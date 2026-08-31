@@ -1,4 +1,4 @@
-import 'dart:async';
+import 'package:rxdart/rxdart.dart';
 
 import 'app_database.dart';
 import 'bookmark_lifecycle_store.dart';
@@ -36,58 +36,27 @@ class BookmarkRepository {
   Future<void> moveBookmarksToWorkspace(Iterable<int> ids, WorkspaceInfo workspace) =>
       workspaceStore.moveBookmarks(ids, workspace.id);
 
-  Stream<List<BookmarkItem>> _watchLifecycleItems({
-    required bool Function(BookmarkLifecycleState? state) include,
-  }) {
-    late StreamController<List<BookmarkItem>> controller;
-    StreamSubscription<List<BookmarkItem>>? bookmarkSubscription;
-    StreamSubscription<void>? lifecycleSubscription;
-    var latest = <BookmarkItem>[];
-    var closed = false;
-
-    Future<void> emit() async {
-      if (closed) return;
-      final workspaceIds = await workspaceStore.bookmarkIds(workspaceId);
-      final states = await lifecycleStore.states();
-      final result = latest
-          .where((item) => workspaceIds.contains(item.id) && include(states[item.id]))
-          .toList();
-      if (!closed) controller.add(result);
-    }
-
-    controller = StreamController<List<BookmarkItem>>(
-      onListen: () {
-        bookmarkSubscription = _database.watchBookmarkItems().listen(
-          (items) {
-            latest = items;
-            emit();
-          },
-          onError: controller.addError,
-        );
-        lifecycleSubscription = lifecycleStore.changes.listen(
-          (_) => emit(),
-          onError: controller.addError,
-        );
-      },
-      onCancel: () async {
-        closed = true;
-        await bookmarkSubscription?.cancel();
-        await lifecycleSubscription?.cancel();
-      },
-    );
-    return controller.stream;
-  }
-
-  Stream<List<BookmarkItem>> watchAll() => _watchLifecycleItems(
-        include: (state) => state?.deleted != true,
+  Stream<List<BookmarkItem>> _watchWorkspaceItems({
+    required bool Function(BookmarkItem item) include,
+  }) =>
+      Rx.combineLatest2<List<BookmarkItem>, Set<int>, List<BookmarkItem>>(
+        _database.watchBookmarkItems(),
+        workspaceStore.watchBookmarkIds(workspaceId),
+        (items, workspaceIds) => items
+            .where((item) => workspaceIds.contains(item.id) && include(item))
+            .toList(),
       );
 
-  Stream<List<BookmarkItem>> watchInbox() => _watchLifecycleItems(
-        include: (state) => state?.deleted != true && state?.inbox == true,
+  Stream<List<BookmarkItem>> watchAll() => _watchWorkspaceItems(
+        include: (item) => item.storageState != 'trash',
       );
 
-  Stream<List<BookmarkItem>> watchTrash() => _watchLifecycleItems(
-        include: (state) => state?.deleted == true,
+  Stream<List<BookmarkItem>> watchInbox() => _watchWorkspaceItems(
+        include: (item) => item.storageState == 'inbox',
+      );
+
+  Stream<List<BookmarkItem>> watchTrash() => _watchWorkspaceItems(
+        include: (item) => item.storageState == 'trash',
       );
 
   Stream<List<Tag>> watchTags() => _database.watchAllTags();
@@ -97,12 +66,12 @@ class BookmarkRepository {
   Stream<List<BookmarkRelation>> watchRelationsForBookmark(int bookmarkId) =>
       _database.watchRelationsForBookmark(bookmarkId);
 
-  Stream<List<SavedViewConfig>> watchSavedViews() async* {
-    await for (final views in _database.watchSavedViewConfigs()) {
-      final ids = await workspaceStore.savedViewIds(workspaceId);
-      yield views.where((config) => ids.contains(config.view.id)).toList();
-    }
-  }
+  Stream<List<SavedViewConfig>> watchSavedViews() =>
+      Rx.combineLatest2<List<SavedViewConfig>, Set<int>, List<SavedViewConfig>>(
+        _database.watchSavedViewConfigs(),
+        workspaceStore.watchSavedViewIds(workspaceId),
+        (views, ids) => views.where((config) => ids.contains(config.view.id)).toList(),
+      );
 
   Stream<List<PersonRoleAssignment>> watchPersonRoles(BookmarkItem bookmark) =>
       _database.watchPersonRoleAssignments(bookmark.id);
