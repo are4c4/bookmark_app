@@ -8,6 +8,7 @@ class BookmarkRepository {
   Stream<List<BookmarkItem>> watchAll() => _database.watchBookmarkItems();
   Stream<List<Tag>> watchTags() => _database.watchAllTags();
   Stream<List<Person>> watchPeople() => _database.watchAllPeople();
+  Stream<List<PhotoRecord>> watchPhotos() => _database.watchAllPhotos();
   Stream<List<SavedViewConfig>> watchSavedViews() =>
       _database.watchSavedViewConfigs();
 
@@ -49,26 +50,32 @@ class BookmarkRepository {
 
   Future<void> toggleFavorite(BookmarkItem bookmark) =>
       _database.setFavorite(bookmark.id, !bookmark.favorite);
-
   Future<int> delete(int id) => _database.deleteBookmark(id);
+
+  Future<int> addPhoto({required String path, String? title, String? note}) =>
+      _database.addPhoto(path: path, title: title, note: note);
+  Future<void> updatePhoto(PhotoRecord photo, {String? title, String? note}) =>
+      _database.updatePhoto(photo.id, title: title, note: note);
+  Future<void> deletePhoto(PhotoRecord photo) => _database.deletePhoto(photo.id);
+  Future<void> attachPhoto(BookmarkItem bookmark, PhotoRecord photo, {bool asCover = false}) =>
+      _database.attachPhotoToBookmark(bookmark.id, photo.id, asCover: asCover);
+  Future<void> detachPhoto(BookmarkItem bookmark, PhotoRecord photo) =>
+      _database.detachPhotoFromBookmark(bookmark.id, photo.id);
+  Future<void> setCoverPhoto(BookmarkItem bookmark, PhotoRecord photo) =>
+      _database.setCoverPhoto(bookmark.id, photo.id);
 
   Future<int> createPerson(String name, {String? note}) =>
       _database.createPerson(name, note: note);
-
   Future<void> updatePerson(Person person, String name, String? note) =>
       _database.updatePerson(person.id, name, note);
-
   Future<void> deletePerson(Person person) => _database.deletePerson(person.id);
 
   Future<int> createTag(String name, {Tag? parent}) =>
       _database.createTag(name, parentTagId: parent?.id);
-
   Future<void> renameTag(Tag tag, String newName) =>
       _database.renameTag(tag.id, newName);
-
   Future<void> setTagParent(Tag tag, Tag? parent) =>
       _database.setTagParent(tag.id, parent?.id);
-
   Future<void> deleteTag(Tag tag) => _database.deleteTag(tag.id);
 
   Future<int> createSavedView({
