@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:drift/drift.dart';
 
 import 'app_database.dart';
@@ -32,255 +30,230 @@ class WorkspaceStore {
   WorkspaceStore(this.database);
 
   final AppDatabase database;
-  final StreamController<void> _changes = StreamController<void>.broadcast();
 
-  Stream<void> get changes => _changes.stream;
-
-  void _notify() {
-    if (!_changes.isClosed) _changes.add(null);
-  }
-
-  Future<void> _touchBookmark(int bookmarkId) async {
-    await database.customUpdate(
-      'UPDATE bookmarks SET id = id WHERE id = ?',
-      variables: [Variable(bookmarkId)],
-      updates: {database.bookmarks},
-    );
-  }
-
-  Future<void> _touchSavedView(int savedViewId) async {
-    await database.customUpdate(
-      'UPDATE saved_views SET id = id WHERE id = ?',
-      variables: [Variable(savedViewId)],
-      updates: {database.savedViews},
-    );
-  }
-
-  Future<void> _ensureColumn(String table, String column, String definition) async {
-    final rows = await database.customSelect('PRAGMA table_info($table)').get();
-    final exists = rows.any((row) => row.read<String>('name') == column);
-    if (!exists) {
-      await database.customStatement('ALTER TABLE $table ADD COLUMN $column $definition');
-    }
-  }
+  WorkspaceInfo _toInfo(WorkspaceRecord row) => WorkspaceInfo(
+        id: row.id,
+        name: row.name,
+        icon: row.icon,
+        colorValue: row.colorValue,
+        sortOrder: row.sortOrder,
+      );
 
   Future<int> initialize() async {
-    await database.customStatement('''
-      CREATE TABLE IF NOT EXISTS workspaces (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL UNIQUE,
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        icon TEXT NOT NULL DEFAULT '📁',
-        color_value INTEGER NOT NULL DEFAULT 4288585374,
-        sort_order INTEGER NOT NULL DEFAULT 0
-      )
-    ''');
-    await _ensureColumn('workspaces', 'icon', "TEXT NOT NULL DEFAULT '📁'");
-    await _ensureColumn('workspaces', 'color_value', 'INTEGER NOT NULL DEFAULT 4288585374');
-    await _ensureColumn('workspaces', 'sort_order', 'INTEGER NOT NULL DEFAULT 0');
+    var rows = await (database.select(database.workspaces)
+          ..orderBy([
+            (workspace) => OrderingTerm.asc(workspace.sortOrder),
+            (workspace) => OrderingTerm.asc(workspace.createdAt),
+            (workspace) => OrderingTerm.asc(workspace.id),
+          ]))
+        .get();
 
-    await database.customStatement('''
-      CREATE TABLE IF NOT EXISTS bookmark_workspace (
-        bookmark_id INTEGER PRIMARY KEY,
-        workspace_id INTEGER NOT NULL,
-        FOREIGN KEY(bookmark_id) REFERENCES bookmarks(id) ON DELETE CASCADE,
-        FOREIGN KEY(workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
-      )
-    ''');
-    await database.customStatement('''
-      CREATE TABLE IF NOT EXISTS saved_view_workspace (
-        saved_view_id INTEGER PRIMARY KEY,
-        workspace_id INTEGER NOT NULL,
-        FOREIGN KEY(saved_view_id) REFERENCES saved_views(id) ON DELETE CASCADE,
-        FOREIGN KEY(workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
-      )
-    ''');
-    await database.customStatement('''
-      CREATE TABLE IF NOT EXISTS workspace_settings (
-        key TEXT PRIMARY KEY,
-        value TEXT NOT NULL
-      )
-    ''');
-
-    var rows = await database.customSelect('SELECT id FROM workspaces ORDER BY id LIMIT 1').get();
-    int defaultId;
     if (rows.isEmpty) {
-      await database.customStatement("INSERT INTO workspaces(name, icon, sort_order) VALUES ('Default Workspace', '🏠', 0)");
-      rows = await database.customSelect('SELECT id FROM workspaces ORDER BY id LIMIT 1').get();
+      final id = await database.into(database.workspaces).insert(
+            WorkspacesCompanion.insert(
+              name: 'Default Workspace',
+              icon: const Value('🏠'),
+              sortOrder: const Value(0),
+            ),
+          );
+      rows = [
+        (await (database.select(database.workspaces)..where((workspace) => workspace.id.equals(id))).getSingle()),
+      ];
     }
-    defaultId = rows.first.read<int>('id');
 
-    final unordered = await database.customSelect('SELECT id FROM workspaces ORDER BY created_at, id').get();
-    for (var i = 0; i < unordered.length; i++) {
-      await database.customStatement('UPDATE workspaces SET sort_order = ? WHERE id = ? AND sort_order = 0', [i, unordered[i].read<int>('id')]);
+    // Normalize sort order once on startup. This removes the old ambiguity where
+    // multiple workspaces could permanently keep sort_order = 0.
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].sortOrder == i) continue;
+      await (database.update(database.workspaces)..where((workspace) => workspace.id.equals(rows[i].id))).write(
+        WorkspacesCompanion(sortOrder: Value(i)),
+      );
     }
 
-    await database.customStatement(
-      'INSERT OR IGNORE INTO bookmark_workspace(bookmark_id, workspace_id) SELECT id, ? FROM bookmarks',
-      [defaultId],
-    );
-    await database.customStatement(
-      'INSERT OR IGNORE INTO saved_view_workspace(saved_view_id, workspace_id) SELECT id, ? FROM saved_views',
-      [defaultId],
-    );
+    final defaultId = rows.first.id;
 
-    final activeRows = await database.customSelect(
-      "SELECT value FROM workspace_settings WHERE key = 'active_workspace_id' LIMIT 1",
-    ).get();
-    var activeId = defaultId;
-    if (activeRows.isNotEmpty) {
-      final parsed = int.tryParse(activeRows.first.read<String>('value'));
-      if (parsed != null && await exists(parsed)) activeId = parsed;
+    final bookmarkRows = await database.select(database.bookmarks).get();
+    final assignedBookmarks = await database.select(database.bookmarkWorkspaces).get();
+    final assignedBookmarkIds = assignedBookmarks.map((row) => row.bookmarkId).toSet();
+    for (final bookmark in bookmarkRows) {
+      if (assignedBookmarkIds.contains(bookmark.id)) continue;
+      await database.into(database.bookmarkWorkspaces).insert(
+            BookmarkWorkspacesCompanion.insert(
+              bookmarkId: bookmark.id,
+              workspaceId: defaultId,
+            ),
+            mode: InsertMode.insertOrIgnore,
+          );
     }
+
+    final viewRows = await database.select(database.savedViews).get();
+    final assignedViews = await database.select(database.savedViewWorkspaces).get();
+    final assignedViewIds = assignedViews.map((row) => row.savedViewId).toSet();
+    for (final view in viewRows) {
+      if (assignedViewIds.contains(view.id)) continue;
+      await database.into(database.savedViewWorkspaces).insert(
+            SavedViewWorkspacesCompanion.insert(
+              savedViewId: view.id,
+              workspaceId: defaultId,
+            ),
+            mode: InsertMode.insertOrIgnore,
+          );
+    }
+
+    final active = await (database.select(database.workspaceSettings)
+          ..where((setting) => setting.key.equals('active_workspace_id')))
+        .getSingleOrNull();
+    final parsed = active == null ? null : int.tryParse(active.value);
+    final activeId = parsed != null && await exists(parsed) ? parsed : defaultId;
     await setActiveWorkspace(activeId);
     return activeId;
   }
 
-  Future<List<WorkspaceInfo>> listWorkspaces() async {
-    final rows = await database.customSelect(
-      'SELECT id, name, icon, color_value, sort_order FROM workspaces ORDER BY sort_order, created_at, id',
-    ).get();
-    return rows
-        .map((row) => WorkspaceInfo(
-              id: row.read<int>('id'),
-              name: row.read<String>('name'),
-              icon: row.read<String>('icon'),
-              colorValue: row.read<int>('color_value'),
-              sortOrder: row.read<int>('sort_order'),
-            ))
-        .toList();
-  }
+  Stream<List<WorkspaceInfo>> watchWorkspaces() => (database.select(database.workspaces)
+        ..orderBy([
+          (workspace) => OrderingTerm.asc(workspace.sortOrder),
+          (workspace) => OrderingTerm.asc(workspace.createdAt),
+          (workspace) => OrderingTerm.asc(workspace.id),
+        ]))
+      .watch()
+      .map((rows) => rows.map(_toInfo).toList());
 
-  Future<bool> exists(int id) async {
-    final rows = await database.customSelect(
-      'SELECT 1 AS ok FROM workspaces WHERE id = ? LIMIT 1',
-      variables: [Variable(id)],
-    ).get();
-    return rows.isNotEmpty;
-  }
+  Future<List<WorkspaceInfo>> listWorkspaces() async =>
+      (await (database.select(database.workspaces)
+                ..orderBy([
+                  (workspace) => OrderingTerm.asc(workspace.sortOrder),
+                  (workspace) => OrderingTerm.asc(workspace.createdAt),
+                  (workspace) => OrderingTerm.asc(workspace.id),
+                ]))
+              .get())
+          .map(_toInfo)
+          .toList();
 
-  Future<int> createWorkspace(String name, {String icon = '📁', int colorValue = 4288585374}) async {
+  Future<bool> exists(int id) async =>
+      await (database.select(database.workspaces)..where((workspace) => workspace.id.equals(id))).getSingleOrNull() != null;
+
+  Future<int> createWorkspace(
+    String name, {
+    String icon = '📁',
+    int colorValue = 4288585374,
+  }) async {
     final trimmed = name.trim();
     if (trimmed.isEmpty) throw ArgumentError('Workspace name is empty');
-    final orderRow = await database.customSelect('SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order FROM workspaces').getSingle();
-    final order = orderRow.read<int>('next_order');
-    await database.customStatement(
-      'INSERT INTO workspaces(name, icon, color_value, sort_order) VALUES (?, ?, ?, ?)',
-      [trimmed, icon, colorValue, order],
-    );
-    final row = await database.customSelect(
-      'SELECT id FROM workspaces WHERE name = ? LIMIT 1',
-      variables: [Variable(trimmed)],
-    ).getSingle();
-    _notify();
-    return row.read<int>('id');
+
+    final all = await database.select(database.workspaces).get();
+    final nextOrder = all.isEmpty
+        ? 0
+        : all.map((workspace) => workspace.sortOrder).reduce((a, b) => a > b ? a : b) + 1;
+
+    return database.into(database.workspaces).insert(
+          WorkspacesCompanion.insert(
+            name: trimmed,
+            icon: Value(icon),
+            colorValue: Value(colorValue),
+            sortOrder: Value(nextOrder),
+          ),
+        );
   }
 
-  Future<void> updateWorkspace(int id, {String? name, String? icon, int? colorValue}) async {
-    if (name != null && name.trim().isNotEmpty) {
-      await database.customStatement('UPDATE workspaces SET name = ? WHERE id = ?', [name.trim(), id]);
-    }
-    if (icon != null && icon.trim().isNotEmpty) {
-      await database.customStatement('UPDATE workspaces SET icon = ? WHERE id = ?', [icon.trim(), id]);
-    }
-    if (colorValue != null) {
-      await database.customStatement('UPDATE workspaces SET color_value = ? WHERE id = ?', [colorValue, id]);
-    }
-    _notify();
+  Future<void> updateWorkspace(
+    int id, {
+    String? name,
+    String? icon,
+    int? colorValue,
+  }) async {
+    final trimmedName = name?.trim();
+    final trimmedIcon = icon?.trim();
+    await (database.update(database.workspaces)..where((workspace) => workspace.id.equals(id))).write(
+      WorkspacesCompanion(
+        name: trimmedName == null || trimmedName.isEmpty ? const Value.absent() : Value(trimmedName),
+        icon: trimmedIcon == null || trimmedIcon.isEmpty ? const Value.absent() : Value(trimmedIcon),
+        colorValue: colorValue == null ? const Value.absent() : Value(colorValue),
+      ),
+    );
   }
 
   Future<void> renameWorkspace(int id, String name) => updateWorkspace(id, name: name);
 
-  Future<void> reorderWorkspaces(List<int> orderedIds) async {
-    await database.transaction(() async {
-      for (var i = 0; i < orderedIds.length; i++) {
-        await database.customStatement('UPDATE workspaces SET sort_order = ? WHERE id = ?', [i, orderedIds[i]]);
-      }
-    });
-    _notify();
-  }
+  Future<void> reorderWorkspaces(List<int> orderedIds) => database.transaction(() async {
+        for (var i = 0; i < orderedIds.length; i++) {
+          await (database.update(database.workspaces)..where((workspace) => workspace.id.equals(orderedIds[i]))).write(
+            WorkspacesCompanion(sortOrder: Value(i)),
+          );
+        }
+      });
 
   Future<void> deleteWorkspace(int id) async {
     final all = await listWorkspaces();
     if (all.length <= 1) throw StateError('At least one workspace is required');
     final fallback = all.firstWhere((workspace) => workspace.id != id);
-    final movedBookmarkRows = await database.customSelect(
-      'SELECT bookmark_id FROM bookmark_workspace WHERE workspace_id = ?',
-      variables: [Variable(id)],
-    ).get();
-    final movedViewRows = await database.customSelect(
-      'SELECT saved_view_id FROM saved_view_workspace WHERE workspace_id = ?',
-      variables: [Variable(id)],
-    ).get();
+
     await database.transaction(() async {
-      await database.customStatement('UPDATE bookmark_workspace SET workspace_id = ? WHERE workspace_id = ?', [fallback.id, id]);
-      await database.customStatement('UPDATE saved_view_workspace SET workspace_id = ? WHERE workspace_id = ?', [fallback.id, id]);
-      await database.customStatement('DELETE FROM workspaces WHERE id = ?', [id]);
+      await (database.update(database.bookmarkWorkspaces)..where((relation) => relation.workspaceId.equals(id))).write(
+        BookmarkWorkspacesCompanion(workspaceId: Value(fallback.id)),
+      );
+      await (database.update(database.savedViewWorkspaces)..where((relation) => relation.workspaceId.equals(id))).write(
+        SavedViewWorkspacesCompanion(workspaceId: Value(fallback.id)),
+      );
+      await (database.delete(database.workspaces)..where((workspace) => workspace.id.equals(id))).go();
     });
-    await setActiveWorkspace(fallback.id);
-    for (final row in movedBookmarkRows) {
-      await _touchBookmark(row.read<int>('bookmark_id'));
-    }
-    for (final row in movedViewRows) {
-      await _touchSavedView(row.read<int>('saved_view_id'));
-    }
-    _notify();
+
+    final active = await activeWorkspaceId();
+    if (active == id) await setActiveWorkspace(fallback.id);
   }
 
-  Future<void> setActiveWorkspace(int id) async {
-    await database.customStatement(
-      "INSERT INTO workspace_settings(key, value) VALUES ('active_workspace_id', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-      ['$id'],
-    );
+  Future<int?> activeWorkspaceId() async {
+    final setting = await (database.select(database.workspaceSettings)
+          ..where((row) => row.key.equals('active_workspace_id')))
+        .getSingleOrNull();
+    return setting == null ? null : int.tryParse(setting.value);
   }
 
-  Future<Set<int>> bookmarkIds(int workspaceId) async {
-    final rows = await database.customSelect(
-      'SELECT bookmark_id FROM bookmark_workspace WHERE workspace_id = ?',
-      variables: [Variable(workspaceId)],
-    ).get();
-    return rows.map((row) => row.read<int>('bookmark_id')).toSet();
-  }
+  Future<void> setActiveWorkspace(int id) => database.into(database.workspaceSettings).insertOnConflictUpdate(
+        WorkspaceSettingsCompanion.insert(
+          key: 'active_workspace_id',
+          value: '$id',
+        ),
+      );
 
-  Future<Set<int>> savedViewIds(int workspaceId) async {
-    final rows = await database.customSelect(
-      'SELECT saved_view_id FROM saved_view_workspace WHERE workspace_id = ?',
-      variables: [Variable(workspaceId)],
-    ).get();
-    return rows.map((row) => row.read<int>('saved_view_id')).toSet();
-  }
+  Stream<Set<int>> watchBookmarkIds(int workspaceId) =>
+      (database.select(database.bookmarkWorkspaces)..where((relation) => relation.workspaceId.equals(workspaceId)))
+          .watch()
+          .map((rows) => rows.map((row) => row.bookmarkId).toSet());
 
-  Future<void> assignBookmark(int bookmarkId, int workspaceId) async {
-    await database.customStatement(
-      'INSERT INTO bookmark_workspace(bookmark_id, workspace_id) VALUES (?, ?) ON CONFLICT(bookmark_id) DO UPDATE SET workspace_id = excluded.workspace_id',
-      [bookmarkId, workspaceId],
-    );
-    await _touchBookmark(bookmarkId);
-    _notify();
-  }
+  Future<Set<int>> bookmarkIds(int workspaceId) async =>
+      (await (database.select(database.bookmarkWorkspaces)..where((relation) => relation.workspaceId.equals(workspaceId))).get())
+          .map((row) => row.bookmarkId)
+          .toSet();
 
-  Future<void> assignSavedView(int savedViewId, int workspaceId) async {
-    await database.customStatement(
-      'INSERT INTO saved_view_workspace(saved_view_id, workspace_id) VALUES (?, ?) ON CONFLICT(saved_view_id) DO UPDATE SET workspace_id = excluded.workspace_id',
-      [savedViewId, workspaceId],
-    );
-    await _touchSavedView(savedViewId);
-    _notify();
-  }
+  Stream<Set<int>> watchSavedViewIds(int workspaceId) =>
+      (database.select(database.savedViewWorkspaces)..where((relation) => relation.workspaceId.equals(workspaceId)))
+          .watch()
+          .map((rows) => rows.map((row) => row.savedViewId).toSet());
 
-  Future<void> moveBookmarks(Iterable<int> bookmarkIds, int workspaceId) async {
-    final ids = bookmarkIds.toSet();
-    await database.transaction(() async {
-      for (final id in ids) {
-        await database.customStatement(
-          'INSERT INTO bookmark_workspace(bookmark_id, workspace_id) VALUES (?, ?) ON CONFLICT(bookmark_id) DO UPDATE SET workspace_id = excluded.workspace_id',
-          [id, workspaceId],
-        );
-      }
-    });
-    for (final id in ids) {
-      await _touchBookmark(id);
-    }
-    _notify();
-  }
+  Future<Set<int>> savedViewIds(int workspaceId) async =>
+      (await (database.select(database.savedViewWorkspaces)..where((relation) => relation.workspaceId.equals(workspaceId))).get())
+          .map((row) => row.savedViewId)
+          .toSet();
+
+  Future<void> assignBookmark(int bookmarkId, int workspaceId) =>
+      database.into(database.bookmarkWorkspaces).insertOnConflictUpdate(
+            BookmarkWorkspacesCompanion.insert(
+              bookmarkId: bookmarkId,
+              workspaceId: workspaceId,
+            ),
+          );
+
+  Future<void> assignSavedView(int savedViewId, int workspaceId) =>
+      database.into(database.savedViewWorkspaces).insertOnConflictUpdate(
+            SavedViewWorkspacesCompanion.insert(
+              savedViewId: savedViewId,
+              workspaceId: workspaceId,
+            ),
+          );
+
+  Future<void> moveBookmarks(Iterable<int> bookmarkIds, int workspaceId) => database.transaction(() async {
+        for (final id in bookmarkIds.toSet()) {
+          await assignBookmark(id, workspaceId);
+        }
+      });
 }
