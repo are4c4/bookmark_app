@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'data/app_database.dart';
+import 'data/bookmark_lifecycle_store.dart';
 import 'data/bookmark_repository.dart';
 import 'data/workspace_store.dart';
 import 'services/photo_storage_service.dart';
@@ -24,6 +25,7 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
   ProfileManager? _profileManager;
   AppDatabase? _database;
   WorkspaceStore? _workspaceStore;
+  BookmarkLifecycleStore? _lifecycleStore;
   BookmarkRepository? _repository;
   Object? _error;
   bool _switching = false;
@@ -44,11 +46,15 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
     );
     final workspaceStore = WorkspaceStore(database);
     final workspaceId = await workspaceStore.initialize();
+    final lifecycleStore = BookmarkLifecycleStore(database);
+    await lifecycleStore.initialize();
     _workspaceStore = workspaceStore;
+    _lifecycleStore = lifecycleStore;
     PhotoStorageService.activePhotoDirectoryPath = profile.photoDirectoryPath;
     return BookmarkRepository(
       database,
       workspaceStore: workspaceStore,
+      lifecycleStore: lifecycleStore,
       workspaceId: workspaceId,
       profileDirectoryPath: profile.directoryPath,
     );
@@ -61,6 +67,7 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
       final database = AppDatabase(databaseName: profile.databaseName);
       final repository = await _openRepository(database, profile);
       if (!mounted) {
+        await _lifecycleStore?.dispose();
         await database.close();
         return;
       }
@@ -80,21 +87,25 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
 
     final previous = manager.state.activeProfile;
     final oldDatabase = _database;
+    final oldLifecycle = _lifecycleStore;
     setState(() {
       _switching = true;
       _repository = null;
     });
 
     await WidgetsBinding.instance.endOfFrame;
+    await oldLifecycle?.dispose();
     await oldDatabase?.close();
     _database = null;
     _workspaceStore = null;
+    _lifecycleStore = null;
 
     try {
       final database = AppDatabase(databaseName: profile.databaseName);
       final repository = await _openRepository(database, profile);
       await manager.setActiveProfile(profile);
       if (!mounted) {
+        await _lifecycleStore?.dispose();
         await database.close();
         return;
       }
@@ -110,6 +121,7 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
         final fallbackRepository = await _openRepository(fallbackDatabase, previous);
         await manager.setActiveProfile(previous);
         if (!mounted) {
+          await _lifecycleStore?.dispose();
           await fallbackDatabase.close();
           return;
         }
@@ -132,15 +144,17 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
 
   Future<void> _switchWorkspace(WorkspaceInfo workspace) async {
     final store = _workspaceStore;
+    final lifecycle = _lifecycleStore;
     final database = _database;
     final profile = _profileManager?.state.activeProfile;
-    if (store == null || database == null || profile == null || _repository?.workspaceId == workspace.id) return;
+    if (store == null || lifecycle == null || database == null || profile == null || _repository?.workspaceId == workspace.id) return;
     await store.setActiveWorkspace(workspace.id);
     if (!mounted) return;
     setState(() {
       _repository = BookmarkRepository(
         database,
         workspaceStore: store,
+        lifecycleStore: lifecycle,
         workspaceId: workspace.id,
         profileDirectoryPath: profile.directoryPath,
       );
@@ -190,6 +204,7 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
 
   @override
   void dispose() {
+    _lifecycleStore?.dispose();
     _database?.close();
     super.dispose();
   }
