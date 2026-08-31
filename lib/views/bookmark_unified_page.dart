@@ -12,6 +12,7 @@ enum BookmarkViewType { gallery, list, table }
 enum TagMatchMode { or, and }
 enum BookmarkSortField { createdAt, title, url }
 enum SortDirection { asc, desc }
+enum ViewProperty { image, url, tags, people, description, createdAt, favorite }
 
 class BookmarkUnifiedPage extends StatefulWidget {
   const BookmarkUnifiedPage({super.key, required this.repository});
@@ -25,6 +26,12 @@ class BookmarkUnifiedPage extends StatefulWidget {
 class _BookmarkUnifiedPageState extends State<BookmarkUnifiedPage> {
   final _searchController = TextEditingController();
   final Set<int> _selectedTagIds = {};
+  final Set<ViewProperty> _visibleProperties = {
+    ViewProperty.image,
+    ViewProperty.url,
+    ViewProperty.tags,
+    ViewProperty.favorite,
+  };
 
   BookmarkViewType _viewType = BookmarkViewType.gallery;
   TagMatchMode _tagMatchMode = TagMatchMode.or;
@@ -35,6 +42,9 @@ class _BookmarkUnifiedPageState extends State<BookmarkUnifiedPage> {
   bool _includeDescendants = true;
   int? _activeSavedViewId;
   int? _selectedBookmarkId;
+  int? _personFilterId;
+  int? _photoFilterId;
+  String? _relationFilterLabel;
 
   @override
   void dispose() {
@@ -49,10 +59,30 @@ class _BookmarkUnifiedPageState extends State<BookmarkUnifiedPage> {
   TagMatchMode _parseMatchMode(String value) => value == 'and' ? TagMatchMode.and : TagMatchMode.or;
   SortDirection _parseSortDirection(String value) => value == 'asc' ? SortDirection.asc : SortDirection.desc;
 
+  Set<ViewProperty> _parseVisibleProperties(String value) {
+    final names = value.split(',').map((e) => e.trim()).toSet();
+    final parsed = ViewProperty.values.where((property) => names.contains(property.name)).toSet();
+    return parsed.isEmpty
+        ? {ViewProperty.image, ViewProperty.url, ViewProperty.tags, ViewProperty.favorite}
+        : parsed;
+  }
+
+  String get _visiblePropertiesText => _visibleProperties.map((e) => e.name).join(',');
+
   static String _sortLabel(BookmarkSortField field) => switch (field) {
         BookmarkSortField.createdAt => '登録日時',
         BookmarkSortField.title => 'タイトル',
         BookmarkSortField.url => 'URL',
+      };
+
+  static String _propertyLabel(ViewProperty property) => switch (property) {
+        ViewProperty.image => '画像',
+        ViewProperty.url => 'URL',
+        ViewProperty.tags => 'タグ',
+        ViewProperty.people => '出演者',
+        ViewProperty.description => '説明',
+        ViewProperty.createdAt => '登録日時',
+        ViewProperty.favorite => 'お気に入り',
       };
 
   List<Tag> _childrenOf(int? parentId, List<Tag> tags) => tags
@@ -75,6 +105,8 @@ class _BookmarkUnifiedPageState extends State<BookmarkUnifiedPage> {
     final query = _query.trim().toLowerCase();
     final result = source.where((bookmark) {
       if (_favoritesOnly && !bookmark.favorite) return false;
+      if (_personFilterId != null && !bookmark.people.any((person) => person.id == _personFilterId)) return false;
+      if (_photoFilterId != null && !bookmark.photos.any((photo) => photo.id == _photoFilterId)) return false;
       if (query.isNotEmpty) {
         final text = [
           bookmark.title,
@@ -121,6 +153,58 @@ class _BookmarkUnifiedPageState extends State<BookmarkUnifiedPage> {
   }
 
   void _selectBookmark(BookmarkItem bookmark) => setState(() => _selectedBookmarkId = bookmark.id);
+
+  void _filterByTag(Tag tag) {
+    _searchController.clear();
+    setState(() {
+      _query = '';
+      _favoritesOnly = false;
+      _personFilterId = null;
+      _photoFilterId = null;
+      _relationFilterLabel = 'タグ: ${tag.name}';
+      _activeSavedViewId = null;
+      _selectedTagIds
+        ..clear()
+        ..add(tag.id);
+      _selectedBookmarkId = null;
+    });
+  }
+
+  void _filterByPerson(Person person) {
+    _searchController.clear();
+    setState(() {
+      _query = '';
+      _favoritesOnly = false;
+      _selectedTagIds.clear();
+      _photoFilterId = null;
+      _personFilterId = person.id;
+      _relationFilterLabel = '出演者: ${person.name}';
+      _activeSavedViewId = null;
+      _selectedBookmarkId = null;
+    });
+  }
+
+  void _filterByPhoto(PhotoRecord photo) {
+    _searchController.clear();
+    setState(() {
+      _query = '';
+      _favoritesOnly = false;
+      _selectedTagIds.clear();
+      _personFilterId = null;
+      _photoFilterId = photo.id;
+      _relationFilterLabel = '写真: ${photo.title?.trim().isNotEmpty == true ? photo.title! : '写真 ${photo.id}'}';
+      _activeSavedViewId = null;
+      _selectedBookmarkId = null;
+    });
+  }
+
+  void _clearRelationFilter() {
+    setState(() {
+      _personFilterId = null;
+      _photoFilterId = null;
+      _relationFilterLabel = null;
+    });
+  }
 
   Future<void> _openBookmark(BookmarkItem bookmark) async {
     final uri = Uri.tryParse(bookmark.url);
@@ -191,18 +275,15 @@ class _BookmarkUnifiedPageState extends State<BookmarkUnifiedPage> {
 
   Widget _gallery(List<BookmarkItem> bookmarks) => LayoutBuilder(
         builder: (context, constraints) {
-          final columns = constraints.maxWidth >= 1050
-              ? 4
-              : constraints.maxWidth >= 780
-                  ? 3
-                  : 2;
+          final columns = constraints.maxWidth >= 1050 ? 4 : constraints.maxWidth >= 780 ? 3 : 2;
+          final showImage = _visibleProperties.contains(ViewProperty.image);
           return GridView.builder(
             padding: const EdgeInsets.all(16),
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: columns,
               crossAxisSpacing: 12,
               mainAxisSpacing: 12,
-              childAspectRatio: 0.9,
+              childAspectRatio: showImage ? 0.9 : 1.7,
             ),
             itemCount: bookmarks.length,
             itemBuilder: (context, index) {
@@ -216,7 +297,7 @@ class _BookmarkUnifiedPageState extends State<BookmarkUnifiedPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(child: SizedBox(width: double.infinity, child: _image(bookmark))),
+                      if (showImage) Expanded(child: SizedBox(width: double.infinity, child: _image(bookmark))),
                       Padding(
                         padding: const EdgeInsets.all(10),
                         child: Column(
@@ -228,17 +309,19 @@ class _BookmarkUnifiedPageState extends State<BookmarkUnifiedPage> {
                                   child: Text(bookmark.title, maxLines: 2, overflow: TextOverflow.ellipsis,
                                       style: Theme.of(context).textTheme.titleSmall),
                                 ),
-                                IconButton(
-                                  tooltip: 'お気に入り',
-                                  onPressed: () => widget.repository.toggleFavorite(bookmark),
-                                  icon: Icon(bookmark.favorite ? Icons.star : Icons.star_border),
-                                ),
+                                if (_visibleProperties.contains(ViewProperty.favorite))
+                                  IconButton(
+                                    tooltip: 'お気に入り',
+                                    onPressed: () => widget.repository.toggleFavorite(bookmark),
+                                    icon: Icon(bookmark.favorite ? Icons.star : Icons.star_border),
+                                  ),
                                 _bookmarkMenu(bookmark),
                               ],
                             ),
-                            Text(bookmark.url, maxLines: 1, overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.bodySmall),
-                            if (bookmark.tags.isNotEmpty) ...[
+                            if (_visibleProperties.contains(ViewProperty.url))
+                              Text(bookmark.url, maxLines: 1, overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodySmall),
+                            if (_visibleProperties.contains(ViewProperty.tags) && bookmark.tags.isNotEmpty) ...[
                               const SizedBox(height: 6),
                               Wrap(
                                 spacing: 4,
@@ -248,6 +331,18 @@ class _BookmarkUnifiedPageState extends State<BookmarkUnifiedPage> {
                                       visualDensity: VisualDensity.compact,
                                     )).toList(),
                               ),
+                            ],
+                            if (_visibleProperties.contains(ViewProperty.people) && bookmark.people.isNotEmpty) ...[
+                              const SizedBox(height: 5),
+                              Text(bookmark.people.map((e) => e.name).join(', '), maxLines: 1, overflow: TextOverflow.ellipsis),
+                            ],
+                            if (_visibleProperties.contains(ViewProperty.description) && bookmark.description?.trim().isNotEmpty == true) ...[
+                              const SizedBox(height: 5),
+                              Text(bookmark.description!, maxLines: 2, overflow: TextOverflow.ellipsis),
+                            ],
+                            if (_visibleProperties.contains(ViewProperty.createdAt)) ...[
+                              const SizedBox(height: 5),
+                              Text(bookmark.createdAt.toLocal().toString(), style: Theme.of(context).textTheme.bodySmall),
                             ],
                           ],
                         ),
@@ -267,23 +362,34 @@ class _BookmarkUnifiedPageState extends State<BookmarkUnifiedPage> {
         separatorBuilder: (_, __) => const Divider(height: 1),
         itemBuilder: (context, index) {
           final bookmark = bookmarks[index];
+          final subtitleParts = <String>[
+            if (_visibleProperties.contains(ViewProperty.url)) bookmark.url,
+            if (_visibleProperties.contains(ViewProperty.tags) && bookmark.tags.isNotEmpty) bookmark.tags.map((e) => e.name).join(', '),
+            if (_visibleProperties.contains(ViewProperty.people) && bookmark.people.isNotEmpty) bookmark.people.map((e) => e.name).join(', '),
+            if (_visibleProperties.contains(ViewProperty.description) && bookmark.description?.trim().isNotEmpty == true) bookmark.description!,
+            if (_visibleProperties.contains(ViewProperty.createdAt)) bookmark.createdAt.toLocal().toString(),
+          ];
           return ListTile(
             selected: bookmark.id == _selectedBookmarkId,
             onTap: () => _selectBookmark(bookmark),
-            leading: ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: SizedBox(width: 56, height: 42, child: _image(bookmark, width: 56, height: 42, placeholderSize: 24)),
-            ),
+            leading: _visibleProperties.contains(ViewProperty.image)
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: SizedBox(width: 56, height: 42, child: _image(bookmark, width: 56, height: 42, placeholderSize: 24)),
+                  )
+                : null,
             title: Text(bookmark.title),
-            subtitle: Text([bookmark.url, ...bookmark.tags.map((e) => e.name)].join(' • '),
-                maxLines: 2, overflow: TextOverflow.ellipsis),
+            subtitle: subtitleParts.isEmpty
+                ? null
+                : Text(subtitleParts.join(' • '), maxLines: 2, overflow: TextOverflow.ellipsis),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                IconButton(
-                  onPressed: () => widget.repository.toggleFavorite(bookmark),
-                  icon: Icon(bookmark.favorite ? Icons.star : Icons.star_border),
-                ),
+                if (_visibleProperties.contains(ViewProperty.favorite))
+                  IconButton(
+                    onPressed: () => widget.repository.toggleFavorite(bookmark),
+                    icon: Icon(bookmark.favorite ? Icons.star : Icons.star_border),
+                  ),
                 _bookmarkMenu(bookmark),
               ],
             ),
@@ -291,38 +397,46 @@ class _BookmarkUnifiedPageState extends State<BookmarkUnifiedPage> {
         },
       );
 
-  Widget _table(List<BookmarkItem> bookmarks) => SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        scrollDirection: Axis.horizontal,
-        child: DataTable(
-          columns: const [
-            DataColumn(label: Text('画像')),
-            DataColumn(label: Text('タイトル')),
-            DataColumn(label: Text('URL')),
-            DataColumn(label: Text('タグ')),
-            DataColumn(label: Text('お気に入り')),
-            DataColumn(label: Text('操作')),
-          ],
-          rows: bookmarks.map((bookmark) => DataRow(
-                selected: bookmark.id == _selectedBookmarkId,
-                onSelectChanged: (_) => _selectBookmark(bookmark),
-                cells: [
-                  DataCell(ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: SizedBox(width: 64, height: 42, child: _image(bookmark, width: 64, height: 42, placeholderSize: 22)),
-                  )),
-                  DataCell(Text(bookmark.title)),
-                  DataCell(Text(bookmark.url)),
-                  DataCell(Text(bookmark.tags.map((e) => e.name).join(', '))),
-                  DataCell(IconButton(
-                    onPressed: () => widget.repository.toggleFavorite(bookmark),
-                    icon: Icon(bookmark.favorite ? Icons.star : Icons.star_border),
-                  )),
-                  DataCell(_bookmarkMenu(bookmark)),
-                ],
-              )).toList(),
-        ),
-      );
+  Widget _table(List<BookmarkItem> bookmarks) {
+    final properties = ViewProperty.values.where(_visibleProperties.contains).toList();
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      scrollDirection: Axis.horizontal,
+      child: DataTable(
+        columns: [
+          const DataColumn(label: Text('タイトル')),
+          ...properties.map((property) => DataColumn(label: Text(_propertyLabel(property)))),
+          const DataColumn(label: Text('操作')),
+        ],
+        rows: bookmarks.map((bookmark) {
+          final cells = <DataCell>[DataCell(Text(bookmark.title))];
+          for (final property in properties) {
+            cells.add(switch (property) {
+              ViewProperty.image => DataCell(ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: SizedBox(width: 64, height: 42, child: _image(bookmark, width: 64, height: 42, placeholderSize: 22)),
+                )),
+              ViewProperty.url => DataCell(Text(bookmark.url)),
+              ViewProperty.tags => DataCell(Text(bookmark.tags.map((e) => e.name).join(', '))),
+              ViewProperty.people => DataCell(Text(bookmark.people.map((e) => e.name).join(', '))),
+              ViewProperty.description => DataCell(SizedBox(width: 260, child: Text(bookmark.description ?? '', maxLines: 2, overflow: TextOverflow.ellipsis))),
+              ViewProperty.createdAt => DataCell(Text(bookmark.createdAt.toLocal().toString())),
+              ViewProperty.favorite => DataCell(IconButton(
+                  onPressed: () => widget.repository.toggleFavorite(bookmark),
+                  icon: Icon(bookmark.favorite ? Icons.star : Icons.star_border),
+                )),
+            });
+          }
+          cells.add(DataCell(_bookmarkMenu(bookmark)));
+          return DataRow(
+            selected: bookmark.id == _selectedBookmarkId,
+            onSelectChanged: (_) => _selectBookmark(bookmark),
+            cells: cells,
+          );
+        }).toList(),
+      ),
+    );
+  }
 
   void _resetFilters() {
     _searchController.clear();
@@ -331,6 +445,9 @@ class _BookmarkUnifiedPageState extends State<BookmarkUnifiedPage> {
       _query = '';
       _favoritesOnly = false;
       _selectedTagIds.clear();
+      _personFilterId = null;
+      _photoFilterId = null;
+      _relationFilterLabel = null;
       _tagMatchMode = TagMatchMode.or;
       _sortField = BookmarkSortField.createdAt;
       _sortDirection = SortDirection.desc;
@@ -348,9 +465,15 @@ class _BookmarkUnifiedPageState extends State<BookmarkUnifiedPage> {
       _tagMatchMode = _parseMatchMode(view.tagMatchMode);
       _sortField = _parseSortField(view.sortField);
       _sortDirection = _parseSortDirection(view.sortDirection);
+      _personFilterId = null;
+      _photoFilterId = null;
+      _relationFilterLabel = null;
       _selectedTagIds
         ..clear()
         ..addAll(config.tags.map((tag) => tag.id));
+      _visibleProperties
+        ..clear()
+        ..addAll(_parseVisibleProperties(view.visibleProperties));
     });
   }
 
@@ -375,6 +498,7 @@ class _BookmarkUnifiedPageState extends State<BookmarkUnifiedPage> {
                 tagMatchMode: _tagMatchMode.name,
                 sortField: _sortField.name,
                 sortDirection: _sortDirection.name,
+                visibleProperties: _visiblePropertiesText,
               );
               if (dialogContext.mounted) Navigator.pop(dialogContext);
             },
@@ -384,6 +508,53 @@ class _BookmarkUnifiedPageState extends State<BookmarkUnifiedPage> {
       ),
     );
     name.dispose();
+  }
+
+  Future<void> _showPropertiesDialog() async {
+    final selected = {..._visibleProperties};
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setLocalState) => AlertDialog(
+          title: const Text('表示するプロパティ'),
+          content: SizedBox(
+            width: 360,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: ViewProperty.values
+                  .map((property) => CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(_propertyLabel(property)),
+                        value: selected.contains(property),
+                        onChanged: (value) => setLocalState(() {
+                          if (value == true) {
+                            selected.add(property);
+                          } else {
+                            selected.remove(property);
+                          }
+                        }),
+                      ))
+                  .toList(),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('キャンセル')),
+            FilledButton(
+              onPressed: () {
+                setState(() {
+                  _activeSavedViewId = null;
+                  _visibleProperties
+                    ..clear()
+                    ..addAll(selected);
+                });
+                Navigator.pop(dialogContext);
+              },
+              child: const Text('適用'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _showFilterDialog(List<Tag> allTags) async {
@@ -457,6 +628,9 @@ class _BookmarkUnifiedPageState extends State<BookmarkUnifiedPage> {
                   _favoritesOnly = favorites;
                   _tagMatchMode = matchMode;
                   _includeDescendants = includeDescendants;
+                  _personFilterId = null;
+                  _photoFilterId = null;
+                  _relationFilterLabel = null;
                   _selectedTagIds
                     ..clear()
                     ..addAll(selectedTags);
@@ -472,7 +646,7 @@ class _BookmarkUnifiedPageState extends State<BookmarkUnifiedPage> {
   }
 
   Widget _toolbar(List<Tag> allTags) {
-    final filterCount = (_favoritesOnly ? 1 : 0) + _selectedTagIds.length;
+    final filterCount = (_favoritesOnly ? 1 : 0) + _selectedTagIds.length + (_relationFilterLabel == null ? 0 : 1);
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
       decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Theme.of(context).dividerColor))),
@@ -503,6 +677,10 @@ class _BookmarkUnifiedPageState extends State<BookmarkUnifiedPage> {
             ),
           ),
           const SizedBox(width: 10),
+          if (_relationFilterLabel != null) ...[
+            InputChip(label: Text(_relationFilterLabel!), onDeleted: _clearRelationFilter),
+            const SizedBox(width: 8),
+          ],
           Badge(
             isLabelVisible: filterCount > 0,
             label: Text('$filterCount'),
@@ -516,10 +694,7 @@ class _BookmarkUnifiedPageState extends State<BookmarkUnifiedPage> {
           PopupMenuButton<BookmarkSortField>(
             initialValue: _sortField,
             onSelected: (value) => setState(() => _sortField = value),
-            itemBuilder: (_) => BookmarkSortField.values.map((field) => PopupMenuItem(
-                  value: field,
-                  child: Text(_sortLabel(field)),
-                )).toList(),
+            itemBuilder: (_) => BookmarkSortField.values.map((field) => PopupMenuItem(value: field, child: Text(_sortLabel(field)))).toList(),
             child: OutlinedButton.icon(
               onPressed: null,
               icon: const Icon(Icons.swap_vert, size: 18),
@@ -531,6 +706,12 @@ class _BookmarkUnifiedPageState extends State<BookmarkUnifiedPage> {
             onPressed: () => setState(() => _sortDirection = _sortDirection == SortDirection.asc ? SortDirection.desc : SortDirection.asc),
             icon: Icon(_sortDirection == SortDirection.asc ? Icons.arrow_upward : Icons.arrow_downward),
           ),
+          OutlinedButton.icon(
+            onPressed: _showPropertiesDialog,
+            icon: const Icon(Icons.view_column_outlined, size: 18),
+            label: const Text('プロパティ'),
+          ),
+          const SizedBox(width: 8),
           SegmentedButton<BookmarkViewType>(
             showSelectedIcon: false,
             segments: const [
@@ -565,17 +746,7 @@ class _BookmarkUnifiedPageState extends State<BookmarkUnifiedPage> {
               leading: Icon(nested.isEmpty ? Icons.sell_outlined : Icons.folder_outlined, size: 18),
               title: Text(tag.name, maxLines: 1, overflow: TextOverflow.ellipsis),
               selected: _selectedTagIds.length == 1 && _selectedTagIds.contains(tag.id),
-              onTap: () {
-                _searchController.clear();
-                setState(() {
-                  _activeSavedViewId = null;
-                  _query = '';
-                  _favoritesOnly = false;
-                  _selectedTagIds
-                    ..clear()
-                    ..add(tag.id);
-                });
-              },
+              onTap: () => _filterByTag(tag),
             ),
             if (nested.isNotEmpty) _tagTree(allTags, tag.id, depth + 1),
           ],
@@ -590,12 +761,7 @@ class _BookmarkUnifiedPageState extends State<BookmarkUnifiedPage> {
         child: ListView(
           padding: const EdgeInsets.all(8),
           children: [
-            ListTile(
-              dense: true,
-              leading: const Icon(Icons.all_inbox_outlined),
-              title: const Text('すべて'),
-              onTap: _resetFilters,
-            ),
+            ListTile(dense: true, leading: const Icon(Icons.all_inbox_outlined), title: const Text('すべて'), onTap: _resetFilters),
             ListTile(
               dense: true,
               leading: const Icon(Icons.star_outline),
@@ -608,6 +774,9 @@ class _BookmarkUnifiedPageState extends State<BookmarkUnifiedPage> {
                   _query = '';
                   _favoritesOnly = true;
                   _selectedTagIds.clear();
+                  _personFilterId = null;
+                  _photoFilterId = null;
+                  _relationFilterLabel = null;
                 });
               },
             ),
@@ -656,11 +825,7 @@ class _BookmarkUnifiedPageState extends State<BookmarkUnifiedPage> {
               appBar: AppBar(
                 title: const Row(
                   mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.bookmarks_outlined, size: 22),
-                    SizedBox(width: 8),
-                    Text('Bookmarks'),
-                  ],
+                  children: [Icon(Icons.bookmarks_outlined, size: 22), SizedBox(width: 8), Text('Bookmarks')],
                 ),
               ),
               floatingActionButton: FloatingActionButton.extended(
@@ -705,6 +870,9 @@ class _BookmarkUnifiedPageState extends State<BookmarkUnifiedPage> {
                             repository: widget.repository,
                             bookmark: selected,
                             onClose: () => setState(() => _selectedBookmarkId = null),
+                            onFilterByTag: _filterByTag,
+                            onFilterByPerson: _filterByPerson,
+                            onFilterByPhoto: _filterByPhoto,
                           ),
                         ),
                       ],
