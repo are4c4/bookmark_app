@@ -109,11 +109,9 @@ class PersonRoleProperties extends StatelessWidget {
               child: DropdownButton<String>(
                 value: genre,
                 isDense: true,
-                isExpanded: true,
                 iconSize: 18,
                 style: TextStyle(
                   fontSize: 12.5,
-                  fontWeight: FontWeight.w500,
                   color: Theme.of(context).colorScheme.onSurface,
                 ),
                 items: [
