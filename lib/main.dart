@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'data/app_database.dart';
 import 'data/bookmark_repository.dart';
 import 'services/bookmark_transfer_service.dart';
-import 'views/bookmark_unified_page.dart';
+import 'views/bookmark_unified_stage1_page.dart';
 import 'views/people_management_page.dart';
 import 'views/photo_management_page.dart';
 import 'views/tag_management_page.dart';
@@ -183,7 +183,7 @@ class _BookmarkShellState extends State<BookmarkShell> {
             child: IndexedStack(
               index: _index,
               children: [
-                BookmarkUnifiedPage(repository: widget.repository),
+                BookmarkUnifiedStage1Page(repository: widget.repository),
                 PhotoManagementPage(repository: widget.repository),
                 TagManagementPage(repository: widget.repository),
                 PeopleManagementPage(repository: widget.repository),
