@@ -40,9 +40,12 @@ class BookmarkLifecycleStore {
         'ALTER TABLE bookmarks ADD COLUMN deleted_at_state TEXT',
       );
     }
+    if (!names.contains('genre_state')) {
+      await database.customStatement(
+        "ALTER TABLE bookmarks ADD COLUMN genre_state TEXT NOT NULL DEFAULT ''",
+      );
+    }
 
-    // Older experimental lifecycle data may exist. Import it once, then remove
-    // the legacy table so bookmarks becomes the single source of truth.
     final tables = await database.customSelect(
       "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'bookmark_lifecycle'",
     ).get();
@@ -94,6 +97,34 @@ class BookmarkLifecycleStore {
     return DateTime.tryParse(value);
   }
 
+  Future<String> genre(int bookmarkId) async {
+    final row = await database.customSelect(
+      'SELECT genre_state FROM bookmarks WHERE id = ?',
+      variables: [Variable<int>(bookmarkId)],
+      readsFrom: {database.bookmarks},
+    ).getSingleOrNull();
+    return row?.readNullable<String>('genre_state') ?? '';
+  }
+
+  Stream<String> watchGenre(int bookmarkId) async* {
+    yield await genre(bookmarkId);
+    await for (final _ in changes) {
+      yield await genre(bookmarkId);
+    }
+  }
+
+  Future<void> setGenre(int bookmarkId, String value) async {
+    final changed = await database.customUpdate(
+      'UPDATE bookmarks SET genre_state = ? WHERE id = ?',
+      variables: [Variable<String>(value.trim()), Variable<int>(bookmarkId)],
+      updates: {database.bookmarks},
+    );
+    if (changed == 0) {
+      throw StateError('ジャンルを更新できませんでした (id=$bookmarkId)');
+    }
+    _changes.add(null);
+  }
+
   Future<void> ensureBookmark(int bookmarkId, {bool inbox = false}) async {
     final changed = await database.customUpdate(
       'UPDATE bookmarks SET inbox_state = ?, deleted_at_state = NULL WHERE id = ?',
@@ -129,8 +160,6 @@ class BookmarkLifecycleStore {
       throw StateError('削除対象のブックマークが見つかりませんでした (id=$bookmarkId)');
     }
 
-    // Read the same row back immediately. This makes a silent no-op impossible:
-    // either the state is persisted or the caller receives an explicit error.
     final verification = await database.customSelect(
       '''
       SELECT
@@ -178,7 +207,6 @@ class BookmarkLifecycleStore {
   }
 
   Future<void> remove(int bookmarkId) async {
-    // Permanent deletion removes the bookmark row immediately after this call.
     _changes.add(null);
   }
 
