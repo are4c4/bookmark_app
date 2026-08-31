@@ -6,10 +6,9 @@ class BookmarkRepository {
   final AppDatabase _database;
 
   Stream<List<BookmarkItem>> watchAll() => _database.watchBookmarkItems();
-
   Stream<List<Tag>> watchTags() => _database.watchAllTags();
-
-  Stream<List<SavedView>> watchSavedViews() => _database.watchSavedViews();
+  Stream<List<SavedViewConfig>> watchSavedViews() =>
+      _database.watchSavedViewConfigs();
 
   Future<int> create({
     required String url,
@@ -18,16 +17,14 @@ class BookmarkRepository {
     String? description,
     Iterable<String> tagNames = const [],
     bool favorite = false,
-  }) {
-    return _database.addBookmark(
-      url: url,
-      title: title,
-      thumbnail: thumbnail,
-      description: description,
-      tagNames: tagNames,
-      favorite: favorite,
-    );
-  }
+  }) => _database.addBookmark(
+        url: url,
+        title: title,
+        thumbnail: thumbnail,
+        description: description,
+        tagNames: tagNames,
+        favorite: favorite,
+      );
 
   Future<void> update({
     required int id,
@@ -36,30 +33,25 @@ class BookmarkRepository {
     String? thumbnail,
     String? description,
     Iterable<String> tagNames = const [],
-  }) {
-    return _database.updateBookmarkFields(
-      id: id,
-      url: url,
-      title: title,
-      thumbnail: thumbnail,
-      description: description,
-      tagNames: tagNames,
-    );
-  }
+  }) => _database.updateBookmarkFields(
+        id: id,
+        url: url,
+        title: title,
+        thumbnail: thumbnail,
+        description: description,
+        tagNames: tagNames,
+      );
 
-  Future<void> toggleFavorite(BookmarkItem bookmark) {
-    return _database.setFavorite(bookmark.id, !bookmark.favorite);
-  }
+  Future<void> toggleFavorite(BookmarkItem bookmark) =>
+      _database.setFavorite(bookmark.id, !bookmark.favorite);
 
   Future<int> delete(int id) => _database.deleteBookmark(id);
 
-  Future<void> renameTag(Tag tag, String newName) {
-    return _database.renameTag(tag.id, newName);
-  }
+  Future<void> renameTag(Tag tag, String newName) =>
+      _database.renameTag(tag.id, newName);
 
-  Future<void> setTagParent(Tag tag, Tag? parent) {
-    return _database.setTagParent(tag.id, parent?.id);
-  }
+  Future<void> setTagParent(Tag tag, Tag? parent) =>
+      _database.setTagParent(tag.id, parent?.id);
 
   Future<void> deleteTag(Tag tag) => _database.deleteTag(tag.id);
 
@@ -68,16 +60,20 @@ class BookmarkRepository {
     required String layoutType,
     String searchQuery = '',
     bool favoritesOnly = false,
-    int? tagId,
-  }) {
-    return _database.createSavedView(
-      name: name,
-      layoutType: layoutType,
-      searchQuery: searchQuery,
-      favoritesOnly: favoritesOnly,
-      tagId: tagId,
-    );
-  }
+    Iterable<int> tagIds = const [],
+    String tagMatchMode = 'or',
+    String sortField = 'createdAt',
+    String sortDirection = 'desc',
+  }) => _database.createSavedView(
+        name: name,
+        layoutType: layoutType,
+        searchQuery: searchQuery,
+        favoritesOnly: favoritesOnly,
+        tagIds: tagIds,
+        tagMatchMode: tagMatchMode,
+        sortField: sortField,
+        sortDirection: sortDirection,
+      );
 
   Future<void> updateSavedView({
     required int id,
@@ -85,17 +81,21 @@ class BookmarkRepository {
     required String layoutType,
     required String searchQuery,
     required bool favoritesOnly,
-    int? tagId,
-  }) {
-    return _database.updateSavedView(
-      id: id,
-      name: name,
-      layoutType: layoutType,
-      searchQuery: searchQuery,
-      favoritesOnly: favoritesOnly,
-      tagId: tagId,
-    );
-  }
+    required Iterable<int> tagIds,
+    required String tagMatchMode,
+    required String sortField,
+    required String sortDirection,
+  }) => _database.updateSavedView(
+        id: id,
+        name: name,
+        layoutType: layoutType,
+        searchQuery: searchQuery,
+        favoritesOnly: favoritesOnly,
+        tagIds: tagIds,
+        tagMatchMode: tagMatchMode,
+        sortField: sortField,
+        sortDirection: sortDirection,
+      );
 
   Future<int> deleteSavedView(int id) => _database.deleteSavedView(id);
 }
