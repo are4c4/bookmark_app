@@ -3,22 +3,136 @@ import 'package:flutter/material.dart';
 import 'data/app_database.dart';
 import 'data/bookmark_repository.dart';
 import 'services/bookmark_transfer_service.dart';
+import 'services/profile_manager.dart';
 import 'views/bookmark_unified_stage1_page.dart';
 import 'views/people_management_page.dart';
 import 'views/photo_management_page.dart';
 import 'views/tag_management_page.dart';
 
 void main() {
-  final database = AppDatabase();
-  final repository = BookmarkRepository(database);
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const BookmarkBootstrap());
+}
 
-  runApp(BookmarkApp(repository: repository));
+class BookmarkBootstrap extends StatefulWidget {
+  const BookmarkBootstrap({super.key});
+
+  @override
+  State<BookmarkBootstrap> createState() => _BookmarkBootstrapState();
+}
+
+class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
+  ProfileManager? _profileManager;
+  AppDatabase? _database;
+  BookmarkRepository? _repository;
+  Object? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final manager = await ProfileManager.load();
+      final database = AppDatabase(databaseName: manager.state.activeProfile.databaseName);
+      if (!mounted) {
+        await database.close();
+        return;
+      }
+      setState(() {
+        _profileManager = manager;
+        _database = database;
+        _repository = BookmarkRepository(database);
+      });
+    } catch (error) {
+      if (mounted) setState(() => _error = error);
+    }
+  }
+
+  Future<void> _switchProfile(DatabaseProfile profile) async {
+    final manager = _profileManager;
+    if (manager == null || manager.state.activeProfile.id == profile.id) return;
+    await manager.setActiveProfile(profile);
+    final oldDatabase = _database;
+    final database = AppDatabase(databaseName: profile.databaseName);
+    if (!mounted) {
+      await database.close();
+      return;
+    }
+    setState(() {
+      _database = database;
+      _repository = BookmarkRepository(database);
+    });
+    await oldDatabase?.close();
+  }
+
+  Future<void> _createProfile(String name) async {
+    final manager = _profileManager;
+    if (manager == null) return;
+    final profile = await manager.createProfile(name);
+    if (!mounted) return;
+    setState(() {});
+    await _switchProfile(profile);
+  }
+
+  Future<void> _renameProfile(DatabaseProfile profile, String name) async {
+    final manager = _profileManager;
+    if (manager == null) return;
+    await manager.renameProfile(profile, name);
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _database?.close();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_error != null) {
+      return MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: Scaffold(body: Center(child: Text('起動に失敗しました: $_error'))),
+      );
+    }
+
+    final manager = _profileManager;
+    final repository = _repository;
+    if (manager == null || repository == null) {
+      return const MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: Scaffold(body: Center(child: CircularProgressIndicator())),
+      );
+    }
+
+    return BookmarkApp(
+      repository: repository,
+      profileState: manager.state,
+      onSwitchProfile: _switchProfile,
+      onCreateProfile: _createProfile,
+      onRenameProfile: _renameProfile,
+    );
+  }
 }
 
 class BookmarkApp extends StatelessWidget {
-  const BookmarkApp({super.key, required this.repository});
+  const BookmarkApp({
+    super.key,
+    required this.repository,
+    required this.profileState,
+    required this.onSwitchProfile,
+    required this.onCreateProfile,
+    required this.onRenameProfile,
+  });
 
   final BookmarkRepository repository;
+  final ProfileState profileState;
+  final Future<void> Function(DatabaseProfile profile) onSwitchProfile;
+  final Future<void> Function(String name) onCreateProfile;
+  final Future<void> Function(DatabaseProfile profile, String name) onRenameProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -94,15 +208,33 @@ class BookmarkApp extends StatelessWidget {
         textButtonTheme: TextButtonThemeData(style: TextButton.styleFrom(foregroundColor: notionText)),
         iconTheme: const IconThemeData(color: notionText),
       ),
-      home: BookmarkShell(repository: repository),
+      home: BookmarkShell(
+        key: ValueKey(profileState.activeProfile.id),
+        repository: repository,
+        profileState: profileState,
+        onSwitchProfile: onSwitchProfile,
+        onCreateProfile: onCreateProfile,
+        onRenameProfile: onRenameProfile,
+      ),
     );
   }
 }
 
 class BookmarkShell extends StatefulWidget {
-  const BookmarkShell({super.key, required this.repository});
+  const BookmarkShell({
+    super.key,
+    required this.repository,
+    required this.profileState,
+    required this.onSwitchProfile,
+    required this.onCreateProfile,
+    required this.onRenameProfile,
+  });
 
   final BookmarkRepository repository;
+  final ProfileState profileState;
+  final Future<void> Function(DatabaseProfile profile) onSwitchProfile;
+  final Future<void> Function(String name) onCreateProfile;
+  final Future<void> Function(DatabaseProfile profile, String name) onRenameProfile;
 
   @override
   State<BookmarkShell> createState() => _BookmarkShellState();
@@ -111,6 +243,64 @@ class BookmarkShell extends StatefulWidget {
 class _BookmarkShellState extends State<BookmarkShell> {
   var _index = 0;
   static const _transfer = BookmarkTransferService();
+
+  Future<void> _createProfileDialog() async {
+    final controller = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Profileを追加'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Profile名', hintText: '例: 実験'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('キャンセル')),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, controller.text.trim()),
+            child: const Text('作成して切替'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (name?.isNotEmpty == true) await widget.onCreateProfile(name!);
+  }
+
+  Future<void> _renameCurrentProfile() async {
+    final profile = widget.profileState.activeProfile;
+    final controller = TextEditingController(text: profile.name);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Profile名を変更'),
+        content: TextField(controller: controller, autofocus: true),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('キャンセル')),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, controller.text.trim()),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (name?.isNotEmpty == true) await widget.onRenameProfile(profile, name!);
+  }
+
+  Future<void> _handleProfileAction(String value) async {
+    if (value == '__create__') {
+      await _createProfileDialog();
+      return;
+    }
+    if (value == '__rename__') {
+      await _renameCurrentProfile();
+      return;
+    }
+    final matches = widget.profileState.profiles.where((profile) => profile.id == value);
+    if (matches.isNotEmpty) await widget.onSwitchProfile(matches.first);
+  }
 
   Future<void> _handleDataAction(String value) async {
     try {
@@ -134,12 +324,55 @@ class _BookmarkShellState extends State<BookmarkShell> {
 
   @override
   Widget build(BuildContext context) {
+    final activeProfile = widget.profileState.activeProfile;
     return Scaffold(
       body: Row(
         children: [
           NavigationRail(
             selectedIndex: _index,
             labelType: NavigationRailLabelType.all,
+            leading: Padding(
+              padding: const EdgeInsets.only(top: 8, bottom: 12),
+              child: PopupMenuButton<String>(
+                tooltip: 'Profileを切り替え',
+                onSelected: _handleProfileAction,
+                itemBuilder: (_) => [
+                  ...widget.profileState.profiles.map(
+                    (profile) => PopupMenuItem(
+                      value: profile.id,
+                      child: Row(
+                        children: [
+                          Icon(profile.id == activeProfile.id ? Icons.check : Icons.circle_outlined, size: 17),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text(profile.name)),
+                          if (profile.isDefault)
+                            const Text('既存DB', style: TextStyle(fontSize: 11, color: Color(0xFF9B9A97))),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const PopupMenuDivider(),
+                  const PopupMenuItem(value: '__create__', child: Text('＋ Profileを追加')),
+                  const PopupMenuItem(value: '__rename__', child: Text('現在のProfile名を変更')),
+                ],
+                child: SizedBox(
+                  width: 68,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.account_circle_outlined, size: 25),
+                      const SizedBox(height: 4),
+                      Text(
+                        activeProfile.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
             destinations: const [
               NavigationRailDestination(icon: Icon(Icons.bookmarks_outlined), selectedIcon: Icon(Icons.bookmarks), label: Text('ブックマーク')),
               NavigationRailDestination(icon: Icon(Icons.photo_library_outlined), selectedIcon: Icon(Icons.photo_library), label: Text('写真')),
