@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:drift/drift.dart';
 
 import 'app_database.dart';
+import 'app_database_touch.dart';
 
 class BookmarkLifecycleState {
   const BookmarkLifecycleState({
@@ -57,13 +58,18 @@ class BookmarkLifecycleStore {
     };
   }
 
+  Future<void> _notify(int bookmarkId) async {
+    _changes.add(null);
+    await database.touchBookmark(bookmarkId);
+  }
+
   Future<void> ensureBookmark(int bookmarkId, {bool inbox = false}) async {
     await database.customStatement(
       'INSERT INTO bookmark_lifecycle(bookmark_id, inbox, deleted_at) VALUES (?, ?, NULL) '
       'ON CONFLICT(bookmark_id) DO UPDATE SET inbox = excluded.inbox',
       [bookmarkId, inbox ? 1 : 0],
     );
-    _changes.add(null);
+    await _notify(bookmarkId);
   }
 
   Future<void> setInbox(int bookmarkId, bool value) async {
@@ -72,7 +78,7 @@ class BookmarkLifecycleStore {
       'ON CONFLICT(bookmark_id) DO UPDATE SET inbox = excluded.inbox',
       [bookmarkId, value ? 1 : 0],
     );
-    _changes.add(null);
+    await _notify(bookmarkId);
   }
 
   Future<void> moveToTrash(int bookmarkId) async {
@@ -81,7 +87,7 @@ class BookmarkLifecycleStore {
       'ON CONFLICT(bookmark_id) DO UPDATE SET inbox = 0, deleted_at = excluded.deleted_at',
       [bookmarkId, DateTime.now().toIso8601String()],
     );
-    _changes.add(null);
+    await _notify(bookmarkId);
   }
 
   Future<void> restore(int bookmarkId) async {
@@ -90,7 +96,7 @@ class BookmarkLifecycleStore {
       'ON CONFLICT(bookmark_id) DO UPDATE SET deleted_at = NULL',
       [bookmarkId],
     );
-    _changes.add(null);
+    await _notify(bookmarkId);
   }
 
   Future<void> remove(int bookmarkId) async {
