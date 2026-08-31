@@ -4,9 +4,11 @@ import 'data/app_database.dart';
 import 'data/bookmark_lifecycle_store.dart';
 import 'data/bookmark_repository.dart';
 import 'data/workspace_store.dart';
+import 'services/app_settings_service.dart';
 import 'services/photo_storage_service.dart';
 import 'services/profile_manager.dart';
 import 'services/profile_storage_migrator.dart';
+import 'ui/ui_tokens.dart';
 import 'views/app_shell.dart';
 import 'widgets/global_file_drop_layer.dart';
 
@@ -23,6 +25,8 @@ class BookmarkBootstrap extends StatefulWidget {
 }
 
 class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
+  static const _settings = AppSettingsService();
+
   ProfileManager? _profileManager;
   AppDatabase? _database;
   WorkspaceStore? _workspaceStore;
@@ -35,7 +39,19 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
   @override
   void initState() {
     super.initState();
+    _loadThemeMode();
     _load();
+  }
+
+  Future<void> _loadThemeMode() async {
+    final mode = await _settings.loadThemeMode();
+    if (mounted) setState(() => _themeMode = mode);
+  }
+
+  Future<void> _setThemeMode(ThemeMode mode) async {
+    if (_themeMode == mode) return;
+    setState(() => _themeMode = mode);
+    await _settings.saveThemeMode(mode);
   }
 
   Future<BookmarkRepository> _openRepository(
@@ -121,8 +137,7 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
     } catch (error) {
       try {
         final fallbackDatabase = AppDatabase(databaseName: previous.databaseName);
-        final fallbackRepository =
-            await _openRepository(fallbackDatabase, previous);
+        final fallbackRepository = await _openRepository(fallbackDatabase, previous);
         await manager.setActiveProfile(previous);
         if (!mounted) {
           await _lifecycleStore?.dispose();
@@ -256,14 +271,16 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
       splashColor: dark ? const Color(0x18FFFFFF) : const Color(0x0D000000),
       hoverColor: dark ? const Color(0x12FFFFFF) : const Color(0x0A000000),
       listTileTheme: ListTileThemeData(
-        minTileHeight: 36,
+        minTileHeight: UiTokens.sidebarRowHeight,
         minVerticalPadding: 0,
-        horizontalTitleGap: 8,
+        horizontalTitleGap: UiTokens.space8,
         selectedTileColor: selectedTile,
         selectedColor: notionText,
         iconColor: notionMuted,
         textColor: notionText,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(UiTokens.radiusSm),
+        ),
       ),
       cardTheme: CardThemeData(
         elevation: 0,
@@ -294,15 +311,15 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
         filled: dark,
         fillColor: dark ? const Color(0xFF242424) : null,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(5),
+          borderRadius: BorderRadius.circular(UiTokens.radiusSm),
           borderSide: BorderSide(color: notionBorder),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(5),
+          borderRadius: BorderRadius.circular(UiTokens.radiusSm),
           borderSide: BorderSide(color: notionBorder),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(5),
+          borderRadius: BorderRadius.circular(UiTokens.radiusSm),
           borderSide: BorderSide(color: notionMuted),
         ),
       ),
@@ -344,7 +361,7 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
       home = Scaffold(
         body: Center(
           child: Padding(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(UiTokens.space24),
             child: Text('起動またはProfile切替に失敗しました:\n$_error'),
           ),
         ),
@@ -378,15 +395,15 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
         children: [
           Positioned.fill(child: child ?? const SizedBox.shrink()),
           Positioned(
-            left: 8,
-            bottom: 8,
+            left: UiTokens.space8,
+            bottom: UiTokens.space8,
             child: Material(
               color: Theme.of(context).colorScheme.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(7),
+              borderRadius: BorderRadius.circular(UiTokens.radiusMd),
               elevation: 1,
               child: InkWell(
-                borderRadius: BorderRadius.circular(7),
-                onTap: () => setState(() => _themeMode = _nextThemeMode()),
+                borderRadius: BorderRadius.circular(UiTokens.radiusMd),
+                onTap: () => _setThemeMode(_nextThemeMode()),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                   child: Row(
@@ -396,7 +413,7 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
                       const SizedBox(width: 7),
                       Text(
                         _themeLabel(_themeMode),
-                        style: const TextStyle(fontSize: 12),
+                        style: const TextStyle(fontSize: UiTokens.textSm),
                       ),
                     ],
                   ),
