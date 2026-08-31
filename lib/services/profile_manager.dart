@@ -35,10 +35,10 @@ class DatabaseProfile {
         directoryPath: (json['directoryPath'] as String?) ?? '',
       );
 
-  DatabaseProfile copyWith({String? name, String? directoryPath}) => DatabaseProfile(
+  DatabaseProfile copyWith({String? name, String? databaseName, String? directoryPath}) => DatabaseProfile(
         id: id,
         name: name ?? this.name,
-        databaseName: databaseName,
+        databaseName: databaseName ?? this.databaseName,
         directoryPath: directoryPath ?? this.directoryPath,
       );
 }
@@ -56,9 +56,10 @@ class ProfileState {
 }
 
 class ProfileManager {
-  ProfileManager._(this._file, this._profilesRoot, this._state);
+  ProfileManager._(this._file, this._documentsRoot, this._profilesRoot, this._state);
 
   final File _file;
+  final Directory _documentsRoot;
   final Directory _profilesRoot;
   ProfileState _state;
 
@@ -66,7 +67,8 @@ class ProfileManager {
 
   static Future<ProfileManager> load() async {
     final support = await getApplicationSupportDirectory();
-    final root = Directory('${support.path}/BookmarkApp/Profiles');
+    final documents = await getApplicationDocumentsDirectory();
+    final root = Directory('${documents.path}/BookmarkApp/Profiles');
     await root.create(recursive: true);
     final file = File('${support.path}/bookmark_profiles.json');
 
@@ -77,7 +79,7 @@ class ProfileManager {
           DatabaseProfile(
             id: 'default',
             name: 'Default',
-            databaseName: 'bookmark_app',
+            databaseName: 'BookmarkApp/Profiles/default/database',
             directoryPath: '${root.path}/default',
           ),
         ],
@@ -95,15 +97,18 @@ class ProfileManager {
               id: 'default',
               name: 'Default',
               databaseName: 'bookmark_app',
-              directoryPath: '${root.path}/default',
+              directoryPath: '',
             ),
           ];
         }
-        profiles = profiles
-            .map((profile) => profile.directoryPath.isEmpty
-                ? profile.copyWith(directoryPath: '${root.path}/${profile.id}')
-                : profile)
-            .toList();
+
+        profiles = profiles.map((profile) {
+          return profile.copyWith(
+            databaseName: 'BookmarkApp/Profiles/${profile.id}/database',
+            directoryPath: '${root.path}/${profile.id}',
+          );
+        }).toList();
+
         final requestedActive = raw['activeProfileId'] as String? ?? 'default';
         final active = profiles.any((profile) => profile.id == requestedActive)
             ? requestedActive
@@ -115,7 +120,7 @@ class ProfileManager {
             DatabaseProfile(
               id: 'default',
               name: 'Default',
-              databaseName: 'bookmark_app',
+              databaseName: 'BookmarkApp/Profiles/default/database',
               directoryPath: '${root.path}/default',
             ),
           ],
@@ -124,14 +129,16 @@ class ProfileManager {
       }
     }
 
-    final manager = ProfileManager._(file, root, state);
+    final manager = ProfileManager._(file, documents, root, state);
     await manager._prepareProfileFolders();
     await manager._save();
     return manager;
   }
 
+  String _legacyDatabaseName(DatabaseProfile profile) =>
+      profile.isDefault ? 'bookmark_app' : 'bookmark_app_profile_${profile.id}';
+
   Future<void> _prepareProfileFolders() async {
-    final documents = await getApplicationDocumentsDirectory();
     for (final profile in _state.profiles) {
       final directory = Directory(profile.directoryPath);
       final photos = Directory(profile.photoDirectoryPath);
@@ -140,7 +147,7 @@ class ProfileManager {
 
       final targetDb = File(profile.databasePath);
       if (!await targetDb.exists()) {
-        final legacyDb = File('${documents.path}/${profile.databaseName}.sqlite');
+        final legacyDb = File('${_documentsRoot.path}/${_legacyDatabaseName(profile)}.sqlite');
         if (await legacyDb.exists()) {
           await legacyDb.copy(targetDb.path);
           for (final suffix in const ['-wal', '-shm']) {
@@ -165,7 +172,7 @@ class ProfileManager {
     final profile = DatabaseProfile(
       id: id,
       name: trimmed,
-      databaseName: 'bookmark_app_profile_$id',
+      databaseName: 'BookmarkApp/Profiles/$id/database',
       directoryPath: directory.path,
     );
     _state = ProfileState(
