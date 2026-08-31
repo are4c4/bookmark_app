@@ -110,9 +110,15 @@ class PersonRoleProperties extends StatelessWidget {
                 value: genre,
                 isDense: true,
                 isExpanded: true,
+                iconSize: 18,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w500,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
                 items: [
-                  const DropdownMenuItem(value: '', child: Text('未設定')),
-                  ..._bookmarkGenres.map((value) => DropdownMenuItem(value: value, child: Text(value))),
+                  const DropdownMenuItem(value: '', child: Text('未設定', style: TextStyle(fontSize: 12.5))),
+                  ..._bookmarkGenres.map((value) => DropdownMenuItem(value: value, child: Text(value, style: const TextStyle(fontSize: 12.5)))),
                 ],
                 onChanged: (value) => repository.lifecycleStore.setGenre(bookmark.id, value ?? ''),
               ),
