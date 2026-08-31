@@ -7,11 +7,16 @@ class BookmarkRepository {
     this._database, {
     required this.workspaceStore,
     required this.workspaceId,
+    this.profileDirectoryPath,
   });
 
   final AppDatabase _database;
   final WorkspaceStore workspaceStore;
   final int workspaceId;
+  final String? profileDirectoryPath;
+
+  String? get photoDirectoryPath =>
+      profileDirectoryPath == null ? null : '$profileDirectoryPath/photos';
 
   Future<List<WorkspaceInfo>> listWorkspaces() => workspaceStore.listWorkspaces();
   Future<int> createWorkspace(String name) => workspaceStore.createWorkspace(name);
