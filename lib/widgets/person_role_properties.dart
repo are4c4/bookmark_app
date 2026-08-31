@@ -109,6 +109,7 @@ class PersonRoleProperties extends StatelessWidget {
               child: DropdownButton<String>(
                 value: genre,
                 isDense: true,
+                isExpanded: true,
                 iconSize: 18,
                 style: TextStyle(
                   fontSize: 12.5,
@@ -181,7 +182,7 @@ class PersonRoleProperties extends StatelessWidget {
                 () => _selectPeople(context, role, assignments),
               )),
           Padding(
-            padding: const EdgeInsets.fromLTRB(120, 2, 0, 4),
+            padding: const EdgeInsets.fromLTRB(112, 2, 0, 4),
             child: TextButton.icon(
               onPressed: () => _addRole(context, assignments),
               icon: const Icon(Icons.add, size: 15),
