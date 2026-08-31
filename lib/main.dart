@@ -24,12 +24,95 @@ class BookmarkApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const notionText = Color(0xFF37352F);
+    const notionMuted = Color(0xFF787774);
+    const notionBorder = Color(0xFFE7E7E4);
+    const notionSidebar = Color(0xFFF7F7F5);
+
+    final scheme = ColorScheme.fromSeed(
+      seedColor: notionText,
+      brightness: Brightness.light,
+      surface: Colors.white,
+    );
+
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Bookmark App',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
         useMaterial3: true,
+        colorScheme: scheme.copyWith(
+          primary: notionText,
+          onPrimary: Colors.white,
+          surface: Colors.white,
+          onSurface: notionText,
+          outline: notionBorder,
+          outlineVariant: notionBorder,
+          surfaceContainerLowest: notionSidebar,
+          surfaceContainerLow: notionSidebar,
+        ),
+        scaffoldBackgroundColor: Colors.white,
+        dividerColor: notionBorder,
+        splashColor: const Color(0x0D000000),
+        hoverColor: const Color(0x0A000000),
+        cardTheme: CardThemeData(
+          elevation: 0,
+          color: Colors.white,
+          margin: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(6),
+            side: const BorderSide(color: notionBorder),
+          ),
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.white,
+          foregroundColor: notionText,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          centerTitle: true,
+        ),
+        navigationRailTheme: const NavigationRailThemeData(
+          backgroundColor: notionSidebar,
+          indicatorColor: Color(0xFFEFEFED),
+          selectedIconTheme: IconThemeData(color: notionText),
+          unselectedIconTheme: IconThemeData(color: notionMuted),
+          selectedLabelTextStyle: TextStyle(
+            color: notionText,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+          unselectedLabelTextStyle: TextStyle(
+            color: notionMuted,
+            fontSize: 12,
+          ),
+        ),
+        chipTheme: ChipThemeData(
+          backgroundColor: const Color(0xFFF1F1EF),
+          side: BorderSide.none,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+          labelStyle: const TextStyle(fontSize: 12.5, color: notionText),
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: false,
+          isDense: true,
+          hintStyle: const TextStyle(color: Color(0xFF9B9A97)),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(5),
+            borderSide: const BorderSide(color: notionBorder),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(5),
+            borderSide: const BorderSide(color: notionBorder),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(5),
+            borderSide: const BorderSide(color: Color(0xFF9B9A97)),
+          ),
+        ),
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(foregroundColor: notionText),
+        ),
+        iconTheme: const IconThemeData(color: notionText),
       ),
       home: BookmarkShell(repository: repository),
     );
@@ -80,7 +163,7 @@ class _BookmarkShellState extends State<BookmarkShell> {
             ],
             onDestinationSelected: (index) => setState(() => _index = index),
           ),
-          const VerticalDivider(width: 1),
+          const VerticalDivider(width: 1, color: Color(0xFFE7E7E4)),
           Expanded(
             child: IndexedStack(
               index: _index,
