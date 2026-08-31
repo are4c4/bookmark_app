@@ -5,6 +5,19 @@ import '../data/bookmark_repository.dart';
 import '../data/person_roles.dart';
 import 'relation_database_picker.dart';
 
+const _bookmarkGenres = <String>[
+  '動画',
+  '漫画',
+  '記事',
+  '書籍',
+  '音楽',
+  '映画',
+  'アニメ',
+  'ゲーム',
+  '画像',
+  'その他',
+];
+
 class PersonRoleProperties extends StatelessWidget {
   const PersonRoleProperties({
     super.key,
@@ -66,7 +79,7 @@ class PersonRoleProperties extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (suggestions.isNotEmpty) ...[
-                  const Text('候補', style: TextStyle(fontSize: 12.5, color: Color(0xFF787774))),
+                  Text('候補', style: TextStyle(fontSize: 12.5, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 6,
@@ -115,11 +128,61 @@ class PersonRoleProperties extends StatelessWidget {
     await _selectPeople(context, role, assignments);
   }
 
+  Widget _genreRow(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return StreamBuilder<String>(
+      stream: repository.lifecycleStore.watchGenre(bookmark.id),
+      builder: (context, snapshot) {
+        final genre = snapshot.data ?? '';
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 5),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 112,
+                child: Row(
+                  children: [
+                    Icon(Icons.category_outlined, size: 16, color: scheme.onSurfaceVariant),
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child: Text(
+                        'ジャンル',
+                        style: TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: genre,
+                    isDense: true,
+                    isExpanded: true,
+                    items: [
+                      const DropdownMenuItem(value: '', child: Text('未設定')),
+                      ..._bookmarkGenres.map((value) => DropdownMenuItem(value: value, child: Text(value))),
+                    ],
+                    onChanged: (value) => repository.lifecycleStore.setGenre(bookmark.id, value ?? ''),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 28),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _row({
+    required BuildContext context,
     required String role,
     required List<Person> people,
     required VoidCallback onAdd,
   }) {
+    final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(
@@ -129,12 +192,12 @@ class PersonRoleProperties extends StatelessWidget {
             width: 112,
             child: Row(
               children: [
-                const Icon(Icons.person_outline, size: 16, color: Color(0xFF9B9A97)),
+                Icon(Icons.person_outline, size: 16, color: scheme.onSurfaceVariant),
                 const SizedBox(width: 7),
                 Expanded(
                   child: Text(
                     role,
-                    style: const TextStyle(fontSize: 12.5, color: Color(0xFF787774)),
+                    style: TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant),
                   ),
                 ),
               ],
@@ -142,19 +205,19 @@ class PersonRoleProperties extends StatelessWidget {
           ),
           Expanded(
             child: people.isEmpty
-                ? const Text('なし', style: TextStyle(fontSize: 12.5, color: Color(0xFFB0AFAC)))
+                ? Text('なし', style: TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant.withValues(alpha: .55)))
                 : Wrap(
                     spacing: 5,
                     runSpacing: 5,
                     children: people.map((person) {
                       return ActionChip(
-                        avatar: const Icon(Icons.person_outline, size: 14, color: Color(0xFF787774)),
+                        avatar: Icon(Icons.person_outline, size: 14, color: scheme.onSurfaceVariant),
                         label: Text(person.name),
                         onPressed: () => onFilterByPerson?.call(person),
-                        backgroundColor: const Color(0xFFF1F1EF),
+                        backgroundColor: scheme.surfaceContainerHighest,
                         side: BorderSide.none,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                        labelStyle: const TextStyle(fontSize: 12, color: Color(0xFF565653)),
+                        labelStyle: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
                         visualDensity: VisualDensity.compact,
                       );
                     }).toList(),
@@ -167,7 +230,7 @@ class PersonRoleProperties extends StatelessWidget {
               padding: EdgeInsets.zero,
               tooltip: '$roleを人物DBから選択・新規作成',
               onPressed: onAdd,
-              icon: const Icon(Icons.add, size: 17, color: Color(0xFF787774)),
+              icon: Icon(Icons.add, size: 17, color: scheme.onSurfaceVariant),
             ),
           ),
         ],
@@ -200,8 +263,10 @@ class PersonRoleProperties extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            _genreRow(context),
             ...roles.map(
               (role) => _row(
+                context: context,
                 role: role,
                 people: grouped[role] ?? const <Person>[],
                 onAdd: () => _selectPeople(context, role, assignments),
@@ -214,7 +279,7 @@ class PersonRoleProperties extends StatelessWidget {
                 icon: const Icon(Icons.add, size: 15),
                 label: const Text('人物プロパティを追加'),
                 style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF787774),
+                  foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant,
                   textStyle: const TextStyle(fontSize: 12),
                   visualDensity: VisualDensity.compact,
                 ),
