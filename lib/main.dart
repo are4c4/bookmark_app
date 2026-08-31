@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'data/app_database.dart';
 import 'data/bookmark_repository.dart';
-import 'views/bookmark_gallery_page.dart';
+import 'views/bookmark_workspace_page.dart';
 
 void main() {
   final database = AppDatabase();
@@ -28,7 +28,7 @@ class BookmarkApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
         useMaterial3: true,
       ),
-      home: BookmarkGalleryPage(repository: repository),
+      home: BookmarkWorkspacePage(repository: repository),
     );
   }
 }
