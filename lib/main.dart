@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'data/app_database.dart';
 import 'data/bookmark_repository.dart';
+import 'data/workspace_store.dart';
 import 'services/bookmark_transfer_service.dart';
 import 'services/profile_manager.dart';
 import 'views/bookmark_unified_stage1_page.dart';
@@ -24,6 +25,7 @@ class BookmarkBootstrap extends StatefulWidget {
 class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
   ProfileManager? _profileManager;
   AppDatabase? _database;
+  WorkspaceStore? _workspaceStore;
   BookmarkRepository? _repository;
   Object? _error;
 
@@ -33,10 +35,22 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
     _load();
   }
 
+  Future<BookmarkRepository> _openRepository(AppDatabase database) async {
+    final workspaceStore = WorkspaceStore(database);
+    final workspaceId = await workspaceStore.initialize();
+    _workspaceStore = workspaceStore;
+    return BookmarkRepository(
+      database,
+      workspaceStore: workspaceStore,
+      workspaceId: workspaceId,
+    );
+  }
+
   Future<void> _load() async {
     try {
       final manager = await ProfileManager.load();
       final database = AppDatabase(databaseName: manager.state.activeProfile.databaseName);
+      final repository = await _openRepository(database);
       if (!mounted) {
         await database.close();
         return;
@@ -44,7 +58,7 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
       setState(() {
         _profileManager = manager;
         _database = database;
-        _repository = BookmarkRepository(database);
+        _repository = repository;
       });
     } catch (error) {
       if (mounted) setState(() => _error = error);
@@ -57,15 +71,31 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
     await manager.setActiveProfile(profile);
     final oldDatabase = _database;
     final database = AppDatabase(databaseName: profile.databaseName);
+    final repository = await _openRepository(database);
     if (!mounted) {
       await database.close();
       return;
     }
     setState(() {
       _database = database;
-      _repository = BookmarkRepository(database);
+      _repository = repository;
     });
     await oldDatabase?.close();
+  }
+
+  Future<void> _switchWorkspace(WorkspaceInfo workspace) async {
+    final store = _workspaceStore;
+    final database = _database;
+    if (store == null || database == null || _repository?.workspaceId == workspace.id) return;
+    await store.setActiveWorkspace(workspace.id);
+    if (!mounted) return;
+    setState(() {
+      _repository = BookmarkRepository(
+        database,
+        workspaceStore: store,
+        workspaceId: workspace.id,
+      );
+    });
   }
 
   Future<void> _createProfile(String name) async {
@@ -114,6 +144,7 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
       onSwitchProfile: _switchProfile,
       onCreateProfile: _createProfile,
       onRenameProfile: _renameProfile,
+      onSwitchWorkspace: _switchWorkspace,
     );
   }
 }
@@ -126,6 +157,7 @@ class BookmarkApp extends StatelessWidget {
     required this.onSwitchProfile,
     required this.onCreateProfile,
     required this.onRenameProfile,
+    required this.onSwitchWorkspace,
   });
 
   final BookmarkRepository repository;
@@ -133,6 +165,7 @@ class BookmarkApp extends StatelessWidget {
   final Future<void> Function(DatabaseProfile profile) onSwitchProfile;
   final Future<void> Function(String name) onCreateProfile;
   final Future<void> Function(DatabaseProfile profile, String name) onRenameProfile;
+  final Future<void> Function(WorkspaceInfo workspace) onSwitchWorkspace;
 
   @override
   Widget build(BuildContext context) {
@@ -209,12 +242,13 @@ class BookmarkApp extends StatelessWidget {
         iconTheme: const IconThemeData(color: notionText),
       ),
       home: BookmarkShell(
-        key: ValueKey(profileState.activeProfile.id),
+        key: ValueKey('${profileState.activeProfile.id}:${repository.workspaceId}'),
         repository: repository,
         profileState: profileState,
         onSwitchProfile: onSwitchProfile,
         onCreateProfile: onCreateProfile,
         onRenameProfile: onRenameProfile,
+        onSwitchWorkspace: onSwitchWorkspace,
       ),
     );
   }
@@ -228,6 +262,7 @@ class BookmarkShell extends StatefulWidget {
     required this.onSwitchProfile,
     required this.onCreateProfile,
     required this.onRenameProfile,
+    required this.onSwitchWorkspace,
   });
 
   final BookmarkRepository repository;
@@ -235,6 +270,7 @@ class BookmarkShell extends StatefulWidget {
   final Future<void> Function(DatabaseProfile profile) onSwitchProfile;
   final Future<void> Function(String name) onCreateProfile;
   final Future<void> Function(DatabaseProfile profile, String name) onRenameProfile;
+  final Future<void> Function(WorkspaceInfo workspace) onSwitchWorkspace;
 
   @override
   State<BookmarkShell> createState() => _BookmarkShellState();
@@ -244,62 +280,113 @@ class _BookmarkShellState extends State<BookmarkShell> {
   var _index = 0;
   static const _transfer = BookmarkTransferService();
 
-  Future<void> _createProfileDialog() async {
-    final controller = TextEditingController();
-    final name = await showDialog<String>(
+  Future<String?> _askName(String title, {String initial = '', String hint = ''}) async {
+    final controller = TextEditingController(text: initial);
+    final result = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Profileを追加'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(labelText: 'Profile名', hintText: '例: 実験'),
-        ),
+        title: Text(title),
+        content: TextField(controller: controller, autofocus: true, decoration: InputDecoration(hintText: hint)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('キャンセル')),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, controller.text.trim()),
-            child: const Text('作成して切替'),
-          ),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, controller.text.trim()), child: const Text('保存')),
         ],
       ),
     );
     controller.dispose();
+    return result;
+  }
+
+  Future<void> _createProfileDialog() async {
+    final name = await _askName('Profileを追加', hint: '例: 実験');
     if (name?.isNotEmpty == true) await widget.onCreateProfile(name!);
   }
 
   Future<void> _renameCurrentProfile() async {
     final profile = widget.profileState.activeProfile;
-    final controller = TextEditingController(text: profile.name);
-    final name = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Profile名を変更'),
-        content: TextField(controller: controller, autofocus: true),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('キャンセル')),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, controller.text.trim()),
-            child: const Text('保存'),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
+    final name = await _askName('Profile名を変更', initial: profile.name);
     if (name?.isNotEmpty == true) await widget.onRenameProfile(profile, name!);
   }
 
   Future<void> _handleProfileAction(String value) async {
-    if (value == '__create__') {
-      await _createProfileDialog();
-      return;
-    }
-    if (value == '__rename__') {
-      await _renameCurrentProfile();
-      return;
-    }
+    if (value == '__create__') return _createProfileDialog();
+    if (value == '__rename__') return _renameCurrentProfile();
     final matches = widget.profileState.profiles.where((profile) => profile.id == value);
     if (matches.isNotEmpty) await widget.onSwitchProfile(matches.first);
+  }
+
+  Future<void> _createWorkspace() async {
+    final name = await _askName('Workspaceを追加', hint: '例: 修論');
+    if (name?.isNotEmpty != true) return;
+    try {
+      final id = await widget.repository.createWorkspace(name!);
+      final workspace = (await widget.repository.listWorkspaces()).firstWhere((item) => item.id == id);
+      await widget.onSwitchWorkspace(workspace);
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Workspaceを作成できませんでした: $error')));
+    }
+  }
+
+  Future<void> _renameWorkspace(WorkspaceInfo workspace) async {
+    final name = await _askName('Workspace名を変更', initial: workspace.name);
+    if (name?.isNotEmpty != true) return;
+    await widget.repository.renameWorkspace(workspace, name!);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _deleteWorkspace(WorkspaceInfo workspace) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Workspaceを削除しますか？'),
+        content: const Text('中のブックマークと保存ビューは別のWorkspaceへ移動されます。人物・写真・タグは削除されません。'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('キャンセル')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('削除')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await widget.repository.deleteWorkspace(workspace);
+      final workspaces = await widget.repository.listWorkspaces();
+      await widget.onSwitchWorkspace(workspaces.first);
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Workspaceを削除できませんでした: $error')));
+    }
+  }
+
+  Future<void> _showWorkspaceMenu() async {
+    final workspaces = await widget.repository.listWorkspaces();
+    if (!mounted) return;
+    final selected = await showMenu<String>(
+      context: context,
+      position: const RelativeRect.fromLTRB(72, 92, 0, 0),
+      items: [
+        ...workspaces.map((workspace) => PopupMenuItem(
+              value: 'switch:${workspace.id}',
+              child: Row(children: [
+                Icon(workspace.id == widget.repository.workspaceId ? Icons.check : Icons.space_dashboard_outlined, size: 17),
+                const SizedBox(width: 8),
+                Expanded(child: Text(workspace.name)),
+              ]),
+            )),
+        const PopupMenuDivider(),
+        const PopupMenuItem(value: 'create', child: Text('＋ Workspaceを追加')),
+        const PopupMenuItem(value: 'rename', child: Text('現在のWorkspace名を変更')),
+        if (workspaces.length > 1) const PopupMenuItem(value: 'delete', child: Text('現在のWorkspaceを削除')),
+      ],
+    );
+    if (selected == null) return;
+    final current = workspaces.firstWhere((workspace) => workspace.id == widget.repository.workspaceId);
+    if (selected == 'create') return _createWorkspace();
+    if (selected == 'rename') return _renameWorkspace(current);
+    if (selected == 'delete') return _deleteWorkspace(current);
+    if (selected.startsWith('switch:')) {
+      final id = int.tryParse(selected.substring(7));
+      final matches = workspaces.where((workspace) => workspace.id == id);
+      if (matches.isNotEmpty) await widget.onSwitchWorkspace(matches.first);
+    }
   }
 
   Future<void> _handleDataAction(String value) async {
@@ -332,44 +419,48 @@ class _BookmarkShellState extends State<BookmarkShell> {
             selectedIndex: _index,
             labelType: NavigationRailLabelType.all,
             leading: Padding(
-              padding: const EdgeInsets.only(top: 8, bottom: 12),
-              child: PopupMenuButton<String>(
-                tooltip: 'Profileを切り替え',
-                onSelected: _handleProfileAction,
-                itemBuilder: (_) => [
-                  ...widget.profileState.profiles.map(
-                    (profile) => PopupMenuItem(
-                      value: profile.id,
-                      child: Row(
-                        children: [
-                          Icon(profile.id == activeProfile.id ? Icons.check : Icons.circle_outlined, size: 17),
-                          const SizedBox(width: 8),
-                          Expanded(child: Text(profile.name)),
-                          if (profile.isDefault)
-                            const Text('既存DB', style: TextStyle(fontSize: 11, color: Color(0xFF9B9A97))),
-                        ],
+              padding: const EdgeInsets.only(top: 8, bottom: 10),
+              child: SizedBox(
+                width: 72,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    PopupMenuButton<String>(
+                      tooltip: 'Profileを切り替え',
+                      onSelected: _handleProfileAction,
+                      itemBuilder: (_) => [
+                        ...widget.profileState.profiles.map(
+                          (profile) => PopupMenuItem(
+                            value: profile.id,
+                            child: Row(children: [
+                              Icon(profile.id == activeProfile.id ? Icons.check : Icons.circle_outlined, size: 17),
+                              const SizedBox(width: 8),
+                              Expanded(child: Text(profile.name)),
+                            ]),
+                          ),
+                        ),
+                        const PopupMenuDivider(),
+                        const PopupMenuItem(value: '__create__', child: Text('＋ Profileを追加')),
+                        const PopupMenuItem(value: '__rename__', child: Text('現在のProfile名を変更')),
+                      ],
+                      child: Column(mainAxisSize: MainAxisSize.min, children: [
+                        const Icon(Icons.account_circle_outlined, size: 23),
+                        Text(activeProfile.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w600)),
+                      ]),
+                    ),
+                    const SizedBox(height: 9),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(6),
+                      onTap: _showWorkspaceMenu,
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 4, vertical: 5),
+                        child: Column(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(Icons.space_dashboard_outlined, size: 21),
+                          Text('Workspace', maxLines: 1, style: TextStyle(fontSize: 9.5)),
+                        ]),
                       ),
                     ),
-                  ),
-                  const PopupMenuDivider(),
-                  const PopupMenuItem(value: '__create__', child: Text('＋ Profileを追加')),
-                  const PopupMenuItem(value: '__rename__', child: Text('現在のProfile名を変更')),
-                ],
-                child: SizedBox(
-                  width: 68,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.account_circle_outlined, size: 25),
-                      const SizedBox(height: 4),
-                      Text(
-                        activeProfile.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
+                  ],
                 ),
               ),
             ),
@@ -388,23 +479,14 @@ class _BookmarkShellState extends State<BookmarkShell> {
                     tooltip: 'インポート / エクスポート',
                     onSelected: _handleDataAction,
                     itemBuilder: (_) => const [
-                      PopupMenuItem(
-                        value: 'import',
-                        child: ListTile(contentPadding: EdgeInsets.zero, dense: true, leading: Icon(Icons.file_download_outlined), title: Text('インポート')),
-                      ),
-                      PopupMenuItem(
-                        value: 'export',
-                        child: ListTile(contentPadding: EdgeInsets.zero, dense: true, leading: Icon(Icons.file_upload_outlined), title: Text('JSONバックアップ')),
-                      ),
+                      PopupMenuItem(value: 'import', child: ListTile(contentPadding: EdgeInsets.zero, dense: true, leading: Icon(Icons.file_download_outlined), title: Text('インポート'))),
+                      PopupMenuItem(value: 'export', child: ListTile(contentPadding: EdgeInsets.zero, dense: true, leading: Icon(Icons.file_upload_outlined), title: Text('JSONバックアップ'))),
                     ],
-                    child: const Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.import_export, size: 22),
-                        SizedBox(height: 4),
-                        Text('データ', style: TextStyle(fontSize: 11)),
-                      ],
-                    ),
+                    child: const Column(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.import_export, size: 22),
+                      SizedBox(height: 4),
+                      Text('データ', style: TextStyle(fontSize: 11)),
+                    ]),
                   ),
                 ),
               ),
