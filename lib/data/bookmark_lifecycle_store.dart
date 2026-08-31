@@ -41,7 +41,8 @@ class BookmarkLifecycleStore {
       );
     }
 
-    // Older experimental lifecycle data may exist. Import it once when possible.
+    // Older experimental lifecycle data may exist. Import it once, then remove
+    // the legacy table so bookmarks becomes the single source of truth.
     final tables = await database.customSelect(
       "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'bookmark_lifecycle'",
     ).get();
@@ -60,6 +61,7 @@ class BookmarkLifecycleStore {
           SELECT 1 FROM bookmark_lifecycle bl WHERE bl.bookmark_id = bookmarks.id
         )
       ''');
+      await database.customStatement('DROP TABLE bookmark_lifecycle');
     }
   }
 
