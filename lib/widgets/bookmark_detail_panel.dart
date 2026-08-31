@@ -37,6 +37,12 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
       .where((e) => e.isNotEmpty)
       .toList();
 
+  String _compactUrl(String value) {
+    final uri = Uri.tryParse(value);
+    if (uri == null || uri.host.isEmpty) return value;
+    return uri.host.startsWith('www.') ? uri.host.substring(4) : uri.host;
+  }
+
   Future<void> _openUrl(String value) async {
     final uri = Uri.tryParse(value);
     if (uri == null || !await launchUrl(uri, mode: LaunchMode.externalApplication)) {
@@ -116,14 +122,15 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                   const SizedBox(height: 8),
                   if (!clearCover && selectedCover != null)
                     ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: SizedBox(width: 220, height: 130, child: Image.file(File(selectedCover!.path), fit: BoxFit.cover)),
+                      borderRadius: BorderRadius.circular(6),
+                      child: SizedBox(width: 240, height: 135, child: Image.file(File(selectedCover!.path), fit: BoxFit.cover)),
                     )
                   else
                     Text('ローカルのカバー画像は設定されていません', style: Theme.of(context).textTheme.bodySmall),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
+                    runSpacing: 8,
                     children: [
                       OutlinedButton.icon(
                         onPressed: () async {
@@ -195,198 +202,332 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
 
   Widget _cover() {
     final bookmark = widget.bookmark;
-    if (bookmark.coverPhoto != null) return Image.file(File(bookmark.coverPhoto!.path), fit: BoxFit.cover);
-    if (bookmark.thumbnail?.trim().isNotEmpty == true) {
-      return Image.network(bookmark.thumbnail!, fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image_outlined, size: 42)));
+    if (bookmark.coverPhoto != null) {
+      return Image.file(
+        File(bookmark.coverPhoto!.path),
+        width: double.infinity,
+        height: double.infinity,
+        fit: BoxFit.cover,
+      );
     }
-    return const Center(child: Icon(Icons.image_outlined, size: 42));
+    if (bookmark.thumbnail?.trim().isNotEmpty == true) {
+      return Image.network(
+        bookmark.thumbnail!,
+        width: double.infinity,
+        height: double.infinity,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _coverPlaceholder(),
+      );
+    }
+    return _coverPlaceholder();
   }
 
-  Widget _property(String label, Widget value, {VoidCallback? onSelect, String? tooltip}) => Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(width: 84, child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600))),
-          Expanded(child: value),
-          if (onSelect != null)
-            IconButton(
-              tooltip: tooltip,
-              onPressed: onSelect,
-              visualDensity: VisualDensity.compact,
-              icon: const Icon(Icons.add_circle_outline, size: 20),
+  Widget _coverPlaceholder() => Container(
+        color: const Color(0xFFFAFAF9),
+        alignment: Alignment.center,
+        child: const Icon(Icons.image_outlined, size: 40, color: Color(0xFFB8B7B4)),
+      );
+
+  Widget _propertyRow({
+    required IconData icon,
+    required String label,
+    required Widget value,
+    VoidCallback? onAdd,
+    String? tooltip,
+  }) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 104,
+              child: Row(
+                children: [
+                  Icon(icon, size: 16, color: const Color(0xFF9B9A97)),
+                  const SizedBox(width: 7),
+                  Text(label, style: const TextStyle(fontSize: 12.5, color: Color(0xFF787774))),
+                ],
+              ),
             ),
-        ],
+            Expanded(child: value),
+            if (onAdd != null)
+              SizedBox(
+                width: 28,
+                height: 28,
+                child: IconButton(
+                  padding: EdgeInsets.zero,
+                  tooltip: tooltip,
+                  onPressed: onAdd,
+                  icon: const Icon(Icons.add, size: 17, color: Color(0xFF787774)),
+                ),
+              ),
+          ],
+        ),
+      );
+
+  Widget _relationChip({required String label, IconData? icon, required VoidCallback onPressed}) => ActionChip(
+        avatar: icon == null ? null : Icon(icon, size: 14, color: const Color(0xFF787774)),
+        label: Text(label),
+        onPressed: onPressed,
+        backgroundColor: const Color(0xFFF1F1EF),
+        side: BorderSide.none,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+        labelStyle: const TextStyle(fontSize: 12, color: Color(0xFF565653)),
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        visualDensity: VisualDensity.compact,
       );
 
   @override
   Widget build(BuildContext context) {
     final bookmark = widget.bookmark;
     return Material(
-      color: Theme.of(context).colorScheme.surface,
+      color: Colors.white,
       child: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 8, 8),
-            child: Row(
-              children: [
-                const Text('詳細', style: TextStyle(fontWeight: FontWeight.w700)),
-                const Spacer(),
-                IconButton(tooltip: '閉じる', onPressed: widget.onClose, icon: const Icon(Icons.close)),
-              ],
+          SizedBox(
+            height: 46,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 16, right: 6),
+              child: Row(
+                children: [
+                  const Text('詳細', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF787774))),
+                  const Spacer(),
+                  IconButton(
+                    tooltip: '編集',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: _edit,
+                    icon: const Icon(Icons.edit_outlined, size: 18),
+                  ),
+                  IconButton(
+                    tooltip: bookmark.favorite ? 'お気に入り解除' : 'お気に入り',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => widget.repository.toggleFavorite(bookmark),
+                    icon: Icon(bookmark.favorite ? Icons.star : Icons.star_border, size: 19),
+                  ),
+                  IconButton(
+                    tooltip: '閉じる',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: widget.onClose,
+                    icon: const Icon(Icons.close, size: 20),
+                  ),
+                ],
+              ),
             ),
           ),
-          const Divider(height: 1),
+          const Divider(height: 1, color: Color(0xFFE7E7E4)),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(18),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  ClipRRect(borderRadius: BorderRadius.circular(10), child: AspectRatio(aspectRatio: 16 / 9, child: _cover())),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(child: Text(bookmark.title, style: Theme.of(context).textTheme.titleLarge)),
-                      IconButton(
-                        tooltip: 'お気に入り',
-                        onPressed: () => widget.repository.toggleFavorite(bookmark),
-                        icon: Icon(bookmark.favorite ? Icons.star : Icons.star_border),
-                      ),
-                      IconButton(tooltip: '編集', onPressed: _edit, icon: const Icon(Icons.edit_outlined)),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(child: SelectableText(bookmark.url, maxLines: 2)),
-                      const SizedBox(width: 8),
-                      FilledButton.icon(
-                        onPressed: () => _openUrl(bookmark.url),
-                        icon: const Icon(Icons.open_in_new, size: 18),
-                        label: const Text('開く'),
-                      ),
-                    ],
-                  ),
-                  const Divider(height: 28),
-                  _property(
-                    'タグ',
-                    bookmark.tags.isEmpty
-                        ? const Text('なし')
-                        : Wrap(
-                            spacing: 5,
-                            runSpacing: 5,
-                            children: bookmark.tags
-                                .map((tag) => ActionChip(
-                                      label: Text(tag.name),
-                                      tooltip: 'このタグで絞り込む',
-                                      onPressed: () => widget.onFilterByTag?.call(tag),
-                                    ))
-                                .toList(),
+                  AspectRatio(aspectRatio: 16 / 9, child: _cover()),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 22, 24, 36),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          bookmark.title,
+                          style: const TextStyle(
+                            fontSize: 24,
+                            height: 1.2,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF37352F),
                           ),
-                    onSelect: _selectTagsFromDatabase,
-                    tooltip: 'タグDBから選択',
-                  ),
-                  const SizedBox(height: 12),
-                  _property(
-                    '出演者',
-                    bookmark.people.isEmpty
-                        ? const Text('なし')
-                        : Wrap(
-                            spacing: 5,
-                            runSpacing: 5,
-                            children: bookmark.people
-                                .map((person) => ActionChip(
-                                      avatar: const Icon(Icons.person_outline, size: 16),
-                                      label: Text(person.name),
-                                      tooltip: 'この出演者で絞り込む',
-                                      onPressed: () => widget.onFilterByPerson?.call(person),
-                                    ))
-                                .toList(),
-                          ),
-                    onSelect: _selectPeopleFromDatabase,
-                    tooltip: '出演者DBから選択',
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      Text('関連写真', style: Theme.of(context).textTheme.titleMedium),
-                      const Spacer(),
-                      IconButton(
-                        tooltip: '写真DBから追加',
-                        onPressed: _addPhotosFromDatabase,
-                        icon: const Icon(Icons.add_photo_alternate_outlined),
-                      ),
-                      if (bookmark.coverPhoto != null)
-                        IconButton(
-                          tooltip: 'カバー解除',
-                          onPressed: () => widget.repository.clearCoverPhoto(bookmark),
-                          icon: const Icon(Icons.hide_image_outlined),
                         ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  if (bookmark.photos.isEmpty)
-                    const Text('関連写真はありません')
-                  else
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: bookmark.photos.map((photo) {
-                        final isCover = bookmark.coverPhoto?.id == photo.id;
-                        return SizedBox(
-                          width: 130,
-                          child: Card(
-                            clipBehavior: Clip.antiAlias,
-                            child: Column(
-                              children: [
-                                AspectRatio(
-                                  aspectRatio: 4 / 3,
-                                  child: InkWell(
-                                    onTap: () => widget.onFilterByPhoto?.call(photo),
-                                    child: Stack(
-                                      fit: StackFit.expand,
-                                      children: [
-                                        Image.file(File(photo.path), fit: BoxFit.cover),
-                                        if (isCover)
-                                          const Positioned(top: 4, left: 4, child: Icon(Icons.photo_size_select_actual, size: 18)),
-                                      ],
-                                    ),
-                                  ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Tooltip(
+                                message: bookmark.url,
+                                child: Text(
+                                  _compactUrl(bookmark.url),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontSize: 13, color: Color(0xFF9B9A97)),
                                 ),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Padding(
-                                        padding: const EdgeInsets.only(left: 6),
-                                        child: Text(photo.title ?? '写真', maxLines: 1, overflow: TextOverflow.ellipsis),
+                              ),
+                            ),
+                            TextButton.icon(
+                              onPressed: () => _openUrl(bookmark.url),
+                              icon: const Icon(Icons.open_in_new, size: 15),
+                              label: const Text('開く'),
+                              style: TextButton.styleFrom(
+                                foregroundColor: const Color(0xFF565653),
+                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                                visualDensity: VisualDensity.compact,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 18),
+                        _propertyRow(
+                          icon: Icons.sell_outlined,
+                          label: 'タグ',
+                          value: bookmark.tags.isEmpty
+                              ? const Text('なし', style: TextStyle(fontSize: 12.5, color: Color(0xFFB0AFAC)))
+                              : Wrap(
+                                  spacing: 5,
+                                  runSpacing: 5,
+                                  children: bookmark.tags
+                                      .map((tag) => _relationChip(
+                                            label: tag.name,
+                                            onPressed: () => widget.onFilterByTag?.call(tag),
+                                          ))
+                                      .toList(),
+                                ),
+                          onAdd: _selectTagsFromDatabase,
+                          tooltip: 'タグDBから選択',
+                        ),
+                        _propertyRow(
+                          icon: Icons.people_outline,
+                          label: '出演者',
+                          value: bookmark.people.isEmpty
+                              ? const Text('なし', style: TextStyle(fontSize: 12.5, color: Color(0xFFB0AFAC)))
+                              : Wrap(
+                                  spacing: 5,
+                                  runSpacing: 5,
+                                  children: bookmark.people
+                                      .map((person) => _relationChip(
+                                            label: person.name,
+                                            icon: Icons.person_outline,
+                                            onPressed: () => widget.onFilterByPerson?.call(person),
+                                          ))
+                                      .toList(),
+                                ),
+                          onAdd: _selectPeopleFromDatabase,
+                          tooltip: '出演者DBから選択',
+                        ),
+                        const SizedBox(height: 18),
+                        const Divider(height: 1, color: Color(0xFFEDEDEB)),
+                        const SizedBox(height: 18),
+                        Row(
+                          children: [
+                            const Text('関連写真', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF37352F))),
+                            const Spacer(),
+                            IconButton(
+                              tooltip: '写真DBから追加',
+                              visualDensity: VisualDensity.compact,
+                              onPressed: _addPhotosFromDatabase,
+                              icon: const Icon(Icons.add_photo_alternate_outlined, size: 19),
+                            ),
+                            if (bookmark.coverPhoto != null)
+                              IconButton(
+                                tooltip: 'カバー解除',
+                                visualDensity: VisualDensity.compact,
+                                onPressed: () => widget.repository.clearCoverPhoto(bookmark),
+                                icon: const Icon(Icons.hide_image_outlined, size: 19),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        if (bookmark.photos.isEmpty)
+                          const Text('関連写真はありません', style: TextStyle(fontSize: 12.5, color: Color(0xFF9B9A97)))
+                        else
+                          SizedBox(
+                            height: 104,
+                            child: ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: bookmark.photos.length,
+                              separatorBuilder: (_, __) => const SizedBox(width: 8),
+                              itemBuilder: (context, index) {
+                                final photo = bookmark.photos[index];
+                                final isCover = bookmark.coverPhoto?.id == photo.id;
+                                return SizedBox(
+                                  width: 126,
+                                  child: Material(
+                                    color: Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                      side: const BorderSide(color: Color(0xFFE7E7E4)),
+                                      borderRadius: BorderRadius.circular(5),
+                                    ),
+                                    clipBehavior: Clip.antiAlias,
+                                    child: InkWell(
+                                      onTap: () => widget.onFilterByPhoto?.call(photo),
+                                      child: Column(
+                                        children: [
+                                          Expanded(
+                                            child: Stack(
+                                              fit: StackFit.expand,
+                                              children: [
+                                                Image.file(File(photo.path), fit: BoxFit.cover),
+                                                if (isCover)
+                                                  const Positioned(
+                                                    top: 5,
+                                                    left: 5,
+                                                    child: DecoratedBox(
+                                                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.all(Radius.circular(3))),
+                                                      child: Padding(
+                                                        padding: EdgeInsets.all(3),
+                                                        child: Icon(Icons.photo_size_select_actual, size: 13),
+                                                      ),
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                          ),
+                                          SizedBox(
+                                            height: 30,
+                                            child: Row(
+                                              children: [
+                                                Expanded(
+                                                  child: Padding(
+                                                    padding: const EdgeInsets.only(left: 7),
+                                                    child: Text(
+                                                      photo.title ?? '写真',
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
+                                                      style: const TextStyle(fontSize: 11.5, color: Color(0xFF565653)),
+                                                    ),
+                                                  ),
+                                                ),
+                                                PopupMenuButton<String>(
+                                                  padding: EdgeInsets.zero,
+                                                  iconSize: 17,
+                                                  onSelected: (value) async {
+                                                    if (value == 'filter') widget.onFilterByPhoto?.call(photo);
+                                                    if (value == 'cover') await widget.repository.setCoverPhoto(bookmark, photo);
+                                                    if (value == 'clear') await widget.repository.clearCoverPhoto(bookmark);
+                                                    if (value == 'detach') await widget.repository.detachPhoto(bookmark, photo);
+                                                  },
+                                                  itemBuilder: (_) => [
+                                                    const PopupMenuItem(value: 'filter', child: Text('この写真で絞り込む')),
+                                                    if (!isCover) const PopupMenuItem(value: 'cover', child: Text('カバーにする')),
+                                                    if (isCover) const PopupMenuItem(value: 'clear', child: Text('カバー解除')),
+                                                    const PopupMenuDivider(),
+                                                    const PopupMenuItem(value: 'detach', child: Text('関連を解除')),
+                                                  ],
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                    PopupMenuButton<String>(
-                                      onSelected: (value) async {
-                                        if (value == 'filter') widget.onFilterByPhoto?.call(photo);
-                                        if (value == 'cover') await widget.repository.setCoverPhoto(bookmark, photo);
-                                        if (value == 'clear') await widget.repository.clearCoverPhoto(bookmark);
-                                        if (value == 'detach') await widget.repository.detachPhoto(bookmark, photo);
-                                      },
-                                      itemBuilder: (_) => [
-                                        const PopupMenuItem(value: 'filter', child: Text('この写真で絞り込む')),
-                                        if (!isCover) const PopupMenuItem(value: 'cover', child: Text('カバーにする')),
-                                        if (isCover) const PopupMenuItem(value: 'clear', child: Text('カバー解除')),
-                                        const PopupMenuItem(value: 'detach', child: Text('関連を解除')),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ],
+                                  ),
+                                );
+                              },
                             ),
                           ),
-                        );
-                      }).toList(),
+                        const SizedBox(height: 22),
+                        const Divider(height: 1, color: Color(0xFFEDEDEB)),
+                        const SizedBox(height: 18),
+                        const Text('説明', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF37352F))),
+                        const SizedBox(height: 8),
+                        Text(
+                          bookmark.description?.trim().isNotEmpty == true ? bookmark.description! : '説明はありません。',
+                          style: TextStyle(
+                            fontSize: 13,
+                            height: 1.55,
+                            color: bookmark.description?.trim().isNotEmpty == true
+                                ? const Color(0xFF565653)
+                                : const Color(0xFF9B9A97),
+                          ),
+                        ),
+                      ],
                     ),
-                  const SizedBox(height: 20),
-                  Text('説明', style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 6),
-                  Text(bookmark.description?.trim().isNotEmpty == true ? bookmark.description! : '説明はありません。'),
+                  ),
                 ],
               ),
             ),
