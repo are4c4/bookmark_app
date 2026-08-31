@@ -1,3 +1,4 @@
+import 'package:html/dom.dart';
 import 'package:html/parser.dart' as html_parser;
 import 'package:http/http.dart' as http;
 
@@ -91,7 +92,7 @@ class BookmarkMetadataService {
   }
 
   String? _metaContent(
-    dynamic document, {
+    Document document, {
     String? property,
     String? name,
   }) {
