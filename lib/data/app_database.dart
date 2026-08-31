@@ -50,6 +50,7 @@ class Photos extends Table {
   TextColumn get path => text().unique()();
   TextColumn get title => text().nullable()();
   TextColumn get note => text().nullable()();
+  TextColumn get tags => text().withDefault(const Constant(''))();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }
 
@@ -132,7 +133,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'bookmark_app'));
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -177,6 +178,9 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(photos);
             await m.createTable(bookmarkPhotos);
           }
+          if (from < 7) {
+            await m.addColumn(photos, photos.tags);
+          }
         },
         beforeOpen: (_) async => customStatement('PRAGMA foreign_keys = ON'),
       );
@@ -190,6 +194,8 @@ class AppDatabase extends _$AppDatabase {
     }
     return result;
   }
+
+  static String _normalizeNamesText(Iterable<String> names) => _normalizeNames(names).join(', ');
 
   Future<int> _ensureTag(String name) async {
     final existing = await (select(tags)..where((t) => t.name.equals(name))).getSingleOrNull();
@@ -342,12 +348,31 @@ class AppDatabase extends _$AppDatabase {
     }
   }
 
-  Future<int> addPhoto({required String path, String? title, String? note}) =>
-      into(photos).insert(PhotosCompanion.insert(path: path, title: Value(title), note: Value(note)));
+  Future<int> addPhoto({
+    required String path,
+    String? title,
+    String? note,
+    Iterable<String> tagNames = const [],
+  }) => into(photos).insert(
+        PhotosCompanion.insert(
+          path: path,
+          title: Value(title),
+          note: Value(note),
+          tags: Value(_normalizeNamesText(tagNames)),
+        ),
+      );
 
-  Future<void> updatePhoto(int id, {String? title, String? note}) =>
-      (update(photos)..where((p) => p.id.equals(id))).write(
-        PhotosCompanion(title: Value(title), note: Value(note)),
+  Future<void> updatePhoto(
+    int id, {
+    String? title,
+    String? note,
+    Iterable<String>? tagNames,
+  }) => (update(photos)..where((p) => p.id.equals(id))).write(
+        PhotosCompanion(
+          title: Value(title),
+          note: Value(note),
+          tags: tagNames == null ? const Value.absent() : Value(_normalizeNamesText(tagNames)),
+        ),
       );
 
   Future<void> deletePhoto(int id) => (delete(photos)..where((p) => p.id.equals(id))).go();
@@ -368,6 +393,30 @@ class AppDatabase extends _$AppDatabase {
         );
       });
 
+  Future<void> attachPhotosToBookmark(
+    int bookmarkId,
+    Iterable<int> photoIds, {
+    int? coverPhotoId,
+  }) => transaction(() async {
+        final uniqueIds = photoIds.toSet();
+        if (coverPhotoId != null) uniqueIds.add(coverPhotoId);
+        if (coverPhotoId != null) {
+          await (update(bookmarkPhotos)..where((bp) => bp.bookmarkId.equals(bookmarkId))).write(
+            const BookmarkPhotosCompanion(isCover: Value(false)),
+          );
+        }
+        for (final photoId in uniqueIds) {
+          await into(bookmarkPhotos).insert(
+            BookmarkPhotosCompanion.insert(
+              bookmarkId: bookmarkId,
+              photoId: photoId,
+              isCover: Value(photoId == coverPhotoId),
+            ),
+            mode: InsertMode.insertOrReplace,
+          );
+        }
+      });
+
   Future<void> detachPhotoFromBookmark(int bookmarkId, int photoId) =>
       (delete(bookmarkPhotos)..where((bp) => bp.bookmarkId.equals(bookmarkId) & bp.photoId.equals(photoId))).go();
 
@@ -375,10 +424,16 @@ class AppDatabase extends _$AppDatabase {
         await (update(bookmarkPhotos)..where((bp) => bp.bookmarkId.equals(bookmarkId))).write(
           const BookmarkPhotosCompanion(isCover: Value(false)),
         );
-        await (update(bookmarkPhotos)
-              ..where((bp) => bp.bookmarkId.equals(bookmarkId) & bp.photoId.equals(photoId)))
-            .write(const BookmarkPhotosCompanion(isCover: Value(true)));
+        await into(bookmarkPhotos).insert(
+          BookmarkPhotosCompanion.insert(bookmarkId: bookmarkId, photoId: photoId, isCover: const Value(true)),
+          mode: InsertMode.insertOrReplace,
+        );
       });
+
+  Future<void> clearCoverPhoto(int bookmarkId) =>
+      (update(bookmarkPhotos)..where((bp) => bp.bookmarkId.equals(bookmarkId))).write(
+        const BookmarkPhotosCompanion(isCover: Value(false)),
+      );
 
   Future<int> createPerson(String name, {String? note}) async {
     final trimmed = name.trim();
