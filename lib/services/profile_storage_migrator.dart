@@ -14,30 +14,23 @@ class ProfileStorageMigrator {
     final targetDir = Directory(photoDirectoryPath);
     await targetDir.create(recursive: true);
 
-    final rows = await database.customSelect(
-      'SELECT id, path FROM photos',
-      readsFrom: {database.photos},
-    ).get();
+    final photos = await database.select(database.photos).get();
 
-    for (final row in rows) {
-      final id = row.read<int>('id');
-      final sourcePath = row.read<String>('path');
-      if (_isInside(sourcePath, targetDir.path)) continue;
+    for (final photo in photos) {
+      if (_isInside(photo.path, targetDir.path)) continue;
 
-      final source = File(sourcePath);
+      final source = File(photo.path);
       if (!await source.exists()) continue;
 
-      final fileName = _fileName(sourcePath);
-      final targetPath = '${targetDir.path}/${id}_$fileName';
+      final fileName = _fileName(photo.path);
+      final targetPath = '${targetDir.path}/${photo.id}_$fileName';
       final target = File(targetPath);
       if (!await target.exists()) {
         await source.copy(targetPath);
       }
 
-      await database.customUpdate(
-        'UPDATE photos SET path = ? WHERE id = ?',
-        variables: [Variable.withString(targetPath), Variable.withInt(id)],
-        updates: {database.photos},
+      await (database.update(database.photos)..where((row) => row.id.equals(photo.id))).write(
+        PhotosCompanion(path: Value(targetPath)),
       );
     }
   }
