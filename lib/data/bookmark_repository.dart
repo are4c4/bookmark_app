@@ -36,7 +36,7 @@ class BookmarkRepository {
     String? thumbnail,
     String? description,
     Iterable<String> tagNames = const [],
-    Iterable<String> personNames = const [],
+    Iterable<String>? personNames,
   }) => _database.updateBookmarkFields(
         id: id,
         url: url,
