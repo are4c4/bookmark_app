@@ -221,19 +221,13 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
 
   ThemeData _theme(Brightness brightness) {
     final dark = brightness == Brightness.dark;
-    final notionText =
-        dark ? const Color(0xFFE7E7E5) : const Color(0xFF37352F);
-    final notionMuted =
-        dark ? const Color(0xFFA9A9A6) : const Color(0xFF787774);
-    final notionBorder =
-        dark ? const Color(0xFF3B3B39) : const Color(0xFFE7E7E4);
+    final notionText = dark ? const Color(0xFFE7E7E5) : const Color(0xFF37352F);
+    final notionMuted = dark ? const Color(0xFFA9A9A6) : const Color(0xFF787774);
+    final notionBorder = dark ? const Color(0xFF3B3B39) : const Color(0xFFE7E7E4);
     final notionSurface = dark ? const Color(0xFF191919) : Colors.white;
-    final notionSidebar =
-        dark ? const Color(0xFF202020) : const Color(0xFFF7F7F5);
-    final notionRaised =
-        dark ? const Color(0xFF2A2A28) : const Color(0xFFF1F1EF);
-    final selectedTile =
-        dark ? const Color(0xFF343432) : const Color(0xFFE9E9E6);
+    final notionSidebar = dark ? const Color(0xFF202020) : const Color(0xFFF7F7F5);
+    final notionRaised = dark ? const Color(0xFF2A2A28) : const Color(0xFFF1F1EF);
+    final selectedTile = dark ? const Color(0xFF343432) : const Color(0xFFE9E9E6);
     final scheme = ColorScheme.fromSeed(
       seedColor: notionText,
       brightness: brightness,
@@ -262,6 +256,9 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
       splashColor: dark ? const Color(0x18FFFFFF) : const Color(0x0D000000),
       hoverColor: dark ? const Color(0x12FFFFFF) : const Color(0x0A000000),
       listTileTheme: ListTileThemeData(
+        minTileHeight: 36,
+        minVerticalPadding: 0,
+        horizontalTitleGap: 8,
         selectedTileColor: selectedTile,
         selectedColor: notionText,
         iconColor: notionMuted,
