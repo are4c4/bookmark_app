@@ -209,64 +209,78 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
     super.dispose();
   }
 
-  ThemeData _theme() {
-    const notionText = Color(0xFF37352F);
-    const notionMuted = Color(0xFF787774);
-    const notionBorder = Color(0xFFE7E7E4);
-    const notionSidebar = Color(0xFFF7F7F5);
+  ThemeData _theme(Brightness brightness) {
+    final dark = brightness == Brightness.dark;
+    final notionText = dark ? const Color(0xFFE7E7E5) : const Color(0xFF37352F);
+    final notionMuted = dark ? const Color(0xFFA9A9A6) : const Color(0xFF787774);
+    final notionBorder = dark ? const Color(0xFF3B3B39) : const Color(0xFFE7E7E4);
+    final notionSurface = dark ? const Color(0xFF191919) : Colors.white;
+    final notionSidebar = dark ? const Color(0xFF202020) : const Color(0xFFF7F7F5);
+    final notionRaised = dark ? const Color(0xFF2A2A28) : const Color(0xFFF1F1EF);
+
     final scheme = ColorScheme.fromSeed(
       seedColor: notionText,
-      brightness: Brightness.light,
-      surface: Colors.white,
+      brightness: brightness,
+      surface: notionSurface,
     );
+
     return ThemeData(
       useMaterial3: true,
+      brightness: brightness,
       colorScheme: scheme.copyWith(
         primary: notionText,
-        onPrimary: Colors.white,
-        surface: Colors.white,
+        onPrimary: notionSurface,
+        surface: notionSurface,
         onSurface: notionText,
+        onSurfaceVariant: notionMuted,
         outline: notionBorder,
         outlineVariant: notionBorder,
         surfaceContainerLowest: notionSidebar,
         surfaceContainerLow: notionSidebar,
+        surfaceContainer: notionRaised,
+        surfaceContainerHigh: notionRaised,
+        surfaceContainerHighest: notionRaised,
       ),
-      scaffoldBackgroundColor: Colors.white,
+      scaffoldBackgroundColor: notionSurface,
       dividerColor: notionBorder,
-      splashColor: const Color(0x0D000000),
-      hoverColor: const Color(0x0A000000),
+      splashColor: dark ? const Color(0x18FFFFFF) : const Color(0x0D000000),
+      hoverColor: dark ? const Color(0x12FFFFFF) : const Color(0x0A000000),
       cardTheme: CardThemeData(
         elevation: 0,
-        color: Colors.white,
+        color: notionSurface,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(6),
-          side: const BorderSide(color: notionBorder),
+          side: BorderSide(color: notionBorder),
         ),
       ),
-      appBarTheme: const AppBarTheme(
-        backgroundColor: Colors.white,
+      appBarTheme: AppBarTheme(
+        backgroundColor: notionSurface,
         foregroundColor: notionText,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: const Color(0xFFF1F1EF),
+        backgroundColor: notionRaised,
         side: BorderSide.none,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-        labelStyle: const TextStyle(fontSize: 12.5, color: notionText),
+        labelStyle: TextStyle(fontSize: 12.5, color: notionText),
         padding: const EdgeInsets.symmetric(horizontal: 4),
       ),
       inputDecorationTheme: InputDecorationTheme(
         isDense: true,
-        hintStyle: const TextStyle(color: Color(0xFF9B9A97)),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(5), borderSide: const BorderSide(color: notionBorder)),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(5), borderSide: const BorderSide(color: notionBorder)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(5), borderSide: const BorderSide(color: Color(0xFF9B9A97))),
+        hintStyle: TextStyle(color: notionMuted),
+        filled: dark,
+        fillColor: dark ? const Color(0xFF242424) : null,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(5), borderSide: BorderSide(color: notionBorder)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(5), borderSide: BorderSide(color: notionBorder)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(5), borderSide: BorderSide(color: notionMuted)),
       ),
       textButtonTheme: TextButtonThemeData(style: TextButton.styleFrom(foregroundColor: notionText)),
-      iconTheme: const IconThemeData(color: notionText),
+      iconTheme: IconThemeData(color: notionText),
+      popupMenuTheme: PopupMenuThemeData(color: dark ? const Color(0xFF252525) : Colors.white),
+      dialogTheme: DialogThemeData(backgroundColor: notionSurface),
     );
   }
 
@@ -304,7 +318,9 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Bookmark App',
-      theme: _theme(),
+      theme: _theme(Brightness.light),
+      darkTheme: _theme(Brightness.dark),
+      themeMode: ThemeMode.system,
       home: home,
     );
   }
