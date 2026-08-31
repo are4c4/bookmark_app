@@ -80,8 +80,9 @@ class TagManagementPage extends StatelessWidget {
                   await repository.createTag(name, parent: parent);
                   if (dialogContext.mounted) Navigator.pop(dialogContext);
                 } catch (_) {
-                  setLocalState(() =>
-                      error = '同名タグなどの理由で追加できませんでした');
+                  setLocalState(
+                    () => error = '同名タグなどの理由で追加できませんでした',
+                  );
                 }
               },
               child: const Text('追加'),
@@ -107,8 +108,10 @@ class TagManagementPage extends StatelessWidget {
 
     final descendants = _descendantIds(tag.id, allTags);
     final parentCandidates = allTags
-        .where((candidate) =>
-            candidate.id != tag.id && !descendants.contains(candidate.id))
+        .where(
+          (candidate) =>
+              candidate.id != tag.id && !descendants.contains(candidate.id),
+        )
         .toList();
 
     await showDialog<void>(
@@ -234,6 +237,50 @@ class TagManagementPage extends StatelessWidget {
     return !_descendantIds(dragged.id, tags).contains(target.id);
   }
 
+  Widget _dragHandle(BuildContext context, Tag tag) {
+    return Draggable<Tag>(
+      data: tag,
+      dragAnchorStrategy: pointerDragAnchorStrategy,
+      feedback: Material(
+        elevation: 8,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          constraints: const BoxConstraints(minWidth: 180, maxWidth: 300),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.drag_indicator, size: 18),
+              const SizedBox(width: 8),
+              Flexible(child: Text(tag.name)),
+            ],
+          ),
+        ),
+      ),
+      childWhenDragging: Opacity(
+        opacity: 0.3,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.grabbing,
+          child: const Icon(Icons.drag_indicator, size: 18),
+        ),
+      ),
+      child: Tooltip(
+        message: 'ドラッグして親タグを変更',
+        child: MouseRegion(
+          cursor: SystemMouseCursors.grab,
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+            child: Icon(Icons.drag_indicator, size: 18),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _tagTile(
     BuildContext context,
     Tag tag,
@@ -242,35 +289,6 @@ class TagManagementPage extends StatelessWidget {
     int depth,
   ) {
     final nested = _childrenOf(tag.id, tags);
-    final tile = ListTile(
-      contentPadding: EdgeInsets.only(
-        left: 20 + depth * 28,
-        right: 12,
-      ),
-      leading: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.drag_indicator, size: 18),
-          const SizedBox(width: 6),
-          Icon(
-            nested.isEmpty ? Icons.sell_outlined : Icons.folder_outlined,
-            size: 20,
-          ),
-        ],
-      ),
-      title: Text(tag.name),
-      subtitle: Text('${counts[tag.id] ?? 0} 件のブックマーク'),
-      trailing: PopupMenuButton<String>(
-        onSelected: (value) {
-          if (value == 'edit') _editTag(context, tag, tags);
-          if (value == 'delete') _deleteTag(context, tag);
-        },
-        itemBuilder: (_) => const [
-          PopupMenuItem(value: 'edit', child: Text('編集')),
-          PopupMenuItem(value: 'delete', child: Text('削除')),
-        ],
-      ),
-    );
 
     return DragTarget<Tag>(
       onWillAcceptWithDetails: (details) =>
@@ -280,38 +298,45 @@ class TagManagementPage extends StatelessWidget {
       },
       builder: (context, candidates, rejected) {
         final highlighted = candidates.isNotEmpty;
-        return Container(
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 100),
           decoration: BoxDecoration(
             color: highlighted
                 ? Theme.of(context).colorScheme.primaryContainer
                 : null,
             borderRadius: BorderRadius.circular(8),
+            border: highlighted
+                ? Border.all(color: Theme.of(context).colorScheme.primary)
+                : null,
           ),
-          child: LongPressDraggable<Tag>(
-            data: tag,
-            feedback: Material(
-              elevation: 6,
-              borderRadius: BorderRadius.circular(8),
-              child: Container(
-                width: 260,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 10,
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.sell_outlined, size: 18),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(tag.name)),
-                  ],
-                ),
-              ),
+          child: ListTile(
+            contentPadding: EdgeInsets.only(
+              left: 16 + depth * 28,
+              right: 12,
             ),
-            childWhenDragging: Opacity(
-              opacity: 0.35,
-              child: tile,
+            leading: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _dragHandle(context, tag),
+                const SizedBox(width: 4),
+                Icon(
+                  nested.isEmpty ? Icons.sell_outlined : Icons.folder_outlined,
+                  size: 20,
+                ),
+              ],
             ),
-            child: tile,
+            title: Text(tag.name),
+            subtitle: Text('${counts[tag.id] ?? 0} 件のブックマーク'),
+            trailing: PopupMenuButton<String>(
+              onSelected: (value) {
+                if (value == 'edit') _editTag(context, tag, tags);
+                if (value == 'delete') _deleteTag(context, tag);
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'edit', child: Text('編集')),
+                PopupMenuItem(value: 'delete', child: Text('削除')),
+              ],
+            ),
           ),
         );
       },
@@ -425,7 +450,7 @@ class TagManagementPage extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 8, 20, 6),
                     child: Text(
-                      'タグを長押しして別のタグへドラッグすると、そのタグの子にできます。',
+                      '左端のドラッグハンドルを掴んで別のタグへドロップすると、そのタグの子にできます。',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ),
