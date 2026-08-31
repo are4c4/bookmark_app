@@ -386,6 +386,30 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
     );
   }
 
+  Widget _subNavTile(int index, IconData icon, String label) {
+    final scheme = Theme.of(context).colorScheme;
+    final selected = _index == index;
+    return Padding(
+      padding: const EdgeInsets.only(left: 22, right: 6, top: 1, bottom: 1),
+      child: Material(
+        color: selected ? scheme.surfaceContainerHigh : Colors.transparent,
+        borderRadius: BorderRadius.circular(5),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(5),
+          onTap: () => setState(() => _index = index),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+            child: Row(children: [
+              Icon(icon, size: 16, color: selected ? scheme.onSurface : scheme.onSurfaceVariant),
+              const SizedBox(width: 8),
+              Text(label, style: TextStyle(fontSize: 12.5, fontWeight: selected ? FontWeight.w600 : FontWeight.w400)),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _expandedSidebar() {
     final scheme = Theme.of(context).colorScheme;
     return Material(
@@ -408,10 +432,11 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
                 child: Text('LIBRARY', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: scheme.onSurfaceVariant, letterSpacing: .3)),
               ),
               _navTile(0, Icons.bookmarks_outlined, 'ブックマーク'),
+              _subNavTile(2, Icons.inbox_outlined, '未整理'),
+              _subNavTile(3, Icons.archive_outlined, 'アーカイブ'),
+              _subNavTile(4, Icons.delete_outline, 'ゴミ箱'),
+              const SizedBox(height: 3),
               _navTile(1, Icons.search, '全文検索'),
-              _navTile(2, Icons.inbox_outlined, 'Inbox'),
-              _navTile(3, Icons.archive_outlined, 'アーカイブ'),
-              _navTile(4, Icons.delete_outline, 'ゴミ箱'),
               const Padding(padding: EdgeInsets.symmetric(horizontal: 12, vertical: 7), child: Divider(height: 1)),
               _navTile(5, Icons.photo_library_outlined, '写真'),
               _navTile(6, Icons.account_tree_outlined, 'タグ'),
