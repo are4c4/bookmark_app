@@ -5,7 +5,11 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
+import '../ui/ui_tokens.dart';
+import '../widgets/app_empty_state.dart';
 import '../widgets/bookmark_reverse_lookup_dialog.dart';
+import '../widgets/database_page_toolbar.dart';
+import '../widgets/detail_section.dart';
 import '../widgets/photo_database_picker.dart';
 
 enum PeopleViewType { gallery, list, table }
@@ -42,7 +46,7 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
           width: 440,
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             TextFormField(autofocus: true, decoration: const InputDecoration(labelText: '名前'), onChanged: (v) => name = v),
-            const SizedBox(height: 10),
+            const SizedBox(height: UiTokens.space12),
             TextFormField(maxLines: 3, decoration: const InputDecoration(labelText: 'メモ'), onChanged: (v) => note = v),
           ]),
         ),
@@ -70,17 +74,17 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
             child: SingleChildScrollView(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
                 TextFormField(initialValue: name, decoration: const InputDecoration(labelText: '名前'), onChanged: (v) => name = v),
-                const SizedBox(height: 10),
+                const SizedBox(height: UiTokens.space12),
                 TextFormField(initialValue: note, maxLines: 4, decoration: const InputDecoration(labelText: 'メモ'), onChanged: (v) => note = v),
-                const SizedBox(height: 16),
+                const SizedBox(height: UiTokens.space16),
                 const Text('プロフィール画像', style: TextStyle(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 8),
+                const SizedBox(height: UiTokens.space8),
                 if (profilePhoto != null)
-                  ClipRRect(borderRadius: BorderRadius.circular(8), child: SizedBox(width: 190, child: Image.file(File(profilePhoto!.path), fit: BoxFit.fitWidth)))
+                  ClipRRect(borderRadius: BorderRadius.circular(UiTokens.radiusMd), child: SizedBox(width: 190, child: Image.file(File(profilePhoto!.path), fit: BoxFit.fitWidth)))
                 else
                   Container(width: 190, height: 150, alignment: Alignment.center, color: Theme.of(context).colorScheme.surfaceContainerLow, child: const Icon(Icons.person_outline, size: 52)),
-                const SizedBox(height: 8),
-                Wrap(spacing: 8, children: [
+                const SizedBox(height: UiTokens.space8),
+                Wrap(spacing: UiTokens.space8, children: [
                   OutlinedButton.icon(
                     onPressed: () async {
                       final result = await showPhotoDatabasePicker(
@@ -177,10 +181,10 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
         builder: (context, constraints) {
           final columns = constraints.maxWidth >= 1200 ? 5 : constraints.maxWidth >= 900 ? 4 : constraints.maxWidth >= 620 ? 3 : 2;
           return MasonryGridView.count(
-            padding: const EdgeInsets.fromLTRB(18, 16, 18, 100),
+            padding: const EdgeInsets.fromLTRB(18, UiTokens.space16, 18, 100),
             crossAxisCount: columns,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
+            mainAxisSpacing: UiTokens.space12,
+            crossAxisSpacing: UiTokens.space12,
             itemCount: people.length,
             itemBuilder: (context, index) {
               final person = people[index];
@@ -189,22 +193,22 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
               final selected = _selectedPersonId == person.id;
               return Material(
                 color: scheme.surface,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(UiTokens.radiusMd),
                 clipBehavior: Clip.antiAlias,
                 child: InkWell(
                   onTap: () => setState(() => _selectedPersonId = person.id),
                   child: Container(
-                    decoration: BoxDecoration(border: Border.all(color: selected ? scheme.primary : scheme.outlineVariant, width: selected ? 1.5 : 1), borderRadius: BorderRadius.circular(8)),
+                    decoration: BoxDecoration(border: Border.all(color: selected ? scheme.primary : scheme.outlineVariant, width: selected ? 1.5 : 1), borderRadius: BorderRadius.circular(UiTokens.radiusMd)),
                     child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
                       _image(person, photos),
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(10, 8, 4, 10),
+                        padding: const EdgeInsets.fromLTRB(10, UiTokens.space8, UiTokens.space4, 10),
                         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                             Text(person.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: UiTokens.space4),
                             Text('${related.length}件のブックマーク', style: TextStyle(fontSize: 11.5, color: scheme.onSurfaceVariant)),
-                            if (person.note?.trim().isNotEmpty == true) ...[const SizedBox(height: 5), Text(person.note!, maxLines: 3, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant))],
+                            if (person.note?.trim().isNotEmpty == true) ...[const SizedBox(height: UiTokens.space4), Text(person.note!, maxLines: 3, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: UiTokens.textSm, color: scheme.onSurfaceVariant))],
                           ])),
                           _menu(person, photos, bookmarks),
                         ]),
@@ -219,7 +223,7 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
       );
 
   Widget _list(List<Person> people, List<PhotoRecord> photos, List<BookmarkItem> bookmarks) => ListView.separated(
-        padding: const EdgeInsets.fromLTRB(18, 12, 18, 100),
+        padding: const EdgeInsets.fromLTRB(18, UiTokens.space12, 18, 100),
         itemCount: people.length,
         separatorBuilder: (_, __) => const Divider(height: 1),
         itemBuilder: (context, index) {
@@ -237,7 +241,7 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
       );
 
   Widget _table(List<Person> people, List<PhotoRecord> photos, List<BookmarkItem> bookmarks) => SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(18, 12, 18, 100),
+        padding: const EdgeInsets.fromLTRB(18, UiTokens.space12, 18, 100),
         scrollDirection: Axis.horizontal,
         child: DataTable(
           columns: const [DataColumn(label: Text('人物')), DataColumn(label: Text('メモ')), DataColumn(label: Text('ブックマーク')), DataColumn(label: Text(''))],
@@ -264,86 +268,132 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
     return Material(
       color: scheme.surface,
       child: Column(children: [
-        SizedBox(height: 48, child: Row(children: [
-          const SizedBox(width: 16),
+        SizedBox(height: UiTokens.toolbarHeight, child: Row(children: [
+          const SizedBox(width: UiTokens.space16),
           const Text('人物の詳細', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
           const Spacer(),
-          IconButton(tooltip: '編集', onPressed: () => _edit(person, photos), icon: const Icon(Icons.edit_outlined, size: 18)),
+          IconButton(tooltip: '編集', onPressed: () => _edit(person, photos), icon: const Icon(Icons.edit_outlined, size: UiTokens.iconNormal)),
           IconButton(tooltip: '閉じる', onPressed: () => setState(() => _selectedPersonId = null), icon: const Icon(Icons.close, size: 19)),
         ])),
         const Divider(height: 1),
         Expanded(child: ListView(padding: const EdgeInsets.fromLTRB(18, 18, 18, 30), children: [
           if (profilePhoto != null)
-            ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.file(File(profilePhoto.path), width: double.infinity, fit: BoxFit.fitWidth))
+            ClipRRect(borderRadius: BorderRadius.circular(UiTokens.radiusMd), child: Image.file(File(profilePhoto.path), width: double.infinity, fit: BoxFit.fitWidth))
           else
             SizedBox(height: 220, child: ColoredBox(color: scheme.surfaceContainerLow, child: const Center(child: Icon(Icons.person_outline, size: 64)))),
-          const SizedBox(height: 18),
+          const SizedBox(height: UiTokens.space16),
           Text(person.name, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 6),
+          const SizedBox(height: UiTokens.space6),
           Text('${related.length}件の関連ブックマーク', style: TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant)),
-          if (person.note?.trim().isNotEmpty == true) ...[const SizedBox(height: 16), Text(person.note!, style: const TextStyle(fontSize: 13.5, height: 1.55))],
-          const SizedBox(height: 24),
-          const Divider(),
-          Row(children: [const Expanded(child: Text('関連ブックマーク', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600))), if (related.isNotEmpty) TextButton(onPressed: () => _showRelated(person, bookmarks), child: const Text('すべて見る'))]),
-          if (related.isEmpty)
-            Padding(padding: const EdgeInsets.symmetric(vertical: 12), child: Text('関連ブックマークはありません', style: TextStyle(color: scheme.onSurfaceVariant)))
-          else
-            ...related.take(8).map((bookmark) => ListTile(dense: true, contentPadding: EdgeInsets.zero, leading: const Icon(Icons.bookmark_outline, size: 18), title: Text(bookmark.title, maxLines: 1, overflow: TextOverflow.ellipsis), subtitle: Text(bookmark.url, maxLines: 1, overflow: TextOverflow.ellipsis))),
-          const SizedBox(height: 12),
-          ListTile(contentPadding: EdgeInsets.zero, leading: Icon(Icons.delete_outline, color: scheme.error), title: Text('人物を削除', style: TextStyle(color: scheme.error)), onTap: () => _delete(person)),
+          const SizedBox(height: UiTokens.space16),
+          DetailSection(
+            title: '基本情報',
+            icon: Icons.person_outline,
+            topDivider: false,
+            child: person.note?.trim().isNotEmpty == true
+                ? Text(person.note!, style: const TextStyle(fontSize: 13.5, height: 1.55))
+                : Text('メモはありません', style: TextStyle(color: scheme.onSurfaceVariant)),
+          ),
+          DetailSection(
+            title: 'Relation',
+            icon: Icons.link_outlined,
+            trailing: related.isEmpty ? null : TextButton(onPressed: () => _showRelated(person, bookmarks), child: const Text('すべて見る')),
+            child: related.isEmpty
+                ? Text('関連ブックマークはありません', style: TextStyle(color: scheme.onSurfaceVariant))
+                : Column(children: related.take(8).map((bookmark) => ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.bookmark_outline, size: UiTokens.iconNormal),
+                    title: Text(bookmark.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    subtitle: Text(bookmark.url, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  )).toList()),
+          ),
+          DetailSection(
+            title: '管理',
+            icon: Icons.settings_outlined,
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.delete_outline, color: scheme.error),
+              title: Text('人物を削除', style: TextStyle(color: scheme.error)),
+              onTap: () => _delete(person),
+            ),
+          ),
         ])),
       ]),
     );
   }
 
+  Widget _viewSwitcher() => SegmentedButton<PeopleViewType>(
+        showSelectedIcon: false,
+        segments: const [
+          ButtonSegment(value: PeopleViewType.gallery, icon: Icon(Icons.grid_view, size: 17)),
+          ButtonSegment(value: PeopleViewType.list, icon: Icon(Icons.view_list, size: 17)),
+          ButtonSegment(value: PeopleViewType.table, icon: Icon(Icons.table_rows, size: 17)),
+        ],
+        selected: {_viewType},
+        onSelectionChanged: (value) => setState(() => _viewType = value.first),
+      );
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('人物'),
-        actions: [
-          SizedBox(width: 250, child: Padding(padding: const EdgeInsets.symmetric(vertical: 7), child: TextField(onChanged: (value) => setState(() => _query = value), decoration: const InputDecoration(hintText: '人物を検索', prefixIcon: Icon(Icons.search, size: 18))))),
-          const SizedBox(width: 10),
-          SegmentedButton<PeopleViewType>(
-            showSelectedIcon: false,
-            segments: const [ButtonSegment(value: PeopleViewType.gallery, icon: Icon(Icons.grid_view, size: 17)), ButtonSegment(value: PeopleViewType.list, icon: Icon(Icons.view_list, size: 17)), ButtonSegment(value: PeopleViewType.table, icon: Icon(Icons.table_rows, size: 17))],
-            selected: {_viewType},
-            onSelectionChanged: (value) => setState(() => _viewType = value.first),
-          ),
-          const SizedBox(width: 12),
-        ],
-      ),
       floatingActionButton: FloatingActionButton.extended(onPressed: _create, icon: const Icon(Icons.person_add_alt_1_outlined), label: const Text('人物を追加')),
-      body: StreamBuilder<List<Person>>(
-        stream: repository.watchPeople(),
-        builder: (context, peopleSnapshot) {
-          if (!peopleSnapshot.hasData) return const Center(child: CircularProgressIndicator());
-          return StreamBuilder<List<PhotoRecord>>(
-            stream: repository.watchPhotos(),
-            builder: (context, photoSnapshot) {
-              final photos = photoSnapshot.data ?? const <PhotoRecord>[];
-              return StreamBuilder<List<BookmarkItem>>(
-                stream: repository.watchAll(),
-                builder: (context, bookmarkSnapshot) {
-                  final bookmarks = bookmarkSnapshot.data ?? const <BookmarkItem>[];
-                  final all = peopleSnapshot.data!;
-                  final q = _query.trim().toLowerCase();
-                  final people = q.isEmpty ? all : all.where((person) => '${person.name} ${person.note ?? ''}'.toLowerCase().contains(q)).toList();
-                  final selected = all.where((person) => person.id == _selectedPersonId).firstOrNull;
-                  return Row(children: [
-                    Expanded(child: people.isEmpty ? const Center(child: Text('人物がありません')) : switch (_viewType) {
-                      PeopleViewType.gallery => _gallery(people, photos, bookmarks),
-                      PeopleViewType.list => _list(people, photos, bookmarks),
-                      PeopleViewType.table => _table(people, photos, bookmarks),
-                    }),
-                    if (selected != null) ...[const VerticalDivider(width: 1), SizedBox(width: 400, child: _detail(selected, photos, bookmarks))],
-                  ]);
+      body: Column(children: [
+        DatabasePageToolbar(
+          title: '人物',
+          searchHint: '人物を検索',
+          onSearchChanged: (value) => setState(() => _query = value),
+          viewSwitcher: _viewSwitcher(),
+        ),
+        Expanded(
+          child: StreamBuilder<List<Person>>(
+            stream: repository.watchPeople(),
+            builder: (context, peopleSnapshot) {
+              if (!peopleSnapshot.hasData) return const Center(child: CircularProgressIndicator());
+              return StreamBuilder<List<PhotoRecord>>(
+                stream: repository.watchPhotos(),
+                builder: (context, photoSnapshot) {
+                  final photos = photoSnapshot.data ?? const <PhotoRecord>[];
+                  return StreamBuilder<List<BookmarkItem>>(
+                    stream: repository.watchAll(),
+                    builder: (context, bookmarkSnapshot) {
+                      final bookmarks = bookmarkSnapshot.data ?? const <BookmarkItem>[];
+                      final all = peopleSnapshot.data!;
+                      final q = _query.trim().toLowerCase();
+                      final people = q.isEmpty ? all : all.where((person) => '${person.name} ${person.note ?? ''}'.toLowerCase().contains(q)).toList();
+                      final selected = all.where((person) => person.id == _selectedPersonId).firstOrNull;
+                      if (all.isEmpty && selected == null) {
+                        return AppEmptyState(
+                          icon: Icons.people_outline,
+                          title: '人物はまだありません',
+                          message: '著者・出演者・講師などを人物DBとして登録すると、ブックマークからRelationできます。',
+                          actionLabel: '人物を追加',
+                          onAction: _create,
+                        );
+                      }
+                      return Row(children: [
+                        Expanded(
+                          child: people.isEmpty
+                              ? const AppEmptyState(icon: Icons.search_off_outlined, title: '検索条件に一致する人物がいません')
+                              : switch (_viewType) {
+                                  PeopleViewType.gallery => _gallery(people, photos, bookmarks),
+                                  PeopleViewType.list => _list(people, photos, bookmarks),
+                                  PeopleViewType.table => _table(people, photos, bookmarks),
+                                },
+                        ),
+                        if (selected != null) ...[
+                          const VerticalDivider(width: 1),
+                          SizedBox(width: 400, child: _detail(selected, photos, bookmarks)),
+                        ],
+                      ]);
+                    },
+                  );
                 },
               );
             },
-          );
-        },
-      ),
+          ),
+        ),
+      ]),
     );
   }
 }
