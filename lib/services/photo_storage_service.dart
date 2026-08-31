@@ -13,16 +13,22 @@ class ImportedPhoto {
 class PhotoStorageService {
   const PhotoStorageService();
 
-  Future<List<ImportedPhoto>> importImages() async {
-    const imageTypes = XTypeGroup(
-      label: '画像',
-      extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic', 'heif'],
-    );
+  static const _allowedExtensions = {
+    'jpg',
+    'jpeg',
+    'png',
+    'webp',
+    'gif',
+    'heic',
+    'heif',
+  };
 
-    final pickedFiles = await openFiles(
-      acceptedTypeGroups: const [imageTypes],
-    );
-    if (pickedFiles.isEmpty) return const [];
+  Future<List<ImportedPhoto>> importImages() async {
+    final sourcePaths = Platform.isMacOS
+        ? await _pickImagesOnMacOS()
+        : await _pickImagesWithFileSelector();
+
+    if (sourcePaths.isEmpty) return const [];
 
     final support = await getApplicationSupportDirectory();
     final photoDir = Directory('${support.path}/photos');
@@ -30,11 +36,13 @@ class PhotoStorageService {
 
     final imported = <ImportedPhoto>[];
     var index = 0;
-    for (final picked in pickedFiles) {
-      final source = File(picked.path);
+    for (final sourcePath in sourcePaths) {
+      final source = File(sourcePath);
       if (!await source.exists()) continue;
 
-      final originalName = picked.name;
+      final originalName = _fileName(source.path);
+      if (!_isSupportedImage(originalName)) continue;
+
       final safeName = originalName.replaceAll(
         RegExp(r'[^A-Za-z0-9._-]'),
         '_',
@@ -47,5 +55,66 @@ class PhotoStorageService {
       );
     }
     return imported;
+  }
+
+  Future<List<String>> _pickImagesWithFileSelector() async {
+    const imageTypes = XTypeGroup(
+      label: '画像',
+      extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic', 'heif'],
+    );
+
+    final pickedFiles = await openFiles(
+      acceptedTypeGroups: const [imageTypes],
+    );
+    return pickedFiles.map((file) => file.path).toList();
+  }
+
+  Future<List<String>> _pickImagesOnMacOS() async {
+    const script = r'''
+set selectedFiles to choose file with prompt "写真を選択" with multiple selections allowed
+set output to ""
+repeat with selectedFile in selectedFiles
+  set output to output & POSIX path of selectedFile & linefeed
+end repeat
+return output
+''';
+
+    final result = await Process.run(
+      '/usr/bin/osascript',
+      const ['-e', script],
+      runInShell: false,
+    );
+
+    if (result.exitCode != 0) {
+      final error = result.stderr.toString().trim();
+      if (error.contains('User canceled') || error.contains('(-128)')) {
+        return const [];
+      }
+      throw StateError(
+        error.isEmpty
+            ? 'macOSのファイル選択画面を開けませんでした (exit ${result.exitCode})'
+            : error,
+      );
+    }
+
+    return result.stdout
+        .toString()
+        .split('\n')
+        .map((path) => path.trim())
+        .where((path) => path.isNotEmpty)
+        .where((path) => _isSupportedImage(path))
+        .toList();
+  }
+
+  bool _isSupportedImage(String path) {
+    final dot = path.lastIndexOf('.');
+    if (dot < 0 || dot == path.length - 1) return false;
+    return _allowedExtensions.contains(path.substring(dot + 1).toLowerCase());
+  }
+
+  String _fileName(String path) {
+    final normalized = path.replaceAll('\\', '/');
+    final slash = normalized.lastIndexOf('/');
+    return slash < 0 ? normalized : normalized.substring(slash + 1);
   }
 }
