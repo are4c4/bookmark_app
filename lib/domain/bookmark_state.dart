@@ -20,7 +20,7 @@ enum BookmarkStorageState {
   inbox('inbox', '未整理'),
   active('active', '通常'),
   archived('archived', 'アーカイブ'),
-  trashed('trashed', 'ゴミ箱');
+  trashed('trash', 'ゴミ箱');
 
   const BookmarkStorageState(this.storageValue, this.label);
   final String storageValue;
@@ -29,7 +29,7 @@ enum BookmarkStorageState {
   static BookmarkStorageState fromStorage(String value) => switch (value) {
         'inbox' => inbox,
         'archived' => archived,
-        'trashed' => trashed,
+        'trash' || 'trashed' => trashed,
         _ => active,
       };
 }
