@@ -16,6 +16,7 @@ class BookmarkRepository {
     required String title,
     String? thumbnail,
     String? description,
+    String tags = '',
     bool favorite = false,
   }) {
     return _database.addBookmark(
@@ -23,7 +24,26 @@ class BookmarkRepository {
       title: title,
       thumbnail: thumbnail,
       description: description,
+      tags: tags,
       favorite: favorite,
+    );
+  }
+
+  Future<void> update({
+    required int id,
+    required String url,
+    required String title,
+    String? thumbnail,
+    String? description,
+    String tags = '',
+  }) {
+    return _database.updateBookmarkFields(
+      id: id,
+      url: url,
+      title: title,
+      thumbnail: thumbnail,
+      description: description,
+      tags: tags,
     );
   }
 
