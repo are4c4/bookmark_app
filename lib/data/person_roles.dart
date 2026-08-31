@@ -74,22 +74,28 @@ extension AppDatabasePersonRoles on AppDatabase {
             .go();
 
         for (final person in selectedPeople) {
-          // Current schema allows one role per person/bookmark pair. Selecting the same
-          // person under another role intentionally moves that relation to the new role.
           await into(bookmarkPeople).insert(
             BookmarkPeopleCompanion.insert(
               bookmarkId: bookmarkId,
               personId: person.id,
               role: Value(normalizedRole),
             ),
-            mode: InsertMode.insertOrReplace,
+            mode: InsertMode.insertOrIgnore,
           );
         }
       });
 
-  Future<void> removePersonRole(int bookmarkId, Person person) =>
-      (delete(bookmarkPeople)
-            ..where((relation) =>
-                relation.bookmarkId.equals(bookmarkId) & relation.personId.equals(person.id)))
-          .go();
+  Future<void> removePersonRole(
+    int bookmarkId,
+    Person person, {
+    String? role,
+  }) {
+    final query = delete(bookmarkPeople)
+      ..where((relation) =>
+          relation.bookmarkId.equals(bookmarkId) & relation.personId.equals(person.id));
+    if (role != null) {
+      query.where((relation) => relation.role.equals(normalizePersonRole(role)));
+    }
+    return query.go();
+  }
 }
