@@ -7,6 +7,7 @@ class BookmarkRepository {
 
   Stream<List<BookmarkItem>> watchAll() => _database.watchBookmarkItems();
   Stream<List<Tag>> watchTags() => _database.watchAllTags();
+  Stream<List<Person>> watchPeople() => _database.watchAllPeople();
   Stream<List<SavedViewConfig>> watchSavedViews() =>
       _database.watchSavedViewConfigs();
 
@@ -16,6 +17,7 @@ class BookmarkRepository {
     String? thumbnail,
     String? description,
     Iterable<String> tagNames = const [],
+    Iterable<String> personNames = const [],
     bool favorite = false,
   }) => _database.addBookmark(
         url: url,
@@ -23,6 +25,7 @@ class BookmarkRepository {
         thumbnail: thumbnail,
         description: description,
         tagNames: tagNames,
+        personNames: personNames,
         favorite: favorite,
       );
 
@@ -33,6 +36,7 @@ class BookmarkRepository {
     String? thumbnail,
     String? description,
     Iterable<String> tagNames = const [],
+    Iterable<String> personNames = const [],
   }) => _database.updateBookmarkFields(
         id: id,
         url: url,
@@ -40,12 +44,21 @@ class BookmarkRepository {
         thumbnail: thumbnail,
         description: description,
         tagNames: tagNames,
+        personNames: personNames,
       );
 
   Future<void> toggleFavorite(BookmarkItem bookmark) =>
       _database.setFavorite(bookmark.id, !bookmark.favorite);
 
   Future<int> delete(int id) => _database.deleteBookmark(id);
+
+  Future<int> createPerson(String name, {String? note}) =>
+      _database.createPerson(name, note: note);
+
+  Future<void> updatePerson(Person person, String name, String? note) =>
+      _database.updatePerson(person.id, name, note);
+
+  Future<void> deletePerson(Person person) => _database.deletePerson(person.id);
 
   Future<int> createTag(String name, {Tag? parent}) =>
       _database.createTag(name, parentTagId: parent?.id);
