@@ -52,17 +52,66 @@ class BookmarkRepository {
       _database.setFavorite(bookmark.id, !bookmark.favorite);
   Future<int> delete(int id) => _database.deleteBookmark(id);
 
-  Future<int> addPhoto({required String path, String? title, String? note}) =>
-      _database.addPhoto(path: path, title: title, note: note);
-  Future<void> updatePhoto(PhotoRecord photo, {String? title, String? note}) =>
-      _database.updatePhoto(photo.id, title: title, note: note);
+  Future<int> addPhoto({
+    required String path,
+    String? title,
+    String? note,
+    Iterable<String> tagNames = const [],
+  }) => _database.addPhoto(
+        path: path,
+        title: title,
+        note: note,
+        tagNames: tagNames,
+      );
+
+  Future<void> updatePhoto(
+    PhotoRecord photo, {
+    String? title,
+    String? note,
+    Iterable<String>? tagNames,
+  }) => _database.updatePhoto(
+        photo.id,
+        title: title,
+        note: note,
+        tagNames: tagNames,
+      );
+
   Future<void> deletePhoto(PhotoRecord photo) => _database.deletePhoto(photo.id);
-  Future<void> attachPhoto(BookmarkItem bookmark, PhotoRecord photo, {bool asCover = false}) =>
-      _database.attachPhotoToBookmark(bookmark.id, photo.id, asCover: asCover);
+
+  Future<void> attachPhoto(
+    BookmarkItem bookmark,
+    PhotoRecord photo, {
+    bool asCover = false,
+  }) => _database.attachPhotoToBookmark(bookmark.id, photo.id, asCover: asCover);
+
+  Future<void> attachPhotos(
+    BookmarkItem bookmark,
+    Iterable<PhotoRecord> photos, {
+    PhotoRecord? coverPhoto,
+  }) => _database.attachPhotosToBookmark(
+        bookmark.id,
+        photos.map((photo) => photo.id),
+        coverPhotoId: coverPhoto?.id,
+      );
+
+  Future<void> attachPhotosByBookmarkId(
+    int bookmarkId,
+    Iterable<PhotoRecord> photos, {
+    PhotoRecord? coverPhoto,
+  }) => _database.attachPhotosToBookmark(
+        bookmarkId,
+        photos.map((photo) => photo.id),
+        coverPhotoId: coverPhoto?.id,
+      );
+
   Future<void> detachPhoto(BookmarkItem bookmark, PhotoRecord photo) =>
       _database.detachPhotoFromBookmark(bookmark.id, photo.id);
+
   Future<void> setCoverPhoto(BookmarkItem bookmark, PhotoRecord photo) =>
       _database.setCoverPhoto(bookmark.id, photo.id);
+
+  Future<void> clearCoverPhoto(BookmarkItem bookmark) =>
+      _database.clearCoverPhoto(bookmark.id);
 
   Future<int> createPerson(String name, {String? note}) =>
       _database.createPerson(name, note: note);
