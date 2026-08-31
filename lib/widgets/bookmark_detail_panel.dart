@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
+import 'detail_property_row.dart';
 import 'person_role_properties.dart';
 import 'photo_database_picker.dart';
 import 'relation_database_picker.dart';
@@ -381,39 +382,13 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
     required Widget value,
     VoidCallback? onAdd,
     String? tooltip,
-  }) {
-    final scheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 112,
-            child: Row(
-              children: [
-                Icon(icon, size: 16, color: scheme.onSurfaceVariant),
-                const SizedBox(width: 7),
-                Expanded(child: Text(label, style: TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant))),
-              ],
-            ),
-          ),
-          Expanded(child: value),
-          if (onAdd != null)
-            SizedBox(
-              width: 28,
-              height: 28,
-              child: IconButton(
-                padding: EdgeInsets.zero,
-                tooltip: tooltip,
-                onPressed: onAdd,
-                icon: Icon(Icons.add, size: 17, color: scheme.onSurfaceVariant),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
+  }) => DetailPropertyRow(
+        icon: icon,
+        label: label,
+        child: value,
+        onAdd: onAdd,
+        addTooltip: tooltip,
+      );
 
   Widget _relationChip({required String label, required VoidCallback onPressed}) {
     final scheme = Theme.of(context).colorScheme;
@@ -430,23 +405,27 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
 
   Widget _rating(BookmarkItem bookmark) {
     final scheme = Theme.of(context).colorScheme;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: List.generate(5, (index) {
-        final value = index + 1;
-        return InkWell(
-          onTap: () => widget.repository.setRating(bookmark, bookmark.rating == value ? 0 : value),
-          borderRadius: BorderRadius.circular(3),
-          child: Padding(
-            padding: const EdgeInsets.all(1),
-            child: Icon(
-              value <= bookmark.rating ? Icons.star : Icons.star_border,
-              size: 18,
-              color: value <= bookmark.rating ? const Color(0xFFB8860B) : scheme.onSurfaceVariant,
+    return SizedBox(
+      height: 30,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: List.generate(5, (index) {
+          final value = index + 1;
+          return InkWell(
+            onTap: () => widget.repository.setRating(bookmark, bookmark.rating == value ? 0 : value),
+            borderRadius: BorderRadius.circular(3),
+            child: Padding(
+              padding: const EdgeInsets.all(1),
+              child: Icon(
+                value <= bookmark.rating ? Icons.star : Icons.star_border,
+                size: 18,
+                color: value <= bookmark.rating ? const Color(0xFFB8860B) : scheme.onSurfaceVariant,
+              ),
             ),
-          ),
-        );
-      }),
+          );
+        }),
+      ),
     );
   }
 
@@ -678,17 +657,10 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                         _propertyRow(
                           icon: Icons.flag_outlined,
                           label: 'ステータス',
-                          value: DropdownButtonHideUnderline(
-                            child: DropdownButton<String>(
-                              value: bookmark.status,
-                              isDense: true,
-                              items: _statusLabels.entries
-                                  .map((entry) => DropdownMenuItem(value: entry.key, child: Text(entry.value, style: const TextStyle(fontSize: 12.5))))
-                                  .toList(),
-                              onChanged: (value) {
-                                if (value != null) widget.repository.setStatus(bookmark, value);
-                              },
-                            ),
+                          value: DetailSelectField<String>(
+                            value: bookmark.status,
+                            items: _statusLabels,
+                            onSelected: (value) => widget.repository.setStatus(bookmark, value),
                           ),
                         ),
                         _propertyRow(icon: Icons.star_outline, label: '評価', value: _rating(bookmark)),
@@ -696,7 +668,7 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                           icon: Icons.sell_outlined,
                           label: 'タグ',
                           value: bookmark.tags.isEmpty
-                              ? Text('なし', style: TextStyle(fontSize: 12.5, color: muted.withValues(alpha: .55)))
+                              ? Text('なし', style: TextStyle(fontSize: 12.5, height: 1.0, color: muted.withValues(alpha: .55)))
                               : Wrap(
                                   spacing: 5,
                                   runSpacing: 5,
@@ -716,7 +688,7 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                           icon: Icons.collections_bookmark_outlined,
                           label: 'コレクション',
                           value: bookmark.collections.isEmpty
-                              ? Text('なし', style: TextStyle(fontSize: 12.5, color: muted.withValues(alpha: .55)))
+                              ? Text('なし', style: TextStyle(fontSize: 12.5, height: 1.0, color: muted.withValues(alpha: .55)))
                               : Wrap(
                                   spacing: 5,
                                   runSpacing: 5,
@@ -736,7 +708,7 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                           label: '履歴',
                           value: Text(
                             '${bookmark.openCount}回 · ${_formatDateTime(bookmark.lastOpenedAt)}',
-                            style: TextStyle(fontSize: 12.5, color: muted),
+                            style: TextStyle(fontSize: 12.5, height: 1.0, color: scheme.onSurface),
                           ),
                         ),
                         const SizedBox(height: 18),
