@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
+import '../widgets/bookmark_reverse_lookup_dialog.dart';
 
 class TagManagementPage extends StatelessWidget {
   const TagManagementPage({super.key, required this.repository});
@@ -58,9 +59,7 @@ class TagManagementPage extends StatelessWidget {
                     alignment: Alignment.centerLeft,
                     child: Text(
                       error!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
+                      style: TextStyle(color: Theme.of(context).colorScheme.error),
                     ),
                   ),
                 ],
@@ -80,9 +79,7 @@ class TagManagementPage extends StatelessWidget {
                   await repository.createTag(name, parent: parent);
                   if (dialogContext.mounted) Navigator.pop(dialogContext);
                 } catch (_) {
-                  setLocalState(
-                    () => error = '同名タグなどの理由で追加できませんでした',
-                  );
+                  setLocalState(() => error = '同名タグなどの理由で追加できませんでした');
                 }
               },
               child: const Text('追加'),
@@ -108,10 +105,7 @@ class TagManagementPage extends StatelessWidget {
 
     final descendants = _descendantIds(tag.id, allTags);
     final parentCandidates = allTags
-        .where(
-          (candidate) =>
-              candidate.id != tag.id && !descendants.contains(candidate.id),
-        )
+        .where((candidate) => candidate.id != tag.id && !descendants.contains(candidate.id))
         .toList();
 
     await showDialog<void>(
@@ -158,9 +152,7 @@ class TagManagementPage extends StatelessWidget {
                     alignment: Alignment.centerLeft,
                     child: Text(
                       error!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
+                      style: TextStyle(color: Theme.of(context).colorScheme.error),
                     ),
                   ),
                 ],
@@ -214,6 +206,33 @@ class TagManagementPage extends StatelessWidget {
     );
 
     if (confirmed == true) await repository.deleteTag(tag);
+  }
+
+  Future<void> _showRelatedBookmarks(
+    BuildContext context,
+    Tag tag,
+    List<Tag> allTags, {
+    bool includeDescendants = false,
+  }) {
+    final tagIds = <int>{tag.id};
+    if (includeDescendants) {
+      tagIds.addAll(_descendantIds(tag.id, allTags));
+    }
+
+    final stream = repository.watchAll().map(
+          (bookmarks) => bookmarks
+              .where(
+                (bookmark) => bookmark.tags.any((bookmarkTag) => tagIds.contains(bookmarkTag.id)),
+              )
+              .toList(),
+        );
+
+    final suffix = includeDescendants ? '（子タグを含む）' : '';
+    return showBookmarkReverseLookupDialog(
+      context: context,
+      title: '${tag.name} のブックマーク$suffix',
+      bookmarks: stream,
+    );
   }
 
   Set<int> _descendantIds(int tagId, List<Tag> tags) {
@@ -291,8 +310,7 @@ class TagManagementPage extends StatelessWidget {
     final nested = _childrenOf(tag.id, tags);
 
     return DragTarget<Tag>(
-      onWillAcceptWithDetails: (details) =>
-          _canDropOn(details.data, tag, tags),
+      onWillAcceptWithDetails: (details) => _canDropOn(details.data, tag, tags),
       onAcceptWithDetails: (details) async {
         await repository.setTagParent(details.data, tag);
       },
@@ -301,9 +319,7 @@ class TagManagementPage extends StatelessWidget {
         return AnimatedContainer(
           duration: const Duration(milliseconds: 100),
           decoration: BoxDecoration(
-            color: highlighted
-                ? Theme.of(context).colorScheme.primaryContainer
-                : null,
+            color: highlighted ? Theme.of(context).colorScheme.primaryContainer : null,
             borderRadius: BorderRadius.circular(8),
             border: highlighted
                 ? Border.all(color: Theme.of(context).colorScheme.primary)
@@ -327,14 +343,36 @@ class TagManagementPage extends StatelessWidget {
             ),
             title: Text(tag.name),
             subtitle: Text('${counts[tag.id] ?? 0} 件のブックマーク'),
+            onTap: () => _showRelatedBookmarks(context, tag, tags),
             trailing: PopupMenuButton<String>(
               onSelected: (value) {
+                if (value == 'bookmarks') {
+                  _showRelatedBookmarks(context, tag, tags);
+                }
+                if (value == 'bookmarks_descendants') {
+                  _showRelatedBookmarks(
+                    context,
+                    tag,
+                    tags,
+                    includeDescendants: true,
+                  );
+                }
                 if (value == 'edit') _editTag(context, tag, tags);
                 if (value == 'delete') _deleteTag(context, tag);
               },
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'edit', child: Text('編集')),
-                PopupMenuItem(value: 'delete', child: Text('削除')),
+              itemBuilder: (_) => [
+                const PopupMenuItem(
+                  value: 'bookmarks',
+                  child: Text('関連ブックマークを見る'),
+                ),
+                if (nested.isNotEmpty)
+                  const PopupMenuItem(
+                    value: 'bookmarks_descendants',
+                    child: Text('子タグも含めて見る'),
+                  ),
+                const PopupMenuDivider(),
+                const PopupMenuItem(value: 'edit', child: Text('編集')),
+                const PopupMenuItem(value: 'delete', child: Text('削除')),
               ],
             ),
           ),
@@ -395,9 +433,7 @@ class TagManagementPage extends StatelessWidget {
                 color: active ? Theme.of(context).colorScheme.primary : null,
               ),
               const SizedBox(width: 10),
-              Text(
-                active ? 'ここにドロップして最上位へ移動' : '最上位へ移動',
-              ),
+              Text(active ? 'ここにドロップして最上位へ移動' : '最上位へ移動'),
             ],
           ),
         );
@@ -408,9 +444,7 @@ class TagManagementPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('タグ管理'),
-      ),
+      appBar: AppBar(title: const Text('タグ管理')),
       floatingActionButton: StreamBuilder<List<Tag>>(
         stream: repository.watchTags(),
         builder: (context, snapshot) => FloatingActionButton.extended(
@@ -429,8 +463,7 @@ class TagManagementPage extends StatelessWidget {
           return StreamBuilder<List<BookmarkItem>>(
             stream: repository.watchAll(),
             builder: (context, bookmarkSnapshot) {
-              final bookmarks =
-                  bookmarkSnapshot.data ?? const <BookmarkItem>[];
+              final bookmarks = bookmarkSnapshot.data ?? const <BookmarkItem>[];
               final counts = <int, int>{};
               for (final bookmark in bookmarks) {
                 for (final tag in bookmark.tags) {
@@ -450,7 +483,7 @@ class TagManagementPage extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 8, 20, 6),
                     child: Text(
-                      '左端のドラッグハンドルを掴んで別のタグへドロップすると、そのタグの子にできます。',
+                      'タグをクリックすると関連ブックマークを表示します。左端のドラッグハンドルでは親子関係を変更できます。',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ),
