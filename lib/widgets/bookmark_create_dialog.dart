@@ -13,6 +13,14 @@ List<String> _splitNames(String value) => value
     .where((value) => value.isNotEmpty)
     .toList();
 
+const _statusLabels = <String, String>{
+  'unread': '未読',
+  'later': '後で見る',
+  'in_progress': '閲覧中 / 視聴中',
+  'done': '完了 / 視聴済み',
+  'archived': 'アーカイブ',
+};
+
 Future<void> showBookmarkCreateDialog({
   required BuildContext context,
   required BookmarkRepository repository,
@@ -22,6 +30,8 @@ Future<void> showBookmarkCreateDialog({
   var selectedPhotos = <PhotoRecord>[];
   PhotoRecord? coverPhoto;
   var saving = false;
+  var status = 'unread';
+  var rating = 0;
 
   await showDialog<void>(
     context: context,
@@ -45,10 +55,40 @@ Future<void> showBookmarkCreateDialog({
           });
         }
 
+        Future<bool> confirmDuplicate(BookmarkItem duplicate) async {
+          final choice = await showDialog<String>(
+            context: context,
+            builder: (duplicateContext) => AlertDialog(
+              title: const Text('同じURLが登録されています'),
+              content: Text('「${duplicate.title}」がすでに存在します。\nそれでも新しく追加しますか？'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(duplicateContext, 'cancel'),
+                  child: const Text('キャンセル'),
+                ),
+                FilledButton.tonal(
+                  onPressed: () => Navigator.pop(duplicateContext, 'add'),
+                  child: const Text('それでも追加'),
+                ),
+              ],
+            ),
+          );
+          return choice == 'add';
+        }
+
         Future<void> save() async {
           if (saving || url.text.trim().isEmpty) return;
           setLocalState(() => saving = true);
           try {
+            final duplicate = await repository.findDuplicateUrl(url.text.trim());
+            if (duplicate != null) {
+              final proceed = await confirmDuplicate(duplicate);
+              if (!proceed) {
+                setLocalState(() => saving = false);
+                return;
+              }
+            }
+
             final metadata = await const BookmarkMetadataService().fetch(url.text.trim());
             final bookmarkId = await repository.create(
               url: metadata.url,
@@ -56,6 +96,8 @@ Future<void> showBookmarkCreateDialog({
               thumbnail: metadata.thumbnail,
               description: metadata.description,
               tagNames: _splitNames(tags.text),
+              status: status,
+              rating: rating,
             );
             if (selectedPhotos.isNotEmpty) {
               await repository.attachPhotosByBookmarkId(
@@ -78,7 +120,7 @@ Future<void> showBookmarkCreateDialog({
         return AlertDialog(
           title: const Text('ブックマークを追加'),
           content: SizedBox(
-            width: 560,
+            width: 580,
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -100,6 +142,33 @@ Future<void> showBookmarkCreateDialog({
                       labelText: 'タグ（カンマ区切り）',
                       border: OutlineInputBorder(),
                     ),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          value: status,
+                          decoration: const InputDecoration(labelText: 'ステータス', border: OutlineInputBorder()),
+                          items: _statusLabels.entries
+                              .map((entry) => DropdownMenuItem(value: entry.key, child: Text(entry.value)))
+                              .toList(),
+                          onChanged: (value) => setLocalState(() => status = value ?? 'unread'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: DropdownButtonFormField<int>(
+                          value: rating,
+                          decoration: const InputDecoration(labelText: '評価', border: OutlineInputBorder()),
+                          items: List.generate(6, (index) => DropdownMenuItem(
+                                value: index,
+                                child: Text(index == 0 ? '未評価' : '${'★' * index}${'☆' * (5 - index)}'),
+                              )),
+                          onChanged: (value) => setLocalState(() => rating = value ?? 0),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 16),
                   Row(
@@ -125,9 +194,7 @@ Future<void> showBookmarkCreateDialog({
                         child: Image.file(
                           File(coverPhoto!.path),
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const Center(
-                            child: Icon(Icons.broken_image_outlined),
-                          ),
+                          errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image_outlined)),
                         ),
                       ),
                     ),
