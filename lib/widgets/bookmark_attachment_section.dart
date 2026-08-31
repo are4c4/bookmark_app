@@ -4,6 +4,7 @@ import '../data/app_database.dart';
 import '../data/bookmark_attachment_store.dart';
 import '../data/bookmark_repository.dart';
 import '../services/attachment_storage_service.dart';
+import '../services/pdf_metadata_service.dart';
 import '../views/attachment_viewer_page.dart';
 
 class BookmarkAttachmentSection extends StatefulWidget {
@@ -23,6 +24,7 @@ class BookmarkAttachmentSection extends StatefulWidget {
 class _BookmarkAttachmentSectionState extends State<BookmarkAttachmentSection> {
   late final BookmarkAttachmentStore _store;
   static const _storage = AttachmentStorageService();
+  static const _pdfMetadata = PdfMetadataService();
   var _ready = false;
   var _importing = false;
 
@@ -59,6 +61,66 @@ class _BookmarkAttachmentSectionState extends State<BookmarkAttachmentSection> {
     return Icons.insert_drive_file_outlined;
   }
 
+  Future<void> _offerPdfMetadata(BookmarkAttachment attachment) async {
+    final metadata = await _pdfMetadata.read(attachment.path);
+    if (!mounted) return;
+    if (metadata.title.trim().isEmpty && metadata.authors.isEmpty) return;
+
+    final apply = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('PDFの情報を反映しますか？'),
+        content: SizedBox(
+          width: 460,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('タイトル: ${metadata.title}'),
+              if (metadata.authors.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text('著者: ${metadata.authors.join(', ')}'),
+              ],
+              const SizedBox(height: 12),
+              const Text('タイトルを更新し、著者は人物DBの「著者」プロパティとして追加します。'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('反映しない')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('反映')),
+        ],
+      ),
+    );
+    if (apply != true) return;
+
+    await widget.repository.update(
+      id: widget.bookmark.id,
+      url: widget.bookmark.url,
+      title: metadata.title.trim().isEmpty ? widget.bookmark.title : metadata.title.trim(),
+      thumbnail: widget.bookmark.thumbnail,
+      description: widget.bookmark.description,
+      tagNames: widget.bookmark.tags.map((tag) => tag.name),
+      status: widget.bookmark.status,
+      rating: widget.bookmark.rating,
+    );
+
+    if (metadata.authors.isNotEmpty) {
+      final people = <Person>[];
+      for (final author in metadata.authors) {
+        try {
+          await widget.repository.createPerson(author);
+        } catch (_) {}
+      }
+      final allPeople = await widget.repository.watchPeople().first;
+      final normalized = metadata.authors.map((name) => name.trim().toLowerCase()).toSet();
+      people.addAll(allPeople.where((person) => normalized.contains(person.name.trim().toLowerCase())));
+      if (people.isNotEmpty) {
+        await widget.repository.setPeopleForRole(widget.bookmark, '著者', people);
+      }
+    }
+  }
+
   Future<void> _import() async {
     final profilePath = widget.repository.profileDirectoryPath;
     if (profilePath == null || _importing) return;
@@ -73,6 +135,8 @@ class _BookmarkAttachmentSectionState extends State<BookmarkAttachmentSection> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('${added.length}件のファイルを添付しました')),
         );
+        final pdfs = added.where((attachment) => attachment.isPdf).toList();
+        if (pdfs.length == 1) await _offerPdfMetadata(pdfs.first);
       }
     } catch (error) {
       if (mounted) {
@@ -154,12 +218,15 @@ class _BookmarkAttachmentSectionState extends State<BookmarkAttachmentSection> {
                 iconSize: 17,
                 onSelected: (value) {
                   if (value == 'open') _open(attachment);
+                  if (value == 'metadata' && attachment.isPdf) _offerPdfMetadata(attachment);
                   if (value == 'delete') _delete(attachment);
                 },
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'open', child: Text('アプリ内で開く')),
-                  PopupMenuDivider(),
-                  PopupMenuItem(value: 'delete', child: Text('添付を削除')),
+                itemBuilder: (_) => [
+                  const PopupMenuItem(value: 'open', child: Text('アプリ内で開く')),
+                  if (attachment.isPdf)
+                    const PopupMenuItem(value: 'metadata', child: Text('PDFのタイトル・著者を取り込む')),
+                  const PopupMenuDivider(),
+                  const PopupMenuItem(value: 'delete', child: Text('添付を削除')),
                 ],
               ),
             ],
