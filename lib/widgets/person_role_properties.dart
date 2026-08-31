@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
 import '../data/person_roles.dart';
+import 'bookmark_attachment_section.dart';
 import 'relation_database_picker.dart';
 
 const _bookmarkGenres = <String>[
@@ -284,6 +285,10 @@ class PersonRoleProperties extends StatelessWidget {
                   visualDensity: VisualDensity.compact,
                 ),
               ),
+            ),
+            BookmarkAttachmentSection(
+              repository: repository,
+              bookmark: bookmark,
             ),
           ],
         );
