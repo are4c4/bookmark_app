@@ -29,6 +29,7 @@ class BookmarkTags extends Table {
   Set<Column<Object>> get primaryKey => {bookmarkId, tagId};
 }
 
+@DataClassName('Person')
 class People extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get name => text().unique()();
