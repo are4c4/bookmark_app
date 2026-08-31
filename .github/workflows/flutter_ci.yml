@@ -9,6 +9,10 @@ on:
     branches:
       - main
 
+concurrency:
+  group: flutter-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   analyze-test-build:
     runs-on: macos-latest
