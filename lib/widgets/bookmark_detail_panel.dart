@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
 import 'photo_database_picker.dart';
+import 'relation_database_picker.dart';
 
 class BookmarkDetailPanel extends StatefulWidget {
   const BookmarkDetailPanel({
@@ -38,6 +39,30 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
         const SnackBar(content: Text('URLを開けませんでした')),
       );
     }
+  }
+
+  Future<void> _selectTagsFromDatabase() async {
+    final allTags = await widget.repository.watchTags().first;
+    if (!mounted) return;
+    final selected = await showTagDatabasePicker(
+      context: context,
+      tags: allTags,
+      initiallySelectedIds: widget.bookmark.tags.map((tag) => tag.id),
+    );
+    if (selected == null) return;
+    await widget.repository.setBookmarkTagsFromDatabase(widget.bookmark, selected);
+  }
+
+  Future<void> _selectPeopleFromDatabase() async {
+    final allPeople = await widget.repository.watchPeople().first;
+    if (!mounted) return;
+    final selected = await showPeopleDatabasePicker(
+      context: context,
+      people: allPeople,
+      initiallySelectedIds: widget.bookmark.people.map((person) => person.id),
+    );
+    if (selected == null) return;
+    await widget.repository.setBookmarkPeopleFromDatabase(widget.bookmark, selected);
   }
 
   Future<void> _addPhotosFromDatabase() async {
@@ -207,7 +232,7 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
     return const Center(child: Icon(Icons.image_outlined, size: 42));
   }
 
-  Widget _property(String label, Widget value) => Row(
+  Widget _property(String label, Widget value, {VoidCallback? onSelect, String? tooltip}) => Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
@@ -215,6 +240,13 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
             child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
           ),
           Expanded(child: value),
+          if (onSelect != null)
+            IconButton(
+              tooltip: tooltip,
+              onPressed: onSelect,
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.add_circle_outline, size: 20),
+            ),
         ],
       );
 
@@ -293,8 +325,10 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                             runSpacing: 5,
                             children: bookmark.tags.map((t) => Chip(label: Text(t.name))).toList(),
                           ),
+                    onSelect: _selectTagsFromDatabase,
+                    tooltip: 'タグDBから選択',
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                   _property(
                     '出演者',
                     bookmark.people.isEmpty
@@ -304,6 +338,8 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                             runSpacing: 5,
                             children: bookmark.people.map((p) => Chip(label: Text(p.name))).toList(),
                           ),
+                    onSelect: _selectPeopleFromDatabase,
+                    tooltip: '出演者DBから選択',
                   ),
                   const SizedBox(height: 20),
                   Row(
