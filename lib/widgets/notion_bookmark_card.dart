@@ -74,8 +74,7 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
       return Image.file(
         File(bookmark.coverPhoto!.path),
         width: double.infinity,
-        height: double.infinity,
-        fit: BoxFit.cover,
+        fit: BoxFit.fitWidth,
         errorBuilder: (_, __, ___) => _networkCover(),
       );
     }
@@ -88,34 +87,46 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
       return Image.network(
         bookmark.thumbnail!,
         width: double.infinity,
-        height: double.infinity,
-        fit: BoxFit.cover,
+        fit: BoxFit.fitWidth,
         errorBuilder: (_, __, ___) => _placeholder(),
       );
     }
     return _placeholder();
   }
 
-  Widget _placeholder() => Container(
-        color: const Color(0xFFFAFAF9),
-        alignment: Alignment.center,
-        child: const Icon(Icons.image_outlined, size: 34, color: Color(0xFFB8B7B4)),
-      );
-
-  Widget _chip(String label, {IconData? icon}) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-        decoration: BoxDecoration(color: const Color(0xFFF1F1EF), borderRadius: BorderRadius.circular(4)),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (icon != null) ...[
-              Icon(icon, size: 12.5, color: const Color(0xFF787774)),
-              const SizedBox(width: 4),
-            ],
-            Text(label, style: const TextStyle(fontSize: 12, height: 1.2, color: Color(0xFF565653))),
-          ],
+  Widget _placeholder() {
+    final scheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      height: 160,
+      child: ColoredBox(
+        color: scheme.surfaceContainerLowest,
+        child: Center(
+          child: Icon(Icons.image_outlined, size: 34, color: scheme.onSurfaceVariant.withValues(alpha: .55)),
         ),
-      );
+      ),
+    );
+  }
+
+  Widget _chip(String label, {IconData? icon}) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 12.5, color: scheme.onSurfaceVariant),
+            const SizedBox(width: 4),
+          ],
+          Text(label, style: TextStyle(fontSize: 12, height: 1.2, color: scheme.onSurfaceVariant)),
+        ],
+      ),
+    );
+  }
 
   Widget _menu() {
     final menu = widget.menu;
@@ -142,9 +153,6 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
                 ? entry.onTap
                 : () {
                     entry.onTap?.call();
-                    // PopupMenuItem.onTap runs before the popup route is fully
-                    // removed. Forward the action shortly after closing so
-                    // dialogs and other routes can be opened reliably on macOS.
                     Future<void>.delayed(const Duration(milliseconds: 120), () {
                       if (!mounted) return;
                       menu.onSelected?.call(value);
@@ -160,23 +168,28 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
   @override
   Widget build(BuildContext context) {
     final bookmark = widget.bookmark;
+    final scheme = Theme.of(context).colorScheme;
+    final selectedBorder = scheme.onSurfaceVariant;
+    final hoverBorder = scheme.outline;
+    final normalBorder = scheme.outlineVariant;
+
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 100),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: scheme.surface,
           borderRadius: BorderRadius.circular(5),
           border: Border.all(
             color: widget.selected
-                ? const Color(0xFF9B9A97)
+                ? selectedBorder
                 : _hovered
-                    ? const Color(0xFFD7D7D4)
-                    : const Color(0xFFE7E7E4),
+                    ? hoverBorder
+                    : normalBorder,
           ),
           boxShadow: _hovered
-              ? const [BoxShadow(color: Color(0x10000000), blurRadius: 7, offset: Offset(0, 2))]
+              ? [BoxShadow(color: scheme.shadow.withValues(alpha: .08), blurRadius: 7, offset: const Offset(0, 2))]
               : null,
         ),
         child: Material(
@@ -192,16 +205,16 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
                 if (widget.showImage)
                   Stack(
                     children: [
-                      AspectRatio(aspectRatio: 16 / 9, child: _cover()),
+                      _cover(),
                       if (_hovered)
                         Positioned(
                           top: 7,
                           right: 7,
                           child: DecoratedBox(
                             decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: .94),
+                              color: scheme.surface.withValues(alpha: .94),
                               borderRadius: BorderRadius.circular(4),
-                              boxShadow: const [BoxShadow(color: Color(0x18000000), blurRadius: 4)],
+                              boxShadow: [BoxShadow(color: scheme.shadow.withValues(alpha: .12), blurRadius: 4)],
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -237,7 +250,12 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
                           Expanded(
                             child: Text(
                               bookmark.title,
-                              style: const TextStyle(fontSize: 14.5, height: 1.28, fontWeight: FontWeight.w600, color: Color(0xFF37352F)),
+                              style: TextStyle(
+                                fontSize: 14.5,
+                                height: 1.28,
+                                fontWeight: FontWeight.w600,
+                                color: scheme.onSurface,
+                              ),
                             ),
                           ),
                           if (!widget.showImage)
@@ -270,7 +288,12 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
                       ),
                       if (widget.showUrl) ...[
                         const SizedBox(height: 5),
-                        Text(_compactUrl(bookmark.url), style: const TextStyle(fontSize: 12, color: Color(0xFF9B9A97)), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        Text(
+                          _compactUrl(bookmark.url),
+                          style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ],
                       if (widget.showStatus) ...[
                         const SizedBox(height: 8),
@@ -291,7 +314,7 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
                       ...widget.personRoleGroups.entries.expand((entry) sync* {
                         if (entry.value.isEmpty) return;
                         yield const SizedBox(height: 8);
-                        yield Text(entry.key, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF787774)));
+                        yield Text(entry.key, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: scheme.onSurfaceVariant));
                         yield const SizedBox(height: 4);
                         yield Wrap(
                           spacing: 5,
@@ -301,7 +324,7 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
                       }),
                       if (widget.showDescription && bookmark.description?.trim().isNotEmpty == true) ...[
                         const SizedBox(height: 10),
-                        Text(bookmark.description!, style: const TextStyle(fontSize: 12.5, height: 1.5, color: Color(0xFF6B6B68))),
+                        Text(bookmark.description!, style: TextStyle(fontSize: 12.5, height: 1.5, color: scheme.onSurfaceVariant)),
                       ],
                       if (widget.showCreatedAt || widget.showHistory) ...[
                         const SizedBox(height: 10),
@@ -311,15 +334,15 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
                           children: [
                             if (widget.showCreatedAt)
                               Row(mainAxisSize: MainAxisSize.min, children: [
-                                const Icon(Icons.schedule, size: 12.5, color: Color(0xFFB0AFAC)),
+                                Icon(Icons.schedule, size: 12.5, color: scheme.onSurfaceVariant.withValues(alpha: .65)),
                                 const SizedBox(width: 4),
-                                Text(_date(bookmark.createdAt), style: const TextStyle(fontSize: 11.5, color: Color(0xFFB0AFAC))),
+                                Text(_date(bookmark.createdAt), style: TextStyle(fontSize: 11.5, color: scheme.onSurfaceVariant.withValues(alpha: .75))),
                               ]),
                             if (widget.showHistory)
                               Row(mainAxisSize: MainAxisSize.min, children: [
-                                const Icon(Icons.history, size: 12.5, color: Color(0xFFB0AFAC)),
+                                Icon(Icons.history, size: 12.5, color: scheme.onSurfaceVariant.withValues(alpha: .65)),
                                 const SizedBox(width: 4),
-                                Text('${bookmark.openCount}回', style: const TextStyle(fontSize: 11.5, color: Color(0xFFB0AFAC))),
+                                Text('${bookmark.openCount}回', style: TextStyle(fontSize: 11.5, color: scheme.onSurfaceVariant.withValues(alpha: .75))),
                               ]),
                           ],
                         ),
