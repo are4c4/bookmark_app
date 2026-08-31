@@ -225,7 +225,7 @@ class BookmarkLifecycleStore {
       'UPDATE bookmarks SET inbox_state = ?, deleted_at_state = ? WHERE id = ?',
       variables: [
         Variable<int>(inbox ? 1 : 0),
-        Variable<String>(deletedAt?.toIso8601String()),
+        Variable<String?>(deletedAt?.toIso8601String()),
         Variable<int>(bookmarkId),
       ],
       updates: {database.bookmarks},
