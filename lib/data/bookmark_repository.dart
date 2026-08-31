@@ -1,18 +1,47 @@
 import 'app_database.dart';
 import 'person_roles.dart';
+import 'workspace_store.dart';
 
 class BookmarkRepository {
-  BookmarkRepository(this._database);
+  BookmarkRepository(
+    this._database, {
+    required this.workspaceStore,
+    required this.workspaceId,
+  });
 
   final AppDatabase _database;
+  final WorkspaceStore workspaceStore;
+  final int workspaceId;
 
-  Stream<List<BookmarkItem>> watchAll() => _database.watchBookmarkItems();
+  Future<List<WorkspaceInfo>> listWorkspaces() => workspaceStore.listWorkspaces();
+  Future<int> createWorkspace(String name) => workspaceStore.createWorkspace(name);
+  Future<void> renameWorkspace(WorkspaceInfo workspace, String name) =>
+      workspaceStore.renameWorkspace(workspace.id, name);
+  Future<void> deleteWorkspace(WorkspaceInfo workspace) => workspaceStore.deleteWorkspace(workspace.id);
+  Future<void> setActiveWorkspace(WorkspaceInfo workspace) => workspaceStore.setActiveWorkspace(workspace.id);
+  Future<void> moveBookmarksToWorkspace(Iterable<int> ids, WorkspaceInfo workspace) =>
+      workspaceStore.moveBookmarks(ids, workspace.id);
+
+  Stream<List<BookmarkItem>> watchAll() async* {
+    await for (final items in _database.watchBookmarkItems()) {
+      final ids = await workspaceStore.bookmarkIds(workspaceId);
+      yield items.where((item) => ids.contains(item.id)).toList();
+    }
+  }
+
   Stream<List<Tag>> watchTags() => _database.watchAllTags();
   Stream<List<Person>> watchPeople() => _database.watchAllPeople();
   Stream<List<PhotoRecord>> watchPhotos() => _database.watchAllPhotos();
   Stream<List<CollectionRecord>> watchCollections() => _database.watchAllCollections();
-  Stream<List<BookmarkRelation>> watchRelationsForBookmark(int bookmarkId) => _database.watchRelationsForBookmark(bookmarkId);
-  Stream<List<SavedViewConfig>> watchSavedViews() => _database.watchSavedViewConfigs();
+  Stream<List<BookmarkRelation>> watchRelationsForBookmark(int bookmarkId) =>
+      _database.watchRelationsForBookmark(bookmarkId);
+
+  Stream<List<SavedViewConfig>> watchSavedViews() async* {
+    await for (final views in _database.watchSavedViewConfigs()) {
+      final ids = await workspaceStore.savedViewIds(workspaceId);
+      yield views.where((config) => ids.contains(config.view.id)).toList();
+    }
+  }
 
   Stream<List<PersonRoleAssignment>> watchPersonRoles(BookmarkItem bookmark) =>
       _database.watchPersonRoleAssignments(bookmark.id);
@@ -67,17 +96,21 @@ class BookmarkRepository {
     bool favorite = false,
     String status = 'unread',
     int rating = 0,
-  }) => _database.addBookmark(
-        url: url,
-        title: title,
-        thumbnail: thumbnail,
-        description: description,
-        tagNames: tagNames,
-        personNames: personNames,
-        favorite: favorite,
-        status: status,
-        rating: rating,
-      );
+  }) async {
+    final id = await _database.addBookmark(
+      url: url,
+      title: title,
+      thumbnail: thumbnail,
+      description: description,
+      tagNames: tagNames,
+      personNames: personNames,
+      favorite: favorite,
+      status: status,
+      rating: rating,
+    );
+    await workspaceStore.assignBookmark(id, workspaceId);
+    return id;
+  }
 
   Future<void> update({
     required int id,
@@ -206,19 +239,23 @@ class BookmarkRepository {
     String visibleProperties = 'image,url,tags,favorite',
     String statusFilter = '',
     int minRating = 0,
-  }) => _database.createSavedView(
-        name: name,
-        layoutType: layoutType,
-        searchQuery: searchQuery,
-        favoritesOnly: favoritesOnly,
-        tagIds: tagIds,
-        tagMatchMode: tagMatchMode,
-        sortField: sortField,
-        sortDirection: sortDirection,
-        visibleProperties: visibleProperties,
-        statusFilter: statusFilter,
-        minRating: minRating,
-      );
+  }) async {
+    final id = await _database.createSavedView(
+      name: name,
+      layoutType: layoutType,
+      searchQuery: searchQuery,
+      favoritesOnly: favoritesOnly,
+      tagIds: tagIds,
+      tagMatchMode: tagMatchMode,
+      sortField: sortField,
+      sortDirection: sortDirection,
+      visibleProperties: visibleProperties,
+      statusFilter: statusFilter,
+      minRating: minRating,
+    );
+    await workspaceStore.assignSavedView(id, workspaceId);
+    return id;
+  }
 
   Future<void> updateSavedView({
     required int id,
