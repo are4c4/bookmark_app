@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../data/app_database.dart';
 
@@ -28,7 +29,7 @@ class NotionBookmarkCard extends StatefulWidget {
     required this.showRating,
     required this.showHistory,
     required this.onTap,
-    required this.onOpen,
+    this.onOpen,
     required this.onToggleFavorite,
     required this.menu,
     this.personRoleGroups = const {},
@@ -47,7 +48,7 @@ class NotionBookmarkCard extends StatefulWidget {
   final bool showRating;
   final bool showHistory;
   final VoidCallback onTap;
-  final VoidCallback onOpen;
+  final VoidCallback? onOpen;
   final VoidCallback onToggleFavorite;
   final Widget menu;
   final Map<String, List<Person>> personRoleGroups;
@@ -58,6 +59,15 @@ class NotionBookmarkCard extends StatefulWidget {
 
 class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
   var _hovered = false;
+
+  Future<void> _openLink() async {
+    if (widget.onOpen != null) {
+      widget.onOpen!.call();
+      return;
+    }
+    final uri = Uri.tryParse(widget.bookmark.url);
+    if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
 
   String _compactUrl(String value) {
     final uri = Uri.tryParse(value);
@@ -155,7 +165,7 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
             if (widget.showImage)
               Stack(children: [
-                InkWell(onTap: widget.onOpen, child: _cover()),
+                InkWell(onTap: _openLink, child: _cover()),
                 if (_hovered)
                   Positioned(
                     top: 7,
@@ -163,7 +173,7 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
                     child: DecoratedBox(
                       decoration: BoxDecoration(color: scheme.surface.withValues(alpha: .94), borderRadius: BorderRadius.circular(4), boxShadow: [BoxShadow(color: scheme.shadow.withValues(alpha: .12), blurRadius: 4)]),
                       child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        SizedBox(width: 30, height: 30, child: IconButton(padding: EdgeInsets.zero, tooltip: 'リンクを開く', onPressed: widget.onOpen, iconSize: 17, icon: const Icon(Icons.open_in_new))),
+                        SizedBox(width: 30, height: 30, child: IconButton(padding: EdgeInsets.zero, tooltip: 'リンクを開く', onPressed: _openLink, iconSize: 17, icon: const Icon(Icons.open_in_new))),
                         if (widget.showFavorite) SizedBox(width: 30, height: 30, child: IconButton(padding: EdgeInsets.zero, tooltip: 'お気に入り', onPressed: widget.onToggleFavorite, iconSize: 17, icon: Icon(bookmark.favorite ? Icons.star : Icons.star_border))),
                         SizedBox(width: 30, height: 30, child: _menu()),
                       ]),
@@ -184,7 +194,7 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
                         child: IgnorePointer(
                           ignoring: !_hovered,
                           child: Row(mainAxisSize: MainAxisSize.min, children: [
-                            SizedBox(width: 28, height: 28, child: IconButton(padding: EdgeInsets.zero, tooltip: 'リンクを開く', onPressed: widget.onOpen, iconSize: 17, icon: const Icon(Icons.open_in_new))),
+                            SizedBox(width: 28, height: 28, child: IconButton(padding: EdgeInsets.zero, tooltip: 'リンクを開く', onPressed: _openLink, iconSize: 17, icon: const Icon(Icons.open_in_new))),
                             if (widget.showFavorite) SizedBox(width: 28, height: 28, child: IconButton(padding: EdgeInsets.zero, tooltip: 'お気に入り', onPressed: widget.onToggleFavorite, iconSize: 17, icon: Icon(bookmark.favorite ? Icons.star : Icons.star_border))),
                             SizedBox(width: 28, height: 28, child: _menu()),
                           ]),
