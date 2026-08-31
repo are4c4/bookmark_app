@@ -88,7 +88,10 @@ class _BookmarkAttachmentSectionState extends State<BookmarkAttachmentSection> {
   Future<void> _open(BookmarkAttachment attachment) async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => AttachmentViewerPage(attachment: attachment),
+        builder: (_) => AttachmentViewerPage(
+          attachment: attachment,
+          database: widget.repository.lifecycleStore.database,
+        ),
       ),
     );
   }
