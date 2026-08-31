@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -52,7 +54,7 @@ class _BookmarkDetailsPageState extends State<BookmarkDetailsPage> {
                 TextField(controller: title, decoration: const InputDecoration(labelText: 'タイトル')),
                 TextField(controller: url, decoration: const InputDecoration(labelText: 'URL')),
                 TextField(controller: description, maxLines: 4, decoration: const InputDecoration(labelText: '説明')),
-                TextField(controller: thumbnail, decoration: const InputDecoration(labelText: 'サムネイルURL')),
+                TextField(controller: thumbnail, decoration: const InputDecoration(labelText: 'WebサムネイルURL')),
                 TextField(controller: tags, decoration: const InputDecoration(labelText: 'タグ（カンマ区切り）')),
                 TextField(
                   controller: people,
@@ -94,6 +96,79 @@ class _BookmarkDetailsPageState extends State<BookmarkDetailsPage> {
     people.dispose();
   }
 
+  Widget _cover(BookmarkItem bookmark) {
+    if (bookmark.coverPhoto != null) {
+      return Image.file(
+        File(bookmark.coverPhoto!.path),
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image_outlined, size: 48)),
+      );
+    }
+    if (bookmark.thumbnail != null) {
+      return Image.network(
+        bookmark.thumbnail!,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image_outlined, size: 48)),
+      );
+    }
+    return const Center(child: Icon(Icons.image_outlined, size: 48));
+  }
+
+  Widget _photoSection(BookmarkItem bookmark) {
+    if (bookmark.photos.isEmpty) {
+      return const Text('関連写真はありません。「写真」画面から追加できます。');
+    }
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: bookmark.photos.map((photo) {
+        final isCover = bookmark.coverPhoto?.id == photo.id;
+        return SizedBox(
+          width: 180,
+          child: Card(
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: [
+                AspectRatio(
+                  aspectRatio: 4 / 3,
+                  child: Image.file(
+                    File(photo.path),
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image_outlined)),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 4, 4, 4),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          photo.title?.trim().isNotEmpty == true ? photo.title! : '写真 ${photo.id}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: isCover ? 'カバーに設定済み' : 'カバーにする',
+                        onPressed: isCover ? null : () => widget.repository.setCoverPhoto(bookmark, photo),
+                        icon: Icon(isCover ? Icons.photo_size_select_actual : Icons.photo_outlined),
+                      ),
+                      IconButton(
+                        tooltip: '関連を解除',
+                        onPressed: () => widget.repository.detachPhoto(bookmark, photo),
+                        icon: const Icon(Icons.link_off, size: 18),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
   Widget _detail(BookmarkItem bookmark) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(28),
@@ -103,28 +178,15 @@ class _BookmarkDetailsPageState extends State<BookmarkDetailsPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (bookmark.thumbnail != null)
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: AspectRatio(
-                    aspectRatio: 16 / 9,
-                    child: Image.network(
-                      bookmark.thumbnail!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const ColoredBox(
-                        color: Color(0x11000000),
-                        child: Center(child: Icon(Icons.broken_image_outlined, size: 48)),
-                      ),
-                    ),
-                  ),
-                ),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: AspectRatio(aspectRatio: 16 / 9, child: _cover(bookmark)),
+              ),
               const SizedBox(height: 22),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Text(bookmark.title, style: Theme.of(context).textTheme.headlineMedium),
-                  ),
+                  Expanded(child: Text(bookmark.title, style: Theme.of(context).textTheme.headlineMedium)),
                   IconButton(
                     tooltip: 'お気に入り',
                     onPressed: () => widget.repository.toggleFavorite(bookmark),
@@ -154,11 +216,7 @@ class _BookmarkDetailsPageState extends State<BookmarkDetailsPage> {
                 'タグ',
                 bookmark.tags.isEmpty
                     ? const Text('なし')
-                    : Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: bookmark.tags.map((tag) => Chip(label: Text(tag.name))).toList(),
-                      ),
+                    : Wrap(spacing: 6, runSpacing: 6, children: bookmark.tags.map((tag) => Chip(label: Text(tag.name))).toList()),
               ),
               const SizedBox(height: 20),
               _property(
@@ -169,22 +227,21 @@ class _BookmarkDetailsPageState extends State<BookmarkDetailsPage> {
                         spacing: 6,
                         runSpacing: 6,
                         children: bookmark.people
-                            .map((person) => Chip(
-                                  avatar: const Icon(Icons.person_outline, size: 17),
-                                  label: Text(person.name),
-                                ))
+                            .map((person) => Chip(avatar: const Icon(Icons.person_outline, size: 17), label: Text(person.name)))
                             .toList(),
                       ),
               ),
               const SizedBox(height: 20),
               _property('登録日時', Text(bookmark.createdAt.toLocal().toString())),
-              const SizedBox(height: 24),
+              const SizedBox(height: 28),
+              Text('関連写真', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 10),
+              _photoSection(bookmark),
+              const SizedBox(height: 28),
               Text('説明', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),
               Text(
-                bookmark.description?.trim().isNotEmpty == true
-                    ? bookmark.description!
-                    : '説明はありません。',
+                bookmark.description?.trim().isNotEmpty == true ? bookmark.description! : '説明はありません。',
                 style: Theme.of(context).textTheme.bodyLarge,
               ),
             ],
@@ -197,10 +254,7 @@ class _BookmarkDetailsPageState extends State<BookmarkDetailsPage> {
   Widget _property(String label, Widget value) => Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 100,
-            child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-          ),
+          SizedBox(width: 100, child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600))),
           Expanded(child: value),
         ],
       );
@@ -208,7 +262,7 @@ class _BookmarkDetailsPageState extends State<BookmarkDetailsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('詳細')), 
+      appBar: AppBar(title: const Text('詳細')),
       body: StreamBuilder<List<BookmarkItem>>(
         stream: widget.repository.watchAll(),
         builder: (context, snapshot) {
@@ -230,18 +284,11 @@ class _BookmarkDetailsPageState extends State<BookmarkDetailsPage> {
                     final bookmark = bookmarks[index];
                     return ListTile(
                       selected: bookmark.id == selected.id,
-                      leading: bookmark.thumbnail == null
-                          ? const Icon(Icons.bookmark_outline)
-                          : ClipRRect(
-                              borderRadius: BorderRadius.circular(4),
-                              child: Image.network(
-                                bookmark.thumbnail!,
-                                width: 44,
-                                height: 34,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => const Icon(Icons.bookmark_outline),
-                              ),
-                            ),
+                      leading: SizedBox(
+                        width: 44,
+                        height: 34,
+                        child: ClipRRect(borderRadius: BorderRadius.circular(4), child: _cover(bookmark)),
+                      ),
                       title: Text(bookmark.title, maxLines: 2, overflow: TextOverflow.ellipsis),
                       subtitle: bookmark.people.isEmpty
                           ? null
