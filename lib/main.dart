@@ -68,18 +68,38 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
   Future<void> _switchProfile(DatabaseProfile profile) async {
     final manager = _profileManager;
     if (manager == null || manager.state.activeProfile.id == profile.id) return;
-    await manager.setActiveProfile(profile);
+
+    // Prepare the new database before touching the currently visible tree.
     final oldDatabase = _database;
     final database = AppDatabase(databaseName: profile.databaseName);
-    final repository = await _openRepository(database);
+    BookmarkRepository repository;
+    try {
+      repository = await _openRepository(database);
+    } catch (_) {
+      await database.close();
+      rethrow;
+    }
+
     if (!mounted) {
       await database.close();
       return;
     }
+
+    // Persist the active profile only after the new database is known to open.
+    await manager.setActiveProfile(profile);
+    if (!mounted) {
+      await database.close();
+      return;
+    }
+
     setState(() {
       _database = database;
       _repository = repository;
     });
+
+    // The old widgets still hold stream subscriptions until the next frame.
+    // Closing the old Drift database before disposal can trip framework asserts.
+    await WidgetsBinding.instance.endOfFrame;
     await oldDatabase?.close();
   }
 
@@ -103,7 +123,8 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
     if (manager == null) return;
     final profile = await manager.createProfile(name);
     if (!mounted) return;
-    setState(() {});
+    // Do not rebuild once just to show the new profile and then rebuild again
+    // for the switch. A single atomic switch keeps inherited widgets stable.
     await _switchProfile(profile);
   }
 
@@ -280,6 +301,14 @@ class _BookmarkShellState extends State<BookmarkShell> {
   var _index = 0;
   static const _transfer = BookmarkTransferService();
 
+  Future<void> _waitForOverlayToClose() async {
+    // PopupMenu/AlertDialog routes can still be disposing when their Future
+    // completes. Replacing BookmarkShell in that same frame may invalidate
+    // inherited dependencies. Wait through a full frame before switching.
+    await WidgetsBinding.instance.endOfFrame;
+    await Future<void>.delayed(const Duration(milliseconds: 16));
+  }
+
   Future<String?> _askName(String title, {String initial = '', String hint = ''}) async {
     final controller = TextEditingController(text: initial);
     final result = await showDialog<String>(
@@ -299,20 +328,34 @@ class _BookmarkShellState extends State<BookmarkShell> {
 
   Future<void> _createProfileDialog() async {
     final name = await _askName('Profileを追加', hint: '例: 実験');
-    if (name?.isNotEmpty == true) await widget.onCreateProfile(name!);
+    if (name?.isNotEmpty != true) return;
+    await _waitForOverlayToClose();
+    if (mounted) await widget.onCreateProfile(name!);
   }
 
   Future<void> _renameCurrentProfile() async {
     final profile = widget.profileState.activeProfile;
     final name = await _askName('Profile名を変更', initial: profile.name);
-    if (name?.isNotEmpty == true) await widget.onRenameProfile(profile, name!);
+    if (name?.isNotEmpty != true) return;
+    await _waitForOverlayToClose();
+    if (mounted) await widget.onRenameProfile(profile, name!);
   }
 
   Future<void> _handleProfileAction(String value) async {
-    if (value == '__create__') return _createProfileDialog();
-    if (value == '__rename__') return _renameCurrentProfile();
+    if (value == '__create__') {
+      await _waitForOverlayToClose();
+      if (mounted) await _createProfileDialog();
+      return;
+    }
+    if (value == '__rename__') {
+      await _waitForOverlayToClose();
+      if (mounted) await _renameCurrentProfile();
+      return;
+    }
     final matches = widget.profileState.profiles.where((profile) => profile.id == value);
-    if (matches.isNotEmpty) await widget.onSwitchProfile(matches.first);
+    if (matches.isEmpty) return;
+    await _waitForOverlayToClose();
+    if (mounted) await widget.onSwitchProfile(matches.first);
   }
 
   Future<void> _createWorkspace() async {
@@ -321,7 +364,8 @@ class _BookmarkShellState extends State<BookmarkShell> {
     try {
       final id = await widget.repository.createWorkspace(name!);
       final workspace = (await widget.repository.listWorkspaces()).firstWhere((item) => item.id == id);
-      await widget.onSwitchWorkspace(workspace);
+      await _waitForOverlayToClose();
+      if (mounted) await widget.onSwitchWorkspace(workspace);
     } catch (error) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Workspaceを作成できませんでした: $error')));
     }
@@ -350,7 +394,8 @@ class _BookmarkShellState extends State<BookmarkShell> {
     try {
       await widget.repository.deleteWorkspace(workspace);
       final workspaces = await widget.repository.listWorkspaces();
-      await widget.onSwitchWorkspace(workspaces.first);
+      await _waitForOverlayToClose();
+      if (mounted) await widget.onSwitchWorkspace(workspaces.first);
     } catch (error) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Workspaceを削除できませんでした: $error')));
     }
@@ -379,6 +424,8 @@ class _BookmarkShellState extends State<BookmarkShell> {
     );
     if (selected == null) return;
     final current = workspaces.firstWhere((workspace) => workspace.id == widget.repository.workspaceId);
+    await _waitForOverlayToClose();
+    if (!mounted) return;
     if (selected == 'create') return _createWorkspace();
     if (selected == 'rename') return _renameWorkspace(current);
     if (selected == 'delete') return _deleteWorkspace(current);
