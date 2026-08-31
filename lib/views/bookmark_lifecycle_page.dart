@@ -53,6 +53,61 @@ class BookmarkLifecyclePage extends StatelessWidget {
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
+  Future<void> _addExistingToInbox(BuildContext context) async {
+    final all = await repository.watchAll().first;
+    final inboxItems = await repository.watchInbox().first;
+    final inboxIds = inboxItems.map((item) => item.id).toSet();
+    final candidates = all.where((item) => !inboxIds.contains(item.id)).toList();
+    if (!context.mounted) return;
+    BookmarkItem? selected;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setLocalState) => AlertDialog(
+          title: const Text('既存ブックマークをInboxへ'),
+          content: SizedBox(
+            width: 520,
+            height: 420,
+            child: candidates.isEmpty
+                ? const Center(child: Text('追加できるブックマークがありません'))
+                : ListView.builder(
+                    itemCount: candidates.length,
+                    itemBuilder: (context, index) {
+                      final item = candidates[index];
+                      return RadioListTile<int>(
+                        value: item.id,
+                        groupValue: selected?.id,
+                        title: Text(item.title),
+                        subtitle: Text(
+                          item.url,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        onChanged: (_) => setLocalState(() => selected = item),
+                      );
+                    },
+                  ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('キャンセル'),
+            ),
+            FilledButton(
+              onPressed: selected == null
+                  ? null
+                  : () async {
+                      await repository.setInbox(selected!, true);
+                      if (dialogContext.mounted) Navigator.pop(dialogContext);
+                    },
+              child: const Text('Inboxへ'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -61,6 +116,16 @@ class BookmarkLifecyclePage extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [Icon(_icon, size: 19), const SizedBox(width: 7), Text(_title)],
         ),
+        actions: mode == BookmarkLifecycleMode.inbox
+            ? [
+                TextButton.icon(
+                  onPressed: () => _addExistingToInbox(context),
+                  icon: const Icon(Icons.playlist_add, size: 18),
+                  label: const Text('既存から追加'),
+                ),
+                const SizedBox(width: 8),
+              ]
+            : null,
       ),
       floatingActionButton: mode == BookmarkLifecycleMode.inbox
           ? FloatingActionButton.extended(
