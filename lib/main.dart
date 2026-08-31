@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'data/app_database.dart';
 import 'data/bookmark_repository.dart';
-import 'views/bookmark_details_page.dart';
-import 'views/bookmark_workspace_page.dart';
+import 'views/bookmark_unified_page.dart';
 import 'views/people_management_page.dart';
 import 'views/photo_management_page.dart';
 import 'views/tag_management_page.dart';
@@ -64,11 +63,6 @@ class _BookmarkShellState extends State<BookmarkShell> {
                 label: Text('ブックマーク'),
               ),
               NavigationRailDestination(
-                icon: Icon(Icons.article_outlined),
-                selectedIcon: Icon(Icons.article),
-                label: Text('詳細'),
-              ),
-              NavigationRailDestination(
                 icon: Icon(Icons.photo_library_outlined),
                 selectedIcon: Icon(Icons.photo_library),
                 label: Text('写真'),
@@ -91,8 +85,7 @@ class _BookmarkShellState extends State<BookmarkShell> {
             child: IndexedStack(
               index: _index,
               children: [
-                BookmarkWorkspacePage(repository: widget.repository),
-                BookmarkDetailsPage(repository: widget.repository),
+                BookmarkUnifiedPage(repository: widget.repository),
                 PhotoManagementPage(repository: widget.repository),
                 TagManagementPage(repository: widget.repository),
                 PeopleManagementPage(repository: widget.repository),
