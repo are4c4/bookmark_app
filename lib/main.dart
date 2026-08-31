@@ -287,7 +287,7 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
         color: notionSurface,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(UiTokens.radiusMd),
           side: BorderSide(color: notionBorder),
         ),
       ),
@@ -301,9 +301,9 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
       chipTheme: ChipThemeData(
         backgroundColor: notionRaised,
         side: BorderSide.none,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(UiTokens.radiusSm)),
         labelStyle: TextStyle(fontSize: 12.5, color: notionText),
-        padding: const EdgeInsets.symmetric(horizontal: 4),
+        padding: const EdgeInsets.symmetric(horizontal: UiTokens.space4),
       ),
       inputDecorationTheme: InputDecorationTheme(
         isDense: true,
@@ -334,24 +334,6 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
     );
   }
 
-  String _themeLabel(ThemeMode mode) => switch (mode) {
-        ThemeMode.system => 'システム',
-        ThemeMode.light => 'ライト',
-        ThemeMode.dark => 'ダーク',
-      };
-
-  ThemeMode _nextThemeMode() => switch (_themeMode) {
-        ThemeMode.system => ThemeMode.light,
-        ThemeMode.light => ThemeMode.dark,
-        ThemeMode.dark => ThemeMode.system,
-      };
-
-  IconData _themeIcon() => switch (_themeMode) {
-        ThemeMode.system => Icons.brightness_auto_outlined,
-        ThemeMode.light => Icons.light_mode_outlined,
-        ThemeMode.dark => Icons.dark_mode_outlined,
-      };
-
   @override
   Widget build(BuildContext context) {
     final manager = _profileManager;
@@ -375,6 +357,8 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
           key: ValueKey('${manager.state.activeProfile.id}:${repository.workspaceId}'),
           repository: repository,
           profileState: manager.state,
+          themeMode: _themeMode,
+          onThemeModeChanged: _setThemeMode,
           onSwitchProfile: _switchProfile,
           onCreateProfile: _createProfile,
           onRenameProfile: _renameProfile,
@@ -391,38 +375,6 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
       theme: _theme(Brightness.light),
       darkTheme: _theme(Brightness.dark),
       themeMode: _themeMode,
-      builder: (context, child) => Stack(
-        children: [
-          Positioned.fill(child: child ?? const SizedBox.shrink()),
-          Positioned(
-            left: UiTokens.space8,
-            bottom: UiTokens.space8,
-            child: Material(
-              color: Theme.of(context).colorScheme.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(UiTokens.radiusMd),
-              elevation: 1,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(UiTokens.radiusMd),
-                onTap: () => _setThemeMode(_nextThemeMode()),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(_themeIcon(), size: 17),
-                      const SizedBox(width: 7),
-                      Text(
-                        _themeLabel(_themeMode),
-                        style: const TextStyle(fontSize: UiTokens.textSm),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
       home: home,
     );
   }
