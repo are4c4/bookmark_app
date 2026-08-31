@@ -72,6 +72,7 @@ class SavedViews extends Table {
   TextColumn get tagMatchMode => text().withDefault(const Constant('or'))();
   TextColumn get sortField => text().withDefault(const Constant('createdAt'))();
   TextColumn get sortDirection => text().withDefault(const Constant('desc'))();
+  TextColumn get visibleProperties => text().withDefault(const Constant('image,url,tags,favorite'))();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }
 
@@ -133,7 +134,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'bookmark_app'));
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -178,9 +179,8 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(photos);
             await m.createTable(bookmarkPhotos);
           }
-          if (from < 7) {
-            await m.addColumn(photos, photos.tags);
-          }
+          if (from < 7) await m.addColumn(photos, photos.tags);
+          if (from < 8) await m.addColumn(savedViews, savedViews.visibleProperties);
         },
         beforeOpen: (_) async => customStatement('PRAGMA foreign_keys = ON'),
       );
@@ -273,12 +273,9 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 
-  Stream<List<Tag>> watchAllTags() =>
-      (select(tags)..orderBy([(t) => OrderingTerm.asc(t.name)])).watch();
-  Stream<List<Person>> watchAllPeople() =>
-      (select(people)..orderBy([(p) => OrderingTerm.asc(p.name)])).watch();
-  Stream<List<PhotoRecord>> watchAllPhotos() =>
-      (select(photos)..orderBy([(p) => OrderingTerm.desc(p.createdAt)])).watch();
+  Stream<List<Tag>> watchAllTags() => (select(tags)..orderBy([(t) => OrderingTerm.asc(t.name)])).watch();
+  Stream<List<Person>> watchAllPeople() => (select(people)..orderBy([(p) => OrderingTerm.asc(p.name)])).watch();
+  Stream<List<PhotoRecord>> watchAllPhotos() => (select(photos)..orderBy([(p) => OrderingTerm.desc(p.createdAt)])).watch();
 
   Stream<List<SavedViewConfig>> watchSavedViewConfigs() {
     final trigger = customSelect(
@@ -348,70 +345,38 @@ class AppDatabase extends _$AppDatabase {
     }
   }
 
-  Future<int> addPhoto({
-    required String path,
-    String? title,
-    String? note,
-    Iterable<String> tagNames = const [],
-  }) => into(photos).insert(
-        PhotosCompanion.insert(
-          path: path,
-          title: Value(title),
-          note: Value(note),
-          tags: Value(_normalizeNamesText(tagNames)),
-        ),
-      );
+  Future<int> addPhoto({required String path, String? title, String? note, Iterable<String> tagNames = const []}) =>
+      into(photos).insert(PhotosCompanion.insert(path: path, title: Value(title), note: Value(note), tags: Value(_normalizeNamesText(tagNames))));
 
-  Future<void> updatePhoto(
-    int id, {
-    String? title,
-    String? note,
-    Iterable<String>? tagNames,
-  }) => (update(photos)..where((p) => p.id.equals(id))).write(
-        PhotosCompanion(
-          title: Value(title),
-          note: Value(note),
-          tags: tagNames == null ? const Value.absent() : Value(_normalizeNamesText(tagNames)),
-        ),
-      );
+  Future<void> updatePhoto(int id, {String? title, String? note, Iterable<String>? tagNames}) =>
+      (update(photos)..where((p) => p.id.equals(id))).write(PhotosCompanion(
+        title: Value(title), note: Value(note),
+        tags: tagNames == null ? const Value.absent() : Value(_normalizeNamesText(tagNames)),
+      ));
 
   Future<void> deletePhoto(int id) => (delete(photos)..where((p) => p.id.equals(id))).go();
 
   Future<void> attachPhotoToBookmark(int bookmarkId, int photoId, {bool asCover = false}) => transaction(() async {
         if (asCover) {
-          await (update(bookmarkPhotos)..where((bp) => bp.bookmarkId.equals(bookmarkId))).write(
-            const BookmarkPhotosCompanion(isCover: Value(false)),
-          );
+          await (update(bookmarkPhotos)..where((bp) => bp.bookmarkId.equals(bookmarkId)))
+              .write(const BookmarkPhotosCompanion(isCover: Value(false)));
         }
         await into(bookmarkPhotos).insert(
-          BookmarkPhotosCompanion.insert(
-            bookmarkId: bookmarkId,
-            photoId: photoId,
-            isCover: Value(asCover),
-          ),
+          BookmarkPhotosCompanion.insert(bookmarkId: bookmarkId, photoId: photoId, isCover: Value(asCover)),
           mode: InsertMode.insertOrReplace,
         );
       });
 
-  Future<void> attachPhotosToBookmark(
-    int bookmarkId,
-    Iterable<int> photoIds, {
-    int? coverPhotoId,
-  }) => transaction(() async {
+  Future<void> attachPhotosToBookmark(int bookmarkId, Iterable<int> photoIds, {int? coverPhotoId}) => transaction(() async {
         final uniqueIds = photoIds.toSet();
         if (coverPhotoId != null) uniqueIds.add(coverPhotoId);
         if (coverPhotoId != null) {
-          await (update(bookmarkPhotos)..where((bp) => bp.bookmarkId.equals(bookmarkId))).write(
-            const BookmarkPhotosCompanion(isCover: Value(false)),
-          );
+          await (update(bookmarkPhotos)..where((bp) => bp.bookmarkId.equals(bookmarkId)))
+              .write(const BookmarkPhotosCompanion(isCover: Value(false)));
         }
         for (final photoId in uniqueIds) {
           await into(bookmarkPhotos).insert(
-            BookmarkPhotosCompanion.insert(
-              bookmarkId: bookmarkId,
-              photoId: photoId,
-              isCover: Value(photoId == coverPhotoId),
-            ),
+            BookmarkPhotosCompanion.insert(bookmarkId: bookmarkId, photoId: photoId, isCover: Value(photoId == coverPhotoId)),
             mode: InsertMode.insertOrReplace,
           );
         }
@@ -421,9 +386,8 @@ class AppDatabase extends _$AppDatabase {
       (delete(bookmarkPhotos)..where((bp) => bp.bookmarkId.equals(bookmarkId) & bp.photoId.equals(photoId))).go();
 
   Future<void> setCoverPhoto(int bookmarkId, int photoId) => transaction(() async {
-        await (update(bookmarkPhotos)..where((bp) => bp.bookmarkId.equals(bookmarkId))).write(
-          const BookmarkPhotosCompanion(isCover: Value(false)),
-        );
+        await (update(bookmarkPhotos)..where((bp) => bp.bookmarkId.equals(bookmarkId)))
+            .write(const BookmarkPhotosCompanion(isCover: Value(false)));
         await into(bookmarkPhotos).insert(
           BookmarkPhotosCompanion.insert(bookmarkId: bookmarkId, photoId: photoId, isCover: const Value(true)),
           mode: InsertMode.insertOrReplace,
@@ -431,9 +395,8 @@ class AppDatabase extends _$AppDatabase {
       });
 
   Future<void> clearCoverPhoto(int bookmarkId) =>
-      (update(bookmarkPhotos)..where((bp) => bp.bookmarkId.equals(bookmarkId))).write(
-        const BookmarkPhotosCompanion(isCover: Value(false)),
-      );
+      (update(bookmarkPhotos)..where((bp) => bp.bookmarkId.equals(bookmarkId)))
+          .write(const BookmarkPhotosCompanion(isCover: Value(false)));
 
   Future<int> createPerson(String name, {String? note}) async {
     final trimmed = name.trim();
@@ -511,6 +474,7 @@ class AppDatabase extends _$AppDatabase {
     String tagMatchMode = 'or',
     String sortField = 'createdAt',
     String sortDirection = 'desc',
+    String visibleProperties = 'image,url,tags,favorite',
   }) => transaction(() async {
         final id = await into(savedViews).insert(SavedViewsCompanion.insert(
           name: name,
@@ -520,6 +484,7 @@ class AppDatabase extends _$AppDatabase {
           tagMatchMode: Value(tagMatchMode),
           sortField: Value(sortField),
           sortDirection: Value(sortDirection),
+          visibleProperties: Value(visibleProperties),
         ));
         await _setSavedViewTags(id, tagIds);
         return id;
@@ -535,11 +500,12 @@ class AppDatabase extends _$AppDatabase {
     required String tagMatchMode,
     required String sortField,
     required String sortDirection,
+    required String visibleProperties,
   }) => transaction(() async {
         await (update(savedViews)..where((v) => v.id.equals(id))).write(SavedViewsCompanion(
           name: Value(name), layoutType: Value(layoutType), searchQuery: Value(searchQuery),
           favoritesOnly: Value(favoritesOnly), tagMatchMode: Value(tagMatchMode),
-          sortField: Value(sortField), sortDirection: Value(sortDirection),
+          sortField: Value(sortField), sortDirection: Value(sortDirection), visibleProperties: Value(visibleProperties),
         ));
         await _setSavedViewTags(id, tagIds);
       });
