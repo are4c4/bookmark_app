@@ -14,6 +14,7 @@ class PhotoStorageService {
   const PhotoStorageService({this.photoDirectoryPath});
 
   final String? photoDirectoryPath;
+  static String? activePhotoDirectoryPath;
 
   static const _allowedExtensions = {
     'jpg',
@@ -57,6 +58,8 @@ class PhotoStorageService {
   Future<Directory> _resolvePhotoDirectory() async {
     final explicit = photoDirectoryPath?.trim();
     if (explicit != null && explicit.isNotEmpty) return Directory(explicit);
+    final active = activePhotoDirectoryPath?.trim();
+    if (active != null && active.isNotEmpty) return Directory(active);
     final support = await getApplicationSupportDirectory();
     return Directory('${support.path}/photos');
   }
