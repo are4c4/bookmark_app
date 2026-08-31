@@ -47,6 +47,9 @@ class BookmarkRepository {
 
   Future<int> delete(int id) => _database.deleteBookmark(id);
 
+  Future<int> createTag(String name, {Tag? parent}) =>
+      _database.createTag(name, parentTagId: parent?.id);
+
   Future<void> renameTag(Tag tag, String newName) =>
       _database.renameTag(tag.id, newName);
 
