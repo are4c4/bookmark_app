@@ -117,6 +117,30 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
         ),
       );
 
+  Widget _menu() {
+    final menu = widget.menu;
+    if (menu is! PopupMenuButton<String>) return menu;
+
+    return PopupMenuButton<String>(
+      tooltip: menu.tooltip,
+      icon: menu.icon,
+      iconSize: menu.iconSize,
+      initialValue: menu.initialValue,
+      enabled: menu.enabled,
+      itemBuilder: menu.itemBuilder,
+      onCanceled: menu.onCanceled,
+      onSelected: (value) async {
+        // PopupMenu is a route. Actions that immediately open another route
+        // (confirmation dialogs / workspace picker) can race with its closing
+        // animation on desktop. Wait until it is fully gone before forwarding.
+        await Future<void>.delayed(const Duration(milliseconds: 90));
+        if (!mounted) return;
+        await WidgetsBinding.instance.endOfFrame;
+        menu.onSelected?.call(value);
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bookmark = widget.bookmark;
@@ -178,7 +202,7 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
                                       icon: Icon(bookmark.favorite ? Icons.star : Icons.star_border),
                                     ),
                                   ),
-                                SizedBox(width: 30, height: 30, child: widget.menu),
+                                SizedBox(width: 30, height: 30, child: _menu()),
                               ],
                             ),
                           ),
@@ -221,7 +245,7 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
                                           icon: Icon(bookmark.favorite ? Icons.star : Icons.star_border),
                                         ),
                                       ),
-                                    SizedBox(width: 28, height: 28, child: widget.menu),
+                                    SizedBox(width: 28, height: 28, child: _menu()),
                                   ],
                                 ),
                               ),
