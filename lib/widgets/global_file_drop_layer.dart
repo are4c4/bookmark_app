@@ -115,9 +115,8 @@ class _GlobalFileDropLayerState extends State<GlobalFileDropLayer> {
   @override
   Widget build(BuildContext context) {
     return DropTarget(
-      onDragEntered: (details) {
-        final supported = details.files.any((file) => _supported(file.path));
-        if (supported && !_draggingSupportedFile) setState(() => _draggingSupportedFile = true);
+      onDragEntered: (_) {
+        if (!_draggingSupportedFile) setState(() => _draggingSupportedFile = true);
       },
       onDragExited: (_) {
         if (_draggingSupportedFile) setState(() => _draggingSupportedFile = false);
