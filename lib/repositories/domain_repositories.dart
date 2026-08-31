@@ -1,5 +1,6 @@
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
+import '../data/person_roles.dart';
 import '../data/workspace_store.dart';
 import 'backlink_repository.dart';
 import 'full_text_search_repository.dart';
