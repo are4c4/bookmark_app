@@ -19,14 +19,15 @@ class AttachmentStorageService {
     return 'file';
   }
 
+  Future<List<String>> pickFiles() =>
+      Platform.isMacOS ? _pickAttachmentsOnMacOS() : _pickAttachmentsWithFileSelector();
+
   Future<List<BookmarkAttachment>> importForBookmark({
     required int bookmarkId,
     required String profileDirectoryPath,
     required BookmarkAttachmentStore store,
   }) async {
-    final sourcePaths = Platform.isMacOS
-        ? await _pickAttachmentsOnMacOS()
-        : await _pickAttachmentsWithFileSelector();
+    final sourcePaths = await pickFiles();
     return importPathsForBookmark(
       bookmarkId: bookmarkId,
       profileDirectoryPath: profileDirectoryPath,
