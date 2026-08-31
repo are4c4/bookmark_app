@@ -30,6 +30,7 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
   BookmarkRepository? _repository;
   Object? _error;
   bool _switching = false;
+  ThemeMode _themeMode = ThemeMode.system;
 
   @override
   void initState() {
@@ -252,6 +253,12 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
     );
   }
 
+  String _themeLabel(ThemeMode mode) => switch (mode) {
+        ThemeMode.system => 'システム',
+        ThemeMode.light => 'ライト',
+        ThemeMode.dark => 'ダーク',
+      };
+
   @override
   Widget build(BuildContext context) {
     final manager = _profileManager;
@@ -282,7 +289,51 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
       title: 'Bookmark App',
       theme: _theme(Brightness.light),
       darkTheme: _theme(Brightness.dark),
-      themeMode: ThemeMode.system,
+      themeMode: _themeMode,
+      builder: (context, child) => Stack(
+        children: [
+          Positioned.fill(child: child ?? const SizedBox.shrink()),
+          Positioned(
+            left: 8,
+            bottom: 8,
+            child: Material(
+              color: Theme.of(context).colorScheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(7),
+              elevation: 1,
+              child: PopupMenuButton<ThemeMode>(
+                tooltip: '外観を切り替え',
+                initialValue: _themeMode,
+                onSelected: (mode) => setState(() => _themeMode = mode),
+                itemBuilder: (_) => ThemeMode.values
+                    .map((mode) => PopupMenuItem(
+                          value: mode,
+                          child: Row(children: [
+                            Icon(mode == _themeMode ? Icons.check : Icons.circle_outlined, size: 16),
+                            const SizedBox(width: 8),
+                            Text(_themeLabel(mode)),
+                          ]),
+                        ))
+                    .toList(),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(
+                      _themeMode == ThemeMode.dark
+                          ? Icons.dark_mode_outlined
+                          : _themeMode == ThemeMode.light
+                              ? Icons.light_mode_outlined
+                              : Icons.brightness_auto_outlined,
+                      size: 17,
+                    ),
+                    const SizedBox(width: 7),
+                    Text(_themeLabel(_themeMode), style: const TextStyle(fontSize: 12)),
+                  ]),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
       home: home,
     );
   }
