@@ -209,9 +209,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
   void _selectBookmark(BookmarkItem bookmark) {
     if (_selectionMode) {
       setState(() {
-        _batchSelectedIds.contains(bookmark.id)
-            ? _batchSelectedIds.remove(bookmark.id)
-            : _batchSelectedIds.add(bookmark.id);
+        _batchSelectedIds.contains(bookmark.id) ? _batchSelectedIds.remove(bookmark.id) : _batchSelectedIds.add(bookmark.id);
       });
     } else {
       setState(() => _selectedBookmarkId = bookmark.id);
@@ -223,9 +221,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
     if (uri == null) return;
     await widget.repository.recordOpen(bookmark);
     final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!opened && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('URLを開けませんでした')));
-    }
+    if (!opened && mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('URLを開けませんでした')));
   }
 
   Future<void> _deleteBookmark(BookmarkItem bookmark) async {
@@ -253,19 +249,16 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
       context: context,
       builder: (context) => SimpleDialog(
         title: const Text('Workspaceへ移動'),
-        children: workspaces
-            .where((workspace) => workspace.id != excludingId)
-            .map((workspace) => SimpleDialogOption(
-                  onPressed: () => Navigator.pop(context, workspace),
-                  child: Row(children: [
-                    Text(workspace.icon),
-                    const SizedBox(width: 9),
-                    Container(width: 7, height: 7, decoration: BoxDecoration(color: Color(workspace.colorValue), shape: BoxShape.circle)),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(workspace.name)),
-                  ]),
-                ))
-            .toList(),
+        children: workspaces.where((workspace) => workspace.id != excludingId).map((workspace) => SimpleDialogOption(
+          onPressed: () => Navigator.pop(context, workspace),
+          child: Row(children: [
+            Text(workspace.icon),
+            const SizedBox(width: 9),
+            Container(width: 7, height: 7, decoration: BoxDecoration(color: Color(workspace.colorValue), shape: BoxShape.circle)),
+            const SizedBox(width: 8),
+            Expanded(child: Text(workspace.name)),
+          ]),
+        )).toList(),
       ),
     );
   }
@@ -290,30 +283,30 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
   }
 
   Widget _bookmarkMenu(BookmarkItem bookmark) => PopupMenuButton<String>(
-        tooltip: 'その他',
-        iconSize: 18,
-        onSelected: (value) {
-          if (value == 'detail') setState(() => _selectedBookmarkId = bookmark.id);
-          if (value == 'open') _openBookmark(bookmark);
-          if (value == 'move') _moveBookmark(bookmark);
-          if (value == 'select') {
-            setState(() {
-              _selectionMode = true;
-              _selectedBookmarkId = null;
-              _batchSelectedIds.add(bookmark.id);
-            });
-          }
-          if (value == 'delete') _deleteBookmark(bookmark);
-        },
-        itemBuilder: (_) => const [
-          PopupMenuItem(value: 'detail', child: Text('詳細を表示')),
-          PopupMenuItem(value: 'open', child: Text('ブラウザで開く')),
-          PopupMenuItem(value: 'move', child: Text('Workspaceへ移動')),
-          PopupMenuItem(value: 'select', child: Text('選択する')),
-          PopupMenuDivider(),
-          PopupMenuItem(value: 'delete', child: Text('削除')),
-        ],
-      );
+    tooltip: 'その他',
+    iconSize: 18,
+    onSelected: (value) {
+      if (value == 'detail') setState(() => _selectedBookmarkId = bookmark.id);
+      if (value == 'open') _openBookmark(bookmark);
+      if (value == 'move') _moveBookmark(bookmark);
+      if (value == 'select') {
+        setState(() {
+          _selectionMode = true;
+          _selectedBookmarkId = null;
+          _batchSelectedIds.add(bookmark.id);
+        });
+      }
+      if (value == 'delete') _deleteBookmark(bookmark);
+    },
+    itemBuilder: (_) => const [
+      PopupMenuItem(value: 'detail', child: Text('詳細を表示')),
+      PopupMenuItem(value: 'open', child: Text('ブラウザで開く')),
+      PopupMenuItem(value: 'move', child: Text('Workspaceへ移動')),
+      PopupMenuItem(value: 'select', child: Text('選択する')),
+      PopupMenuDivider(),
+      PopupMenuItem(value: 'delete', child: Text('削除')),
+    ],
+  );
 
   Map<String, List<Person>> _roleGroups(List<PersonRoleAssignment> assignments) {
     final result = <String, List<Person>>{};
@@ -328,6 +321,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
     return StreamBuilder<List<PersonRoleAssignment>>(
       stream: widget.repository.watchPersonRoles(bookmark),
       builder: (context, snapshot) {
+        final scheme = Theme.of(context).colorScheme;
         final card = NotionBookmarkCard(
           bookmark: bookmark,
           selected: selected,
@@ -350,12 +344,14 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
           data: bookmark.id,
           feedback: Material(
             elevation: 8,
+            color: scheme.surfaceContainerHigh,
             borderRadius: BorderRadius.circular(6),
-            child: Container(
+            child: SizedBox(
               width: 220,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(6)),
-              child: Text(bookmark.title, maxLines: 2, overflow: TextOverflow.ellipsis),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Text(bookmark.title, maxLines: 2, overflow: TextOverflow.ellipsis),
+              ),
             ),
           ),
           childWhenDragging: Opacity(opacity: .35, child: card),
@@ -366,50 +362,45 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
   }
 
   Widget _gallery(List<BookmarkItem> bookmarks) => LayoutBuilder(
-        builder: (context, constraints) {
-          final columns = constraints.maxWidth >= 1200 ? 4 : constraints.maxWidth >= 850 ? 3 : constraints.maxWidth >= 560 ? 2 : 1;
-          return MasonryGridView.count(
-            padding: const EdgeInsets.fromLTRB(18, 16, 18, 90),
-            crossAxisCount: columns,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            itemCount: bookmarks.length,
-            itemBuilder: (context, index) {
-              final bookmark = bookmarks[index];
-              final selected = _selectionMode ? _batchSelectedIds.contains(bookmark.id) : bookmark.id == _selectedBookmarkId;
-              return Stack(children: [
-                _roleAwareCard(bookmark, selected: selected),
-                if (_selectionMode)
-                  Positioned(
-                    left: 8,
-                    top: 8,
-                    child: DecoratedBox(
-                      decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                      child: Checkbox(
-                        visualDensity: VisualDensity.compact,
-                        value: _batchSelectedIds.contains(bookmark.id),
-                        onChanged: (_) => _selectBookmark(bookmark),
-                      ),
-                    ),
-                  ),
-              ]);
-            },
-          );
+    builder: (context, constraints) {
+      final columns = constraints.maxWidth >= 1200 ? 4 : constraints.maxWidth >= 850 ? 3 : constraints.maxWidth >= 560 ? 2 : 1;
+      final scheme = Theme.of(context).colorScheme;
+      return MasonryGridView.count(
+        padding: const EdgeInsets.fromLTRB(18, 16, 18, 90),
+        crossAxisCount: columns,
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 12,
+        itemCount: bookmarks.length,
+        itemBuilder: (context, index) {
+          final bookmark = bookmarks[index];
+          final selected = _selectionMode ? _batchSelectedIds.contains(bookmark.id) : bookmark.id == _selectedBookmarkId;
+          return Stack(children: [
+            _roleAwareCard(bookmark, selected: selected),
+            if (_selectionMode)
+              Positioned(
+                left: 8,
+                top: 8,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(color: scheme.surfaceContainerHigh, shape: BoxShape.circle),
+                  child: Checkbox(visualDensity: VisualDensity.compact, value: _batchSelectedIds.contains(bookmark.id), onChanged: (_) => _selectBookmark(bookmark)),
+                ),
+              ),
+          ]);
         },
       );
+    },
+  );
 
   Widget _image(BookmarkItem bookmark, {double width = 60, double height = 44}) {
     if (bookmark.coverPhoto != null) {
-      return Image.file(File(bookmark.coverPhoto!.path), width: width, height: height, fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => _networkImage(bookmark, width, height));
+      return Image.file(File(bookmark.coverPhoto!.path), width: width, height: height, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _networkImage(bookmark, width, height));
     }
     return _networkImage(bookmark, width, height);
   }
 
   Widget _networkImage(BookmarkItem bookmark, double width, double height) {
     if (bookmark.thumbnail?.trim().isNotEmpty == true) {
-      return Image.network(bookmark.thumbnail!, width: width, height: height, fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.image_outlined)));
+      return Image.network(bookmark.thumbnail!, width: width, height: height, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.image_outlined)));
     }
     return const Center(child: Icon(Icons.image_outlined));
   }
@@ -424,70 +415,63 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
   }
 
   Widget _list(List<BookmarkItem> bookmarks) => ListView.separated(
-        padding: const EdgeInsets.fromLTRB(14, 8, 14, 90),
-        itemCount: bookmarks.length,
-        separatorBuilder: (_, __) => const Divider(height: 1),
-        itemBuilder: (context, index) {
-          final bookmark = bookmarks[index];
-          return StreamBuilder<List<PersonRoleAssignment>>(
-            stream: widget.repository.watchPersonRoles(bookmark),
-            builder: (context, roleSnapshot) {
-              final roleText = _roleText(roleSnapshot.data ?? const []);
-              final details = <String>[
-                if (_visibleProperties.contains(BookmarkStage1Property.url)) _compactUrl(bookmark.url),
-                if (_visibleProperties.contains(BookmarkStage1Property.status)) _statusLabels[bookmark.status] ?? bookmark.status,
-                if (_visibleProperties.contains(BookmarkStage1Property.rating) && bookmark.rating > 0) '★' * bookmark.rating,
-                if (_visibleProperties.contains(BookmarkStage1Property.tags) && bookmark.tags.isNotEmpty) bookmark.tags.map((tag) => tag.name).join(', '),
-                if (_visibleProperties.contains(BookmarkStage1Property.people) && bookmark.people.isNotEmpty) bookmark.people.map((person) => person.name).join(', '),
-                if (roleText.isNotEmpty) roleText,
-                if (_visibleProperties.contains(BookmarkStage1Property.description) && bookmark.description?.trim().isNotEmpty == true) bookmark.description!,
-                if (_visibleProperties.contains(BookmarkStage1Property.createdAt)) _formatDate(bookmark.createdAt),
-                if (_visibleProperties.contains(BookmarkStage1Property.history)) _historyText(bookmark),
-              ];
-              final tile = Material(
-                color: Colors.transparent,
-                child: ListTile(
-                  selected: _selectionMode ? _batchSelectedIds.contains(bookmark.id) : bookmark.id == _selectedBookmarkId,
-                  selectedTileColor: const Color(0xFFF1F1EF),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
-                  onTap: () => _selectBookmark(bookmark),
-                  leading: _selectionMode
-                      ? Checkbox(value: _batchSelectedIds.contains(bookmark.id), onChanged: (_) => _selectBookmark(bookmark))
-                      : _visibleProperties.contains(BookmarkStage1Property.image)
-                          ? ClipRRect(borderRadius: BorderRadius.circular(4), child: SizedBox(width: 60, height: 44, child: _image(bookmark)))
-                          : null,
-                  title: Text(bookmark.title),
-                  subtitle: details.isEmpty ? null : Text(details.join('  ·  '), maxLines: 2, overflow: TextOverflow.ellipsis),
-                  trailing: _selectionMode
-                      ? null
-                      : Row(mainAxisSize: MainAxisSize.min, children: [
-                          if (_visibleProperties.contains(BookmarkStage1Property.favorite))
-                            IconButton(tooltip: 'お気に入り', onPressed: () => widget.repository.toggleFavorite(bookmark), icon: Icon(bookmark.favorite ? Icons.star : Icons.star_border, size: 19)),
-                          _bookmarkMenu(bookmark),
-                        ]),
-                ),
-              );
-              return Draggable<int>(
-                data: bookmark.id,
-                feedback: Material(elevation: 6, child: Padding(padding: const EdgeInsets.all(10), child: Text(bookmark.title))),
-                childWhenDragging: Opacity(opacity: .35, child: tile),
-                child: tile,
-              );
-            },
+    padding: const EdgeInsets.fromLTRB(14, 8, 14, 90),
+    itemCount: bookmarks.length,
+    separatorBuilder: (_, __) => const Divider(height: 1),
+    itemBuilder: (context, index) {
+      final bookmark = bookmarks[index];
+      return StreamBuilder<List<PersonRoleAssignment>>(
+        stream: widget.repository.watchPersonRoles(bookmark),
+        builder: (context, roleSnapshot) {
+          final roleText = _roleText(roleSnapshot.data ?? const []);
+          final details = <String>[
+            if (_visibleProperties.contains(BookmarkStage1Property.url)) _compactUrl(bookmark.url),
+            if (_visibleProperties.contains(BookmarkStage1Property.status)) _statusLabels[bookmark.status] ?? bookmark.status,
+            if (_visibleProperties.contains(BookmarkStage1Property.rating) && bookmark.rating > 0) '★' * bookmark.rating,
+            if (_visibleProperties.contains(BookmarkStage1Property.tags) && bookmark.tags.isNotEmpty) bookmark.tags.map((tag) => tag.name).join(', '),
+            if (_visibleProperties.contains(BookmarkStage1Property.people) && bookmark.people.isNotEmpty) bookmark.people.map((person) => person.name).join(', '),
+            if (roleText.isNotEmpty) roleText,
+            if (_visibleProperties.contains(BookmarkStage1Property.description) && bookmark.description?.trim().isNotEmpty == true) bookmark.description!,
+            if (_visibleProperties.contains(BookmarkStage1Property.createdAt)) _formatDate(bookmark.createdAt),
+            if (_visibleProperties.contains(BookmarkStage1Property.history)) _historyText(bookmark),
+          ];
+          final tile = Material(
+            color: Colors.transparent,
+            child: ListTile(
+              selected: _selectionMode ? _batchSelectedIds.contains(bookmark.id) : bookmark.id == _selectedBookmarkId,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
+              onTap: () => _selectBookmark(bookmark),
+              leading: _selectionMode
+                  ? Checkbox(value: _batchSelectedIds.contains(bookmark.id), onChanged: (_) => _selectBookmark(bookmark))
+                  : _visibleProperties.contains(BookmarkStage1Property.image)
+                      ? ClipRRect(borderRadius: BorderRadius.circular(4), child: SizedBox(width: 60, height: 44, child: _image(bookmark)))
+                      : null,
+              title: Text(bookmark.title),
+              subtitle: details.isEmpty ? null : Text(details.join('  ·  '), maxLines: 2, overflow: TextOverflow.ellipsis),
+              trailing: _selectionMode ? null : Row(mainAxisSize: MainAxisSize.min, children: [
+                if (_visibleProperties.contains(BookmarkStage1Property.favorite)) IconButton(tooltip: 'お気に入り', onPressed: () => widget.repository.toggleFavorite(bookmark), icon: Icon(bookmark.favorite ? Icons.star : Icons.star_border, size: 19)),
+                _bookmarkMenu(bookmark),
+              ]),
+            ),
+          );
+          return Draggable<int>(
+            data: bookmark.id,
+            feedback: Material(elevation: 6, child: Padding(padding: const EdgeInsets.all(10), child: Text(bookmark.title))),
+            childWhenDragging: Opacity(opacity: .35, child: tile),
+            child: tile,
           );
         },
       );
+    },
+  );
 
   Widget _roleCell(BookmarkItem bookmark, String role) => StreamBuilder<List<PersonRoleAssignment>>(
-        stream: widget.repository.watchPersonRoles(bookmark),
-        builder: (context, snapshot) {
-          final names = (snapshot.data ?? const [])
-              .where((assignment) => assignment.role == role)
-              .map((assignment) => assignment.person.name)
-              .join(', ');
-          return Text(names);
-        },
-      );
+    stream: widget.repository.watchPersonRoles(bookmark),
+    builder: (context, snapshot) {
+      final names = (snapshot.data ?? const []).where((assignment) => assignment.role == role).map((assignment) => assignment.person.name).join(', ');
+      return Text(names);
+    },
+  );
 
   Widget _table(List<BookmarkItem> bookmarks) {
     final properties = BookmarkStage1Property.values.where(_visibleProperties.contains).toList();
@@ -534,30 +518,30 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
   }
 
   String _propertyLabel(BookmarkStage1Property property) => switch (property) {
-        BookmarkStage1Property.image => '画像',
-        BookmarkStage1Property.url => 'URL',
-        BookmarkStage1Property.tags => 'タグ',
-        BookmarkStage1Property.people => '人物（すべて）',
-        BookmarkStage1Property.description => '説明',
-        BookmarkStage1Property.createdAt => '登録日時',
-        BookmarkStage1Property.favorite => 'お気に入り',
-        BookmarkStage1Property.status => 'ステータス',
-        BookmarkStage1Property.rating => '評価',
-        BookmarkStage1Property.history => '履歴',
-      };
+    BookmarkStage1Property.image => '画像',
+    BookmarkStage1Property.url => 'URL',
+    BookmarkStage1Property.tags => 'タグ',
+    BookmarkStage1Property.people => '人物（すべて）',
+    BookmarkStage1Property.description => '説明',
+    BookmarkStage1Property.createdAt => '登録日時',
+    BookmarkStage1Property.favorite => 'お気に入り',
+    BookmarkStage1Property.status => 'ステータス',
+    BookmarkStage1Property.rating => '評価',
+    BookmarkStage1Property.history => '履歴',
+  };
 
   String _propertyKey(BookmarkStage1Property property) => switch (property) {
-        BookmarkStage1Property.image => 'image',
-        BookmarkStage1Property.url => 'url',
-        BookmarkStage1Property.tags => 'tags',
-        BookmarkStage1Property.people => 'people',
-        BookmarkStage1Property.description => 'description',
-        BookmarkStage1Property.createdAt => 'createdAt',
-        BookmarkStage1Property.favorite => 'favorite',
-        BookmarkStage1Property.status => 'status',
-        BookmarkStage1Property.rating => 'rating',
-        BookmarkStage1Property.history => 'history',
-      };
+    BookmarkStage1Property.image => 'image',
+    BookmarkStage1Property.url => 'url',
+    BookmarkStage1Property.tags => 'tags',
+    BookmarkStage1Property.people => 'people',
+    BookmarkStage1Property.description => 'description',
+    BookmarkStage1Property.createdAt => 'createdAt',
+    BookmarkStage1Property.favorite => 'favorite',
+    BookmarkStage1Property.status => 'status',
+    BookmarkStage1Property.rating => 'rating',
+    BookmarkStage1Property.history => 'history',
+  };
 
   BookmarkStage1Property? _propertyFromKey(String key) {
     for (final property in BookmarkStage1Property.values) {
@@ -582,14 +566,12 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
     return '${_formatDate(local)} ${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
   }
 
-  String _historyText(BookmarkItem bookmark) => bookmark.lastOpenedAt == null
-      ? '${bookmark.openCount}回 · 未閲覧'
-      : '${bookmark.openCount}回 · ${_formatDateTime(bookmark.lastOpenedAt!)}';
+  String _historyText(BookmarkItem bookmark) => bookmark.lastOpenedAt == null ? '${bookmark.openCount}回 · 未閲覧' : '${bookmark.openCount}回 · ${_formatDateTime(bookmark.lastOpenedAt!)}';
 
   String _visiblePropertiesString() => [
-        ..._visibleProperties.map(_propertyKey),
-        ..._visiblePersonRoles.map((role) => 'role:$role'),
-      ].join(',');
+    ..._visibleProperties.map(_propertyKey),
+    ..._visiblePersonRoles.map((role) => 'role:$role'),
+  ].join(',');
 
   Future<void> _showPropertiesDialog() async {
     final selected = {..._visibleProperties};
@@ -684,16 +666,16 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
   }
 
   String get _layoutKey => switch (_viewType) {
-        BookmarkStage1ViewType.gallery => 'gallery',
-        BookmarkStage1ViewType.list => 'list',
-        BookmarkStage1ViewType.table => 'table',
-      };
+    BookmarkStage1ViewType.gallery => 'gallery',
+    BookmarkStage1ViewType.list => 'list',
+    BookmarkStage1ViewType.table => 'table',
+  };
 
   String get _sortKey => switch (_sortField) {
-        BookmarkStage1SortField.createdAt => 'createdAt',
-        BookmarkStage1SortField.title => 'title',
-        BookmarkStage1SortField.url => 'url',
-      };
+    BookmarkStage1SortField.createdAt => 'createdAt',
+    BookmarkStage1SortField.title => 'title',
+    BookmarkStage1SortField.url => 'url',
+  };
 
   Future<void> _saveCurrentView() async {
     final name = await _askName('ビューを保存');
@@ -824,73 +806,74 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
     }
   }
 
-  Widget _batchBar(List<BookmarkItem> visible) => Container(
-        constraints: const BoxConstraints(minHeight: 48),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: const BoxDecoration(color: Color(0xFFF7F7F5), border: Border(bottom: BorderSide(color: Color(0xFFE7E7E4)))),
-        child: Wrap(
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 4,
-          runSpacing: 2,
-          children: [
-            Checkbox(
-              value: visible.isNotEmpty && visible.every((item) => _batchSelectedIds.contains(item.id)),
-              onChanged: (value) => setState(() {
-                if (value == true) {
-                  _batchSelectedIds.addAll(visible.map((e) => e.id));
-                } else {
-                  _batchSelectedIds.removeAll(visible.map((e) => e.id));
-                }
-              }),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Text('${_batchSelectedIds.length}件', style: const TextStyle(fontWeight: FontWeight.w600)),
-            ),
-            PopupMenuButton<String>(
-              onSelected: (value) {
-                if (value == 'tag_add') _batchTags(remove: false);
-                if (value == 'tag_remove') _batchTags(remove: true);
-                if (value == 'people_add') _batchPeople(remove: false);
-                if (value == 'people_remove') _batchPeople(remove: true);
-              },
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'tag_add', child: Text('タグを追加')),
-                PopupMenuItem(value: 'tag_remove', child: Text('タグを削除')),
-                PopupMenuDivider(),
-                PopupMenuItem(value: 'people_add', child: Text('出演者を追加')),
-                PopupMenuItem(value: 'people_remove', child: Text('出演者を削除')),
-              ],
-              child: const Padding(padding: EdgeInsets.all(8), child: Text('Relation編集')),
-            ),
-            TextButton.icon(onPressed: _batchSelectedIds.isEmpty ? null : _moveBatch, icon: const Icon(Icons.drive_file_move_outline, size: 17), label: const Text('Workspaceへ移動')),
-            PopupMenuButton<String>(
-              onSelected: (value) => widget.repository.batchSetStatus(_batchSelectedIds, value),
-              itemBuilder: (_) => _statusLabels.entries.map((e) => PopupMenuItem(value: e.key, child: Text(e.value))).toList(),
-              child: const Padding(padding: EdgeInsets.all(8), child: Text('ステータス')),
-            ),
-            IconButton(tooltip: '選択を削除', onPressed: _batchSelectedIds.isEmpty ? null : _batchDelete, icon: const Icon(Icons.delete_outline)),
-            IconButton(tooltip: '選択を終了', onPressed: _toggleSelectionMode, icon: const Icon(Icons.close)),
-          ],
-        ),
-      );
+  Widget _batchBar(List<BookmarkItem> visible) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      constraints: const BoxConstraints(minHeight: 48),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(color: scheme.surfaceContainerLow, border: Border(bottom: BorderSide(color: scheme.outlineVariant))),
+      child: Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 4,
+        runSpacing: 2,
+        children: [
+          Checkbox(
+            value: visible.isNotEmpty && visible.every((item) => _batchSelectedIds.contains(item.id)),
+            onChanged: (value) => setState(() {
+              if (value == true) {
+                _batchSelectedIds.addAll(visible.map((e) => e.id));
+              } else {
+                _batchSelectedIds.removeAll(visible.map((e) => e.id));
+              }
+            }),
+          ),
+          Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Text('${_batchSelectedIds.length}件', style: const TextStyle(fontWeight: FontWeight.w600))),
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'tag_add') _batchTags(remove: false);
+              if (value == 'tag_remove') _batchTags(remove: true);
+              if (value == 'people_add') _batchPeople(remove: false);
+              if (value == 'people_remove') _batchPeople(remove: true);
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'tag_add', child: Text('タグを追加')),
+              PopupMenuItem(value: 'tag_remove', child: Text('タグを削除')),
+              PopupMenuDivider(),
+              PopupMenuItem(value: 'people_add', child: Text('出演者を追加')),
+              PopupMenuItem(value: 'people_remove', child: Text('出演者を削除')),
+            ],
+            child: const Padding(padding: EdgeInsets.all(8), child: Text('Relation編集')),
+          ),
+          TextButton.icon(onPressed: _batchSelectedIds.isEmpty ? null : _moveBatch, icon: const Icon(Icons.drive_file_move_outline, size: 17), label: const Text('Workspaceへ移動')),
+          PopupMenuButton<String>(
+            onSelected: (value) => widget.repository.batchSetStatus(_batchSelectedIds, value),
+            itemBuilder: (_) => _statusLabels.entries.map((e) => PopupMenuItem(value: e.key, child: Text(e.value))).toList(),
+            child: const Padding(padding: EdgeInsets.all(8), child: Text('ステータス')),
+          ),
+          IconButton(tooltip: '選択を削除', onPressed: _batchSelectedIds.isEmpty ? null : _batchDelete, icon: const Icon(Icons.delete_outline)),
+          IconButton(tooltip: '選択を終了', onPressed: _toggleSelectionMode, icon: const Icon(Icons.close)),
+        ],
+      ),
+    );
+  }
 
   Widget _viewSwitcher() => SegmentedButton<BookmarkStage1ViewType>(
-        showSelectedIcon: false,
-        segments: const [
-          ButtonSegment(value: BookmarkStage1ViewType.gallery, icon: Icon(Icons.grid_view, size: 17)),
-          ButtonSegment(value: BookmarkStage1ViewType.list, icon: Icon(Icons.view_list, size: 17)),
-          ButtonSegment(value: BookmarkStage1ViewType.table, icon: Icon(Icons.table_rows, size: 17)),
-        ],
-        selected: {_viewType},
-        onSelectionChanged: (value) => setState(() { _viewType = value.first; _activeSavedViewId = null; }),
-      );
+    showSelectedIcon: false,
+    segments: const [
+      ButtonSegment(value: BookmarkStage1ViewType.gallery, icon: Icon(Icons.grid_view, size: 17)),
+      ButtonSegment(value: BookmarkStage1ViewType.list, icon: Icon(Icons.view_list, size: 17)),
+      ButtonSegment(value: BookmarkStage1ViewType.table, icon: Icon(Icons.table_rows, size: 17)),
+    ],
+    selected: {_viewType},
+    onSelectionChanged: (value) => setState(() { _viewType = value.first; _activeSavedViewId = null; }),
+  );
 
   Widget _toolbar() {
     final filterCount = (_favoritesOnly ? 1 : 0) + (_statusFilter.isNotEmpty ? 1 : 0) + (_minRating > 0 ? 1 : 0);
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-      decoration: const BoxDecoration(color: Colors.white, border: Border(bottom: BorderSide(color: Color(0xFFE7E7E4)))),
+      decoration: BoxDecoration(color: scheme.surface, border: Border(bottom: BorderSide(color: scheme.outlineVariant))),
       child: LayoutBuilder(builder: (context, constraints) {
         final compact = constraints.maxWidth < 900;
         final searchWidth = (constraints.maxWidth * .32).clamp(96.0, compact ? 190.0 : 250.0).toDouble();
@@ -906,7 +889,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
                 prefixIcon: const Icon(Icons.search, size: 18),
                 suffixIcon: _query.isEmpty ? null : IconButton(icon: const Icon(Icons.close, size: 16), onPressed: () { _searchController.clear(); setState(() { _query = ''; _activeSavedViewId = null; }); }),
                 filled: true,
-                fillColor: const Color(0xFFF7F7F5),
+                fillColor: scheme.surfaceContainerLow,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(5), borderSide: BorderSide.none),
               ),
             ),
@@ -980,48 +963,49 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
   }
 
   Widget _savedViewsSection() => StreamBuilder<List<SavedViewConfig>>(
-        stream: widget.repository.watchSavedViews(),
-        builder: (context, snapshot) {
-          final views = snapshot.data ?? const <SavedViewConfig>[];
-          return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(9, 10, 0, 3),
-              child: Row(children: [
-                const Expanded(child: Text('保存ビュー', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600))),
-                IconButton(tooltip: '現在のビューを保存', visualDensity: VisualDensity.compact, iconSize: 16, onPressed: _saveCurrentView, icon: const Icon(Icons.add)),
-              ]),
+    stream: widget.repository.watchSavedViews(),
+    builder: (context, snapshot) {
+      final views = snapshot.data ?? const <SavedViewConfig>[];
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(9, 10, 0, 3),
+          child: Row(children: [
+            const Expanded(child: Text('保存ビュー', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600))),
+            IconButton(tooltip: '現在のビューを保存', visualDensity: VisualDensity.compact, iconSize: 16, onPressed: _saveCurrentView, icon: const Icon(Icons.add)),
+          ]),
+        ),
+        ...views.map((config) => Material(
+          color: Colors.transparent,
+          child: ListTile(
+            dense: true,
+            visualDensity: VisualDensity.compact,
+            contentPadding: const EdgeInsets.only(left: 8, right: 0),
+            leading: Icon(config.view.layoutType == 'table' ? Icons.table_rows : config.view.layoutType == 'list' ? Icons.view_list : Icons.grid_view, size: 16),
+            title: Text(config.view.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5)),
+            selected: _activeSavedViewId == config.view.id,
+            onTap: () => _applySavedView(config),
+            trailing: PopupMenuButton<String>(
+              iconSize: 15,
+              onSelected: (value) {
+                if (value == 'delete') _deleteSavedView(config);
+                if (value == 'update') { _applySavedView(config); _updateActiveView(); }
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'update', child: Text('現在の設定で上書き')),
+                PopupMenuItem(value: 'delete', child: Text('削除')),
+              ],
             ),
-            ...views.map((config) => Material(
-              color: Colors.transparent,
-              child: ListTile(
-                dense: true,
-                visualDensity: VisualDensity.compact,
-                contentPadding: const EdgeInsets.only(left: 8, right: 0),
-                leading: Icon(config.view.layoutType == 'table' ? Icons.table_rows : config.view.layoutType == 'list' ? Icons.view_list : Icons.grid_view, size: 16),
-                title: Text(config.view.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5)),
-                selected: _activeSavedViewId == config.view.id,
-                onTap: () => _applySavedView(config),
-                trailing: PopupMenuButton<String>(
-                  iconSize: 15,
-                  onSelected: (value) {
-                    if (value == 'delete') _deleteSavedView(config);
-                    if (value == 'update') { _applySavedView(config); _updateActiveView(); }
-                  },
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(value: 'update', child: Text('現在の設定で上書き')),
-                    PopupMenuItem(value: 'delete', child: Text('削除')),
-                  ],
-                ),
-              ),
-            )),
-          ]);
-        },
-      );
+          ),
+        )),
+      ]);
+    },
+  );
 
   Widget _sidebar(List<Tag> allTags) {
+    final scheme = Theme.of(context).colorScheme;
     if (_sidebarCollapsed) {
       return Material(
-        color: const Color(0xFFF7F7F5),
+        color: scheme.surfaceContainerLow,
         child: SizedBox(
           width: 42,
           child: Align(
@@ -1035,7 +1019,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
       );
     }
     return Material(
-      color: const Color(0xFFF7F7F5),
+      color: scheme.surfaceContainerLow,
       child: SizedBox(
         width: 220,
         child: ListView(padding: const EdgeInsets.fromLTRB(8, 6, 8, 20), children: [
@@ -1098,12 +1082,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
       }
       try {
         final metadata = await const BookmarkMetadataService().fetch(url);
-        await widget.repository.create(
-          url: metadata.url,
-          title: metadata.title,
-          thumbnail: metadata.thumbnail,
-          description: metadata.description,
-        );
+        await widget.repository.create(url: metadata.url, title: metadata.title, thumbnail: metadata.thumbnail, description: metadata.description);
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ドロップしたURLを追加しました')));
       } catch (error) {
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('URLを追加できませんでした: $error')));
@@ -1117,13 +1096,14 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
       stream: widget.repository.watchTags(),
       builder: (context, tagSnapshot) {
         final tags = tagSnapshot.data ?? const <Tag>[];
+        final scheme = Theme.of(context).colorScheme;
         return Scaffold(
-          backgroundColor: Colors.white,
+          backgroundColor: scheme.surface,
           appBar: AppBar(
             toolbarHeight: 50,
             title: Column(mainAxisSize: MainAxisSize.min, children: [
               const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.bookmarks_outlined, size: 19), SizedBox(width: 6), Text('Bookmarks', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w500))]),
-              Text('${widget.profileName} / ${widget.workspaceName}', style: const TextStyle(fontSize: 10.5, color: Color(0xFF9B9A97), fontWeight: FontWeight.w400)),
+              Text('${widget.profileName} / ${widget.workspaceName}', style: TextStyle(fontSize: 10.5, color: scheme.onSurfaceVariant, fontWeight: FontWeight.w400)),
             ]),
           ),
           floatingActionButton: _selectionMode ? null : FloatingActionButton.extended(onPressed: () => showBookmarkCreateDialog(context: context, repository: widget.repository), icon: const Icon(Icons.add, size: 18), label: const Text('追加')),
@@ -1138,71 +1118,69 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
                 final allBookmarks = bookmarkSnapshot.data!;
                 final bookmarks = _applyFilters(allBookmarks, tags);
                 final selected = allBookmarks.where((bookmark) => bookmark.id == _selectedBookmarkId).firstOrNull;
-                return LayoutBuilder(
-                  builder: (context, constraints) {
-                    final wantsDetail = selected != null && !_selectionMode;
-                    final showSidebar = constraints.maxWidth >= 520 && (!wantsDetail || constraints.maxWidth >= 900);
-                    final fixedSidebarWidth = showSidebar ? (_sidebarCollapsed ? 43.0 : 221.0) : 0.0;
-                    final availableForDetail = constraints.maxWidth - fixedSidebarWidth - 260;
-                    final showDetail = wantsDetail && availableForDetail >= 320;
-                    final maxDetailWidth = showDetail ? availableForDetail.clamp(320.0, 720.0).toDouble() : 0.0;
-                    final effectiveDetailWidth = showDetail ? _detailWidth.clamp(320.0, maxDetailWidth).toDouble() : 0.0;
+                return LayoutBuilder(builder: (context, constraints) {
+                  final wantsDetail = selected != null && !_selectionMode;
+                  final showSidebar = constraints.maxWidth >= 520 && (!wantsDetail || constraints.maxWidth >= 900);
+                  final fixedSidebarWidth = showSidebar ? (_sidebarCollapsed ? 43.0 : 221.0) : 0.0;
+                  final availableForDetail = constraints.maxWidth - fixedSidebarWidth - 260;
+                  final showDetail = wantsDetail && availableForDetail >= 320;
+                  final maxDetailWidth = showDetail ? availableForDetail.clamp(320.0, 720.0).toDouble() : 0.0;
+                  final effectiveDetailWidth = showDetail ? _detailWidth.clamp(320.0, maxDetailWidth).toDouble() : 0.0;
 
-                    return Stack(children: [
-                      Row(children: [
-                        if (showSidebar) ...[
-                          _sidebar(tags),
-                          const VerticalDivider(width: 1, color: Color(0xFFE7E7E4)),
-                        ],
-                        Expanded(child: Column(children: [
-                          _toolbar(),
-                          if (_selectionMode) _batchBar(bookmarks),
-                          Expanded(child: bookmarks.isEmpty ? const Center(child: Text('条件に一致するブックマークがありません')) : switch (_viewType) {
-                            BookmarkStage1ViewType.gallery => _gallery(bookmarks),
-                            BookmarkStage1ViewType.list => _list(bookmarks),
-                            BookmarkStage1ViewType.table => _table(bookmarks),
-                          }),
-                        ])),
-                        if (showDetail) ...[
-                          MouseRegion(
-                            cursor: SystemMouseCursors.resizeColumn,
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onHorizontalDragUpdate: (details) => setState(() => _detailWidth = (_detailWidth - details.delta.dx).clamp(320.0, 720.0)),
-                              child: Container(width: 6, color: const Color(0xFFE7E7E4)),
-                            ),
+                  return Stack(children: [
+                    Row(children: [
+                      if (showSidebar) ...[
+                        _sidebar(tags),
+                        VerticalDivider(width: 1, color: scheme.outlineVariant),
+                      ],
+                      Expanded(child: Column(children: [
+                        _toolbar(),
+                        if (_selectionMode) _batchBar(bookmarks),
+                        Expanded(child: bookmarks.isEmpty ? const Center(child: Text('条件に一致するブックマークがありません')) : switch (_viewType) {
+                          BookmarkStage1ViewType.gallery => _gallery(bookmarks),
+                          BookmarkStage1ViewType.list => _list(bookmarks),
+                          BookmarkStage1ViewType.table => _table(bookmarks),
+                        }),
+                      ])),
+                      if (showDetail) ...[
+                        MouseRegion(
+                          cursor: SystemMouseCursors.resizeColumn,
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onHorizontalDragUpdate: (details) => setState(() => _detailWidth = (_detailWidth - details.delta.dx).clamp(320.0, 720.0)),
+                            child: Container(width: 6, color: scheme.outlineVariant),
                           ),
-                          SizedBox(
-                            width: effectiveDetailWidth,
-                            child: BookmarkDetailPanel(
-                              key: ValueKey(selected.id),
-                              repository: widget.repository,
-                              bookmark: selected,
-                              onClose: () => setState(() => _selectedBookmarkId = null),
-                              onFilterByTag: _filterByTag,
-                              onFilterByPerson: _filterByPerson,
-                              onFilterByPhoto: _filterByPhoto,
-                            ),
+                        ),
+                        SizedBox(
+                          width: effectiveDetailWidth,
+                          child: BookmarkDetailPanel(
+                            key: ValueKey(selected.id),
+                            repository: widget.repository,
+                            bookmark: selected,
+                            onClose: () => setState(() => _selectedBookmarkId = null),
+                            onFilterByTag: _filterByTag,
+                            onFilterByPerson: _filterByPerson,
+                            onFilterByPhoto: _filterByPhoto,
                           ),
-                        ],
-                      ]),
-                      if (_externalDragging)
-                        Positioned.fill(
-                          child: IgnorePointer(
+                        ),
+                      ],
+                    ]),
+                    if (_externalDragging)
+                      Positioned.fill(
+                        child: IgnorePointer(
+                          child: Container(
+                            color: scheme.scrim.withValues(alpha: .30),
+                            alignment: Alignment.center,
                             child: Container(
-                              color: const Color(0x55FFFFFF),
-                              alignment: Alignment.center,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
-                                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFF9B9A97))),
-                                child: const Text('URLまたは画像をドロップして追加', style: TextStyle(fontWeight: FontWeight.w600)),
-                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+                              decoration: BoxDecoration(color: scheme.surfaceContainerHigh, borderRadius: BorderRadius.circular(8), border: Border.all(color: scheme.outline)),
+                              child: const Text('URLまたは画像をドロップして追加', style: TextStyle(fontWeight: FontWeight.w600)),
                             ),
                           ),
                         ),
-                    ]);
-                  },
-                );
+                      ),
+                  ]);
+                });
               },
             ),
           ),
