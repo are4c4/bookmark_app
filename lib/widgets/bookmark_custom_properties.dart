@@ -51,23 +51,19 @@ class _BookmarkCustomPropertiesState extends State<BookmarkCustomProperties> {
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setLocalState) {
-          Widget editor;
-          switch (definition.type) {
-            case BookmarkPropertyType.text:
-              editor = TextField(
+          final editor = switch (definition.type) {
+            BookmarkPropertyType.text => TextField(
                 controller: controller,
                 autofocus: true,
                 decoration: const InputDecoration(border: OutlineInputBorder()),
-              );
-            case BookmarkPropertyType.number:
-              editor = TextField(
+              ),
+            BookmarkPropertyType.number => TextField(
                 controller: controller,
                 autofocus: true,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
                 decoration: const InputDecoration(border: OutlineInputBorder()),
-              );
-            case BookmarkPropertyType.date:
-              editor = Row(
+              ),
+            BookmarkPropertyType.date => Row(
                 children: [
                   Expanded(
                     child: Text(
@@ -90,9 +86,8 @@ class _BookmarkCustomPropertiesState extends State<BookmarkCustomProperties> {
                     label: const Text('日付を選択'),
                   ),
                 ],
-              );
-            case BookmarkPropertyType.select:
-              editor = DropdownButtonFormField<String>(
+              ),
+            BookmarkPropertyType.select => DropdownButtonFormField<String>(
                 initialValue: selectValue,
                 decoration: const InputDecoration(
                   border: OutlineInputBorder(),
@@ -102,15 +97,14 @@ class _BookmarkCustomPropertiesState extends State<BookmarkCustomProperties> {
                     .map((option) => DropdownMenuItem(value: option, child: Text(option)))
                     .toList(),
                 onChanged: (value) => setLocalState(() => selectValue = value),
-              );
-            case BookmarkPropertyType.checkbox:
-              editor = SwitchListTile(
+              ),
+            BookmarkPropertyType.checkbox => SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('チェック'),
                 value: checkboxValue,
                 onChanged: (value) => setLocalState(() => checkboxValue = value),
-              );
-          }
+              ),
+          };
 
           return AlertDialog(
             title: Text(definition.name),
@@ -133,20 +127,15 @@ class _BookmarkCustomPropertiesState extends State<BookmarkCustomProperties> {
               ),
               FilledButton(
                 onPressed: () async {
-                  String? value;
-                  switch (definition.type) {
-                    case BookmarkPropertyType.text:
-                    case BookmarkPropertyType.number:
-                      value = controller.text.trim().isEmpty ? null : controller.text.trim();
-                    case BookmarkPropertyType.date:
-                      value = selectedDate == null
-                          ? null
-                          : '${selectedDate!.year.toString().padLeft(4, '0')}-${selectedDate!.month.toString().padLeft(2, '0')}-${selectedDate!.day.toString().padLeft(2, '0')}';
-                    case BookmarkPropertyType.select:
-                      value = selectValue;
-                    case BookmarkPropertyType.checkbox:
-                      value = checkboxValue ? 'true' : 'false';
-                  }
+                  final String? value = switch (definition.type) {
+                    BookmarkPropertyType.text || BookmarkPropertyType.number =>
+                      controller.text.trim().isEmpty ? null : controller.text.trim(),
+                    BookmarkPropertyType.date => selectedDate == null
+                        ? null
+                        : '${selectedDate!.year.toString().padLeft(4, '0')}-${selectedDate!.month.toString().padLeft(2, '0')}-${selectedDate!.day.toString().padLeft(2, '0')}',
+                    BookmarkPropertyType.select => selectValue,
+                    BookmarkPropertyType.checkbox => checkboxValue ? 'true' : 'false',
+                  };
                   await widget.repository.setCustomPropertyValue(
                     widget.bookmarkId,
                     definition,
