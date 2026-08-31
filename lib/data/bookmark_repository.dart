@@ -5,18 +5,18 @@ class BookmarkRepository {
 
   final AppDatabase _database;
 
-  Stream<List<Bookmark>> watchAll() => _database.watchAllBookmarks();
+  Stream<List<BookmarkItem>> watchAll() => _database.watchBookmarkItems();
 
-  Stream<List<Bookmark>> watchFavorites() => _database.watchFavorites();
+  Stream<List<Tag>> watchTags() => _database.watchAllTags();
 
-  Future<Bookmark?> findById(int id) => _database.getBookmarkById(id);
+  Stream<List<SavedView>> watchSavedViews() => _database.watchSavedViews();
 
   Future<int> create({
     required String url,
     required String title,
     String? thumbnail,
     String? description,
-    String tags = '',
+    Iterable<String> tagNames = const [],
     bool favorite = false,
   }) {
     return _database.addBookmark(
@@ -24,7 +24,7 @@ class BookmarkRepository {
       title: title,
       thumbnail: thumbnail,
       description: description,
-      tags: tags,
+      tagNames: tagNames,
       favorite: favorite,
     );
   }
@@ -35,7 +35,7 @@ class BookmarkRepository {
     required String title,
     String? thumbnail,
     String? description,
-    String tags = '',
+    Iterable<String> tagNames = const [],
   }) {
     return _database.updateBookmarkFields(
       id: id,
@@ -43,17 +43,59 @@ class BookmarkRepository {
       title: title,
       thumbnail: thumbnail,
       description: description,
-      tags: tags,
+      tagNames: tagNames,
     );
   }
 
-  Future<void> toggleFavorite(Bookmark bookmark) {
+  Future<void> toggleFavorite(BookmarkItem bookmark) {
     return _database.setFavorite(bookmark.id, !bookmark.favorite);
   }
 
-  Future<void> setThumbnail(int id, String? pathOrUrl) {
-    return _database.updateThumbnail(id, pathOrUrl);
+  Future<int> delete(int id) => _database.deleteBookmark(id);
+
+  Future<void> renameTag(Tag tag, String newName) {
+    return _database.renameTag(tag.id, newName);
   }
 
-  Future<int> delete(int id) => _database.deleteBookmark(id);
+  Future<void> setTagParent(Tag tag, Tag? parent) {
+    return _database.setTagParent(tag.id, parent?.id);
+  }
+
+  Future<void> deleteTag(Tag tag) => _database.deleteTag(tag.id);
+
+  Future<int> createSavedView({
+    required String name,
+    required String layoutType,
+    String searchQuery = '',
+    bool favoritesOnly = false,
+    int? tagId,
+  }) {
+    return _database.createSavedView(
+      name: name,
+      layoutType: layoutType,
+      searchQuery: searchQuery,
+      favoritesOnly: favoritesOnly,
+      tagId: tagId,
+    );
+  }
+
+  Future<void> updateSavedView({
+    required int id,
+    required String name,
+    required String layoutType,
+    required String searchQuery,
+    required bool favoritesOnly,
+    int? tagId,
+  }) {
+    return _database.updateSavedView(
+      id: id,
+      name: name,
+      layoutType: layoutType,
+      searchQuery: searchQuery,
+      favoritesOnly: favoritesOnly,
+      tagId: tagId,
+    );
+  }
+
+  Future<int> deleteSavedView(int id) => _database.deleteSavedView(id);
 }
