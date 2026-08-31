@@ -62,6 +62,22 @@ class BookmarkRepository {
         personNames: personNames,
       );
 
+  Future<void> setBookmarkTagsFromDatabase(
+    BookmarkItem bookmark,
+    Iterable<Tag> selectedTags,
+  ) => _database.setBookmarkTags(
+        bookmark.id,
+        selectedTags.map((tag) => tag.name),
+      );
+
+  Future<void> setBookmarkPeopleFromDatabase(
+    BookmarkItem bookmark,
+    Iterable<Person> selectedPeople,
+  ) => _database.setBookmarkPeople(
+        bookmark.id,
+        selectedPeople.map((person) => person.name),
+      );
+
   Future<void> toggleFavorite(BookmarkItem bookmark) =>
       _database.setFavorite(bookmark.id, !bookmark.favorite);
   Future<int> delete(int id) => _database.deleteBookmark(id);
