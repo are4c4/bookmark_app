@@ -215,6 +215,15 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
     }
   }
 
+  Future<Tag?> _createTagFromPicker(String name, Tag? parent) async {
+    final id = await widget.repository.createTag(name, parent: parent);
+    final tags = await widget.repository.watchTags().first;
+    for (final tag in tags) {
+      if (tag.id == id) return tag;
+    }
+    return null;
+  }
+
   Future<void> _selectTagsFromDatabase() async {
     final allTags = await widget.repository.watchTags().first;
     if (!mounted) return;
@@ -222,6 +231,7 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
       context: context,
       tags: allTags,
       initiallySelectedIds: widget.bookmark.tags.map((tag) => tag.id),
+      onCreateTag: _createTagFromPicker,
     );
     if (selected != null) await widget.repository.setBookmarkTagsFromDatabase(widget.bookmark, selected);
   }
@@ -681,7 +691,7 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                                       .toList(),
                                 ),
                           onAdd: _selectTagsFromDatabase,
-                          tooltip: 'タグDBから選択',
+                          tooltip: 'タグDBから選択・新規作成',
                         ),
                         PersonRoleProperties(
                           repository: widget.repository,
