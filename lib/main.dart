@@ -5,6 +5,7 @@ import 'data/bookmark_repository.dart';
 import 'views/bookmark_details_page.dart';
 import 'views/bookmark_workspace_page.dart';
 import 'views/people_management_page.dart';
+import 'views/photo_management_page.dart';
 import 'views/tag_management_page.dart';
 
 void main() {
@@ -68,6 +69,11 @@ class _BookmarkShellState extends State<BookmarkShell> {
                 label: Text('詳細'),
               ),
               NavigationRailDestination(
+                icon: Icon(Icons.photo_library_outlined),
+                selectedIcon: Icon(Icons.photo_library),
+                label: Text('写真'),
+              ),
+              NavigationRailDestination(
                 icon: Icon(Icons.account_tree_outlined),
                 selectedIcon: Icon(Icons.account_tree),
                 label: Text('タグ管理'),
@@ -87,6 +93,7 @@ class _BookmarkShellState extends State<BookmarkShell> {
               children: [
                 BookmarkWorkspacePage(repository: widget.repository),
                 BookmarkDetailsPage(repository: widget.repository),
+                PhotoManagementPage(repository: widget.repository),
                 TagManagementPage(repository: widget.repository),
                 PeopleManagementPage(repository: widget.repository),
               ],
