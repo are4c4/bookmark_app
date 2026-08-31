@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:drift/drift.dart';
 
 import 'app_database.dart';
@@ -30,6 +32,12 @@ class WorkspaceStore {
   WorkspaceStore(this.database);
 
   final AppDatabase database;
+  final StreamController<void> _changes = StreamController<void>.broadcast();
+
+  Stream<void> get changes => _changes.stream;
+  void _notify() {
+    if (!_changes.isClosed) _changes.add(null);
+  }
 
   Future<void> _ensureColumn(String table, String column, String definition) async {
     final rows = await database.customSelect('PRAGMA table_info($table)').get();
@@ -147,6 +155,7 @@ class WorkspaceStore {
       'SELECT id FROM workspaces WHERE name = ? LIMIT 1',
       variables: [Variable(trimmed)],
     ).getSingle();
+    _notify();
     return row.read<int>('id');
   }
 
@@ -160,6 +169,7 @@ class WorkspaceStore {
     if (colorValue != null) {
       await database.customStatement('UPDATE workspaces SET color_value = ? WHERE id = ?', [colorValue, id]);
     }
+    _notify();
   }
 
   Future<void> renameWorkspace(int id, String name) => updateWorkspace(id, name: name);
@@ -170,6 +180,7 @@ class WorkspaceStore {
         await database.customStatement('UPDATE workspaces SET sort_order = ? WHERE id = ?', [i, orderedIds[i]]);
       }
     });
+    _notify();
   }
 
   Future<void> deleteWorkspace(int id) async {
@@ -182,6 +193,7 @@ class WorkspaceStore {
       await database.customStatement('DELETE FROM workspaces WHERE id = ?', [id]);
     });
     await setActiveWorkspace(fallback.id);
+    _notify();
   }
 
   Future<void> setActiveWorkspace(int id) async {
@@ -212,6 +224,7 @@ class WorkspaceStore {
       'INSERT INTO bookmark_workspace(bookmark_id, workspace_id) VALUES (?, ?) ON CONFLICT(bookmark_id) DO UPDATE SET workspace_id = excluded.workspace_id',
       [bookmarkId, workspaceId],
     );
+    _notify();
   }
 
   Future<void> assignSavedView(int savedViewId, int workspaceId) async {
@@ -219,13 +232,18 @@ class WorkspaceStore {
       'INSERT INTO saved_view_workspace(saved_view_id, workspace_id) VALUES (?, ?) ON CONFLICT(saved_view_id) DO UPDATE SET workspace_id = excluded.workspace_id',
       [savedViewId, workspaceId],
     );
+    _notify();
   }
 
   Future<void> moveBookmarks(Iterable<int> bookmarkIds, int workspaceId) async {
     await database.transaction(() async {
       for (final id in bookmarkIds.toSet()) {
-        await assignBookmark(id, workspaceId);
+        await database.customStatement(
+          'INSERT INTO bookmark_workspace(bookmark_id, workspace_id) VALUES (?, ?) ON CONFLICT(bookmark_id) DO UPDATE SET workspace_id = excluded.workspace_id',
+          [id, workspaceId],
+        );
       }
     });
+    _notify();
   }
 }
