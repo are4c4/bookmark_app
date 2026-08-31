@@ -24,6 +24,7 @@ const _statusLabels = <String, String>{
 Future<void> showBookmarkCreateDialog({
   required BuildContext context,
   required BookmarkRepository repository,
+  bool initialInbox = false,
 }) async {
   final url = TextEditingController();
   final tags = TextEditingController();
@@ -32,6 +33,7 @@ Future<void> showBookmarkCreateDialog({
   var saving = false;
   var status = 'unread';
   var rating = 0;
+  var inbox = initialInbox;
 
   await showDialog<void>(
     context: context,
@@ -98,6 +100,7 @@ Future<void> showBookmarkCreateDialog({
               tagNames: _splitNames(tags.text),
               status: status,
               rating: rating,
+              inbox: inbox,
             );
             if (selectedPhotos.isNotEmpty) {
               await repository.attachPhotosByBookmarkId(
@@ -143,12 +146,21 @@ Future<void> showBookmarkCreateDialog({
                       border: OutlineInputBorder(),
                     ),
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 10),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    title: const Text('Inboxに入れる'),
+                    subtitle: const Text('後でタグや人物などを整理するための一時保存'),
+                    value: inbox,
+                    onChanged: (value) => setLocalState(() => inbox = value),
+                  ),
+                  const SizedBox(height: 8),
                   Row(
                     children: [
                       Expanded(
                         child: DropdownButtonFormField<String>(
-                          value: status,
+                          initialValue: status,
                           decoration: const InputDecoration(labelText: 'ステータス', border: OutlineInputBorder()),
                           items: _statusLabels.entries
                               .map((entry) => DropdownMenuItem(value: entry.key, child: Text(entry.value)))
@@ -159,7 +171,7 @@ Future<void> showBookmarkCreateDialog({
                       const SizedBox(width: 12),
                       Expanded(
                         child: DropdownButtonFormField<int>(
-                          value: rating,
+                          initialValue: rating,
                           decoration: const InputDecoration(labelText: '評価', border: OutlineInputBorder()),
                           items: List.generate(6, (index) => DropdownMenuItem(
                                 value: index,
