@@ -102,25 +102,18 @@ class PersonRoleProperties extends StatelessWidget {
         stream: repository.lifecycleStore.watchGenre(bookmark.id),
         builder: (context, snapshot) {
           final genre = snapshot.data ?? '';
+          final items = <String, String>{
+            '': '未設定',
+            for (final value in _bookmarkGenres) value: value,
+          };
           return DetailPropertyRow(
             icon: Icons.category_outlined,
             label: 'ジャンル',
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: genre,
-                isDense: true,
-                isExpanded: true,
-                iconSize: 18,
-                style: TextStyle(
-                  fontSize: 12.5,
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
-                items: [
-                  const DropdownMenuItem(value: '', child: Text('未設定', style: TextStyle(fontSize: 12.5))),
-                  ..._bookmarkGenres.map((value) => DropdownMenuItem(value: value, child: Text(value, style: const TextStyle(fontSize: 12.5)))),
-                ],
-                onChanged: (value) => repository.lifecycleStore.setGenre(bookmark.id, value ?? ''),
-              ),
+            child: DetailSelectField<String>(
+              value: genre,
+              items: items,
+              empty: genre.isEmpty,
+              onSelected: (value) => repository.lifecycleStore.setGenre(bookmark.id, value),
             ),
           );
         },
