@@ -33,10 +33,21 @@ class Bookmarks extends Table {
   IntColumn get openCount => integer().withDefault(const Constant(0))();
 }
 
+@DataClassName('TagGroupRecord')
+class TagGroups extends Table {
+  @override
+  String get tableName => 'tag_groups';
+
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text().unique()();
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+}
+
 class Tags extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get name => text().unique()();
   IntColumn get parentTagId => integer().nullable()();
+  IntColumn get groupId => integer().nullable().references(TagGroups, #id, onDelete: KeyAction.setNull)();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }
 
@@ -98,8 +109,12 @@ class BookmarkCollections extends Table {
 }
 
 class BookmarkRelations extends Table {
+  @ReferenceName('outgoingBookmarkRelations')
   IntColumn get sourceBookmarkId => integer().references(Bookmarks, #id, onDelete: KeyAction.cascade)();
+
+  @ReferenceName('incomingBookmarkRelations')
   IntColumn get targetBookmarkId => integer().references(Bookmarks, #id, onDelete: KeyAction.cascade)();
+
   TextColumn get relationType => text().withDefault(const Constant('related'))();
   @override
   Set<Column<Object>> get primaryKey => {sourceBookmarkId, targetBookmarkId, relationType};
@@ -174,6 +189,34 @@ class WorkspaceSettings extends Table {
   Set<Column<Object>> get primaryKey => {key};
 }
 
+@DataClassName('BookmarkAttachmentRecord')
+class BookmarkAttachments extends Table {
+  @override
+  String get tableName => 'bookmark_attachments';
+
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get bookmarkId => integer().references(Bookmarks, #id, onDelete: KeyAction.cascade)();
+  TextColumn get fileName => text()();
+  TextColumn get path => text().unique()();
+  TextColumn get kind => text().withDefault(const Constant('file'))();
+  IntColumn get sizeBytes => integer().withDefault(const Constant(0))();
+  TextColumn get createdAt => text()();
+}
+
+@DataClassName('PdfAnnotationRow')
+class PdfAnnotations extends Table {
+  @override
+  String get tableName => 'pdf_annotations';
+
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get attachmentId => integer().references(BookmarkAttachments, #id, onDelete: KeyAction.cascade)();
+  IntColumn get pageNumber => integer()();
+  TextColumn get kind => text().withDefault(const Constant('note'))();
+  TextColumn get selectedText => text().withDefault(const Constant(''))();
+  TextColumn get note => text().withDefault(const Constant(''))();
+  TextColumn get createdAt => text()();
+}
+
 class BookmarkItem {
   const BookmarkItem({
     required this.id,
@@ -232,6 +275,7 @@ class SavedViewConfig {
 @DriftDatabase(
   tables: [
     Bookmarks,
+    TagGroups,
     Tags,
     BookmarkTags,
     People,
@@ -247,6 +291,8 @@ class SavedViewConfig {
     BookmarkWorkspaces,
     SavedViewWorkspaces,
     WorkspaceSettings,
+    BookmarkAttachments,
+    PdfAnnotations,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -254,7 +300,7 @@ class AppDatabase extends _$AppDatabase {
       : super(driftDatabase(name: databaseName));
 
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -422,6 +468,38 @@ class AppDatabase extends _$AppDatabase {
             if (!tableNames.contains('workspace_settings')) {
               await m.createTable(workspaceSettings);
             }
+          }
+          if (from < 13) {
+            final existing = await customSelect(
+              "SELECT name FROM sqlite_master WHERE type = 'table'",
+            ).get();
+            final tableNames = existing.map((row) => row.read<String>('name')).toSet();
+
+            if (!tableNames.contains('tag_groups')) {
+              await m.createTable(tagGroups);
+            }
+
+            final tagColumns = await customSelect('PRAGMA table_info(tags)').get();
+            final tagColumnNames = tagColumns.map((row) => row.read<String>('name')).toSet();
+            if (!tagColumnNames.contains('group_id')) {
+              await m.addColumn(tags, tags.groupId);
+            }
+
+            if (!tableNames.contains('bookmark_attachments')) {
+              await m.createTable(bookmarkAttachments);
+            }
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS bookmark_attachments_bookmark_id_idx '
+              'ON bookmark_attachments(bookmark_id)',
+            );
+
+            if (!tableNames.contains('pdf_annotations')) {
+              await m.createTable(pdfAnnotations);
+            }
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS pdf_annotations_attachment_idx '
+              'ON pdf_annotations(attachment_id, page_number)',
+            );
           }
         },
         beforeOpen: (_) async => customStatement('PRAGMA foreign_keys = ON'),
