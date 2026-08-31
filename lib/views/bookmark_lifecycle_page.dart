@@ -27,7 +27,7 @@ class BookmarkLifecyclePage extends StatelessWidget {
   final BookmarkLifecycleMode mode;
 
   String get _title => switch (mode) {
-        BookmarkLifecycleMode.inbox => 'Inbox',
+        BookmarkLifecycleMode.inbox => '未整理',
         BookmarkLifecycleMode.archive => 'アーカイブ',
         BookmarkLifecycleMode.trash => 'ゴミ箱',
       };
@@ -64,7 +64,7 @@ class BookmarkLifecyclePage extends StatelessWidget {
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setLocalState) => AlertDialog(
-          title: const Text('既存ブックマークをInboxへ'),
+          title: const Text('既存ブックマークを未整理へ'),
           content: SizedBox(
             width: 520,
             height: 420,
@@ -100,7 +100,7 @@ class BookmarkLifecyclePage extends StatelessWidget {
                       await repository.setInbox(selected!, true);
                       if (dialogContext.mounted) Navigator.pop(dialogContext);
                     },
-              child: const Text('Inboxへ'),
+              child: const Text('未整理へ'),
             ),
           ],
         ),
@@ -135,7 +135,7 @@ class BookmarkLifecyclePage extends StatelessWidget {
                 initialInbox: true,
               ),
               icon: const Icon(Icons.add, size: 18),
-              label: const Text('Inboxに追加'),
+              label: const Text('未整理に追加'),
             )
           : null,
       body: StreamBuilder<List<BookmarkItem>>(
@@ -149,11 +149,11 @@ class BookmarkLifecyclePage extends StatelessWidget {
             return Center(
               child: Text(
                 switch (mode) {
-                  BookmarkLifecycleMode.inbox => 'Inboxは空です',
+                  BookmarkLifecycleMode.inbox => '未整理は空です',
                   BookmarkLifecycleMode.archive => 'アーカイブはありません',
                   BookmarkLifecycleMode.trash => 'ゴミ箱は空です',
                 },
-                style: const TextStyle(color: Color(0xFF9B9A97)),
+                style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
               ),
             );
           }
@@ -231,7 +231,7 @@ class BookmarkLifecyclePage extends StatelessWidget {
                   itemBuilder: (_) => switch (mode) {
                     BookmarkLifecycleMode.inbox => const [
                         PopupMenuItem(value: 'open', child: Text('ブラウザで開く')),
-                        PopupMenuItem(value: 'inbox_done', child: Text('Inboxから出す')),
+                        PopupMenuItem(value: 'inbox_done', child: Text('未整理から出す')),
                         PopupMenuItem(value: 'archive', child: Text('アーカイブ')),
                         PopupMenuDivider(),
                         PopupMenuItem(value: 'trash', child: Text('ゴミ箱へ移動')),
