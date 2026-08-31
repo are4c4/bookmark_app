@@ -876,33 +876,15 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
       decoration: BoxDecoration(color: scheme.surface, border: Border(bottom: BorderSide(color: scheme.outlineVariant))),
       child: LayoutBuilder(builder: (context, constraints) {
         final compact = constraints.maxWidth < 900;
-        final searchWidth = (constraints.maxWidth * .32).clamp(96.0, compact ? 190.0 : 250.0).toDouble();
+        final searchWidth = (constraints.maxWidth * .26).clamp(150.0, compact ? 190.0 : 240.0).toDouble();
         return Row(children: [
-          SizedBox(
-            width: searchWidth,
-            height: 36,
-            child: TextField(
-              controller: _searchController,
-              onChanged: (value) => setState(() { _query = value; _activeSavedViewId = null; }),
-              decoration: InputDecoration(
-                hintText: '検索',
-                prefixIcon: const Icon(Icons.search, size: 18),
-                suffixIcon: _query.isEmpty ? null : IconButton(icon: const Icon(Icons.close, size: 16), onPressed: () { _searchController.clear(); setState(() { _query = ''; _activeSavedViewId = null; }); }),
-                filled: true,
-                fillColor: scheme.surfaceContainerLow,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(5), borderSide: BorderSide.none),
-              ),
-            ),
-          ),
-          const SizedBox(width: 5),
           Expanded(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
-              reverse: true,
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 TextButton.icon(onPressed: _showFilterDialog, icon: const Icon(Icons.filter_alt_outlined, size: 17), label: compact ? const SizedBox.shrink() : Text(filterCount == 0 ? 'フィルター' : 'フィルター $filterCount')),
                 PopupMenuButton<BookmarkStage1SortField>(
-                  tooltip: '並び替え',
+                  tooltip: '並べ替え',
                   initialValue: _sortField,
                   onSelected: (value) => setState(() { _sortField = value; _activeSavedViewId = null; }),
                   itemBuilder: (_) => const [
@@ -910,7 +892,14 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
                     PopupMenuItem(value: BookmarkStage1SortField.title, child: Text('タイトル')),
                     PopupMenuItem(value: BookmarkStage1SortField.url, child: Text('URL')),
                   ],
-                  child: const Padding(padding: EdgeInsets.symmetric(horizontal: 7, vertical: 6), child: Icon(Icons.swap_vert, size: 18)),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.swap_vert, size: 17),
+                      SizedBox(width: 6),
+                      Text('並べ替え'),
+                    ]),
+                  ),
                 ),
                 IconButton(tooltip: _sortAscending ? '昇順' : '降順', onPressed: () => setState(() { _sortAscending = !_sortAscending; _activeSavedViewId = null; }), icon: Icon(_sortAscending ? Icons.arrow_upward : Icons.arrow_downward, size: 18)),
                 if (!compact) TextButton.icon(onPressed: _showPropertiesDialog, icon: const Icon(Icons.tune, size: 17), label: const Text('プロパティ')),
@@ -930,9 +919,26 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
                   ],
                   icon: const Icon(Icons.bookmark_add_outlined, size: 19),
                 ),
-                const SizedBox(width: 8),
-                _viewSwitcher(),
               ]),
+            ),
+          ),
+          const SizedBox(width: 10),
+          _viewSwitcher(),
+          const SizedBox(width: 10),
+          SizedBox(
+            width: searchWidth,
+            height: 36,
+            child: TextField(
+              controller: _searchController,
+              onChanged: (value) => setState(() { _query = value; _activeSavedViewId = null; }),
+              decoration: InputDecoration(
+                hintText: '検索',
+                prefixIcon: const Icon(Icons.search, size: 18),
+                suffixIcon: _query.isEmpty ? null : IconButton(icon: const Icon(Icons.close, size: 16), onPressed: () { _searchController.clear(); setState(() { _query = ''; _activeSavedViewId = null; }); }),
+                filled: true,
+                fillColor: scheme.surfaceContainerLow,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(5), borderSide: BorderSide.none),
+              ),
             ),
           ),
         ]);
