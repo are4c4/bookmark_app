@@ -11,7 +11,9 @@ class ImportedPhoto {
 }
 
 class PhotoStorageService {
-  const PhotoStorageService();
+  const PhotoStorageService({this.photoDirectoryPath});
+
+  final String? photoDirectoryPath;
 
   static const _allowedExtensions = {
     'jpg',
@@ -34,8 +36,7 @@ class PhotoStorageService {
     final paths = sourcePaths.where((path) => _isSupportedImage(path)).toList();
     if (paths.isEmpty) return const [];
 
-    final support = await getApplicationSupportDirectory();
-    final photoDir = Directory('${support.path}/photos');
+    final photoDir = await _resolvePhotoDirectory();
     await photoDir.create(recursive: true);
 
     final imported = <ImportedPhoto>[];
@@ -51,6 +52,13 @@ class PhotoStorageService {
       imported.add(ImportedPhoto(path: target.path, originalName: originalName));
     }
     return imported;
+  }
+
+  Future<Directory> _resolvePhotoDirectory() async {
+    final explicit = photoDirectoryPath?.trim();
+    if (explicit != null && explicit.isNotEmpty) return Directory(explicit);
+    final support = await getApplicationSupportDirectory();
+    return Directory('${support.path}/photos');
   }
 
   Future<List<String>> _pickImagesWithFileSelector() async {
