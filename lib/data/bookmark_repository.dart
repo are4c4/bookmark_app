@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'app_database.dart';
+import 'bookmark_lifecycle_store.dart';
 import 'person_roles.dart';
 import 'workspace_store.dart';
 
@@ -6,12 +9,14 @@ class BookmarkRepository {
   BookmarkRepository(
     this._database, {
     required this.workspaceStore,
+    required this.lifecycleStore,
     required this.workspaceId,
     this.profileDirectoryPath,
   });
 
   final AppDatabase _database;
   final WorkspaceStore workspaceStore;
+  final BookmarkLifecycleStore lifecycleStore;
   final int workspaceId;
   final String? profileDirectoryPath;
 
@@ -31,12 +36,59 @@ class BookmarkRepository {
   Future<void> moveBookmarksToWorkspace(Iterable<int> ids, WorkspaceInfo workspace) =>
       workspaceStore.moveBookmarks(ids, workspace.id);
 
-  Stream<List<BookmarkItem>> watchAll() async* {
-    await for (final items in _database.watchBookmarkItems()) {
-      final ids = await workspaceStore.bookmarkIds(workspaceId);
-      yield items.where((item) => ids.contains(item.id)).toList();
+  Stream<List<BookmarkItem>> _watchLifecycleItems({
+    required bool Function(BookmarkLifecycleState? state) include,
+  }) {
+    late StreamController<List<BookmarkItem>> controller;
+    StreamSubscription<List<BookmarkItem>>? bookmarkSubscription;
+    StreamSubscription<void>? lifecycleSubscription;
+    var latest = <BookmarkItem>[];
+    var closed = false;
+
+    Future<void> emit() async {
+      if (closed) return;
+      final workspaceIds = await workspaceStore.bookmarkIds(workspaceId);
+      final states = await lifecycleStore.states();
+      final result = latest
+          .where((item) => workspaceIds.contains(item.id) && include(states[item.id]))
+          .toList();
+      if (!closed) controller.add(result);
     }
+
+    controller = StreamController<List<BookmarkItem>>(
+      onListen: () {
+        bookmarkSubscription = _database.watchBookmarkItems().listen(
+          (items) {
+            latest = items;
+            emit();
+          },
+          onError: controller.addError,
+        );
+        lifecycleSubscription = lifecycleStore.changes.listen(
+          (_) => emit(),
+          onError: controller.addError,
+        );
+      },
+      onCancel: () async {
+        closed = true;
+        await bookmarkSubscription?.cancel();
+        await lifecycleSubscription?.cancel();
+      },
+    );
+    return controller.stream;
   }
+
+  Stream<List<BookmarkItem>> watchAll() => _watchLifecycleItems(
+        include: (state) => state?.deleted != true,
+      );
+
+  Stream<List<BookmarkItem>> watchInbox() => _watchLifecycleItems(
+        include: (state) => state?.deleted != true && state?.inbox == true,
+      );
+
+  Stream<List<BookmarkItem>> watchTrash() => _watchLifecycleItems(
+        include: (state) => state?.deleted == true,
+      );
 
   Stream<List<Tag>> watchTags() => _database.watchAllTags();
   Stream<List<Person>> watchPeople() => _database.watchAllPeople();
@@ -62,6 +114,9 @@ class BookmarkRepository {
       );
   Stream<List<BookmarkItem>> watchBookmarksForPhoto(PhotoRecord photo) => watchAll().map(
         (items) => items.where((item) => item.photos.any((candidate) => candidate.id == photo.id)).toList(),
+      );
+  Stream<List<BookmarkItem>> watchBookmarksForCollection(CollectionRecord collection) => watchAll().map(
+        (items) => items.where((item) => item.collections.any((candidate) => candidate.id == collection.id)).toList(),
       );
 
   String _normalizeUrl(String value) {
@@ -105,6 +160,7 @@ class BookmarkRepository {
     bool favorite = false,
     String status = 'unread',
     int rating = 0,
+    bool inbox = false,
   }) async {
     final id = await _database.addBookmark(
       url: url,
@@ -118,6 +174,7 @@ class BookmarkRepository {
       rating: rating,
     );
     await workspaceStore.assignBookmark(id, workspaceId);
+    await lifecycleStore.ensureBookmark(id, inbox: inbox);
     return id;
   }
 
@@ -164,7 +221,14 @@ class BookmarkRepository {
   Future<void> setStatus(BookmarkItem bookmark, String status) => _database.setStatus(bookmark.id, status);
   Future<void> setRating(BookmarkItem bookmark, int rating) => _database.setRating(bookmark.id, rating);
   Future<void> recordOpen(BookmarkItem bookmark) => _database.recordBookmarkOpen(bookmark.id);
-  Future<int> delete(int id) => _database.deleteBookmark(id);
+  Future<void> setInbox(BookmarkItem bookmark, bool value) => lifecycleStore.setInbox(bookmark.id, value);
+  Future<void> moveToTrash(BookmarkItem bookmark) => lifecycleStore.moveToTrash(bookmark.id);
+  Future<void> restoreFromTrash(BookmarkItem bookmark) => lifecycleStore.restore(bookmark.id);
+  Future<void> permanentDelete(BookmarkItem bookmark) async {
+    await lifecycleStore.remove(bookmark.id);
+    await _database.deleteBookmark(bookmark.id);
+  }
+  Future<void> delete(int id) => lifecycleStore.moveToTrash(id);
 
   Future<void> batchAddTags(Iterable<int> ids, Iterable<String> names) => _database.addTagsToBookmarks(ids, names);
   Future<void> batchRemoveTags(Iterable<int> ids, Iterable<String> names) => _database.removeTagsFromBookmarks(ids, names);
@@ -200,7 +264,7 @@ class BookmarkRepository {
   Future<void> batchSetFavorite(Iterable<int> ids, bool favorite) => _database.batchSetFavorite(ids, favorite);
   Future<void> batchDelete(Iterable<int> ids) async {
     for (final id in ids.toSet()) {
-      await _database.deleteBookmark(id);
+      await lifecycleStore.moveToTrash(id);
     }
   }
 
