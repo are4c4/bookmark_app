@@ -23,6 +23,9 @@ class _BookmarkGalleryPageState extends State<BookmarkGalleryPage> {
   final _searchController = TextEditingController();
   BookmarkViewType _viewType = BookmarkViewType.gallery;
   String _query = '';
+  int? _selectedTagId;
+  bool _favoritesOnly = false;
+  int? _activeSavedViewId;
 
   @override
   void dispose() {
@@ -30,29 +33,44 @@ class _BookmarkGalleryPageState extends State<BookmarkGalleryPage> {
     super.dispose();
   }
 
-  List<String> _tagsOf(Bookmark bookmark) {
-    return bookmark.tags
-        .split(',')
-        .map((tag) => tag.trim())
-        .where((tag) => tag.isNotEmpty)
-        .toList();
-  }
+  List<String> _parseTags(String value) => value
+      .split(',')
+      .map((tag) => tag.trim())
+      .where((tag) => tag.isNotEmpty)
+      .toList();
 
-  List<Bookmark> _filterBookmarks(List<Bookmark> bookmarks) {
+  String _layoutName(BookmarkViewType type) => switch (type) {
+        BookmarkViewType.gallery => 'gallery',
+        BookmarkViewType.list => 'list',
+        BookmarkViewType.table => 'table',
+      };
+
+  BookmarkViewType _layoutFromName(String value) => switch (value) {
+        'list' => BookmarkViewType.list,
+        'table' => BookmarkViewType.table,
+        _ => BookmarkViewType.gallery,
+      };
+
+  List<BookmarkItem> _filterBookmarks(List<BookmarkItem> bookmarks) {
     final query = _query.trim().toLowerCase();
-    if (query.isEmpty) return bookmarks;
-
     return bookmarks.where((bookmark) {
+      if (_favoritesOnly && !bookmark.favorite) return false;
+      if (_selectedTagId != null &&
+          !bookmark.tags.any((tag) => tag.id == _selectedTagId)) {
+        return false;
+      }
+      if (query.isEmpty) return true;
       return bookmark.title.toLowerCase().contains(query) ||
           bookmark.url.toLowerCase().contains(query) ||
           (bookmark.description ?? '').toLowerCase().contains(query) ||
-          bookmark.tags.toLowerCase().contains(query);
+          bookmark.tags.any((tag) => tag.name.toLowerCase().contains(query));
     }).toList();
   }
 
-  Future<void> _openBookmark(Bookmark bookmark) async {
+  Future<void> _openBookmark(BookmarkItem bookmark) async {
     final uri = Uri.tryParse(bookmark.url);
-    if (uri == null || !await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+    if (uri == null ||
+        !await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('URLを開けませんでした')),
@@ -64,357 +82,701 @@ class _BookmarkGalleryPageState extends State<BookmarkGalleryPage> {
     final urlController = TextEditingController();
     final tagsController = TextEditingController();
     final formKey = GlobalKey<FormState>();
-    var isSaving = false;
-    String? errorText;
+    var saving = false;
 
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            Future<void> save() async {
-              if (isSaving || !(formKey.currentState?.validate() ?? false)) return;
-
-              setDialogState(() {
-                isSaving = true;
-                errorText = null;
-              });
-
-              try {
-                final result = await const BookmarkMetadataService().fetch(
-                  urlController.text,
-                );
-
-                await widget.repository.create(
-                  url: result.url,
-                  title: result.title,
-                  thumbnail: result.thumbnail,
-                  description: result.description,
-                  tags: tagsController.text.trim(),
-                );
-
-                if (dialogContext.mounted) Navigator.of(dialogContext).pop();
-              } catch (_) {
-                setDialogState(() {
-                  isSaving = false;
-                  errorText = '保存できませんでした。URLを確認してください。';
-                });
-              }
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          Future<void> save() async {
+            if (saving || !(formKey.currentState?.validate() ?? false)) return;
+            setDialogState(() => saving = true);
+            try {
+              final metadata = await const BookmarkMetadataService().fetch(
+                urlController.text,
+              );
+              await widget.repository.create(
+                url: metadata.url,
+                title: metadata.title,
+                thumbnail: metadata.thumbnail,
+                description: metadata.description,
+                tagNames: _parseTags(tagsController.text),
+              );
+              if (dialogContext.mounted) Navigator.pop(dialogContext);
+            } catch (_) {
+              setDialogState(() => saving = false);
             }
+          }
 
-            return AlertDialog(
-              title: const Text('ブックマークを追加'),
-              content: SizedBox(
-                width: 480,
-                child: Form(
-                  key: formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextFormField(
-                        controller: urlController,
-                        autofocus: true,
-                        enabled: !isSaving,
-                        decoration: const InputDecoration(
-                          labelText: 'URL',
-                          hintText: 'https://example.com',
-                          border: OutlineInputBorder(),
-                        ),
-                        validator: (value) {
-                          final input = value?.trim() ?? '';
-                          if (input.isEmpty) return 'URLを入力してください';
-                          final normalized = input.startsWith('http://') ||
-                                  input.startsWith('https://')
-                              ? input
-                              : 'https://$input';
-                          final uri = Uri.tryParse(normalized);
-                          if (uri == null || uri.host.isEmpty) {
-                            return '有効なURLを入力してください';
-                          }
-                          return null;
-                        },
-                        onFieldSubmitted: (_) => save(),
+          return AlertDialog(
+            title: const Text('ブックマークを追加'),
+            content: SizedBox(
+              width: 480,
+              child: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextFormField(
+                      controller: urlController,
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                        labelText: 'URL',
+                        hintText: 'https://example.com',
+                        border: OutlineInputBorder(),
                       ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: tagsController,
-                        enabled: !isSaving,
-                        decoration: const InputDecoration(
-                          labelText: 'タグ（カンマ区切り）',
-                          hintText: 'AI, 開発, 後で読む',
-                          border: OutlineInputBorder(),
-                        ),
+                      validator: (value) => (value?.trim().isEmpty ?? true)
+                          ? 'URLを入力してください'
+                          : null,
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: tagsController,
+                      decoration: const InputDecoration(
+                        labelText: 'タグ',
+                        hintText: 'AI, 数学, 後で読む',
+                        border: OutlineInputBorder(),
                       ),
-                      if (errorText != null) ...[
-                        const SizedBox(height: 12),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            errorText!,
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.error,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
-              actions: [
-                TextButton(
-                  onPressed: isSaving
-                      ? null
-                      : () => Navigator.of(dialogContext).pop(),
-                  child: const Text('キャンセル'),
-                ),
-                FilledButton.icon(
-                  onPressed: isSaving ? null : save,
-                  icon: isSaving
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.add_link),
-                  label: Text(isSaving ? '取得中…' : '追加'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+            ),
+            actions: [
+              TextButton(
+                onPressed: saving ? null : () => Navigator.pop(dialogContext),
+                child: const Text('キャンセル'),
+              ),
+              FilledButton.icon(
+                onPressed: saving ? null : save,
+                icon: saving
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.add_link),
+                label: Text(saving ? '取得中…' : '追加'),
+              ),
+            ],
+          );
+        },
+      ),
     );
-
     urlController.dispose();
     tagsController.dispose();
   }
 
-  Future<void> _showEditDialog(Bookmark bookmark) async {
-    final titleController = TextEditingController(text: bookmark.title);
-    final urlController = TextEditingController(text: bookmark.url);
-    final descriptionController = TextEditingController(
-      text: bookmark.description ?? '',
+  Future<void> _showEditDialog(BookmarkItem bookmark) async {
+    final title = TextEditingController(text: bookmark.title);
+    final url = TextEditingController(text: bookmark.url);
+    final description = TextEditingController(text: bookmark.description ?? '');
+    final thumbnail = TextEditingController(text: bookmark.thumbnail ?? '');
+    final tagNames = TextEditingController(
+      text: bookmark.tags.map((tag) => tag.name).join(', '),
     );
-    final thumbnailController = TextEditingController(
-      text: bookmark.thumbnail ?? '',
-    );
-    final tagsController = TextEditingController(text: bookmark.tags);
 
     await showDialog<void>(
       context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('ブックマークを編集'),
-          content: SizedBox(
-            width: 520,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: titleController,
-                    decoration: const InputDecoration(labelText: 'タイトル'),
-                  ),
-                  TextField(
-                    controller: urlController,
-                    decoration: const InputDecoration(labelText: 'URL'),
-                  ),
-                  TextField(
-                    controller: descriptionController,
-                    maxLines: 3,
-                    decoration: const InputDecoration(labelText: '説明'),
-                  ),
-                  TextField(
-                    controller: thumbnailController,
-                    decoration: const InputDecoration(labelText: 'サムネイルURL'),
-                  ),
-                  TextField(
-                    controller: tagsController,
-                    decoration: const InputDecoration(
-                      labelText: 'タグ（カンマ区切り）',
-                    ),
-                  ),
-                ],
-              ),
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('ブックマークを編集'),
+        content: SizedBox(
+          width: 520,
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                TextField(
+                  controller: title,
+                  decoration: const InputDecoration(labelText: 'タイトル'),
+                ),
+                TextField(
+                  controller: url,
+                  decoration: const InputDecoration(labelText: 'URL'),
+                ),
+                TextField(
+                  controller: description,
+                  maxLines: 3,
+                  decoration: const InputDecoration(labelText: '説明'),
+                ),
+                TextField(
+                  controller: thumbnail,
+                  decoration: const InputDecoration(labelText: 'サムネイルURL'),
+                ),
+                TextField(
+                  controller: tagNames,
+                  decoration: const InputDecoration(labelText: 'タグ'),
+                ),
+              ],
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('キャンセル'),
-            ),
-            FilledButton(
-              onPressed: () async {
-                await widget.repository.update(
-                  id: bookmark.id,
-                  url: urlController.text.trim(),
-                  title: titleController.text.trim(),
-                  description: descriptionController.text.trim().isEmpty
-                      ? null
-                      : descriptionController.text.trim(),
-                  thumbnail: thumbnailController.text.trim().isEmpty
-                      ? null
-                      : thumbnailController.text.trim(),
-                  tags: tagsController.text.trim(),
-                );
-                if (dialogContext.mounted) Navigator.of(dialogContext).pop();
-              },
-              child: const Text('保存'),
-            ),
-          ],
-        );
-      },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              await widget.repository.update(
+                id: bookmark.id,
+                url: url.text.trim(),
+                title: title.text.trim(),
+                description:
+                    description.text.trim().isEmpty ? null : description.text.trim(),
+                thumbnail:
+                    thumbnail.text.trim().isEmpty ? null : thumbnail.text.trim(),
+                tagNames: _parseTags(tagNames.text),
+              );
+              if (dialogContext.mounted) Navigator.pop(dialogContext);
+            },
+            child: const Text('保存'),
+          ),
+        ],
+      ),
     );
 
-    titleController.dispose();
-    urlController.dispose();
-    descriptionController.dispose();
-    thumbnailController.dispose();
-    tagsController.dispose();
+    title.dispose();
+    url.dispose();
+    description.dispose();
+    thumbnail.dispose();
+    tagNames.dispose();
   }
 
-  Future<void> _confirmDelete(Bookmark bookmark) async {
-    final delete = await showDialog<bool>(
+  Future<void> _confirmDelete(BookmarkItem bookmark) async {
+    final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('削除しますか？'),
         content: Text('「${bookmark.title}」を削除します。'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
+            onPressed: () => Navigator.pop(dialogContext, false),
             child: const Text('キャンセル'),
           ),
           FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
+            onPressed: () => Navigator.pop(dialogContext, true),
             child: const Text('削除'),
           ),
         ],
       ),
     );
-
-    if (delete == true) await widget.repository.delete(bookmark.id);
+    if (shouldDelete == true) await widget.repository.delete(bookmark.id);
   }
 
-  Widget _actionsFor(Bookmark bookmark) {
-    return PopupMenuButton<String>(
-      tooltip: '操作',
-      onSelected: (value) {
-        if (value == 'open') _openBookmark(bookmark);
-        if (value == 'edit') _showEditDialog(bookmark);
-        if (value == 'delete') _confirmDelete(bookmark);
-      },
-      itemBuilder: (context) => const [
-        PopupMenuItem(value: 'open', child: Text('開く')),
-        PopupMenuItem(value: 'edit', child: Text('編集')),
-        PopupMenuItem(value: 'delete', child: Text('削除')),
-      ],
+  Future<void> _saveCurrentView(List<Tag> tags) async {
+    final nameController = TextEditingController();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('現在のビューを保存'),
+        content: TextField(
+          controller: nameController,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'ビュー名',
+            hintText: '例：数学のお気に入り',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final name = nameController.text.trim();
+              if (name.isEmpty) return;
+              await widget.repository.createSavedView(
+                name: name,
+                layoutType: _layoutName(_viewType),
+                searchQuery: _query,
+                favoritesOnly: _favoritesOnly,
+                tagId: _selectedTagId,
+              );
+              if (dialogContext.mounted) Navigator.pop(dialogContext);
+            },
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    nameController.dispose();
+  }
+
+  void _applySavedView(SavedView view) {
+    _searchController.text = view.searchQuery;
+    setState(() {
+      _activeSavedViewId = view.id;
+      _query = view.searchQuery;
+      _favoritesOnly = view.favoritesOnly;
+      _selectedTagId = view.tagId;
+      _viewType = _layoutFromName(view.layoutType);
+    });
+  }
+
+  void _resetView() {
+    _searchController.clear();
+    setState(() {
+      _activeSavedViewId = null;
+      _query = '';
+      _favoritesOnly = false;
+      _selectedTagId = null;
+      _viewType = BookmarkViewType.gallery;
+    });
+  }
+
+  Future<void> _manageTags(List<Tag> tags) async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('タグを管理'),
+        content: SizedBox(
+          width: 460,
+          height: 420,
+          child: tags.isEmpty
+              ? const Center(child: Text('タグはまだありません'))
+              : ListView.builder(
+                  itemCount: tags.length,
+                  itemBuilder: (context, index) {
+                    final tag = tags[index];
+                    return ListTile(
+                      title: Text(tag.name),
+                      subtitle: tag.parentTagId == null
+                          ? null
+                          : Text(
+                              '親: ${tags.where((t) => t.id == tag.parentTagId).map((t) => t.name).firstOrNull ?? '不明'}',
+                            ),
+                      trailing: PopupMenuButton<String>(
+                        onSelected: (value) async {
+                          if (value == 'rename') {
+                            final controller = TextEditingController(text: tag.name);
+                            final newName = await showDialog<String>(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text('タグ名を変更'),
+                                content: TextField(controller: controller),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context),
+                                    child: const Text('キャンセル'),
+                                  ),
+                                  FilledButton(
+                                    onPressed: () => Navigator.pop(
+                                      context,
+                                      controller.text.trim(),
+                                    ),
+                                    child: const Text('変更'),
+                                  ),
+                                ],
+                              ),
+                            );
+                            controller.dispose();
+                            if (newName != null && newName.isNotEmpty) {
+                              await widget.repository.renameTag(tag, newName);
+                            }
+                          } else if (value == 'delete') {
+                            await widget.repository.deleteTag(tag);
+                          }
+                        },
+                        itemBuilder: (_) => const [
+                          PopupMenuItem(value: 'rename', child: Text('名前を変更')),
+                          PopupMenuItem(value: 'delete', child: Text('削除')),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('閉じる'),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildGallery(List<Bookmark> bookmarks) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        final columns = width >= 1100
-            ? 5
-            : width >= 800
-                ? 4
-                : width >= 600
-                    ? 3
-                    : 2;
+  Widget _bookmarkMenu(BookmarkItem bookmark) => PopupMenuButton<String>(
+        onSelected: (value) {
+          if (value == 'open') _openBookmark(bookmark);
+          if (value == 'edit') _showEditDialog(bookmark);
+          if (value == 'delete') _confirmDelete(bookmark);
+        },
+        itemBuilder: (_) => const [
+          PopupMenuItem(value: 'open', child: Text('開く')),
+          PopupMenuItem(value: 'edit', child: Text('編集')),
+          PopupMenuItem(value: 'delete', child: Text('削除')),
+        ],
+      );
 
-        return GridView.builder(
-          padding: const EdgeInsets.all(16),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: columns,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: 0.9,
-          ),
-          itemCount: bookmarks.length,
-          itemBuilder: (context, index) {
-            final bookmark = bookmarks[index];
-            return Card(
-              clipBehavior: Clip.antiAlias,
-              child: InkWell(
-                onTap: () => _openBookmark(bookmark),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: bookmark.thumbnail == null
-                            ? const Center(
-                                child: Icon(Icons.image_outlined, size: 48),
-                              )
-                            : Image.network(
-                                bookmark.thumbnail!,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => const Center(
-                                  child: Icon(
-                                    Icons.broken_image_outlined,
-                                    size: 48,
+  Widget _gallery(List<BookmarkItem> bookmarks) => LayoutBuilder(
+        builder: (context, constraints) {
+          final columns = constraints.maxWidth >= 1100
+              ? 5
+              : constraints.maxWidth >= 800
+                  ? 4
+                  : constraints.maxWidth >= 600
+                      ? 3
+                      : 2;
+          return GridView.builder(
+            padding: const EdgeInsets.all(16),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: columns,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: .88,
+            ),
+            itemCount: bookmarks.length,
+            itemBuilder: (context, index) {
+              final bookmark = bookmarks[index];
+              return Card(
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: () => _openBookmark(bookmark),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: bookmark.thumbnail == null
+                              ? const Center(child: Icon(Icons.image_outlined, size: 46))
+                              : Image.network(
+                                  bookmark.thumbnail!,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => const Center(
+                                    child: Icon(Icons.broken_image_outlined, size: 46),
                                   ),
                                 ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(10),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    bookmark.title,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context).textTheme.titleSmall,
+                                  ),
+                                ),
+                                IconButton(
+                                  onPressed: () => widget.repository.toggleFavorite(bookmark),
+                                  icon: Icon(
+                                    bookmark.favorite ? Icons.star : Icons.star_border,
+                                  ),
+                                ),
+                                _bookmarkMenu(bookmark),
+                              ],
+                            ),
+                            Text(
+                              bookmark.url,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                            if (bookmark.tags.isNotEmpty) ...[
+                              const SizedBox(height: 7),
+                              Wrap(
+                                spacing: 4,
+                                runSpacing: 4,
+                                children: bookmark.tags
+                                    .take(4)
+                                    .map(
+                                      (tag) => ActionChip(
+                                        label: Text(tag.name),
+                                        onPressed: () => setState(() {
+                                          _selectedTagId = tag.id;
+                                          _activeSavedViewId = null;
+                                        }),
+                                      ),
+                                    )
+                                    .toList(),
                               ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      );
+
+  Widget _list(List<BookmarkItem> bookmarks) => ListView.separated(
+        padding: const EdgeInsets.all(12),
+        itemCount: bookmarks.length,
+        separatorBuilder: (_, __) => const Divider(height: 1),
+        itemBuilder: (context, index) {
+          final bookmark = bookmarks[index];
+          return ListTile(
+            onTap: () => _openBookmark(bookmark),
+            leading: SizedBox(
+              width: 72,
+              child: bookmark.thumbnail == null
+                  ? const Icon(Icons.bookmark_border)
+                  : Image.network(bookmark.thumbnail!, fit: BoxFit.cover),
+            ),
+            title: Text(bookmark.title),
+            subtitle: Text(
+              [bookmark.url, ...bookmark.tags.map((tag) => tag.name)].join(' • '),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  onPressed: () => widget.repository.toggleFavorite(bookmark),
+                  icon: Icon(bookmark.favorite ? Icons.star : Icons.star_border),
+                ),
+                _bookmarkMenu(bookmark),
+              ],
+            ),
+          );
+        },
+      );
+
+  Widget _table(List<BookmarkItem> bookmarks) => SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        scrollDirection: Axis.horizontal,
+        child: DataTable(
+          columns: const [
+            DataColumn(label: Text('タイトル')),
+            DataColumn(label: Text('URL')),
+            DataColumn(label: Text('タグ')),
+            DataColumn(label: Text('★')),
+            DataColumn(label: Text('操作')),
+          ],
+          rows: bookmarks
+              .map(
+                (bookmark) => DataRow(
+                  cells: [
+                    DataCell(SizedBox(width: 230, child: Text(bookmark.title))),
+                    DataCell(SizedBox(width: 300, child: Text(bookmark.url))),
+                    DataCell(Text(bookmark.tags.map((tag) => tag.name).join(', '))),
+                    DataCell(
+                      IconButton(
+                        onPressed: () => widget.repository.toggleFavorite(bookmark),
+                        icon: Icon(bookmark.favorite ? Icons.star : Icons.star_border),
                       ),
                     ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 10, 6, 8),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                    DataCell(_bookmarkMenu(bookmark)),
+                  ],
+                ),
+              )
+              .toList(),
+        ),
+      );
+
+  Widget _content(List<BookmarkItem> bookmarks) => switch (_viewType) {
+        BookmarkViewType.gallery => _gallery(bookmarks),
+        BookmarkViewType.list => _list(bookmarks),
+        BookmarkViewType.table => _table(bookmarks),
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<Tag>>(
+      stream: widget.repository.watchTags(),
+      builder: (context, tagSnapshot) {
+        final tags = tagSnapshot.data ?? const <Tag>[];
+        return StreamBuilder<List<SavedView>>(
+          stream: widget.repository.watchSavedViews(),
+          builder: (context, viewSnapshot) {
+            final savedViews = viewSnapshot.data ?? const <SavedView>[];
+            return Scaffold(
+              appBar: AppBar(
+                title: const Text('Bookmarks'),
+                actions: [
+                  IconButton(
+                    tooltip: '現在のビューを保存',
+                    onPressed: () => _saveCurrentView(tags),
+                    icon: const Icon(Icons.bookmark_add_outlined),
+                  ),
+                  PopupMenuButton<BookmarkViewType>(
+                    tooltip: '表示形式',
+                    initialValue: _viewType,
+                    onSelected: (value) => setState(() {
+                      _viewType = value;
+                      _activeSavedViewId = null;
+                    }),
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(
+                        value: BookmarkViewType.gallery,
+                        child: Text('Gallery'),
+                      ),
+                      PopupMenuItem(
+                        value: BookmarkViewType.list,
+                        child: Text('List'),
+                      ),
+                      PopupMenuItem(
+                        value: BookmarkViewType.table,
+                        child: Text('Table'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              floatingActionButton: FloatingActionButton(
+                onPressed: _showAddBookmarkDialog,
+                child: const Icon(Icons.add),
+              ),
+              body: Row(
+                children: [
+                  SizedBox(
+                    width: 220,
+                    child: Material(
+                      color: Theme.of(context).colorScheme.surfaceContainerLow,
+                      child: ListView(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
                         children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  bookmark.title,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.titleSmall,
-                                ),
-                              ),
-                              IconButton(
-                                tooltip: 'お気に入り',
-                                onPressed: () =>
-                                    widget.repository.toggleFavorite(bookmark),
-                                icon: Icon(
-                                  bookmark.favorite
-                                      ? Icons.star
-                                      : Icons.star_border,
-                                ),
-                              ),
-                              _actionsFor(bookmark),
-                            ],
+                          ListTile(
+                            leading: const Icon(Icons.grid_view_outlined),
+                            title: const Text('すべて'),
+                            selected: _activeSavedViewId == null &&
+                                _selectedTagId == null &&
+                                !_favoritesOnly,
+                            onTap: _resetView,
                           ),
-                          Text(
-                            bookmark.url,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodySmall,
+                          ListTile(
+                            leading: const Icon(Icons.star_outline),
+                            title: const Text('お気に入り'),
+                            selected: _favoritesOnly && _activeSavedViewId == null,
+                            onTap: () => setState(() {
+                              _favoritesOnly = !_favoritesOnly;
+                              _activeSavedViewId = null;
+                            }),
                           ),
-                          if (_tagsOf(bookmark).isNotEmpty) ...[
-                            const SizedBox(height: 6),
-                            Wrap(
-                              spacing: 4,
-                              runSpacing: 4,
-                              children: _tagsOf(bookmark)
-                                  .take(3)
-                                  .map((tag) => Chip(
-                                        label: Text(tag),
-                                        visualDensity: VisualDensity.compact,
-                                      ))
-                                  .toList(),
+                          const Divider(),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 8, 8, 4),
+                            child: Row(
+                              children: [
+                                const Expanded(child: Text('保存ビュー')),
+                                if (savedViews.isNotEmpty)
+                                  const Icon(Icons.bookmarks_outlined, size: 18),
+                              ],
                             ),
-                          ],
+                          ),
+                          ...savedViews.map(
+                            (view) => ListTile(
+                              dense: true,
+                              title: Text(view.name),
+                              selected: _activeSavedViewId == view.id,
+                              onTap: () => _applySavedView(view),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.close, size: 17),
+                                onPressed: () => widget.repository.deleteSavedView(view.id),
+                              ),
+                            ),
+                          ),
+                          const Divider(),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 8, 4, 4),
+                            child: Row(
+                              children: [
+                                const Expanded(child: Text('タグ')),
+                                IconButton(
+                                  tooltip: 'タグを管理',
+                                  onPressed: () => _manageTags(tags),
+                                  icon: const Icon(Icons.settings_outlined, size: 18),
+                                ),
+                              ],
+                            ),
+                          ),
+                          ...tags.map(
+                            (tag) => ListTile(
+                              dense: true,
+                              leading: const Icon(Icons.sell_outlined, size: 17),
+                              title: Text(tag.name),
+                              selected: _selectedTagId == tag.id,
+                              onTap: () => setState(() {
+                                _selectedTagId = _selectedTagId == tag.id ? null : tag.id;
+                                _activeSavedViewId = null;
+                              }),
+                            ),
+                          ),
                         ],
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                  const VerticalDivider(width: 1),
+                  Expanded(
+                    child: Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: _searchController,
+                                  onChanged: (value) => setState(() {
+                                    _query = value;
+                                    _activeSavedViewId = null;
+                                  }),
+                                  decoration: InputDecoration(
+                                    hintText: 'タイトル・URL・説明・タグを検索',
+                                    prefixIcon: const Icon(Icons.search),
+                                    suffixIcon: _query.isEmpty
+                                        ? null
+                                        : IconButton(
+                                            onPressed: () {
+                                              _searchController.clear();
+                                              setState(() {
+                                                _query = '';
+                                                _activeSavedViewId = null;
+                                              });
+                                            },
+                                            icon: const Icon(Icons.clear),
+                                          ),
+                                    border: const OutlineInputBorder(),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              FilterChip(
+                                label: const Text('お気に入りのみ'),
+                                selected: _favoritesOnly,
+                                onSelected: (value) => setState(() {
+                                  _favoritesOnly = value;
+                                  _activeSavedViewId = null;
+                                }),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Expanded(
+                          child: StreamBuilder<List<BookmarkItem>>(
+                            stream: widget.repository.watchAll(),
+                            builder: (context, snapshot) {
+                              if (!snapshot.hasData) {
+                                return const Center(child: CircularProgressIndicator());
+                              }
+                              final filtered = _filterBookmarks(snapshot.data!);
+                              if (filtered.isEmpty) {
+                                return const Center(child: Text('該当するブックマークがありません'));
+                              }
+                              return _content(filtered);
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             );
           },
@@ -422,203 +784,8 @@ class _BookmarkGalleryPageState extends State<BookmarkGalleryPage> {
       },
     );
   }
+}
 
-  Widget _buildList(List<Bookmark> bookmarks) {
-    return ListView.separated(
-      padding: const EdgeInsets.all(12),
-      itemCount: bookmarks.length,
-      separatorBuilder: (_, __) => const Divider(height: 1),
-      itemBuilder: (context, index) {
-        final bookmark = bookmarks[index];
-        return ListTile(
-          onTap: () => _openBookmark(bookmark),
-          leading: SizedBox(
-            width: 72,
-            height: 52,
-            child: bookmark.thumbnail == null
-                ? const Icon(Icons.bookmark_border)
-                : Image.network(
-                    bookmark.thumbnail!,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) =>
-                        const Icon(Icons.broken_image_outlined),
-                  ),
-          ),
-          title: Text(bookmark.title),
-          subtitle: Text(
-            [bookmark.url, ..._tagsOf(bookmark)].join('  •  '),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                onPressed: () => widget.repository.toggleFavorite(bookmark),
-                icon: Icon(bookmark.favorite ? Icons.star : Icons.star_border),
-              ),
-              _actionsFor(bookmark),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildTable(List<Bookmark> bookmarks) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      scrollDirection: Axis.horizontal,
-      child: SingleChildScrollView(
-        child: DataTable(
-          columns: const [
-            DataColumn(label: Text('タイトル')),
-            DataColumn(label: Text('URL')),
-            DataColumn(label: Text('タグ')),
-            DataColumn(label: Text('お気に入り')),
-            DataColumn(label: Text('操作')),
-          ],
-          rows: bookmarks.map((bookmark) {
-            return DataRow(
-              cells: [
-                DataCell(
-                  SizedBox(
-                    width: 240,
-                    child: Text(
-                      bookmark.title,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  onTap: () => _openBookmark(bookmark),
-                ),
-                DataCell(
-                  SizedBox(
-                    width: 300,
-                    child: Text(
-                      bookmark.url,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  onTap: () => _openBookmark(bookmark),
-                ),
-                DataCell(Text(_tagsOf(bookmark).join(', '))),
-                DataCell(
-                  IconButton(
-                    onPressed: () => widget.repository.toggleFavorite(bookmark),
-                    icon: Icon(
-                      bookmark.favorite ? Icons.star : Icons.star_border,
-                    ),
-                  ),
-                ),
-                DataCell(_actionsFor(bookmark)),
-              ],
-            );
-          }).toList(),
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Bookmarks'),
-        actions: [
-          SizedBox(
-            width: 280,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: TextField(
-                controller: _searchController,
-                onChanged: (value) => setState(() => _query = value),
-                decoration: InputDecoration(
-                  hintText: '検索',
-                  prefixIcon: const Icon(Icons.search),
-                  suffixIcon: _query.isEmpty
-                      ? null
-                      : IconButton(
-                          onPressed: () {
-                            _searchController.clear();
-                            setState(() => _query = '');
-                          },
-                          icon: const Icon(Icons.clear),
-                        ),
-                  border: const OutlineInputBorder(),
-                  isDense: true,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          DropdownButtonHideUnderline(
-            child: DropdownButton<BookmarkViewType>(
-              value: _viewType,
-              onChanged: (value) {
-                if (value != null) setState(() => _viewType = value);
-              },
-              items: const [
-                DropdownMenuItem(
-                  value: BookmarkViewType.gallery,
-                  child: Row(
-                    children: [Icon(Icons.grid_view), SizedBox(width: 8), Text('Gallery')],
-                  ),
-                ),
-                DropdownMenuItem(
-                  value: BookmarkViewType.list,
-                  child: Row(
-                    children: [Icon(Icons.view_list), SizedBox(width: 8), Text('List')],
-                  ),
-                ),
-                DropdownMenuItem(
-                  value: BookmarkViewType.table,
-                  child: Row(
-                    children: [Icon(Icons.table_rows), SizedBox(width: 8), Text('Table')],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showAddBookmarkDialog,
-        tooltip: 'ブックマークを追加',
-        child: const Icon(Icons.add),
-      ),
-      body: StreamBuilder<List<Bookmark>>(
-        stream: widget.repository.watchAll(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting &&
-              !snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          final bookmarks = _filterBookmarks(
-            snapshot.data ?? const <Bookmark>[],
-          );
-
-          if (bookmarks.isEmpty) {
-            return Center(
-              child: Text(
-                _query.isEmpty
-                    ? '右下の＋からブックマークを追加できます'
-                    : '検索結果がありません',
-              ),
-            );
-          }
-
-          switch (_viewType) {
-            case BookmarkViewType.gallery:
-              return _buildGallery(bookmarks);
-            case BookmarkViewType.list:
-              return _buildList(bookmarks);
-            case BookmarkViewType.table:
-              return _buildTable(bookmarks);
-          }
-        },
-      ),
-    );
-  }
+extension _FirstOrNull<T> on Iterable<T> {
+  T? get firstOrNull => isEmpty ? null : first;
 }
