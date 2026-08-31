@@ -6,6 +6,7 @@ import 'data/workspace_store.dart';
 import 'services/bookmark_transfer_service.dart';
 import 'services/photo_storage_service.dart';
 import 'services/profile_manager.dart';
+import 'services/profile_storage_migrator.dart';
 import 'views/bookmark_unified_stage1_page.dart';
 import 'views/people_management_page.dart';
 import 'views/photo_management_page.dart';
@@ -41,6 +42,10 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
     AppDatabase database,
     DatabaseProfile profile,
   ) async {
+    await const ProfileStorageMigrator().migratePhotos(
+      database: database,
+      photoDirectoryPath: profile.photoDirectoryPath,
+    );
     final workspaceStore = WorkspaceStore(database);
     final workspaceId = await workspaceStore.initialize();
     _workspaceStore = workspaceStore;
