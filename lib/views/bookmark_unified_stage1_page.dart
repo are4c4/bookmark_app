@@ -12,7 +12,26 @@ import '../widgets/notion_bookmark_card.dart';
 
 enum BookmarkStage1ViewType { gallery, list, table }
 enum BookmarkStage1SortField { createdAt, title, url }
-enum BookmarkStage1Property { image, url, tags, people, description, createdAt, favorite }
+enum BookmarkStage1Property {
+  image,
+  url,
+  tags,
+  people,
+  description,
+  createdAt,
+  favorite,
+  status,
+  rating,
+  history,
+}
+
+const _statusLabels = <String, String>{
+  'unread': '未読',
+  'later': '後で見る',
+  'in_progress': '閲覧中 / 視聴中',
+  'done': '完了 / 視聴済み',
+  'archived': 'アーカイブ',
+};
 
 class BookmarkUnifiedStage1Page extends StatefulWidget {
   const BookmarkUnifiedStage1Page({super.key, required this.repository});
@@ -39,6 +58,8 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
   bool _favoritesOnly = false;
   bool _includeDescendants = true;
   bool _sidebarCollapsed = false;
+  String _statusFilter = '';
+  int _minRating = 0;
   String _query = '';
   int? _selectedBookmarkId;
   int? _personFilterId;
@@ -73,6 +94,8 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
     final q = _query.trim().toLowerCase();
     final result = source.where((bookmark) {
       if (_favoritesOnly && !bookmark.favorite) return false;
+      if (_statusFilter.isNotEmpty && bookmark.status != _statusFilter) return false;
+      if (bookmark.rating < _minRating) return false;
       if (_personFilterId != null && !bookmark.people.any((person) => person.id == _personFilterId)) return false;
       if (_photoFilterId != null && !bookmark.photos.any((photo) => photo.id == _photoFilterId)) return false;
 
@@ -81,6 +104,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
           bookmark.title,
           bookmark.url,
           bookmark.description ?? '',
+          _statusLabels[bookmark.status] ?? bookmark.status,
           ...bookmark.tags.map((tag) => tag.name),
           ...bookmark.people.map((person) => person.name),
         ].join(' ').toLowerCase();
@@ -117,6 +141,8 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
     setState(() {
       _query = '';
       _favoritesOnly = false;
+      _statusFilter = '';
+      _minRating = 0;
       _selectedTagIds.clear();
       _personFilterId = null;
       _photoFilterId = null;
@@ -238,9 +264,9 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
                 showDescription: _visibleProperties.contains(BookmarkStage1Property.description),
                 showCreatedAt: _visibleProperties.contains(BookmarkStage1Property.createdAt),
                 showFavorite: _visibleProperties.contains(BookmarkStage1Property.favorite),
-                showStatus: false,
-                showRating: false,
-                showHistory: false,
+                showStatus: _visibleProperties.contains(BookmarkStage1Property.status),
+                showRating: _visibleProperties.contains(BookmarkStage1Property.rating),
+                showHistory: _visibleProperties.contains(BookmarkStage1Property.history),
                 onTap: () => setState(() => _selectedBookmarkId = bookmark.id),
                 onToggleFavorite: () => widget.repository.toggleFavorite(bookmark),
                 menu: _bookmarkMenu(bookmark),
@@ -284,12 +310,16 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
           final bookmark = bookmarks[index];
           final details = <String>[
             if (_visibleProperties.contains(BookmarkStage1Property.url)) _compactUrl(bookmark.url),
+            if (_visibleProperties.contains(BookmarkStage1Property.status)) _statusLabels[bookmark.status] ?? bookmark.status,
+            if (_visibleProperties.contains(BookmarkStage1Property.rating) && bookmark.rating > 0) '★' * bookmark.rating,
             if (_visibleProperties.contains(BookmarkStage1Property.tags) && bookmark.tags.isNotEmpty)
               bookmark.tags.map((tag) => tag.name).join(', '),
             if (_visibleProperties.contains(BookmarkStage1Property.people) && bookmark.people.isNotEmpty)
               bookmark.people.map((person) => person.name).join(', '),
             if (_visibleProperties.contains(BookmarkStage1Property.description) && bookmark.description?.trim().isNotEmpty == true)
               bookmark.description!,
+            if (_visibleProperties.contains(BookmarkStage1Property.createdAt)) _formatDate(bookmark.createdAt),
+            if (_visibleProperties.contains(BookmarkStage1Property.history)) _historyText(bookmark),
           ];
           return ListTile(
             selected: bookmark.id == _selectedBookmarkId,
@@ -322,37 +352,94 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
         },
       );
 
-  Widget _table(List<BookmarkItem> bookmarks) => SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 90),
-        scrollDirection: Axis.horizontal,
-        child: DataTable(
-          columns: const [
-            DataColumn(label: Text('タイトル')),
-            DataColumn(label: Text('URL')),
-            DataColumn(label: Text('タグ')),
-            DataColumn(label: Text('出演者')),
-            DataColumn(label: Text('')),
-          ],
-          rows: bookmarks.map((bookmark) {
-            return DataRow(
-              selected: bookmark.id == _selectedBookmarkId,
-              onSelectChanged: (_) => setState(() => _selectedBookmarkId = bookmark.id),
-              cells: [
-                DataCell(Text(bookmark.title)),
-                DataCell(Text(_compactUrl(bookmark.url))),
-                DataCell(Text(bookmark.tags.map((tag) => tag.name).join(', '))),
-                DataCell(Text(bookmark.people.map((person) => person.name).join(', '))),
-                DataCell(_bookmarkMenu(bookmark)),
-              ],
-            );
-          }).toList(),
-        ),
-      );
+  Widget _table(List<BookmarkItem> bookmarks) {
+    final properties = BookmarkStage1Property.values.where(_visibleProperties.contains).toList();
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 90),
+      scrollDirection: Axis.horizontal,
+      child: DataTable(
+        columns: [
+          const DataColumn(label: Text('タイトル')),
+          ...properties.map((property) => DataColumn(label: Text(_propertyLabel(property)))),
+          const DataColumn(label: Text('')),
+        ],
+        rows: bookmarks.map((bookmark) {
+          final cells = <DataCell>[DataCell(Text(bookmark.title))];
+          for (final property in properties) {
+            cells.add(switch (property) {
+              BookmarkStage1Property.image => DataCell(
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: SizedBox(width: 58, height: 38, child: _image(bookmark, width: 58, height: 38)),
+                  ),
+                ),
+              BookmarkStage1Property.url => DataCell(Text(_compactUrl(bookmark.url))),
+              BookmarkStage1Property.tags => DataCell(Text(bookmark.tags.map((tag) => tag.name).join(', '))),
+              BookmarkStage1Property.people => DataCell(Text(bookmark.people.map((person) => person.name).join(', '))),
+              BookmarkStage1Property.description => DataCell(
+                  SizedBox(width: 260, child: Text(bookmark.description ?? '', maxLines: 2, overflow: TextOverflow.ellipsis)),
+                ),
+              BookmarkStage1Property.createdAt => DataCell(Text(_formatDate(bookmark.createdAt))),
+              BookmarkStage1Property.favorite => DataCell(
+                  IconButton(
+                    onPressed: () => widget.repository.toggleFavorite(bookmark),
+                    icon: Icon(bookmark.favorite ? Icons.star : Icons.star_border, size: 18),
+                  ),
+                ),
+              BookmarkStage1Property.status => DataCell(Text(_statusLabels[bookmark.status] ?? bookmark.status)),
+              BookmarkStage1Property.rating => DataCell(Text(bookmark.rating == 0 ? '' : '★' * bookmark.rating)),
+              BookmarkStage1Property.history => DataCell(Text(_historyText(bookmark))),
+            });
+          }
+          cells.add(DataCell(_bookmarkMenu(bookmark)));
+          return DataRow(
+            selected: bookmark.id == _selectedBookmarkId,
+            onSelectChanged: (_) => setState(() => _selectedBookmarkId = bookmark.id),
+            cells: cells,
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  String _propertyLabel(BookmarkStage1Property property) => switch (property) {
+        BookmarkStage1Property.image => '画像',
+        BookmarkStage1Property.url => 'URL',
+        BookmarkStage1Property.tags => 'タグ',
+        BookmarkStage1Property.people => '出演者',
+        BookmarkStage1Property.description => '説明',
+        BookmarkStage1Property.createdAt => '登録日時',
+        BookmarkStage1Property.favorite => 'お気に入り',
+        BookmarkStage1Property.status => 'ステータス',
+        BookmarkStage1Property.rating => '評価',
+        BookmarkStage1Property.history => '履歴',
+      };
 
   String _compactUrl(String value) {
     final uri = Uri.tryParse(value);
     if (uri == null || uri.host.isEmpty) return value;
     return uri.host.startsWith('www.') ? uri.host.substring(4) : uri.host;
+  }
+
+  String _formatDate(DateTime value) {
+    final local = value.toLocal();
+    final month = local.month.toString().padLeft(2, '0');
+    final day = local.day.toString().padLeft(2, '0');
+    return '${local.year}/$month/$day';
+  }
+
+  String _formatDateTime(DateTime value) {
+    final local = value.toLocal();
+    final month = local.month.toString().padLeft(2, '0');
+    final day = local.day.toString().padLeft(2, '0');
+    final hour = local.hour.toString().padLeft(2, '0');
+    final minute = local.minute.toString().padLeft(2, '0');
+    return '${local.year}/$month/$day $hour:$minute';
+  }
+
+  String _historyText(BookmarkItem bookmark) {
+    if (bookmark.lastOpenedAt == null) return '${bookmark.openCount}回 · 未閲覧';
+    return '${bookmark.openCount}回 · ${_formatDateTime(bookmark.lastOpenedAt!)}';
   }
 
   Future<void> _showPropertiesDialog() async {
@@ -364,32 +451,25 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
           title: const Text('表示するプロパティ'),
           content: SizedBox(
             width: 340,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: BookmarkStage1Property.values.map((property) {
-                final label = switch (property) {
-                  BookmarkStage1Property.image => '画像',
-                  BookmarkStage1Property.url => 'URL',
-                  BookmarkStage1Property.tags => 'タグ',
-                  BookmarkStage1Property.people => '出演者',
-                  BookmarkStage1Property.description => '説明',
-                  BookmarkStage1Property.createdAt => '登録日時',
-                  BookmarkStage1Property.favorite => 'お気に入り',
-                };
-                return CheckboxListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(label),
-                  value: selected.contains(property),
-                  onChanged: (value) => setLocalState(() {
-                    if (value == true) {
-                      selected.add(property);
-                    } else {
-                      selected.remove(property);
-                    }
-                  }),
-                );
-              }).toList(),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: BookmarkStage1Property.values.map((property) {
+                  return CheckboxListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(_propertyLabel(property)),
+                    value: selected.contains(property),
+                    onChanged: (value) => setLocalState(() {
+                      if (value == true) {
+                        selected.add(property);
+                      } else {
+                        selected.remove(property);
+                      }
+                    }),
+                  );
+                }).toList(),
+              ),
             ),
           ),
           actions: [
@@ -411,88 +491,163 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
     );
   }
 
-  Widget _toolbar() => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(bottom: BorderSide(color: Color(0xFFE7E7E4))),
-        ),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 250,
-              height: 36,
-              child: TextField(
-                controller: _searchController,
-                onChanged: (value) => setState(() => _query = value),
-                decoration: InputDecoration(
-                  hintText: '検索',
-                  prefixIcon: const Icon(Icons.search, size: 18),
-                  suffixIcon: _query.isEmpty
-                      ? null
-                      : IconButton(
-                          icon: const Icon(Icons.close, size: 16),
-                          onPressed: () {
-                            _searchController.clear();
-                            setState(() => _query = '');
-                          },
-                        ),
-                  filled: true,
-                  fillColor: const Color(0xFFF7F7F5),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(5), borderSide: BorderSide.none),
+  Future<void> _showFilterDialog() async {
+    var favorites = _favoritesOnly;
+    var status = _statusFilter;
+    var minRating = _minRating;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setLocalState) => AlertDialog(
+          title: const Text('フィルター'),
+          content: SizedBox(
+            width: 390,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('お気に入りのみ'),
+                  value: favorites,
+                  onChanged: (value) => setLocalState(() => favorites = value),
                 ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            if (_relationFilterLabel != null) ...[
-              InputChip(
-                label: Text(_relationFilterLabel!, style: const TextStyle(fontSize: 12)),
-                onDeleted: () => setState(() {
-                  _personFilterId = null;
-                  _photoFilterId = null;
-                  _relationFilterLabel = null;
-                }),
-              ),
-              const SizedBox(width: 6),
-            ],
-            PopupMenuButton<BookmarkStage1SortField>(
-              tooltip: '並び替え',
-              initialValue: _sortField,
-              onSelected: (value) => setState(() => _sortField = value),
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: BookmarkStage1SortField.createdAt, child: Text('登録日時')),
-                PopupMenuItem(value: BookmarkStage1SortField.title, child: Text('タイトル')),
-                PopupMenuItem(value: BookmarkStage1SortField.url, child: Text('URL')),
+                DropdownButtonFormField<String>(
+                  value: status,
+                  decoration: const InputDecoration(labelText: 'ステータス'),
+                  items: [
+                    const DropdownMenuItem(value: '', child: Text('すべて')),
+                    ..._statusLabels.entries.map(
+                      (entry) => DropdownMenuItem(value: entry.key, child: Text(entry.value)),
+                    ),
+                  ],
+                  onChanged: (value) => setLocalState(() => status = value ?? ''),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<int>(
+                  value: minRating,
+                  decoration: const InputDecoration(labelText: '最低評価'),
+                  items: List.generate(
+                    6,
+                    (index) => DropdownMenuItem(
+                      value: index,
+                      child: Text(index == 0 ? '指定なし' : '${'★' * index} 以上'),
+                    ),
+                  ),
+                  onChanged: (value) => setLocalState(() => minRating = value ?? 0),
+                ),
               ],
-              child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.swap_vert, size: 17), SizedBox(width: 5), Text('並び替え')]),
-              ),
             ),
-            IconButton(
-              tooltip: _sortAscending ? '昇順' : '降順',
-              onPressed: () => setState(() => _sortAscending = !_sortAscending),
-              icon: Icon(_sortAscending ? Icons.arrow_upward : Icons.arrow_downward, size: 18),
-            ),
-            TextButton.icon(
-              onPressed: _showPropertiesDialog,
-              icon: const Icon(Icons.tune, size: 17),
-              label: const Text('プロパティ'),
-            ),
-            const Spacer(),
-            SegmentedButton<BookmarkStage1ViewType>(
-              showSelectedIcon: false,
-              segments: const [
-                ButtonSegment(value: BookmarkStage1ViewType.gallery, icon: Icon(Icons.grid_view, size: 17)),
-                ButtonSegment(value: BookmarkStage1ViewType.list, icon: Icon(Icons.view_list, size: 17)),
-                ButtonSegment(value: BookmarkStage1ViewType.table, icon: Icon(Icons.table_rows, size: 17)),
-              ],
-              selected: {_viewType},
-              onSelectionChanged: (value) => setState(() => _viewType = value.first),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('キャンセル')),
+            FilledButton(
+              onPressed: () {
+                setState(() {
+                  _favoritesOnly = favorites;
+                  _statusFilter = status;
+                  _minRating = minRating;
+                });
+                Navigator.pop(dialogContext);
+              },
+              child: const Text('適用'),
             ),
           ],
         ),
-      );
+      ),
+    );
+  }
+
+  Widget _toolbar() {
+    final filterCount = (_favoritesOnly ? 1 : 0) + (_statusFilter.isNotEmpty ? 1 : 0) + (_minRating > 0 ? 1 : 0);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Color(0xFFE7E7E4))),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 250,
+            height: 36,
+            child: TextField(
+              controller: _searchController,
+              onChanged: (value) => setState(() => _query = value),
+              decoration: InputDecoration(
+                hintText: '検索',
+                prefixIcon: const Icon(Icons.search, size: 18),
+                suffixIcon: _query.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.close, size: 16),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _query = '');
+                        },
+                      ),
+                filled: true,
+                fillColor: const Color(0xFFF7F7F5),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(5), borderSide: BorderSide.none),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          if (_relationFilterLabel != null) ...[
+            InputChip(
+              label: Text(_relationFilterLabel!, style: const TextStyle(fontSize: 12)),
+              onDeleted: () => setState(() {
+                _personFilterId = null;
+                _photoFilterId = null;
+                _relationFilterLabel = null;
+              }),
+            ),
+            const SizedBox(width: 6),
+          ],
+          TextButton.icon(
+            onPressed: _showFilterDialog,
+            icon: const Icon(Icons.filter_alt_outlined, size: 17),
+            label: Text(filterCount == 0 ? 'フィルター' : 'フィルター $filterCount'),
+          ),
+          PopupMenuButton<BookmarkStage1SortField>(
+            tooltip: '並び替え',
+            initialValue: _sortField,
+            onSelected: (value) => setState(() => _sortField = value),
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: BookmarkStage1SortField.createdAt, child: Text('登録日時')),
+              PopupMenuItem(value: BookmarkStage1SortField.title, child: Text('タイトル')),
+              PopupMenuItem(value: BookmarkStage1SortField.url, child: Text('URL')),
+            ],
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.swap_vert, size: 17), SizedBox(width: 5), Text('並び替え')]),
+            ),
+          ),
+          IconButton(
+            tooltip: _sortAscending ? '昇順' : '降順',
+            onPressed: () => setState(() => _sortAscending = !_sortAscending),
+            icon: Icon(_sortAscending ? Icons.arrow_upward : Icons.arrow_downward, size: 18),
+          ),
+          TextButton.icon(
+            onPressed: _showPropertiesDialog,
+            icon: const Icon(Icons.tune, size: 17),
+            label: const Text('プロパティ'),
+          ),
+          const Spacer(),
+          SegmentedButton<BookmarkStage1ViewType>(
+            showSelectedIcon: false,
+            segments: const [
+              ButtonSegment(value: BookmarkStage1ViewType.gallery, icon: Icon(Icons.grid_view, size: 17)),
+              ButtonSegment(value: BookmarkStage1ViewType.list, icon: Icon(Icons.view_list, size: 17)),
+              ButtonSegment(value: BookmarkStage1ViewType.table, icon: Icon(Icons.table_rows, size: 17)),
+            ],
+            selected: {_viewType},
+            onSelectionChanged: (value) => setState(() => _viewType = value.first),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _tagTree(List<Tag> allTags, int? parentId, int depth) {
     final children = _childrenOf(parentId, allTags);
