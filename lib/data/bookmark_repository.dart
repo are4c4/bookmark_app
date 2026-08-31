@@ -19,9 +19,13 @@ class BookmarkRepository {
       profileDirectoryPath == null ? null : '$profileDirectoryPath/photos';
 
   Future<List<WorkspaceInfo>> listWorkspaces() => workspaceStore.listWorkspaces();
-  Future<int> createWorkspace(String name) => workspaceStore.createWorkspace(name);
+  Future<int> createWorkspace(String name, {String icon = '📁', int colorValue = 4288585374}) =>
+      workspaceStore.createWorkspace(name, icon: icon, colorValue: colorValue);
+  Future<void> updateWorkspace(WorkspaceInfo workspace, {String? name, String? icon, int? colorValue}) =>
+      workspaceStore.updateWorkspace(workspace.id, name: name, icon: icon, colorValue: colorValue);
   Future<void> renameWorkspace(WorkspaceInfo workspace, String name) =>
       workspaceStore.renameWorkspace(workspace.id, name);
+  Future<void> reorderWorkspaces(List<int> orderedIds) => workspaceStore.reorderWorkspaces(orderedIds);
   Future<void> deleteWorkspace(WorkspaceInfo workspace) => workspaceStore.deleteWorkspace(workspace.id);
   Future<void> setActiveWorkspace(WorkspaceInfo workspace) => workspaceStore.setActiveWorkspace(workspace.id);
   Future<void> moveBookmarksToWorkspace(Iterable<int> ids, WorkspaceInfo workspace) =>
