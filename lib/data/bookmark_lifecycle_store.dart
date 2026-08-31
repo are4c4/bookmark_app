@@ -21,75 +21,87 @@ class BookmarkLifecycleStore {
 
   final AppDatabase database;
 
+  /// Imports data from pre-v11 runtime tables/columns when they still exist.
+  ///
+  /// Normal reads and writes use the Drift-managed bookmark columns only.
+  /// Raw SQL is intentionally limited to compatibility discovery/reading here.
   Future<void> initialize() async {
-    // Keep the legacy columns during the transition so older exports and
-    // pre-v11 helper code can still be read safely. The source of truth is now
-    // reading_status / storage_state / genre / deleted_at.
     final columns = await database.customSelect('PRAGMA table_info(bookmarks)').get();
-    final names = columns.map((row) => row.read<String>('name')).toSet();
+    final columnNames = columns.map((row) => row.read<String>('name')).toSet();
 
-    if (!names.contains('inbox_state')) {
-      await database.customStatement(
-        'ALTER TABLE bookmarks ADD COLUMN inbox_state INTEGER NOT NULL DEFAULT 0',
-      );
-    }
-    if (!names.contains('deleted_at_state')) {
-      await database.customStatement(
-        'ALTER TABLE bookmarks ADD COLUMN deleted_at_state TEXT',
-      );
-    }
-    if (!names.contains('genre_state')) {
-      await database.customStatement(
-        "ALTER TABLE bookmarks ADD COLUMN genre_state TEXT NOT NULL DEFAULT ''",
-      );
-    }
-
-    final tables = await database.customSelect(
+    final legacyTables = await database.customSelect(
       "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'bookmark_lifecycle'",
     ).get();
-    if (tables.isNotEmpty) {
-      await database.customStatement('''
-        UPDATE bookmarks
-        SET inbox_state = COALESCE(
-              (SELECT inbox FROM bookmark_lifecycle bl WHERE bl.bookmark_id = bookmarks.id),
-              inbox_state
-            ),
-            deleted_at_state = COALESCE(
-              (SELECT deleted_at FROM bookmark_lifecycle bl WHERE bl.bookmark_id = bookmarks.id),
-              deleted_at_state
-            )
-        WHERE EXISTS (
-          SELECT 1 FROM bookmark_lifecycle bl WHERE bl.bookmark_id = bookmarks.id
-        )
-      ''');
+    if (legacyTables.isNotEmpty) {
+      final rows = await database.customSelect(
+        'SELECT bookmark_id, inbox, deleted_at FROM bookmark_lifecycle',
+      ).get();
+      for (final row in rows) {
+        final bookmarkId = row.read<int>('bookmark_id');
+        final inbox = row.read<int>('inbox') == 1;
+        final rawDeletedAt = row.readNullable<String>('deleted_at');
+        final deletedAt = rawDeletedAt == null ? null : DateTime.tryParse(rawDeletedAt);
+        await (database.update(database.bookmarks)
+              ..where((bookmark) => bookmark.id.equals(bookmarkId)))
+            .write(
+          BookmarksCompanion(
+            storageState: Value(deletedAt != null ? 'trash' : inbox ? 'inbox' : 'active'),
+            deletedAt: Value(deletedAt),
+          ),
+        );
+      }
       await database.customStatement('DROP TABLE bookmark_lifecycle');
     }
 
-    await database.customStatement('''
-      UPDATE bookmarks
-      SET storage_state = CASE
-            WHEN deleted_at_state IS NOT NULL THEN 'trash'
-            WHEN inbox_state = 1 THEN 'inbox'
-            WHEN status = 'archived' THEN 'archived'
-            ELSE storage_state
-          END,
-          genre = CASE
-            WHEN genre = '' AND genre_state != '' THEN genre_state
-            ELSE genre
-          END
-    ''');
+    // Some development builds created legacy columns directly on bookmarks.
+    // Import their values once when present, without recreating or dual-writing them.
+    if (columnNames.contains('inbox_state') ||
+        columnNames.contains('deleted_at_state') ||
+        columnNames.contains('genre_state')) {
+      final selectColumns = <String>[
+        'id',
+        if (columnNames.contains('inbox_state')) 'inbox_state',
+        if (columnNames.contains('deleted_at_state')) 'deleted_at_state',
+        if (columnNames.contains('genre_state')) 'genre_state',
+      ].join(', ');
+      final rows = await database.customSelect('SELECT $selectColumns FROM bookmarks').get();
 
-    final deletedRows = await database.customSelect('''
-      SELECT id, deleted_at_state
-      FROM bookmarks
-      WHERE deleted_at_state IS NOT NULL AND deleted_at IS NULL
-    ''').get();
-    for (final row in deletedRows) {
-      final parsed = DateTime.tryParse(row.read<String>('deleted_at_state'));
-      if (parsed == null) continue;
-      await (database.update(database.bookmarks)
-            ..where((bookmark) => bookmark.id.equals(row.read<int>('id'))))
-          .write(BookmarksCompanion(deletedAt: Value(parsed)));
+      for (final row in rows) {
+        final id = row.read<int>('id');
+        final current = await (database.select(database.bookmarks)
+              ..where((bookmark) => bookmark.id.equals(id)))
+            .getSingleOrNull();
+        if (current == null) continue;
+
+        final inbox = columnNames.contains('inbox_state')
+            ? row.readNullable<int>('inbox_state') == 1
+            : false;
+        final rawDeletedAt = columnNames.contains('deleted_at_state')
+            ? row.readNullable<String>('deleted_at_state')
+            : null;
+        final legacyDeletedAt = rawDeletedAt == null ? null : DateTime.tryParse(rawDeletedAt);
+        final legacyGenre = columnNames.contains('genre_state')
+            ? row.readNullable<String>('genre_state')?.trim() ?? ''
+            : '';
+
+        final shouldImportStorage = current.storageState == 'active' &&
+            (legacyDeletedAt != null || inbox);
+        final shouldImportGenre = current.genre.isEmpty && legacyGenre.isNotEmpty;
+        final shouldImportDeletedAt = current.deletedAt == null && legacyDeletedAt != null;
+        if (!shouldImportStorage && !shouldImportGenre && !shouldImportDeletedAt) continue;
+
+        await (database.update(database.bookmarks)
+              ..where((bookmark) => bookmark.id.equals(id)))
+            .write(
+          BookmarksCompanion(
+            storageState: shouldImportStorage
+                ? Value(legacyDeletedAt != null ? 'trash' : 'inbox')
+                : const Value.absent(),
+            deletedAt: shouldImportDeletedAt ? Value(legacyDeletedAt) : const Value.absent(),
+            genre: shouldImportGenre ? Value(legacyGenre) : const Value.absent(),
+          ),
+        );
+      }
     }
   }
 
@@ -139,11 +151,6 @@ class BookmarkLifecycleStore {
     if (changed == 0) {
       throw StateError('ジャンルを更新できませんでした (id=$bookmarkId)');
     }
-    await database.customUpdate(
-      'UPDATE bookmarks SET genre_state = ? WHERE id = ?',
-      variables: [Variable<String>(trimmed), Variable<int>(bookmarkId)],
-      updates: {database.bookmarks},
-    );
   }
 
   Future<void> ensureBookmark(int bookmarkId, {bool inbox = false}) async {
@@ -157,7 +164,6 @@ class BookmarkLifecycleStore {
     if (changed == 0) {
       throw StateError('ブックマーク状態を初期化できませんでした (id=$bookmarkId)');
     }
-    await _syncLegacyState(bookmarkId, inbox: inbox, deletedAt: null);
   }
 
   Future<void> setInbox(int bookmarkId, bool value) async {
@@ -170,7 +176,6 @@ class BookmarkLifecycleStore {
     if (changed == 0) {
       throw StateError('未整理状態を更新できませんでした (id=$bookmarkId)');
     }
-    await _syncLegacyState(bookmarkId, inbox: value, deletedAt: null);
   }
 
   Future<void> moveToTrash(int bookmarkId) async {
@@ -184,7 +189,6 @@ class BookmarkLifecycleStore {
     if (changed == 0) {
       throw StateError('削除対象のブックマークが見つかりませんでした (id=$bookmarkId)');
     }
-    await _syncLegacyState(bookmarkId, inbox: false, deletedAt: deletedAt);
 
     final verification = await (database.select(database.bookmarks)
           ..where((bookmark) => bookmark.id.equals(bookmarkId)))
@@ -204,7 +208,6 @@ class BookmarkLifecycleStore {
     if (changed == 0) {
       throw StateError('復元対象のブックマークが見つかりませんでした (id=$bookmarkId)');
     }
-    await _syncLegacyState(bookmarkId, inbox: false, deletedAt: null);
 
     final verification = await (database.select(database.bookmarks)
           ..where((bookmark) => bookmark.id.equals(bookmarkId)))
@@ -214,17 +217,6 @@ class BookmarkLifecycleStore {
         verification.deletedAt != null) {
       throw StateError('復元状態を保存できませんでした (id=$bookmarkId)');
     }
-  }
-
-  Future<void> _syncLegacyState(
-    int bookmarkId, {
-    required bool inbox,
-    required DateTime? deletedAt,
-  }) async {
-    await database.customStatement(
-      'UPDATE bookmarks SET inbox_state = ?, deleted_at_state = ? WHERE id = ?',
-      [inbox ? 1 : 0, deletedAt?.toIso8601String(), bookmarkId],
-    );
   }
 
   Future<void> remove(int bookmarkId) async {}
