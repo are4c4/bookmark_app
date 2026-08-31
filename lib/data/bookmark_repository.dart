@@ -1,11 +1,9 @@
 import 'app_database.dart';
-import 'custom_property_store.dart';
 
 class BookmarkRepository {
-  BookmarkRepository(this._database) : _customProperties = CustomPropertyStore(_database);
+  BookmarkRepository(this._database);
 
   final AppDatabase _database;
-  final CustomPropertyStore _customProperties;
 
   Stream<List<BookmarkItem>> watchAll() => _database.watchBookmarkItems();
   Stream<List<Tag>> watchTags() => _database.watchAllTags();
@@ -27,43 +25,6 @@ class BookmarkRepository {
             .where((item) => item.photos.any((candidate) => candidate.id == photo.id))
             .toList(),
       );
-
-  Future<List<BookmarkPropertyDefinition>> getCustomPropertyDefinitions() =>
-      _customProperties.getDefinitions();
-
-  Future<int> createCustomProperty({
-    required String name,
-    required BookmarkPropertyType type,
-    Iterable<String> options = const [],
-  }) => _customProperties.createDefinition(
-        name: name,
-        type: type,
-        options: options,
-      );
-
-  Future<void> updateCustomProperty(
-    BookmarkPropertyDefinition definition, {
-    required String name,
-    required BookmarkPropertyType type,
-    Iterable<String> options = const [],
-  }) => _customProperties.updateDefinition(
-        definition,
-        name: name,
-        type: type,
-        options: options,
-      );
-
-  Future<void> deleteCustomProperty(BookmarkPropertyDefinition definition) =>
-      _customProperties.deleteDefinition(definition);
-
-  Future<List<BookmarkPropertyValue>> getCustomPropertyValues(int bookmarkId) =>
-      _customProperties.getValues(bookmarkId);
-
-  Future<void> setCustomPropertyValue(
-    int bookmarkId,
-    BookmarkPropertyDefinition definition,
-    String? value,
-  ) => _customProperties.setValue(bookmarkId, definition, value);
 
   Future<int> create({
     required String url,
