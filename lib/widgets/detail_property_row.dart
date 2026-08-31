@@ -137,11 +137,13 @@ class DetailSelectField<T> extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(width: 8),
-            Icon(
-              Icons.arrow_drop_down,
-              size: 18,
-              color: scheme.onSurfaceVariant,
+            Transform.translate(
+              offset: const Offset(28, 0),
+              child: Icon(
+                Icons.keyboard_arrow_down,
+                size: 17,
+                color: scheme.onSurfaceVariant,
+              ),
             ),
           ],
         ),
