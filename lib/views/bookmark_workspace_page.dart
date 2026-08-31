@@ -5,7 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
-import '../services/bookmark_metadata_service.dart';
+import '../widgets/bookmark_create_dialog.dart';
 
 enum BookmarkViewType { gallery, list, table }
 enum TagMatchMode { or, and }
@@ -240,79 +240,10 @@ class _BookmarkWorkspacePageState extends State<BookmarkWorkspacePage> {
     }
   }
 
-  Future<void> _addBookmark() async {
-    final url = TextEditingController();
-    final tags = TextEditingController();
-    var saving = false;
-
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setLocalState) {
-          Future<void> save() async {
-            if (saving || url.text.trim().isEmpty) return;
-            setLocalState(() => saving = true);
-            try {
-              final metadata = await const BookmarkMetadataService()
-                  .fetch(url.text.trim());
-              await widget.repository.create(
-                url: metadata.url,
-                title: metadata.title,
-                thumbnail: metadata.thumbnail,
-                description: metadata.description,
-                tagNames: _parseTagNames(tags.text),
-              );
-              if (dialogContext.mounted) Navigator.pop(dialogContext);
-            } catch (_) {
-              setLocalState(() => saving = false);
-            }
-          }
-
-          return AlertDialog(
-            title: const Text('ブックマークを追加'),
-            content: SizedBox(
-              width: 480,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: url,
-                    autofocus: true,
-                    decoration: const InputDecoration(
-                      labelText: 'URL',
-                      border: OutlineInputBorder(),
-                    ),
-                    onSubmitted: (_) => save(),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: tags,
-                    decoration: const InputDecoration(
-                      labelText: 'タグ（カンマ区切り）',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: saving ? null : () => Navigator.pop(dialogContext),
-                child: const Text('キャンセル'),
-              ),
-              FilledButton(
-                onPressed: saving ? null : save,
-                child: Text(saving ? '取得中…' : '追加'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-    url.dispose();
-    tags.dispose();
-  }
+  Future<void> _addBookmark() => showBookmarkCreateDialog(
+        context: context,
+        repository: widget.repository,
+      );
 
   Future<void> _editBookmark(BookmarkItem bookmark) async {
     final title = TextEditingController(text: bookmark.title);
