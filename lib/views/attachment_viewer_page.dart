@@ -69,7 +69,6 @@ class _PdfAttachmentViewerState extends State<_PdfAttachmentViewer> {
   void dispose() {
     _searcher?.dispose();
     _searchController.dispose();
-    _controller.dispose();
     _annotationStore.dispose();
     super.dispose();
   }
@@ -142,8 +141,7 @@ class _PdfAttachmentViewerState extends State<_PdfAttachmentViewer> {
     if (!_controller.isReady || _pageCount == 0) return;
     final current = _controller.pageNumber ?? 1;
     final step = _layoutMode == _PdfLayoutMode.facing ? 2 : 1;
-    final logicalDelta = _rightToLeft ? -delta : delta;
-    final target = (current + logicalDelta * step).clamp(1, _pageCount);
+    final target = (current + delta * step).clamp(1, _pageCount);
     await _controller.goToPage(pageNumber: target);
   }
 
@@ -342,12 +340,11 @@ class _PdfAttachmentViewerState extends State<_PdfAttachmentViewer> {
           textSelectionParams: PdfTextSelectionParams(
             enabled: true,
             onTextSelectionChange: (selection) async {
-              final text = selection.getSelectedText();
-              final range = _controller.textSelection.textSelectionPointRange;
+              final text = await selection.getSelectedText();
               if (!mounted) return;
               setState(() {
                 _selectedText = text;
-                _selectedPage = range?.start.text.pageNumber ?? _controller.pageNumber ?? 1;
+                _selectedPage = _controller.pageNumber ?? 1;
               });
             },
           ),
