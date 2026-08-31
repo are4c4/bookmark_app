@@ -22,16 +22,8 @@ class Tags extends Table {
 }
 
 class BookmarkTags extends Table {
-  IntColumn get bookmarkId => integer().references(
-        Bookmarks,
-        #id,
-        onDelete: KeyAction.cascade,
-      )();
-  IntColumn get tagId => integer().references(
-        Tags,
-        #id,
-        onDelete: KeyAction.cascade,
-      )();
+  IntColumn get bookmarkId => integer().references(Bookmarks, #id, onDelete: KeyAction.cascade)();
+  IntColumn get tagId => integer().references(Tags, #id, onDelete: KeyAction.cascade)();
 
   @override
   Set<Column<Object>> get primaryKey => {bookmarkId, tagId};
@@ -43,14 +35,7 @@ class SavedViews extends Table {
   TextColumn get layoutType => text().withDefault(const Constant('gallery'))();
   TextColumn get searchQuery => text().withDefault(const Constant(''))();
   BoolColumn get favoritesOnly => boolean().withDefault(const Constant(false))();
-
-  // Legacy v3 filter. v4+ uses SavedViewTags.
-  IntColumn get tagId => integer().nullable().references(
-        Tags,
-        #id,
-        onDelete: KeyAction.setNull,
-      )();
-
+  IntColumn get tagId => integer().nullable().references(Tags, #id, onDelete: KeyAction.setNull)();
   TextColumn get tagMatchMode => text().withDefault(const Constant('or'))();
   TextColumn get sortField => text().withDefault(const Constant('createdAt'))();
   TextColumn get sortDirection => text().withDefault(const Constant('desc'))();
@@ -58,16 +43,8 @@ class SavedViews extends Table {
 }
 
 class SavedViewTags extends Table {
-  IntColumn get savedViewId => integer().references(
-        SavedViews,
-        #id,
-        onDelete: KeyAction.cascade,
-      )();
-  IntColumn get tagId => integer().references(
-        Tags,
-        #id,
-        onDelete: KeyAction.cascade,
-      )();
+  IntColumn get savedViewId => integer().references(SavedViews, #id, onDelete: KeyAction.cascade)();
+  IntColumn get tagId => integer().references(Tags, #id, onDelete: KeyAction.cascade)();
 
   @override
   Set<Column<Object>> get primaryKey => {savedViewId, tagId};
@@ -97,14 +74,11 @@ class BookmarkItem {
 
 class SavedViewConfig {
   const SavedViewConfig({required this.view, required this.tags});
-
   final SavedView view;
   final List<Tag> tags;
 }
 
-@DriftDatabase(
-  tables: [Bookmarks, Tags, BookmarkTags, SavedViews, SavedViewTags],
-)
+@DriftDatabase(tables: [Bookmarks, Tags, BookmarkTags, SavedViews, SavedViewTags])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'bookmark_app'));
 
@@ -115,54 +89,39 @@ class AppDatabase extends _$AppDatabase {
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (m) => m.createAll(),
         onUpgrade: (m, from, to) async {
-          if (from < 2) {
-            await m.addColumn(bookmarks, bookmarks.tags);
-          }
-
+          if (from < 2) await m.addColumn(bookmarks, bookmarks.tags);
           if (from < 3) {
             await m.createTable(tags);
             await m.createTable(bookmarkTags);
             await m.createTable(savedViews);
-
             final existingBookmarks = await select(bookmarks).get();
             for (final bookmark in existingBookmarks) {
               for (final name in _normalizeTagNames(bookmark.tags.split(','))) {
                 final tagId = await _ensureTag(name);
                 await into(bookmarkTags).insert(
-                  BookmarkTagsCompanion.insert(
-                    bookmarkId: bookmark.id,
-                    tagId: tagId,
-                  ),
+                  BookmarkTagsCompanion.insert(bookmarkId: bookmark.id, tagId: tagId),
                   mode: InsertMode.insertOrIgnore,
                 );
               }
             }
           }
-
           if (from < 4) {
             await m.addColumn(savedViews, savedViews.tagMatchMode);
             await m.addColumn(savedViews, savedViews.sortField);
             await m.addColumn(savedViews, savedViews.sortDirection);
             await m.createTable(savedViewTags);
-
-            // Preserve v3 saved views that filtered by a single tag.
             final oldViews = await select(savedViews).get();
             for (final view in oldViews) {
               if (view.tagId != null) {
                 await into(savedViewTags).insert(
-                  SavedViewTagsCompanion.insert(
-                    savedViewId: view.id,
-                    tagId: view.tagId!,
-                  ),
+                  SavedViewTagsCompanion.insert(savedViewId: view.id, tagId: view.tagId!),
                   mode: InsertMode.insertOrIgnore,
                 );
               }
             }
           }
         },
-        beforeOpen: (_) async {
-          await customStatement('PRAGMA foreign_keys = ON');
-        },
+        beforeOpen: (_) async => customStatement('PRAGMA foreign_keys = ON'),
       );
 
   static List<String> _normalizeTagNames(Iterable<String> names) {
@@ -176,32 +135,22 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<int> _ensureTag(String name) async {
-    final existing = await (select(tags)..where((t) => t.name.equals(name)))
-        .getSingleOrNull();
+    final existing = await (select(tags)..where((t) => t.name.equals(name))).getSingleOrNull();
     if (existing != null) return existing.id;
-
-    final id = await into(tags).insert(
-      TagsCompanion.insert(name: name),
-      mode: InsertMode.insertOrIgnore,
-    );
+    final id = await into(tags).insert(TagsCompanion.insert(name: name), mode: InsertMode.insertOrIgnore);
     if (id != 0) return id;
-    return (await (select(tags)..where((t) => t.name.equals(name))).getSingle())
-        .id;
+    return (await (select(tags)..where((t) => t.name.equals(name))).getSingle()).id;
   }
 
   Future<List<Tag>> _tagsForBookmark(int bookmarkId) {
-    final query = select(tags).join([
-      innerJoin(bookmarkTags, bookmarkTags.tagId.equalsExp(tags.id)),
-    ])
+    final query = select(tags).join([innerJoin(bookmarkTags, bookmarkTags.tagId.equalsExp(tags.id))])
       ..where(bookmarkTags.bookmarkId.equals(bookmarkId))
       ..orderBy([OrderingTerm.asc(tags.name)]);
     return query.map((row) => row.readTable(tags)).get();
   }
 
   Future<List<Tag>> _tagsForSavedView(int savedViewId) {
-    final query = select(tags).join([
-      innerJoin(savedViewTags, savedViewTags.tagId.equalsExp(tags.id)),
-    ])
+    final query = select(tags).join([innerJoin(savedViewTags, savedViewTags.tagId.equalsExp(tags.id))])
       ..where(savedViewTags.savedViewId.equals(savedViewId))
       ..orderBy([OrderingTerm.asc(tags.name)]);
     return query.map((row) => row.readTable(tags)).get();
@@ -223,7 +172,6 @@ class AppDatabase extends _$AppDatabase {
       'SELECT b.id FROM bookmarks b LEFT JOIN bookmark_tags bt ON bt.bookmark_id = b.id LEFT JOIN tags t ON t.id = bt.tag_id GROUP BY b.id',
       readsFrom: {bookmarks, bookmarkTags, tags},
     ).watch();
-
     return trigger.asyncMap((_) async {
       final rows = await select(bookmarks).get();
       return Future.wait(rows.map(_toItem));
@@ -238,15 +186,9 @@ class AppDatabase extends _$AppDatabase {
       'SELECT sv.id FROM saved_views sv LEFT JOIN saved_view_tags svt ON svt.saved_view_id = sv.id GROUP BY sv.id',
       readsFrom: {savedViews, savedViewTags, tags},
     ).watch();
-
     return trigger.asyncMap((_) async {
-      final rows = await (select(savedViews)
-            ..orderBy([(v) => OrderingTerm.asc(v.createdAt)]))
-          .get();
-      return Future.wait(rows.map((view) async => SavedViewConfig(
-            view: view,
-            tags: await _tagsForSavedView(view.id),
-          )));
+      final rows = await (select(savedViews)..orderBy([(v) => OrderingTerm.asc(v.createdAt)])).get();
+      return Future.wait(rows.map((view) async => SavedViewConfig(view: view, tags: await _tagsForSavedView(view.id))));
     });
   }
 
@@ -258,15 +200,13 @@ class AppDatabase extends _$AppDatabase {
     Iterable<String> tagNames = const [],
     bool favorite = false,
   }) => transaction(() async {
-        final id = await into(bookmarks).insert(
-          BookmarksCompanion.insert(
-            url: url,
-            title: title,
-            thumbnail: Value(thumbnail),
-            description: Value(description),
-            favorite: Value(favorite),
-          ),
-        );
+        final id = await into(bookmarks).insert(BookmarksCompanion.insert(
+          url: url,
+          title: title,
+          thumbnail: Value(thumbnail),
+          description: Value(description),
+          favorite: Value(favorite),
+        ));
         await setBookmarkTags(id, tagNames);
         return id;
       });
@@ -279,20 +219,17 @@ class AppDatabase extends _$AppDatabase {
     String? description,
     Iterable<String> tagNames = const [],
   }) => transaction(() async {
-        await (update(bookmarks)..where((b) => b.id.equals(id))).write(
-          BookmarksCompanion(
-            url: Value(url),
-            title: Value(title),
-            thumbnail: Value(thumbnail),
-            description: Value(description),
-          ),
-        );
+        await (update(bookmarks)..where((b) => b.id.equals(id))).write(BookmarksCompanion(
+          url: Value(url),
+          title: Value(title),
+          thumbnail: Value(thumbnail),
+          description: Value(description),
+        ));
         await setBookmarkTags(id, tagNames);
       });
 
   Future<void> setBookmarkTags(int bookmarkId, Iterable<String> names) async {
-    await (delete(bookmarkTags)..where((bt) => bt.bookmarkId.equals(bookmarkId)))
-        .go();
+    await (delete(bookmarkTags)..where((bt) => bt.bookmarkId.equals(bookmarkId))).go();
     for (final name in _normalizeTagNames(names)) {
       final tagId = await _ensureTag(name);
       await into(bookmarkTags).insert(
@@ -302,33 +239,51 @@ class AppDatabase extends _$AppDatabase {
     }
   }
 
+  Future<int> createTag(String name, {int? parentTagId}) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) throw ArgumentError('Tag name is empty');
+    final id = await _ensureTag(trimmed);
+    if (parentTagId != null) await setTagParent(id, parentTagId);
+    return id;
+  }
+
   Future<void> renameTag(int id, String newName) async {
     final name = newName.trim();
     if (name.isEmpty) return;
-    await (update(tags)..where((t) => t.id.equals(id))).write(
-      TagsCompanion(name: Value(name)),
-    );
+    await (update(tags)..where((t) => t.id.equals(id))).write(TagsCompanion(name: Value(name)));
+  }
+
+  Future<bool> _wouldCreateTagCycle(int id, int? parentTagId) async {
+    var current = parentTagId;
+    final visited = <int>{id};
+    while (current != null) {
+      if (!visited.add(current)) return true;
+      final row = await (select(tags)..where((t) => t.id.equals(current!))).getSingleOrNull();
+      current = row?.parentTagId;
+    }
+    return false;
   }
 
   Future<void> setTagParent(int id, int? parentTagId) async {
-    if (id == parentTagId) return;
-    await (update(tags)..where((t) => t.id.equals(id))).write(
-      TagsCompanion(parentTagId: Value(parentTagId)),
-    );
+    if (id == parentTagId) throw ArgumentError('A tag cannot be its own parent');
+    if (await _wouldCreateTagCycle(id, parentTagId)) {
+      throw ArgumentError('This parent would create a tag cycle');
+    }
+    await (update(tags)..where((t) => t.id.equals(id))).write(TagsCompanion(parentTagId: Value(parentTagId)));
   }
 
   Future<void> deleteTag(int id) async {
-    await (delete(tags)..where((t) => t.id.equals(id))).go();
+    await transaction(() async {
+      await (update(tags)..where((t) => t.parentTagId.equals(id))).write(const TagsCompanion(parentTagId: Value(null)));
+      await (delete(tags)..where((t) => t.id.equals(id))).go();
+    });
   }
 
   Future<void> setFavorite(int id, bool favorite) async {
-    await (update(bookmarks)..where((b) => b.id.equals(id))).write(
-      BookmarksCompanion(favorite: Value(favorite)),
-    );
+    await (update(bookmarks)..where((b) => b.id.equals(id))).write(BookmarksCompanion(favorite: Value(favorite)));
   }
 
-  Future<int> deleteBookmark(int id) =>
-      (delete(bookmarks)..where((b) => b.id.equals(id))).go();
+  Future<int> deleteBookmark(int id) => (delete(bookmarks)..where((b) => b.id.equals(id))).go();
 
   Future<void> _setSavedViewTags(int viewId, Iterable<int> tagIds) async {
     await (delete(savedViewTags)..where((x) => x.savedViewId.equals(viewId))).go();
@@ -350,17 +305,15 @@ class AppDatabase extends _$AppDatabase {
     String sortField = 'createdAt',
     String sortDirection = 'desc',
   }) => transaction(() async {
-        final id = await into(savedViews).insert(
-          SavedViewsCompanion.insert(
-            name: name,
-            layoutType: Value(layoutType),
-            searchQuery: Value(searchQuery),
-            favoritesOnly: Value(favoritesOnly),
-            tagMatchMode: Value(tagMatchMode),
-            sortField: Value(sortField),
-            sortDirection: Value(sortDirection),
-          ),
-        );
+        final id = await into(savedViews).insert(SavedViewsCompanion.insert(
+          name: name,
+          layoutType: Value(layoutType),
+          searchQuery: Value(searchQuery),
+          favoritesOnly: Value(favoritesOnly),
+          tagMatchMode: Value(tagMatchMode),
+          sortField: Value(sortField),
+          sortDirection: Value(sortDirection),
+        ));
         await _setSavedViewTags(id, tagIds);
         return id;
       });
@@ -376,20 +329,17 @@ class AppDatabase extends _$AppDatabase {
     required String sortField,
     required String sortDirection,
   }) => transaction(() async {
-        await (update(savedViews)..where((v) => v.id.equals(id))).write(
-          SavedViewsCompanion(
-            name: Value(name),
-            layoutType: Value(layoutType),
-            searchQuery: Value(searchQuery),
-            favoritesOnly: Value(favoritesOnly),
-            tagMatchMode: Value(tagMatchMode),
-            sortField: Value(sortField),
-            sortDirection: Value(sortDirection),
-          ),
-        );
+        await (update(savedViews)..where((v) => v.id.equals(id))).write(SavedViewsCompanion(
+          name: Value(name),
+          layoutType: Value(layoutType),
+          searchQuery: Value(searchQuery),
+          favoritesOnly: Value(favoritesOnly),
+          tagMatchMode: Value(tagMatchMode),
+          sortField: Value(sortField),
+          sortDirection: Value(sortDirection),
+        ));
         await _setSavedViewTags(id, tagIds);
       });
 
-  Future<int> deleteSavedView(int id) =>
-      (delete(savedViews)..where((v) => v.id.equals(id))).go();
+  Future<int> deleteSavedView(int id) => (delete(savedViews)..where((v) => v.id.equals(id))).go();
 }
