@@ -80,7 +80,8 @@ class TagManagementPage extends StatelessWidget {
                   await repository.createTag(name, parent: parent);
                   if (dialogContext.mounted) Navigator.pop(dialogContext);
                 } catch (_) {
-                  setLocalState(() => error = '同名タグなどの理由で追加できませんでした');
+                  setLocalState(() =>
+                      error = '同名タグなどの理由で追加できませんでした');
                 }
               },
               child: const Text('追加'),
@@ -219,7 +220,6 @@ class TagManagementPage extends StatelessWidget {
         if (result.add(child.id)) visit(child.id);
       }
     }
-
     visit(tagId);
     return result;
   }
@@ -228,6 +228,95 @@ class TagManagementPage extends StatelessWidget {
       .where((tag) => tag.parentTagId == parentId)
       .toList()
     ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+  bool _canDropOn(Tag dragged, Tag target, List<Tag> tags) {
+    if (dragged.id == target.id) return false;
+    return !_descendantIds(dragged.id, tags).contains(target.id);
+  }
+
+  Widget _tagTile(
+    BuildContext context,
+    Tag tag,
+    List<Tag> tags,
+    Map<int, int> counts,
+    int depth,
+  ) {
+    final nested = _childrenOf(tag.id, tags);
+    final tile = ListTile(
+      contentPadding: EdgeInsets.only(
+        left: 20 + depth * 28,
+        right: 12,
+      ),
+      leading: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.drag_indicator, size: 18),
+          const SizedBox(width: 6),
+          Icon(
+            nested.isEmpty ? Icons.sell_outlined : Icons.folder_outlined,
+            size: 20,
+          ),
+        ],
+      ),
+      title: Text(tag.name),
+      subtitle: Text('${counts[tag.id] ?? 0} 件のブックマーク'),
+      trailing: PopupMenuButton<String>(
+        onSelected: (value) {
+          if (value == 'edit') _editTag(context, tag, tags);
+          if (value == 'delete') _deleteTag(context, tag);
+        },
+        itemBuilder: (_) => const [
+          PopupMenuItem(value: 'edit', child: Text('編集')),
+          PopupMenuItem(value: 'delete', child: Text('削除')),
+        ],
+      ),
+    );
+
+    return DragTarget<Tag>(
+      onWillAcceptWithDetails: (details) =>
+          _canDropOn(details.data, tag, tags),
+      onAcceptWithDetails: (details) async {
+        await repository.setTagParent(details.data, tag);
+      },
+      builder: (context, candidates, rejected) {
+        final highlighted = candidates.isNotEmpty;
+        return Container(
+          decoration: BoxDecoration(
+            color: highlighted
+                ? Theme.of(context).colorScheme.primaryContainer
+                : null,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: LongPressDraggable<Tag>(
+            data: tag,
+            feedback: Material(
+              elevation: 6,
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                width: 260,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.sell_outlined, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(tag.name)),
+                  ],
+                ),
+              ),
+            ),
+            childWhenDragging: Opacity(
+              opacity: 0.35,
+              child: tile,
+            ),
+            child: tile,
+          ),
+        );
+      },
+    );
+  }
 
   Widget _tagTree(
     BuildContext context,
@@ -242,33 +331,52 @@ class TagManagementPage extends StatelessWidget {
         final nested = _childrenOf(tag.id, tags);
         return Column(
           children: [
-            ListTile(
-              contentPadding: EdgeInsets.only(
-                left: 20 + depth * 28,
-                right: 12,
-              ),
-              leading: Icon(
-                nested.isEmpty ? Icons.sell_outlined : Icons.folder_outlined,
-                size: 20,
-              ),
-              title: Text(tag.name),
-              subtitle: Text('${counts[tag.id] ?? 0} 件のブックマーク'),
-              trailing: PopupMenuButton<String>(
-                onSelected: (value) {
-                  if (value == 'edit') _editTag(context, tag, tags);
-                  if (value == 'delete') _deleteTag(context, tag);
-                },
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'edit', child: Text('編集')),
-                  PopupMenuItem(value: 'delete', child: Text('削除')),
-                ],
-              ),
-            ),
+            _tagTile(context, tag, tags, counts, depth),
             if (nested.isNotEmpty)
               _tagTree(context, tags, counts, tag.id, depth + 1),
           ],
         );
       }).toList(),
+    );
+  }
+
+  Widget _rootDropTarget(BuildContext context) {
+    return DragTarget<Tag>(
+      onWillAcceptWithDetails: (_) => true,
+      onAcceptWithDetails: (details) async {
+        await repository.setTagParent(details.data, null);
+      },
+      builder: (context, candidates, rejected) {
+        final active = candidates.isNotEmpty;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          margin: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: active
+                ? Theme.of(context).colorScheme.primaryContainer
+                : Theme.of(context).colorScheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: active
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).dividerColor,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.vertical_align_top,
+                color: active ? Theme.of(context).colorScheme.primary : null,
+              ),
+              const SizedBox(width: 10),
+              Text(
+                active ? 'ここにドロップして最上位へ移動' : '最上位へ移動',
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -281,7 +389,10 @@ class TagManagementPage extends StatelessWidget {
       floatingActionButton: StreamBuilder<List<Tag>>(
         stream: repository.watchTags(),
         builder: (context, snapshot) => FloatingActionButton.extended(
-          onPressed: () => _createTag(context, snapshot.data ?? const <Tag>[]),
+          onPressed: () => _createTag(
+            context,
+            snapshot.data ?? const <Tag>[],
+          ),
           icon: const Icon(Icons.add),
           label: const Text('タグを追加'),
         ),
@@ -293,7 +404,8 @@ class TagManagementPage extends StatelessWidget {
           return StreamBuilder<List<BookmarkItem>>(
             stream: repository.watchAll(),
             builder: (context, bookmarkSnapshot) {
-              final bookmarks = bookmarkSnapshot.data ?? const <BookmarkItem>[];
+              final bookmarks =
+                  bookmarkSnapshot.data ?? const <BookmarkItem>[];
               final counts = <int, int>{};
               for (final bookmark in bookmarks) {
                 for (final tag in bookmark.tags) {
@@ -311,12 +423,13 @@ class TagManagementPage extends StatelessWidget {
                 padding: const EdgeInsets.only(top: 12, bottom: 100),
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 6),
                     child: Text(
-                      'タグを階層化して整理できます。子タグは親タグの下に表示されます。',
+                      'タグを長押しして別のタグへドラッグすると、そのタグの子にできます。',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ),
+                  _rootDropTarget(context),
                   _tagTree(context, tags, counts, null, 0),
                 ],
               );
