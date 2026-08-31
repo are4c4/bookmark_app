@@ -9,6 +9,9 @@ class BookmarkRepository {
   Stream<List<Tag>> watchTags() => _database.watchAllTags();
   Stream<List<Person>> watchPeople() => _database.watchAllPeople();
   Stream<List<PhotoRecord>> watchPhotos() => _database.watchAllPhotos();
+  Stream<List<CollectionRecord>> watchCollections() => _database.watchAllCollections();
+  Stream<List<BookmarkRelation>> watchRelationsForBookmark(int bookmarkId) =>
+      _database.watchRelationsForBookmark(bookmarkId);
   Stream<List<SavedViewConfig>> watchSavedViews() => _database.watchSavedViewConfigs();
 
   Stream<List<BookmarkItem>> watchBookmarksForPerson(Person person) => watchAll().map(
@@ -19,6 +22,24 @@ class BookmarkRepository {
         (items) => items.where((item) => item.photos.any((candidate) => candidate.id == photo.id)).toList(),
       );
 
+  String _normalizeUrl(String value) {
+    final trimmed = value.trim();
+    final uri = Uri.tryParse(trimmed);
+    if (uri == null || uri.host.isEmpty) return trimmed.toLowerCase().replaceAll(RegExp(r'/$'), '');
+    final host = uri.host.toLowerCase().replaceFirst(RegExp(r'^www\.'), '');
+    final path = uri.path == '/' ? '' : uri.path.replaceAll(RegExp(r'/$'), '');
+    return '$host$path${uri.hasQuery ? '?${uri.query}' : ''}';
+  }
+
+  Future<BookmarkItem?> findDuplicateUrl(String url) async {
+    final normalized = _normalizeUrl(url);
+    final items = await watchAll().first;
+    for (final item in items) {
+      if (_normalizeUrl(item.url) == normalized) return item;
+    }
+    return null;
+  }
+
   Future<int> create({
     required String url,
     required String title,
@@ -27,6 +48,8 @@ class BookmarkRepository {
     Iterable<String> tagNames = const [],
     Iterable<String> personNames = const [],
     bool favorite = false,
+    String status = 'unread',
+    int rating = 0,
   }) => _database.addBookmark(
         url: url,
         title: title,
@@ -35,6 +58,8 @@ class BookmarkRepository {
         tagNames: tagNames,
         personNames: personNames,
         favorite: favorite,
+        status: status,
+        rating: rating,
       );
 
   Future<void> update({
@@ -45,6 +70,8 @@ class BookmarkRepository {
     String? description,
     Iterable<String> tagNames = const [],
     Iterable<String>? personNames,
+    String? status,
+    int? rating,
   }) => _database.updateBookmarkFields(
         id: id,
         url: url,
@@ -53,6 +80,8 @@ class BookmarkRepository {
         description: description,
         tagNames: tagNames,
         personNames: personNames,
+        status: status,
+        rating: rating,
       );
 
   Future<void> setBookmarkTagsFromDatabase(BookmarkItem bookmark, Iterable<Tag> selectedTags) =>
@@ -61,8 +90,27 @@ class BookmarkRepository {
   Future<void> setBookmarkPeopleFromDatabase(BookmarkItem bookmark, Iterable<Person> selectedPeople) =>
       _database.setBookmarkPeople(bookmark.id, selectedPeople.map((person) => person.name));
 
+  Future<void> setBookmarkCollections(BookmarkItem bookmark, Iterable<CollectionRecord> selected) =>
+      _database.setBookmarkCollections(bookmark.id, selected.map((collection) => collection.name));
+
   Future<void> toggleFavorite(BookmarkItem bookmark) => _database.setFavorite(bookmark.id, !bookmark.favorite);
+  Future<void> setStatus(BookmarkItem bookmark, String status) => _database.setStatus(bookmark.id, status);
+  Future<void> setRating(BookmarkItem bookmark, int rating) => _database.setRating(bookmark.id, rating);
+  Future<void> recordOpen(BookmarkItem bookmark) => _database.recordBookmarkOpen(bookmark.id);
   Future<int> delete(int id) => _database.deleteBookmark(id);
+
+  Future<void> batchAddTags(Iterable<int> ids, Iterable<String> names) => _database.addTagsToBookmarks(ids, names);
+  Future<void> batchRemoveTags(Iterable<int> ids, Iterable<String> names) => _database.removeTagsFromBookmarks(ids, names);
+  Future<void> batchAddPeople(Iterable<int> ids, Iterable<String> names) => _database.addPeopleToBookmarks(ids, names);
+  Future<void> batchRemovePeople(Iterable<int> ids, Iterable<String> names) => _database.removePeopleFromBookmarks(ids, names);
+  Future<void> batchSetStatus(Iterable<int> ids, String status) => _database.batchSetStatus(ids, status);
+  Future<void> batchSetRating(Iterable<int> ids, int rating) => _database.batchSetRating(ids, rating);
+  Future<void> batchSetFavorite(Iterable<int> ids, bool favorite) => _database.batchSetFavorite(ids, favorite);
+  Future<void> batchDelete(Iterable<int> ids) async {
+    for (final id in ids.toSet()) {
+      await _database.deleteBookmark(id);
+    }
+  }
 
   Future<int> addPhoto({
     required String path,
@@ -100,8 +148,23 @@ class BookmarkRepository {
   Future<void> clearCoverPhoto(BookmarkItem bookmark) => _database.clearCoverPhoto(bookmark.id);
 
   Future<int> createPerson(String name, {String? note}) => _database.createPerson(name, note: note);
-  Future<void> updatePerson(Person person, String name, String? note) => _database.updatePerson(person.id, name, note);
+  Future<void> updatePerson(Person person, String name, String? note, {PhotoRecord? profilePhoto, bool updateProfilePhoto = false}) =>
+      _database.updatePerson(
+        person.id,
+        name,
+        note,
+        profilePhotoId: profilePhoto?.id,
+        updateProfilePhoto: updateProfilePhoto,
+      );
   Future<void> deletePerson(Person person) => _database.deletePerson(person.id);
+
+  Future<int> createCollection(String name, {String? note}) => _database.createCollection(name, note: note);
+  Future<void> deleteCollection(CollectionRecord collection) => _database.deleteCollection(collection.id);
+
+  Future<void> addRelation(BookmarkItem source, BookmarkItem target, String type) =>
+      _database.addBookmarkRelation(source.id, target.id, type);
+  Future<void> removeRelation(int sourceId, int targetId, String type) =>
+      _database.removeBookmarkRelation(sourceId, targetId, type);
 
   Future<int> createTag(String name, {Tag? parent}) => _database.createTag(name, parentTagId: parent?.id);
   Future<void> renameTag(Tag tag, String newName) => _database.renameTag(tag.id, newName);
@@ -118,6 +181,8 @@ class BookmarkRepository {
     String sortField = 'createdAt',
     String sortDirection = 'desc',
     String visibleProperties = 'image,url,tags,favorite',
+    String statusFilter = '',
+    int minRating = 0,
   }) => _database.createSavedView(
         name: name,
         layoutType: layoutType,
@@ -128,6 +193,8 @@ class BookmarkRepository {
         sortField: sortField,
         sortDirection: sortDirection,
         visibleProperties: visibleProperties,
+        statusFilter: statusFilter,
+        minRating: minRating,
       );
 
   Future<void> updateSavedView({
@@ -141,6 +208,8 @@ class BookmarkRepository {
     required String sortField,
     required String sortDirection,
     required String visibleProperties,
+    required String statusFilter,
+    required int minRating,
   }) => _database.updateSavedView(
         id: id,
         name: name,
@@ -152,6 +221,8 @@ class BookmarkRepository {
         sortField: sortField,
         sortDirection: sortDirection,
         visibleProperties: visibleProperties,
+        statusFilter: statusFilter,
+        minRating: minRating,
       );
 
   Future<int> deleteSavedView(int id) => _database.deleteSavedView(id);
