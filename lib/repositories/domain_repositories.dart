@@ -1,6 +1,8 @@
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
 import '../data/workspace_store.dart';
+import 'backlink_repository.dart';
+import 'full_text_search_repository.dart';
 
 class WorkspaceRepository {
   const WorkspaceRepository(this._root);
@@ -117,13 +119,15 @@ class BookmarkLifecycleRepository {
 }
 
 class AppRepositories {
-  const AppRepositories._(this.bookmarks)
+  AppRepositories._(this.bookmarks)
       : workspaces = WorkspaceRepository(bookmarks),
         tags = TagRepository(bookmarks),
         people = PeopleRepository(bookmarks),
         photos = PhotoRepository(bookmarks),
         collections = CollectionRepository(bookmarks),
-        lifecycle = BookmarkLifecycleRepository(bookmarks);
+        lifecycle = BookmarkLifecycleRepository(bookmarks),
+        search = FullTextSearchRepository(bookmarks),
+        backlinks = BacklinkRepository(bookmarks);
 
   factory AppRepositories(BookmarkRepository root) => AppRepositories._(root);
 
@@ -134,4 +138,6 @@ class AppRepositories {
   final PhotoRepository photos;
   final CollectionRepository collections;
   final BookmarkLifecycleRepository lifecycle;
+  final FullTextSearchRepository search;
+  final BacklinkRepository backlinks;
 }
