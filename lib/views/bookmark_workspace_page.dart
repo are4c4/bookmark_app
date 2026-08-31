@@ -29,6 +29,7 @@ class _BookmarkWorkspacePageState extends State<BookmarkWorkspacePage> {
   SortDirection _sortDirection = SortDirection.desc;
   String _query = '';
   bool _favoritesOnly = false;
+  bool _includeDescendants = true;
   int? _activeSavedViewId;
 
   @override
@@ -63,8 +64,38 @@ class _BookmarkWorkspacePageState extends State<BookmarkWorkspacePage> {
       .where((e) => e.isNotEmpty)
       .toList();
 
-  List<BookmarkItem> _applyFilters(List<BookmarkItem> source) {
+  List<Tag> _childrenOf(int? parentId, List<Tag> tags) => tags
+      .where((tag) => tag.parentTagId == parentId)
+      .toList()
+    ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+  Set<int> _descendantIds(int tagId, List<Tag> tags) {
+    final result = <int>{};
+    void visit(int parentId) {
+      for (final child in tags.where((tag) => tag.parentTagId == parentId)) {
+        if (result.add(child.id)) visit(child.id);
+      }
+    }
+    visit(tagId);
+    return result;
+  }
+
+  Set<int> _effectiveTagIds(List<Tag> allTags) {
+    if (!_includeDescendants) return {..._selectedTagIds};
+    final result = <int>{..._selectedTagIds};
+    for (final id in _selectedTagIds) {
+      result.addAll(_descendantIds(id, allTags));
+    }
+    return result;
+  }
+
+  List<BookmarkItem> _applyFilters(
+    List<BookmarkItem> source,
+    List<Tag> allTags,
+  ) {
     final query = _query.trim().toLowerCase();
+    final effectiveTagIds = _effectiveTagIds(allTags);
+
     final result = source.where((bookmark) {
       if (_favoritesOnly && !bookmark.favorite) return false;
 
@@ -80,9 +111,18 @@ class _BookmarkWorkspacePageState extends State<BookmarkWorkspacePage> {
 
       if (_selectedTagIds.isNotEmpty) {
         final ids = bookmark.tags.map((tag) => tag.id).toSet();
-        final matches = _tagMatchMode == TagMatchMode.and
-            ? _selectedTagIds.every(ids.contains)
-            : _selectedTagIds.any(ids.contains);
+        bool matches;
+        if (_tagMatchMode == TagMatchMode.or) {
+          matches = effectiveTagIds.any(ids.contains);
+        } else {
+          matches = _selectedTagIds.every((selectedId) {
+            final allowed = <int>{selectedId};
+            if (_includeDescendants) {
+              allowed.addAll(_descendantIds(selectedId, allTags));
+            }
+            return allowed.any(ids.contains);
+          });
+        }
         if (!matches) return false;
       }
       return true;
@@ -214,7 +254,6 @@ class _BookmarkWorkspacePageState extends State<BookmarkWorkspacePage> {
         },
       ),
     );
-
     url.dispose();
     tags.dispose();
   }
@@ -344,6 +383,7 @@ class _BookmarkWorkspacePageState extends State<BookmarkWorkspacePage> {
   Future<void> _showFilterDialog(List<Tag> allTags) async {
     var favorites = _favoritesOnly;
     var matchMode = _tagMatchMode;
+    var includeDescendants = _includeDescendants;
     final selectedTags = {..._selectedTagIds};
 
     await showDialog<void>(
@@ -353,51 +393,60 @@ class _BookmarkWorkspacePageState extends State<BookmarkWorkspacePage> {
           title: const Text('フィルター'),
           content: SizedBox(
             width: 520,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('お気に入りのみ'),
-                  value: favorites,
-                  onChanged: (value) => setLocalState(() => favorites = value),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Text('タグ条件'),
-                    const Spacer(),
-                    SegmentedButton<TagMatchMode>(
-                      segments: const [
-                        ButtonSegment(value: TagMatchMode.or, label: Text('OR')),
-                        ButtonSegment(value: TagMatchMode.and, label: Text('AND')),
-                      ],
-                      selected: {matchMode},
-                      onSelectionChanged: (value) =>
-                          setLocalState(() => matchMode = value.first),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: allTags
-                      .map((tag) => FilterChip(
-                            label: Text(tag.name),
-                            selected: selectedTags.contains(tag.id),
-                            onSelected: (selected) => setLocalState(() {
-                              if (selected) {
-                                selectedTags.add(tag.id);
-                              } else {
-                                selectedTags.remove(tag.id);
-                              }
-                            }),
-                          ))
-                      .toList(),
-                ),
-              ],
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('お気に入りのみ'),
+                    value: favorites,
+                    onChanged: (value) => setLocalState(() => favorites = value),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('子タグも含める'),
+                    subtitle: const Text('親タグを選択したとき、配下のタグも検索対象にします'),
+                    value: includeDescendants,
+                    onChanged: (value) =>
+                        setLocalState(() => includeDescendants = value),
+                  ),
+                  Row(
+                    children: [
+                      const Text('タグ条件'),
+                      const Spacer(),
+                      SegmentedButton<TagMatchMode>(
+                        segments: const [
+                          ButtonSegment(value: TagMatchMode.or, label: Text('OR')),
+                          ButtonSegment(value: TagMatchMode.and, label: Text('AND')),
+                        ],
+                        selected: {matchMode},
+                        onSelectionChanged: (value) =>
+                            setLocalState(() => matchMode = value.first),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: allTags
+                        .map((tag) => FilterChip(
+                              label: Text(tag.name),
+                              selected: selectedTags.contains(tag.id),
+                              onSelected: (selected) => setLocalState(() {
+                                if (selected) {
+                                  selectedTags.add(tag.id);
+                                } else {
+                                  selectedTags.remove(tag.id);
+                                }
+                              }),
+                            ))
+                        .toList(),
+                  ),
+                ],
+              ),
             ),
           ),
           actions: [
@@ -407,6 +456,7 @@ class _BookmarkWorkspacePageState extends State<BookmarkWorkspacePage> {
                   favorites = false;
                   selectedTags.clear();
                   matchMode = TagMatchMode.or;
+                  includeDescendants = true;
                 });
               },
               child: const Text('クリア'),
@@ -420,6 +470,7 @@ class _BookmarkWorkspacePageState extends State<BookmarkWorkspacePage> {
                 setState(() {
                   _favoritesOnly = favorites;
                   _tagMatchMode = matchMode;
+                  _includeDescendants = includeDescendants;
                   _selectedTagIds
                     ..clear()
                     ..addAll(selectedTags);
@@ -478,12 +529,17 @@ class _BookmarkWorkspacePageState extends State<BookmarkWorkspacePage> {
                         child: SizedBox(
                           width: double.infinity,
                           child: bookmark.thumbnail == null
-                              ? const Center(child: Icon(Icons.image_outlined, size: 48))
+                              ? const Center(
+                                  child: Icon(Icons.image_outlined, size: 48),
+                                )
                               : Image.network(
                                   bookmark.thumbnail!,
                                   fit: BoxFit.cover,
                                   errorBuilder: (_, __, ___) => const Center(
-                                    child: Icon(Icons.broken_image_outlined, size: 48),
+                                    child: Icon(
+                                      Icons.broken_image_outlined,
+                                      size: 48,
+                                    ),
                                   ),
                                 ),
                         ),
@@ -505,8 +561,13 @@ class _BookmarkWorkspacePageState extends State<BookmarkWorkspacePage> {
                                 ),
                                 IconButton(
                                   tooltip: 'お気に入り',
-                                  onPressed: () => widget.repository.toggleFavorite(bookmark),
-                                  icon: Icon(bookmark.favorite ? Icons.star : Icons.star_border),
+                                  onPressed: () =>
+                                      widget.repository.toggleFavorite(bookmark),
+                                  icon: Icon(
+                                    bookmark.favorite
+                                        ? Icons.star
+                                        : Icons.star_border,
+                                  ),
                                 ),
                                 _bookmarkMenu(bookmark),
                               ],
@@ -563,7 +624,9 @@ class _BookmarkWorkspacePageState extends State<BookmarkWorkspacePage> {
               children: [
                 IconButton(
                   onPressed: () => widget.repository.toggleFavorite(bookmark),
-                  icon: Icon(bookmark.favorite ? Icons.star : Icons.star_border),
+                  icon: Icon(
+                    bookmark.favorite ? Icons.star : Icons.star_border,
+                  ),
                 ),
                 _bookmarkMenu(bookmark),
               ],
@@ -585,12 +648,22 @@ class _BookmarkWorkspacePageState extends State<BookmarkWorkspacePage> {
           ],
           rows: bookmarks
               .map((bookmark) => DataRow(cells: [
-                    DataCell(Text(bookmark.title), onTap: () => _openBookmark(bookmark)),
-                    DataCell(Text(bookmark.url), onTap: () => _openBookmark(bookmark)),
-                    DataCell(Text(bookmark.tags.map((e) => e.name).join(', '))),
+                    DataCell(
+                      Text(bookmark.title),
+                      onTap: () => _openBookmark(bookmark),
+                    ),
+                    DataCell(
+                      Text(bookmark.url),
+                      onTap: () => _openBookmark(bookmark),
+                    ),
+                    DataCell(
+                      Text(bookmark.tags.map((e) => e.name).join(', ')),
+                    ),
                     DataCell(IconButton(
                       onPressed: () => widget.repository.toggleFavorite(bookmark),
-                      icon: Icon(bookmark.favorite ? Icons.star : Icons.star_border),
+                      icon: Icon(
+                        bookmark.favorite ? Icons.star : Icons.star_border,
+                      ),
                     )),
                     DataCell(_bookmarkMenu(bookmark)),
                   ]))
@@ -603,7 +676,9 @@ class _BookmarkWorkspacePageState extends State<BookmarkWorkspacePage> {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
       decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: Theme.of(context).dividerColor)),
+        border: Border(
+          bottom: BorderSide(color: Theme.of(context).dividerColor),
+        ),
       ),
       child: Row(
         children: [
@@ -650,7 +725,10 @@ class _BookmarkWorkspacePageState extends State<BookmarkWorkspacePage> {
                       value: field,
                       child: Row(
                         children: [
-                          if (_sortField == field) const Icon(Icons.check, size: 18) else const SizedBox(width: 18),
+                          if (_sortField == field)
+                            const Icon(Icons.check, size: 18)
+                          else
+                            const SizedBox(width: 18),
                           const SizedBox(width: 8),
                           Text(_sortLabel(field)),
                         ],
@@ -680,12 +758,22 @@ class _BookmarkWorkspacePageState extends State<BookmarkWorkspacePage> {
           SegmentedButton<BookmarkViewType>(
             showSelectedIcon: false,
             segments: const [
-              ButtonSegment(value: BookmarkViewType.gallery, icon: Icon(Icons.grid_view, size: 18)),
-              ButtonSegment(value: BookmarkViewType.list, icon: Icon(Icons.view_list, size: 18)),
-              ButtonSegment(value: BookmarkViewType.table, icon: Icon(Icons.table_rows, size: 18)),
+              ButtonSegment(
+                value: BookmarkViewType.gallery,
+                icon: Icon(Icons.grid_view, size: 18),
+              ),
+              ButtonSegment(
+                value: BookmarkViewType.list,
+                icon: Icon(Icons.view_list, size: 18),
+              ),
+              ButtonSegment(
+                value: BookmarkViewType.table,
+                icon: Icon(Icons.table_rows, size: 18),
+              ),
             ],
             selected: {_viewType},
-            onSelectionChanged: (value) => setState(() => _viewType = value.first),
+            onSelectionChanged: (value) =>
+                setState(() => _viewType = value.first),
           ),
           const SizedBox(width: 8),
           FilledButton.icon(
@@ -698,9 +786,59 @@ class _BookmarkWorkspacePageState extends State<BookmarkWorkspacePage> {
     );
   }
 
+  Widget _tagTreeSidebar(
+    List<Tag> allTags,
+    int? parentId,
+    int depth,
+  ) {
+    final children = _childrenOf(parentId, allTags);
+    return Column(
+      children: children.map((tag) {
+        final nested = _childrenOf(tag.id, allTags);
+        final selected = _selectedTagIds.length == 1 &&
+            _selectedTagIds.contains(tag.id);
+        return Column(
+          children: [
+            ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.only(
+                left: 8 + depth * 18,
+                right: 6,
+              ),
+              leading: Icon(
+                nested.isEmpty ? Icons.sell_outlined : Icons.folder_outlined,
+                size: 18,
+              ),
+              title: Text(
+                tag.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              selected: selected,
+              onTap: () {
+                _searchController.clear();
+                setState(() {
+                  _activeSavedViewId = null;
+                  _query = '';
+                  _favoritesOnly = false;
+                  _selectedTagIds
+                    ..clear()
+                    ..add(tag.id);
+                  _tagMatchMode = TagMatchMode.or;
+                });
+              },
+            ),
+            if (nested.isNotEmpty)
+              _tagTreeSidebar(allTags, tag.id, depth + 1),
+          ],
+        );
+      }).toList(),
+    );
+  }
+
   Widget _sidebar(List<Tag> allTags, List<SavedViewConfig> savedViews) {
     return Container(
-      width: 230,
+      width: 240,
       color: Theme.of(context).colorScheme.surfaceContainerLowest,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(8, 12, 8, 12),
@@ -709,7 +847,9 @@ class _BookmarkWorkspacePageState extends State<BookmarkWorkspacePage> {
             dense: true,
             leading: const Icon(Icons.all_inbox_outlined),
             title: const Text('すべて'),
-            selected: _activeSavedViewId == null && !_favoritesOnly && _selectedTagIds.isEmpty,
+            selected: _activeSavedViewId == null &&
+                !_favoritesOnly &&
+                _selectedTagIds.isEmpty,
             onTap: _resetFilters,
           ),
           ListTile(
@@ -731,7 +871,10 @@ class _BookmarkWorkspacePageState extends State<BookmarkWorkspacePage> {
           const Divider(height: 1),
           const Padding(
             padding: EdgeInsets.fromLTRB(12, 14, 12, 6),
-            child: Text('保存ビュー', style: TextStyle(fontWeight: FontWeight.w600)),
+            child: Text(
+              '保存ビュー',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
           ),
           if (savedViews.isEmpty)
             const Padding(
@@ -741,39 +884,53 @@ class _BookmarkWorkspacePageState extends State<BookmarkWorkspacePage> {
           ...savedViews.map((config) => ListTile(
                 dense: true,
                 leading: const Icon(Icons.view_quilt_outlined, size: 20),
-                title: Text(config.view.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                title: Text(
+                  config.view.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 selected: _activeSavedViewId == config.view.id,
                 onTap: () => _applySavedView(config),
                 trailing: IconButton(
                   tooltip: '削除',
                   icon: const Icon(Icons.close, size: 16),
-                  onPressed: () => widget.repository.deleteSavedView(config.view.id),
+                  onPressed: () =>
+                      widget.repository.deleteSavedView(config.view.id),
                 ),
               )),
           const SizedBox(height: 8),
           const Divider(height: 1),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(12, 14, 12, 6),
-            child: Text('タグ', style: TextStyle(fontWeight: FontWeight.w600)),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 4, 4),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'タグ',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+                Tooltip(
+                  message: _includeDescendants
+                      ? '子タグを含めています'
+                      : '選択したタグだけを対象にします',
+                  child: Switch(
+                    value: _includeDescendants,
+                    onChanged: (value) =>
+                        setState(() => _includeDescendants = value),
+                  ),
+                ),
+              ],
+            ),
           ),
-          ...allTags.map((tag) => ListTile(
-                dense: true,
-                leading: const Icon(Icons.sell_outlined, size: 18),
-                title: Text(tag.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                selected: _selectedTagIds.length == 1 && _selectedTagIds.contains(tag.id),
-                onTap: () {
-                  _searchController.clear();
-                  setState(() {
-                    _activeSavedViewId = null;
-                    _query = '';
-                    _favoritesOnly = false;
-                    _selectedTagIds
-                      ..clear()
-                      ..add(tag.id);
-                    _tagMatchMode = TagMatchMode.or;
-                  });
-                },
-              )),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 8, 6),
+            child: Text(
+              _includeDescendants ? '子タグも含める' : '親タグだけ',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+          _tagTreeSidebar(allTags, null, 0),
         ],
       ),
     );
@@ -821,9 +978,12 @@ class _BookmarkWorkspacePageState extends State<BookmarkWorkspacePage> {
                             stream: widget.repository.watchAll(),
                             builder: (context, snapshot) {
                               if (!snapshot.hasData) {
-                                return const Center(child: CircularProgressIndicator());
+                                return const Center(
+                                  child: CircularProgressIndicator(),
+                                );
                               }
-                              final bookmarks = _applyFilters(snapshot.data!);
+                              final bookmarks =
+                                  _applyFilters(snapshot.data!, allTags);
                               if (bookmarks.isEmpty) {
                                 return const Center(
                                   child: Text('条件に一致するブックマークがありません'),
