@@ -15,6 +15,17 @@ class BookmarkSearchHit {
   final String snippet;
 }
 
+String buildFtsPrefixQuery(String value) {
+  final terms = value
+      .trim()
+      .split(RegExp(r'\s+'))
+      .map((term) => term.replaceAll('"', '').trim())
+      .where((term) => term.isNotEmpty)
+      .toList();
+  if (terms.isEmpty) return '';
+  return terms.map((term) => '"$term"*').join(' AND ');
+}
+
 /// SQLite FTS5-backed search index for bookmark metadata and relations.
 ///
 /// The index intentionally lives beside the Drift schema because FTS virtual
@@ -122,7 +133,7 @@ class FullTextSearchRepository {
 
   Future<List<BookmarkSearchHit>> search(String rawQuery, {int limit = 100}) async {
     await initialize();
-    final query = _toFtsQuery(rawQuery);
+    final query = buildFtsPrefixQuery(rawQuery);
     if (query.isEmpty) return const [];
 
     final rows = await _database.customSelect(
@@ -148,16 +159,5 @@ class FullTextSearchRepository {
           ),
         )
         .toList();
-  }
-
-  String _toFtsQuery(String value) {
-    final terms = value
-        .trim()
-        .split(RegExp(r'\s+'))
-        .map((term) => term.replaceAll('"', ''))
-        .where((term) => term.isNotEmpty)
-        .toList();
-    if (terms.isEmpty) return '';
-    return terms.map((term) => '"$term"*').join(' AND ');
   }
 }
