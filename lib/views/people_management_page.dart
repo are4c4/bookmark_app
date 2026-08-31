@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
+import '../widgets/bookmark_reverse_lookup_dialog.dart';
 
 class PeopleManagementPage extends StatelessWidget {
   const PeopleManagementPage({super.key, required this.repository});
@@ -125,23 +126,37 @@ class PeopleManagementPage extends StatelessWidget {
                 separatorBuilder: (_, __) => const Divider(height: 1),
                 itemBuilder: (context, index) {
                   final person = people[index];
+                  final count = counts[person.id] ?? 0;
                   return ListTile(
                     leading: const CircleAvatar(child: Icon(Icons.person_outline)),
                     title: Text(person.name),
                     subtitle: Text(
                       [
-                        '${counts[person.id] ?? 0} 件のブックマーク',
+                        '$count 件のブックマーク',
                         if (person.note?.trim().isNotEmpty == true) person.note!,
                       ].join(' • '),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
+                    onTap: () => showBookmarkReverseLookupDialog(
+                      context: context,
+                      title: '${person.name} のブックマーク（$count件）',
+                      bookmarks: repository.watchBookmarksForPerson(person),
+                    ),
                     trailing: PopupMenuButton<String>(
                       onSelected: (value) {
+                        if (value == 'bookmarks') {
+                          showBookmarkReverseLookupDialog(
+                            context: context,
+                            title: '${person.name} のブックマーク（$count件）',
+                            bookmarks: repository.watchBookmarksForPerson(person),
+                          );
+                        }
                         if (value == 'edit') _edit(context, person);
                         if (value == 'delete') _delete(context, person);
                       },
                       itemBuilder: (_) => const [
+                        PopupMenuItem(value: 'bookmarks', child: Text('関連ブックマークを見る')),
                         PopupMenuItem(value: 'edit', child: Text('編集')),
                         PopupMenuItem(value: 'delete', child: Text('削除')),
                       ],
