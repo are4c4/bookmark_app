@@ -3,8 +3,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../data/app_database.dart';
+import '../data/bookmark_attachment_store.dart';
 import '../data/bookmark_repository.dart';
+import '../services/attachment_storage_service.dart';
 import '../services/bookmark_metadata_service.dart';
+import '../services/pdf_metadata_service.dart';
 import 'photo_database_picker.dart';
 
 List<String> _splitNames(String value) => value
@@ -20,6 +23,13 @@ const _statusLabels = <String, String>{
   'done': '完了 / 視聴済み',
   'archived': 'アーカイブ',
 };
+
+String _fileTitle(String path) {
+  final normalized = path.replaceAll('\\', '/');
+  final name = normalized.substring(normalized.lastIndexOf('/') + 1);
+  final dot = name.lastIndexOf('.');
+  return dot > 0 ? name.substring(0, dot) : name;
+}
 
 Future<void> showBookmarkCreateDialog({
   required BuildContext context,
@@ -78,6 +88,90 @@ Future<void> showBookmarkCreateDialog({
           return choice == 'add';
         }
 
+        Future<void> createFromFiles() async {
+          if (saving) return;
+          final profilePath = repository.profileDirectoryPath;
+          if (profilePath == null) return;
+          setLocalState(() => saving = true);
+          BookmarkAttachmentStore? store;
+          try {
+            const storage = AttachmentStorageService();
+            final paths = await storage.pickFiles();
+            if (paths.isEmpty) {
+              setLocalState(() => saving = false);
+              return;
+            }
+            store = BookmarkAttachmentStore(repository.lifecycleStore.database);
+            await store.initialize();
+            var createdCount = 0;
+            for (final path in paths) {
+              final lower = path.toLowerCase();
+              final isPdf = lower.endsWith('.pdf');
+              final metadata = isPdf
+                  ? await const PdfMetadataService().read(path)
+                  : PdfFileMetadata(title: _fileTitle(path));
+
+              final provisionalUrl = 'local-file://${DateTime.now().microsecondsSinceEpoch}/$createdCount';
+              final bookmarkId = await repository.create(
+                url: provisionalUrl,
+                title: metadata.title,
+                tagNames: _splitNames(tags.text),
+                status: status,
+                rating: rating,
+                inbox: inbox,
+              );
+              final attachments = await storage.importPathsForBookmark(
+                bookmarkId: bookmarkId,
+                profileDirectoryPath: profilePath,
+                store: store,
+                sourcePaths: [path],
+              );
+              if (attachments.isEmpty) continue;
+
+              await repository.update(
+                id: bookmarkId,
+                url: Uri.file(attachments.first.path).toString(),
+                title: metadata.title,
+                tagNames: _splitNames(tags.text),
+                status: status,
+                rating: rating,
+              );
+
+              if (isPdf && metadata.authors.isNotEmpty) {
+                for (final author in metadata.authors) {
+                  try {
+                    await repository.createPerson(author);
+                  } catch (_) {}
+                }
+                final allPeople = await repository.watchPeople().first;
+                final names = metadata.authors.map((e) => e.trim().toLowerCase()).toSet();
+                final authors = allPeople.where((person) => names.contains(person.name.trim().toLowerCase())).toList();
+                final allBookmarks = await repository.watchAll().first;
+                final created = allBookmarks.where((item) => item.id == bookmarkId).firstOrNull;
+                if (created != null && authors.isNotEmpty) {
+                  await repository.setPeopleForRole(created, '著者', authors);
+                }
+              }
+              createdCount++;
+            }
+            if (dialogContext.mounted) Navigator.pop(dialogContext);
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('$createdCount件のPDF / 動画ブックマークを作成しました')),
+              );
+            }
+          } catch (error) {
+            setLocalState(() => saving = false);
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('ファイルから作成できませんでした: $error')),
+              );
+            }
+          } finally {
+            await store?.dispose();
+          }
+        }
+
         Future<void> save() async {
           if (saving || url.text.trim().isEmpty) return;
           setLocalState(() => saving = true);
@@ -129,6 +223,23 @@ Future<void> showBookmarkCreateDialog({
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  OutlinedButton.icon(
+                    onPressed: saving ? null : createFromFiles,
+                    icon: const Icon(Icons.attach_file),
+                    label: const Text('PDF / 動画からブックマークを作成'),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      const Expanded(child: Divider()),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        child: Text('またはURL', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                      ),
+                      const Expanded(child: Divider()),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
                   TextField(
                     controller: url,
                     autofocus: true,
@@ -222,7 +333,7 @@ Future<void> showBookmarkCreateDialog({
             ),
             FilledButton(
               onPressed: saving ? null : save,
-              child: Text(saving ? '取得中…' : '追加'),
+              child: Text(saving ? '取得中…' : 'URLから追加'),
             ),
           ],
         );
@@ -232,4 +343,8 @@ Future<void> showBookmarkCreateDialog({
 
   url.dispose();
   tags.dispose();
+}
+
+extension _FirstOrNull<T> on Iterable<T> {
+  T? get firstOrNull => isEmpty ? null : first;
 }
