@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../data/app_database.dart';
@@ -48,11 +49,145 @@ class BookmarkDetailPanel extends StatefulWidget {
 }
 
 class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
-  List<String> _split(String value) => value
-      .split(',')
-      .map((e) => e.trim())
-      .where((e) => e.isNotEmpty)
-      .toList();
+  late final TextEditingController _titleController;
+  late final TextEditingController _urlController;
+  late final TextEditingController _descriptionController;
+  late final FocusNode _titleFocus;
+  late final FocusNode _urlFocus;
+  late final FocusNode _descriptionFocus;
+
+  bool _editingTitle = false;
+  bool _editingUrl = false;
+  bool _editingDescription = false;
+  bool _savingInline = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _titleController = TextEditingController(text: widget.bookmark.title);
+    _urlController = TextEditingController(text: widget.bookmark.url);
+    _descriptionController = TextEditingController(text: widget.bookmark.description ?? '');
+    _titleFocus = FocusNode()..addListener(_handleTitleFocus);
+    _urlFocus = FocusNode()..addListener(_handleUrlFocus);
+    _descriptionFocus = FocusNode()..addListener(_handleDescriptionFocus);
+  }
+
+  @override
+  void didUpdateWidget(covariant BookmarkDetailPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.bookmark.id != widget.bookmark.id) {
+      _editingTitle = false;
+      _editingUrl = false;
+      _editingDescription = false;
+      _syncControllers(force: true);
+      return;
+    }
+    _syncControllers();
+  }
+
+  void _syncControllers({bool force = false}) {
+    if (force || !_editingTitle) _titleController.text = widget.bookmark.title;
+    if (force || !_editingUrl) _urlController.text = widget.bookmark.url;
+    if (force || !_editingDescription) {
+      _descriptionController.text = widget.bookmark.description ?? '';
+    }
+  }
+
+  void _handleTitleFocus() {
+    if (!_titleFocus.hasFocus && _editingTitle) _saveTitle();
+  }
+
+  void _handleUrlFocus() {
+    if (!_urlFocus.hasFocus && _editingUrl) _saveUrl();
+  }
+
+  void _handleDescriptionFocus() {
+    if (!_descriptionFocus.hasFocus && _editingDescription) _saveDescription();
+  }
+
+  @override
+  void dispose() {
+    _titleFocus.removeListener(_handleTitleFocus);
+    _urlFocus.removeListener(_handleUrlFocus);
+    _descriptionFocus.removeListener(_handleDescriptionFocus);
+    _titleController.dispose();
+    _urlController.dispose();
+    _descriptionController.dispose();
+    _titleFocus.dispose();
+    _urlFocus.dispose();
+    _descriptionFocus.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveInline({String? title, String? url, String? description}) async {
+    if (_savingInline) return;
+    setState(() => _savingInline = true);
+    try {
+      await widget.repository.update(
+        id: widget.bookmark.id,
+        url: url ?? widget.bookmark.url,
+        title: title ?? widget.bookmark.title,
+        description: description ?? widget.bookmark.description,
+        thumbnail: widget.bookmark.thumbnail,
+        tagNames: widget.bookmark.tags.map((tag) => tag.name),
+        personNames: null,
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('保存できませんでした: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _savingInline = false);
+    }
+  }
+
+  Future<void> _saveTitle() async {
+    if (!_editingTitle) return;
+    final value = _titleController.text.trim();
+    if (value.isEmpty) {
+      _titleController.text = widget.bookmark.title;
+      if (mounted) setState(() => _editingTitle = false);
+      return;
+    }
+    if (mounted) setState(() => _editingTitle = false);
+    if (value != widget.bookmark.title) await _saveInline(title: value);
+  }
+
+  Future<void> _saveUrl() async {
+    if (!_editingUrl) return;
+    final value = _urlController.text.trim();
+    if (value.isEmpty) {
+      _urlController.text = widget.bookmark.url;
+      if (mounted) setState(() => _editingUrl = false);
+      return;
+    }
+    if (mounted) setState(() => _editingUrl = false);
+    if (value != widget.bookmark.url) await _saveInline(url: value);
+  }
+
+  Future<void> _saveDescription() async {
+    if (!_editingDescription) return;
+    final value = _descriptionController.text.trim();
+    if (mounted) setState(() => _editingDescription = false);
+    final current = widget.bookmark.description?.trim() ?? '';
+    if (value != current) await _saveInline(description: value.isEmpty ? null : value);
+  }
+
+  void _cancelInline() {
+    _titleController.text = widget.bookmark.title;
+    _urlController.text = widget.bookmark.url;
+    _descriptionController.text = widget.bookmark.description ?? '';
+    _titleFocus.unfocus();
+    _urlFocus.unfocus();
+    _descriptionFocus.unfocus();
+    setState(() {
+      _editingTitle = false;
+      _editingUrl = false;
+      _editingDescription = false;
+    });
+  }
 
   String _compactUrl(String value) {
     final uri = Uri.tryParse(value);
@@ -75,8 +210,7 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
     final uri = Uri.tryParse(value);
     if (uri == null) return;
     await widget.repository.recordOpen(widget.bookmark);
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      if (!mounted) return;
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication) && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('URLを開けませんでした')));
     }
   }
@@ -89,9 +223,7 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
       tags: allTags,
       initiallySelectedIds: widget.bookmark.tags.map((tag) => tag.id),
     );
-    if (selected != null) {
-      await widget.repository.setBookmarkTagsFromDatabase(widget.bookmark, selected);
-    }
+    if (selected != null) await widget.repository.setBookmarkTagsFromDatabase(widget.bookmark, selected);
   }
 
   Future<void> _selectCollections() async {
@@ -110,16 +242,14 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                 ? const Center(child: Text('コレクションがありません'))
                 : ListView(
                     children: allCollections
-                        .map(
-                          (collection) => CheckboxListTile(
-                            value: selectedIds.contains(collection.id),
-                            title: Text(collection.name),
-                            subtitle: collection.note?.trim().isNotEmpty == true ? Text(collection.note!) : null,
-                            onChanged: (value) => setLocalState(() {
-                              value == true ? selectedIds.add(collection.id) : selectedIds.remove(collection.id);
-                            }),
-                          ),
-                        )
+                        .map((collection) => CheckboxListTile(
+                              value: selectedIds.contains(collection.id),
+                              title: Text(collection.name),
+                              subtitle: collection.note?.trim().isNotEmpty == true ? Text(collection.note!) : null,
+                              onChanged: (value) => setLocalState(() {
+                                value == true ? selectedIds.add(collection.id) : selectedIds.remove(collection.id);
+                              }),
+                            ))
                         .toList(),
                   ),
           ),
@@ -206,124 +336,6 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
         ),
       ),
     );
-  }
-
-  Future<void> _edit() async {
-    final bookmark = widget.bookmark;
-    final title = TextEditingController(text: bookmark.title);
-    final url = TextEditingController(text: bookmark.url);
-    final description = TextEditingController(text: bookmark.description ?? '');
-    final thumbnail = TextEditingController(text: bookmark.thumbnail ?? '');
-    final tags = TextEditingController(text: bookmark.tags.map((e) => e.name).join(', '));
-    var selectedPhotos = <PhotoRecord>[...bookmark.photos];
-    PhotoRecord? selectedCover = bookmark.coverPhoto;
-    var clearCover = false;
-
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setLocalState) => AlertDialog(
-          title: const Text('詳細を編集'),
-          content: SizedBox(
-            width: 650,
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextField(controller: title, decoration: const InputDecoration(labelText: 'タイトル')),
-                  TextField(controller: url, decoration: const InputDecoration(labelText: 'URL')),
-                  TextField(controller: description, maxLines: 4, decoration: const InputDecoration(labelText: '説明')),
-                  TextField(controller: thumbnail, decoration: const InputDecoration(labelText: 'WebサムネイルURL')),
-                  TextField(controller: tags, decoration: const InputDecoration(labelText: 'タグ（カンマ区切り）')),
-                  const SizedBox(height: 8),
-                  const Text(
-                    '人物は詳細パネルの「出演者」「著者」などの人物プロパティから編集します。',
-                    style: TextStyle(fontSize: 12, color: Color(0xFF787774)),
-                  ),
-                  const SizedBox(height: 20),
-                  Text('カバー画像', style: Theme.of(context).textTheme.titleSmall),
-                  const SizedBox(height: 8),
-                  if (!clearCover && selectedCover != null)
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
-                      child: SizedBox(width: 240, height: 135, child: Image.file(File(selectedCover!.path), fit: BoxFit.cover)),
-                    )
-                  else
-                    Text('ローカルのカバー画像は設定されていません', style: Theme.of(context).textTheme.bodySmall),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      OutlinedButton.icon(
-                        onPressed: () async {
-                          final allPhotos = await widget.repository.watchPhotos().first;
-                          if (!context.mounted) return;
-                          final result = await showPhotoDatabasePicker(
-                            context: context,
-                            photos: allPhotos,
-                            initiallySelectedIds: selectedPhotos.map((photo) => photo.id),
-                            initialCoverPhotoId: clearCover ? null : selectedCover?.id,
-                            title: 'サムネイル・関連写真を選択',
-                          );
-                          if (result == null) return;
-                          setLocalState(() {
-                            selectedPhotos = result.photos;
-                            selectedCover = result.coverPhoto;
-                            clearCover = false;
-                          });
-                        },
-                        icon: const Icon(Icons.photo_library_outlined),
-                        label: const Text('写真DBから選択'),
-                      ),
-                      if (bookmark.coverPhoto != null || selectedCover != null)
-                        OutlinedButton.icon(
-                          onPressed: () => setLocalState(() {
-                            clearCover = true;
-                            selectedCover = null;
-                          }),
-                          icon: const Icon(Icons.hide_image_outlined),
-                          label: const Text('カバーを解除'),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('キャンセル')),
-            FilledButton(
-              onPressed: () async {
-                await widget.repository.update(
-                  id: bookmark.id,
-                  url: url.text.trim(),
-                  title: title.text.trim(),
-                  description: description.text.trim().isEmpty ? null : description.text.trim(),
-                  thumbnail: thumbnail.text.trim().isEmpty ? null : thumbnail.text.trim(),
-                  tagNames: _split(tags.text),
-                  personNames: null,
-                );
-                await widget.repository.attachPhotos(
-                  bookmark,
-                  selectedPhotos,
-                  coverPhoto: clearCover ? null : selectedCover,
-                );
-                if (clearCover) await widget.repository.clearCoverPhoto(bookmark);
-                if (dialogContext.mounted) Navigator.pop(dialogContext);
-              },
-              child: const Text('保存'),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    title.dispose();
-    url.dispose();
-    description.dispose();
-    thumbnail.dispose();
-    tags.dispose();
   }
 
   Widget _cover() {
@@ -415,6 +427,134 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
         }),
       );
 
+  Widget _inlineTitle(BookmarkItem bookmark) {
+    if (_editingTitle) {
+      return Shortcuts(
+        shortcuts: const {SingleActivator(LogicalKeyboardKey.escape): _CancelIntent()},
+        child: Actions(
+          actions: <Type, Action<Intent>>{
+            _CancelIntent: CallbackAction<_CancelIntent>(onInvoke: (_) { _cancelInline(); return null; }),
+          },
+          child: TextField(
+            controller: _titleController,
+            focusNode: _titleFocus,
+            autofocus: true,
+            maxLines: null,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => _saveTitle(),
+            style: const TextStyle(fontSize: 24, height: 1.2, fontWeight: FontWeight.w700, color: Color(0xFF37352F)),
+            decoration: const InputDecoration(
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+              border: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFE7E7E4))),
+            ),
+          ),
+        ),
+      );
+    }
+    return InkWell(
+      borderRadius: BorderRadius.circular(4),
+      onTap: () {
+        setState(() => _editingTitle = true);
+        WidgetsBinding.instance.addPostFrameCallback((_) => _titleFocus.requestFocus());
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+        child: Text(
+          bookmark.title,
+          style: const TextStyle(fontSize: 24, height: 1.2, fontWeight: FontWeight.w700, color: Color(0xFF37352F)),
+        ),
+      ),
+    );
+  }
+
+  Widget _inlineUrl(BookmarkItem bookmark) {
+    if (_editingUrl) {
+      return TextField(
+        controller: _urlController,
+        focusNode: _urlFocus,
+        autofocus: true,
+        maxLines: 2,
+        minLines: 1,
+        textInputAction: TextInputAction.done,
+        onSubmitted: (_) => _saveUrl(),
+        style: const TextStyle(fontSize: 13, color: Color(0xFF565653)),
+        decoration: const InputDecoration(
+          isDense: true,
+          contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+          border: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFE7E7E4))),
+        ),
+      );
+    }
+    return Tooltip(
+      message: bookmark.url,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(4),
+        onTap: () {
+          setState(() => _editingUrl = true);
+          WidgetsBinding.instance.addPostFrameCallback((_) => _urlFocus.requestFocus());
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 6),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _compactUrl(bookmark.url),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 13, color: Color(0xFF9B9A97)),
+                ),
+              ),
+              const SizedBox(width: 4),
+              const Icon(Icons.edit_outlined, size: 13, color: Color(0xFFB0AFAC)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _inlineDescription(BookmarkItem bookmark) {
+    if (_editingDescription) {
+      return TextField(
+        controller: _descriptionController,
+        focusNode: _descriptionFocus,
+        autofocus: true,
+        minLines: 4,
+        maxLines: null,
+        keyboardType: TextInputType.multiline,
+        style: const TextStyle(fontSize: 13, height: 1.55, color: Color(0xFF565653)),
+        decoration: const InputDecoration(
+          hintText: '説明を入力…',
+          isDense: true,
+          contentPadding: EdgeInsets.all(8),
+          border: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFE7E7E4))),
+        ),
+      );
+    }
+    final hasDescription = bookmark.description?.trim().isNotEmpty == true;
+    return InkWell(
+      borderRadius: BorderRadius.circular(4),
+      onTap: () {
+        setState(() => _editingDescription = true);
+        WidgetsBinding.instance.addPostFrameCallback((_) => _descriptionFocus.requestFocus());
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+        child: Text(
+          hasDescription ? bookmark.description! : '説明を追加…',
+          style: TextStyle(
+            fontSize: 13,
+            height: 1.55,
+            color: hasDescription ? const Color(0xFF565653) : const Color(0xFF9B9A97),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _relationsSection() => StreamBuilder<List<BookmarkRelation>>(
         stream: widget.repository.watchRelationsForBookmark(widget.bookmark.id),
         builder: (context, relationSnapshot) => StreamBuilder<List<BookmarkItem>>(
@@ -468,8 +608,11 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
               child: Row(
                 children: [
                   const Text('詳細', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF787774))),
+                  if (_savingInline) ...[
+                    const SizedBox(width: 8),
+                    const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 1.5)),
+                  ],
                   const Spacer(),
-                  IconButton(tooltip: '編集', visualDensity: VisualDensity.compact, onPressed: _edit, icon: const Icon(Icons.edit_outlined, size: 18)),
                   IconButton(
                     tooltip: bookmark.favorite ? 'お気に入り解除' : 'お気に入り',
                     visualDensity: VisualDensity.compact,
@@ -493,24 +636,13 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          bookmark.title,
-                          style: const TextStyle(fontSize: 24, height: 1.2, fontWeight: FontWeight.w700, color: Color(0xFF37352F)),
-                        ),
-                        const SizedBox(height: 10),
+                        _inlineTitle(bookmark),
+                        const SizedBox(height: 8),
                         Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(
-                              child: Tooltip(
-                                message: bookmark.url,
-                                child: Text(
-                                  _compactUrl(bookmark.url),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontSize: 13, color: Color(0xFF9B9A97)),
-                                ),
-                              ),
-                            ),
+                            Expanded(child: _inlineUrl(bookmark)),
+                            const SizedBox(width: 4),
                             TextButton.icon(
                               onPressed: () => _openUrl(bookmark.url),
                               icon: const Icon(Icons.open_in_new, size: 15),
@@ -565,13 +697,11 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                                   spacing: 5,
                                   runSpacing: 5,
                                   children: bookmark.collections
-                                      .map(
-                                        (collection) => Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-                                          decoration: BoxDecoration(color: const Color(0xFFF1F1EF), borderRadius: BorderRadius.circular(4)),
-                                          child: Text(collection.name, style: const TextStyle(fontSize: 12)),
-                                        ),
-                                      )
+                                      .map((collection) => Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                                            decoration: BoxDecoration(color: const Color(0xFFF1F1EF), borderRadius: BorderRadius.circular(4)),
+                                            child: Text(collection.name, style: const TextStyle(fontSize: 12)),
+                                          ))
                                       .toList(),
                                 ),
                           onAdd: _selectCollections,
@@ -692,17 +822,8 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                         const Divider(height: 1, color: Color(0xFFEDEDEB)),
                         const SizedBox(height: 18),
                         const Text('説明', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF37352F))),
-                        const SizedBox(height: 8),
-                        Text(
-                          bookmark.description?.trim().isNotEmpty == true ? bookmark.description! : '説明はありません。',
-                          style: TextStyle(
-                            fontSize: 13,
-                            height: 1.55,
-                            color: bookmark.description?.trim().isNotEmpty == true
-                                ? const Color(0xFF565653)
-                                : const Color(0xFF9B9A97),
-                          ),
-                        ),
+                        const SizedBox(height: 6),
+                        _inlineDescription(bookmark),
                       ],
                     ),
                   ),
@@ -714,6 +835,10 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
       ),
     );
   }
+}
+
+class _CancelIntent extends Intent {
+  const _CancelIntent();
 }
 
 extension _FirstOrNull<T> on Iterable<T> {
