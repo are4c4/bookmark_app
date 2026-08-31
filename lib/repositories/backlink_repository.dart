@@ -1,5 +1,3 @@
-import 'package:drift/drift.dart';
-
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
 
@@ -13,6 +11,9 @@ class BacklinkEntry {
   final BookmarkItem bookmark;
   final String relationType;
   final BacklinkDirection direction;
+
+  String get directionLabel =>
+      direction == BacklinkDirection.outgoing ? '→ outgoing' : '← incoming';
 }
 
 enum BacklinkDirection { outgoing, incoming }
@@ -29,43 +30,37 @@ class BacklinkRepository {
   final AppDatabase _database;
 
   Stream<List<BacklinkEntry>> watchFor(int bookmarkId) {
-    final relationStream = _database.customSelect(
-      '''
-      SELECT source_bookmark_id, target_bookmark_id, relation_type
-      FROM bookmark_relations
-      WHERE source_bookmark_id = ? OR target_bookmark_id = ?
-      ''',
-      variables: [Variable.withInt(bookmarkId), Variable.withInt(bookmarkId)],
-      readsFrom: {_database.bookmarkRelations},
-    ).watch();
+    final query = _database.select(_database.bookmarkRelations)
+      ..where(
+        (relation) =>
+            relation.sourceBookmarkId.equals(bookmarkId) |
+            relation.targetBookmarkId.equals(bookmarkId),
+      );
 
-    return relationStream.asyncMap((rows) async {
+    return query.watch().asyncMap((relations) async {
       final bookmarks = await _root.watchAll().first;
       final byId = {for (final bookmark in bookmarks) bookmark.id: bookmark};
       final entries = <BacklinkEntry>[];
 
-      for (final row in rows) {
-        final sourceId = row.read<int>('source_bookmark_id');
-        final targetId = row.read<int>('target_bookmark_id');
-        final type = row.read<String>('relation_type');
-        if (sourceId == bookmarkId) {
-          final target = byId[targetId];
+      for (final relation in relations) {
+        if (relation.sourceBookmarkId == bookmarkId) {
+          final target = byId[relation.targetBookmarkId];
           if (target != null) {
             entries.add(
               BacklinkEntry(
                 bookmark: target,
-                relationType: type,
+                relationType: relation.relationType,
                 direction: BacklinkDirection.outgoing,
               ),
             );
           }
         } else {
-          final source = byId[sourceId];
+          final source = byId[relation.sourceBookmarkId];
           if (source != null) {
             entries.add(
               BacklinkEntry(
                 bookmark: source,
-                relationType: type,
+                relationType: relation.relationType,
                 direction: BacklinkDirection.incoming,
               ),
             );
