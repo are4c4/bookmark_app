@@ -19,7 +19,7 @@ class GlobalSearchPage extends StatefulWidget {
 }
 
 class _GlobalSearchPageState extends State<GlobalSearchPage> {
-  late final FullTextSearchRepository _searchRepository;
+  late FullTextSearchRepository _searchRepository;
   final _controller = TextEditingController();
   Timer? _debounce;
   List<_ResolvedSearchHit> _results = const [];
