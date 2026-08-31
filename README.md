@@ -1,41 +1,34 @@
 # bookmark_app
 
-A Flutter bookmark manager with multiple database views.
+A Flutter bookmark manager built around a local Drift / SQLite database.
 
-## Current foundation
+## Current features
 
-- Drift + SQLite bookmark database
-- Bookmark fields: id, url, title, thumbnail, description, createdAt, favorite
-- Repository layer shared by future views
-- Responsive gallery view
-- Favorite toggle
+- Save bookmarks from URLs
+- Fetch page title, description, and Open Graph thumbnail
+- Gallery / List / Table views over the same database
+- Search, favorites, edit, delete, and external URL opening
+- Normalized tags with many-to-many bookmark relations
+- Multiple tag filtering with OR / AND matching
+- Sorting by registration date, title, or URL in ascending / descending order
+- Persisted saved views
+- Edit and delete saved views
+- Saved views remember:
+  - layout
+  - search query
+  - favorites-only filter
+  - multiple selected tags
+  - OR / AND tag matching
+  - sort field
+  - sort direction
 
-The thumbnail column stores a URL or local file path rather than image bytes.
-
-## Local setup
-
-This repository currently contains the app source but not Flutter-generated platform folders.
-From a local checkout, run:
+## Local update
 
 ```bash
-flutter create .
+git pull
 flutter pub get
 dart run build_runner build --delete-conflicting-outputs
-flutter run
+flutter run -d macos
 ```
 
-The build_runner command generates `lib/data/app_database.g.dart` for Drift.
-
-## Planned view architecture
-
-```text
-Drift / SQLite
-      |
-BookmarkRepository
-      |
-+-----+------+------+
-|            |      |
-Gallery     List   Table
-```
-
-All views will read the same bookmark records rather than keeping separate copies of the data.
+The database schema is currently version 4. Existing bookmarks, normalized tags, and old single-tag saved views are migrated forward automatically.
