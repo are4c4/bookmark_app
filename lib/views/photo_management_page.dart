@@ -8,6 +8,7 @@ import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
 import '../services/photo_storage_service.dart';
 import '../widgets/bookmark_reverse_lookup_dialog.dart';
+import 'image_editor_page.dart';
 
 class PhotoManagementPage extends StatefulWidget {
   const PhotoManagementPage({super.key, required this.repository});
@@ -93,6 +94,17 @@ class _PhotoManagementPageState extends State<PhotoManagementPage> {
       note: note.trim().isEmpty ? null : note.trim(),
       tagNames: _split(tags),
     );
+  }
+
+  Future<void> _editImage(PhotoRecord photo) async {
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => ImageEditorPage(path: photo.path)),
+    );
+    if (changed == true && mounted) {
+      await FileImage(File(photo.path)).evict();
+      setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('画像を更新しました')));
+    }
   }
 
   Future<void> _attach(PhotoRecord photo) async {
@@ -229,7 +241,8 @@ class _PhotoManagementPageState extends State<PhotoManagementPage> {
             const SizedBox(width: 16),
             const Text('写真の詳細', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
             const Spacer(),
-            IconButton(tooltip: '編集', onPressed: () => _edit(photo), icon: const Icon(Icons.edit_outlined, size: 18)),
+            IconButton(tooltip: '画像を編集', onPressed: () => _editImage(photo), icon: const Icon(Icons.crop_rotate, size: 18)),
+            IconButton(tooltip: '情報を編集', onPressed: () => _edit(photo), icon: const Icon(Icons.edit_outlined, size: 18)),
             IconButton(tooltip: '閉じる', onPressed: () => setState(() => _selectedPhotoId = null), icon: const Icon(Icons.close, size: 19)),
           ]),
         ),
@@ -252,6 +265,13 @@ class _PhotoManagementPageState extends State<PhotoManagementPage> {
             ],
             const SizedBox(height: 22),
             const Divider(),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.crop_rotate),
+              title: const Text('画像を編集'),
+              subtitle: const Text('回転・左右反転・トリミング'),
+              onTap: () => _editImage(photo),
+            ),
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.bookmarks_outlined),
