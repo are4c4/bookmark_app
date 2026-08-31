@@ -27,8 +27,12 @@ class PhotoStorageService {
     final sourcePaths = Platform.isMacOS
         ? await _pickImagesOnMacOS()
         : await _pickImagesWithFileSelector();
+    return importPaths(sourcePaths);
+  }
 
-    if (sourcePaths.isEmpty) return const [];
+  Future<List<ImportedPhoto>> importPaths(Iterable<String> sourcePaths) async {
+    final paths = sourcePaths.where((path) => _isSupportedImage(path)).toList();
+    if (paths.isEmpty) return const [];
 
     final support = await getApplicationSupportDirectory();
     final photoDir = Directory('${support.path}/photos');
@@ -36,23 +40,15 @@ class PhotoStorageService {
 
     final imported = <ImportedPhoto>[];
     var index = 0;
-    for (final sourcePath in sourcePaths) {
+    for (final sourcePath in paths) {
       final source = File(sourcePath);
       if (!await source.exists()) continue;
 
       final originalName = _fileName(source.path);
-      if (!_isSupportedImage(originalName)) continue;
-
-      final safeName = originalName.replaceAll(
-        RegExp(r'[^A-Za-z0-9._-]'),
-        '_',
-      );
-      final targetPath =
-          '${photoDir.path}/${DateTime.now().microsecondsSinceEpoch}_${index++}_$safeName';
+      final safeName = originalName.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+      final targetPath = '${photoDir.path}/${DateTime.now().microsecondsSinceEpoch}_${index++}_$safeName';
       final target = await source.copy(targetPath);
-      imported.add(
-        ImportedPhoto(path: target.path, originalName: originalName),
-      );
+      imported.add(ImportedPhoto(path: target.path, originalName: originalName));
     }
     return imported;
   }
@@ -63,9 +59,7 @@ class PhotoStorageService {
       extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic', 'heif'],
     );
 
-    final pickedFiles = await openFiles(
-      acceptedTypeGroups: const [imageTypes],
-    );
+    final pickedFiles = await openFiles(acceptedTypeGroups: const [imageTypes]);
     return pickedFiles.map((file) => file.path).toList();
   }
 
@@ -79,22 +73,12 @@ end repeat
 return output
 ''';
 
-    final result = await Process.run(
-      '/usr/bin/osascript',
-      const ['-e', script],
-      runInShell: false,
-    );
+    final result = await Process.run('/usr/bin/osascript', const ['-e', script], runInShell: false);
 
     if (result.exitCode != 0) {
       final error = result.stderr.toString().trim();
-      if (error.contains('User canceled') || error.contains('(-128)')) {
-        return const [];
-      }
-      throw StateError(
-        error.isEmpty
-            ? 'macOSのファイル選択画面を開けませんでした (exit ${result.exitCode})'
-            : error,
-      );
+      if (error.contains('User canceled') || error.contains('(-128)')) return const [];
+      throw StateError(error.isEmpty ? 'macOSのファイル選択画面を開けませんでした (exit ${result.exitCode})' : error);
     }
 
     return result.stdout
