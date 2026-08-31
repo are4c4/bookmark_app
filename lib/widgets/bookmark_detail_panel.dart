@@ -365,11 +365,15 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
     return _coverPlaceholder();
   }
 
-  Widget _coverPlaceholder() => Container(
-        color: const Color(0xFFFAFAF9),
-        alignment: Alignment.center,
-        child: const Icon(Icons.image_outlined, size: 40, color: Color(0xFFB8B7B4)),
-      );
+  Widget _coverPlaceholder() {
+    final scheme = Theme.of(context).colorScheme;
+    return ColoredBox(
+      color: scheme.surfaceContainerLowest,
+      child: Center(
+        child: Icon(Icons.image_outlined, size: 40, color: scheme.onSurfaceVariant.withValues(alpha: .55)),
+      ),
+    );
+  }
 
   Widget _propertyRow({
     required IconData icon,
@@ -377,67 +381,78 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
     required Widget value,
     VoidCallback? onAdd,
     String? tooltip,
-  }) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 5),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 112,
+            child: Row(
+              children: [
+                Icon(icon, size: 16, color: scheme.onSurfaceVariant),
+                const SizedBox(width: 7),
+                Expanded(child: Text(label, style: TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant))),
+              ],
+            ),
+          ),
+          Expanded(child: value),
+          if (onAdd != null)
             SizedBox(
-              width: 112,
-              child: Row(
-                children: [
-                  Icon(icon, size: 16, color: const Color(0xFF9B9A97)),
-                  const SizedBox(width: 7),
-                  Expanded(child: Text(label, style: const TextStyle(fontSize: 12.5, color: Color(0xFF787774)))),
-                ],
+              width: 28,
+              height: 28,
+              child: IconButton(
+                padding: EdgeInsets.zero,
+                tooltip: tooltip,
+                onPressed: onAdd,
+                icon: Icon(Icons.add, size: 17, color: scheme.onSurfaceVariant),
               ),
             ),
-            Expanded(child: value),
-            if (onAdd != null)
-              SizedBox(
-                width: 28,
-                height: 28,
-                child: IconButton(
-                  padding: EdgeInsets.zero,
-                  tooltip: tooltip,
-                  onPressed: onAdd,
-                  icon: const Icon(Icons.add, size: 17, color: Color(0xFF787774)),
-                ),
-              ),
-          ],
-        ),
-      );
+        ],
+      ),
+    );
+  }
 
-  Widget _relationChip({required String label, required VoidCallback onPressed}) => ActionChip(
-        label: Text(label),
-        onPressed: onPressed,
-        backgroundColor: const Color(0xFFF1F1EF),
-        side: BorderSide.none,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-        labelStyle: const TextStyle(fontSize: 12, color: Color(0xFF565653)),
-        visualDensity: VisualDensity.compact,
-      );
+  Widget _relationChip({required String label, required VoidCallback onPressed}) {
+    final scheme = Theme.of(context).colorScheme;
+    return ActionChip(
+      label: Text(label),
+      onPressed: onPressed,
+      backgroundColor: scheme.surfaceContainerHighest,
+      side: BorderSide.none,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+      labelStyle: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+      visualDensity: VisualDensity.compact,
+    );
+  }
 
-  Widget _rating(BookmarkItem bookmark) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: List.generate(5, (index) {
-          final value = index + 1;
-          return InkWell(
-            onTap: () => widget.repository.setRating(bookmark, bookmark.rating == value ? 0 : value),
-            borderRadius: BorderRadius.circular(3),
-            child: Padding(
-              padding: const EdgeInsets.all(1),
-              child: Icon(
-                value <= bookmark.rating ? Icons.star : Icons.star_border,
-                size: 18,
-                color: value <= bookmark.rating ? const Color(0xFFB8860B) : const Color(0xFF9B9A97),
-              ),
+  Widget _rating(BookmarkItem bookmark) {
+    final scheme = Theme.of(context).colorScheme;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(5, (index) {
+        final value = index + 1;
+        return InkWell(
+          onTap: () => widget.repository.setRating(bookmark, bookmark.rating == value ? 0 : value),
+          borderRadius: BorderRadius.circular(3),
+          child: Padding(
+            padding: const EdgeInsets.all(1),
+            child: Icon(
+              value <= bookmark.rating ? Icons.star : Icons.star_border,
+              size: 18,
+              color: value <= bookmark.rating ? const Color(0xFFB8860B) : scheme.onSurfaceVariant,
             ),
-          );
-        }),
-      );
+          ),
+        );
+      }),
+    );
+  }
 
   Widget _inlineTitle(BookmarkItem bookmark) {
+    final scheme = Theme.of(context).colorScheme;
+    final style = TextStyle(fontSize: 24, height: 1.2, fontWeight: FontWeight.w700, color: scheme.onSurface);
     if (_editingTitle) {
       return Shortcuts(
         shortcuts: const {SingleActivator(LogicalKeyboardKey.escape): _CancelIntent()},
@@ -452,11 +467,10 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
             maxLines: null,
             textInputAction: TextInputAction.done,
             onSubmitted: (_) => _saveTitle(),
-            style: const TextStyle(fontSize: 24, height: 1.2, fontWeight: FontWeight.w700, color: Color(0xFF37352F)),
+            style: style,
             decoration: const InputDecoration(
               isDense: true,
               contentPadding: EdgeInsets.symmetric(horizontal: 5, vertical: 3),
-              border: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFE7E7E4))),
             ),
           ),
         ),
@@ -470,15 +484,13 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
       },
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
-        child: Text(
-          bookmark.title,
-          style: const TextStyle(fontSize: 24, height: 1.2, fontWeight: FontWeight.w700, color: Color(0xFF37352F)),
-        ),
+        child: Text(bookmark.title, style: style),
       ),
     );
   }
 
   Widget _inlineUrl(BookmarkItem bookmark) {
+    final scheme = Theme.of(context).colorScheme;
     if (_editingUrl) {
       return TextField(
         controller: _urlController,
@@ -488,11 +500,10 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
         minLines: 1,
         textInputAction: TextInputAction.done,
         onSubmitted: (_) => _saveUrl(),
-        style: const TextStyle(fontSize: 13, color: Color(0xFF565653)),
+        style: TextStyle(fontSize: 13, color: scheme.onSurface),
         decoration: const InputDecoration(
           isDense: true,
           contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-          border: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFE7E7E4))),
         ),
       );
     }
@@ -513,11 +524,11 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                   _compactUrl(bookmark.url),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 13, color: Color(0xFF9B9A97)),
+                  style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
                 ),
               ),
               const SizedBox(width: 4),
-              const Icon(Icons.edit_outlined, size: 13, color: Color(0xFFB0AFAC)),
+              Icon(Icons.edit_outlined, size: 13, color: scheme.onSurfaceVariant.withValues(alpha: .65)),
             ],
           ),
         ),
@@ -526,6 +537,7 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
   }
 
   Widget _inlineDescription(BookmarkItem bookmark) {
+    final scheme = Theme.of(context).colorScheme;
     if (_editingDescription) {
       return TextField(
         controller: _descriptionController,
@@ -534,12 +546,11 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
         minLines: 4,
         maxLines: null,
         keyboardType: TextInputType.multiline,
-        style: const TextStyle(fontSize: 13, height: 1.55, color: Color(0xFF565653)),
+        style: TextStyle(fontSize: 13, height: 1.55, color: scheme.onSurfaceVariant),
         decoration: const InputDecoration(
           hintText: '説明を入力…',
           isDense: true,
           contentPadding: EdgeInsets.all(8),
-          border: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFE7E7E4))),
         ),
       );
     }
@@ -558,7 +569,7 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
           style: TextStyle(
             fontSize: 13,
             height: 1.55,
-            color: hasDescription ? const Color(0xFF565653) : const Color(0xFF9B9A97),
+            color: hasDescription ? scheme.onSurfaceVariant : scheme.onSurfaceVariant.withValues(alpha: .65),
           ),
         ),
       ),
@@ -570,10 +581,11 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
         builder: (context, relationSnapshot) => StreamBuilder<List<BookmarkItem>>(
           stream: widget.repository.watchAll(),
           builder: (context, bookmarkSnapshot) {
+            final scheme = Theme.of(context).colorScheme;
             final relations = relationSnapshot.data ?? const <BookmarkRelation>[];
             final all = bookmarkSnapshot.data ?? const <BookmarkItem>[];
             if (relations.isEmpty) {
-              return const Text('関連ブックマークはありません', style: TextStyle(fontSize: 12.5, color: Color(0xFF9B9A97)));
+              return Text('関連ブックマークはありません', style: TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant));
             }
             return Column(
               children: relations.map((relation) {
@@ -607,8 +619,10 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
   @override
   Widget build(BuildContext context) {
     final bookmark = widget.bookmark;
+    final scheme = Theme.of(context).colorScheme;
+    final muted = scheme.onSurfaceVariant;
     return Material(
-      color: Colors.white,
+      color: scheme.surface,
       child: Column(
         children: [
           SizedBox(
@@ -617,7 +631,7 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
               padding: const EdgeInsets.only(left: 16, right: 6),
               child: Row(
                 children: [
-                  const Text('詳細', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF787774))),
+                  Text('詳細', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: muted)),
                   if (_savingInline) ...[
                     const SizedBox(width: 8),
                     const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 1.5)),
@@ -634,7 +648,7 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
               ),
             ),
           ),
-          const Divider(height: 1, color: Color(0xFFE7E7E4)),
+          Divider(height: 1, color: scheme.outlineVariant),
           Expanded(
             child: SingleChildScrollView(
               child: Column(
@@ -682,7 +696,7 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                           icon: Icons.sell_outlined,
                           label: 'タグ',
                           value: bookmark.tags.isEmpty
-                              ? const Text('なし', style: TextStyle(fontSize: 12.5, color: Color(0xFFB0AFAC)))
+                              ? Text('なし', style: TextStyle(fontSize: 12.5, color: muted.withValues(alpha: .55)))
                               : Wrap(
                                   spacing: 5,
                                   runSpacing: 5,
@@ -702,14 +716,14 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                           icon: Icons.collections_bookmark_outlined,
                           label: 'コレクション',
                           value: bookmark.collections.isEmpty
-                              ? const Text('なし', style: TextStyle(fontSize: 12.5, color: Color(0xFFB0AFAC)))
+                              ? Text('なし', style: TextStyle(fontSize: 12.5, color: muted.withValues(alpha: .55)))
                               : Wrap(
                                   spacing: 5,
                                   runSpacing: 5,
                                   children: bookmark.collections
                                       .map((collection) => Container(
                                             padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-                                            decoration: BoxDecoration(color: const Color(0xFFF1F1EF), borderRadius: BorderRadius.circular(4)),
+                                            decoration: BoxDecoration(color: scheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(4)),
                                             child: Text(collection.name, style: const TextStyle(fontSize: 12)),
                                           ))
                                       .toList(),
@@ -722,15 +736,15 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                           label: '履歴',
                           value: Text(
                             '${bookmark.openCount}回 · ${_formatDateTime(bookmark.lastOpenedAt)}',
-                            style: const TextStyle(fontSize: 12.5, color: Color(0xFF787774)),
+                            style: TextStyle(fontSize: 12.5, color: muted),
                           ),
                         ),
                         const SizedBox(height: 18),
-                        const Divider(height: 1, color: Color(0xFFEDEDEB)),
+                        Divider(height: 1, color: scheme.outlineVariant),
                         const SizedBox(height: 18),
                         Row(
                           children: [
-                            const Text('関連写真', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF37352F))),
+                            Text('関連写真', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: scheme.onSurface)),
                             const Spacer(),
                             IconButton(
                               tooltip: '写真DBから追加',
@@ -742,7 +756,7 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                         ),
                         const SizedBox(height: 10),
                         if (bookmark.photos.isEmpty)
-                          const Text('関連写真はありません', style: TextStyle(fontSize: 12.5, color: Color(0xFF9B9A97)))
+                          Text('関連写真はありません', style: TextStyle(fontSize: 12.5, color: muted))
                         else
                           SizedBox(
                             height: 104,
@@ -756,9 +770,9 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                                 return SizedBox(
                                   width: 126,
                                   child: Material(
-                                    color: Colors.white,
+                                    color: scheme.surface,
                                     shape: RoundedRectangleBorder(
-                                      side: const BorderSide(color: Color(0xFFE7E7E4)),
+                                      side: BorderSide(color: scheme.outlineVariant),
                                       borderRadius: BorderRadius.circular(5),
                                     ),
                                     clipBehavior: Clip.antiAlias,
@@ -818,20 +832,20 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                             ),
                           ),
                         const SizedBox(height: 22),
-                        const Divider(height: 1, color: Color(0xFFEDEDEB)),
+                        Divider(height: 1, color: scheme.outlineVariant),
                         const SizedBox(height: 18),
                         Row(
                           children: [
-                            const Text('関連ブックマーク', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF37352F))),
+                            Text('関連ブックマーク', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: scheme.onSurface)),
                             const Spacer(),
                             IconButton(tooltip: '関連を追加', onPressed: _addBookmarkRelation, icon: const Icon(Icons.add_link, size: 19)),
                           ],
                         ),
                         _relationsSection(),
                         const SizedBox(height: 22),
-                        const Divider(height: 1, color: Color(0xFFEDEDEB)),
+                        Divider(height: 1, color: scheme.outlineVariant),
                         const SizedBox(height: 18),
-                        const Text('説明', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF37352F))),
+                        Text('説明', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: scheme.onSurface)),
                         const SizedBox(height: 6),
                         _inlineDescription(bookmark),
                       ],
