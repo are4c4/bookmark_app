@@ -8,14 +8,14 @@ class BookmarkLifecycleState {
   const BookmarkLifecycleState({
     required this.bookmarkId,
     required this.inbox,
+    required this.deleted,
     this.deletedAt,
   });
 
   final int bookmarkId;
   final bool inbox;
+  final bool deleted;
   final DateTime? deletedAt;
-
-  bool get deleted => deletedAt != null;
 }
 
 class BookmarkLifecycleStore {
@@ -67,51 +67,86 @@ class BookmarkLifecycleStore {
 
   Future<Map<int, BookmarkLifecycleState>> states() async {
     final rows = await database.customSelect(
-      'SELECT id AS bookmark_id, inbox_state AS inbox, deleted_at_state AS deleted_at FROM bookmarks',
+      '''
+      SELECT
+        id AS bookmark_id,
+        inbox_state AS inbox,
+        deleted_at_state AS deleted_at,
+        CASE WHEN deleted_at_state IS NULL THEN 0 ELSE 1 END AS is_deleted
+      FROM bookmarks
+      ''',
       readsFrom: {database.bookmarks},
     ).get();
+
     return {
       for (final row in rows)
         row.read<int>('bookmark_id'): BookmarkLifecycleState(
           bookmarkId: row.read<int>('bookmark_id'),
           inbox: row.read<int>('inbox') != 0,
-          deletedAt: row.readNullable<String>('deleted_at') == null
-              ? null
-              : DateTime.tryParse(row.read<String>('deleted_at')),
+          deleted: row.read<int>('is_deleted') != 0,
+          deletedAt: _parseDeletedAt(row.readNullable<String>('deleted_at')),
         ),
     };
   }
 
+  DateTime? _parseDeletedAt(String? value) {
+    if (value == null) return null;
+    return DateTime.tryParse(value);
+  }
+
   Future<void> ensureBookmark(int bookmarkId, {bool inbox = false}) async {
-    await database.customUpdate(
+    final changed = await database.customUpdate(
       'UPDATE bookmarks SET inbox_state = ?, deleted_at_state = NULL WHERE id = ?',
       variables: [Variable<int>(inbox ? 1 : 0), Variable<int>(bookmarkId)],
       updates: {database.bookmarks},
     );
+    if (changed == 0) {
+      throw StateError('ブックマーク状態を初期化できませんでした (id=$bookmarkId)');
+    }
     _changes.add(null);
   }
 
   Future<void> setInbox(int bookmarkId, bool value) async {
-    await database.customUpdate(
+    final changed = await database.customUpdate(
       'UPDATE bookmarks SET inbox_state = ?, deleted_at_state = NULL WHERE id = ?',
       variables: [Variable<int>(value ? 1 : 0), Variable<int>(bookmarkId)],
       updates: {database.bookmarks},
     );
+    if (changed == 0) {
+      throw StateError('Inbox状態を更新できませんでした (id=$bookmarkId)');
+    }
     _changes.add(null);
   }
 
   Future<void> moveToTrash(int bookmarkId) async {
+    final deletedAt = DateTime.now().toIso8601String();
     final changed = await database.customUpdate(
       'UPDATE bookmarks SET inbox_state = 0, deleted_at_state = ? WHERE id = ?',
-      variables: [
-        Variable<String>(DateTime.now().toIso8601String()),
-        Variable<int>(bookmarkId),
-      ],
+      variables: [Variable<String>(deletedAt), Variable<int>(bookmarkId)],
       updates: {database.bookmarks},
     );
     if (changed == 0) {
       throw StateError('削除対象のブックマークが見つかりませんでした (id=$bookmarkId)');
     }
+
+    // Read the same row back immediately. This makes a silent no-op impossible:
+    // either the state is persisted or the caller receives an explicit error.
+    final verification = await database.customSelect(
+      '''
+      SELECT
+        deleted_at_state,
+        CASE WHEN deleted_at_state IS NULL THEN 0 ELSE 1 END AS is_deleted
+      FROM bookmarks
+      WHERE id = ?
+      ''',
+      variables: [Variable<int>(bookmarkId)],
+      readsFrom: {database.bookmarks},
+    ).getSingleOrNull();
+
+    if (verification == null || verification.read<int>('is_deleted') == 0) {
+      throw StateError('ゴミ箱への移動状態を保存できませんでした (id=$bookmarkId)');
+    }
+
     _changes.add(null);
   }
 
@@ -124,6 +159,21 @@ class BookmarkLifecycleStore {
     if (changed == 0) {
       throw StateError('復元対象のブックマークが見つかりませんでした (id=$bookmarkId)');
     }
+
+    final verification = await database.customSelect(
+      '''
+      SELECT CASE WHEN deleted_at_state IS NULL THEN 1 ELSE 0 END AS is_restored
+      FROM bookmarks
+      WHERE id = ?
+      ''',
+      variables: [Variable<int>(bookmarkId)],
+      readsFrom: {database.bookmarks},
+    ).getSingleOrNull();
+
+    if (verification == null || verification.read<int>('is_restored') == 0) {
+      throw StateError('復元状態を保存できませんでした (id=$bookmarkId)');
+    }
+
     _changes.add(null);
   }
 
