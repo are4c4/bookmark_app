@@ -29,6 +29,22 @@ class BookmarkTags extends Table {
   Set<Column<Object>> get primaryKey => {bookmarkId, tagId};
 }
 
+class People extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text().unique()();
+  TextColumn get note => text().nullable()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+}
+
+class BookmarkPeople extends Table {
+  IntColumn get bookmarkId => integer().references(Bookmarks, #id, onDelete: KeyAction.cascade)();
+  IntColumn get personId => integer().references(People, #id, onDelete: KeyAction.cascade)();
+  TextColumn get role => text().withDefault(const Constant('出演'))();
+
+  @override
+  Set<Column<Object>> get primaryKey => {bookmarkId, personId};
+}
+
 class SavedViews extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get name => text()();
@@ -58,6 +74,7 @@ class BookmarkItem {
     required this.createdAt,
     required this.favorite,
     required this.tags,
+    required this.people,
     this.thumbnail,
     this.description,
   });
@@ -70,6 +87,7 @@ class BookmarkItem {
   final DateTime createdAt;
   final bool favorite;
   final List<Tag> tags;
+  final List<Person> people;
 }
 
 class SavedViewConfig {
@@ -78,12 +96,22 @@ class SavedViewConfig {
   final List<Tag> tags;
 }
 
-@DriftDatabase(tables: [Bookmarks, Tags, BookmarkTags, SavedViews, SavedViewTags])
+@DriftDatabase(
+  tables: [
+    Bookmarks,
+    Tags,
+    BookmarkTags,
+    People,
+    BookmarkPeople,
+    SavedViews,
+    SavedViewTags,
+  ],
+)
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'bookmark_app'));
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -96,7 +124,7 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(savedViews);
             final existingBookmarks = await select(bookmarks).get();
             for (final bookmark in existingBookmarks) {
-              for (final name in _normalizeTagNames(bookmark.tags.split(','))) {
+              for (final name in _normalizeNames(bookmark.tags.split(','))) {
                 final tagId = await _ensureTag(name);
                 await into(bookmarkTags).insert(
                   BookmarkTagsCompanion.insert(bookmarkId: bookmark.id, tagId: tagId),
@@ -120,11 +148,15 @@ class AppDatabase extends _$AppDatabase {
               }
             }
           }
+          if (from < 5) {
+            await m.createTable(people);
+            await m.createTable(bookmarkPeople);
+          }
         },
         beforeOpen: (_) async => customStatement('PRAGMA foreign_keys = ON'),
       );
 
-  static List<String> _normalizeTagNames(Iterable<String> names) {
+  static List<String> _normalizeNames(Iterable<String> names) {
     final seen = <String>{};
     final result = <String>[];
     for (final raw in names) {
@@ -142,11 +174,26 @@ class AppDatabase extends _$AppDatabase {
     return (await (select(tags)..where((t) => t.name.equals(name))).getSingle()).id;
   }
 
+  Future<int> _ensurePerson(String name) async {
+    final existing = await (select(people)..where((p) => p.name.equals(name))).getSingleOrNull();
+    if (existing != null) return existing.id;
+    final id = await into(people).insert(PeopleCompanion.insert(name: name), mode: InsertMode.insertOrIgnore);
+    if (id != 0) return id;
+    return (await (select(people)..where((p) => p.name.equals(name))).getSingle()).id;
+  }
+
   Future<List<Tag>> _tagsForBookmark(int bookmarkId) {
     final query = select(tags).join([innerJoin(bookmarkTags, bookmarkTags.tagId.equalsExp(tags.id))])
       ..where(bookmarkTags.bookmarkId.equals(bookmarkId))
       ..orderBy([OrderingTerm.asc(tags.name)]);
     return query.map((row) => row.readTable(tags)).get();
+  }
+
+  Future<List<Person>> _peopleForBookmark(int bookmarkId) {
+    final query = select(people).join([innerJoin(bookmarkPeople, bookmarkPeople.personId.equalsExp(people.id))])
+      ..where(bookmarkPeople.bookmarkId.equals(bookmarkId))
+      ..orderBy([OrderingTerm.asc(people.name)]);
+    return query.map((row) => row.readTable(people)).get();
   }
 
   Future<List<Tag>> _tagsForSavedView(int savedViewId) {
@@ -165,12 +212,13 @@ class AppDatabase extends _$AppDatabase {
         createdAt: bookmark.createdAt,
         favorite: bookmark.favorite,
         tags: await _tagsForBookmark(bookmark.id),
+        people: await _peopleForBookmark(bookmark.id),
       );
 
   Stream<List<BookmarkItem>> watchBookmarkItems() {
     final trigger = customSelect(
-      'SELECT b.id FROM bookmarks b LEFT JOIN bookmark_tags bt ON bt.bookmark_id = b.id LEFT JOIN tags t ON t.id = bt.tag_id GROUP BY b.id',
-      readsFrom: {bookmarks, bookmarkTags, tags},
+      'SELECT b.id FROM bookmarks b LEFT JOIN bookmark_tags bt ON bt.bookmark_id = b.id LEFT JOIN bookmark_people bp ON bp.bookmark_id = b.id GROUP BY b.id',
+      readsFrom: {bookmarks, bookmarkTags, tags, bookmarkPeople, people},
     ).watch();
     return trigger.asyncMap((_) async {
       final rows = await select(bookmarks).get();
@@ -180,6 +228,9 @@ class AppDatabase extends _$AppDatabase {
 
   Stream<List<Tag>> watchAllTags() =>
       (select(tags)..orderBy([(t) => OrderingTerm.asc(t.name)])).watch();
+
+  Stream<List<Person>> watchAllPeople() =>
+      (select(people)..orderBy([(p) => OrderingTerm.asc(p.name)])).watch();
 
   Stream<List<SavedViewConfig>> watchSavedViewConfigs() {
     final trigger = customSelect(
@@ -198,6 +249,7 @@ class AppDatabase extends _$AppDatabase {
     String? thumbnail,
     String? description,
     Iterable<String> tagNames = const [],
+    Iterable<String> personNames = const [],
     bool favorite = false,
   }) => transaction(() async {
         final id = await into(bookmarks).insert(BookmarksCompanion.insert(
@@ -208,6 +260,7 @@ class AppDatabase extends _$AppDatabase {
           favorite: Value(favorite),
         ));
         await setBookmarkTags(id, tagNames);
+        await setBookmarkPeople(id, personNames);
         return id;
       });
 
@@ -218,6 +271,7 @@ class AppDatabase extends _$AppDatabase {
     String? thumbnail,
     String? description,
     Iterable<String> tagNames = const [],
+    Iterable<String> personNames = const [],
   }) => transaction(() async {
         await (update(bookmarks)..where((b) => b.id.equals(id))).write(BookmarksCompanion(
           url: Value(url),
@@ -226,11 +280,12 @@ class AppDatabase extends _$AppDatabase {
           description: Value(description),
         ));
         await setBookmarkTags(id, tagNames);
+        await setBookmarkPeople(id, personNames);
       });
 
   Future<void> setBookmarkTags(int bookmarkId, Iterable<String> names) async {
     await (delete(bookmarkTags)..where((bt) => bt.bookmarkId.equals(bookmarkId))).go();
-    for (final name in _normalizeTagNames(names)) {
+    for (final name in _normalizeNames(names)) {
       final tagId = await _ensureTag(name);
       await into(bookmarkTags).insert(
         BookmarkTagsCompanion.insert(bookmarkId: bookmarkId, tagId: tagId),
@@ -238,6 +293,40 @@ class AppDatabase extends _$AppDatabase {
       );
     }
   }
+
+  Future<void> setBookmarkPeople(int bookmarkId, Iterable<String> names) async {
+    await (delete(bookmarkPeople)..where((bp) => bp.bookmarkId.equals(bookmarkId))).go();
+    for (final name in _normalizeNames(names)) {
+      final personId = await _ensurePerson(name);
+      await into(bookmarkPeople).insert(
+        BookmarkPeopleCompanion.insert(bookmarkId: bookmarkId, personId: personId),
+        mode: InsertMode.insertOrIgnore,
+      );
+    }
+  }
+
+  Future<int> createPerson(String name, {String? note}) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) throw ArgumentError('Person name is empty');
+    final id = await _ensurePerson(trimmed);
+    if (note != null && note.trim().isNotEmpty) {
+      await (update(people)..where((p) => p.id.equals(id))).write(
+        PeopleCompanion(note: Value(note.trim())),
+      );
+    }
+    return id;
+  }
+
+  Future<void> updatePerson(int id, String name, String? note) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    await (update(people)..where((p) => p.id.equals(id))).write(
+      PeopleCompanion(name: Value(trimmed), note: Value(note?.trim().isEmpty == true ? null : note?.trim())),
+    );
+  }
+
+  Future<void> deletePerson(int id) =>
+      (delete(people)..where((p) => p.id.equals(id))).go();
 
   Future<int> createTag(String name, {int? parentTagId}) async {
     final trimmed = name.trim();
