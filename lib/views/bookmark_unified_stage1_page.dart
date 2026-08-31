@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
 import '../data/person_roles.dart';
+import '../data/workspace_store.dart';
 import '../services/bookmark_metadata_service.dart';
 import '../services/photo_storage_service.dart';
 import '../widgets/bookmark_create_dialog.dart';
