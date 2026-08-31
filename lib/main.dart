@@ -36,14 +36,8 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
     _load();
   }
 
-  Future<BookmarkRepository> _openRepository(
-    AppDatabase database,
-    DatabaseProfile profile,
-  ) async {
-    await const ProfileStorageMigrator().migratePhotos(
-      database: database,
-      photoDirectoryPath: profile.photoDirectoryPath,
-    );
+  Future<BookmarkRepository> _openRepository(AppDatabase database, DatabaseProfile profile) async {
+    await const ProfileStorageMigrator().migratePhotos(database: database, photoDirectoryPath: profile.photoDirectoryPath);
     final workspaceStore = WorkspaceStore(database);
     final workspaceId = await workspaceStore.initialize();
     final lifecycleStore = BookmarkLifecycleStore(database);
@@ -84,7 +78,6 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
   Future<void> _switchProfile(DatabaseProfile profile) async {
     final manager = _profileManager;
     if (manager == null || manager.state.activeProfile.id == profile.id || _switching) return;
-
     final previous = manager.state.activeProfile;
     final oldDatabase = _database;
     final oldLifecycle = _lifecycleStore;
@@ -92,14 +85,12 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
       _switching = true;
       _repository = null;
     });
-
     await WidgetsBinding.instance.endOfFrame;
     await oldLifecycle?.dispose();
     await oldDatabase?.close();
     _database = null;
     _workspaceStore = null;
     _lifecycleStore = null;
-
     try {
       final database = AppDatabase(databaseName: profile.databaseName);
       final repository = await _openRepository(database, profile);
@@ -132,12 +123,7 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
           _error = error;
         });
       } catch (_) {
-        if (mounted) {
-          setState(() {
-            _switching = false;
-            _error = error;
-          });
-        }
+        if (mounted) setState(() { _switching = false; _error = error; });
       }
     }
   }
@@ -181,9 +167,7 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
     final manager = _profileManager;
     if (manager == null) return;
     try {
-      if (manager.state.activeProfile.id == profile.id) {
-        await _database?.customStatement('PRAGMA wal_checkpoint(FULL)');
-      }
+      if (manager.state.activeProfile.id == profile.id) await _database?.customStatement('PRAGMA wal_checkpoint(FULL)');
       await manager.duplicateProfile(profile);
       if (mounted) setState(() {});
     } catch (error) {
@@ -217,12 +201,8 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
     final notionSurface = dark ? const Color(0xFF191919) : Colors.white;
     final notionSidebar = dark ? const Color(0xFF202020) : const Color(0xFFF7F7F5);
     final notionRaised = dark ? const Color(0xFF2A2A28) : const Color(0xFFF1F1EF);
-
-    final scheme = ColorScheme.fromSeed(
-      seedColor: notionText,
-      brightness: brightness,
-      surface: notionSurface,
-    );
+    final selectedTile = dark ? const Color(0xFF343432) : const Color(0xFFE9E9E6);
+    final scheme = ColorScheme.fromSeed(seedColor: notionText, brightness: brightness, surface: notionSurface);
 
     return ThemeData(
       useMaterial3: true,
@@ -245,29 +225,16 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
       dividerColor: notionBorder,
       splashColor: dark ? const Color(0x18FFFFFF) : const Color(0x0D000000),
       hoverColor: dark ? const Color(0x12FFFFFF) : const Color(0x0A000000),
-      cardTheme: CardThemeData(
-        elevation: 0,
-        color: notionSurface,
-        margin: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(6),
-          side: BorderSide(color: notionBorder),
-        ),
+      listTileTheme: ListTileThemeData(
+        selectedTileColor: selectedTile,
+        selectedColor: notionText,
+        iconColor: notionMuted,
+        textColor: notionText,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
       ),
-      appBarTheme: AppBarTheme(
-        backgroundColor: notionSurface,
-        foregroundColor: notionText,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: true,
-      ),
-      chipTheme: ChipThemeData(
-        backgroundColor: notionRaised,
-        side: BorderSide.none,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-        labelStyle: TextStyle(fontSize: 12.5, color: notionText),
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-      ),
+      cardTheme: CardThemeData(elevation: 0, color: notionSurface, margin: EdgeInsets.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6), side: BorderSide(color: notionBorder))),
+      appBarTheme: AppBarTheme(backgroundColor: notionSurface, foregroundColor: notionText, surfaceTintColor: Colors.transparent, elevation: 0, centerTitle: true),
+      chipTheme: ChipThemeData(backgroundColor: notionRaised, side: BorderSide.none, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)), labelStyle: TextStyle(fontSize: 12.5, color: notionText), padding: const EdgeInsets.symmetric(horizontal: 4)),
       inputDecorationTheme: InputDecorationTheme(
         isDense: true,
         hintStyle: TextStyle(color: notionMuted),
@@ -288,17 +255,9 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
   Widget build(BuildContext context) {
     final manager = _profileManager;
     final repository = _repository;
-
     Widget home;
     if (_error != null && repository == null) {
-      home = Scaffold(
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text('起動またはProfile切替に失敗しました:\n$_error'),
-          ),
-        ),
-      );
+      home = Scaffold(body: Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('起動またはProfile切替に失敗しました:\n$_error'))));
     } else if (manager == null || repository == null || _switching) {
       home = const Scaffold(body: Center(child: CircularProgressIndicator()));
     } else {
@@ -314,7 +273,6 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
         onSwitchWorkspace: _switchWorkspace,
       );
     }
-
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Bookmark App',
