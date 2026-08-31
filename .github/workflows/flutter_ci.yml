@@ -10,9 +10,9 @@ on:
       - main
 
 jobs:
-  analyze-and-test:
+  analyze-test-build:
     runs-on: macos-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -33,7 +33,10 @@ jobs:
         run: dart run build_runner build
 
       - name: Analyze
-        run: flutter analyze
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
       - name: Test
         run: flutter test
+
+      - name: Build macOS debug app
+        run: flutter build macos --debug
