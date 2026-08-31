@@ -9,21 +9,11 @@ import '../data/bookmark_repository.dart';
 import '../widgets/bookmark_create_dialog.dart';
 import '../widgets/bookmark_detail_panel.dart';
 import '../widgets/notion_bookmark_card.dart';
+import '../widgets/relation_database_picker.dart';
 
 enum BookmarkStage1ViewType { gallery, list, table }
 enum BookmarkStage1SortField { createdAt, title, url }
-enum BookmarkStage1Property {
-  image,
-  url,
-  tags,
-  people,
-  description,
-  createdAt,
-  favorite,
-  status,
-  rating,
-  history,
-}
+enum BookmarkStage1Property { image, url, tags, people, description, createdAt, favorite, status, rating, history }
 
 const _statusLabels = <String, String>{
   'unread': '未読',
@@ -35,7 +25,6 @@ const _statusLabels = <String, String>{
 
 class BookmarkUnifiedStage1Page extends StatefulWidget {
   const BookmarkUnifiedStage1Page({super.key, required this.repository});
-
   final BookmarkRepository repository;
 
   @override
@@ -45,6 +34,7 @@ class BookmarkUnifiedStage1Page extends StatefulWidget {
 class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
   final _searchController = TextEditingController();
   final Set<int> _selectedTagIds = {};
+  final Set<int> _batchSelectedIds = {};
   final Set<BookmarkStage1Property> _visibleProperties = {
     BookmarkStage1Property.image,
     BookmarkStage1Property.url,
@@ -58,6 +48,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
   bool _favoritesOnly = false;
   bool _includeDescendants = true;
   bool _sidebarCollapsed = false;
+  bool _selectionMode = false;
   String _statusFilter = '';
   int _minRating = 0;
   String _query = '';
@@ -98,7 +89,6 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
       if (bookmark.rating < _minRating) return false;
       if (_personFilterId != null && !bookmark.people.any((person) => person.id == _personFilterId)) return false;
       if (_photoFilterId != null && !bookmark.photos.any((photo) => photo.id == _photoFilterId)) return false;
-
       if (q.isNotEmpty) {
         final searchable = [
           bookmark.title,
@@ -110,7 +100,6 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
         ].join(' ').toLowerCase();
         if (!searchable.contains(q)) return false;
       }
-
       if (_selectedTagIds.isNotEmpty) {
         final bookmarkTagIds = bookmark.tags.map((tag) => tag.id).toSet();
         final allowed = <int>{};
@@ -158,9 +147,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
       _personFilterId = null;
       _photoFilterId = null;
       _relationFilterLabel = 'タグ: ${tag.name}';
-      _selectedTagIds
-        ..clear()
-        ..add(tag.id);
+      _selectedTagIds..clear()..add(tag.id);
       _selectedBookmarkId = null;
     });
   }
@@ -191,6 +178,26 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
     });
   }
 
+  void _toggleSelectionMode() {
+    setState(() {
+      _selectionMode = !_selectionMode;
+      _selectedBookmarkId = null;
+      if (!_selectionMode) _batchSelectedIds.clear();
+    });
+  }
+
+  void _selectBookmark(BookmarkItem bookmark) {
+    if (_selectionMode) {
+      setState(() {
+        _batchSelectedIds.contains(bookmark.id)
+            ? _batchSelectedIds.remove(bookmark.id)
+            : _batchSelectedIds.add(bookmark.id);
+      });
+    } else {
+      setState(() => _selectedBookmarkId = bookmark.id);
+    }
+  }
+
   Future<void> _openBookmark(BookmarkItem bookmark) async {
     final uri = Uri.tryParse(bookmark.url);
     if (uri == null) return;
@@ -215,9 +222,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
     );
     if (confirmed == true) {
       await widget.repository.delete(bookmark.id);
-      if (_selectedBookmarkId == bookmark.id && mounted) {
-        setState(() => _selectedBookmarkId = null);
-      }
+      if (_selectedBookmarkId == bookmark.id && mounted) setState(() => _selectedBookmarkId = null);
     }
   }
 
@@ -227,11 +232,19 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
         onSelected: (value) {
           if (value == 'detail') setState(() => _selectedBookmarkId = bookmark.id);
           if (value == 'open') _openBookmark(bookmark);
+          if (value == 'select') {
+            setState(() {
+              _selectionMode = true;
+              _selectedBookmarkId = null;
+              _batchSelectedIds.add(bookmark.id);
+            });
+          }
           if (value == 'delete') _deleteBookmark(bookmark);
         },
         itemBuilder: (_) => const [
           PopupMenuItem(value: 'detail', child: Text('詳細を表示')),
           PopupMenuItem(value: 'open', child: Text('ブラウザで開く')),
+          PopupMenuItem(value: 'select', child: Text('選択する')),
           PopupMenuDivider(),
           PopupMenuItem(value: 'delete', child: Text('削除')),
         ],
@@ -239,13 +252,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
 
   Widget _gallery(List<BookmarkItem> bookmarks) => LayoutBuilder(
         builder: (context, constraints) {
-          final columns = constraints.maxWidth >= 1200
-              ? 4
-              : constraints.maxWidth >= 850
-                  ? 3
-                  : constraints.maxWidth >= 560
-                      ? 2
-                      : 1;
+          final columns = constraints.maxWidth >= 1200 ? 4 : constraints.maxWidth >= 850 ? 3 : constraints.maxWidth >= 560 ? 2 : 1;
           return MasonryGridView.count(
             padding: const EdgeInsets.fromLTRB(18, 16, 18, 90),
             crossAxisCount: columns,
@@ -254,22 +261,40 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
             itemCount: bookmarks.length,
             itemBuilder: (context, index) {
               final bookmark = bookmarks[index];
-              return NotionBookmarkCard(
-                bookmark: bookmark,
-                selected: bookmark.id == _selectedBookmarkId,
-                showImage: _visibleProperties.contains(BookmarkStage1Property.image),
-                showUrl: _visibleProperties.contains(BookmarkStage1Property.url),
-                showTags: _visibleProperties.contains(BookmarkStage1Property.tags),
-                showPeople: _visibleProperties.contains(BookmarkStage1Property.people),
-                showDescription: _visibleProperties.contains(BookmarkStage1Property.description),
-                showCreatedAt: _visibleProperties.contains(BookmarkStage1Property.createdAt),
-                showFavorite: _visibleProperties.contains(BookmarkStage1Property.favorite),
-                showStatus: _visibleProperties.contains(BookmarkStage1Property.status),
-                showRating: _visibleProperties.contains(BookmarkStage1Property.rating),
-                showHistory: _visibleProperties.contains(BookmarkStage1Property.history),
-                onTap: () => setState(() => _selectedBookmarkId = bookmark.id),
-                onToggleFavorite: () => widget.repository.toggleFavorite(bookmark),
-                menu: _bookmarkMenu(bookmark),
+              final selected = _selectionMode ? _batchSelectedIds.contains(bookmark.id) : bookmark.id == _selectedBookmarkId;
+              return Stack(
+                children: [
+                  NotionBookmarkCard(
+                    bookmark: bookmark,
+                    selected: selected,
+                    showImage: _visibleProperties.contains(BookmarkStage1Property.image),
+                    showUrl: _visibleProperties.contains(BookmarkStage1Property.url),
+                    showTags: _visibleProperties.contains(BookmarkStage1Property.tags),
+                    showPeople: _visibleProperties.contains(BookmarkStage1Property.people),
+                    showDescription: _visibleProperties.contains(BookmarkStage1Property.description),
+                    showCreatedAt: _visibleProperties.contains(BookmarkStage1Property.createdAt),
+                    showFavorite: _visibleProperties.contains(BookmarkStage1Property.favorite),
+                    showStatus: _visibleProperties.contains(BookmarkStage1Property.status),
+                    showRating: _visibleProperties.contains(BookmarkStage1Property.rating),
+                    showHistory: _visibleProperties.contains(BookmarkStage1Property.history),
+                    onTap: () => _selectBookmark(bookmark),
+                    onToggleFavorite: () => widget.repository.toggleFavorite(bookmark),
+                    menu: _bookmarkMenu(bookmark),
+                  ),
+                  if (_selectionMode)
+                    Positioned(
+                      left: 8,
+                      top: 8,
+                      child: DecoratedBox(
+                        decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                        child: Checkbox(
+                          visualDensity: VisualDensity.compact,
+                          value: _batchSelectedIds.contains(bookmark.id),
+                          onChanged: (_) => _selectBookmark(bookmark),
+                        ),
+                      ),
+                    ),
+                ],
               );
             },
           );
@@ -278,26 +303,16 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
 
   Widget _image(BookmarkItem bookmark, {double width = 60, double height = 44}) {
     if (bookmark.coverPhoto != null) {
-      return Image.file(
-        File(bookmark.coverPhoto!.path),
-        width: width,
-        height: height,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => _networkImage(bookmark, width, height),
-      );
+      return Image.file(File(bookmark.coverPhoto!.path), width: width, height: height, fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _networkImage(bookmark, width, height));
     }
     return _networkImage(bookmark, width, height);
   }
 
   Widget _networkImage(BookmarkItem bookmark, double width, double height) {
     if (bookmark.thumbnail?.trim().isNotEmpty == true) {
-      return Image.network(
-        bookmark.thumbnail!,
-        width: width,
-        height: height,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.image_outlined)),
-      );
+      return Image.network(bookmark.thumbnail!, width: width, height: height, fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.image_outlined)));
     }
     return const Center(child: Icon(Icons.image_outlined));
   }
@@ -312,42 +327,31 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
             if (_visibleProperties.contains(BookmarkStage1Property.url)) _compactUrl(bookmark.url),
             if (_visibleProperties.contains(BookmarkStage1Property.status)) _statusLabels[bookmark.status] ?? bookmark.status,
             if (_visibleProperties.contains(BookmarkStage1Property.rating) && bookmark.rating > 0) '★' * bookmark.rating,
-            if (_visibleProperties.contains(BookmarkStage1Property.tags) && bookmark.tags.isNotEmpty)
-              bookmark.tags.map((tag) => tag.name).join(', '),
-            if (_visibleProperties.contains(BookmarkStage1Property.people) && bookmark.people.isNotEmpty)
-              bookmark.people.map((person) => person.name).join(', '),
-            if (_visibleProperties.contains(BookmarkStage1Property.description) && bookmark.description?.trim().isNotEmpty == true)
-              bookmark.description!,
+            if (_visibleProperties.contains(BookmarkStage1Property.tags) && bookmark.tags.isNotEmpty) bookmark.tags.map((tag) => tag.name).join(', '),
+            if (_visibleProperties.contains(BookmarkStage1Property.people) && bookmark.people.isNotEmpty) bookmark.people.map((person) => person.name).join(', '),
+            if (_visibleProperties.contains(BookmarkStage1Property.description) && bookmark.description?.trim().isNotEmpty == true) bookmark.description!,
             if (_visibleProperties.contains(BookmarkStage1Property.createdAt)) _formatDate(bookmark.createdAt),
             if (_visibleProperties.contains(BookmarkStage1Property.history)) _historyText(bookmark),
           ];
           return ListTile(
-            selected: bookmark.id == _selectedBookmarkId,
+            selected: _selectionMode ? _batchSelectedIds.contains(bookmark.id) : bookmark.id == _selectedBookmarkId,
             selectedTileColor: const Color(0xFFF1F1EF),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
-            onTap: () => setState(() => _selectedBookmarkId = bookmark.id),
-            leading: _visibleProperties.contains(BookmarkStage1Property.image)
-                ? ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: SizedBox(width: 60, height: 44, child: _image(bookmark)),
-                  )
-                : null,
+            onTap: () => _selectBookmark(bookmark),
+            leading: _selectionMode
+                ? Checkbox(value: _batchSelectedIds.contains(bookmark.id), onChanged: (_) => _selectBookmark(bookmark))
+                : _visibleProperties.contains(BookmarkStage1Property.image)
+                    ? ClipRRect(borderRadius: BorderRadius.circular(4), child: SizedBox(width: 60, height: 44, child: _image(bookmark)))
+                    : null,
             title: Text(bookmark.title),
-            subtitle: details.isEmpty
+            subtitle: details.isEmpty ? null : Text(details.join('  ·  '), maxLines: 2, overflow: TextOverflow.ellipsis),
+            trailing: _selectionMode
                 ? null
-                : Text(details.join('  ·  '), maxLines: 2, overflow: TextOverflow.ellipsis),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (_visibleProperties.contains(BookmarkStage1Property.favorite))
-                  IconButton(
-                    tooltip: 'お気に入り',
-                    onPressed: () => widget.repository.toggleFavorite(bookmark),
-                    icon: Icon(bookmark.favorite ? Icons.star : Icons.star_border, size: 19),
-                  ),
-                _bookmarkMenu(bookmark),
-              ],
-            ),
+                : Row(mainAxisSize: MainAxisSize.min, children: [
+                    if (_visibleProperties.contains(BookmarkStage1Property.favorite))
+                      IconButton(tooltip: 'お気に入り', onPressed: () => widget.repository.toggleFavorite(bookmark), icon: Icon(bookmark.favorite ? Icons.star : Icons.star_border, size: 19)),
+                    _bookmarkMenu(bookmark),
+                  ]),
           );
         },
       );
@@ -358,43 +362,28 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 90),
       scrollDirection: Axis.horizontal,
       child: DataTable(
-        columns: [
-          const DataColumn(label: Text('タイトル')),
-          ...properties.map((property) => DataColumn(label: Text(_propertyLabel(property)))),
-          const DataColumn(label: Text('')),
-        ],
+        showCheckboxColumn: _selectionMode,
+        columns: [const DataColumn(label: Text('タイトル')), ...properties.map((p) => DataColumn(label: Text(_propertyLabel(p)))), const DataColumn(label: Text(''))],
         rows: bookmarks.map((bookmark) {
           final cells = <DataCell>[DataCell(Text(bookmark.title))];
           for (final property in properties) {
             cells.add(switch (property) {
-              BookmarkStage1Property.image => DataCell(
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: SizedBox(width: 58, height: 38, child: _image(bookmark, width: 58, height: 38)),
-                  ),
-                ),
+              BookmarkStage1Property.image => DataCell(ClipRRect(borderRadius: BorderRadius.circular(4), child: SizedBox(width: 58, height: 38, child: _image(bookmark, width: 58, height: 38)))),
               BookmarkStage1Property.url => DataCell(Text(_compactUrl(bookmark.url))),
               BookmarkStage1Property.tags => DataCell(Text(bookmark.tags.map((tag) => tag.name).join(', '))),
               BookmarkStage1Property.people => DataCell(Text(bookmark.people.map((person) => person.name).join(', '))),
-              BookmarkStage1Property.description => DataCell(
-                  SizedBox(width: 260, child: Text(bookmark.description ?? '', maxLines: 2, overflow: TextOverflow.ellipsis)),
-                ),
+              BookmarkStage1Property.description => DataCell(SizedBox(width: 260, child: Text(bookmark.description ?? '', maxLines: 2, overflow: TextOverflow.ellipsis))),
               BookmarkStage1Property.createdAt => DataCell(Text(_formatDate(bookmark.createdAt))),
-              BookmarkStage1Property.favorite => DataCell(
-                  IconButton(
-                    onPressed: () => widget.repository.toggleFavorite(bookmark),
-                    icon: Icon(bookmark.favorite ? Icons.star : Icons.star_border, size: 18),
-                  ),
-                ),
+              BookmarkStage1Property.favorite => DataCell(IconButton(onPressed: () => widget.repository.toggleFavorite(bookmark), icon: Icon(bookmark.favorite ? Icons.star : Icons.star_border, size: 18))),
               BookmarkStage1Property.status => DataCell(Text(_statusLabels[bookmark.status] ?? bookmark.status)),
               BookmarkStage1Property.rating => DataCell(Text(bookmark.rating == 0 ? '' : '★' * bookmark.rating)),
               BookmarkStage1Property.history => DataCell(Text(_historyText(bookmark))),
             });
           }
-          cells.add(DataCell(_bookmarkMenu(bookmark)));
+          cells.add(DataCell(_selectionMode ? const SizedBox.shrink() : _bookmarkMenu(bookmark)));
           return DataRow(
-            selected: bookmark.id == _selectedBookmarkId,
-            onSelectChanged: (_) => setState(() => _selectedBookmarkId = bookmark.id),
+            selected: _selectionMode ? _batchSelectedIds.contains(bookmark.id) : bookmark.id == _selectedBookmarkId,
+            onSelectChanged: (_) => _selectBookmark(bookmark),
             cells: cells,
           );
         }).toList(),
@@ -423,24 +412,17 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
 
   String _formatDate(DateTime value) {
     final local = value.toLocal();
-    final month = local.month.toString().padLeft(2, '0');
-    final day = local.day.toString().padLeft(2, '0');
-    return '${local.year}/$month/$day';
+    return '${local.year}/${local.month.toString().padLeft(2, '0')}/${local.day.toString().padLeft(2, '0')}';
   }
 
   String _formatDateTime(DateTime value) {
     final local = value.toLocal();
-    final month = local.month.toString().padLeft(2, '0');
-    final day = local.day.toString().padLeft(2, '0');
-    final hour = local.hour.toString().padLeft(2, '0');
-    final minute = local.minute.toString().padLeft(2, '0');
-    return '${local.year}/$month/$day $hour:$minute';
+    return '${_formatDate(local)} ${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
   }
 
-  String _historyText(BookmarkItem bookmark) {
-    if (bookmark.lastOpenedAt == null) return '${bookmark.openCount}回 · 未閲覧';
-    return '${bookmark.openCount}回 · ${_formatDateTime(bookmark.lastOpenedAt!)}';
-  }
+  String _historyText(BookmarkItem bookmark) => bookmark.lastOpenedAt == null
+      ? '${bookmark.openCount}回 · 未閲覧'
+      : '${bookmark.openCount}回 · ${_formatDateTime(bookmark.lastOpenedAt!)}';
 
   Future<void> _showPropertiesDialog() async {
     final selected = {..._visibleProperties};
@@ -452,39 +434,18 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
           content: SizedBox(
             width: 340,
             child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: BookmarkStage1Property.values.map((property) {
-                  return CheckboxListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(_propertyLabel(property)),
-                    value: selected.contains(property),
-                    onChanged: (value) => setLocalState(() {
-                      if (value == true) {
-                        selected.add(property);
-                      } else {
-                        selected.remove(property);
-                      }
-                    }),
-                  );
-                }).toList(),
-              ),
+              child: Column(mainAxisSize: MainAxisSize.min, children: BookmarkStage1Property.values.map((property) => CheckboxListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: Text(_propertyLabel(property)),
+                value: selected.contains(property),
+                onChanged: (value) => setLocalState(() => value == true ? selected.add(property) : selected.remove(property)),
+              )).toList()),
             ),
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('キャンセル')),
-            FilledButton(
-              onPressed: () {
-                setState(() {
-                  _visibleProperties
-                    ..clear()
-                    ..addAll(selected);
-                });
-                Navigator.pop(dialogContext);
-              },
-              child: const Text('適用'),
-            ),
+            FilledButton(onPressed: () { setState(() { _visibleProperties..clear()..addAll(selected); }); Navigator.pop(dialogContext); }, child: const Text('適用')),
           ],
         ),
       ),
@@ -495,7 +456,6 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
     var favorites = _favoritesOnly;
     var status = _statusFilter;
     var minRating = _minRating;
-
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
@@ -503,249 +463,216 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
           title: const Text('フィルター'),
           content: SizedBox(
             width: 390,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('お気に入りのみ'),
-                  value: favorites,
-                  onChanged: (value) => setLocalState(() => favorites = value),
-                ),
-                DropdownButtonFormField<String>(
-                  value: status,
-                  decoration: const InputDecoration(labelText: 'ステータス'),
-                  items: [
-                    const DropdownMenuItem(value: '', child: Text('すべて')),
-                    ..._statusLabels.entries.map(
-                      (entry) => DropdownMenuItem(value: entry.key, child: Text(entry.value)),
-                    ),
-                  ],
-                  onChanged: (value) => setLocalState(() => status = value ?? ''),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<int>(
-                  value: minRating,
-                  decoration: const InputDecoration(labelText: '最低評価'),
-                  items: List.generate(
-                    6,
-                    (index) => DropdownMenuItem(
-                      value: index,
-                      child: Text(index == 0 ? '指定なし' : '${'★' * index} 以上'),
-                    ),
-                  ),
-                  onChanged: (value) => setLocalState(() => minRating = value ?? 0),
-                ),
-              ],
-            ),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('お気に入りのみ'), value: favorites, onChanged: (value) => setLocalState(() => favorites = value)),
+              DropdownButtonFormField<String>(value: status, decoration: const InputDecoration(labelText: 'ステータス'), items: [const DropdownMenuItem(value: '', child: Text('すべて')), ..._statusLabels.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))], onChanged: (value) => setLocalState(() => status = value ?? '')),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<int>(value: minRating, decoration: const InputDecoration(labelText: '最低評価'), items: List.generate(6, (index) => DropdownMenuItem(value: index, child: Text(index == 0 ? '指定なし' : '${'★' * index} 以上'))), onChanged: (value) => setLocalState(() => minRating = value ?? 0)),
+            ]),
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('キャンセル')),
-            FilledButton(
-              onPressed: () {
-                setState(() {
-                  _favoritesOnly = favorites;
-                  _statusFilter = status;
-                  _minRating = minRating;
-                });
-                Navigator.pop(dialogContext);
-              },
-              child: const Text('適用'),
-            ),
+            FilledButton(onPressed: () { setState(() { _favoritesOnly = favorites; _statusFilter = status; _minRating = minRating; }); Navigator.pop(dialogContext); }, child: const Text('適用')),
           ],
         ),
       ),
     );
   }
 
+  Future<void> _batchTags({required bool remove}) async {
+    final tags = await widget.repository.watchTags().first;
+    if (!mounted) return;
+    final selected = await showTagDatabasePicker(context: context, tags: tags, initiallySelectedIds: const []);
+    if (selected == null || selected.isEmpty) return;
+    if (remove) {
+      await widget.repository.batchRemoveTags(_batchSelectedIds, selected.map((e) => e.name));
+    } else {
+      await widget.repository.batchAddTags(_batchSelectedIds, selected.map((e) => e.name));
+    }
+  }
+
+  Future<void> _batchPeople({required bool remove}) async {
+    final people = await widget.repository.watchPeople().first;
+    if (!mounted) return;
+    final selected = await showPeopleDatabasePicker(context: context, people: people, initiallySelectedIds: const []);
+    if (selected == null || selected.isEmpty) return;
+    if (remove) {
+      await widget.repository.batchRemovePeople(_batchSelectedIds, selected.map((e) => e.name));
+    } else {
+      await widget.repository.batchAddPeople(_batchSelectedIds, selected.map((e) => e.name));
+    }
+  }
+
+  Future<void> _batchDelete() async {
+    if (_batchSelectedIds.isEmpty) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('${_batchSelectedIds.length}件を削除しますか？'),
+        content: const Text('この操作は元に戻せません。'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('キャンセル')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('削除')),
+        ],
+      ),
+    );
+    if (ok == true) {
+      await widget.repository.batchDelete(_batchSelectedIds);
+      setState(() { _batchSelectedIds.clear(); _selectionMode = false; });
+    }
+  }
+
+  Widget _batchBar(List<BookmarkItem> visible) => Container(
+        minHeight: 48,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: const BoxDecoration(color: Color(0xFFF7F7F5), border: Border(bottom: BorderSide(color: Color(0xFFE7E7E4)))),
+        child: LayoutBuilder(builder: (context, constraints) {
+          final compact = constraints.maxWidth < 720;
+          final allSelected = visible.isNotEmpty && visible.every((item) => _batchSelectedIds.contains(item.id));
+          return Row(children: [
+            Checkbox(value: allSelected, onChanged: (value) => setState(() {
+              if (value == true) { _batchSelectedIds.addAll(visible.map((e) => e.id)); } else { _batchSelectedIds.removeAll(visible.map((e) => e.id)); }
+            })),
+            Text('${_batchSelectedIds.length}件', style: const TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(width: 6),
+            if (!compact) ...[
+              PopupMenuButton<String>(onSelected: (value) { if (value == 'tag_add') _batchTags(remove: false); if (value == 'tag_remove') _batchTags(remove: true); if (value == 'people_add') _batchPeople(remove: false); if (value == 'people_remove') _batchPeople(remove: true); }, itemBuilder: (_) => const [
+                PopupMenuItem(value: 'tag_add', child: Text('タグを追加')), PopupMenuItem(value: 'tag_remove', child: Text('タグを削除')), PopupMenuDivider(), PopupMenuItem(value: 'people_add', child: Text('出演者を追加')), PopupMenuItem(value: 'people_remove', child: Text('出演者を削除')),
+              ], child: const Padding(padding: EdgeInsets.all(8), child: Text('Relation編集'))),
+              PopupMenuButton<String>(onSelected: (value) => widget.repository.batchSetStatus(_batchSelectedIds, value), itemBuilder: (_) => _statusLabels.entries.map((e) => PopupMenuItem(value: e.key, child: Text(e.value))).toList(), child: const Padding(padding: EdgeInsets.all(8), child: Text('ステータス'))),
+              PopupMenuButton<int>(onSelected: (value) => widget.repository.batchSetRating(_batchSelectedIds, value), itemBuilder: (_) => List.generate(6, (index) => PopupMenuItem(value: index, child: Text(index == 0 ? '評価を解除' : '${'★' * index}${'☆' * (5 - index)}'))), child: const Padding(padding: EdgeInsets.all(8), child: Text('評価'))),
+              IconButton(tooltip: 'お気に入りにする', onPressed: _batchSelectedIds.isEmpty ? null : () => widget.repository.batchSetFavorite(_batchSelectedIds, true), icon: const Icon(Icons.star_outline)),
+            ] else
+              PopupMenuButton<String>(
+                tooltip: '一括操作',
+                onSelected: (value) {
+                  if (value == 'tag_add') _batchTags(remove: false);
+                  if (value == 'tag_remove') _batchTags(remove: true);
+                  if (value == 'people_add') _batchPeople(remove: false);
+                  if (value == 'people_remove') _batchPeople(remove: true);
+                  if (value == 'favorite') widget.repository.batchSetFavorite(_batchSelectedIds, true);
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'tag_add', child: Text('タグを追加')), PopupMenuItem(value: 'tag_remove', child: Text('タグを削除')), PopupMenuItem(value: 'people_add', child: Text('出演者を追加')), PopupMenuItem(value: 'people_remove', child: Text('出演者を削除')), PopupMenuItem(value: 'favorite', child: Text('お気に入りにする')),
+                ],
+                icon: const Icon(Icons.more_horiz),
+              ),
+            const Spacer(),
+            IconButton(tooltip: '選択を削除', onPressed: _batchSelectedIds.isEmpty ? null : _batchDelete, icon: const Icon(Icons.delete_outline)),
+            IconButton(tooltip: '選択を終了', onPressed: _toggleSelectionMode, icon: const Icon(Icons.close)),
+          ]);
+        }),
+      );
+
+  Widget _viewSwitcher() => SegmentedButton<BookmarkStage1ViewType>(
+        showSelectedIcon: false,
+        segments: const [
+          ButtonSegment(value: BookmarkStage1ViewType.gallery, icon: Icon(Icons.grid_view, size: 17)),
+          ButtonSegment(value: BookmarkStage1ViewType.list, icon: Icon(Icons.view_list, size: 17)),
+          ButtonSegment(value: BookmarkStage1ViewType.table, icon: Icon(Icons.table_rows, size: 17)),
+        ],
+        selected: {_viewType},
+        onSelectionChanged: (value) => setState(() => _viewType = value.first),
+      );
+
   Widget _toolbar() {
     final filterCount = (_favoritesOnly ? 1 : 0) + (_statusFilter.isNotEmpty ? 1 : 0) + (_minRating > 0 ? 1 : 0);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFE7E7E4))),
-      ),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 250,
-            height: 36,
-            child: TextField(
-              controller: _searchController,
-              onChanged: (value) => setState(() => _query = value),
-              decoration: InputDecoration(
-                hintText: '検索',
-                prefixIcon: const Icon(Icons.search, size: 18),
-                suffixIcon: _query.isEmpty
-                    ? null
-                    : IconButton(
-                        icon: const Icon(Icons.close, size: 16),
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() => _query = '');
-                        },
-                      ),
-                filled: true,
-                fillColor: const Color(0xFFF7F7F5),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(5), borderSide: BorderSide.none),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: const BoxDecoration(color: Colors.white, border: Border(bottom: BorderSide(color: Color(0xFFE7E7E4)))),
+      child: LayoutBuilder(builder: (context, constraints) {
+        final compact = constraints.maxWidth < 830;
+        final veryCompact = constraints.maxWidth < 610;
+        return Row(children: [
+          Flexible(
+            flex: veryCompact ? 1 : 0,
+            child: SizedBox(
+              width: veryCompact ? double.infinity : (compact ? 190 : 250),
+              height: 36,
+              child: TextField(
+                controller: _searchController,
+                onChanged: (value) => setState(() => _query = value),
+                decoration: InputDecoration(
+                  hintText: '検索', prefixIcon: const Icon(Icons.search, size: 18),
+                  suffixIcon: _query.isEmpty ? null : IconButton(icon: const Icon(Icons.close, size: 16), onPressed: () { _searchController.clear(); setState(() => _query = ''); }),
+                  filled: true, fillColor: const Color(0xFFF7F7F5), border: OutlineInputBorder(borderRadius: BorderRadius.circular(5), borderSide: BorderSide.none),
+                ),
               ),
             ),
           ),
-          const SizedBox(width: 8),
-          if (_relationFilterLabel != null) ...[
-            InputChip(
-              label: Text(_relationFilterLabel!, style: const TextStyle(fontSize: 12)),
-              onDeleted: () => setState(() {
-                _personFilterId = null;
-                _photoFilterId = null;
-                _relationFilterLabel = null;
-              }),
-            ),
-            const SizedBox(width: 6),
+          const SizedBox(width: 6),
+          if (!veryCompact && _relationFilterLabel != null) ...[
+            Flexible(child: InputChip(label: Text(_relationFilterLabel!, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)), onDeleted: () => setState(() { _personFilterId = null; _photoFilterId = null; _relationFilterLabel = null; }))),
+            const SizedBox(width: 4),
           ],
-          TextButton.icon(
-            onPressed: _showFilterDialog,
-            icon: const Icon(Icons.filter_alt_outlined, size: 17),
-            label: Text(filterCount == 0 ? 'フィルター' : 'フィルター $filterCount'),
-          ),
-          PopupMenuButton<BookmarkStage1SortField>(
-            tooltip: '並び替え',
-            initialValue: _sortField,
-            onSelected: (value) => setState(() => _sortField = value),
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: BookmarkStage1SortField.createdAt, child: Text('登録日時')),
-              PopupMenuItem(value: BookmarkStage1SortField.title, child: Text('タイトル')),
-              PopupMenuItem(value: BookmarkStage1SortField.url, child: Text('URL')),
-            ],
-            child: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.swap_vert, size: 17), SizedBox(width: 5), Text('並び替え')]),
+          TextButton.icon(onPressed: _showFilterDialog, icon: const Icon(Icons.filter_alt_outlined, size: 17), label: compact ? const SizedBox.shrink() : Text(filterCount == 0 ? 'フィルター' : 'フィルター $filterCount')),
+          if (!compact) ...[
+            PopupMenuButton<BookmarkStage1SortField>(tooltip: '並び替え', initialValue: _sortField, onSelected: (value) => setState(() => _sortField = value), itemBuilder: (_) => const [PopupMenuItem(value: BookmarkStage1SortField.createdAt, child: Text('登録日時')), PopupMenuItem(value: BookmarkStage1SortField.title, child: Text('タイトル')), PopupMenuItem(value: BookmarkStage1SortField.url, child: Text('URL'))], child: const Padding(padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6), child: Icon(Icons.swap_vert, size: 18))),
+            IconButton(tooltip: _sortAscending ? '昇順' : '降順', onPressed: () => setState(() => _sortAscending = !_sortAscending), icon: Icon(_sortAscending ? Icons.arrow_upward : Icons.arrow_downward, size: 18)),
+            TextButton.icon(onPressed: _showPropertiesDialog, icon: const Icon(Icons.tune, size: 17), label: const Text('プロパティ')),
+            TextButton.icon(onPressed: _toggleSelectionMode, icon: const Icon(Icons.check_box_outlined, size: 17), label: const Text('選択')),
+            const Spacer(),
+            _viewSwitcher(),
+          ] else ...[
+            const Spacer(),
+            if (!veryCompact) _viewSwitcher(),
+            PopupMenuButton<String>(
+              tooltip: '表示・操作',
+              onSelected: (value) {
+                if (value == 'properties') _showPropertiesDialog();
+                if (value == 'select') _toggleSelectionMode();
+                if (value == 'sort_created') setState(() => _sortField = BookmarkStage1SortField.createdAt);
+                if (value == 'sort_title') setState(() => _sortField = BookmarkStage1SortField.title);
+                if (value == 'sort_url') setState(() => _sortField = BookmarkStage1SortField.url);
+                if (value == 'direction') setState(() => _sortAscending = !_sortAscending);
+                if (value == 'gallery') setState(() => _viewType = BookmarkStage1ViewType.gallery);
+                if (value == 'list') setState(() => _viewType = BookmarkStage1ViewType.list);
+                if (value == 'table') setState(() => _viewType = BookmarkStage1ViewType.table);
+              },
+              itemBuilder: (_) => [
+                const PopupMenuItem(value: 'properties', child: Text('プロパティ')),
+                const PopupMenuItem(value: 'select', child: Text('複数選択')),
+                const PopupMenuDivider(),
+                const PopupMenuItem(value: 'sort_created', child: Text('登録日時で並び替え')),
+                const PopupMenuItem(value: 'sort_title', child: Text('タイトルで並び替え')),
+                const PopupMenuItem(value: 'sort_url', child: Text('URLで並び替え')),
+                PopupMenuItem(value: 'direction', child: Text(_sortAscending ? '降順にする' : '昇順にする')),
+                if (veryCompact) ...const [PopupMenuDivider(), PopupMenuItem(value: 'gallery', child: Text('ギャラリー表示')), PopupMenuItem(value: 'list', child: Text('リスト表示')), PopupMenuItem(value: 'table', child: Text('テーブル表示'))],
+              ],
+              icon: const Icon(Icons.more_horiz),
             ),
-          ),
-          IconButton(
-            tooltip: _sortAscending ? '昇順' : '降順',
-            onPressed: () => setState(() => _sortAscending = !_sortAscending),
-            icon: Icon(_sortAscending ? Icons.arrow_upward : Icons.arrow_downward, size: 18),
-          ),
-          TextButton.icon(
-            onPressed: _showPropertiesDialog,
-            icon: const Icon(Icons.tune, size: 17),
-            label: const Text('プロパティ'),
-          ),
-          const Spacer(),
-          SegmentedButton<BookmarkStage1ViewType>(
-            showSelectedIcon: false,
-            segments: const [
-              ButtonSegment(value: BookmarkStage1ViewType.gallery, icon: Icon(Icons.grid_view, size: 17)),
-              ButtonSegment(value: BookmarkStage1ViewType.list, icon: Icon(Icons.view_list, size: 17)),
-              ButtonSegment(value: BookmarkStage1ViewType.table, icon: Icon(Icons.table_rows, size: 17)),
-            ],
-            selected: {_viewType},
-            onSelectionChanged: (value) => setState(() => _viewType = value.first),
-          ),
-        ],
-      ),
+          ],
+        ]);
+      }),
     );
   }
 
   Widget _tagTree(List<Tag> allTags, int? parentId, int depth) {
     final children = _childrenOf(parentId, allTags);
-    return Column(
-      children: children.map((tag) {
-        final nested = _childrenOf(tag.id, allTags);
-        return Column(
-          children: [
-            ListTile(
-              dense: true,
-              visualDensity: VisualDensity.compact,
-              contentPadding: EdgeInsets.only(left: 8 + depth * 16, right: 6),
-              leading: Icon(nested.isEmpty ? Icons.sell_outlined : Icons.folder_outlined, size: 17),
-              title: Text(tag.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)),
-              selected: _selectedTagIds.length == 1 && _selectedTagIds.contains(tag.id),
-              onTap: () => _filterByTag(tag),
-            ),
-            if (nested.isNotEmpty) _tagTree(allTags, tag.id, depth + 1),
-          ],
-        );
-      }).toList(),
-    );
+    return Column(children: children.map((tag) {
+      final nested = _childrenOf(tag.id, allTags);
+      return Column(children: [
+        ListTile(dense: true, visualDensity: VisualDensity.compact, contentPadding: EdgeInsets.only(left: 8 + depth * 16, right: 6), leading: Icon(nested.isEmpty ? Icons.sell_outlined : Icons.folder_outlined, size: 17), title: Text(tag.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)), selected: _selectedTagIds.length == 1 && _selectedTagIds.contains(tag.id), onTap: () => _filterByTag(tag)),
+        if (nested.isNotEmpty) _tagTree(allTags, tag.id, depth + 1),
+      ]);
+    }).toList());
   }
 
   Widget _sidebar(List<Tag> allTags) {
     if (_sidebarCollapsed) {
-      return Container(
-        width: 42,
-        color: const Color(0xFFF7F7F5),
-        alignment: Alignment.topCenter,
-        child: Padding(
-          padding: const EdgeInsets.only(top: 8),
-          child: IconButton(
-            tooltip: 'サイドバーを開く',
-            onPressed: () => setState(() => _sidebarCollapsed = false),
-            icon: const Icon(Icons.chevron_right, size: 19),
-          ),
-        ),
-      );
+      return Container(width: 42, color: const Color(0xFFF7F7F5), alignment: Alignment.topCenter, child: Padding(padding: const EdgeInsets.only(top: 8), child: IconButton(tooltip: 'サイドバーを開く', onPressed: () => setState(() => _sidebarCollapsed = false), icon: const Icon(Icons.chevron_right, size: 19))));
     }
-
     return Container(
       width: 220,
       color: const Color(0xFFF7F7F5),
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(8, 6, 8, 20),
-        children: [
-          Align(
-            alignment: Alignment.centerRight,
-            child: IconButton(
-              tooltip: 'サイドバーを閉じる',
-              visualDensity: VisualDensity.compact,
-              onPressed: () => setState(() => _sidebarCollapsed = true),
-              icon: const Icon(Icons.chevron_left, size: 18),
-            ),
-          ),
-          ListTile(
-            dense: true,
-            leading: const Icon(Icons.all_inbox_outlined, size: 18),
-            title: const Text('すべて'),
-            onTap: _resetFilters,
-          ),
-          ListTile(
-            dense: true,
-            leading: const Icon(Icons.star_outline, size: 18),
-            title: const Text('お気に入り'),
-            selected: _favoritesOnly,
-            onTap: () {
-              _searchController.clear();
-              setState(() {
-                _query = '';
-                _favoritesOnly = true;
-                _selectedTagIds.clear();
-                _personFilterId = null;
-                _photoFilterId = null;
-                _relationFilterLabel = null;
-              });
-            },
-          ),
-          const Divider(),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(9, 8, 0, 4),
-            child: Row(
-              children: [
-                const Expanded(child: Text('タグ', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600))),
-                Transform.scale(
-                  scale: .78,
-                  child: Switch(
-                    value: _includeDescendants,
-                    onChanged: (value) => setState(() => _includeDescendants = value),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          _tagTree(allTags, null, 0),
-        ],
-      ),
+      child: ListView(padding: const EdgeInsets.fromLTRB(8, 6, 8, 20), children: [
+        Align(alignment: Alignment.centerRight, child: IconButton(tooltip: 'サイドバーを閉じる', visualDensity: VisualDensity.compact, onPressed: () => setState(() => _sidebarCollapsed = true), icon: const Icon(Icons.chevron_left, size: 18))),
+        ListTile(dense: true, leading: const Icon(Icons.all_inbox_outlined, size: 18), title: const Text('すべて'), onTap: _resetFilters),
+        ListTile(dense: true, leading: const Icon(Icons.star_outline, size: 18), title: const Text('お気に入り'), selected: _favoritesOnly, onTap: () { _searchController.clear(); setState(() { _query = ''; _favoritesOnly = true; _selectedTagIds.clear(); _personFilterId = null; _photoFilterId = null; _relationFilterLabel = null; }); }),
+        const Divider(),
+        Padding(padding: const EdgeInsets.fromLTRB(9, 8, 0, 4), child: Row(children: [const Expanded(child: Text('タグ', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600))), Transform.scale(scale: .78, child: Switch(value: _includeDescendants, onChanged: (value) => setState(() => _includeDescendants = value)))])),
+        _tagTree(allTags, null, 0),
+      ]),
     );
   }
 
@@ -757,22 +684,8 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
         final tags = tagSnapshot.data ?? const <Tag>[];
         return Scaffold(
           backgroundColor: Colors.white,
-          appBar: AppBar(
-            toolbarHeight: 50,
-            title: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.bookmarks_outlined, size: 20),
-                SizedBox(width: 7),
-                Text('Bookmarks', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
-              ],
-            ),
-          ),
-          floatingActionButton: FloatingActionButton.extended(
-            onPressed: () => showBookmarkCreateDialog(context: context, repository: widget.repository),
-            icon: const Icon(Icons.add, size: 18),
-            label: const Text('追加'),
-          ),
+          appBar: AppBar(toolbarHeight: 50, title: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.bookmarks_outlined, size: 20), SizedBox(width: 7), Text('Bookmarks', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500))])),
+          floatingActionButton: _selectionMode ? null : FloatingActionButton.extended(onPressed: () => showBookmarkCreateDialog(context: context, repository: widget.repository), icon: const Icon(Icons.add, size: 18), label: const Text('追加')),
           body: StreamBuilder<List<BookmarkItem>>(
             stream: widget.repository.watchAll(),
             builder: (context, bookmarkSnapshot) {
@@ -780,55 +693,23 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
               final allBookmarks = bookmarkSnapshot.data!;
               final bookmarks = _applyFilters(allBookmarks, tags);
               final selected = allBookmarks.where((bookmark) => bookmark.id == _selectedBookmarkId).firstOrNull;
-
-              return Row(
-                children: [
-                  _sidebar(tags),
-                  const VerticalDivider(width: 1, color: Color(0xFFE7E7E4)),
-                  Expanded(
-                    child: Column(
-                      children: [
-                        _toolbar(),
-                        Expanded(
-                          child: bookmarks.isEmpty
-                              ? const Center(child: Text('条件に一致するブックマークがありません'))
-                              : switch (_viewType) {
-                                  BookmarkStage1ViewType.gallery => _gallery(bookmarks),
-                                  BookmarkStage1ViewType.list => _list(bookmarks),
-                                  BookmarkStage1ViewType.table => _table(bookmarks),
-                                },
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (selected != null) ...[
-                    MouseRegion(
-                      cursor: SystemMouseCursors.resizeColumn,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onHorizontalDragUpdate: (details) {
-                          setState(() {
-                            _detailWidth = (_detailWidth - details.delta.dx).clamp(320.0, 720.0);
-                          });
-                        },
-                        child: Container(width: 6, color: const Color(0xFFE7E7E4)),
-                      ),
-                    ),
-                    SizedBox(
-                      width: _detailWidth,
-                      child: BookmarkDetailPanel(
-                        key: ValueKey(selected.id),
-                        repository: widget.repository,
-                        bookmark: selected,
-                        onClose: () => setState(() => _selectedBookmarkId = null),
-                        onFilterByTag: _filterByTag,
-                        onFilterByPerson: _filterByPerson,
-                        onFilterByPhoto: _filterByPhoto,
-                      ),
-                    ),
-                  ],
+              return Row(children: [
+                _sidebar(tags),
+                const VerticalDivider(width: 1, color: Color(0xFFE7E7E4)),
+                Expanded(child: Column(children: [
+                  _toolbar(),
+                  if (_selectionMode) _batchBar(bookmarks),
+                  Expanded(child: bookmarks.isEmpty ? const Center(child: Text('条件に一致するブックマークがありません')) : switch (_viewType) {
+                    BookmarkStage1ViewType.gallery => _gallery(bookmarks),
+                    BookmarkStage1ViewType.list => _list(bookmarks),
+                    BookmarkStage1ViewType.table => _table(bookmarks),
+                  }),
+                ])),
+                if (selected != null && !_selectionMode) ...[
+                  MouseRegion(cursor: SystemMouseCursors.resizeColumn, child: GestureDetector(behavior: HitTestBehavior.opaque, onHorizontalDragUpdate: (details) => setState(() => _detailWidth = (_detailWidth - details.delta.dx).clamp(320.0, 720.0)), child: Container(width: 6, color: const Color(0xFFE7E7E4)))),
+                  SizedBox(width: _detailWidth, child: BookmarkDetailPanel(key: ValueKey(selected.id), repository: widget.repository, bookmark: selected, onClose: () => setState(() => _selectedBookmarkId = null), onFilterByTag: _filterByTag, onFilterByPerson: _filterByPerson, onFilterByPhoto: _filterByPhoto)),
                 ],
-              );
+              ]);
             },
           ),
         );
