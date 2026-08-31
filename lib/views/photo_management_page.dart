@@ -12,13 +12,28 @@ class PhotoManagementPage extends StatelessWidget {
   final BookmarkRepository repository;
 
   Future<void> _import(BuildContext context) async {
-    final imported = await const PhotoStorageService().importImages();
-    for (final photo in imported) {
-      await repository.addPhoto(path: photo.path, title: photo.originalName);
-    }
-    if (context.mounted && imported.isNotEmpty) {
+    try {
+      final imported = await const PhotoStorageService().importImages();
+      for (final photo in imported) {
+        await repository.addPhoto(path: photo.path, title: photo.originalName);
+      }
+      if (!context.mounted) return;
+      if (imported.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('写真は選択されませんでした')),
+        );
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('${imported.length} 枚の写真を追加しました')),
+      );
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('写真を追加できませんでした: $error'),
+          duration: const Duration(seconds: 8),
+        ),
       );
     }
   }
