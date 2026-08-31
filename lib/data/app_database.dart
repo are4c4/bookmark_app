@@ -12,6 +12,10 @@ class Bookmarks extends Table {
   TextColumn get tags => text().withDefault(const Constant(''))();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   BoolColumn get favorite => boolean().withDefault(const Constant(false))();
+  TextColumn get status => text().withDefault(const Constant('unread'))();
+  IntColumn get rating => integer().withDefault(const Constant(0))();
+  DateTimeColumn get lastOpenedAt => dateTime().nullable()();
+  IntColumn get openCount => integer().withDefault(const Constant(0))();
 }
 
 class Tags extends Table {
@@ -33,6 +37,7 @@ class People extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get name => text().unique()();
   TextColumn get note => text().nullable()();
+  IntColumn get profilePhotoId => integer().nullable()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }
 
@@ -62,6 +67,29 @@ class BookmarkPhotos extends Table {
   Set<Column<Object>> get primaryKey => {bookmarkId, photoId};
 }
 
+@DataClassName('CollectionRecord')
+class Collections extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text().unique()();
+  TextColumn get note => text().nullable()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+}
+
+class BookmarkCollections extends Table {
+  IntColumn get bookmarkId => integer().references(Bookmarks, #id, onDelete: KeyAction.cascade)();
+  IntColumn get collectionId => integer().references(Collections, #id, onDelete: KeyAction.cascade)();
+  @override
+  Set<Column<Object>> get primaryKey => {bookmarkId, collectionId};
+}
+
+class BookmarkRelations extends Table {
+  IntColumn get sourceBookmarkId => integer().references(Bookmarks, #id, onDelete: KeyAction.cascade)();
+  IntColumn get targetBookmarkId => integer().references(Bookmarks, #id, onDelete: KeyAction.cascade)();
+  TextColumn get relationType => text().withDefault(const Constant('related'))();
+  @override
+  Set<Column<Object>> get primaryKey => {sourceBookmarkId, targetBookmarkId, relationType};
+}
+
 class SavedViews extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get name => text()();
@@ -73,6 +101,8 @@ class SavedViews extends Table {
   TextColumn get sortField => text().withDefault(const Constant('createdAt'))();
   TextColumn get sortDirection => text().withDefault(const Constant('desc'))();
   TextColumn get visibleProperties => text().withDefault(const Constant('image,url,tags,favorite'))();
+  TextColumn get statusFilter => text().withDefault(const Constant(''))();
+  IntColumn get minRating => integer().withDefault(const Constant(0))();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }
 
@@ -90,12 +120,17 @@ class BookmarkItem {
     required this.title,
     required this.createdAt,
     required this.favorite,
+    required this.status,
+    required this.rating,
+    required this.openCount,
     required this.tags,
     required this.people,
     required this.photos,
+    required this.collections,
     this.coverPhoto,
     this.thumbnail,
     this.description,
+    this.lastOpenedAt,
   });
 
   final int id;
@@ -105,9 +140,14 @@ class BookmarkItem {
   final String? description;
   final DateTime createdAt;
   final bool favorite;
+  final String status;
+  final int rating;
+  final DateTime? lastOpenedAt;
+  final int openCount;
   final List<Tag> tags;
   final List<Person> people;
   final List<PhotoRecord> photos;
+  final List<CollectionRecord> collections;
   final PhotoRecord? coverPhoto;
 }
 
@@ -126,6 +166,9 @@ class SavedViewConfig {
     BookmarkPeople,
     Photos,
     BookmarkPhotos,
+    Collections,
+    BookmarkCollections,
+    BookmarkRelations,
     SavedViews,
     SavedViewTags,
   ],
@@ -134,7 +177,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'bookmark_app'));
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -181,6 +224,18 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 7) await m.addColumn(photos, photos.tags);
           if (from < 8) await m.addColumn(savedViews, savedViews.visibleProperties);
+          if (from < 9) {
+            await m.addColumn(bookmarks, bookmarks.status);
+            await m.addColumn(bookmarks, bookmarks.rating);
+            await m.addColumn(bookmarks, bookmarks.lastOpenedAt);
+            await m.addColumn(bookmarks, bookmarks.openCount);
+            await m.addColumn(people, people.profilePhotoId);
+            await m.addColumn(savedViews, savedViews.statusFilter);
+            await m.addColumn(savedViews, savedViews.minRating);
+            await m.createTable(collections);
+            await m.createTable(bookmarkCollections);
+            await m.createTable(bookmarkRelations);
+          }
         },
         beforeOpen: (_) async => customStatement('PRAGMA foreign_keys = ON'),
       );
@@ -213,6 +268,14 @@ class AppDatabase extends _$AppDatabase {
     return (await (select(people)..where((p) => p.name.equals(name))).getSingle()).id;
   }
 
+  Future<int> _ensureCollection(String name) async {
+    final existing = await (select(collections)..where((c) => c.name.equals(name))).getSingleOrNull();
+    if (existing != null) return existing.id;
+    final id = await into(collections).insert(CollectionsCompanion.insert(name: name), mode: InsertMode.insertOrIgnore);
+    if (id != 0) return id;
+    return (await (select(collections)..where((c) => c.name.equals(name))).getSingle()).id;
+  }
+
   Future<List<Tag>> _tagsForBookmark(int bookmarkId) {
     final query = select(tags).join([innerJoin(bookmarkTags, bookmarkTags.tagId.equalsExp(tags.id))])
       ..where(bookmarkTags.bookmarkId.equals(bookmarkId))
@@ -232,6 +295,15 @@ class AppDatabase extends _$AppDatabase {
       ..where(bookmarkPhotos.bookmarkId.equals(bookmarkId))
       ..orderBy([OrderingTerm.asc(photos.createdAt)]);
     return query.map((row) => row.readTable(photos)).get();
+  }
+
+  Future<List<CollectionRecord>> _collectionsForBookmark(int bookmarkId) {
+    final query = select(collections).join([
+      innerJoin(bookmarkCollections, bookmarkCollections.collectionId.equalsExp(collections.id)),
+    ])
+      ..where(bookmarkCollections.bookmarkId.equals(bookmarkId))
+      ..orderBy([OrderingTerm.asc(collections.name)]);
+    return query.map((row) => row.readTable(collections)).get();
   }
 
   Future<PhotoRecord?> _coverPhotoForBookmark(int bookmarkId) async {
@@ -256,16 +328,21 @@ class AppDatabase extends _$AppDatabase {
         description: bookmark.description,
         createdAt: bookmark.createdAt,
         favorite: bookmark.favorite,
+        status: bookmark.status,
+        rating: bookmark.rating,
+        lastOpenedAt: bookmark.lastOpenedAt,
+        openCount: bookmark.openCount,
         tags: await _tagsForBookmark(bookmark.id),
         people: await _peopleForBookmark(bookmark.id),
         photos: await _photosForBookmark(bookmark.id),
+        collections: await _collectionsForBookmark(bookmark.id),
         coverPhoto: await _coverPhotoForBookmark(bookmark.id),
       );
 
   Stream<List<BookmarkItem>> watchBookmarkItems() {
     final trigger = customSelect(
-      'SELECT b.id FROM bookmarks b LEFT JOIN bookmark_tags bt ON bt.bookmark_id = b.id LEFT JOIN bookmark_people bp ON bp.bookmark_id = b.id LEFT JOIN bookmark_photos bph ON bph.bookmark_id = b.id GROUP BY b.id',
-      readsFrom: {bookmarks, bookmarkTags, tags, bookmarkPeople, people, bookmarkPhotos, photos},
+      'SELECT b.id FROM bookmarks b LEFT JOIN bookmark_tags bt ON bt.bookmark_id = b.id LEFT JOIN bookmark_people bp ON bp.bookmark_id = b.id LEFT JOIN bookmark_photos bph ON bph.bookmark_id = b.id LEFT JOIN bookmark_collections bc ON bc.bookmark_id = b.id GROUP BY b.id',
+      readsFrom: {bookmarks, bookmarkTags, tags, bookmarkPeople, people, bookmarkPhotos, photos, bookmarkCollections, collections},
     ).watch();
     return trigger.asyncMap((_) async {
       final rows = await select(bookmarks).get();
@@ -276,6 +353,12 @@ class AppDatabase extends _$AppDatabase {
   Stream<List<Tag>> watchAllTags() => (select(tags)..orderBy([(t) => OrderingTerm.asc(t.name)])).watch();
   Stream<List<Person>> watchAllPeople() => (select(people)..orderBy([(p) => OrderingTerm.asc(p.name)])).watch();
   Stream<List<PhotoRecord>> watchAllPhotos() => (select(photos)..orderBy([(p) => OrderingTerm.desc(p.createdAt)])).watch();
+  Stream<List<CollectionRecord>> watchAllCollections() =>
+      (select(collections)..orderBy([(c) => OrderingTerm.asc(c.name)])).watch();
+  Stream<List<BookmarkRelation>> watchRelationsForBookmark(int bookmarkId) =>
+      (select(bookmarkRelations)
+            ..where((r) => r.sourceBookmarkId.equals(bookmarkId) | r.targetBookmarkId.equals(bookmarkId)))
+          .watch();
 
   Stream<List<SavedViewConfig>> watchSavedViewConfigs() {
     final trigger = customSelect(
@@ -296,6 +379,8 @@ class AppDatabase extends _$AppDatabase {
     Iterable<String> tagNames = const [],
     Iterable<String> personNames = const [],
     bool favorite = false,
+    String status = 'unread',
+    int rating = 0,
   }) => transaction(() async {
         final id = await into(bookmarks).insert(BookmarksCompanion.insert(
           url: url,
@@ -303,6 +388,8 @@ class AppDatabase extends _$AppDatabase {
           thumbnail: Value(thumbnail),
           description: Value(description),
           favorite: Value(favorite),
+          status: Value(status),
+          rating: Value(rating.clamp(0, 5)),
         ));
         await setBookmarkTags(id, tagNames);
         await setBookmarkPeople(id, personNames);
@@ -317,9 +404,16 @@ class AppDatabase extends _$AppDatabase {
     String? description,
     Iterable<String> tagNames = const [],
     Iterable<String>? personNames,
+    String? status,
+    int? rating,
   }) => transaction(() async {
         await (update(bookmarks)..where((b) => b.id.equals(id))).write(BookmarksCompanion(
-          url: Value(url), title: Value(title), thumbnail: Value(thumbnail), description: Value(description),
+          url: Value(url),
+          title: Value(title),
+          thumbnail: Value(thumbnail),
+          description: Value(description),
+          status: status == null ? const Value.absent() : Value(status),
+          rating: rating == null ? const Value.absent() : Value(rating.clamp(0, 5)),
         ));
         await setBookmarkTags(id, tagNames);
         if (personNames != null) await setBookmarkPeople(id, personNames);
@@ -343,6 +437,74 @@ class AppDatabase extends _$AppDatabase {
         BookmarkPeopleCompanion.insert(bookmarkId: bookmarkId, personId: personId), mode: InsertMode.insertOrIgnore,
       );
     }
+  }
+
+  Future<void> setBookmarkCollections(int bookmarkId, Iterable<String> names) async {
+    await (delete(bookmarkCollections)..where((bc) => bc.bookmarkId.equals(bookmarkId))).go();
+    for (final name in _normalizeNames(names)) {
+      final collectionId = await _ensureCollection(name);
+      await into(bookmarkCollections).insert(
+        BookmarkCollectionsCompanion.insert(bookmarkId: bookmarkId, collectionId: collectionId),
+        mode: InsertMode.insertOrIgnore,
+      );
+    }
+  }
+
+  Future<void> addTagsToBookmarks(Iterable<int> bookmarkIds, Iterable<String> names) => transaction(() async {
+        for (final bookmarkId in bookmarkIds.toSet()) {
+          final current = await _tagsForBookmark(bookmarkId);
+          await setBookmarkTags(bookmarkId, [...current.map((e) => e.name), ...names]);
+        }
+      });
+
+  Future<void> removeTagsFromBookmarks(Iterable<int> bookmarkIds, Iterable<String> names) => transaction(() async {
+        final removing = _normalizeNames(names).map((e) => e.toLowerCase()).toSet();
+        for (final bookmarkId in bookmarkIds.toSet()) {
+          final current = await _tagsForBookmark(bookmarkId);
+          await setBookmarkTags(bookmarkId, current.map((e) => e.name).where((e) => !removing.contains(e.toLowerCase())));
+        }
+      });
+
+  Future<void> addPeopleToBookmarks(Iterable<int> bookmarkIds, Iterable<String> names) => transaction(() async {
+        for (final bookmarkId in bookmarkIds.toSet()) {
+          final current = await _peopleForBookmark(bookmarkId);
+          await setBookmarkPeople(bookmarkId, [...current.map((e) => e.name), ...names]);
+        }
+      });
+
+  Future<void> removePeopleFromBookmarks(Iterable<int> bookmarkIds, Iterable<String> names) => transaction(() async {
+        final removing = _normalizeNames(names).map((e) => e.toLowerCase()).toSet();
+        for (final bookmarkId in bookmarkIds.toSet()) {
+          final current = await _peopleForBookmark(bookmarkId);
+          await setBookmarkPeople(bookmarkId, current.map((e) => e.name).where((e) => !removing.contains(e.toLowerCase())));
+        }
+      });
+
+  Future<void> batchSetStatus(Iterable<int> ids, String status) async {
+    for (final id in ids.toSet()) {
+      await (update(bookmarks)..where((b) => b.id.equals(id))).write(BookmarksCompanion(status: Value(status)));
+    }
+  }
+
+  Future<void> batchSetRating(Iterable<int> ids, int rating) async {
+    for (final id in ids.toSet()) {
+      await (update(bookmarks)..where((b) => b.id.equals(id))).write(BookmarksCompanion(rating: Value(rating.clamp(0, 5))));
+    }
+  }
+
+  Future<void> batchSetFavorite(Iterable<int> ids, bool favorite) async {
+    for (final id in ids.toSet()) {
+      await (update(bookmarks)..where((b) => b.id.equals(id))).write(BookmarksCompanion(favorite: Value(favorite)));
+    }
+  }
+
+  Future<void> recordBookmarkOpen(int id) async {
+    final bookmark = await (select(bookmarks)..where((b) => b.id.equals(id))).getSingleOrNull();
+    if (bookmark == null) return;
+    await (update(bookmarks)..where((b) => b.id.equals(id))).write(BookmarksCompanion(
+      lastOpenedAt: Value(DateTime.now()),
+      openCount: Value(bookmark.openCount + 1),
+    ));
   }
 
   Future<int> addPhoto({required String path, String? title, String? note, Iterable<String> tagNames = const []}) =>
@@ -408,14 +570,36 @@ class AppDatabase extends _$AppDatabase {
     return id;
   }
 
-  Future<void> updatePerson(int id, String name, String? note) async {
+  Future<void> updatePerson(int id, String name, String? note, {int? profilePhotoId, bool updateProfilePhoto = false}) async {
     final trimmed = name.trim();
     if (trimmed.isEmpty) return;
-    await (update(people)..where((p) => p.id.equals(id))).write(
-      PeopleCompanion(name: Value(trimmed), note: Value(note?.trim().isEmpty == true ? null : note?.trim())),
-    );
+    await (update(people)..where((p) => p.id.equals(id))).write(PeopleCompanion(
+      name: Value(trimmed),
+      note: Value(note?.trim().isEmpty == true ? null : note?.trim()),
+      profilePhotoId: updateProfilePhoto ? Value(profilePhotoId) : const Value.absent(),
+    ));
   }
   Future<void> deletePerson(int id) => (delete(people)..where((p) => p.id.equals(id))).go();
+
+  Future<int> createCollection(String name, {String? note}) async {
+    final id = await _ensureCollection(name.trim());
+    if (note?.trim().isNotEmpty == true) {
+      await (update(collections)..where((c) => c.id.equals(id))).write(CollectionsCompanion(note: Value(note!.trim())));
+    }
+    return id;
+  }
+  Future<void> deleteCollection(int id) => (delete(collections)..where((c) => c.id.equals(id))).go();
+
+  Future<void> addBookmarkRelation(int sourceId, int targetId, String type) async {
+    if (sourceId == targetId) return;
+    await into(bookmarkRelations).insert(
+      BookmarkRelationsCompanion.insert(sourceBookmarkId: sourceId, targetBookmarkId: targetId, relationType: Value(type)),
+      mode: InsertMode.insertOrIgnore,
+    );
+  }
+  Future<void> removeBookmarkRelation(int sourceId, int targetId, String type) =>
+      (delete(bookmarkRelations)..where((r) =>
+          r.sourceBookmarkId.equals(sourceId) & r.targetBookmarkId.equals(targetId) & r.relationType.equals(type))).go();
 
   Future<int> createTag(String name, {int? parentTagId}) async {
     final trimmed = name.trim();
@@ -454,6 +638,10 @@ class AppDatabase extends _$AppDatabase {
   Future<void> setFavorite(int id, bool favorite) async {
     await (update(bookmarks)..where((b) => b.id.equals(id))).write(BookmarksCompanion(favorite: Value(favorite)));
   }
+  Future<void> setStatus(int id, String status) =>
+      (update(bookmarks)..where((b) => b.id.equals(id))).write(BookmarksCompanion(status: Value(status)));
+  Future<void> setRating(int id, int rating) =>
+      (update(bookmarks)..where((b) => b.id.equals(id))).write(BookmarksCompanion(rating: Value(rating.clamp(0, 5))));
   Future<int> deleteBookmark(int id) => (delete(bookmarks)..where((b) => b.id.equals(id))).go();
 
   Future<void> _setSavedViewTags(int viewId, Iterable<int> tagIds) async {
@@ -475,6 +663,8 @@ class AppDatabase extends _$AppDatabase {
     String sortField = 'createdAt',
     String sortDirection = 'desc',
     String visibleProperties = 'image,url,tags,favorite',
+    String statusFilter = '',
+    int minRating = 0,
   }) => transaction(() async {
         final id = await into(savedViews).insert(SavedViewsCompanion.insert(
           name: name,
@@ -485,6 +675,8 @@ class AppDatabase extends _$AppDatabase {
           sortField: Value(sortField),
           sortDirection: Value(sortDirection),
           visibleProperties: Value(visibleProperties),
+          statusFilter: Value(statusFilter),
+          minRating: Value(minRating.clamp(0, 5)),
         ));
         await _setSavedViewTags(id, tagIds);
         return id;
@@ -501,11 +693,14 @@ class AppDatabase extends _$AppDatabase {
     required String sortField,
     required String sortDirection,
     required String visibleProperties,
+    required String statusFilter,
+    required int minRating,
   }) => transaction(() async {
         await (update(savedViews)..where((v) => v.id.equals(id))).write(SavedViewsCompanion(
           name: Value(name), layoutType: Value(layoutType), searchQuery: Value(searchQuery),
           favoritesOnly: Value(favoritesOnly), tagMatchMode: Value(tagMatchMode),
           sortField: Value(sortField), sortDirection: Value(sortDirection), visibleProperties: Value(visibleProperties),
+          statusFilter: Value(statusFilter), minRating: Value(minRating.clamp(0, 5)),
         ));
         await _setSavedViewTags(id, tagIds);
       });
