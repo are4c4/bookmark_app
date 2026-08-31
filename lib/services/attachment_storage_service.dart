@@ -27,15 +27,29 @@ class AttachmentStorageService {
     final sourcePaths = Platform.isMacOS
         ? await _pickAttachmentsOnMacOS()
         : await _pickAttachmentsWithFileSelector();
-    if (sourcePaths.isEmpty) return const [];
+    return importPathsForBookmark(
+      bookmarkId: bookmarkId,
+      profileDirectoryPath: profileDirectoryPath,
+      store: store,
+      sourcePaths: sourcePaths,
+    );
+  }
+
+  Future<List<BookmarkAttachment>> importPathsForBookmark({
+    required int bookmarkId,
+    required String profileDirectoryPath,
+    required BookmarkAttachmentStore store,
+    required Iterable<String> sourcePaths,
+  }) async {
+    final paths = sourcePaths.where(_isSupported).toList();
+    if (paths.isEmpty) return const [];
 
     final directory = Directory('$profileDirectoryPath/attachments');
     if (!await directory.exists()) await directory.create(recursive: true);
 
     final result = <BookmarkAttachment>[];
-    for (var i = 0; i < sourcePaths.length; i++) {
-      final sourcePath = sourcePaths[i];
-      if (!_isSupported(sourcePath)) continue;
+    for (var i = 0; i < paths.length; i++) {
+      final sourcePath = paths[i];
       final source = File(sourcePath);
       if (!await source.exists()) continue;
       final originalName = _fileName(source.path);
@@ -47,11 +61,12 @@ class AttachmentStorageService {
           '${directory.path}/${DateTime.now().microsecondsSinceEpoch}_${i}_$safeName';
       final copied = await source.copy(targetPath);
       final stat = await copied.stat();
+      final kind = _kindFor(targetPath);
       final id = await store.add(
         bookmarkId: bookmarkId,
         fileName: originalName,
         path: targetPath,
-        kind: _kindFor(targetPath),
+        kind: kind,
         sizeBytes: stat.size,
       );
       result.add(
@@ -60,7 +75,7 @@ class AttachmentStorageService {
           bookmarkId: bookmarkId,
           fileName: originalName,
           path: targetPath,
-          kind: _kindFor(targetPath),
+          kind: kind,
           sizeBytes: stat.size,
           createdAt: DateTime.now(),
         ),
