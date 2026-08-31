@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
+import '../widgets/photo_database_picker.dart';
 
 class BookmarkDetailsPage extends StatefulWidget {
   const BookmarkDetailsPage({super.key, required this.repository});
@@ -34,6 +35,31 @@ class _BookmarkDetailsPageState extends State<BookmarkDetailsPage> {
     }
   }
 
+  Future<PhotoPickerResult?> _pickPhotos(
+    BookmarkItem bookmark, {
+    String title = '写真DBから選択',
+  }) async {
+    final allPhotos = await widget.repository.watchPhotos().first;
+    if (!mounted) return null;
+    return showPhotoDatabasePicker(
+      context: context,
+      photos: allPhotos,
+      initiallySelectedIds: bookmark.photos.map((photo) => photo.id),
+      initialCoverPhotoId: bookmark.coverPhoto?.id,
+      title: title,
+    );
+  }
+
+  Future<void> _addPhotosFromDatabase(BookmarkItem bookmark) async {
+    final result = await _pickPhotos(bookmark, title: '関連写真を選択');
+    if (result == null) return;
+    await widget.repository.attachPhotos(
+      bookmark,
+      result.photos,
+      coverPhoto: result.coverPhoto,
+    );
+  }
+
   Future<void> _edit(BookmarkItem bookmark) async {
     final title = TextEditingController(text: bookmark.title);
     final url = TextEditingController(text: bookmark.url);
@@ -42,49 +68,124 @@ class _BookmarkDetailsPageState extends State<BookmarkDetailsPage> {
     final tags = TextEditingController(text: bookmark.tags.map((e) => e.name).join(', '));
     final people = TextEditingController(text: bookmark.people.map((e) => e.name).join(', '));
 
+    var selectedPhotos = <PhotoRecord>[...bookmark.photos];
+    PhotoRecord? selectedCover = bookmark.coverPhoto;
+    var clearCover = false;
+
     await showDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('詳細を編集'),
-        content: SizedBox(
-          width: 600,
-          child: SingleChildScrollView(
-            child: Column(
-              children: [
-                TextField(controller: title, decoration: const InputDecoration(labelText: 'タイトル')),
-                TextField(controller: url, decoration: const InputDecoration(labelText: 'URL')),
-                TextField(controller: description, maxLines: 4, decoration: const InputDecoration(labelText: '説明')),
-                TextField(controller: thumbnail, decoration: const InputDecoration(labelText: 'WebサムネイルURL')),
-                TextField(controller: tags, decoration: const InputDecoration(labelText: 'タグ（カンマ区切り）')),
-                TextField(
-                  controller: people,
-                  decoration: const InputDecoration(
-                    labelText: '出演者（カンマ区切り）',
-                    hintText: '出演者A, 出演者B',
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setLocalState) => AlertDialog(
+          title: const Text('詳細を編集'),
+          content: SizedBox(
+            width: 650,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(controller: title, decoration: const InputDecoration(labelText: 'タイトル')),
+                  TextField(controller: url, decoration: const InputDecoration(labelText: 'URL')),
+                  TextField(controller: description, maxLines: 4, decoration: const InputDecoration(labelText: '説明')),
+                  TextField(controller: thumbnail, decoration: const InputDecoration(labelText: 'WebサムネイルURL')),
+                  TextField(controller: tags, decoration: const InputDecoration(labelText: 'タグ（カンマ区切り）')),
+                  TextField(
+                    controller: people,
+                    decoration: const InputDecoration(
+                      labelText: '出演者（カンマ区切り）',
+                      hintText: '出演者A, 出演者B',
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 20),
+                  Text('カバー画像', style: Theme.of(context).textTheme.titleSmall),
+                  const SizedBox(height: 8),
+                  if (!clearCover && selectedCover != null)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: SizedBox(
+                        width: 220,
+                        height: 130,
+                        child: Image.file(
+                          File(selectedCover!.path),
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image_outlined)),
+                        ),
+                      ),
+                    )
+                  else
+                    Text(
+                      'ローカルのカバー画像は設定されていません',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.photo_library_outlined),
+                        label: const Text('写真DBから選択'),
+                        onPressed: () async {
+                          final allPhotos = await widget.repository.watchPhotos().first;
+                          if (!context.mounted) return;
+                          final result = await showPhotoDatabasePicker(
+                            context: context,
+                            photos: allPhotos,
+                            initiallySelectedIds: selectedPhotos.map((photo) => photo.id),
+                            initialCoverPhotoId: clearCover ? null : selectedCover?.id,
+                            title: 'サムネイル・関連写真を選択',
+                          );
+                          if (result == null) return;
+                          setLocalState(() {
+                            selectedPhotos = result.photos;
+                            selectedCover = result.coverPhoto;
+                            clearCover = false;
+                          });
+                        },
+                      ),
+                      if ((!clearCover && selectedCover != null) || bookmark.coverPhoto != null)
+                        OutlinedButton.icon(
+                          icon: const Icon(Icons.hide_image_outlined),
+                          label: const Text('カバーを解除'),
+                          onPressed: () => setLocalState(() {
+                            clearCover = true;
+                            selectedCover = null;
+                          }),
+                        ),
+                    ],
+                  ),
+                  if (selectedPhotos.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text('関連写真: ${selectedPhotos.length}枚', style: Theme.of(context).textTheme.bodySmall),
+                  ],
+                ],
+              ),
             ),
           ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('キャンセル')),
+            FilledButton(
+              onPressed: () async {
+                await widget.repository.update(
+                  id: bookmark.id,
+                  url: url.text.trim(),
+                  title: title.text.trim(),
+                  description: description.text.trim().isEmpty ? null : description.text.trim(),
+                  thumbnail: thumbnail.text.trim().isEmpty ? null : thumbnail.text.trim(),
+                  tagNames: _split(tags.text),
+                  personNames: _split(people.text),
+                );
+                await widget.repository.attachPhotos(
+                  bookmark,
+                  selectedPhotos,
+                  coverPhoto: clearCover ? null : selectedCover,
+                );
+                if (clearCover) await widget.repository.clearCoverPhoto(bookmark);
+                if (dialogContext.mounted) Navigator.pop(dialogContext);
+              },
+              child: const Text('保存'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('キャンセル')),
-          FilledButton(
-            onPressed: () async {
-              await widget.repository.update(
-                id: bookmark.id,
-                url: url.text.trim(),
-                title: title.text.trim(),
-                description: description.text.trim().isEmpty ? null : description.text.trim(),
-                thumbnail: thumbnail.text.trim().isEmpty ? null : thumbnail.text.trim(),
-                tagNames: _split(tags.text),
-                personNames: _split(people.text),
-              );
-              if (dialogContext.mounted) Navigator.pop(dialogContext);
-            },
-            child: const Text('保存'),
-          ),
-        ],
       ),
     );
 
@@ -116,7 +217,7 @@ class _BookmarkDetailsPageState extends State<BookmarkDetailsPage> {
 
   Widget _photoSection(BookmarkItem bookmark) {
     if (bookmark.photos.isEmpty) {
-      return const Text('関連写真はありません。「写真」画面から追加できます。');
+      return const Text('関連写真はありません。「写真DBから追加」で選択できます。');
     }
     return Wrap(
       spacing: 10,
@@ -124,17 +225,32 @@ class _BookmarkDetailsPageState extends State<BookmarkDetailsPage> {
       children: bookmark.photos.map((photo) {
         final isCover = bookmark.coverPhoto?.id == photo.id;
         return SizedBox(
-          width: 180,
+          width: 190,
           child: Card(
             clipBehavior: Clip.antiAlias,
             child: Column(
               children: [
                 AspectRatio(
                   aspectRatio: 4 / 3,
-                  child: Image.file(
-                    File(photo.path),
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image_outlined)),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Image.file(
+                        File(photo.path),
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image_outlined)),
+                      ),
+                      if (isCover)
+                        const Positioned(
+                          top: 6,
+                          left: 6,
+                          child: Chip(
+                            avatar: Icon(Icons.photo_size_select_actual, size: 15),
+                            label: Text('カバー'),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        ),
+                    ],
                   ),
                 ),
                 Padding(
@@ -148,15 +264,17 @@ class _BookmarkDetailsPageState extends State<BookmarkDetailsPage> {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      IconButton(
-                        tooltip: isCover ? 'カバーに設定済み' : 'カバーにする',
-                        onPressed: isCover ? null : () => widget.repository.setCoverPhoto(bookmark, photo),
-                        icon: Icon(isCover ? Icons.photo_size_select_actual : Icons.photo_outlined),
-                      ),
-                      IconButton(
-                        tooltip: '関連を解除',
-                        onPressed: () => widget.repository.detachPhoto(bookmark, photo),
-                        icon: const Icon(Icons.link_off, size: 18),
+                      PopupMenuButton<String>(
+                        onSelected: (value) async {
+                          if (value == 'cover') await widget.repository.setCoverPhoto(bookmark, photo);
+                          if (value == 'clearCover') await widget.repository.clearCoverPhoto(bookmark);
+                          if (value == 'detach') await widget.repository.detachPhoto(bookmark, photo);
+                        },
+                        itemBuilder: (_) => [
+                          if (!isCover) const PopupMenuItem(value: 'cover', child: Text('カバーにする')),
+                          if (isCover) const PopupMenuItem(value: 'clearCover', child: Text('カバーを解除')),
+                          const PopupMenuItem(value: 'detach', child: Text('関連を解除')),
+                        ],
                       ),
                     ],
                   ),
@@ -234,7 +352,25 @@ class _BookmarkDetailsPageState extends State<BookmarkDetailsPage> {
               const SizedBox(height: 20),
               _property('登録日時', Text(bookmark.createdAt.toLocal().toString())),
               const SizedBox(height: 28),
-              Text('関連写真', style: Theme.of(context).textTheme.titleMedium),
+              Row(
+                children: [
+                  Text('関連写真', style: Theme.of(context).textTheme.titleMedium),
+                  const Spacer(),
+                  OutlinedButton.icon(
+                    onPressed: () => _addPhotosFromDatabase(bookmark),
+                    icon: const Icon(Icons.photo_library_outlined),
+                    label: const Text('写真DBから追加'),
+                  ),
+                  if (bookmark.coverPhoto != null) ...[
+                    const SizedBox(width: 8),
+                    TextButton.icon(
+                      onPressed: () => widget.repository.clearCoverPhoto(bookmark),
+                      icon: const Icon(Icons.hide_image_outlined),
+                      label: const Text('カバー解除'),
+                    ),
+                  ],
+                ],
+              ),
               const SizedBox(height: 10),
               _photoSection(bookmark),
               const SizedBox(height: 28),
