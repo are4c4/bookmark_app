@@ -128,6 +128,52 @@ class SavedViewTags extends Table {
   Set<Column<Object>> get primaryKey => {savedViewId, tagId};
 }
 
+@DataClassName('WorkspaceRecord')
+class Workspaces extends Table {
+  @override
+  String get tableName => 'workspaces';
+
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text().unique()();
+  TextColumn get createdAt => text().withDefault(const CustomExpression<String>('CURRENT_TIMESTAMP'))();
+  TextColumn get icon => text().withDefault(const Constant('📁'))();
+  IntColumn get colorValue => integer().withDefault(const Constant(4288585374))();
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+}
+
+class BookmarkWorkspaces extends Table {
+  @override
+  String get tableName => 'bookmark_workspace';
+
+  IntColumn get bookmarkId => integer().references(Bookmarks, #id, onDelete: KeyAction.cascade)();
+  IntColumn get workspaceId => integer().references(Workspaces, #id, onDelete: KeyAction.cascade)();
+
+  @override
+  Set<Column<Object>> get primaryKey => {bookmarkId};
+}
+
+class SavedViewWorkspaces extends Table {
+  @override
+  String get tableName => 'saved_view_workspace';
+
+  IntColumn get savedViewId => integer().references(SavedViews, #id, onDelete: KeyAction.cascade)();
+  IntColumn get workspaceId => integer().references(Workspaces, #id, onDelete: KeyAction.cascade)();
+
+  @override
+  Set<Column<Object>> get primaryKey => {savedViewId};
+}
+
+class WorkspaceSettings extends Table {
+  @override
+  String get tableName => 'workspace_settings';
+
+  TextColumn get key => text()();
+  TextColumn get value => text()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {key};
+}
+
 class BookmarkItem {
   const BookmarkItem({
     required this.id,
@@ -197,6 +243,10 @@ class SavedViewConfig {
     BookmarkRelations,
     SavedViews,
     SavedViewTags,
+    Workspaces,
+    BookmarkWorkspaces,
+    SavedViewWorkspaces,
+    WorkspaceSettings,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -204,7 +254,7 @@ class AppDatabase extends _$AppDatabase {
       : super(driftDatabase(name: databaseName));
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -340,6 +390,37 @@ class AppDatabase extends _$AppDatabase {
                   ),
                 );
               }
+            }
+          }
+          if (from < 12) {
+            final existing = await customSelect(
+              "SELECT name FROM sqlite_master WHERE type = 'table'",
+            ).get();
+            final tableNames = existing.map((row) => row.read<String>('name')).toSet();
+
+            if (!tableNames.contains('workspaces')) {
+              await m.createTable(workspaces);
+            } else {
+              final columns = await customSelect('PRAGMA table_info(workspaces)').get();
+              final names = columns.map((row) => row.read<String>('name')).toSet();
+              if (!names.contains('icon')) {
+                await customStatement("ALTER TABLE workspaces ADD COLUMN icon TEXT NOT NULL DEFAULT '📁'");
+              }
+              if (!names.contains('color_value')) {
+                await customStatement('ALTER TABLE workspaces ADD COLUMN color_value INTEGER NOT NULL DEFAULT 4288585374');
+              }
+              if (!names.contains('sort_order')) {
+                await customStatement('ALTER TABLE workspaces ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0');
+              }
+            }
+            if (!tableNames.contains('bookmark_workspace')) {
+              await m.createTable(bookmarkWorkspaces);
+            }
+            if (!tableNames.contains('saved_view_workspace')) {
+              await m.createTable(savedViewWorkspaces);
+            }
+            if (!tableNames.contains('workspace_settings')) {
+              await m.createTable(workspaceSettings);
             }
           }
         },
