@@ -122,14 +122,19 @@ class TagGroupStore {
   }
 
   Future<void> setTagGroup(int tagId, int? groupId) async {
-    await database.customUpdate(
-      'UPDATE tags SET group_id = ? WHERE id = ?',
-      variables: [
-        groupId == null ? const Variable<int>(null) : Variable<int>(groupId),
-        Variable<int>(tagId),
-      ],
-      updates: {database.tags},
-    );
+    if (groupId == null) {
+      await database.customUpdate(
+        'UPDATE tags SET group_id = NULL WHERE id = ?',
+        variables: [Variable<int>(tagId)],
+        updates: {database.tags},
+      );
+    } else {
+      await database.customUpdate(
+        'UPDATE tags SET group_id = ? WHERE id = ?',
+        variables: [Variable<int>(groupId), Variable<int>(tagId)],
+        updates: {database.tags},
+      );
+    }
     _changes.add(null);
   }
 
