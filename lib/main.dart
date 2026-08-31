@@ -4,6 +4,7 @@ import 'data/app_database.dart';
 import 'data/bookmark_repository.dart';
 import 'data/workspace_store.dart';
 import 'services/bookmark_transfer_service.dart';
+import 'services/photo_storage_service.dart';
 import 'services/profile_manager.dart';
 import 'views/bookmark_unified_stage1_page.dart';
 import 'views/people_management_page.dart';
@@ -28,6 +29,7 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
   WorkspaceStore? _workspaceStore;
   BookmarkRepository? _repository;
   Object? _error;
+  bool _switching = false;
 
   @override
   void initState() {
@@ -35,22 +37,28 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
     _load();
   }
 
-  Future<BookmarkRepository> _openRepository(AppDatabase database) async {
+  Future<BookmarkRepository> _openRepository(
+    AppDatabase database,
+    DatabaseProfile profile,
+  ) async {
     final workspaceStore = WorkspaceStore(database);
     final workspaceId = await workspaceStore.initialize();
     _workspaceStore = workspaceStore;
+    PhotoStorageService.activePhotoDirectoryPath = profile.photoDirectoryPath;
     return BookmarkRepository(
       database,
       workspaceStore: workspaceStore,
       workspaceId: workspaceId,
+      profileDirectoryPath: profile.directoryPath,
     );
   }
 
   Future<void> _load() async {
     try {
       final manager = await ProfileManager.load();
-      final database = AppDatabase(databaseName: manager.state.activeProfile.databaseName);
-      final repository = await _openRepository(database);
+      final profile = manager.state.activeProfile;
+      final database = AppDatabase(databaseName: profile.databaseName);
+      final repository = await _openRepository(database, profile);
       if (!mounted) {
         await database.close();
         return;
@@ -67,46 +75,65 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
 
   Future<void> _switchProfile(DatabaseProfile profile) async {
     final manager = _profileManager;
-    if (manager == null || manager.state.activeProfile.id == profile.id) return;
+    if (manager == null || manager.state.activeProfile.id == profile.id || _switching) return;
 
-    // Prepare the new database before touching the currently visible tree.
+    final previous = manager.state.activeProfile;
     final oldDatabase = _database;
-    final database = AppDatabase(databaseName: profile.databaseName);
-    BookmarkRepository repository;
-    try {
-      repository = await _openRepository(database);
-    } catch (_) {
-      await database.close();
-      rethrow;
-    }
-
-    if (!mounted) {
-      await database.close();
-      return;
-    }
-
-    // Persist the active profile only after the new database is known to open.
-    await manager.setActiveProfile(profile);
-    if (!mounted) {
-      await database.close();
-      return;
-    }
-
     setState(() {
-      _database = database;
-      _repository = repository;
+      _switching = true;
+      _repository = null;
     });
 
-    // The old widgets still hold stream subscriptions until the next frame.
-    // Closing the old Drift database before disposal can trip framework asserts.
     await WidgetsBinding.instance.endOfFrame;
     await oldDatabase?.close();
+    _database = null;
+    _workspaceStore = null;
+
+    try {
+      final database = AppDatabase(databaseName: profile.databaseName);
+      final repository = await _openRepository(database, profile);
+      await manager.setActiveProfile(profile);
+      if (!mounted) {
+        await database.close();
+        return;
+      }
+      setState(() {
+        _database = database;
+        _repository = repository;
+        _switching = false;
+        _error = null;
+      });
+    } catch (error) {
+      try {
+        final fallbackDatabase = AppDatabase(databaseName: previous.databaseName);
+        final fallbackRepository = await _openRepository(fallbackDatabase, previous);
+        await manager.setActiveProfile(previous);
+        if (!mounted) {
+          await fallbackDatabase.close();
+          return;
+        }
+        setState(() {
+          _database = fallbackDatabase;
+          _repository = fallbackRepository;
+          _switching = false;
+          _error = error;
+        });
+      } catch (_) {
+        if (mounted) {
+          setState(() {
+            _switching = false;
+            _error = error;
+          });
+        }
+      }
+    }
   }
 
   Future<void> _switchWorkspace(WorkspaceInfo workspace) async {
     final store = _workspaceStore;
     final database = _database;
-    if (store == null || database == null || _repository?.workspaceId == workspace.id) return;
+    final profile = _profileManager?.state.activeProfile;
+    if (store == null || database == null || profile == null || _repository?.workspaceId == workspace.id) return;
     await store.setActiveWorkspace(workspace.id);
     if (!mounted) return;
     setState(() {
@@ -114,6 +141,7 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
         database,
         workspaceStore: store,
         workspaceId: workspace.id,
+        profileDirectoryPath: profile.directoryPath,
       );
     });
   }
@@ -122,9 +150,7 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
     final manager = _profileManager;
     if (manager == null) return;
     final profile = await manager.createProfile(name);
-    if (!mounted) return;
-    // Do not rebuild once just to show the new profile and then rebuild again
-    // for the switch. A single atomic switch keeps inherited widgets stable.
+    await Future<void>.delayed(Duration.zero);
     await _switchProfile(profile);
   }
 
@@ -141,136 +167,109 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    if (_error != null) {
-      return MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(body: Center(child: Text('起動に失敗しました: $_error'))),
-      );
-    }
-
-    final manager = _profileManager;
-    final repository = _repository;
-    if (manager == null || repository == null) {
-      return const MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(body: Center(child: CircularProgressIndicator())),
-      );
-    }
-
-    return BookmarkApp(
-      repository: repository,
-      profileState: manager.state,
-      onSwitchProfile: _switchProfile,
-      onCreateProfile: _createProfile,
-      onRenameProfile: _renameProfile,
-      onSwitchWorkspace: _switchWorkspace,
-    );
-  }
-}
-
-class BookmarkApp extends StatelessWidget {
-  const BookmarkApp({
-    super.key,
-    required this.repository,
-    required this.profileState,
-    required this.onSwitchProfile,
-    required this.onCreateProfile,
-    required this.onRenameProfile,
-    required this.onSwitchWorkspace,
-  });
-
-  final BookmarkRepository repository;
-  final ProfileState profileState;
-  final Future<void> Function(DatabaseProfile profile) onSwitchProfile;
-  final Future<void> Function(String name) onCreateProfile;
-  final Future<void> Function(DatabaseProfile profile, String name) onRenameProfile;
-  final Future<void> Function(WorkspaceInfo workspace) onSwitchWorkspace;
-
-  @override
-  Widget build(BuildContext context) {
+  ThemeData _theme() {
     const notionText = Color(0xFF37352F);
     const notionMuted = Color(0xFF787774);
     const notionBorder = Color(0xFFE7E7E4);
     const notionSidebar = Color(0xFFF7F7F5);
-
     final scheme = ColorScheme.fromSeed(
       seedColor: notionText,
       brightness: Brightness.light,
       surface: Colors.white,
     );
+    return ThemeData(
+      useMaterial3: true,
+      colorScheme: scheme.copyWith(
+        primary: notionText,
+        onPrimary: Colors.white,
+        surface: Colors.white,
+        onSurface: notionText,
+        outline: notionBorder,
+        outlineVariant: notionBorder,
+        surfaceContainerLowest: notionSidebar,
+        surfaceContainerLow: notionSidebar,
+      ),
+      scaffoldBackgroundColor: Colors.white,
+      dividerColor: notionBorder,
+      splashColor: const Color(0x0D000000),
+      hoverColor: const Color(0x0A000000),
+      cardTheme: CardThemeData(
+        elevation: 0,
+        color: Colors.white,
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(6),
+          side: const BorderSide(color: notionBorder),
+        ),
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.white,
+        foregroundColor: notionText,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: true,
+      ),
+      navigationRailTheme: const NavigationRailThemeData(
+        backgroundColor: notionSidebar,
+        indicatorColor: Color(0xFFEFEFED),
+        selectedIconTheme: IconThemeData(color: notionText),
+        unselectedIconTheme: IconThemeData(color: notionMuted),
+        selectedLabelTextStyle: TextStyle(color: notionText, fontSize: 12, fontWeight: FontWeight.w600),
+        unselectedLabelTextStyle: TextStyle(color: notionMuted, fontSize: 12),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: const Color(0xFFF1F1EF),
+        side: BorderSide.none,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+        labelStyle: const TextStyle(fontSize: 12.5, color: notionText),
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        isDense: true,
+        hintStyle: const TextStyle(color: Color(0xFF9B9A97)),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(5), borderSide: const BorderSide(color: notionBorder)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(5), borderSide: const BorderSide(color: notionBorder)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(5), borderSide: const BorderSide(color: Color(0xFF9B9A97))),
+      ),
+      textButtonTheme: TextButtonThemeData(style: TextButton.styleFrom(foregroundColor: notionText)),
+      iconTheme: const IconThemeData(color: notionText),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final manager = _profileManager;
+    final repository = _repository;
+
+    Widget home;
+    if (_error != null && repository == null) {
+      home = Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text('起動またはProfile切替に失敗しました:\n$_error'),
+          ),
+        ),
+      );
+    } else if (manager == null || repository == null || _switching) {
+      home = const Scaffold(body: Center(child: CircularProgressIndicator()));
+    } else {
+      home = BookmarkShell(
+        key: ValueKey('${manager.state.activeProfile.id}:${repository.workspaceId}'),
+        repository: repository,
+        profileState: manager.state,
+        onSwitchProfile: _switchProfile,
+        onCreateProfile: _createProfile,
+        onRenameProfile: _renameProfile,
+        onSwitchWorkspace: _switchWorkspace,
+      );
+    }
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Bookmark App',
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: scheme.copyWith(
-          primary: notionText,
-          onPrimary: Colors.white,
-          surface: Colors.white,
-          onSurface: notionText,
-          outline: notionBorder,
-          outlineVariant: notionBorder,
-          surfaceContainerLowest: notionSidebar,
-          surfaceContainerLow: notionSidebar,
-        ),
-        scaffoldBackgroundColor: Colors.white,
-        dividerColor: notionBorder,
-        splashColor: const Color(0x0D000000),
-        hoverColor: const Color(0x0A000000),
-        cardTheme: CardThemeData(
-          elevation: 0,
-          color: Colors.white,
-          margin: EdgeInsets.zero,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(6),
-            side: const BorderSide(color: notionBorder),
-          ),
-        ),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.white,
-          foregroundColor: notionText,
-          surfaceTintColor: Colors.transparent,
-          elevation: 0,
-          centerTitle: true,
-        ),
-        navigationRailTheme: const NavigationRailThemeData(
-          backgroundColor: notionSidebar,
-          indicatorColor: Color(0xFFEFEFED),
-          selectedIconTheme: IconThemeData(color: notionText),
-          unselectedIconTheme: IconThemeData(color: notionMuted),
-          selectedLabelTextStyle: TextStyle(color: notionText, fontSize: 12, fontWeight: FontWeight.w600),
-          unselectedLabelTextStyle: TextStyle(color: notionMuted, fontSize: 12),
-        ),
-        chipTheme: ChipThemeData(
-          backgroundColor: const Color(0xFFF1F1EF),
-          side: BorderSide.none,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-          labelStyle: const TextStyle(fontSize: 12.5, color: notionText),
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: false,
-          isDense: true,
-          hintStyle: const TextStyle(color: Color(0xFF9B9A97)),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(5), borderSide: const BorderSide(color: notionBorder)),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(5), borderSide: const BorderSide(color: notionBorder)),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(5), borderSide: const BorderSide(color: Color(0xFF9B9A97))),
-        ),
-        textButtonTheme: TextButtonThemeData(style: TextButton.styleFrom(foregroundColor: notionText)),
-        iconTheme: const IconThemeData(color: notionText),
-      ),
-      home: BookmarkShell(
-        key: ValueKey('${profileState.activeProfile.id}:${repository.workspaceId}'),
-        repository: repository,
-        profileState: profileState,
-        onSwitchProfile: onSwitchProfile,
-        onCreateProfile: onCreateProfile,
-        onRenameProfile: onRenameProfile,
-        onSwitchWorkspace: onSwitchWorkspace,
-      ),
+      theme: _theme(),
+      home: home,
     );
   }
 }
@@ -301,71 +300,65 @@ class _BookmarkShellState extends State<BookmarkShell> {
   var _index = 0;
   static const _transfer = BookmarkTransferService();
 
-  Future<void> _waitForOverlayToClose() async {
-    // PopupMenu/AlertDialog routes can still be disposing when their Future
-    // completes. Replacing BookmarkShell in that same frame may invalidate
-    // inherited dependencies. Wait through a full frame before switching.
-    await WidgetsBinding.instance.endOfFrame;
-    await Future<void>.delayed(const Duration(milliseconds: 16));
-  }
-
   Future<String?> _askName(String title, {String initial = '', String hint = ''}) async {
-    final controller = TextEditingController(text: initial);
-    final result = await showDialog<String>(
+    var value = initial;
+    return showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text(title),
-        content: TextField(controller: controller, autofocus: true, decoration: InputDecoration(hintText: hint)),
+        content: TextFormField(
+          initialValue: initial,
+          autofocus: true,
+          onChanged: (text) => value = text,
+          onFieldSubmitted: (_) => Navigator.pop(dialogContext, value.trim()),
+          decoration: InputDecoration(hintText: hint),
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('キャンセル')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, controller.text.trim()), child: const Text('保存')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, value.trim()), child: const Text('保存')),
         ],
       ),
     );
-    controller.dispose();
-    return result;
+  }
+
+  Future<void> _afterOverlayClosed() async {
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    if (mounted) await WidgetsBinding.instance.endOfFrame;
   }
 
   Future<void> _createProfileDialog() async {
     final name = await _askName('Profileを追加', hint: '例: 実験');
     if (name?.isNotEmpty != true) return;
-    await _waitForOverlayToClose();
-    if (mounted) await widget.onCreateProfile(name!);
+    await _afterOverlayClosed();
+    await widget.onCreateProfile(name!);
   }
 
   Future<void> _renameCurrentProfile() async {
     final profile = widget.profileState.activeProfile;
     final name = await _askName('Profile名を変更', initial: profile.name);
     if (name?.isNotEmpty != true) return;
-    await _waitForOverlayToClose();
-    if (mounted) await widget.onRenameProfile(profile, name!);
+    await _afterOverlayClosed();
+    await widget.onRenameProfile(profile, name!);
   }
 
   Future<void> _handleProfileAction(String value) async {
-    if (value == '__create__') {
-      await _waitForOverlayToClose();
-      if (mounted) await _createProfileDialog();
-      return;
-    }
-    if (value == '__rename__') {
-      await _waitForOverlayToClose();
-      if (mounted) await _renameCurrentProfile();
-      return;
-    }
+    await _afterOverlayClosed();
+    if (!mounted) return;
+    if (value == '__create__') return _createProfileDialog();
+    if (value == '__rename__') return _renameCurrentProfile();
     final matches = widget.profileState.profiles.where((profile) => profile.id == value);
-    if (matches.isEmpty) return;
-    await _waitForOverlayToClose();
-    if (mounted) await widget.onSwitchProfile(matches.first);
+    if (matches.isNotEmpty) await widget.onSwitchProfile(matches.first);
   }
 
   Future<void> _createWorkspace() async {
     final name = await _askName('Workspaceを追加', hint: '例: 修論');
     if (name?.isNotEmpty != true) return;
+    await _afterOverlayClosed();
     try {
       final id = await widget.repository.createWorkspace(name!);
       final workspace = (await widget.repository.listWorkspaces()).firstWhere((item) => item.id == id);
-      await _waitForOverlayToClose();
-      if (mounted) await widget.onSwitchWorkspace(workspace);
+      if (!mounted) return;
+      await widget.onSwitchWorkspace(workspace);
     } catch (error) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Workspaceを作成できませんでした: $error')));
     }
@@ -374,6 +367,7 @@ class _BookmarkShellState extends State<BookmarkShell> {
   Future<void> _renameWorkspace(WorkspaceInfo workspace) async {
     final name = await _askName('Workspace名を変更', initial: workspace.name);
     if (name?.isNotEmpty != true) return;
+    await _afterOverlayClosed();
     await widget.repository.renameWorkspace(workspace, name!);
     if (mounted) setState(() {});
   }
@@ -391,11 +385,12 @@ class _BookmarkShellState extends State<BookmarkShell> {
       ),
     );
     if (ok != true) return;
+    await _afterOverlayClosed();
     try {
       await widget.repository.deleteWorkspace(workspace);
       final workspaces = await widget.repository.listWorkspaces();
-      await _waitForOverlayToClose();
-      if (mounted) await widget.onSwitchWorkspace(workspaces.first);
+      if (!mounted) return;
+      await widget.onSwitchWorkspace(workspaces.first);
     } catch (error) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Workspaceを削除できませんでした: $error')));
     }
@@ -423,9 +418,9 @@ class _BookmarkShellState extends State<BookmarkShell> {
       ],
     );
     if (selected == null) return;
-    final current = workspaces.firstWhere((workspace) => workspace.id == widget.repository.workspaceId);
-    await _waitForOverlayToClose();
+    await _afterOverlayClosed();
     if (!mounted) return;
+    final current = workspaces.firstWhere((workspace) => workspace.id == widget.repository.workspaceId);
     if (selected == 'create') return _createWorkspace();
     if (selected == 'rename') return _renameWorkspace(current);
     if (selected == 'delete') return _deleteWorkspace(current);
@@ -442,8 +437,7 @@ class _BookmarkShellState extends State<BookmarkShell> {
         final path = await _transfer.exportJson(widget.repository);
         if (!mounted || path == null) return;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('バックアップを書き出しました: $path')));
-      }
-      if (value == 'import') {
+      } else if (value == 'import') {
         final result = await _transfer.importFile(widget.repository);
         if (!mounted || result == null) return;
         ScaffoldMessenger.of(context).showSnackBar(
