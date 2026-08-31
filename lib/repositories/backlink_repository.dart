@@ -29,6 +29,48 @@ class BacklinkRepository {
   final BookmarkRepository _root;
   final AppDatabase _database;
 
+  static List<BacklinkEntry> buildEntries({
+    required int bookmarkId,
+    required Iterable<BookmarkRelation> relations,
+    required Iterable<BookmarkItem> bookmarks,
+  }) {
+    final byId = {for (final bookmark in bookmarks) bookmark.id: bookmark};
+    final entries = <BacklinkEntry>[];
+
+    for (final relation in relations) {
+      if (relation.sourceBookmarkId == bookmarkId) {
+        final target = byId[relation.targetBookmarkId];
+        if (target != null) {
+          entries.add(
+            BacklinkEntry(
+              bookmark: target,
+              relationType: relation.relationType,
+              direction: BacklinkDirection.outgoing,
+            ),
+          );
+        }
+      } else if (relation.targetBookmarkId == bookmarkId) {
+        final source = byId[relation.sourceBookmarkId];
+        if (source != null) {
+          entries.add(
+            BacklinkEntry(
+              bookmark: source,
+              relationType: relation.relationType,
+              direction: BacklinkDirection.incoming,
+            ),
+          );
+        }
+      }
+    }
+
+    entries.sort((a, b) {
+      final directionCompare = a.direction.index.compareTo(b.direction.index);
+      if (directionCompare != 0) return directionCompare;
+      return a.bookmark.title.toLowerCase().compareTo(b.bookmark.title.toLowerCase());
+    });
+    return entries;
+  }
+
   Stream<List<BacklinkEntry>> watchFor(int bookmarkId) {
     final query = _database.select(_database.bookmarkRelations)
       ..where(
@@ -39,41 +81,11 @@ class BacklinkRepository {
 
     return query.watch().asyncMap((relations) async {
       final bookmarks = await _root.watchAll().first;
-      final byId = {for (final bookmark in bookmarks) bookmark.id: bookmark};
-      final entries = <BacklinkEntry>[];
-
-      for (final relation in relations) {
-        if (relation.sourceBookmarkId == bookmarkId) {
-          final target = byId[relation.targetBookmarkId];
-          if (target != null) {
-            entries.add(
-              BacklinkEntry(
-                bookmark: target,
-                relationType: relation.relationType,
-                direction: BacklinkDirection.outgoing,
-              ),
-            );
-          }
-        } else {
-          final source = byId[relation.sourceBookmarkId];
-          if (source != null) {
-            entries.add(
-              BacklinkEntry(
-                bookmark: source,
-                relationType: relation.relationType,
-                direction: BacklinkDirection.incoming,
-              ),
-            );
-          }
-        }
-      }
-
-      entries.sort((a, b) {
-        final directionCompare = a.direction.index.compareTo(b.direction.index);
-        if (directionCompare != 0) return directionCompare;
-        return a.bookmark.title.toLowerCase().compareTo(b.bookmark.title.toLowerCase());
-      });
-      return entries;
+      return buildEntries(
+        bookmarkId: bookmarkId,
+        relations: relations,
+        bookmarks: bookmarks,
+      );
     });
   }
 
