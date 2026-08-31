@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 
 import '../data/app_database.dart';
@@ -19,6 +20,24 @@ class PhotoManagementPage extends StatelessWidget {
       .where((e) => e.isNotEmpty)
       .toList();
 
+  Future<void> _importPaths(BuildContext context, Iterable<String> paths) async {
+    try {
+      final imported = await const PhotoStorageService().importPaths(paths);
+      for (final photo in imported) {
+        await repository.addPhoto(path: photo.path, title: photo.originalName);
+      }
+      if (!context.mounted) return;
+      if (imported.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('対応する画像はありませんでした')));
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${imported.length} 枚の写真を追加しました')));
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('写真を追加できませんでした: $error'), duration: const Duration(seconds: 8)));
+    }
+  }
+
   Future<void> _import(BuildContext context) async {
     try {
       final imported = await const PhotoStorageService().importImages();
@@ -27,22 +46,13 @@ class PhotoManagementPage extends StatelessWidget {
       }
       if (!context.mounted) return;
       if (imported.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('写真は選択されませんでした')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('写真は選択されませんでした')));
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${imported.length} 枚の写真を追加しました')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${imported.length} 枚の写真を追加しました')));
     } catch (error) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('写真を追加できませんでした: $error'),
-          duration: const Duration(seconds: 8),
-        ),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('写真を追加できませんでした: $error'), duration: const Duration(seconds: 8)));
     }
   }
 
@@ -61,13 +71,7 @@ class PhotoManagementPage extends StatelessWidget {
             children: [
               TextField(controller: title, decoration: const InputDecoration(labelText: 'タイトル')),
               TextField(controller: note, maxLines: 3, decoration: const InputDecoration(labelText: 'メモ')),
-              TextField(
-                controller: tags,
-                decoration: const InputDecoration(
-                  labelText: '写真タグ（カンマ区切り）',
-                  hintText: '風景, 夏, 資料',
-                ),
-              ),
+              TextField(controller: tags, decoration: const InputDecoration(labelText: '写真タグ（カンマ区切り）', hintText: '風景, 夏, 資料')),
             ],
           ),
         ),
@@ -116,9 +120,7 @@ class PhotoManagementPage extends StatelessWidget {
                 DropdownButtonFormField<int>(
                   initialValue: selected?.id,
                   decoration: const InputDecoration(labelText: 'ブックマーク'),
-                  items: bookmarks
-                      .map((bookmark) => DropdownMenuItem(value: bookmark.id, child: Text(bookmark.title)))
-                      .toList(),
+                  items: bookmarks.map((bookmark) => DropdownMenuItem(value: bookmark.id, child: Text(bookmark.title))).toList(),
                   onChanged: (id) => setLocalState(() {
                     selected = bookmarks.where((b) => b.id == id).firstOrNull;
                   }),
@@ -181,95 +183,86 @@ class PhotoManagementPage extends StatelessWidget {
         icon: const Icon(Icons.add_photo_alternate_outlined),
         label: const Text('写真を追加'),
       ),
-      body: StreamBuilder<List<PhotoRecord>>(
-        stream: repository.watchPhotos(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-          final photos = snapshot.data!;
-          if (photos.isEmpty) {
-            return const Center(child: Text('写真がありません。右下から追加できます。'));
-          }
-          return GridView.builder(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
-            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 270,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 0.92,
-            ),
-            itemCount: photos.length,
-            itemBuilder: (context, index) {
-              final photo = photos[index];
-              final tags = photoTagNames(photo);
-              return Card(
-                clipBehavior: Clip.antiAlias,
-                child: InkWell(
-                  onTap: () => _showRelatedBookmarks(context, photo),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: SizedBox(
-                          width: double.infinity,
-                          child: Image.file(
-                            File(photo.path),
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image_outlined, size: 44)),
+      body: DropTarget(
+        onDragDone: (details) => _importPaths(context, details.files.map((file) => file.path)),
+        child: StreamBuilder<List<PhotoRecord>>(
+          stream: repository.watchPhotos(),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+            final photos = snapshot.data!;
+            if (photos.isEmpty) {
+              return const Center(child: Text('写真がありません。右下から追加するか、Finderから画像をドロップできます。'));
+            }
+            return GridView.builder(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 270,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 0.92,
+              ),
+              itemCount: photos.length,
+              itemBuilder: (context, index) {
+                final photo = photos[index];
+                final tags = photoTagNames(photo);
+                return Card(
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: () => _showRelatedBookmarks(context, photo),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: Image.file(
+                              File(photo.path),
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image_outlined, size: 44)),
+                            ),
                           ),
                         ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(10, 6, 4, 2),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                photo.title?.trim().isNotEmpty == true ? photo.title! : '写真 ${photo.id}',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            PopupMenuButton<String>(
-                              onSelected: (value) {
-                                if (value == 'bookmarks') _showRelatedBookmarks(context, photo);
-                                if (value == 'attach') _attach(context, photo);
-                                if (value == 'edit') _edit(context, photo);
-                                if (value == 'delete') _delete(context, photo);
-                              },
-                              itemBuilder: (_) => const [
-                                PopupMenuItem(value: 'bookmarks', child: Text('使用中のブックマークを見る')),
-                                PopupMenuItem(value: 'attach', child: Text('ブックマークに追加')),
-                                PopupMenuItem(value: 'edit', child: Text('編集・タグ')),
-                                PopupMenuItem(value: 'delete', child: Text('削除')),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (tags.isNotEmpty)
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
-                          child: Wrap(
-                            spacing: 4,
-                            runSpacing: 4,
-                            children: tags
-                                .take(4)
-                                .map((tag) => Chip(
-                                      label: Text(tag),
-                                      visualDensity: VisualDensity.compact,
-                                    ))
-                                .toList(),
+                          padding: const EdgeInsets.fromLTRB(10, 6, 4, 2),
+                          child: Row(
+                            children: [
+                              Expanded(child: Text(photo.title?.trim().isNotEmpty == true ? photo.title! : '写真 ${photo.id}', maxLines: 1, overflow: TextOverflow.ellipsis)),
+                              PopupMenuButton<String>(
+                                onSelected: (value) {
+                                  if (value == 'bookmarks') _showRelatedBookmarks(context, photo);
+                                  if (value == 'attach') _attach(context, photo);
+                                  if (value == 'edit') _edit(context, photo);
+                                  if (value == 'delete') _delete(context, photo);
+                                },
+                                itemBuilder: (_) => const [
+                                  PopupMenuItem(value: 'bookmarks', child: Text('使用中のブックマークを見る')),
+                                  PopupMenuItem(value: 'attach', child: Text('ブックマークに追加')),
+                                  PopupMenuItem(value: 'edit', child: Text('編集・タグ')),
+                                  PopupMenuItem(value: 'delete', child: Text('削除')),
+                                ],
+                              ),
+                            ],
                           ),
-                        )
-                      else
-                        const SizedBox(height: 8),
-                    ],
+                        ),
+                        if (tags.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+                            child: Wrap(
+                              spacing: 4,
+                              runSpacing: 4,
+                              children: tags.take(4).map((tag) => Chip(label: Text(tag), visualDensity: VisualDensity.compact)).toList(),
+                            ),
+                          )
+                        else
+                          const SizedBox(height: 8),
+                      ],
+                    ),
                   ),
-                ),
-              );
-            },
-          );
-        },
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }
