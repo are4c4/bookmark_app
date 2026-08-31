@@ -12,7 +12,22 @@ class Bookmarks extends Table {
   TextColumn get tags => text().withDefault(const Constant(''))();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   BoolColumn get favorite => boolean().withDefault(const Constant(false))();
+
+  /// Legacy status column kept during the v11 transition.
   TextColumn get status => text().withDefault(const Constant('unread'))();
+
+  /// Reading / viewing progress, independent from where the bookmark is stored.
+  TextColumn get readingStatus => text().withDefault(const Constant('unread'))();
+
+  /// active / inbox / archived / trash.
+  TextColumn get storageState => text().withDefault(const Constant('active'))();
+
+  /// First-class genre value. Legacy genre_state remains readable during migration.
+  TextColumn get genre => text().withDefault(const Constant(''))();
+
+  /// Timestamp for trash retention / future automatic cleanup.
+  DateTimeColumn get deletedAt => dateTime().nullable()();
+
   IntColumn get rating => integer().withDefault(const Constant(0))();
   DateTimeColumn get lastOpenedAt => dateTime().nullable()();
   IntColumn get openCount => integer().withDefault(const Constant(0))();
@@ -127,6 +142,10 @@ class BookmarkItem {
     required this.people,
     required this.photos,
     required this.collections,
+    this.readingStatus = 'unread',
+    this.storageState = 'active',
+    this.genre = '',
+    this.deletedAt,
     this.coverPhoto,
     this.thumbnail,
     this.description,
@@ -140,7 +159,14 @@ class BookmarkItem {
   final String? description;
   final DateTime createdAt;
   final bool favorite;
+
+  /// Legacy compatibility status. New code should prefer readingStatus/storageState.
   final String status;
+  final String readingStatus;
+  final String storageState;
+  final String genre;
+  final DateTime? deletedAt;
+
   final int rating;
   final DateTime? lastOpenedAt;
   final int openCount;
@@ -178,7 +204,7 @@ class AppDatabase extends _$AppDatabase {
       : super(driftDatabase(name: databaseName));
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -252,6 +278,69 @@ class AppDatabase extends _$AppDatabase {
               "FROM bookmark_people_old",
             );
             await customStatement('DROP TABLE bookmark_people_old');
+          }
+          if (from < 11) {
+            final info = await customSelect('PRAGMA table_info(bookmarks)').get();
+            final names = info.map((row) => row.read<String>('name')).toSet();
+
+            if (!names.contains('reading_status')) {
+              await m.addColumn(bookmarks, bookmarks.readingStatus);
+            }
+            if (!names.contains('storage_state')) {
+              await m.addColumn(bookmarks, bookmarks.storageState);
+            }
+            if (!names.contains('genre')) {
+              await m.addColumn(bookmarks, bookmarks.genre);
+            }
+            if (!names.contains('deleted_at')) {
+              await m.addColumn(bookmarks, bookmarks.deletedAt);
+            }
+
+            await customStatement('''
+              UPDATE bookmarks
+              SET reading_status = CASE
+                    WHEN status IN ('unread', 'later', 'in_progress', 'done') THEN status
+                    ELSE 'unread'
+                  END,
+                  storage_state = CASE
+                    WHEN status = 'archived' THEN 'archived'
+                    ELSE storage_state
+                  END
+            ''');
+
+            if (names.contains('inbox_state')) {
+              await customStatement('''
+                UPDATE bookmarks
+                SET storage_state = 'inbox'
+                WHERE inbox_state = 1 AND storage_state != 'trash'
+              ''');
+            }
+
+            if (names.contains('genre_state')) {
+              await customStatement('''
+                UPDATE bookmarks
+                SET genre = genre_state
+                WHERE genre_state IS NOT NULL AND genre_state != ''
+              ''');
+            }
+
+            if (names.contains('deleted_at_state')) {
+              final deletedRows = await customSelect('''
+                SELECT id, deleted_at_state
+                FROM bookmarks
+                WHERE deleted_at_state IS NOT NULL
+              ''').get();
+              for (final row in deletedRows) {
+                final raw = row.readNullable<String>('deleted_at_state');
+                final parsed = raw == null ? null : DateTime.tryParse(raw);
+                await (update(bookmarks)..where((b) => b.id.equals(row.read<int>('id')))).write(
+                  BookmarksCompanion(
+                    storageState: const Value('trash'),
+                    deletedAt: Value(parsed),
+                  ),
+                );
+              }
+            }
           }
         },
         beforeOpen: (_) async => customStatement('PRAGMA foreign_keys = ON'),
@@ -346,6 +435,10 @@ class AppDatabase extends _$AppDatabase {
         createdAt: bookmark.createdAt,
         favorite: bookmark.favorite,
         status: bookmark.status,
+        readingStatus: bookmark.readingStatus,
+        storageState: bookmark.storageState,
+        genre: bookmark.genre,
+        deletedAt: bookmark.deletedAt,
         rating: bookmark.rating,
         lastOpenedAt: bookmark.lastOpenedAt,
         openCount: bookmark.openCount,
@@ -399,6 +492,8 @@ class AppDatabase extends _$AppDatabase {
     String status = 'unread',
     int rating = 0,
   }) => transaction(() async {
+        final readingStatus = status == 'archived' ? 'unread' : status;
+        final storageState = status == 'archived' ? 'archived' : 'active';
         final id = await into(bookmarks).insert(BookmarksCompanion.insert(
           url: url,
           title: title,
@@ -406,6 +501,8 @@ class AppDatabase extends _$AppDatabase {
           description: Value(description),
           favorite: Value(favorite),
           status: Value(status),
+          readingStatus: Value(readingStatus),
+          storageState: Value(storageState),
           rating: Value(rating.clamp(0, 5)),
         ));
         await setBookmarkTags(id, tagNames);
@@ -424,12 +521,20 @@ class AppDatabase extends _$AppDatabase {
     String? status,
     int? rating,
   }) => transaction(() async {
+        final readingStatus = status == null
+            ? const Value<String>.absent()
+            : Value(status == 'archived' ? 'unread' : status);
+        final storageState = status == 'archived'
+            ? const Value('archived')
+            : const Value<String>.absent();
         await (update(bookmarks)..where((b) => b.id.equals(id))).write(BookmarksCompanion(
           url: Value(url),
           title: Value(title),
           thumbnail: Value(thumbnail),
           description: Value(description),
           status: status == null ? const Value.absent() : Value(status),
+          readingStatus: readingStatus,
+          storageState: storageState,
           rating: rating == null ? const Value.absent() : Value(rating.clamp(0, 5)),
         ));
         await setBookmarkTags(id, tagNames);
@@ -503,8 +608,13 @@ class AppDatabase extends _$AppDatabase {
       });
 
   Future<void> batchSetStatus(Iterable<int> ids, String status) async {
+    final readingStatus = status == 'archived' ? 'unread' : status;
     for (final id in ids.toSet()) {
-      await (update(bookmarks)..where((b) => b.id.equals(id))).write(BookmarksCompanion(status: Value(status)));
+      await (update(bookmarks)..where((b) => b.id.equals(id))).write(BookmarksCompanion(
+        status: Value(status),
+        readingStatus: Value(readingStatus),
+        storageState: status == 'archived' ? const Value('archived') : const Value.absent(),
+      ));
     }
   }
 
@@ -660,8 +770,15 @@ class AppDatabase extends _$AppDatabase {
   Future<void> setFavorite(int id, bool favorite) async {
     await (update(bookmarks)..where((b) => b.id.equals(id))).write(BookmarksCompanion(favorite: Value(favorite)));
   }
-  Future<void> setStatus(int id, String status) =>
-      (update(bookmarks)..where((b) => b.id.equals(id))).write(BookmarksCompanion(status: Value(status)));
+
+  Future<void> setStatus(int id, String status) async {
+    await (update(bookmarks)..where((b) => b.id.equals(id))).write(BookmarksCompanion(
+      status: Value(status),
+      readingStatus: Value(status == 'archived' ? 'unread' : status),
+      storageState: status == 'archived' ? const Value('archived') : const Value.absent(),
+    ));
+  }
+
   Future<void> setRating(int id, int rating) =>
       (update(bookmarks)..where((b) => b.id.equals(id))).write(BookmarksCompanion(rating: Value(rating.clamp(0, 5))));
   Future<int> deleteBookmark(int id) => (delete(bookmarks)..where((b) => b.id.equals(id))).go();
