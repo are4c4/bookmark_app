@@ -44,9 +44,9 @@ class People extends Table {
 class BookmarkPeople extends Table {
   IntColumn get bookmarkId => integer().references(Bookmarks, #id, onDelete: KeyAction.cascade)();
   IntColumn get personId => integer().references(People, #id, onDelete: KeyAction.cascade)();
-  TextColumn get role => text().withDefault(const Constant('出演'))();
+  TextColumn get role => text().withDefault(const Constant('出演者'))();
   @override
-  Set<Column<Object>> get primaryKey => {bookmarkId, personId};
+  Set<Column<Object>> get primaryKey => {bookmarkId, personId, role};
 }
 
 @DataClassName('PhotoRecord')
@@ -174,10 +174,11 @@ class SavedViewConfig {
   ],
 )
 class AppDatabase extends _$AppDatabase {
-  AppDatabase() : super(driftDatabase(name: 'bookmark_app'));
+  AppDatabase({String databaseName = 'bookmark_app'})
+      : super(driftDatabase(name: databaseName));
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -235,6 +236,22 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(collections);
             await m.createTable(bookmarkCollections);
             await m.createTable(bookmarkRelations);
+          }
+          if (from < 10) {
+            await customStatement('ALTER TABLE bookmark_people RENAME TO bookmark_people_old');
+            await customStatement(
+              "CREATE TABLE bookmark_people ("
+              "bookmark_id INTEGER NOT NULL REFERENCES bookmarks(id) ON DELETE CASCADE, "
+              "person_id INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE, "
+              "role TEXT NOT NULL DEFAULT '出演者', "
+              "PRIMARY KEY (bookmark_id, person_id, role))",
+            );
+            await customStatement(
+              "INSERT OR IGNORE INTO bookmark_people (bookmark_id, person_id, role) "
+              "SELECT bookmark_id, person_id, CASE WHEN role = '出演' OR role = 'performer' THEN '出演者' ELSE role END "
+              "FROM bookmark_people_old",
+            );
+            await customStatement('DROP TABLE bookmark_people_old');
           }
         },
         beforeOpen: (_) async => customStatement('PRAGMA foreign_keys = ON'),
@@ -434,7 +451,12 @@ class AppDatabase extends _$AppDatabase {
     for (final name in _normalizeNames(names)) {
       final personId = await _ensurePerson(name);
       await into(bookmarkPeople).insert(
-        BookmarkPeopleCompanion.insert(bookmarkId: bookmarkId, personId: personId), mode: InsertMode.insertOrIgnore,
+        BookmarkPeopleCompanion.insert(
+          bookmarkId: bookmarkId,
+          personId: personId,
+          role: const Value('出演者'),
+        ),
+        mode: InsertMode.insertOrIgnore,
       );
     }
   }
