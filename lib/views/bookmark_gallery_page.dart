@@ -6,6 +6,9 @@ import '../data/bookmark_repository.dart';
 import '../services/bookmark_metadata_service.dart';
 
 enum BookmarkViewType { gallery, list, table }
+enum TagMatchMode { or, and }
+enum BookmarkSortField { createdAt, title, url }
+enum SortDirection { asc, desc }
 
 class BookmarkGalleryPage extends StatefulWidget {
   const BookmarkGalleryPage({
@@ -22,10 +25,12 @@ class BookmarkGalleryPage extends StatefulWidget {
 class _BookmarkGalleryPageState extends State<BookmarkGalleryPage> {
   final _searchController = TextEditingController();
   BookmarkViewType _viewType = BookmarkViewType.gallery;
+  TagMatchMode _tagMatchMode = TagMatchMode.or;
+  BookmarkSortField _sortField = BookmarkSortField.createdAt;
+  SortDirection _sortDirection = SortDirection.desc;
+  final Set<int> _selectedTagIds = {};
   String _query = '';
-  int? _selectedTagId;
   bool _favoritesOnly = false;
-  int? _activeSavedViewId;
 
   @override
   void dispose() {
@@ -33,38 +38,98 @@ class _BookmarkGalleryPageState extends State<BookmarkGalleryPage> {
     super.dispose();
   }
 
-  List<String> _parseTags(String value) => value
-      .split(',')
-      .map((tag) => tag.trim())
-      .where((tag) => tag.isNotEmpty)
-      .toList();
+  BookmarkViewType _viewTypeFrom(String value) {
+    return BookmarkViewType.values.firstWhere(
+      (item) => item.name == value,
+      orElse: () => BookmarkViewType.gallery,
+    );
+  }
 
-  String _layoutName(BookmarkViewType type) => switch (type) {
-        BookmarkViewType.gallery => 'gallery',
-        BookmarkViewType.list => 'list',
-        BookmarkViewType.table => 'table',
-      };
+  TagMatchMode _matchModeFrom(String value) {
+    return value == 'and' ? TagMatchMode.and : TagMatchMode.or;
+  }
 
-  BookmarkViewType _layoutFromName(String value) => switch (value) {
-        'list' => BookmarkViewType.list,
-        'table' => BookmarkViewType.table,
-        _ => BookmarkViewType.gallery,
-      };
+  BookmarkSortField _sortFieldFrom(String value) {
+    return BookmarkSortField.values.firstWhere(
+      (item) => item.name == value,
+      orElse: () => BookmarkSortField.createdAt,
+    );
+  }
 
-  List<BookmarkItem> _filterBookmarks(List<BookmarkItem> bookmarks) {
+  SortDirection _sortDirectionFrom(String value) {
+    return value == 'asc' ? SortDirection.asc : SortDirection.desc;
+  }
+
+  List<BookmarkItem> _filteredAndSorted(List<BookmarkItem> source) {
     final query = _query.trim().toLowerCase();
-    return bookmarks.where((bookmark) {
+    var result = source.where((bookmark) {
       if (_favoritesOnly && !bookmark.favorite) return false;
-      if (_selectedTagId != null &&
-          !bookmark.tags.any((tag) => tag.id == _selectedTagId)) {
-        return false;
+
+      if (query.isNotEmpty) {
+        final searchable = [
+          bookmark.title,
+          bookmark.url,
+          bookmark.description ?? '',
+          ...bookmark.tags.map((tag) => tag.name),
+        ].join(' ').toLowerCase();
+        if (!searchable.contains(query)) return false;
       }
-      if (query.isEmpty) return true;
-      return bookmark.title.toLowerCase().contains(query) ||
-          bookmark.url.toLowerCase().contains(query) ||
-          (bookmark.description ?? '').toLowerCase().contains(query) ||
-          bookmark.tags.any((tag) => tag.name.toLowerCase().contains(query));
+
+      if (_selectedTagIds.isNotEmpty) {
+        final bookmarkTagIds = bookmark.tags.map((tag) => tag.id).toSet();
+        if (_tagMatchMode == TagMatchMode.and) {
+          if (!_selectedTagIds.every(bookmarkTagIds.contains)) return false;
+        } else {
+          if (!_selectedTagIds.any(bookmarkTagIds.contains)) return false;
+        }
+      }
+
+      return true;
     }).toList();
+
+    int compare(BookmarkItem a, BookmarkItem b) {
+      int value;
+      switch (_sortField) {
+        case BookmarkSortField.createdAt:
+          value = a.createdAt.compareTo(b.createdAt);
+        case BookmarkSortField.title:
+          value = a.title.toLowerCase().compareTo(b.title.toLowerCase());
+        case BookmarkSortField.url:
+          value = a.url.toLowerCase().compareTo(b.url.toLowerCase());
+      }
+      return _sortDirection == SortDirection.asc ? value : -value;
+    }
+
+    result.sort(compare);
+    return result;
+  }
+
+  void _resetFilters() {
+    _searchController.clear();
+    setState(() {
+      _query = '';
+      _favoritesOnly = false;
+      _selectedTagIds.clear();
+      _tagMatchMode = TagMatchMode.or;
+      _sortField = BookmarkSortField.createdAt;
+      _sortDirection = SortDirection.desc;
+    });
+  }
+
+  void _applySavedView(SavedViewConfig config) {
+    final view = config.view;
+    _searchController.text = view.searchQuery;
+    setState(() {
+      _query = view.searchQuery;
+      _favoritesOnly = view.favoritesOnly;
+      _viewType = _viewTypeFrom(view.layoutType);
+      _tagMatchMode = _matchModeFrom(view.tagMatchMode);
+      _sortField = _sortFieldFrom(view.sortField);
+      _sortDirection = _sortDirectionFrom(view.sortDirection);
+      _selectedTagIds
+        ..clear()
+        ..addAll(config.tags.map((tag) => tag.id));
+    });
   }
 
   Future<void> _openBookmark(BookmarkItem bookmark) async {
@@ -78,10 +143,15 @@ class _BookmarkGalleryPageState extends State<BookmarkGalleryPage> {
     }
   }
 
+  List<String> _parseTags(String input) => input
+      .split(',')
+      .map((tag) => tag.trim())
+      .where((tag) => tag.isNotEmpty)
+      .toList();
+
   Future<void> _showAddBookmarkDialog() async {
     final urlController = TextEditingController();
     final tagsController = TextEditingController();
-    final formKey = GlobalKey<FormState>();
     var saving = false;
 
     await showDialog<void>(
@@ -90,12 +160,11 @@ class _BookmarkGalleryPageState extends State<BookmarkGalleryPage> {
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) {
           Future<void> save() async {
-            if (saving || !(formKey.currentState?.validate() ?? false)) return;
+            if (saving || urlController.text.trim().isEmpty) return;
             setDialogState(() => saving = true);
             try {
-              final metadata = await const BookmarkMetadataService().fetch(
-                urlController.text,
-              );
+              final metadata = await const BookmarkMetadataService()
+                  .fetch(urlController.text.trim());
               await widget.repository.create(
                 url: metadata.url,
                 title: metadata.title,
@@ -113,34 +182,28 @@ class _BookmarkGalleryPageState extends State<BookmarkGalleryPage> {
             title: const Text('ブックマークを追加'),
             content: SizedBox(
               width: 480,
-              child: Form(
-                key: formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextFormField(
-                      controller: urlController,
-                      autofocus: true,
-                      decoration: const InputDecoration(
-                        labelText: 'URL',
-                        hintText: 'https://example.com',
-                        border: OutlineInputBorder(),
-                      ),
-                      validator: (value) => (value?.trim().isEmpty ?? true)
-                          ? 'URLを入力してください'
-                          : null,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: urlController,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'URL',
+                      border: OutlineInputBorder(),
                     ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: tagsController,
-                      decoration: const InputDecoration(
-                        labelText: 'タグ',
-                        hintText: 'AI, 数学, 後で読む',
-                        border: OutlineInputBorder(),
-                      ),
+                    onSubmitted: (_) => save(),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: tagsController,
+                    decoration: const InputDecoration(
+                      labelText: 'タグ（カンマ区切り）',
+                      hintText: 'AI, 数学, 後で読む',
+                      border: OutlineInputBorder(),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
             actions: [
@@ -148,16 +211,9 @@ class _BookmarkGalleryPageState extends State<BookmarkGalleryPage> {
                 onPressed: saving ? null : () => Navigator.pop(dialogContext),
                 child: const Text('キャンセル'),
               ),
-              FilledButton.icon(
+              FilledButton(
                 onPressed: saving ? null : save,
-                icon: saving
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.add_link),
-                label: Text(saving ? '取得中…' : '追加'),
+                child: Text(saving ? '取得中…' : '追加'),
               ),
             ],
           );
@@ -168,12 +224,12 @@ class _BookmarkGalleryPageState extends State<BookmarkGalleryPage> {
     tagsController.dispose();
   }
 
-  Future<void> _showEditDialog(BookmarkItem bookmark) async {
+  Future<void> _showEditBookmarkDialog(BookmarkItem bookmark) async {
     final title = TextEditingController(text: bookmark.title);
     final url = TextEditingController(text: bookmark.url);
     final description = TextEditingController(text: bookmark.description ?? '');
     final thumbnail = TextEditingController(text: bookmark.thumbnail ?? '');
-    final tagNames = TextEditingController(
+    final tags = TextEditingController(
       text: bookmark.tags.map((tag) => tag.name).join(', '),
     );
 
@@ -185,28 +241,13 @@ class _BookmarkGalleryPageState extends State<BookmarkGalleryPage> {
           width: 520,
           child: SingleChildScrollView(
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(
-                  controller: title,
-                  decoration: const InputDecoration(labelText: 'タイトル'),
-                ),
-                TextField(
-                  controller: url,
-                  decoration: const InputDecoration(labelText: 'URL'),
-                ),
-                TextField(
-                  controller: description,
-                  maxLines: 3,
-                  decoration: const InputDecoration(labelText: '説明'),
-                ),
-                TextField(
-                  controller: thumbnail,
-                  decoration: const InputDecoration(labelText: 'サムネイルURL'),
-                ),
-                TextField(
-                  controller: tagNames,
-                  decoration: const InputDecoration(labelText: 'タグ'),
-                ),
+                TextField(controller: title, decoration: const InputDecoration(labelText: 'タイトル')),
+                TextField(controller: url, decoration: const InputDecoration(labelText: 'URL')),
+                TextField(controller: description, maxLines: 3, decoration: const InputDecoration(labelText: '説明')),
+                TextField(controller: thumbnail, decoration: const InputDecoration(labelText: 'サムネイルURL')),
+                TextField(controller: tags, decoration: const InputDecoration(labelText: 'タグ（カンマ区切り）')),
               ],
             ),
           ),
@@ -222,11 +263,9 @@ class _BookmarkGalleryPageState extends State<BookmarkGalleryPage> {
                 id: bookmark.id,
                 url: url.text.trim(),
                 title: title.text.trim(),
-                description:
-                    description.text.trim().isEmpty ? null : description.text.trim(),
-                thumbnail:
-                    thumbnail.text.trim().isEmpty ? null : thumbnail.text.trim(),
-                tagNames: _parseTags(tagNames.text),
+                description: description.text.trim().isEmpty ? null : description.text.trim(),
+                thumbnail: thumbnail.text.trim().isEmpty ? null : thumbnail.text.trim(),
+                tagNames: _parseTags(tags.text),
               );
               if (dialogContext.mounted) Navigator.pop(dialogContext);
             },
@@ -240,60 +279,49 @@ class _BookmarkGalleryPageState extends State<BookmarkGalleryPage> {
     url.dispose();
     description.dispose();
     thumbnail.dispose();
-    tagNames.dispose();
+    tags.dispose();
   }
 
-  Future<void> _confirmDelete(BookmarkItem bookmark) async {
-    final shouldDelete = await showDialog<bool>(
+  Future<void> _deleteBookmark(BookmarkItem bookmark) async {
+    final confirmed = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (context) => AlertDialog(
         title: const Text('削除しますか？'),
         content: Text('「${bookmark.title}」を削除します。'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('キャンセル'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('削除'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('キャンセル')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('削除')),
         ],
       ),
     );
-    if (shouldDelete == true) await widget.repository.delete(bookmark.id);
+    if (confirmed == true) await widget.repository.delete(bookmark.id);
   }
 
-  Future<void> _saveCurrentView(List<Tag> tags) async {
-    final nameController = TextEditingController();
+  Future<void> _saveCurrentView() async {
+    final name = TextEditingController();
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('現在のビューを保存'),
         content: TextField(
-          controller: nameController,
+          controller: name,
           autofocus: true,
-          decoration: const InputDecoration(
-            labelText: 'ビュー名',
-            hintText: '例：数学のお気に入り',
-            border: OutlineInputBorder(),
-          ),
+          decoration: const InputDecoration(labelText: 'ビュー名'),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('キャンセル'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('キャンセル')),
           FilledButton(
             onPressed: () async {
-              final name = nameController.text.trim();
-              if (name.isEmpty) return;
+              if (name.text.trim().isEmpty) return;
               await widget.repository.createSavedView(
-                name: name,
-                layoutType: _layoutName(_viewType),
+                name: name.text.trim(),
+                layoutType: _viewType.name,
                 searchQuery: _query,
                 favoritesOnly: _favoritesOnly,
-                tagId: _selectedTagId,
+                tagIds: _selectedTagIds,
+                tagMatchMode: _tagMatchMode.name,
+                sortField: _sortField.name,
+                sortDirection: _sortDirection.name,
               );
               if (dialogContext.mounted) Navigator.pop(dialogContext);
             },
@@ -302,108 +330,133 @@ class _BookmarkGalleryPageState extends State<BookmarkGalleryPage> {
         ],
       ),
     );
-    nameController.dispose();
+    name.dispose();
   }
 
-  void _applySavedView(SavedView view) {
-    _searchController.text = view.searchQuery;
-    setState(() {
-      _activeSavedViewId = view.id;
-      _query = view.searchQuery;
-      _favoritesOnly = view.favoritesOnly;
-      _selectedTagId = view.tagId;
-      _viewType = _layoutFromName(view.layoutType);
-    });
-  }
+  Future<void> _editSavedView(SavedViewConfig config, List<Tag> allTags) async {
+    final name = TextEditingController(text: config.view.name);
+    var layout = _viewTypeFrom(config.view.layoutType);
+    var favoritesOnly = config.view.favoritesOnly;
+    var matchMode = _matchModeFrom(config.view.tagMatchMode);
+    var sortField = _sortFieldFrom(config.view.sortField);
+    var sortDirection = _sortDirectionFrom(config.view.sortDirection);
+    final selected = config.tags.map((tag) => tag.id).toSet();
 
-  void _resetView() {
-    _searchController.clear();
-    setState(() {
-      _activeSavedViewId = null;
-      _query = '';
-      _favoritesOnly = false;
-      _selectedTagId = null;
-      _viewType = BookmarkViewType.gallery;
-    });
-  }
-
-  Future<void> _manageTags(List<Tag> tags) async {
     await showDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('タグを管理'),
-        content: SizedBox(
-          width: 460,
-          height: 420,
-          child: tags.isEmpty
-              ? const Center(child: Text('タグはまだありません'))
-              : ListView.builder(
-                  itemCount: tags.length,
-                  itemBuilder: (context, index) {
-                    final tag = tags[index];
-                    return ListTile(
-                      title: Text(tag.name),
-                      subtitle: tag.parentTagId == null
-                          ? null
-                          : Text(
-                              '親: ${tags.where((t) => t.id == tag.parentTagId).map((t) => t.name).firstOrNull ?? '不明'}',
-                            ),
-                      trailing: PopupMenuButton<String>(
-                        onSelected: (value) async {
-                          if (value == 'rename') {
-                            final controller = TextEditingController(text: tag.name);
-                            final newName = await showDialog<String>(
-                              context: context,
-                              builder: (context) => AlertDialog(
-                                title: const Text('タグ名を変更'),
-                                content: TextField(controller: controller),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(context),
-                                    child: const Text('キャンセル'),
-                                  ),
-                                  FilledButton(
-                                    onPressed: () => Navigator.pop(
-                                      context,
-                                      controller.text.trim(),
-                                    ),
-                                    child: const Text('変更'),
-                                  ),
-                                ],
-                              ),
-                            );
-                            controller.dispose();
-                            if (newName != null && newName.isNotEmpty) {
-                              await widget.repository.renameTag(tag, newName);
-                            }
-                          } else if (value == 'delete') {
-                            await widget.repository.deleteTag(tag);
-                          }
-                        },
-                        itemBuilder: (_) => const [
-                          PopupMenuItem(value: 'rename', child: Text('名前を変更')),
-                          PopupMenuItem(value: 'delete', child: Text('削除')),
-                        ],
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('保存ビューを編集'),
+          content: SizedBox(
+            width: 560,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(controller: name, decoration: const InputDecoration(labelText: 'ビュー名')),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<BookmarkViewType>(
+                    initialValue: layout,
+                    decoration: const InputDecoration(labelText: '表示形式'),
+                    items: BookmarkViewType.values.map((v) => DropdownMenuItem(value: v, child: Text(v.name))).toList(),
+                    onChanged: (v) => setDialogState(() => layout = v ?? layout),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('お気に入りのみ'),
+                    value: favoritesOnly,
+                    onChanged: (v) => setDialogState(() => favoritesOnly = v),
+                  ),
+                  const Text('タグ条件'),
+                  const SizedBox(height: 6),
+                  SegmentedButton<TagMatchMode>(
+                    segments: const [
+                      ButtonSegment(value: TagMatchMode.or, label: Text('OR')),
+                      ButtonSegment(value: TagMatchMode.and, label: Text('AND')),
+                    ],
+                    selected: {matchMode},
+                    onSelectionChanged: (value) => setDialogState(() => matchMode = value.first),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    children: allTags.map((tag) => FilterChip(
+                      label: Text(tag.name),
+                      selected: selected.contains(tag.id),
+                      onSelected: (on) => setDialogState(() {
+                        on ? selected.add(tag.id) : selected.remove(tag.id);
+                      }),
+                    )).toList(),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<BookmarkSortField>(
+                          initialValue: sortField,
+                          decoration: const InputDecoration(labelText: '並び替え'),
+                          items: BookmarkSortField.values.map((v) => DropdownMenuItem(value: v, child: Text(_sortFieldLabel(v)))).toList(),
+                          onChanged: (v) => setDialogState(() => sortField = v ?? sortField),
+                        ),
                       ),
-                    );
-                  },
-                ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('閉じる'),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: DropdownButtonFormField<SortDirection>(
+                          initialValue: sortDirection,
+                          decoration: const InputDecoration(labelText: '順序'),
+                          items: SortDirection.values.map((v) => DropdownMenuItem(value: v, child: Text(v == SortDirection.asc ? '昇順' : '降順'))).toList(),
+                          onChanged: (v) => setDialogState(() => sortDirection = v ?? sortDirection),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           ),
-        ],
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('キャンセル')),
+            FilledButton(
+              onPressed: () async {
+                if (name.text.trim().isEmpty) return;
+                await widget.repository.updateSavedView(
+                  id: config.view.id,
+                  name: name.text.trim(),
+                  layoutType: layout.name,
+                  searchQuery: config.view.searchQuery,
+                  favoritesOnly: favoritesOnly,
+                  tagIds: selected,
+                  tagMatchMode: matchMode.name,
+                  sortField: sortField.name,
+                  sortDirection: sortDirection.name,
+                );
+                if (dialogContext.mounted) Navigator.pop(dialogContext);
+              },
+              child: const Text('保存'),
+            ),
+          ],
+        ),
       ),
     );
+    name.dispose();
+  }
+
+  static String _sortFieldLabel(BookmarkSortField field) {
+    switch (field) {
+      case BookmarkSortField.createdAt:
+        return '登録日時';
+      case BookmarkSortField.title:
+        return 'タイトル';
+      case BookmarkSortField.url:
+        return 'URL';
+    }
   }
 
   Widget _bookmarkMenu(BookmarkItem bookmark) => PopupMenuButton<String>(
         onSelected: (value) {
           if (value == 'open') _openBookmark(bookmark);
-          if (value == 'edit') _showEditDialog(bookmark);
-          if (value == 'delete') _confirmDelete(bookmark);
+          if (value == 'edit') _showEditBookmarkDialog(bookmark);
+          if (value == 'delete') _deleteBookmark(bookmark);
         },
         itemBuilder: (_) => const [
           PopupMenuItem(value: 'open', child: Text('開く')),
@@ -414,20 +467,14 @@ class _BookmarkGalleryPageState extends State<BookmarkGalleryPage> {
 
   Widget _gallery(List<BookmarkItem> bookmarks) => LayoutBuilder(
         builder: (context, constraints) {
-          final columns = constraints.maxWidth >= 1100
-              ? 5
-              : constraints.maxWidth >= 800
-                  ? 4
-                  : constraints.maxWidth >= 600
-                      ? 3
-                      : 2;
+          final columns = constraints.maxWidth >= 1100 ? 5 : constraints.maxWidth >= 800 ? 4 : constraints.maxWidth >= 600 ? 3 : 2;
           return GridView.builder(
             padding: const EdgeInsets.all(16),
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: columns,
               crossAxisSpacing: 12,
               mainAxisSpacing: 12,
-              childAspectRatio: .88,
+              childAspectRatio: 0.9,
             ),
             itemCount: bookmarks.length,
             itemBuilder: (context, index) {
@@ -443,13 +490,11 @@ class _BookmarkGalleryPageState extends State<BookmarkGalleryPage> {
                         child: SizedBox(
                           width: double.infinity,
                           child: bookmark.thumbnail == null
-                              ? const Center(child: Icon(Icons.image_outlined, size: 46))
+                              ? const Center(child: Icon(Icons.image_outlined, size: 48))
                               : Image.network(
                                   bookmark.thumbnail!,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => const Center(
-                                    child: Icon(Icons.broken_image_outlined, size: 46),
-                                  ),
+                                  errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image_outlined, size: 48)),
                                 ),
                         ),
                       ),
@@ -460,46 +505,21 @@ class _BookmarkGalleryPageState extends State<BookmarkGalleryPage> {
                           children: [
                             Row(
                               children: [
-                                Expanded(
-                                  child: Text(
-                                    bookmark.title,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(context).textTheme.titleSmall,
-                                  ),
-                                ),
+                                Expanded(child: Text(bookmark.title, maxLines: 2, overflow: TextOverflow.ellipsis)),
                                 IconButton(
                                   onPressed: () => widget.repository.toggleFavorite(bookmark),
-                                  icon: Icon(
-                                    bookmark.favorite ? Icons.star : Icons.star_border,
-                                  ),
+                                  icon: Icon(bookmark.favorite ? Icons.star : Icons.star_border),
                                 ),
                                 _bookmarkMenu(bookmark),
                               ],
                             ),
-                            Text(
-                              bookmark.url,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
+                            Text(bookmark.url, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall),
                             if (bookmark.tags.isNotEmpty) ...[
-                              const SizedBox(height: 7),
+                              const SizedBox(height: 6),
                               Wrap(
                                 spacing: 4,
                                 runSpacing: 4,
-                                children: bookmark.tags
-                                    .take(4)
-                                    .map(
-                                      (tag) => ActionChip(
-                                        label: Text(tag.name),
-                                        onPressed: () => setState(() {
-                                          _selectedTagId = tag.id;
-                                          _activeSavedViewId = null;
-                                        }),
-                                      ),
-                                    )
-                                    .toList(),
+                                children: bookmark.tags.take(3).map((tag) => Chip(label: Text(tag.name), visualDensity: VisualDensity.compact)).toList(),
                               ),
                             ],
                           ],
@@ -522,18 +542,8 @@ class _BookmarkGalleryPageState extends State<BookmarkGalleryPage> {
           final bookmark = bookmarks[index];
           return ListTile(
             onTap: () => _openBookmark(bookmark),
-            leading: SizedBox(
-              width: 72,
-              child: bookmark.thumbnail == null
-                  ? const Icon(Icons.bookmark_border)
-                  : Image.network(bookmark.thumbnail!, fit: BoxFit.cover),
-            ),
             title: Text(bookmark.title),
-            subtitle: Text(
-              [bookmark.url, ...bookmark.tags.map((tag) => tag.name)].join(' • '),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
+            subtitle: Text([bookmark.url, ...bookmark.tags.map((t) => t.name)].join(' • '), maxLines: 2, overflow: TextOverflow.ellipsis),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -556,160 +566,82 @@ class _BookmarkGalleryPageState extends State<BookmarkGalleryPage> {
             DataColumn(label: Text('タイトル')),
             DataColumn(label: Text('URL')),
             DataColumn(label: Text('タグ')),
-            DataColumn(label: Text('★')),
+            DataColumn(label: Text('お気に入り')),
             DataColumn(label: Text('操作')),
           ],
-          rows: bookmarks
-              .map(
-                (bookmark) => DataRow(
-                  cells: [
-                    DataCell(SizedBox(width: 230, child: Text(bookmark.title))),
-                    DataCell(SizedBox(width: 300, child: Text(bookmark.url))),
-                    DataCell(Text(bookmark.tags.map((tag) => tag.name).join(', '))),
-                    DataCell(
-                      IconButton(
-                        onPressed: () => widget.repository.toggleFavorite(bookmark),
-                        icon: Icon(bookmark.favorite ? Icons.star : Icons.star_border),
-                      ),
-                    ),
-                    DataCell(_bookmarkMenu(bookmark)),
-                  ],
-                ),
-              )
-              .toList(),
+          rows: bookmarks.map((bookmark) => DataRow(cells: [
+            DataCell(SizedBox(width: 220, child: Text(bookmark.title, overflow: TextOverflow.ellipsis)), onTap: () => _openBookmark(bookmark)),
+            DataCell(SizedBox(width: 300, child: Text(bookmark.url, overflow: TextOverflow.ellipsis)), onTap: () => _openBookmark(bookmark)),
+            DataCell(Text(bookmark.tags.map((t) => t.name).join(', '))),
+            DataCell(IconButton(onPressed: () => widget.repository.toggleFavorite(bookmark), icon: Icon(bookmark.favorite ? Icons.star : Icons.star_border))),
+            DataCell(_bookmarkMenu(bookmark)),
+          ])).toList(),
         ),
       );
-
-  Widget _content(List<BookmarkItem> bookmarks) => switch (_viewType) {
-        BookmarkViewType.gallery => _gallery(bookmarks),
-        BookmarkViewType.list => _list(bookmarks),
-        BookmarkViewType.table => _table(bookmarks),
-      };
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<Tag>>(
       stream: widget.repository.watchTags(),
       builder: (context, tagSnapshot) {
-        final tags = tagSnapshot.data ?? const <Tag>[];
-        return StreamBuilder<List<SavedView>>(
+        final allTags = tagSnapshot.data ?? const <Tag>[];
+        return StreamBuilder<List<SavedViewConfig>>(
           stream: widget.repository.watchSavedViews(),
           builder: (context, viewSnapshot) {
-            final savedViews = viewSnapshot.data ?? const <SavedView>[];
+            final savedViews = viewSnapshot.data ?? const <SavedViewConfig>[];
             return Scaffold(
               appBar: AppBar(
                 title: const Text('Bookmarks'),
                 actions: [
-                  IconButton(
-                    tooltip: '現在のビューを保存',
-                    onPressed: () => _saveCurrentView(tags),
-                    icon: const Icon(Icons.bookmark_add_outlined),
-                  ),
-                  PopupMenuButton<BookmarkViewType>(
-                    tooltip: '表示形式',
-                    initialValue: _viewType,
-                    onSelected: (value) => setState(() {
-                      _viewType = value;
-                      _activeSavedViewId = null;
-                    }),
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(
-                        value: BookmarkViewType.gallery,
-                        child: Text('Gallery'),
-                      ),
-                      PopupMenuItem(
-                        value: BookmarkViewType.list,
-                        child: Text('List'),
-                      ),
-                      PopupMenuItem(
-                        value: BookmarkViewType.table,
-                        child: Text('Table'),
-                      ),
-                    ],
-                  ),
+                  IconButton(onPressed: _saveCurrentView, tooltip: '現在のビューを保存', icon: const Icon(Icons.bookmark_add_outlined)),
+                  const SizedBox(width: 8),
                 ],
               ),
-              floatingActionButton: FloatingActionButton(
-                onPressed: _showAddBookmarkDialog,
-                child: const Icon(Icons.add),
-              ),
+              floatingActionButton: FloatingActionButton(onPressed: _showAddBookmarkDialog, child: const Icon(Icons.add)),
               body: Row(
                 children: [
                   SizedBox(
-                    width: 220,
-                    child: Material(
-                      color: Theme.of(context).colorScheme.surfaceContainerLow,
-                      child: ListView(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        children: [
-                          ListTile(
-                            leading: const Icon(Icons.grid_view_outlined),
-                            title: const Text('すべて'),
-                            selected: _activeSavedViewId == null &&
-                                _selectedTagId == null &&
-                                !_favoritesOnly,
-                            onTap: _resetView,
-                          ),
-                          ListTile(
-                            leading: const Icon(Icons.star_outline),
-                            title: const Text('お気に入り'),
-                            selected: _favoritesOnly && _activeSavedViewId == null,
-                            onTap: () => setState(() {
-                              _favoritesOnly = !_favoritesOnly;
-                              _activeSavedViewId = null;
-                            }),
-                          ),
-                          const Divider(),
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 8, 8, 4),
-                            child: Row(
-                              children: [
-                                const Expanded(child: Text('保存ビュー')),
-                                if (savedViews.isNotEmpty)
-                                  const Icon(Icons.bookmarks_outlined, size: 18),
-                              ],
-                            ),
-                          ),
-                          ...savedViews.map(
-                            (view) => ListTile(
+                    width: 240,
+                    child: ListView(
+                      padding: const EdgeInsets.all(8),
+                      children: [
+                        ListTile(leading: const Icon(Icons.all_inbox), title: const Text('すべて'), onTap: _resetFilters),
+                        ListTile(
+                          leading: const Icon(Icons.star_outline),
+                          title: const Text('お気に入り'),
+                          selected: _favoritesOnly,
+                          onTap: () => setState(() => _favoritesOnly = !_favoritesOnly),
+                        ),
+                        const Divider(),
+                        const Padding(padding: EdgeInsets.all(8), child: Text('保存ビュー')),
+                        ...savedViews.map((config) => ListTile(
                               dense: true,
-                              title: Text(view.name),
-                              selected: _activeSavedViewId == view.id,
-                              onTap: () => _applySavedView(view),
-                              trailing: IconButton(
-                                icon: const Icon(Icons.close, size: 17),
-                                onPressed: () => widget.repository.deleteSavedView(view.id),
+                              leading: const Icon(Icons.view_quilt_outlined),
+                              title: Text(config.view.name),
+                              onTap: () => _applySavedView(config),
+                              trailing: PopupMenuButton<String>(
+                                onSelected: (value) {
+                                  if (value == 'edit') _editSavedView(config, allTags);
+                                  if (value == 'delete') widget.repository.deleteSavedView(config.view.id);
+                                },
+                                itemBuilder: (_) => const [
+                                  PopupMenuItem(value: 'edit', child: Text('編集')),
+                                  PopupMenuItem(value: 'delete', child: Text('削除')),
+                                ],
                               ),
-                            ),
-                          ),
-                          const Divider(),
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 8, 4, 4),
-                            child: Row(
-                              children: [
-                                const Expanded(child: Text('タグ')),
-                                IconButton(
-                                  tooltip: 'タグを管理',
-                                  onPressed: () => _manageTags(tags),
-                                  icon: const Icon(Icons.settings_outlined, size: 18),
-                                ),
-                              ],
-                            ),
-                          ),
-                          ...tags.map(
-                            (tag) => ListTile(
+                            )),
+                        const Divider(),
+                        const Padding(padding: EdgeInsets.all(8), child: Text('タグ')),
+                        ...allTags.map((tag) => CheckboxListTile(
                               dense: true,
-                              leading: const Icon(Icons.sell_outlined, size: 17),
+                              value: _selectedTagIds.contains(tag.id),
                               title: Text(tag.name),
-                              selected: _selectedTagId == tag.id,
-                              onTap: () => setState(() {
-                                _selectedTagId = _selectedTagId == tag.id ? null : tag.id;
-                                _activeSavedViewId = null;
+                              controlAffinity: ListTileControlAffinity.leading,
+                              onChanged: (on) => setState(() {
+                                on == true ? _selectedTagIds.add(tag.id) : _selectedTagIds.remove(tag.id);
                               }),
-                            ),
-                          ),
-                        ],
-                      ),
+                            )),
+                      ],
                     ),
                   ),
                   const VerticalDivider(width: 1),
@@ -718,58 +650,65 @@ class _BookmarkGalleryPageState extends State<BookmarkGalleryPage> {
                       children: [
                         Padding(
                           padding: const EdgeInsets.all(12),
-                          child: Row(
+                          child: Wrap(
+                            spacing: 10,
+                            runSpacing: 8,
+                            crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
-                              Expanded(
+                              SizedBox(
+                                width: 280,
                                 child: TextField(
                                   controller: _searchController,
-                                  onChanged: (value) => setState(() {
-                                    _query = value;
-                                    _activeSavedViewId = null;
-                                  }),
-                                  decoration: InputDecoration(
-                                    hintText: 'タイトル・URL・説明・タグを検索',
-                                    prefixIcon: const Icon(Icons.search),
-                                    suffixIcon: _query.isEmpty
-                                        ? null
-                                        : IconButton(
-                                            onPressed: () {
-                                              _searchController.clear();
-                                              setState(() {
-                                                _query = '';
-                                                _activeSavedViewId = null;
-                                              });
-                                            },
-                                            icon: const Icon(Icons.clear),
-                                          ),
-                                    border: const OutlineInputBorder(),
-                                  ),
+                                  onChanged: (value) => setState(() => _query = value),
+                                  decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: '検索', border: OutlineInputBorder(), isDense: true),
                                 ),
                               ),
-                              const SizedBox(width: 12),
-                              FilterChip(
-                                label: const Text('お気に入りのみ'),
-                                selected: _favoritesOnly,
-                                onSelected: (value) => setState(() {
-                                  _favoritesOnly = value;
-                                  _activeSavedViewId = null;
-                                }),
+                              SegmentedButton<TagMatchMode>(
+                                segments: const [
+                                  ButtonSegment(value: TagMatchMode.or, label: Text('タグ OR')),
+                                  ButtonSegment(value: TagMatchMode.and, label: Text('タグ AND')),
+                                ],
+                                selected: {_tagMatchMode},
+                                onSelectionChanged: (value) => setState(() => _tagMatchMode = value.first),
+                              ),
+                              DropdownButton<BookmarkSortField>(
+                                value: _sortField,
+                                items: BookmarkSortField.values.map((v) => DropdownMenuItem(value: v, child: Text(_sortFieldLabel(v)))).toList(),
+                                onChanged: (v) => setState(() => _sortField = v ?? _sortField),
+                              ),
+                              IconButton(
+                                tooltip: _sortDirection == SortDirection.asc ? '昇順' : '降順',
+                                onPressed: () => setState(() => _sortDirection = _sortDirection == SortDirection.asc ? SortDirection.desc : SortDirection.asc),
+                                icon: Icon(_sortDirection == SortDirection.asc ? Icons.arrow_upward : Icons.arrow_downward),
+                              ),
+                              SegmentedButton<BookmarkViewType>(
+                                segments: const [
+                                  ButtonSegment(value: BookmarkViewType.gallery, icon: Icon(Icons.grid_view)),
+                                  ButtonSegment(value: BookmarkViewType.list, icon: Icon(Icons.view_list)),
+                                  ButtonSegment(value: BookmarkViewType.table, icon: Icon(Icons.table_rows)),
+                                ],
+                                selected: {_viewType},
+                                onSelectionChanged: (value) => setState(() => _viewType = value.first),
                               ),
                             ],
                           ),
                         ),
+                        const Divider(height: 1),
                         Expanded(
                           child: StreamBuilder<List<BookmarkItem>>(
                             stream: widget.repository.watchAll(),
                             builder: (context, snapshot) {
-                              if (!snapshot.hasData) {
-                                return const Center(child: CircularProgressIndicator());
+                              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                              final bookmarks = _filteredAndSorted(snapshot.data!);
+                              if (bookmarks.isEmpty) return const Center(child: Text('条件に一致するブックマークがありません'));
+                              switch (_viewType) {
+                                case BookmarkViewType.gallery:
+                                  return _gallery(bookmarks);
+                                case BookmarkViewType.list:
+                                  return _list(bookmarks);
+                                case BookmarkViewType.table:
+                                  return _table(bookmarks);
                               }
-                              final filtered = _filterBookmarks(snapshot.data!);
-                              if (filtered.isEmpty) {
-                                return const Center(child: Text('該当するブックマークがありません'));
-                              }
-                              return _content(filtered);
                             },
                           ),
                         ),
@@ -784,8 +723,4 @@ class _BookmarkGalleryPageState extends State<BookmarkGalleryPage> {
       },
     );
   }
-}
-
-extension _FirstOrNull<T> on Iterable<T> {
-  T? get firstOrNull => isEmpty ? null : first;
 }
