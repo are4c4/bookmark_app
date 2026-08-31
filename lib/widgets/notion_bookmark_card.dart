@@ -30,6 +30,7 @@ class NotionBookmarkCard extends StatefulWidget {
     required this.onTap,
     required this.onToggleFavorite,
     required this.menu,
+    this.personRoleGroups = const {},
   });
 
   final BookmarkItem bookmark;
@@ -47,6 +48,7 @@ class NotionBookmarkCard extends StatefulWidget {
   final VoidCallback onTap;
   final VoidCallback onToggleFavorite;
   final Widget menu;
+  final Map<String, List<Person>> personRoleGroups;
 
   @override
   State<NotionBookmarkCard> createState() => _NotionBookmarkCardState();
@@ -246,6 +248,17 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
                         const SizedBox(height: 7),
                         Wrap(spacing: 5, runSpacing: 5, children: bookmark.people.map((person) => _chip(person.name, icon: Icons.person_outline)).toList()),
                       ],
+                      ...widget.personRoleGroups.entries.expand((entry) sync* {
+                        if (entry.value.isEmpty) return;
+                        yield const SizedBox(height: 8);
+                        yield Text(entry.key, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF787774)));
+                        yield const SizedBox(height: 4);
+                        yield Wrap(
+                          spacing: 5,
+                          runSpacing: 5,
+                          children: entry.value.map((person) => _chip(person.name, icon: Icons.person_outline)).toList(),
+                        );
+                      }),
                       if (widget.showDescription && bookmark.description?.trim().isNotEmpty == true) ...[
                         const SizedBox(height: 10),
                         Text(bookmark.description!, style: const TextStyle(fontSize: 12.5, height: 1.5, color: Color(0xFF6B6B68))),
