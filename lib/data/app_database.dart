@@ -271,7 +271,7 @@ class AppDatabase extends _$AppDatabase {
     String? thumbnail,
     String? description,
     Iterable<String> tagNames = const [],
-    Iterable<String> personNames = const [],
+    Iterable<String>? personNames,
   }) => transaction(() async {
         await (update(bookmarks)..where((b) => b.id.equals(id))).write(BookmarksCompanion(
           url: Value(url),
@@ -280,7 +280,7 @@ class AppDatabase extends _$AppDatabase {
           description: Value(description),
         ));
         await setBookmarkTags(id, tagNames);
-        await setBookmarkPeople(id, personNames);
+        if (personNames != null) await setBookmarkPeople(id, personNames);
       });
 
   Future<void> setBookmarkTags(int bookmarkId, Iterable<String> names) async {
