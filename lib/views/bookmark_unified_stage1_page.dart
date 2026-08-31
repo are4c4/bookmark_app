@@ -523,7 +523,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
   }
 
   Widget _batchBar(List<BookmarkItem> visible) => Container(
-        minHeight: 48,
+        constraints: const BoxConstraints(minHeight: 48),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: const BoxDecoration(color: Color(0xFFF7F7F5), border: Border(bottom: BorderSide(color: Color(0xFFE7E7E4)))),
         child: LayoutBuilder(builder: (context, constraints) {
