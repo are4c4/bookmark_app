@@ -305,6 +305,16 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
         labelStyle: TextStyle(fontSize: 12.5, color: notionText),
         padding: const EdgeInsets.symmetric(horizontal: UiTokens.space4),
       ),
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: ButtonStyle(
+          visualDensity: VisualDensity.compact,
+          minimumSize: const WidgetStatePropertyAll(Size(32, 32)),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          padding: const WidgetStatePropertyAll(
+            EdgeInsets.symmetric(horizontal: UiTokens.space8, vertical: UiTokens.space4),
+          ),
+        ),
+      ),
       inputDecorationTheme: InputDecorationTheme(
         isDense: true,
         hintStyle: TextStyle(color: notionMuted),
