@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:drift/drift.dart';
 
 import 'app_database.dart';
@@ -20,149 +18,111 @@ class TagGroupStore {
   TagGroupStore(this.database);
 
   final AppDatabase database;
-  final _changes = StreamController<void>.broadcast();
 
-  Stream<void> get changes => _changes.stream;
+  TagGroupInfo _toInfo(TagGroupRecord row) => TagGroupInfo(
+        id: row.id,
+        name: row.name,
+        sortOrder: row.sortOrder,
+      );
 
   Future<void> initialize() async {
-    await database.customStatement('''
-      CREATE TABLE IF NOT EXISTS tag_groups (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL UNIQUE,
-        sort_order INTEGER NOT NULL DEFAULT 0
-      )
-    ''');
-
-    final columns = await database.customSelect('PRAGMA table_info(tags)').get();
-    final names = columns.map((row) => row.read<String>('name')).toSet();
-    if (!names.contains('group_id')) {
-      await database.customStatement('ALTER TABLE tags ADD COLUMN group_id INTEGER');
-    }
+    // Schema v13 owns tag_groups and tags.group_id.
   }
 
-  Future<List<TagGroupInfo>> listGroups() async {
-    final rows = await database.customSelect(
-      'SELECT id, name, sort_order FROM tag_groups ORDER BY sort_order, name COLLATE NOCASE',
-    ).get();
-    return rows
-        .map((row) => TagGroupInfo(
-              id: row.read<int>('id'),
-              name: row.read<String>('name'),
-              sortOrder: row.read<int>('sort_order'),
-            ))
-        .toList();
-  }
+  Future<List<TagGroupInfo>> listGroups() async =>
+      (await (database.select(database.tagGroups)
+                ..orderBy([
+                  (group) => OrderingTerm.asc(group.sortOrder),
+                  (group) => OrderingTerm.asc(group.name),
+                ]))
+              .get())
+          .map(_toInfo)
+          .toList();
 
-  Stream<List<TagGroupInfo>> watchGroups() async* {
-    yield await listGroups();
-    await for (final _ in changes) {
-      yield await listGroups();
-    }
-  }
+  Stream<List<TagGroupInfo>> watchGroups() => (database.select(database.tagGroups)
+        ..orderBy([
+          (group) => OrderingTerm.asc(group.sortOrder),
+          (group) => OrderingTerm.asc(group.name),
+        ]))
+      .watch()
+      .map((rows) => rows.map(_toInfo).toList());
 
   Future<Map<int, int?>> tagGroupIds() async {
-    final rows = await database.customSelect(
-      'SELECT id, group_id FROM tags',
-      readsFrom: {database.tags},
-    ).get();
-    return {
-      for (final row in rows) row.read<int>('id'): row.readNullable<int>('group_id'),
-    };
+    final rows = await database.select(database.tags).get();
+    return {for (final row in rows) row.id: row.groupId};
   }
 
-  Stream<Map<int, int?>> watchTagGroupIds() async* {
-    yield await tagGroupIds();
-    await for (final _ in changes) {
-      yield await tagGroupIds();
-    }
-  }
+  Stream<Map<int, int?>> watchTagGroupIds() =>
+      database.select(database.tags).watch().map(
+            (rows) => {for (final row in rows) row.id: row.groupId},
+          );
 
   Future<int> createGroup(String name) async {
     final trimmed = name.trim();
     if (trimmed.isEmpty) throw ArgumentError('グループ名が空です');
-    final maxRow = await database.customSelect(
-      'SELECT COALESCE(MAX(sort_order), -1) AS max_order FROM tag_groups',
-    ).getSingle();
-    final nextOrder = maxRow.read<int>('max_order') + 1;
-    await database.customStatement(
-      'INSERT INTO tag_groups (name, sort_order) VALUES (?, ?)',
-      [trimmed, nextOrder],
-    );
-    final row = await database.customSelect(
-      'SELECT id FROM tag_groups WHERE name = ?',
-      variables: [Variable<String>(trimmed)],
-    ).getSingle();
-    _changes.add(null);
-    return row.read<int>('id');
+
+    final groups = await database.select(database.tagGroups).get();
+    final nextOrder = groups.isEmpty
+        ? 0
+        : groups.map((group) => group.sortOrder).reduce((a, b) => a > b ? a : b) + 1;
+
+    return database.into(database.tagGroups).insert(
+          TagGroupsCompanion.insert(
+            name: trimmed,
+            sortOrder: Value(nextOrder),
+          ),
+        );
   }
 
   Future<void> renameGroup(int id, String name) async {
     final trimmed = name.trim();
     if (trimmed.isEmpty) return;
-    await database.customUpdate(
-      'UPDATE tag_groups SET name = ? WHERE id = ?',
-      variables: [Variable<String>(trimmed), Variable<int>(id)],
+    await (database.update(database.tagGroups)..where((group) => group.id.equals(id))).write(
+      TagGroupsCompanion(name: Value(trimmed)),
     );
-    _changes.add(null);
   }
 
-  Future<void> deleteGroup(int id) async {
-    await database.transaction(() async {
-      await database.customUpdate(
-        'UPDATE tags SET group_id = NULL WHERE group_id = ?',
-        variables: [Variable<int>(id)],
-        updates: {database.tags},
-      );
-      await database.customUpdate(
-        'DELETE FROM tag_groups WHERE id = ?',
-        variables: [Variable<int>(id)],
-      );
-    });
-    _changes.add(null);
-  }
+  Future<void> deleteGroup(int id) => database.transaction(() async {
+        await (database.update(database.tags)..where((tag) => tag.groupId.equals(id))).write(
+          const TagsCompanion(groupId: Value(null)),
+        );
+        await (database.delete(database.tagGroups)..where((group) => group.id.equals(id))).go();
+      });
 
   Future<void> setTagGroup(int tagId, int? groupId) async {
-    if (groupId == null) {
-      await database.customUpdate(
-        '''
-        WITH RECURSIVE subtree(id) AS (
-          SELECT id FROM tags WHERE id = ?
-          UNION ALL
-          SELECT t.id FROM tags t JOIN subtree s ON t.parent_tag_id = s.id
-        )
-        UPDATE tags SET group_id = NULL WHERE id IN (SELECT id FROM subtree)
-        ''',
-        variables: [Variable<int>(tagId)],
-        updates: {database.tags},
-      );
-    } else {
-      await database.customUpdate(
-        '''
-        WITH RECURSIVE subtree(id) AS (
-          SELECT id FROM tags WHERE id = ?
-          UNION ALL
-          SELECT t.id FROM tags t JOIN subtree s ON t.parent_tag_id = s.id
-        )
-        UPDATE tags SET group_id = ? WHERE id IN (SELECT id FROM subtree)
-        ''',
-        variables: [Variable<int>(tagId), Variable<int>(groupId)],
-        updates: {database.tags},
-      );
+    final allTags = await database.select(database.tags).get();
+    final childrenByParent = <int, List<int>>{};
+    for (final tag in allTags) {
+      final parentId = tag.parentTagId;
+      if (parentId == null) continue;
+      childrenByParent.putIfAbsent(parentId, () => <int>[]).add(tag.id);
     }
-    _changes.add(null);
-  }
 
-  Future<void> reorderGroups(List<int> ids) async {
+    final subtree = <int>{tagId};
+    final queue = <int>[tagId];
+    while (queue.isNotEmpty) {
+      final current = queue.removeLast();
+      for (final childId in childrenByParent[current] ?? const <int>[]) {
+        if (subtree.add(childId)) queue.add(childId);
+      }
+    }
+
     await database.transaction(() async {
-      for (var i = 0; i < ids.length; i++) {
-        await database.customUpdate(
-          'UPDATE tag_groups SET sort_order = ? WHERE id = ?',
-          variables: [Variable<int>(i), Variable<int>(ids[i])],
+      for (final id in subtree) {
+        await (database.update(database.tags)..where((tag) => tag.id.equals(id))).write(
+          TagsCompanion(groupId: Value(groupId)),
         );
       }
     });
-    _changes.add(null);
   }
 
-  Future<void> dispose() => _changes.close();
+  Future<void> reorderGroups(List<int> ids) => database.transaction(() async {
+        for (var i = 0; i < ids.length; i++) {
+          await (database.update(database.tagGroups)..where((group) => group.id.equals(ids[i]))).write(
+            TagGroupsCompanion(sortOrder: Value(i)),
+          );
+        }
+      });
+
+  Future<void> dispose() async {}
 }
