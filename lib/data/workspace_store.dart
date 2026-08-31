@@ -35,8 +35,25 @@ class WorkspaceStore {
   final StreamController<void> _changes = StreamController<void>.broadcast();
 
   Stream<void> get changes => _changes.stream;
+
   void _notify() {
     if (!_changes.isClosed) _changes.add(null);
+  }
+
+  Future<void> _touchBookmark(int bookmarkId) async {
+    await database.customUpdate(
+      'UPDATE bookmarks SET id = id WHERE id = ?',
+      variables: [Variable(bookmarkId)],
+      updates: {database.bookmarks},
+    );
+  }
+
+  Future<void> _touchSavedView(int savedViewId) async {
+    await database.customUpdate(
+      'UPDATE saved_views SET id = id WHERE id = ?',
+      variables: [Variable(savedViewId)],
+      updates: {database.savedViews},
+    );
   }
 
   Future<void> _ensureColumn(String table, String column, String definition) async {
@@ -187,12 +204,26 @@ class WorkspaceStore {
     final all = await listWorkspaces();
     if (all.length <= 1) throw StateError('At least one workspace is required');
     final fallback = all.firstWhere((workspace) => workspace.id != id);
+    final movedBookmarkRows = await database.customSelect(
+      'SELECT bookmark_id FROM bookmark_workspace WHERE workspace_id = ?',
+      variables: [Variable(id)],
+    ).get();
+    final movedViewRows = await database.customSelect(
+      'SELECT saved_view_id FROM saved_view_workspace WHERE workspace_id = ?',
+      variables: [Variable(id)],
+    ).get();
     await database.transaction(() async {
       await database.customStatement('UPDATE bookmark_workspace SET workspace_id = ? WHERE workspace_id = ?', [fallback.id, id]);
       await database.customStatement('UPDATE saved_view_workspace SET workspace_id = ? WHERE workspace_id = ?', [fallback.id, id]);
       await database.customStatement('DELETE FROM workspaces WHERE id = ?', [id]);
     });
     await setActiveWorkspace(fallback.id);
+    for (final row in movedBookmarkRows) {
+      await _touchBookmark(row.read<int>('bookmark_id'));
+    }
+    for (final row in movedViewRows) {
+      await _touchSavedView(row.read<int>('saved_view_id'));
+    }
     _notify();
   }
 
@@ -224,6 +255,7 @@ class WorkspaceStore {
       'INSERT INTO bookmark_workspace(bookmark_id, workspace_id) VALUES (?, ?) ON CONFLICT(bookmark_id) DO UPDATE SET workspace_id = excluded.workspace_id',
       [bookmarkId, workspaceId],
     );
+    await _touchBookmark(bookmarkId);
     _notify();
   }
 
@@ -232,18 +264,23 @@ class WorkspaceStore {
       'INSERT INTO saved_view_workspace(saved_view_id, workspace_id) VALUES (?, ?) ON CONFLICT(saved_view_id) DO UPDATE SET workspace_id = excluded.workspace_id',
       [savedViewId, workspaceId],
     );
+    await _touchSavedView(savedViewId);
     _notify();
   }
 
   Future<void> moveBookmarks(Iterable<int> bookmarkIds, int workspaceId) async {
+    final ids = bookmarkIds.toSet();
     await database.transaction(() async {
-      for (final id in bookmarkIds.toSet()) {
+      for (final id in ids) {
         await database.customStatement(
           'INSERT INTO bookmark_workspace(bookmark_id, workspace_id) VALUES (?, ?) ON CONFLICT(bookmark_id) DO UPDATE SET workspace_id = excluded.workspace_id',
           [id, workspaceId],
         );
       }
     });
+    for (final id in ids) {
+      await _touchBookmark(id);
+    }
     _notify();
   }
 }
