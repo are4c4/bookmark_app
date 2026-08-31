@@ -1,4 +1,5 @@
 import 'app_database.dart';
+import 'person_roles.dart';
 
 class BookmarkRepository {
   BookmarkRepository(this._database);
@@ -12,6 +13,11 @@ class BookmarkRepository {
   Stream<List<CollectionRecord>> watchCollections() => _database.watchAllCollections();
   Stream<List<BookmarkRelation>> watchRelationsForBookmark(int bookmarkId) => _database.watchRelationsForBookmark(bookmarkId);
   Stream<List<SavedViewConfig>> watchSavedViews() => _database.watchSavedViewConfigs();
+
+  Stream<List<PersonRoleAssignment>> watchPersonRoles(BookmarkItem bookmark) =>
+      _database.watchPersonRoleAssignments(bookmark.id);
+  Stream<List<PersonRoleAssignment>> watchRolesForPerson(Person person) =>
+      _database.watchRoleAssignmentsForPerson(person.id);
 
   Stream<List<BookmarkItem>> watchBookmarksForPerson(Person person) => watchAll().map(
         (items) => items.where((item) => item.people.any((candidate) => candidate.id == person.id)).toList(),
@@ -84,6 +90,10 @@ class BookmarkRepository {
 
   Future<void> setBookmarkTagsFromDatabase(BookmarkItem bookmark, Iterable<Tag> selectedTags) => _database.setBookmarkTags(bookmark.id, selectedTags.map((tag) => tag.name));
   Future<void> setBookmarkPeopleFromDatabase(BookmarkItem bookmark, Iterable<Person> selectedPeople) => _database.setBookmarkPeople(bookmark.id, selectedPeople.map((person) => person.name));
+  Future<void> setPeopleForRole(BookmarkItem bookmark, String role, Iterable<Person> selectedPeople) =>
+      _database.setPeopleForRole(bookmark.id, role, selectedPeople);
+  Future<void> removePersonFromBookmark(BookmarkItem bookmark, Person person) =>
+      _database.removePersonRole(bookmark.id, person);
   Future<void> setBookmarkCollections(BookmarkItem bookmark, Iterable<CollectionRecord> selected) => _database.setBookmarkCollections(bookmark.id, selected.map((collection) => collection.name));
 
   Future<void> toggleFavorite(BookmarkItem bookmark) => _database.setFavorite(bookmark.id, !bookmark.favorite);
