@@ -8,6 +8,22 @@ import '../data/bookmark_repository.dart';
 import 'photo_database_picker.dart';
 import 'relation_database_picker.dart';
 
+const _statusLabels = <String, String>{
+  'unread': '未読',
+  'later': '後で見る',
+  'in_progress': '閲覧中 / 視聴中',
+  'done': '完了 / 視聴済み',
+  'archived': 'アーカイブ',
+};
+
+const _relationLabels = <String, String>{
+  'related': '関連',
+  'sequel': '続編',
+  'previous': '前編',
+  'reference': '参考',
+  'source': '元記事 / 元動画',
+};
+
 class BookmarkDetailPanel extends StatefulWidget {
   const BookmarkDetailPanel({
     super.key,
@@ -43,9 +59,22 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
     return uri.host.startsWith('www.') ? uri.host.substring(4) : uri.host;
   }
 
+  String _formatDateTime(DateTime? value) {
+    if (value == null) return 'まだ開いていません';
+    final local = value.toLocal();
+    final y = local.year;
+    final m = local.month.toString().padLeft(2, '0');
+    final d = local.day.toString().padLeft(2, '0');
+    final h = local.hour.toString().padLeft(2, '0');
+    final min = local.minute.toString().padLeft(2, '0');
+    return '$y/$m/$d $h:$min';
+  }
+
   Future<void> _openUrl(String value) async {
     final uri = Uri.tryParse(value);
-    if (uri == null || !await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+    if (uri == null) return;
+    await widget.repository.recordOpen(widget.bookmark);
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('URLを開けませんでした')));
     }
@@ -73,6 +102,70 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
     if (selected != null) await widget.repository.setBookmarkPeopleFromDatabase(widget.bookmark, selected);
   }
 
+  Future<void> _selectCollections() async {
+    final allCollections = await widget.repository.watchCollections().first;
+    final selectedIds = widget.bookmark.collections.map((e) => e.id).toSet();
+    if (!mounted) return;
+    final result = await showDialog<List<CollectionRecord>>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setLocalState) => AlertDialog(
+          title: const Text('コレクションを選択'),
+          content: SizedBox(
+            width: 430,
+            height: 360,
+            child: allCollections.isEmpty
+                ? const Center(child: Text('コレクションがありません'))
+                : ListView(
+                    children: allCollections.map((collection) => CheckboxListTile(
+                          value: selectedIds.contains(collection.id),
+                          title: Text(collection.name),
+                          subtitle: collection.note?.trim().isNotEmpty == true ? Text(collection.note!) : null,
+                          onChanged: (value) => setLocalState(() {
+                            value == true ? selectedIds.add(collection.id) : selectedIds.remove(collection.id);
+                          }),
+                        )).toList(),
+                  ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                final controller = TextEditingController();
+                final name = await showDialog<String>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('新しいコレクション'),
+                    content: TextField(controller: controller, autofocus: true, decoration: const InputDecoration(labelText: '名前')),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(context), child: const Text('キャンセル')),
+                      FilledButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const Text('作成')),
+                    ],
+                  ),
+                );
+                controller.dispose();
+                if (name?.isNotEmpty == true) {
+                  await widget.repository.createCollection(name!);
+                  if (dialogContext.mounted) Navigator.pop(dialogContext);
+                  await _selectCollections();
+                }
+              },
+              child: const Text('＋ 新規作成'),
+            ),
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('キャンセル')),
+            FilledButton(
+              onPressed: () => Navigator.pop(
+                dialogContext,
+                allCollections.where((collection) => selectedIds.contains(collection.id)).toList(),
+              ),
+              child: const Text('適用'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (result != null) await widget.repository.setBookmarkCollections(widget.bookmark, result);
+  }
+
   Future<void> _addPhotosFromDatabase() async {
     final allPhotos = await widget.repository.watchPhotos().first;
     if (!mounted) return;
@@ -86,6 +179,54 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
     if (result != null) {
       await widget.repository.attachPhotos(widget.bookmark, result.photos, coverPhoto: result.coverPhoto);
     }
+  }
+
+  Future<void> _addBookmarkRelation() async {
+    final all = (await widget.repository.watchAll().first).where((item) => item.id != widget.bookmark.id).toList();
+    if (!mounted) return;
+    BookmarkItem? selected;
+    var type = 'related';
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setLocalState) => AlertDialog(
+          title: const Text('関連ブックマークを追加'),
+          content: SizedBox(
+            width: 520,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<BookmarkItem>(
+                  value: selected,
+                  decoration: const InputDecoration(labelText: 'ブックマーク'),
+                  items: all.map((item) => DropdownMenuItem(value: item, child: Text(item.title, overflow: TextOverflow.ellipsis))).toList(),
+                  onChanged: (value) => setLocalState(() => selected = value),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: type,
+                  decoration: const InputDecoration(labelText: 'Relation'),
+                  items: _relationLabels.entries.map((entry) => DropdownMenuItem(value: entry.key, child: Text(entry.value))).toList(),
+                  onChanged: (value) => setLocalState(() => type = value ?? 'related'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('キャンセル')),
+            FilledButton(
+              onPressed: selected == null
+                  ? null
+                  : () async {
+                      await widget.repository.addRelation(widget.bookmark, selected!, type);
+                      if (dialogContext.mounted) Navigator.pop(dialogContext);
+                    },
+              child: const Text('追加'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _edit() async {
@@ -203,12 +344,7 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
   Widget _cover() {
     final bookmark = widget.bookmark;
     if (bookmark.coverPhoto != null) {
-      return Image.file(
-        File(bookmark.coverPhoto!.path),
-        width: double.infinity,
-        height: double.infinity,
-        fit: BoxFit.cover,
-      );
+      return Image.file(File(bookmark.coverPhoto!.path), width: double.infinity, height: double.infinity, fit: BoxFit.cover);
     }
     if (bookmark.thumbnail?.trim().isNotEmpty == true) {
       return Image.network(
@@ -240,12 +376,12 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SizedBox(
-              width: 104,
+              width: 112,
               child: Row(
                 children: [
                   Icon(icon, size: 16, color: const Color(0xFF9B9A97)),
                   const SizedBox(width: 7),
-                  Text(label, style: const TextStyle(fontSize: 12.5, color: Color(0xFF787774))),
+                  Expanded(child: Text(label, style: const TextStyle(fontSize: 12.5, color: Color(0xFF787774)))),
                 ],
               ),
             ),
@@ -277,6 +413,64 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
         visualDensity: VisualDensity.compact,
       );
 
+  Widget _rating(BookmarkItem bookmark) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: List.generate(5, (index) {
+          final value = index + 1;
+          return InkWell(
+            onTap: () => widget.repository.setRating(bookmark, bookmark.rating == value ? 0 : value),
+            borderRadius: BorderRadius.circular(3),
+            child: Padding(
+              padding: const EdgeInsets.all(1),
+              child: Icon(
+                value <= bookmark.rating ? Icons.star : Icons.star_border,
+                size: 18,
+                color: value <= bookmark.rating ? const Color(0xFFB8860B) : const Color(0xFF9B9A97),
+              ),
+            ),
+          );
+        }),
+      );
+
+  Widget _relationsSection() => StreamBuilder<List<BookmarkRelation>>(
+        stream: widget.repository.watchRelationsForBookmark(widget.bookmark.id),
+        builder: (context, relationSnapshot) => StreamBuilder<List<BookmarkItem>>(
+          stream: widget.repository.watchAll(),
+          builder: (context, bookmarkSnapshot) {
+            final relations = relationSnapshot.data ?? const <BookmarkRelation>[];
+            final all = bookmarkSnapshot.data ?? const <BookmarkItem>[];
+            if (relations.isEmpty) {
+              return const Text('関連ブックマークはありません', style: TextStyle(fontSize: 12.5, color: Color(0xFF9B9A97)));
+            }
+            return Column(
+              children: relations.map((relation) {
+                final otherId = relation.sourceBookmarkId == widget.bookmark.id
+                    ? relation.targetBookmarkId
+                    : relation.sourceBookmarkId;
+                final other = all.where((item) => item.id == otherId).firstOrNull;
+                if (other == null) return const SizedBox.shrink();
+                return ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.link, size: 17),
+                  title: Text(other.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  subtitle: Text(_relationLabels[relation.relationType] ?? relation.relationType),
+                  trailing: IconButton(
+                    tooltip: '関連を解除',
+                    icon: const Icon(Icons.close, size: 16),
+                    onPressed: () => widget.repository.removeRelation(
+                      relation.sourceBookmarkId,
+                      relation.targetBookmarkId,
+                      relation.relationType,
+                    ),
+                  ),
+                );
+              }).toList(),
+            );
+          },
+        ),
+      );
+
   @override
   Widget build(BuildContext context) {
     final bookmark = widget.bookmark;
@@ -292,24 +486,14 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                 children: [
                   const Text('詳細', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF787774))),
                   const Spacer(),
-                  IconButton(
-                    tooltip: '編集',
-                    visualDensity: VisualDensity.compact,
-                    onPressed: _edit,
-                    icon: const Icon(Icons.edit_outlined, size: 18),
-                  ),
+                  IconButton(tooltip: '編集', visualDensity: VisualDensity.compact, onPressed: _edit, icon: const Icon(Icons.edit_outlined, size: 18)),
                   IconButton(
                     tooltip: bookmark.favorite ? 'お気に入り解除' : 'お気に入り',
                     visualDensity: VisualDensity.compact,
                     onPressed: () => widget.repository.toggleFavorite(bookmark),
                     icon: Icon(bookmark.favorite ? Icons.star : Icons.star_border, size: 19),
                   ),
-                  IconButton(
-                    tooltip: '閉じる',
-                    visualDensity: VisualDensity.compact,
-                    onPressed: widget.onClose,
-                    icon: const Icon(Icons.close, size: 20),
-                  ),
+                  IconButton(tooltip: '閉じる', visualDensity: VisualDensity.compact, onPressed: widget.onClose, icon: const Icon(Icons.close, size: 20)),
                 ],
               ),
             ),
@@ -328,12 +512,7 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                       children: [
                         Text(
                           bookmark.title,
-                          style: const TextStyle(
-                            fontSize: 24,
-                            height: 1.2,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF37352F),
-                          ),
+                          style: const TextStyle(fontSize: 24, height: 1.2, fontWeight: FontWeight.w700, color: Color(0xFF37352F)),
                         ),
                         const SizedBox(height: 10),
                         Row(
@@ -341,27 +520,34 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                             Expanded(
                               child: Tooltip(
                                 message: bookmark.url,
-                                child: Text(
-                                  _compactUrl(bookmark.url),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontSize: 13, color: Color(0xFF9B9A97)),
-                                ),
+                                child: Text(_compactUrl(bookmark.url), maxLines: 1, overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 13, color: Color(0xFF9B9A97))),
                               ),
                             ),
                             TextButton.icon(
                               onPressed: () => _openUrl(bookmark.url),
                               icon: const Icon(Icons.open_in_new, size: 15),
                               label: const Text('開く'),
-                              style: TextButton.styleFrom(
-                                foregroundColor: const Color(0xFF565653),
-                                padding: const EdgeInsets.symmetric(horizontal: 8),
-                                visualDensity: VisualDensity.compact,
-                              ),
+                              style: TextButton.styleFrom(foregroundColor: const Color(0xFF565653), padding: const EdgeInsets.symmetric(horizontal: 8), visualDensity: VisualDensity.compact),
                             ),
                           ],
                         ),
                         const SizedBox(height: 18),
+                        _propertyRow(
+                          icon: Icons.flag_outlined,
+                          label: 'ステータス',
+                          value: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: bookmark.status,
+                              isDense: true,
+                              items: _statusLabels.entries.map((entry) => DropdownMenuItem(value: entry.key, child: Text(entry.value, style: const TextStyle(fontSize: 12.5)))).toList(),
+                              onChanged: (value) {
+                                if (value != null) widget.repository.setStatus(bookmark, value);
+                              },
+                            ),
+                          ),
+                        ),
+                        _propertyRow(icon: Icons.star_outline, label: '評価', value: _rating(bookmark)),
                         _propertyRow(
                           icon: Icons.sell_outlined,
                           label: 'タグ',
@@ -370,12 +556,7 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                               : Wrap(
                                   spacing: 5,
                                   runSpacing: 5,
-                                  children: bookmark.tags
-                                      .map((tag) => _relationChip(
-                                            label: tag.name,
-                                            onPressed: () => widget.onFilterByTag?.call(tag),
-                                          ))
-                                      .toList(),
+                                  children: bookmark.tags.map((tag) => _relationChip(label: tag.name, onPressed: () => widget.onFilterByTag?.call(tag))).toList(),
                                 ),
                           onAdd: _selectTagsFromDatabase,
                           tooltip: 'タグDBから選択',
@@ -389,15 +570,35 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                                   spacing: 5,
                                   runSpacing: 5,
                                   children: bookmark.people
-                                      .map((person) => _relationChip(
-                                            label: person.name,
-                                            icon: Icons.person_outline,
-                                            onPressed: () => widget.onFilterByPerson?.call(person),
-                                          ))
+                                      .map((person) => _relationChip(label: person.name, icon: Icons.person_outline, onPressed: () => widget.onFilterByPerson?.call(person)))
                                       .toList(),
                                 ),
                           onAdd: _selectPeopleFromDatabase,
                           tooltip: '出演者DBから選択',
+                        ),
+                        _propertyRow(
+                          icon: Icons.collections_bookmark_outlined,
+                          label: 'コレクション',
+                          value: bookmark.collections.isEmpty
+                              ? const Text('なし', style: TextStyle(fontSize: 12.5, color: Color(0xFFB0AFAC)))
+                              : Wrap(
+                                  spacing: 5,
+                                  runSpacing: 5,
+                                  children: bookmark.collections
+                                      .map((collection) => Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                                            decoration: BoxDecoration(color: const Color(0xFFF1F1EF), borderRadius: BorderRadius.circular(4)),
+                                            child: Text(collection.name, style: const TextStyle(fontSize: 12)),
+                                          ))
+                                      .toList(),
+                                ),
+                          onAdd: _selectCollections,
+                          tooltip: 'コレクションを選択',
+                        ),
+                        _propertyRow(
+                          icon: Icons.history,
+                          label: '履歴',
+                          value: Text('${bookmark.openCount}回 · ${_formatDateTime(bookmark.lastOpenedAt)}', style: const TextStyle(fontSize: 12.5, color: Color(0xFF787774))),
                         ),
                         const SizedBox(height: 18),
                         const Divider(height: 1, color: Color(0xFFEDEDEB)),
@@ -406,19 +607,9 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                           children: [
                             const Text('関連写真', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF37352F))),
                             const Spacer(),
-                            IconButton(
-                              tooltip: '写真DBから追加',
-                              visualDensity: VisualDensity.compact,
-                              onPressed: _addPhotosFromDatabase,
-                              icon: const Icon(Icons.add_photo_alternate_outlined, size: 19),
-                            ),
+                            IconButton(tooltip: '写真DBから追加', visualDensity: VisualDensity.compact, onPressed: _addPhotosFromDatabase, icon: const Icon(Icons.add_photo_alternate_outlined, size: 19)),
                             if (bookmark.coverPhoto != null)
-                              IconButton(
-                                tooltip: 'カバー解除',
-                                visualDensity: VisualDensity.compact,
-                                onPressed: () => widget.repository.clearCoverPhoto(bookmark),
-                                icon: const Icon(Icons.hide_image_outlined, size: 19),
-                              ),
+                              IconButton(tooltip: 'カバー解除', visualDensity: VisualDensity.compact, onPressed: () => widget.repository.clearCoverPhoto(bookmark), icon: const Icon(Icons.hide_image_outlined, size: 19)),
                           ],
                         ),
                         const SizedBox(height: 10),
@@ -438,10 +629,7 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                                   width: 126,
                                   child: Material(
                                     color: Colors.white,
-                                    shape: RoundedRectangleBorder(
-                                      side: const BorderSide(color: Color(0xFFE7E7E4)),
-                                      borderRadius: BorderRadius.circular(5),
-                                    ),
+                                    shape: RoundedRectangleBorder(side: const BorderSide(color: Color(0xFFE7E7E4)), borderRadius: BorderRadius.circular(5)),
                                     clipBehavior: Clip.antiAlias,
                                     child: InkWell(
                                       onTap: () => widget.onFilterByPhoto?.call(photo),
@@ -453,17 +641,7 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                                               children: [
                                                 Image.file(File(photo.path), fit: BoxFit.cover),
                                                 if (isCover)
-                                                  const Positioned(
-                                                    top: 5,
-                                                    left: 5,
-                                                    child: DecoratedBox(
-                                                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.all(Radius.circular(3))),
-                                                      child: Padding(
-                                                        padding: EdgeInsets.all(3),
-                                                        child: Icon(Icons.photo_size_select_actual, size: 13),
-                                                      ),
-                                                    ),
-                                                  ),
+                                                  const Positioned(top: 5, left: 5, child: Icon(Icons.photo_size_select_actual, size: 15)),
                                               ],
                                             ),
                                           ),
@@ -471,17 +649,7 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                                             height: 30,
                                             child: Row(
                                               children: [
-                                                Expanded(
-                                                  child: Padding(
-                                                    padding: const EdgeInsets.only(left: 7),
-                                                    child: Text(
-                                                      photo.title ?? '写真',
-                                                      maxLines: 1,
-                                                      overflow: TextOverflow.ellipsis,
-                                                      style: const TextStyle(fontSize: 11.5, color: Color(0xFF565653)),
-                                                    ),
-                                                  ),
-                                                ),
+                                                Expanded(child: Padding(padding: const EdgeInsets.only(left: 7), child: Text(photo.title ?? '写真', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11.5)))),
                                                 PopupMenuButton<String>(
                                                   padding: EdgeInsets.zero,
                                                   iconSize: 17,
@@ -513,17 +681,22 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                         const SizedBox(height: 22),
                         const Divider(height: 1, color: Color(0xFFEDEDEB)),
                         const SizedBox(height: 18),
+                        Row(
+                          children: [
+                            const Text('関連ブックマーク', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF37352F))),
+                            const Spacer(),
+                            IconButton(tooltip: '関連を追加', onPressed: _addBookmarkRelation, icon: const Icon(Icons.add_link, size: 19)),
+                          ],
+                        ),
+                        _relationsSection(),
+                        const SizedBox(height: 22),
+                        const Divider(height: 1, color: Color(0xFFEDEDEB)),
+                        const SizedBox(height: 18),
                         const Text('説明', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF37352F))),
                         const SizedBox(height: 8),
                         Text(
                           bookmark.description?.trim().isNotEmpty == true ? bookmark.description! : '説明はありません。',
-                          style: TextStyle(
-                            fontSize: 13,
-                            height: 1.55,
-                            color: bookmark.description?.trim().isNotEmpty == true
-                                ? const Color(0xFF565653)
-                                : const Color(0xFF9B9A97),
-                          ),
+                          style: TextStyle(fontSize: 13, height: 1.55, color: bookmark.description?.trim().isNotEmpty == true ? const Color(0xFF565653) : const Color(0xFF9B9A97)),
                         ),
                       ],
                     ),
@@ -536,4 +709,8 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
       ),
     );
   }
+}
+
+extension _FirstOrNull<T> on Iterable<T> {
+  T? get firstOrNull => isEmpty ? null : first;
 }
