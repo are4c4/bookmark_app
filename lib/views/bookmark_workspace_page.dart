@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -95,34 +97,29 @@ class _BookmarkWorkspacePageState extends State<BookmarkWorkspacePage> {
   ) {
     final query = _query.trim().toLowerCase();
     final effectiveTagIds = _effectiveTagIds(allTags);
-
     final result = source.where((bookmark) {
       if (_favoritesOnly && !bookmark.favorite) return false;
-
       if (query.isNotEmpty) {
         final text = [
           bookmark.title,
           bookmark.url,
           bookmark.description ?? '',
           ...bookmark.tags.map((tag) => tag.name),
+          ...bookmark.people.map((person) => person.name),
         ].join(' ').toLowerCase();
         if (!text.contains(query)) return false;
       }
-
       if (_selectedTagIds.isNotEmpty) {
         final ids = bookmark.tags.map((tag) => tag.id).toSet();
-        bool matches;
-        if (_tagMatchMode == TagMatchMode.or) {
-          matches = effectiveTagIds.any(ids.contains);
-        } else {
-          matches = _selectedTagIds.every((selectedId) {
-            final allowed = <int>{selectedId};
-            if (_includeDescendants) {
-              allowed.addAll(_descendantIds(selectedId, allTags));
-            }
-            return allowed.any(ids.contains);
-          });
-        }
+        final matches = _tagMatchMode == TagMatchMode.or
+            ? effectiveTagIds.any(ids.contains)
+            : _selectedTagIds.every((selectedId) {
+                final allowed = <int>{selectedId};
+                if (_includeDescendants) {
+                  allowed.addAll(_descendantIds(selectedId, allTags));
+                }
+                return allowed.any(ids.contains);
+              });
         if (!matches) return false;
       }
       return true;
@@ -141,6 +138,65 @@ class _BookmarkWorkspacePageState extends State<BookmarkWorkspacePage> {
 
     result.sort(compare);
     return result;
+  }
+
+  Widget _imagePlaceholder({double iconSize = 48}) => Center(
+        child: Icon(Icons.image_outlined, size: iconSize),
+      );
+
+  Widget _bookmarkImage(
+    BookmarkItem bookmark, {
+    BoxFit fit = BoxFit.cover,
+    double? width,
+    double? height,
+    double placeholderIconSize = 48,
+  }) {
+    final cover = bookmark.coverPhoto;
+    if (cover != null) {
+      return Image.file(
+        File(cover.path),
+        width: width,
+        height: height,
+        fit: fit,
+        errorBuilder: (_, __, ___) =>
+            _networkOrPlaceholder(bookmark, fit, width, height, placeholderIconSize),
+      );
+    }
+    return _networkOrPlaceholder(
+      bookmark,
+      fit,
+      width,
+      height,
+      placeholderIconSize,
+    );
+  }
+
+  Widget _networkOrPlaceholder(
+    BookmarkItem bookmark,
+    BoxFit fit,
+    double? width,
+    double? height,
+    double placeholderIconSize,
+  ) {
+    final thumbnail = bookmark.thumbnail;
+    if (thumbnail == null || thumbnail.trim().isEmpty) {
+      return SizedBox(
+        width: width,
+        height: height,
+        child: _imagePlaceholder(iconSize: placeholderIconSize),
+      );
+    }
+    return Image.network(
+      thumbnail,
+      width: width,
+      height: height,
+      fit: fit,
+      errorBuilder: (_, __, ___) => SizedBox(
+        width: width,
+        height: height,
+        child: _imagePlaceholder(iconSize: placeholderIconSize),
+      ),
+    );
   }
 
   void _resetFilters() {
@@ -277,11 +333,27 @@ class _BookmarkWorkspacePageState extends State<BookmarkWorkspacePage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(controller: title, decoration: const InputDecoration(labelText: 'タイトル')),
-                TextField(controller: url, decoration: const InputDecoration(labelText: 'URL')),
-                TextField(controller: description, maxLines: 3, decoration: const InputDecoration(labelText: '説明')),
-                TextField(controller: thumbnail, decoration: const InputDecoration(labelText: 'サムネイルURL')),
-                TextField(controller: tags, decoration: const InputDecoration(labelText: 'タグ（カンマ区切り）')),
+                TextField(
+                  controller: title,
+                  decoration: const InputDecoration(labelText: 'タイトル'),
+                ),
+                TextField(
+                  controller: url,
+                  decoration: const InputDecoration(labelText: 'URL'),
+                ),
+                TextField(
+                  controller: description,
+                  maxLines: 3,
+                  decoration: const InputDecoration(labelText: '説明'),
+                ),
+                TextField(
+                  controller: thumbnail,
+                  decoration: const InputDecoration(labelText: 'WebサムネイルURL'),
+                ),
+                TextField(
+                  controller: tags,
+                  decoration: const InputDecoration(labelText: 'タグ（カンマ区切り）'),
+                ),
               ],
             ),
           ),
@@ -528,20 +600,7 @@ class _BookmarkWorkspacePageState extends State<BookmarkWorkspacePage> {
                       Expanded(
                         child: SizedBox(
                           width: double.infinity,
-                          child: bookmark.thumbnail == null
-                              ? const Center(
-                                  child: Icon(Icons.image_outlined, size: 48),
-                                )
-                              : Image.network(
-                                  bookmark.thumbnail!,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => const Center(
-                                    child: Icon(
-                                      Icons.broken_image_outlined,
-                                      size: 48,
-                                    ),
-                                  ),
-                                ),
+                          child: _bookmarkImage(bookmark),
                         ),
                       ),
                       Padding(
@@ -612,7 +671,19 @@ class _BookmarkWorkspacePageState extends State<BookmarkWorkspacePage> {
           final bookmark = bookmarks[index];
           return ListTile(
             onTap: () => _openBookmark(bookmark),
-            leading: const Icon(Icons.bookmark_outline),
+            leading: ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: SizedBox(
+                width: 56,
+                height: 42,
+                child: _bookmarkImage(
+                  bookmark,
+                  width: 56,
+                  height: 42,
+                  placeholderIconSize: 24,
+                ),
+              ),
+            ),
             title: Text(bookmark.title),
             subtitle: Text(
               [bookmark.url, ...bookmark.tags.map((e) => e.name)].join(' • '),
@@ -640,6 +711,7 @@ class _BookmarkWorkspacePageState extends State<BookmarkWorkspacePage> {
         scrollDirection: Axis.horizontal,
         child: DataTable(
           columns: const [
+            DataColumn(label: Text('画像')),
             DataColumn(label: Text('タイトル')),
             DataColumn(label: Text('URL')),
             DataColumn(label: Text('タグ')),
@@ -648,6 +720,21 @@ class _BookmarkWorkspacePageState extends State<BookmarkWorkspacePage> {
           ],
           rows: bookmarks
               .map((bookmark) => DataRow(cells: [
+                    DataCell(
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: SizedBox(
+                          width: 64,
+                          height: 42,
+                          child: _bookmarkImage(
+                            bookmark,
+                            width: 64,
+                            height: 42,
+                            placeholderIconSize: 22,
+                          ),
+                        ),
+                      ),
+                    ),
                     DataCell(
                       Text(bookmark.title),
                       onTap: () => _openBookmark(bookmark),
@@ -942,12 +1029,10 @@ class _BookmarkWorkspacePageState extends State<BookmarkWorkspacePage> {
       stream: widget.repository.watchTags(),
       builder: (context, tagSnapshot) {
         final allTags = tagSnapshot.data ?? const <Tag>[];
-
         return StreamBuilder<List<SavedViewConfig>>(
           stream: widget.repository.watchSavedViews(),
           builder: (context, viewSnapshot) {
             final savedViews = viewSnapshot.data ?? const <SavedViewConfig>[];
-
             return Scaffold(
               appBar: AppBar(
                 titleSpacing: 16,
