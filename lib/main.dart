@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'data/app_database.dart';
 import 'data/bookmark_repository.dart';
 import 'views/bookmark_unified_page.dart';
+import 'views/custom_property_management_page.dart';
 import 'views/people_management_page.dart';
 import 'views/photo_management_page.dart';
 import 'views/tag_management_page.dart';
@@ -77,6 +78,11 @@ class _BookmarkShellState extends State<BookmarkShell> {
                 selectedIcon: Icon(Icons.people),
                 label: Text('出演者'),
               ),
+              NavigationRailDestination(
+                icon: Icon(Icons.tune_outlined),
+                selectedIcon: Icon(Icons.tune),
+                label: Text('プロパティ'),
+              ),
             ],
             onDestinationSelected: (index) => setState(() => _index = index),
           ),
@@ -89,6 +95,7 @@ class _BookmarkShellState extends State<BookmarkShell> {
                 PhotoManagementPage(repository: widget.repository),
                 TagManagementPage(repository: widget.repository),
                 PeopleManagementPage(repository: widget.repository),
+                CustomPropertyManagementPage(repository: widget.repository),
               ],
             ),
           ),
