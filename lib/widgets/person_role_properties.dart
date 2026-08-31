@@ -17,6 +17,15 @@ class PersonRoleProperties extends StatelessWidget {
   final BookmarkItem bookmark;
   final ValueChanged<Person>? onFilterByPerson;
 
+  Future<Person?> _createPerson(String name, String? note) async {
+    final id = await repository.createPerson(name, note: note);
+    final people = await repository.watchPeople().first;
+    for (final person in people) {
+      if (person.id == id) return person;
+    }
+    return null;
+  }
+
   Future<void> _selectPeople(
     BuildContext context,
     String role,
@@ -31,6 +40,7 @@ class PersonRoleProperties extends StatelessWidget {
       context: context,
       people: allPeople,
       initiallySelectedIds: current,
+      onCreatePerson: _createPerson,
     );
     if (selected != null) await repository.setPeopleForRole(bookmark, role, selected);
   }
@@ -155,7 +165,7 @@ class PersonRoleProperties extends StatelessWidget {
             height: 28,
             child: IconButton(
               padding: EdgeInsets.zero,
-              tooltip: '$roleを人物DBから選択',
+              tooltip: '$roleを人物DBから選択・新規作成',
               onPressed: onAdd,
               icon: const Icon(Icons.add, size: 17, color: Color(0xFF787774)),
             ),
