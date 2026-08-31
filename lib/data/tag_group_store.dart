@@ -122,31 +122,33 @@ class TagGroupStore {
   }
 
   Future<void> setTagGroup(int tagId, int? groupId) async {
-    final sql = groupId == null
-        ? '''
-          WITH RECURSIVE subtree(id) AS (
-            SELECT id FROM tags WHERE id = ?
-            UNION ALL
-            SELECT t.id FROM tags t JOIN subtree s ON t.parent_tag_id = s.id
-          )
-          UPDATE tags SET group_id = NULL WHERE id IN (SELECT id FROM subtree)
+    if (groupId == null) {
+      await database.customUpdate(
         '''
-        : '''
-          WITH RECURSIVE subtree(id) AS (
-            SELECT id FROM tags WHERE id = ?
-            UNION ALL
-            SELECT t.id FROM tags t JOIN subtree s ON t.parent_tag_id = s.id
-          )
-          UPDATE tags SET group_id = ? WHERE id IN (SELECT id FROM subtree)
-        ''';
-    final variables = groupId == null
-        ? <Variable>[Variable<int>(tagId)]
-        : <Variable>[Variable<int>(tagId), Variable<int>(groupId)];
-    await database.customUpdate(
-      sql,
-      variables: variables,
-      updates: {database.tags},
-    );
+        WITH RECURSIVE subtree(id) AS (
+          SELECT id FROM tags WHERE id = ?
+          UNION ALL
+          SELECT t.id FROM tags t JOIN subtree s ON t.parent_tag_id = s.id
+        )
+        UPDATE tags SET group_id = NULL WHERE id IN (SELECT id FROM subtree)
+        ''',
+        variables: [Variable<int>(tagId)],
+        updates: {database.tags},
+      );
+    } else {
+      await database.customUpdate(
+        '''
+        WITH RECURSIVE subtree(id) AS (
+          SELECT id FROM tags WHERE id = ?
+          UNION ALL
+          SELECT t.id FROM tags t JOIN subtree s ON t.parent_tag_id = s.id
+        )
+        UPDATE tags SET group_id = ? WHERE id IN (SELECT id FROM subtree)
+        ''',
+        variables: [Variable<int>(tagId), Variable<int>(groupId)],
+        updates: {database.tags},
+      );
+    }
     _changes.add(null);
   }
 
