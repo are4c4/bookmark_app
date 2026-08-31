@@ -184,6 +184,54 @@ class ProfileManager {
     return profile;
   }
 
+  Future<DatabaseProfile> duplicateProfile(DatabaseProfile source, {String? name}) async {
+    final copy = await createProfile(name?.trim().isNotEmpty == true ? name!.trim() : '${source.name} copy');
+    final targetDirectory = Directory(copy.directoryPath);
+    await targetDirectory.create(recursive: true);
+
+    final sourceDb = File(source.databasePath);
+    if (await sourceDb.exists()) {
+      await sourceDb.copy(copy.databasePath);
+    }
+    for (final suffix in const ['-wal', '-shm']) {
+      final sidecar = File('${source.databasePath}$suffix');
+      if (await sidecar.exists()) {
+        await sidecar.copy('${copy.databasePath}$suffix');
+      }
+    }
+
+    final sourcePhotos = Directory(source.photoDirectoryPath);
+    final targetPhotos = Directory(copy.photoDirectoryPath);
+    await targetPhotos.create(recursive: true);
+    if (await sourcePhotos.exists()) {
+      await for (final entity in sourcePhotos.list()) {
+        if (entity is File) {
+          final name = entity.uri.pathSegments.last;
+          await entity.copy('${targetPhotos.path}/$name');
+        }
+      }
+    }
+    await _writeProfileMetadata(copy);
+    return copy;
+  }
+
+  Future<void> deleteProfile(DatabaseProfile profile) async {
+    if (profile.isDefault) throw StateError('Default profile cannot be deleted');
+    if (_state.profiles.length <= 1) throw StateError('At least one profile is required');
+    if (_state.activeProfileId == profile.id) {
+      throw StateError('Switch to another profile before deleting the active profile');
+    }
+    _state = ProfileState(
+      profiles: _state.profiles.where((candidate) => candidate.id != profile.id).toList(),
+      activeProfileId: _state.activeProfileId,
+    );
+    await _save();
+    final directory = Directory(profile.directoryPath);
+    if (await directory.exists()) {
+      await directory.delete(recursive: true);
+    }
+  }
+
   Future<void> setActiveProfile(DatabaseProfile profile) async {
     if (!_state.profiles.any((candidate) => candidate.id == profile.id)) return;
     _state = ProfileState(
