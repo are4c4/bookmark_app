@@ -77,8 +77,8 @@ class WorkspaceStore {
       if (assignedBookmarkIds.contains(bookmark.id)) continue;
       await database.into(database.bookmarkWorkspaces).insert(
             BookmarkWorkspacesCompanion.insert(
-              bookmarkId: bookmark.id,
-              workspaceId: Value(defaultId),
+              bookmarkId: Value(bookmark.id),
+              workspaceId: defaultId,
             ),
             mode: InsertMode.insertOrIgnore,
           );
@@ -91,8 +91,8 @@ class WorkspaceStore {
       if (assignedViewIds.contains(view.id)) continue;
       await database.into(database.savedViewWorkspaces).insert(
             SavedViewWorkspacesCompanion.insert(
-              savedViewId: view.id,
-              workspaceId: Value(defaultId),
+              savedViewId: Value(view.id),
+              workspaceId: defaultId,
             ),
             mode: InsertMode.insertOrIgnore,
           );
@@ -236,16 +236,16 @@ class WorkspaceStore {
   Future<void> assignBookmark(int bookmarkId, int workspaceId) =>
       database.into(database.bookmarkWorkspaces).insertOnConflictUpdate(
             BookmarkWorkspacesCompanion.insert(
-              bookmarkId: bookmarkId,
-              workspaceId: Value(workspaceId),
+              bookmarkId: Value(bookmarkId),
+              workspaceId: workspaceId,
             ),
           );
 
   Future<void> assignSavedView(int savedViewId, int workspaceId) =>
       database.into(database.savedViewWorkspaces).insertOnConflictUpdate(
             SavedViewWorkspacesCompanion.insert(
-              savedViewId: savedViewId,
-              workspaceId: Value(workspaceId),
+              savedViewId: Value(savedViewId),
+              workspaceId: workspaceId,
             ),
           );
 
