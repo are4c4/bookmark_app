@@ -4,6 +4,14 @@ import 'package:flutter/material.dart';
 
 import '../data/app_database.dart';
 
+const _statusLabels = <String, String>{
+  'unread': '未読',
+  'later': '後で見る',
+  'in_progress': '閲覧中',
+  'done': '完了',
+  'archived': 'アーカイブ',
+};
+
 class NotionBookmarkCard extends StatefulWidget {
   const NotionBookmarkCard({
     super.key,
@@ -16,6 +24,9 @@ class NotionBookmarkCard extends StatefulWidget {
     required this.showDescription,
     required this.showCreatedAt,
     required this.showFavorite,
+    required this.showStatus,
+    required this.showRating,
+    required this.showHistory,
     required this.onTap,
     required this.onToggleFavorite,
     required this.menu,
@@ -30,6 +41,9 @@ class NotionBookmarkCard extends StatefulWidget {
   final bool showDescription;
   final bool showCreatedAt;
   final bool showFavorite;
+  final bool showStatus;
+  final bool showRating;
+  final bool showHistory;
   final VoidCallback onTap;
   final VoidCallback onToggleFavorite;
   final Widget menu;
@@ -88,10 +102,7 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
 
   Widget _chip(String label, {IconData? icon}) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF1F1EF),
-          borderRadius: BorderRadius.circular(4),
-        ),
+        decoration: BoxDecoration(color: const Color(0xFFF1F1EF), borderRadius: BorderRadius.circular(4)),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -99,10 +110,7 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
               Icon(icon, size: 12.5, color: const Color(0xFF787774)),
               const SizedBox(width: 4),
             ],
-            Text(
-              label,
-              style: const TextStyle(fontSize: 12, height: 1.2, color: Color(0xFF565653)),
-            ),
+            Text(label, style: const TextStyle(fontSize: 12, height: 1.2, color: Color(0xFF565653))),
           ],
         ),
       );
@@ -126,13 +134,7 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
                     : const Color(0xFFE7E7E4),
           ),
           boxShadow: _hovered
-              ? const [
-                  BoxShadow(
-                    color: Color(0x10000000),
-                    blurRadius: 7,
-                    offset: Offset(0, 2),
-                  ),
-                ]
+              ? const [BoxShadow(color: Color(0x10000000), blurRadius: 7, offset: Offset(0, 2))]
               : null,
         ),
         child: Material(
@@ -148,10 +150,7 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
                 if (widget.showImage)
                   Stack(
                     children: [
-                      AspectRatio(
-                        aspectRatio: 16 / 9,
-                        child: _cover(),
-                      ),
+                      AspectRatio(aspectRatio: 16 / 9, child: _cover()),
                       if (_hovered)
                         Positioned(
                           top: 7,
@@ -160,9 +159,7 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
                             decoration: BoxDecoration(
                               color: Colors.white.withValues(alpha: .94),
                               borderRadius: BorderRadius.circular(4),
-                              boxShadow: const [
-                                BoxShadow(color: Color(0x18000000), blurRadius: 4),
-                              ],
+                              boxShadow: const [BoxShadow(color: Color(0x18000000), blurRadius: 4)],
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -198,12 +195,7 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
                           Expanded(
                             child: Text(
                               bookmark.title,
-                              style: const TextStyle(
-                                fontSize: 14.5,
-                                height: 1.28,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF37352F),
-                              ),
+                              style: const TextStyle(fontSize: 14.5, height: 1.28, fontWeight: FontWeight.w600, color: Color(0xFF37352F)),
                             ),
                           ),
                           if (!widget.showImage)
@@ -236,52 +228,46 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
                       ),
                       if (widget.showUrl) ...[
                         const SizedBox(height: 5),
-                        Text(
-                          _compactUrl(bookmark.url),
-                          style: const TextStyle(fontSize: 12, color: Color(0xFF9B9A97)),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                        Text(_compactUrl(bookmark.url), style: const TextStyle(fontSize: 12, color: Color(0xFF9B9A97)), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ],
+                      if (widget.showStatus) ...[
+                        const SizedBox(height: 8),
+                        _chip(_statusLabels[bookmark.status] ?? bookmark.status, icon: Icons.flag_outlined),
+                      ],
+                      if (widget.showRating && bookmark.rating > 0) ...[
+                        const SizedBox(height: 7),
+                        Text('★' * bookmark.rating, style: const TextStyle(fontSize: 13, color: Color(0xFFB8860B), letterSpacing: 1)),
                       ],
                       if (widget.showTags && bookmark.tags.isNotEmpty) ...[
                         const SizedBox(height: 9),
-                        Wrap(
-                          spacing: 5,
-                          runSpacing: 5,
-                          children: bookmark.tags.map((tag) => _chip(tag.name)).toList(),
-                        ),
+                        Wrap(spacing: 5, runSpacing: 5, children: bookmark.tags.map((tag) => _chip(tag.name)).toList()),
                       ],
                       if (widget.showPeople && bookmark.people.isNotEmpty) ...[
                         const SizedBox(height: 7),
-                        Wrap(
-                          spacing: 5,
-                          runSpacing: 5,
-                          children: bookmark.people
-                              .map((person) => _chip(person.name, icon: Icons.person_outline))
-                              .toList(),
-                        ),
+                        Wrap(spacing: 5, runSpacing: 5, children: bookmark.people.map((person) => _chip(person.name, icon: Icons.person_outline)).toList()),
                       ],
                       if (widget.showDescription && bookmark.description?.trim().isNotEmpty == true) ...[
                         const SizedBox(height: 10),
-                        Text(
-                          bookmark.description!,
-                          style: const TextStyle(
-                            fontSize: 12.5,
-                            height: 1.5,
-                            color: Color(0xFF6B6B68),
-                          ),
-                        ),
+                        Text(bookmark.description!, style: const TextStyle(fontSize: 12.5, height: 1.5, color: Color(0xFF6B6B68))),
                       ],
-                      if (widget.showCreatedAt) ...[
+                      if (widget.showCreatedAt || widget.showHistory) ...[
                         const SizedBox(height: 10),
-                        Row(
+                        Wrap(
+                          spacing: 10,
+                          runSpacing: 4,
                           children: [
-                            const Icon(Icons.schedule, size: 12.5, color: Color(0xFFB0AFAC)),
-                            const SizedBox(width: 4),
-                            Text(
-                              _date(bookmark.createdAt),
-                              style: const TextStyle(fontSize: 11.5, color: Color(0xFFB0AFAC)),
-                            ),
+                            if (widget.showCreatedAt)
+                              Row(mainAxisSize: MainAxisSize.min, children: [
+                                const Icon(Icons.schedule, size: 12.5, color: Color(0xFFB0AFAC)),
+                                const SizedBox(width: 4),
+                                Text(_date(bookmark.createdAt), style: const TextStyle(fontSize: 11.5, color: Color(0xFFB0AFAC))),
+                              ]),
+                            if (widget.showHistory)
+                              Row(mainAxisSize: MainAxisSize.min, children: [
+                                const Icon(Icons.history, size: 12.5, color: Color(0xFFB0AFAC)),
+                                const SizedBox(width: 4),
+                                Text('${bookmark.openCount}回', style: const TextStyle(fontSize: 11.5, color: Color(0xFFB0AFAC))),
+                              ]),
                           ],
                         ),
                       ],
