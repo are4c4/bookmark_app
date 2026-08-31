@@ -30,6 +30,8 @@ class _PhotoManagementPageState extends State<PhotoManagementPage> {
       .where((e) => e.isNotEmpty)
       .toList();
 
+  List<String> _photoTagNames(PhotoRecord photo) => _split(photo.tags);
+
   Future<void> _importPaths(Iterable<String> paths) async {
     try {
       final imported = await const PhotoStorageService().importPaths(paths);
@@ -164,7 +166,7 @@ class _PhotoManagementPageState extends State<PhotoManagementPage> {
   }
 
   Widget _card(PhotoRecord photo) {
-    final tags = photoTagNames(photo);
+    final tags = _photoTagNames(photo);
     final selected = _selectedPhotoId == photo.id;
     final scheme = Theme.of(context).colorScheme;
     return Material(
@@ -217,7 +219,7 @@ class _PhotoManagementPageState extends State<PhotoManagementPage> {
 
   Widget _detail(PhotoRecord photo) {
     final scheme = Theme.of(context).colorScheme;
-    final tags = photoTagNames(photo);
+    final tags = _photoTagNames(photo);
     return Material(
       color: scheme.surface,
       child: Column(children: [
