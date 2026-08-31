@@ -98,6 +98,32 @@ class PersonRoleProperties extends StatelessWidget {
     await _selectPeople(context, role, assignments);
   }
 
+  Future<void> _addPersonToDroppedBookmark(
+    BuildContext context,
+    int bookmarkId,
+    String role,
+    Person person,
+  ) async {
+    final items = await repository.watchAll().first;
+    final dropped = items.where((item) => item.id == bookmarkId).firstOrNull;
+    if (dropped == null) return;
+
+    final assignments = await repository.watchPersonRoles(dropped).first;
+    final people = assignments
+        .where((assignment) => assignment.role == role)
+        .map((assignment) => assignment.person)
+        .toList();
+    final byId = <int, Person>{for (final value in people) value.id: value};
+    byId[person.id] = person;
+    await repository.setPeopleForRole(dropped, role, byId.values);
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('「${dropped.title}」に $role: ${person.name} を追加しました')),
+      );
+    }
+  }
+
   Widget _genreRow(BuildContext context) => StreamBuilder<String>(
         stream: repository.lifecycleStore.watchGenre(bookmark.id),
         builder: (context, snapshot) {
@@ -119,6 +145,39 @@ class PersonRoleProperties extends StatelessWidget {
         },
       );
 
+  Widget _personChip(BuildContext context, String role, Person person) {
+    final scheme = Theme.of(context).colorScheme;
+    return DragTarget<int>(
+      onWillAcceptWithDetails: (details) => details.data != bookmark.id,
+      onAcceptWithDetails: (details) => _addPersonToDroppedBookmark(
+        context,
+        details.data,
+        role,
+        person,
+      ),
+      builder: (context, candidates, rejected) {
+        final hovering = candidates.isNotEmpty;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(5),
+            border: hovering ? Border.all(color: scheme.primary, width: 1.5) : null,
+          ),
+          child: ActionChip(
+            avatar: Icon(Icons.person_outline, size: 14, color: scheme.onSurfaceVariant),
+            label: Text(person.name),
+            onPressed: () => onFilterByPerson?.call(person),
+            backgroundColor: hovering ? scheme.primaryContainer : scheme.surfaceContainerHighest,
+            side: BorderSide.none,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
+            labelStyle: TextStyle(fontSize: 12, color: hovering ? scheme.onPrimaryContainer : scheme.onSurfaceVariant),
+            visualDensity: VisualDensity.compact,
+          ),
+        );
+      },
+    );
+  }
+
   Widget _personRow(BuildContext context, String role, List<Person> people, VoidCallback onAdd) {
     final scheme = Theme.of(context).colorScheme;
     return DetailPropertyRow(
@@ -131,16 +190,7 @@ class PersonRoleProperties extends StatelessWidget {
           : Wrap(
               spacing: 5,
               runSpacing: 5,
-              children: people.map((person) => ActionChip(
-                avatar: Icon(Icons.person_outline, size: 14, color: scheme.onSurfaceVariant),
-                label: Text(person.name),
-                onPressed: () => onFilterByPerson?.call(person),
-                backgroundColor: scheme.surfaceContainerHighest,
-                side: BorderSide.none,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
-                labelStyle: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
-                visualDensity: VisualDensity.compact,
-              )).toList(),
+              children: people.map((person) => _personChip(context, role, person)).toList(),
             ),
     );
   }
