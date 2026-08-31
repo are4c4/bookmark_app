@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
 import '../services/photo_storage_service.dart';
+import '../widgets/bookmark_reverse_lookup_dialog.dart';
 import '../widgets/photo_database_picker.dart';
 
 class PhotoManagementPage extends StatelessWidget {
@@ -163,6 +164,14 @@ class PhotoManagementPage extends StatelessWidget {
     if (confirmed == true) await repository.deletePhoto(photo);
   }
 
+  void _showRelatedBookmarks(BuildContext context, PhotoRecord photo) {
+    showBookmarkReverseLookupDialog(
+      context: context,
+      title: 'この写真を使っているブックマーク',
+      bookmarks: repository.watchBookmarksForPhoto(photo),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -194,63 +203,68 @@ class PhotoManagementPage extends StatelessWidget {
               final tags = photoTagNames(photo);
               return Card(
                 clipBehavior: Clip.antiAlias,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: Image.file(
-                          File(photo.path),
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image_outlined, size: 44)),
+                child: InkWell(
+                  onTap: () => _showRelatedBookmarks(context, photo),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: Image.file(
+                            File(photo.path),
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image_outlined, size: 44)),
+                          ),
                         ),
                       ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(10, 6, 4, 2),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              photo.title?.trim().isNotEmpty == true ? photo.title! : '写真 ${photo.id}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          PopupMenuButton<String>(
-                            onSelected: (value) {
-                              if (value == 'attach') _attach(context, photo);
-                              if (value == 'edit') _edit(context, photo);
-                              if (value == 'delete') _delete(context, photo);
-                            },
-                            itemBuilder: (_) => const [
-                              PopupMenuItem(value: 'attach', child: Text('ブックマークに追加')),
-                              PopupMenuItem(value: 'edit', child: Text('編集・タグ')),
-                              PopupMenuItem(value: 'delete', child: Text('削除')),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (tags.isNotEmpty)
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
-                        child: Wrap(
-                          spacing: 4,
-                          runSpacing: 4,
-                          children: tags
-                              .take(4)
-                              .map((tag) => Chip(
-                                    label: Text(tag),
-                                    visualDensity: VisualDensity.compact,
-                                  ))
-                              .toList(),
+                        padding: const EdgeInsets.fromLTRB(10, 6, 4, 2),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                photo.title?.trim().isNotEmpty == true ? photo.title! : '写真 ${photo.id}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            PopupMenuButton<String>(
+                              onSelected: (value) {
+                                if (value == 'bookmarks') _showRelatedBookmarks(context, photo);
+                                if (value == 'attach') _attach(context, photo);
+                                if (value == 'edit') _edit(context, photo);
+                                if (value == 'delete') _delete(context, photo);
+                              },
+                              itemBuilder: (_) => const [
+                                PopupMenuItem(value: 'bookmarks', child: Text('使用中のブックマークを見る')),
+                                PopupMenuItem(value: 'attach', child: Text('ブックマークに追加')),
+                                PopupMenuItem(value: 'edit', child: Text('編集・タグ')),
+                                PopupMenuItem(value: 'delete', child: Text('削除')),
+                              ],
+                            ),
+                          ],
                         ),
-                      )
-                    else
-                      const SizedBox(height: 8),
-                  ],
+                      ),
+                      if (tags.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+                          child: Wrap(
+                            spacing: 4,
+                            runSpacing: 4,
+                            children: tags
+                                .take(4)
+                                .map((tag) => Chip(
+                                      label: Text(tag),
+                                      visualDensity: VisualDensity.compact,
+                                    ))
+                                .toList(),
+                          ),
+                        )
+                      else
+                        const SizedBox(height: 8),
+                    ],
+                  ),
                 ),
               );
             },
