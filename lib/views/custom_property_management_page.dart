@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
 import '../data/custom_property_store.dart';
+import '../widgets/bookmark_custom_properties.dart';
 
 class CustomPropertyManagementPage extends StatefulWidget {
   const CustomPropertyManagementPage({super.key, required this.repository});
@@ -16,6 +18,7 @@ class CustomPropertyManagementPage extends StatefulWidget {
 class _CustomPropertyManagementPageState
     extends State<CustomPropertyManagementPage> {
   int _refreshToken = 0;
+  int? _selectedBookmarkId;
 
   Future<List<BookmarkPropertyDefinition>> _load() =>
       widget.repository.getCustomPropertyDefinitions();
@@ -44,9 +47,7 @@ class _CustomPropertyManagementPageState
 
   Future<void> _edit({BookmarkPropertyDefinition? definition}) async {
     final name = TextEditingController(text: definition?.name ?? '');
-    final options = TextEditingController(
-      text: definition?.options.join(', ') ?? '',
-    );
+    final options = TextEditingController(text: definition?.options.join(', ') ?? '');
     var type = definition?.type ?? BookmarkPropertyType.text;
 
     final saved = await showDialog<bool>(
@@ -147,9 +148,7 @@ class _CustomPropertyManagementPageState
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('カスタム項目を削除しますか？'),
-        content: Text(
-          '「${definition.name}」と、すべてのブックマークに保存されているこの項目の値を削除します。',
-        ),
+        content: Text('「${definition.name}」と、すべてのブックマークに保存されているこの項目の値を削除します。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
@@ -168,6 +167,97 @@ class _CustomPropertyManagementPageState
     }
   }
 
+  Widget _definitionList() {
+    return FutureBuilder<List<BookmarkPropertyDefinition>>(
+      key: ValueKey(_refreshToken),
+      future: _load(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final definitions = snapshot.data ?? const <BookmarkPropertyDefinition>[];
+        if (definitions.isEmpty) {
+          return const Center(child: Text('カスタム項目がありません。'));
+        }
+        return ListView.separated(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 90),
+          itemCount: definitions.length,
+          separatorBuilder: (_, __) => const Divider(height: 1),
+          itemBuilder: (context, index) {
+            final definition = definitions[index];
+            return ListTile(
+              leading: CircleAvatar(child: Icon(_typeIcon(definition.type))),
+              title: Text(definition.name),
+              subtitle: Text(
+                definition.type == BookmarkPropertyType.select && definition.options.isNotEmpty
+                    ? '${_typeLabel(definition.type)} • ${definition.options.join(' / ')}'
+                    : _typeLabel(definition.type),
+              ),
+              trailing: PopupMenuButton<String>(
+                onSelected: (value) {
+                  if (value == 'edit') _edit(definition: definition);
+                  if (value == 'delete') _delete(definition);
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'edit', child: Text('編集')),
+                  PopupMenuItem(value: 'delete', child: Text('削除')),
+                ],
+              ),
+              onTap: () => _edit(definition: definition),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _bookmarkValueEditor() {
+    return StreamBuilder<List<BookmarkItem>>(
+      stream: widget.repository.watchAll(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        final bookmarks = snapshot.data!;
+        if (bookmarks.isEmpty) return const Center(child: Text('ブックマークがありません。'));
+        final selected = bookmarks.where((b) => b.id == _selectedBookmarkId).firstOrNull ?? bookmarks.first;
+        _selectedBookmarkId ??= selected.id;
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('ブックマークの値', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 6),
+              Text(
+                'ブックマークを選び、作成したカスタム項目の値を設定できます。',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<int>(
+                initialValue: selected.id,
+                decoration: const InputDecoration(
+                  labelText: 'ブックマーク',
+                  border: OutlineInputBorder(),
+                ),
+                items: bookmarks
+                    .map((bookmark) => DropdownMenuItem(
+                          value: bookmark.id,
+                          child: Text(bookmark.title, overflow: TextOverflow.ellipsis),
+                        ))
+                    .toList(),
+                onChanged: (id) => setState(() => _selectedBookmarkId = id),
+              ),
+              const SizedBox(height: 24),
+              BookmarkCustomProperties(
+                repository: widget.repository,
+                bookmarkId: selected.id,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -177,52 +267,31 @@ class _CustomPropertyManagementPageState
         icon: const Icon(Icons.add),
         label: const Text('項目を追加'),
       ),
-      body: FutureBuilder<List<BookmarkPropertyDefinition>>(
-        key: ValueKey(_refreshToken),
-        future: _load(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final definitions = snapshot.data ?? const <BookmarkPropertyDefinition>[];
-          if (definitions.isEmpty) {
-            return const Center(
-              child: Text('カスタム項目がありません。右下から追加できます。'),
-            );
-          }
-          return ListView.separated(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
-            itemCount: definitions.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
-            itemBuilder: (context, index) {
-              final definition = definitions[index];
-              return ListTile(
-                leading: CircleAvatar(
-                  child: Icon(_typeIcon(definition.type)),
+      body: Row(
+        children: [
+          SizedBox(
+            width: 430,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('項目定義', style: Theme.of(context).textTheme.titleMedium),
+                  ),
                 ),
-                title: Text(definition.name),
-                subtitle: Text(
-                  definition.type == BookmarkPropertyType.select &&
-                          definition.options.isNotEmpty
-                      ? '${_typeLabel(definition.type)} • ${definition.options.join(' / ')}'
-                      : _typeLabel(definition.type),
-                ),
-                trailing: PopupMenuButton<String>(
-                  onSelected: (value) {
-                    if (value == 'edit') _edit(definition: definition);
-                    if (value == 'delete') _delete(definition);
-                  },
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(value: 'edit', child: Text('編集')),
-                    PopupMenuItem(value: 'delete', child: Text('削除')),
-                  ],
-                ),
-                onTap: () => _edit(definition: definition),
-              );
-            },
-          );
-        },
+                Expanded(child: _definitionList()),
+              ],
+            ),
+          ),
+          const VerticalDivider(width: 1),
+          Expanded(child: _bookmarkValueEditor()),
+        ],
       ),
     );
   }
+}
+
+extension _FirstOrNull<T> on Iterable<T> {
+  T? get firstOrNull => isEmpty ? null : first;
 }
