@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:drift/drift.dart';
 
 import 'app_database.dart';
-import 'app_database_touch.dart';
 
 class BookmarkLifecycleState {
   const BookmarkLifecycleState({
@@ -28,23 +27,46 @@ class BookmarkLifecycleStore {
   Stream<void> get changes => _changes.stream;
 
   Future<void> initialize() async {
-    await database.customStatement('''
-      CREATE TABLE IF NOT EXISTS bookmark_lifecycle (
-        bookmark_id INTEGER PRIMARY KEY,
-        inbox INTEGER NOT NULL DEFAULT 0,
-        deleted_at TEXT,
-        FOREIGN KEY(bookmark_id) REFERENCES bookmarks(id) ON DELETE CASCADE
-      )
-    ''');
-    await database.customStatement('''
-      INSERT OR IGNORE INTO bookmark_lifecycle(bookmark_id, inbox, deleted_at)
-      SELECT id, 0, NULL FROM bookmarks
-    ''');
+    final columns = await database.customSelect('PRAGMA table_info(bookmarks)').get();
+    final names = columns.map((row) => row.read<String>('name')).toSet();
+
+    if (!names.contains('inbox_state')) {
+      await database.customStatement(
+        'ALTER TABLE bookmarks ADD COLUMN inbox_state INTEGER NOT NULL DEFAULT 0',
+      );
+    }
+    if (!names.contains('deleted_at_state')) {
+      await database.customStatement(
+        'ALTER TABLE bookmarks ADD COLUMN deleted_at_state TEXT',
+      );
+    }
+
+    // Older experimental lifecycle data may exist. Import it once when possible.
+    final tables = await database.customSelect(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'bookmark_lifecycle'",
+    ).get();
+    if (tables.isNotEmpty) {
+      await database.customStatement('''
+        UPDATE bookmarks
+        SET inbox_state = COALESCE(
+              (SELECT inbox FROM bookmark_lifecycle bl WHERE bl.bookmark_id = bookmarks.id),
+              inbox_state
+            ),
+            deleted_at_state = COALESCE(
+              (SELECT deleted_at FROM bookmark_lifecycle bl WHERE bl.bookmark_id = bookmarks.id),
+              deleted_at_state
+            )
+        WHERE EXISTS (
+          SELECT 1 FROM bookmark_lifecycle bl WHERE bl.bookmark_id = bookmarks.id
+        )
+      ''');
+    }
   }
 
   Future<Map<int, BookmarkLifecycleState>> states() async {
     final rows = await database.customSelect(
-      'SELECT bookmark_id, inbox, deleted_at FROM bookmark_lifecycle',
+      'SELECT id AS bookmark_id, inbox_state AS inbox, deleted_at_state AS deleted_at FROM bookmarks',
+      readsFrom: {database.bookmarks},
     ).get();
     return {
       for (final row in rows)
@@ -58,52 +80,53 @@ class BookmarkLifecycleStore {
     };
   }
 
-  Future<void> _notify(int bookmarkId) async {
-    _changes.add(null);
-    await database.touchBookmark(bookmarkId);
-  }
-
   Future<void> ensureBookmark(int bookmarkId, {bool inbox = false}) async {
-    await database.customStatement(
-      'INSERT INTO bookmark_lifecycle(bookmark_id, inbox, deleted_at) VALUES (?, ?, NULL) '
-      'ON CONFLICT(bookmark_id) DO UPDATE SET inbox = excluded.inbox',
-      [bookmarkId, inbox ? 1 : 0],
+    await database.customUpdate(
+      'UPDATE bookmarks SET inbox_state = ?, deleted_at_state = NULL WHERE id = ?',
+      variables: [Variable<int>(inbox ? 1 : 0), Variable<int>(bookmarkId)],
+      updates: {database.bookmarks},
     );
-    await _notify(bookmarkId);
+    _changes.add(null);
   }
 
   Future<void> setInbox(int bookmarkId, bool value) async {
-    await database.customStatement(
-      'INSERT INTO bookmark_lifecycle(bookmark_id, inbox, deleted_at) VALUES (?, ?, NULL) '
-      'ON CONFLICT(bookmark_id) DO UPDATE SET inbox = excluded.inbox',
-      [bookmarkId, value ? 1 : 0],
+    await database.customUpdate(
+      'UPDATE bookmarks SET inbox_state = ?, deleted_at_state = NULL WHERE id = ?',
+      variables: [Variable<int>(value ? 1 : 0), Variable<int>(bookmarkId)],
+      updates: {database.bookmarks},
     );
-    await _notify(bookmarkId);
+    _changes.add(null);
   }
 
   Future<void> moveToTrash(int bookmarkId) async {
-    await database.customStatement(
-      'INSERT INTO bookmark_lifecycle(bookmark_id, inbox, deleted_at) VALUES (?, 0, ?) '
-      'ON CONFLICT(bookmark_id) DO UPDATE SET inbox = 0, deleted_at = excluded.deleted_at',
-      [bookmarkId, DateTime.now().toIso8601String()],
+    final changed = await database.customUpdate(
+      'UPDATE bookmarks SET inbox_state = 0, deleted_at_state = ? WHERE id = ?',
+      variables: [
+        Variable<String>(DateTime.now().toIso8601String()),
+        Variable<int>(bookmarkId),
+      ],
+      updates: {database.bookmarks},
     );
-    await _notify(bookmarkId);
+    if (changed == 0) {
+      throw StateError('削除対象のブックマークが見つかりませんでした (id=$bookmarkId)');
+    }
+    _changes.add(null);
   }
 
   Future<void> restore(int bookmarkId) async {
-    await database.customStatement(
-      'INSERT INTO bookmark_lifecycle(bookmark_id, inbox, deleted_at) VALUES (?, 0, NULL) '
-      'ON CONFLICT(bookmark_id) DO UPDATE SET deleted_at = NULL',
-      [bookmarkId],
+    final changed = await database.customUpdate(
+      'UPDATE bookmarks SET deleted_at_state = NULL WHERE id = ?',
+      variables: [Variable<int>(bookmarkId)],
+      updates: {database.bookmarks},
     );
-    await _notify(bookmarkId);
+    if (changed == 0) {
+      throw StateError('復元対象のブックマークが見つかりませんでした (id=$bookmarkId)');
+    }
+    _changes.add(null);
   }
 
   Future<void> remove(int bookmarkId) async {
-    await database.customStatement(
-      'DELETE FROM bookmark_lifecycle WHERE bookmark_id = ?',
-      [bookmarkId],
-    );
+    // Permanent deletion removes the bookmark row immediately after this call.
     _changes.add(null);
   }
 
