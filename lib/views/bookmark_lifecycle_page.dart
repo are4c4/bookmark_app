@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
+import '../widgets/bookmark_create_dialog.dart';
 
 class BookmarkLifecyclePage extends StatelessWidget {
   const BookmarkLifecyclePage.inbox({
@@ -61,6 +62,17 @@ class BookmarkLifecyclePage extends StatelessWidget {
           children: [Icon(_icon, size: 19), const SizedBox(width: 7), Text(_title)],
         ),
       ),
+      floatingActionButton: mode == BookmarkLifecycleMode.inbox
+          ? FloatingActionButton.extended(
+              onPressed: () => showBookmarkCreateDialog(
+                context: context,
+                repository: repository,
+                initialInbox: true,
+              ),
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Inboxに追加'),
+            )
+          : null,
       body: StreamBuilder<List<BookmarkItem>>(
         stream: _stream(),
         builder: (context, snapshot) {
@@ -81,7 +93,7 @@ class BookmarkLifecyclePage extends StatelessWidget {
             );
           }
           return ListView.separated(
-            padding: const EdgeInsets.fromLTRB(22, 14, 22, 40),
+            padding: const EdgeInsets.fromLTRB(22, 14, 22, 90),
             itemCount: items.length,
             separatorBuilder: (_, __) => const Divider(height: 1),
             itemBuilder: (context, index) {
@@ -123,7 +135,10 @@ class BookmarkLifecyclePage extends StatelessWidget {
                   onSelected: (value) async {
                     if (value == 'open') await _open(bookmark);
                     if (value == 'inbox_done') await repository.setInbox(bookmark, false);
-                    if (value == 'archive') await repository.setStatus(bookmark, 'archived');
+                    if (value == 'archive') {
+                      await repository.setInbox(bookmark, false);
+                      await repository.setStatus(bookmark, 'archived');
+                    }
                     if (value == 'unarchive') await repository.setStatus(bookmark, 'unread');
                     if (value == 'trash') await repository.moveToTrash(bookmark);
                     if (value == 'restore') await repository.restoreFromTrash(bookmark);
