@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
+import 'bookmark_custom_properties.dart';
 import 'photo_database_picker.dart';
 
 class BookmarkDetailPanel extends StatefulWidget {
@@ -96,14 +97,22 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                       child: SizedBox(
                         width: 220,
                         height: 130,
-                        child: Image.file(File(selectedCover!.path), fit: BoxFit.cover),
+                        child: Image.file(
+                          File(selectedCover!.path),
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image_outlined)),
+                        ),
                       ),
                     )
                   else
-                    Text('ローカルのカバー画像は設定されていません', style: Theme.of(context).textTheme.bodySmall),
+                    Text(
+                      'ローカルのカバー画像は設定されていません',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
+                    runSpacing: 8,
                     children: [
                       OutlinedButton.icon(
                         onPressed: () async {
@@ -142,7 +151,10 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('キャンセル')),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('キャンセル'),
+            ),
             FilledButton(
               onPressed: () async {
                 await widget.repository.update(
@@ -154,7 +166,11 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                   tagNames: _split(tags.text),
                   personNames: _split(people.text),
                 );
-                await widget.repository.attachPhotos(bookmark, selectedPhotos, coverPhoto: clearCover ? null : selectedCover);
+                await widget.repository.attachPhotos(
+                  bookmark,
+                  selectedPhotos,
+                  coverPhoto: clearCover ? null : selectedCover,
+                );
                 if (clearCover) await widget.repository.clearCoverPhoto(bookmark);
                 if (dialogContext.mounted) Navigator.pop(dialogContext);
               },
@@ -176,11 +192,18 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
   Widget _cover() {
     final bookmark = widget.bookmark;
     if (bookmark.coverPhoto != null) {
-      return Image.file(File(bookmark.coverPhoto!.path), fit: BoxFit.cover);
+      return Image.file(
+        File(bookmark.coverPhoto!.path),
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image_outlined, size: 42)),
+      );
     }
     if (bookmark.thumbnail?.trim().isNotEmpty == true) {
-      return Image.network(bookmark.thumbnail!, fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image_outlined, size: 42)));
+      return Image.network(
+        bookmark.thumbnail!,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image_outlined, size: 42)),
+      );
     }
     return const Center(child: Icon(Icons.image_outlined, size: 42));
   }
@@ -188,7 +211,10 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
   Widget _property(String label, Widget value) => Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 84, child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600))),
+          SizedBox(
+            width: 84,
+            child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+          ),
           Expanded(child: value),
         ],
       );
@@ -206,7 +232,11 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
               children: [
                 const Text('詳細', style: TextStyle(fontWeight: FontWeight.w700)),
                 const Spacer(),
-                IconButton(tooltip: '閉じる', onPressed: widget.onClose, icon: const Icon(Icons.close)),
+                IconButton(
+                  tooltip: '閉じる',
+                  onPressed: widget.onClose,
+                  icon: const Icon(Icons.close),
+                ),
               ],
             ),
           ),
@@ -224,13 +254,22 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                   const SizedBox(height: 16),
                   Row(
                     children: [
-                      Expanded(child: Text(bookmark.title, style: Theme.of(context).textTheme.titleLarge)),
+                      Expanded(
+                        child: Text(
+                          bookmark.title,
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                      ),
                       IconButton(
                         tooltip: 'お気に入り',
                         onPressed: () => widget.repository.toggleFavorite(bookmark),
                         icon: Icon(bookmark.favorite ? Icons.star : Icons.star_border),
                       ),
-                      IconButton(tooltip: '編集', onPressed: _edit, icon: const Icon(Icons.edit_outlined)),
+                      IconButton(
+                        tooltip: '編集',
+                        onPressed: _edit,
+                        icon: const Icon(Icons.edit_outlined),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -250,14 +289,29 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                     'タグ',
                     bookmark.tags.isEmpty
                         ? const Text('なし')
-                        : Wrap(spacing: 5, runSpacing: 5, children: bookmark.tags.map((t) => Chip(label: Text(t.name))).toList()),
+                        : Wrap(
+                            spacing: 5,
+                            runSpacing: 5,
+                            children: bookmark.tags.map((t) => Chip(label: Text(t.name))).toList(),
+                          ),
                   ),
                   const SizedBox(height: 16),
                   _property(
                     '出演者',
                     bookmark.people.isEmpty
                         ? const Text('なし')
-                        : Wrap(spacing: 5, runSpacing: 5, children: bookmark.people.map((p) => Chip(label: Text(p.name))).toList()),
+                        : Wrap(
+                            spacing: 5,
+                            runSpacing: 5,
+                            children: bookmark.people.map((p) => Chip(label: Text(p.name))).toList(),
+                          ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text('カスタム項目', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 8),
+                  BookmarkCustomProperties(
+                    repository: widget.repository,
+                    bookmarkId: bookmark.id,
                   ),
                   const SizedBox(height: 20),
                   Row(
@@ -297,9 +351,17 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                                   child: Stack(
                                     fit: StackFit.expand,
                                     children: [
-                                      Image.file(File(photo.path), fit: BoxFit.cover),
+                                      Image.file(
+                                        File(photo.path),
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image_outlined)),
+                                      ),
                                       if (isCover)
-                                        const Positioned(top: 4, left: 4, child: Icon(Icons.photo_size_select_actual, size: 18)),
+                                        const Positioned(
+                                          top: 4,
+                                          left: 4,
+                                          child: Icon(Icons.photo_size_select_actual, size: 18),
+                                        ),
                                     ],
                                   ),
                                 ),
@@ -308,7 +370,11 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                                     Expanded(
                                       child: Padding(
                                         padding: const EdgeInsets.only(left: 6),
-                                        child: Text(photo.title ?? '写真', maxLines: 1, overflow: TextOverflow.ellipsis),
+                                        child: Text(
+                                          photo.title ?? '写真',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
                                       ),
                                     ),
                                     PopupMenuButton<String>(
@@ -318,8 +384,10 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                                         if (value == 'detach') await widget.repository.detachPhoto(bookmark, photo);
                                       },
                                       itemBuilder: (_) => [
-                                        if (!isCover) const PopupMenuItem(value: 'cover', child: Text('カバーにする')),
-                                        if (isCover) const PopupMenuItem(value: 'clear', child: Text('カバー解除')),
+                                        if (!isCover)
+                                          const PopupMenuItem(value: 'cover', child: Text('カバーにする')),
+                                        if (isCover)
+                                          const PopupMenuItem(value: 'clear', child: Text('カバー解除')),
                                         const PopupMenuItem(value: 'detach', child: Text('関連を解除')),
                                       ],
                                     ),
@@ -334,7 +402,11 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                   const SizedBox(height: 20),
                   Text('説明', style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 6),
-                  Text(bookmark.description?.trim().isNotEmpty == true ? bookmark.description! : '説明はありません。'),
+                  Text(
+                    bookmark.description?.trim().isNotEmpty == true
+                        ? bookmark.description!
+                        : '説明はありません。',
+                  ),
                 ],
               ),
             ),
