@@ -61,8 +61,6 @@ class WorkspaceStore {
       ];
     }
 
-    // Normalize sort order once on startup. This removes the old ambiguity where
-    // multiple workspaces could permanently keep sort_order = 0.
     for (var i = 0; i < rows.length; i++) {
       if (rows[i].sortOrder == i) continue;
       await (database.update(database.workspaces)..where((workspace) => workspace.id.equals(rows[i].id))).write(
@@ -80,7 +78,7 @@ class WorkspaceStore {
       await database.into(database.bookmarkWorkspaces).insert(
             BookmarkWorkspacesCompanion.insert(
               bookmarkId: bookmark.id,
-              workspaceId: defaultId,
+              workspaceId: Value(defaultId),
             ),
             mode: InsertMode.insertOrIgnore,
           );
@@ -94,7 +92,7 @@ class WorkspaceStore {
       await database.into(database.savedViewWorkspaces).insert(
             SavedViewWorkspacesCompanion.insert(
               savedViewId: view.id,
-              workspaceId: defaultId,
+              workspaceId: Value(defaultId),
             ),
             mode: InsertMode.insertOrIgnore,
           );
@@ -239,7 +237,7 @@ class WorkspaceStore {
       database.into(database.bookmarkWorkspaces).insertOnConflictUpdate(
             BookmarkWorkspacesCompanion.insert(
               bookmarkId: bookmarkId,
-              workspaceId: workspaceId,
+              workspaceId: Value(workspaceId),
             ),
           );
 
@@ -247,7 +245,7 @@ class WorkspaceStore {
       database.into(database.savedViewWorkspaces).insertOnConflictUpdate(
             SavedViewWorkspacesCompanion.insert(
               savedViewId: savedViewId,
-              workspaceId: workspaceId,
+              workspaceId: Value(workspaceId),
             ),
           );
 
