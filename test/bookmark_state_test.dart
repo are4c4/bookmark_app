@@ -39,5 +39,26 @@ void main() {
         BookmarkStorageState.inbox,
       );
     });
+
+    test('database trash value maps to trashed domain state', () {
+      expect(
+        BookmarkStorageState.fromStorage('trash'),
+        BookmarkStorageState.trashed,
+      );
+      expect(BookmarkStorageState.trashed.storageValue, 'trash');
+    });
+
+    test('old trashed spelling remains readable for compatibility', () {
+      expect(
+        BookmarkStorageState.fromStorage('trashed'),
+        BookmarkStorageState.trashed,
+      );
+    });
+
+    test('reading status migration preserves normal progress states', () {
+      expect(legacyReadingStatus('later'), BookmarkReadingStatus.later);
+      expect(legacyReadingStatus('in_progress'), BookmarkReadingStatus.inProgress);
+      expect(legacyReadingStatus('done'), BookmarkReadingStatus.done);
+    });
   });
 }
