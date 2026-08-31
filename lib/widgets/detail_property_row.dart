@@ -66,19 +66,18 @@ class DetailPropertyRow extends StatelessWidget {
               ),
             ),
           ),
-          SizedBox(
-            width: 28,
-            height: 30,
-            child: onAdd == null
-                ? null
-                : IconButton(
-                    padding: EdgeInsets.zero,
-                    visualDensity: VisualDensity.compact,
-                    tooltip: addTooltip,
-                    onPressed: onAdd,
-                    icon: Icon(Icons.add, size: 17, color: scheme.onSurfaceVariant),
-                  ),
-          ),
+          if (onAdd != null)
+            SizedBox(
+              width: 28,
+              height: 30,
+              child: IconButton(
+                padding: EdgeInsets.zero,
+                visualDensity: VisualDensity.compact,
+                tooltip: addTooltip,
+                onPressed: onAdd,
+                icon: Icon(Icons.add, size: 17, color: scheme.onSurfaceVariant),
+              ),
+            ),
         ],
       ),
     );
@@ -137,12 +136,15 @@ class DetailSelectField<T> extends StatelessWidget {
                 ),
               ),
             ),
-            Transform.translate(
-              offset: const Offset(28, 0),
-              child: Icon(
-                Icons.keyboard_arrow_down,
-                size: 17,
-                color: scheme.onSurfaceVariant,
+            SizedBox(
+              width: 28,
+              height: 30,
+              child: Center(
+                child: Icon(
+                  Icons.keyboard_arrow_down,
+                  size: 17,
+                  color: scheme.onSurfaceVariant,
+                ),
               ),
             ),
           ],
