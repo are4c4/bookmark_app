@@ -5,7 +5,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
-import 'bookmark_custom_properties.dart';
 import 'photo_database_picker.dart';
 
 class BookmarkDetailPanel extends StatefulWidget {
@@ -305,13 +304,6 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                             runSpacing: 5,
                             children: bookmark.people.map((p) => Chip(label: Text(p.name))).toList(),
                           ),
-                  ),
-                  const SizedBox(height: 20),
-                  Text('カスタム項目', style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 8),
-                  BookmarkCustomProperties(
-                    repository: widget.repository,
-                    bookmarkId: bookmark.id,
                   ),
                   const SizedBox(height: 20),
                   Row(
