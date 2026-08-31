@@ -120,7 +120,7 @@ class CollectionRepository {
   Stream<List<BookmarkItem>> watchBookmarksFor(CollectionRecord collection) =>
       _root.watchBookmarksForCollection(collection);
   Future<int> create(String name, {String? note}) => _root.createCollection(name, note: note);
-  Future<void> delete(CollectionRecord collection) => _root.deleteCollection(collection.id);
+  Future<void> delete(CollectionRecord collection) => _root.deleteCollection(collection);
   Future<void> setForBookmark(BookmarkItem bookmark, Iterable<CollectionRecord> collections) =>
       _root.setBookmarkCollections(bookmark, collections);
 }
