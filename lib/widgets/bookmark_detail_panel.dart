@@ -237,6 +237,20 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
     if (selected != null) await widget.repository.setBookmarkTagsFromDatabase(widget.bookmark, selected);
   }
 
+  Future<void> _addTagToDroppedBookmark(int bookmarkId, Tag tag) async {
+    final items = await widget.repository.watchAll().first;
+    final dropped = items.where((item) => item.id == bookmarkId).firstOrNull;
+    if (dropped == null) return;
+    final byId = <int, Tag>{for (final value in dropped.tags) value.id: value};
+    byId[tag.id] = tag;
+    await widget.repository.setBookmarkTagsFromDatabase(dropped, byId.values);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('「${dropped.title}」にタグ「${tag.name}」を追加しました')),
+      );
+    }
+  }
+
   Future<void> _selectCollections() async {
     final allCollections = await widget.repository.watchCollections().first;
     final selectedIds = widget.bookmark.collections.map((e) => e.id).toSet();
@@ -390,16 +404,30 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
         addTooltip: tooltip,
       );
 
-  Widget _relationChip({required String label, required VoidCallback onPressed}) {
+  Widget _tagChip(Tag tag) {
     final scheme = Theme.of(context).colorScheme;
-    return ActionChip(
-      label: Text(label),
-      onPressed: onPressed,
-      backgroundColor: scheme.surfaceContainerHighest,
-      side: BorderSide.none,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-      labelStyle: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
-      visualDensity: VisualDensity.compact,
+    return DragTarget<int>(
+      onWillAcceptWithDetails: (details) => details.data != widget.bookmark.id,
+      onAcceptWithDetails: (details) => _addTagToDroppedBookmark(details.data, tag),
+      builder: (context, candidates, rejected) {
+        final hovering = candidates.isNotEmpty;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(4),
+            border: hovering ? Border.all(color: scheme.primary, width: 1.5) : null,
+          ),
+          child: ActionChip(
+            label: Text(tag.name),
+            onPressed: () => widget.onFilterByTag?.call(tag),
+            backgroundColor: hovering ? scheme.primaryContainer : scheme.surfaceContainerHighest,
+            side: BorderSide.none,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+            labelStyle: TextStyle(fontSize: 12, color: hovering ? scheme.onPrimaryContainer : scheme.onSurfaceVariant),
+            visualDensity: VisualDensity.compact,
+          ),
+        );
+      },
     );
   }
 
@@ -568,17 +596,18 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
             }
             return Column(
               children: relations.map((relation) {
-                final otherId = relation.sourceBookmarkId == widget.bookmark.id
-                    ? relation.targetBookmarkId
-                    : relation.sourceBookmarkId;
+                final outgoing = relation.sourceBookmarkId == widget.bookmark.id;
+                final otherId = outgoing ? relation.targetBookmarkId : relation.sourceBookmarkId;
                 final other = all.where((item) => item.id == otherId).firstOrNull;
                 if (other == null) return const SizedBox.shrink();
+                final direction = outgoing ? '→ outgoing' : '← incoming';
+                final relationLabel = _relationLabels[relation.relationType] ?? relation.relationType;
                 return ListTile(
                   dense: true,
                   contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.link, size: 17),
+                  leading: Icon(outgoing ? Icons.arrow_forward : Icons.arrow_back, size: 17),
                   title: Text(other.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                  subtitle: Text(_relationLabels[relation.relationType] ?? relation.relationType),
+                  subtitle: Text('$direction · $relationLabel'),
                   trailing: IconButton(
                     tooltip: '関連を解除',
                     icon: const Icon(Icons.close, size: 16),
@@ -672,9 +701,7 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                               : Wrap(
                                   spacing: 5,
                                   runSpacing: 5,
-                                  children: bookmark.tags
-                                      .map((tag) => _relationChip(label: tag.name, onPressed: () => widget.onFilterByTag?.call(tag)))
-                                      .toList(),
+                                  children: bookmark.tags.map(_tagChip).toList(),
                                 ),
                           onAdd: _selectTagsFromDatabase,
                           tooltip: 'タグDBから選択・新規作成',
