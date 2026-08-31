@@ -18,7 +18,7 @@ class PeopleManagementPage extends StatelessWidget {
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('出演者を追加'),
+        title: const Text('人物を追加'),
         content: SizedBox(
           width: 440,
           child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -54,7 +54,7 @@ class PeopleManagementPage extends StatelessWidget {
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setLocalState) => AlertDialog(
-          title: const Text('出演者プロフィールを編集'),
+          title: const Text('人物プロフィールを編集'),
           content: SizedBox(
             width: 520,
             child: SingleChildScrollView(
@@ -138,8 +138,8 @@ class PeopleManagementPage extends StatelessWidget {
     final ok = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('出演者を削除しますか？'),
-        content: Text('「${person.name}」を出演者DBから削除します。ブックマーク自体は削除されません。'),
+        title: const Text('人物を削除しますか？'),
+        content: Text('「${person.name}」を人物DBから削除します。ブックマーク自体は削除されません。'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('キャンセル')),
           FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('削除')),
@@ -190,7 +190,7 @@ class PeopleManagementPage extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 8, 8),
               child: Row(children: [
-                const Text('出演者プロフィール', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF787774))),
+                const Text('人物プロフィール', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF787774))),
                 const Spacer(),
                 IconButton(tooltip: '編集', onPressed: () async { Navigator.pop(dialogContext); await _edit(context, person, photos); }, icon: const Icon(Icons.edit_outlined, size: 19)),
                 IconButton(tooltip: '閉じる', onPressed: () => Navigator.pop(dialogContext), icon: const Icon(Icons.close)),
@@ -211,6 +211,25 @@ class PeopleManagementPage extends StatelessWidget {
                       Text(person.name, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700, color: Color(0xFF37352F))),
                       const SizedBox(height: 8),
                       Text('${relatedBookmarks.length}件のブックマーク · ${relatedPhotos.length}枚の関連写真', style: const TextStyle(fontSize: 13, color: Color(0xFF9B9A97))),
+                      const SizedBox(height: 10),
+                      StreamBuilder(
+                        stream: repository.watchRolesForPerson(person),
+                        builder: (context, snapshot) {
+                          final assignments = snapshot.data ?? const [];
+                          final counts = <String, int>{};
+                          for (final assignment in assignments) {
+                            counts[assignment.role] = (counts[assignment.role] ?? 0) + 1;
+                          }
+                          if (counts.isEmpty) return const SizedBox.shrink();
+                          return Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: counts.entries
+                                .map((entry) => Chip(label: Text('${entry.key} ${entry.value}件')))
+                                .toList(),
+                          );
+                        },
+                      ),
                       if (person.note?.trim().isNotEmpty == true) ...[
                         const SizedBox(height: 18),
                         Text(person.note!, style: const TextStyle(fontSize: 14, height: 1.55, color: Color(0xFF565653))),
@@ -282,11 +301,11 @@ class PeopleManagementPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('出演者DB')),
+      appBar: AppBar(title: const Text('人物DB')),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _create(context),
         icon: const Icon(Icons.person_add_alt_1),
-        label: const Text('出演者を追加'),
+        label: const Text('人物を追加'),
       ),
       body: StreamBuilder<List<Person>>(
         stream: repository.watchPeople(),
@@ -301,7 +320,7 @@ class PeopleManagementPage extends StatelessWidget {
                 stream: repository.watchAll(),
                 builder: (context, bookmarkSnapshot) {
                   final bookmarks = bookmarkSnapshot.data ?? const <BookmarkItem>[];
-                  if (people.isEmpty) return const Center(child: Text('出演者がまだ登録されていません。'));
+                  if (people.isEmpty) return const Center(child: Text('人物がまだ登録されていません。'));
 
                   return ListView.separated(
                     padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
