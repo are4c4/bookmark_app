@@ -38,5 +38,11 @@ jobs:
       - name: Test
         run: flutter test
 
+      - name: Prepare macOS host project
+        run: |
+          if [ ! -d macos ]; then
+            flutter create --platforms=macos .
+          fi
+
       - name: Build macOS debug app
         run: flutter build macos --debug
