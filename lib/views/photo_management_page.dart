@@ -5,11 +5,18 @@ import 'package:flutter/material.dart';
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
 import '../services/photo_storage_service.dart';
+import '../widgets/photo_database_picker.dart';
 
 class PhotoManagementPage extends StatelessWidget {
   const PhotoManagementPage({super.key, required this.repository});
 
   final BookmarkRepository repository;
+
+  List<String> _split(String value) => value
+      .split(',')
+      .map((e) => e.trim())
+      .where((e) => e.isNotEmpty)
+      .toList();
 
   Future<void> _import(BuildContext context) async {
     try {
@@ -41,17 +48,25 @@ class PhotoManagementPage extends StatelessWidget {
   Future<void> _edit(BuildContext context, PhotoRecord photo) async {
     final title = TextEditingController(text: photo.title ?? '');
     final note = TextEditingController(text: photo.note ?? '');
+    final tags = TextEditingController(text: photo.tags);
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('写真を編集'),
         content: SizedBox(
-          width: 460,
+          width: 480,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(controller: title, decoration: const InputDecoration(labelText: 'タイトル')),
               TextField(controller: note, maxLines: 3, decoration: const InputDecoration(labelText: 'メモ')),
+              TextField(
+                controller: tags,
+                decoration: const InputDecoration(
+                  labelText: '写真タグ（カンマ区切り）',
+                  hintText: '風景, 夏, 資料',
+                ),
+              ),
             ],
           ),
         ),
@@ -63,6 +78,7 @@ class PhotoManagementPage extends StatelessWidget {
                 photo,
                 title: title.text.trim().isEmpty ? null : title.text.trim(),
                 note: note.text.trim().isEmpty ? null : note.text.trim(),
+                tagNames: _split(tags.text),
               );
               if (dialogContext.mounted) Navigator.pop(dialogContext);
             },
@@ -73,6 +89,7 @@ class PhotoManagementPage extends StatelessWidget {
     );
     title.dispose();
     note.dispose();
+    tags.dispose();
   }
 
   Future<void> _attach(BuildContext context, PhotoRecord photo) async {
@@ -166,14 +183,15 @@ class PhotoManagementPage extends StatelessWidget {
           return GridView.builder(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
             gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 260,
+              maxCrossAxisExtent: 270,
               crossAxisSpacing: 12,
               mainAxisSpacing: 12,
-              childAspectRatio: 1.05,
+              childAspectRatio: 0.92,
             ),
             itemCount: photos.length,
             itemBuilder: (context, index) {
               final photo = photos[index];
+              final tags = photoTagNames(photo);
               return Card(
                 clipBehavior: Clip.antiAlias,
                 child: Column(
@@ -190,7 +208,7 @@ class PhotoManagementPage extends StatelessWidget {
                       ),
                     ),
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(10, 6, 4, 6),
+                      padding: const EdgeInsets.fromLTRB(10, 6, 4, 2),
                       child: Row(
                         children: [
                           Expanded(
@@ -208,13 +226,30 @@ class PhotoManagementPage extends StatelessWidget {
                             },
                             itemBuilder: (_) => const [
                               PopupMenuItem(value: 'attach', child: Text('ブックマークに追加')),
-                              PopupMenuItem(value: 'edit', child: Text('編集')),
+                              PopupMenuItem(value: 'edit', child: Text('編集・タグ')),
                               PopupMenuItem(value: 'delete', child: Text('削除')),
                             ],
                           ),
                         ],
                       ),
                     ),
+                    if (tags.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+                        child: Wrap(
+                          spacing: 4,
+                          runSpacing: 4,
+                          children: tags
+                              .take(4)
+                              .map((tag) => Chip(
+                                    label: Text(tag),
+                                    visualDensity: VisualDensity.compact,
+                                  ))
+                              .toList(),
+                        ),
+                      )
+                    else
+                      const SizedBox(height: 8),
                   ],
                 ),
               );
