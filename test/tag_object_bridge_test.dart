@@ -44,8 +44,8 @@ void main() {
     expect(tagType, isNotNull);
     expect(tagType!.kind, ObjectTypeKind.system);
 
-    final parentObjectId = await bridge.objectIdForLegacyTag(parentId);
-    final childObjectId = await bridge.objectIdForLegacyTag(childId);
+    final parentObjectId = await bridge.objectIdForLegacyTag(workspaceId, parentId);
+    final childObjectId = await bridge.objectIdForLegacyTag(workspaceId, childId);
     final objects = await objectStore.listObjects(tagType.id);
     expect(objects.map((object) => object.title).toSet(), {'くだもの', 'りんご'});
 
@@ -57,7 +57,7 @@ void main() {
     );
   });
 
-  test('system object types are scoped per workspace', () async {
+  test('system object types and tag object links are scoped per workspace', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
     final workspaces = WorkspaceStore(database);
@@ -65,22 +65,26 @@ void main() {
     final second = await workspaces.createWorkspace('Second');
     final objectStore = ObjectStore(GenericDatabaseStore(database));
     final systemStore = SystemObjectStore(database: database, objectStore: objectStore);
-
-    final firstType = await systemStore.ensureSystemObjectType(
-      workspaceId: first,
-      systemKey: 'tag',
-      name: 'タグ',
-      icon: '🏷️',
-    );
-    final secondType = await systemStore.ensureSystemObjectType(
-      workspaceId: second,
-      systemKey: 'tag',
-      name: 'タグ',
-      icon: '🏷️',
+    final bridge = TagObjectBridge(
+      database: database,
+      objectStore: objectStore,
+      systemObjectStore: systemStore,
     );
 
-    expect(firstType.id, isNot(secondType.id));
-    expect(firstType.workspaceId, first);
-    expect(secondType.workspaceId, second);
+    await database.customStatement("INSERT INTO tags(name) VALUES ('数学')");
+    final tagId = (await database.customSelect("SELECT id FROM tags WHERE name = '数学'").getSingle())
+        .read<int>('id');
+    await bridge.syncLegacyTags(first);
+    await bridge.syncLegacyTags(second);
+
+    final firstType = await systemStore.getSystemObjectType(workspaceId: first, systemKey: 'tag');
+    final secondType = await systemStore.getSystemObjectType(workspaceId: second, systemKey: 'tag');
+    final firstObjectId = await bridge.objectIdForLegacyTag(first, tagId);
+    final secondObjectId = await bridge.objectIdForLegacyTag(second, tagId);
+
+    expect(firstType, isNotNull);
+    expect(secondType, isNotNull);
+    expect(firstType!.id, isNot(secondType!.id));
+    expect(firstObjectId, isNot(secondObjectId));
   });
 }
