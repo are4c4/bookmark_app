@@ -59,6 +59,7 @@ Future<void> _pumpTagTree(
 
   await tester.pumpWidget(
     MaterialApp(
+      key: ValueKey(brightness),
       theme: ThemeData(colorScheme: scheme),
       home: Scaffold(
         body: TagTreeView(
