@@ -1,5 +1,93 @@
 import 'package:flutter/material.dart';
 
+class DatabaseActionCard extends StatelessWidget {
+  const DatabaseActionCard({
+    super.key,
+    required this.label,
+    required this.onPressed,
+    this.icon = Icons.add,
+    this.aspectRatio = 1.35,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onPressed;
+  final double aspectRatio;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return AspectRatio(
+      aspectRatio: aspectRatio,
+      child: Material(
+        color: scheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(8),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onPressed,
+          child: Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: scheme.outlineVariant),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Center(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: 20, color: scheme.onSurfaceVariant),
+                  const SizedBox(width: 8),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class DatabaseActionRow extends StatelessWidget {
+  const DatabaseActionRow({
+    super.key,
+    required this.label,
+    required this.onPressed,
+    this.icon = Icons.add,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onPressed,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Icon(icon, size: 18, color: scheme.onSurfaceVariant),
+              const SizedBox(width: 10),
+              Text(label, style: TextStyle(color: scheme.onSurfaceVariant)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Card displayed at the end of a gallery to create a new database item.
 /// The text controller is owned by this widget, avoiding dialog/controller
 /// lifetime races when the database updates while an item is being created.
