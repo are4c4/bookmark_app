@@ -4,6 +4,7 @@ import '../data/bookmark_repository.dart';
 import '../data/database_view_store.dart';
 import '../data/generic_database_store.dart';
 import '../database/database_definition.dart';
+import '../features/database/presentation/database_property_presenter.dart';
 import '../widgets/database_create_tiles.dart';
 import '../widgets/database_view_tabs.dart';
 import '../widgets/notion_inline_field.dart';
@@ -264,13 +265,8 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     }).toList();
   }
 
-  String _displayValue(GenericPropertyRecord property, dynamic value) {
-    if (value == null) return '';
-    if (property.type == 'checkbox') return value == true ? '✓' : '';
-    if (property.type == 'multiSelect' && value is List) return value.join(', ');
-    if (property.type == 'rating' && value is num) return '★' * value.toInt().clamp(0, 5).toInt();
-    return '$value';
-  }
+  String _displayValue(GenericPropertyRecord property, dynamic value) =>
+      formatDatabasePropertyValue(_databasePropertyType(property.type), value);
 
   Widget _gallery(List<GenericRecord> records) => GridView.builder(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),

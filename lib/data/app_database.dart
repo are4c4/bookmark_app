@@ -3,6 +3,7 @@ import 'package:drift_flutter/drift_flutter.dart';
 
 part 'app_database.g.dart';
 part 'app_database_schema.dart';
+part 'app_database_migrations.dart';
 
 @DriftDatabase(
   tables: [
@@ -284,57 +285,10 @@ class AppDatabase extends _$AppDatabase {
             await m.addColumn(savedViews, savedViews.photoFilterId);
           }
           if (from < 15) {
-            final existing = await customSelect(
-              "SELECT name FROM sqlite_master WHERE type = 'table'",
-            ).get();
-            final tableNames = existing.map((row) => row.read<String>('name')).toSet();
-            if (!tableNames.contains('person_groups')) {
-              await m.createTable(personGroups);
-            }
-            if (!tableNames.contains('person_group_members')) {
-              await m.createTable(personGroupMembers);
-            }
-            if (!tableNames.contains('database_views')) {
-              await m.createTable(databaseViews);
-            }
-            await customStatement(
-              'CREATE INDEX IF NOT EXISTS person_group_members_person_idx '
-              'ON person_group_members(person_id)',
-            );
-            await customStatement(
-              'CREATE INDEX IF NOT EXISTS database_views_scope_idx '
-              'ON database_views(workspace_id, database_key, sort_order, id)',
-            );
+            await migrateToV15(m);
           }
           if (from < 16) {
-            final existing = await customSelect(
-              "SELECT name FROM sqlite_master WHERE type = 'table'",
-            ).get();
-            final tableNames = existing.map((row) => row.read<String>('name')).toSet();
-            if (!tableNames.contains('generic_databases')) {
-              await m.createTable(genericDatabases);
-            }
-            if (!tableNames.contains('generic_properties')) {
-              await m.createTable(genericProperties);
-            }
-            if (!tableNames.contains('generic_records')) {
-              await m.createTable(genericRecords);
-            }
-            if (!tableNames.contains('generic_values')) {
-              await m.createTable(genericValues);
-            }
-            await customStatement(
-              'CREATE INDEX IF NOT EXISTS generic_databases_workspace_idx '
-              'ON generic_databases(workspace_id, sort_order, id)',
-            );
-            await customStatement(
-              'CREATE INDEX IF NOT EXISTS generic_properties_database_idx '
-              'ON generic_properties(database_id, sort_order, id)',
-            );
-            await customStatement(
-              'CREATE INDEX IF NOT EXISTS generic_records_database_idx '
-              'ON generic_records(database_id, updated_at DESC, id DESC)',
-            );
+            await migrateToV16(m);
           }
         },
         beforeOpen: (_) async => customStatement('PRAGMA foreign_keys = ON'),

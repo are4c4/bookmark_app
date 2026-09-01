@@ -230,13 +230,10 @@ class BookmarkReorderableProperties extends StatelessWidget {
     return '$y/$m/$d $h:$min';
   }
 
-  Widget _dragHandle(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(right: 5),
-        child: Icon(
-          Icons.drag_indicator,
-          size: 15,
-          color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: .50),
-        ),
+  Widget _dragHandle(BuildContext context) => Icon(
+        Icons.drag_indicator,
+        size: 15,
+        color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: .50),
       );
 
   Widget _rating(BuildContext context) {
