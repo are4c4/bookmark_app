@@ -170,6 +170,6 @@ void main() {
           ..where((item) => item.id.equals(id)))
         .getSingleOrNull();
     expect(row, isNotNull);
-    expect(row!.storageState, 'trashed');
+    expect(row!.storageState, 'trash');
   });
 }
