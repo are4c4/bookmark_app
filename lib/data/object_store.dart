@@ -35,7 +35,7 @@ class ObjectStore {
       });
 
   Future<List<AppObjectType>> listObjectTypes(int workspaceId) async {
-    final definitions = await _genericStore.listDatabases(workspaceId);
+    final definitions = await _genericStore.listAllDatabases(workspaceId);
     final result = <AppObjectType>[];
     for (final definition in definitions) {
       result.add(await _hydrateObjectType(definition));
