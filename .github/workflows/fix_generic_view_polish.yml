@@ -1,0 +1,36 @@
+name: Fix generic view polish
+
+on:
+  push:
+    branches:
+      - feature/notion-database-foundation-v2
+    paths:
+      - tool/fix_generic_view_polish.py
+      - .github/workflows/fix_generic_view_polish.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: feature/notion-database-foundation-v2
+          fetch-depth: 0
+      - name: Apply safe polish patch
+        run: python3 tool/fix_generic_view_polish.py
+      - name: Remove one-shot patch files
+        run: rm -f tool/fix_generic_view_polish.py .github/workflows/fix_generic_view_polish.yml
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes"
+            exit 0
+          fi
+          git commit -m "Polish generic database view state handling"
+          git push origin HEAD:feature/notion-database-foundation-v2
