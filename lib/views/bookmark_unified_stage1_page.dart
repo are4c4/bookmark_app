@@ -869,7 +869,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
   );
 
   Widget _toolbar() {
-    final filterCount = (_favoritesOnly ? 1 : 0) + (_statusFilter.isNotEmpty ? 1 : 0) + (_minRating > 0 ? 1 : 0);
+    final filterCount = (_favoritesOnly ? 1 : 0) + (_statusFilter.isNotEmpty ? 1 : 0) + (_minRating > 0 ? 1 : 0) + (_relationFilterLabel == null ? 0 : 1);
     final scheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
