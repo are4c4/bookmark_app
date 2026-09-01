@@ -215,7 +215,6 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
   }
 
   Future<void> _reorder(int oldIndex, int newIndex) async {
-    if (newIndex > oldIndex) newIndex -= 1;
     final updated = [..._workspaces];
     final item = updated.removeAt(oldIndex);
     updated.insert(newIndex, item);
@@ -381,7 +380,7 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
         physics: const NeverScrollableScrollPhysics(),
         buildDefaultDragHandles: false,
         itemCount: _workspaces.length,
-        onReorder: _reorder,
+        onReorderItem: _reorder,
         itemBuilder: (context, index) => _workspaceTile(_workspaces[index], index),
       ),
     ]);
