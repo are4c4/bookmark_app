@@ -68,22 +68,31 @@ class BookmarkLifecyclePage extends StatelessWidget {
             height: 420,
             child: candidates.isEmpty
                 ? const Center(child: Text('追加できるブックマークがありません'))
-                : ListView.builder(
+                : RadioGroup<int>(
+                    groupValue: selected?.id,
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setLocalState(
+                        () => selected = candidates.firstWhere(
+                          (item) => item.id == value,
+                        ),
+                      );
+                    },
+                    child: ListView.builder(
                     itemCount: candidates.length,
                     itemBuilder: (context, index) {
                       final item = candidates[index];
                       return RadioListTile<int>(
                         value: item.id,
-                        groupValue: selected?.id,
                         title: Text(item.title),
                         subtitle: Text(
                           item.url,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        onChanged: (_) => setLocalState(() => selected = item),
                       );
                     },
+                  ),
                   ),
           ),
           actions: [
