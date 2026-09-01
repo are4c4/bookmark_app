@@ -246,7 +246,19 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
     );
     if (confirmed == true) {
       await widget.repository.delete(bookmark.id);
-      if (_selectedBookmarkId == bookmark.id && mounted) setState(() => _selectedBookmarkId = null);
+      if (!mounted) return;
+      if (_selectedBookmarkId == bookmark.id) {
+        setState(() => _selectedBookmarkId = null);
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('ブックマークをゴミ箱へ移動しました'),
+          action: SnackBarAction(
+            label: '元に戻す',
+            onPressed: () => widget.repository.restoreFromTrash(bookmark),
+          ),
+        ),
+      );
     }
   }
 
@@ -837,9 +849,29 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
       ),
     );
     if (ok == true) {
-      await widget.repository.batchDelete(_batchSelectedIds);
+      final selectedIds = {..._batchSelectedIds};
+      final selectedItems = (await widget.repository.watchAll().first)
+          .where((bookmark) => selectedIds.contains(bookmark.id))
+          .toList();
+      await widget.repository.batchDelete(selectedIds);
       if (!mounted) return;
-      setState(() { _batchSelectedIds.clear(); _selectionMode = false; });
+      setState(() {
+        _batchSelectedIds.clear();
+        _selectionMode = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${selectedItems.length}件をゴミ箱へ移動しました'),
+          action: SnackBarAction(
+            label: '元に戻す',
+            onPressed: () async {
+              for (final bookmark in selectedItems) {
+                await widget.repository.restoreFromTrash(bookmark);
+              }
+            },
+          ),
+        ),
+      );
     }
   }
 
