@@ -10,13 +10,6 @@ import 'bookmark_relation_section.dart';
 import 'bookmark_reorderable_properties.dart';
 import 'photo_database_picker.dart';
 
-const _statusLabels = <String, String>{
-  'unread': '未読',
-  'later': '後で見る',
-  'in_progress': '閲覧中 / 視聴中',
-  'done': '完了 / 視聴済み',
-  'archived': 'アーカイブ',
-};
 
 class BookmarkDetailPanel extends StatefulWidget {
   const BookmarkDetailPanel({
@@ -561,6 +554,3 @@ class _CancelIntent extends Intent {
   const _CancelIntent();
 }
 
-extension _FirstOrNull<T> on Iterable<T> {
-  T? get firstOrNull => isEmpty ? null : first;
-}

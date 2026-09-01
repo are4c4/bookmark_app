@@ -628,11 +628,6 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
     return const Center(child: Icon(Icons.image_outlined));
   }
 
-  String _roleValue(List<PersonRoleAssignment> assignments, String role) =>
-      assignments
-          .where((assignment) => assignment.role == role)
-          .map((assignment) => assignment.person.name)
-          .join(', ');
 
 
   Widget _list(List<BookmarkItem> bookmarks) => ListView.separated(

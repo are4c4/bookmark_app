@@ -393,8 +393,7 @@ class BookmarkReorderableProperties extends StatelessWidget {
               physics: const NeverScrollableScrollPhysics(),
               buildDefaultDragHandles: false,
               itemCount: ordered.length,
-              onReorder: (oldIndex, newIndex) {
-                if (newIndex > oldIndex) newIndex--;
+              onReorderItem: (oldIndex, newIndex) {
                 final next = [...ordered];
                 final moved = next.removeAt(oldIndex);
                 next.insert(newIndex, moved);
