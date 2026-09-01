@@ -35,7 +35,6 @@ void showAppToast(
         duration: Duration(seconds: actionLabel == null ? (error ? 6 : 3) : 5),
         behavior: SnackBarBehavior.floating,
         width: 440,
-        margin: const EdgeInsets.only(right: 16, bottom: 16),
       ),
     );
 }
