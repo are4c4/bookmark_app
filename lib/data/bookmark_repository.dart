@@ -1,5 +1,6 @@
 import 'package:rxdart/rxdart.dart';
 
+import '../domain/bookmark_state.dart';
 import 'app_database.dart';
 import 'bookmark_lifecycle_store.dart';
 import 'person_roles.dart';
@@ -48,15 +49,23 @@ class BookmarkRepository {
       );
 
   Stream<List<BookmarkItem>> watchAll() => _watchWorkspaceItems(
-        include: (item) => item.storageState != 'trash',
+        include: (item) =>
+            item.storageState != BookmarkStorageState.trashed.storageValue,
       );
 
   Stream<List<BookmarkItem>> watchInbox() => _watchWorkspaceItems(
-        include: (item) => item.storageState == 'inbox',
+        include: (item) =>
+            item.storageState == BookmarkStorageState.inbox.storageValue,
+      );
+
+  Stream<List<BookmarkItem>> watchArchive() => _watchWorkspaceItems(
+        include: (item) =>
+            item.storageState == BookmarkStorageState.archived.storageValue,
       );
 
   Stream<List<BookmarkItem>> watchTrash() => _watchWorkspaceItems(
-        include: (item) => item.storageState == 'trash',
+        include: (item) =>
+            item.storageState == BookmarkStorageState.trashed.storageValue,
       );
 
   Stream<List<Tag>> watchTags() => _database.watchAllTags();
@@ -191,6 +200,10 @@ class BookmarkRepository {
   Future<void> setRating(BookmarkItem bookmark, int rating) => _database.setRating(bookmark.id, rating);
   Future<void> recordOpen(BookmarkItem bookmark) => _database.recordBookmarkOpen(bookmark.id);
   Future<void> setInbox(BookmarkItem bookmark, bool value) => lifecycleStore.setInbox(bookmark.id, value);
+  Future<void> archive(BookmarkItem bookmark) =>
+      lifecycleStore.setArchived(bookmark.id, true);
+  Future<void> unarchive(BookmarkItem bookmark) =>
+      lifecycleStore.setArchived(bookmark.id, false);
   Future<void> moveToTrash(BookmarkItem bookmark) => lifecycleStore.moveToTrash(bookmark.id);
   Future<void> restoreFromTrash(BookmarkItem bookmark) => lifecycleStore.restore(bookmark.id);
   Future<void> permanentDelete(BookmarkItem bookmark) async {
