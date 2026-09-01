@@ -30,6 +30,7 @@ class _DetailPropertyRowState extends State<DetailPropertyRow> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final effectiveValueTap = widget.onTapValue ?? widget.onAdd;
     final value = ConstrainedBox(
       constraints: const BoxConstraints(minHeight: 30),
       child: Align(
@@ -95,13 +96,13 @@ class _DetailPropertyRowState extends State<DetailPropertyRow> {
               ),
             ),
             Expanded(
-              child: widget.onTapValue == null
+              child: effectiveValueTap == null
                   ? value
                   : Material(
                       color: Colors.transparent,
                       child: InkWell(
                         borderRadius: BorderRadius.circular(4),
-                        onTap: widget.onTapValue,
+                        onTap: effectiveValueTap,
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 3),
                           child: value,
