@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:desktop_drop/desktop_drop.dart';
@@ -12,6 +13,7 @@ import '../data/saved_view_extensions.dart';
 import '../data/workspace_store.dart';
 import '../services/bookmark_metadata_service.dart';
 import '../services/photo_storage_service.dart';
+import '../widgets/app_toast.dart';
 import '../widgets/bookmark_create_dialog.dart';
 import '../widgets/bookmark_detail_panel.dart';
 import '../widgets/bookmark_property_order_dialog.dart';
@@ -67,6 +69,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
   int? _activeSavedViewId;
   String? _relationFilterLabel;
   double _detailWidth = 430;
+  Timer? _savedViewSaveTimer;
 
   List<BookmarkStage1Property> get _orderedVisibleProperties =>
       orderedVisibleBookmarkProperties(_propertyOrder, _visibleProperties);
@@ -82,6 +85,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
 
   @override
   void dispose() {
+    _savedViewSaveTimer?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -110,6 +114,15 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
         sortAscending: _sortAscending,
       ).apply(source, allTags);
 
+  void _markViewChanged() {
+    final id = _activeSavedViewId;
+    if (id == null) return;
+    _savedViewSaveTimer?.cancel();
+    _savedViewSaveTimer = Timer(const Duration(milliseconds: 550), () {
+      if (mounted && _activeSavedViewId == id) _updateActiveView();
+    });
+  }
+
   void _resetFilters() {
     _searchController.clear();
     setState(() {
@@ -123,7 +136,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
       _personFilterId = null;
       _photoFilterId = null;
       _relationFilterLabel = null;
-      _activeSavedViewId = null;
+      _markViewChanged();
     });
   }
 
@@ -139,7 +152,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
         ..clear()
         ..add(tag.id);
       _selectedBookmarkId = null;
-      _activeSavedViewId = null;
+      _markViewChanged();
     });
   }
 
@@ -153,7 +166,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
       _personFilterId = person.id;
       _relationFilterLabel = '人物: ${person.name}';
       _selectedBookmarkId = null;
-      _activeSavedViewId = null;
+      _markViewChanged();
     });
   }
 
@@ -167,7 +180,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
       _photoFilterId = photo.id;
       _relationFilterLabel = '写真: ${photo.title?.trim().isNotEmpty == true ? photo.title! : '写真 ${photo.id}'}';
       _selectedBookmarkId = null;
-      _activeSavedViewId = null;
+      _markViewChanged();
     });
   }
 
@@ -227,14 +240,11 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
       if (_selectedBookmarkId == bookmark.id) {
         setState(() => _selectedBookmarkId = null);
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('ブックマークをゴミ箱へ移動しました'),
-          action: SnackBarAction(
-            label: '元に戻す',
-            onPressed: () => widget.repository.restoreFromTrash(bookmark),
-          ),
-        ),
+      showAppToast(
+        context,
+        'ブックマークをゴミ箱へ移動しました',
+        actionLabel: '元に戻す',
+        onAction: () => widget.repository.restoreFromTrash(bookmark),
       );
     }
   }
@@ -750,7 +760,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
       _visiblePersonRoles
         ..clear()
         ..addAll(result.visibleRoles);
-      _activeSavedViewId = null;
+      _markViewChanged();
     });
   }
 
@@ -844,7 +854,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
                   _minRating = minRating;
                   _tagMatchMode = tagMatchMode;
                   _includeDescendants = includeDescendants;
-                  _activeSavedViewId = null;
+                  _markViewChanged();
                 });
                 Navigator.pop(dialogContext);
               },
@@ -1108,18 +1118,15 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
         _batchSelectedIds.clear();
         _selectionMode = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${selectedItems.length}件をゴミ箱へ移動しました'),
-          action: SnackBarAction(
-            label: '元に戻す',
-            onPressed: () async {
-              for (final bookmark in selectedItems) {
-                await widget.repository.restoreFromTrash(bookmark);
-              }
-            },
-          ),
-        ),
+      showAppToast(
+        context,
+        '${selectedItems.length}件をゴミ箱へ移動しました',
+        actionLabel: '元に戻す',
+        onAction: () async {
+          for (final bookmark in selectedItems) {
+            await widget.repository.restoreFromTrash(bookmark);
+          }
+        },
       );
     }
   }
@@ -1230,7 +1237,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
         selected: {_viewType},
         onSelectionChanged: (value) => setState(() {
           _viewType = value.first;
-          _activeSavedViewId = null;
+          _markViewChanged();
         }),
       );
 
@@ -1272,7 +1279,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
                   initialValue: _sortField,
                   onSelected: (value) => setState(() {
                     _sortField = value;
-                    _activeSavedViewId = null;
+                    _markViewChanged();
                   }),
                   itemBuilder: (_) => const [
                     PopupMenuItem(
@@ -1301,7 +1308,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
                   tooltip: _sortAscending ? '昇順' : '降順',
                   onPressed: () => setState(() {
                     _sortAscending = !_sortAscending;
-                    _activeSavedViewId = null;
+                    _markViewChanged();
                   }),
                   icon: Icon(
                     _sortAscending ? Icons.arrow_upward : Icons.arrow_downward,
@@ -1324,7 +1331,6 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
                   tooltip: 'ビュー',
                   onSelected: (value) {
                     if (value == 'new') _saveCurrentView();
-                    if (value == 'update') _updateActiveView();
                     if (value == 'properties') _showPropertiesDialog();
                     if (value == 'select') _toggleSelectionMode();
                   },
@@ -1333,11 +1339,6 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
                       value: 'new',
                       child: Text('現在のビューを保存'),
                     ),
-                    if (_activeSavedViewId != null)
-                      const PopupMenuItem(
-                        value: 'update',
-                        child: Text('保存ビューを上書き'),
-                      ),
                     if (compact) ...const [
                       PopupMenuDivider(),
                       PopupMenuItem(
@@ -1365,7 +1366,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
               controller: _searchController,
               onChanged: (value) => setState(() {
                 _query = value;
-                _activeSavedViewId = null;
+                _markViewChanged();
               }),
               decoration: InputDecoration(
                 hintText: '検索',
@@ -1378,7 +1379,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
                           _searchController.clear();
                           setState(() {
                             _query = '';
-                            _activeSavedViewId = null;
+                            _markViewChanged();
                           });
                         },
                       ),
@@ -1488,16 +1489,8 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
                       onSelected: (value) {
                         if (value == 'delete') _deleteSavedView(config);
                         if (value == 'duplicate') _duplicateSavedView(config);
-                        if (value == 'update') {
-                          _applySavedView(config);
-                          _updateActiveView();
-                        }
                       },
                       itemBuilder: (_) => const [
-                        PopupMenuItem(
-                          value: 'update',
-                          child: Text('現在の設定で上書き'),
-                        ),
                         PopupMenuItem(
                           value: 'duplicate',
                           child: Text('ビューを複製'),
@@ -1576,7 +1569,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
                     _personFilterId = null;
                     _photoFilterId = null;
                     _relationFilterLabel = null;
-                    _activeSavedViewId = null;
+                    _markViewChanged();
                   });
                 },
               ),
