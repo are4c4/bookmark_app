@@ -192,3 +192,22 @@ class ObjectRelationValue {
   dynamic toJson({required bool multiple}) =>
       multiple ? objectIds : singleOrNull;
 }
+
+/// A normalized relation edge used for fast backlinks and graph traversal.
+///
+/// The property value remains stored in `generic_values` for compatibility
+/// with existing generic database views. This edge is the query index for the
+/// object graph.
+class ObjectRelationEdge {
+  const ObjectRelationEdge({
+    required this.sourceObjectId,
+    required this.propertyId,
+    required this.targetObjectId,
+    required this.position,
+  });
+
+  final int sourceObjectId;
+  final int propertyId;
+  final int targetObjectId;
+  final int position;
+}
