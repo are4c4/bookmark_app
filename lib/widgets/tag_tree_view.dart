@@ -278,9 +278,10 @@ class _TagTreeViewState extends State<TagTreeView> {
           final dropping = _dropTargetKey == row.focusKey;
           final editing = widget.editingTagId == tag.id;
           final showSelection = widget.multiSelectedIds.isNotEmpty;
-          final style = const TextStyle(
+          final style = TextStyle(
             fontSize: UiTokens.textMd,
             fontWeight: FontWeight.w400,
+            color: scheme.onSurface,
           );
           return Semantics(
             selected: selected,
