@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:image/image.dart' as img;
 
@@ -19,6 +20,7 @@ class ImageEditService {
     int quarterTurns = 0,
     bool flipHorizontal = false,
     double? cropAspectRatio,
+    Rect? normalizedCropRect,
   }) async {
     if (!supports(path)) {
       throw StateError('現在の画像編集は JPG / JPEG / PNG に対応しています。');
@@ -40,7 +42,28 @@ class ImageEditService {
     }
     if (flipHorizontal) image = img.flipHorizontal(image);
 
-    if (cropAspectRatio != null && cropAspectRatio > 0) {
+    final freeRect = normalizedCropRect;
+    if (freeRect != null) {
+      final left = freeRect.left.clamp(0.0, 1.0);
+      final top = freeRect.top.clamp(0.0, 1.0);
+      final right = freeRect.right.clamp(0.0, 1.0);
+      final bottom = freeRect.bottom.clamp(0.0, 1.0);
+      final x = (left * image.width).round().clamp(0, image.width - 1);
+      final y = (top * image.height).round().clamp(0, image.height - 1);
+      final cropWidth = ((right - left) * image.width)
+          .round()
+          .clamp(1, image.width - x);
+      final cropHeight = ((bottom - top) * image.height)
+          .round()
+          .clamp(1, image.height - y);
+      image = img.copyCrop(
+        image,
+        x: x,
+        y: y,
+        width: cropWidth,
+        height: cropHeight,
+      );
+    } else if (cropAspectRatio != null && cropAspectRatio > 0) {
       final current = image.width / image.height;
       int cropWidth = image.width;
       int cropHeight = image.height;
