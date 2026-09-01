@@ -299,6 +299,8 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase({String databaseName = 'bookmark_app'})
       : super(driftDatabase(name: databaseName));
 
+  AppDatabase.forTesting(QueryExecutor executor) : super(executor);
+
   @override
   int get schemaVersion => 13;
 
