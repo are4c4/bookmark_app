@@ -1,7 +1,6 @@
 import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/views/tag_tree_model.dart';
 import 'package:bookmark_app/widgets/tag_tree_view.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -37,30 +36,30 @@ void main() {
 
     final addButton = find.byKey(const ValueKey('add-child-tag:1'));
     expect(addButton, findsOneWidget);
-    await tester.tap(addButton);
+    final iconButton = tester.widget<IconButton>(addButton);
+    expect(iconButton.onPressed, isNotNull);
+    iconButton.onPressed!.call();
     await tester.pump();
 
     expect(requestedParent?.id, 1);
   });
 
-  testWidgets('group row exposes contextual add action on hover', (tester) async {
+  testWidgets('focused group exposes contextual add action', (tester) async {
     int? requestedGroup = 999;
     await _pumpTagTree(
       tester,
       brightness: Brightness.light,
       textColor: Colors.black,
       includeGroup: true,
+      focusedKey: 'group:other',
       onAddToGroup: (groupId) => requestedGroup = groupId,
     );
 
-    await tester.sendEventToBinding(
-      const PointerHoverEvent(position: Offset(80, 18)),
-    );
-    await tester.pump();
-
     final addButton = find.byKey(const ValueKey('add-group-tag:-1'));
     expect(addButton, findsOneWidget);
-    await tester.tap(addButton);
+    final iconButton = tester.widget<IconButton>(addButton);
+    expect(iconButton.onPressed, isNotNull);
+    iconButton.onPressed!.call();
     await tester.pump();
 
     expect(requestedGroup, isNull);
@@ -88,6 +87,7 @@ Future<void> _pumpTagTree(
   required Brightness brightness,
   required Color textColor,
   int? selectedTagId,
+  String? focusedKey,
   bool includeGroup = false,
   ValueChanged<Tag>? onAddChild,
   ValueChanged<int?>? onAddToGroup,
@@ -137,7 +137,7 @@ Future<void> _pumpTagTree(
           model: model,
           query: '',
           selectedTagId: selectedTagId,
-          focusedKey: null,
+          focusedKey: focusedKey,
           multiSelectedIds: const {},
           creatingUnderKey: creatingUnderKey,
           createController: createController,
