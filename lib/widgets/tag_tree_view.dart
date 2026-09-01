@@ -27,6 +27,8 @@ class TagTreeView extends StatefulWidget {
     required this.canDrop,
     required this.onShowDirect,
     required this.onShowAggregate,
+    required this.onDragStarted,
+    required this.onDragEnded,
     this.editingTagId,
     this.editController,
     this.editError,
@@ -53,6 +55,8 @@ class TagTreeView extends StatefulWidget {
   final bool Function(Tag dragged, TagTreeRow target) canDrop;
   final ValueChanged<Tag> onShowDirect;
   final ValueChanged<Tag> onShowAggregate;
+  final ValueChanged<Tag> onDragStarted;
+  final VoidCallback onDragEnded;
 
   @override
   State<TagTreeView> createState() => _TagTreeViewState();
@@ -70,13 +74,18 @@ class _TagTreeViewState extends State<TagTreeView> {
   }
 
   void _enterDrop(Tag dragged, TagTreeRow row) {
-    _expandTimer?.cancel();
     final allowed = widget.canDrop(dragged, row);
-    setState(() {
-      _dropTargetKey = row.focusKey;
-      _dropAllowed = allowed;
-    });
-    if (!allowed || row.expanded || !row.hasChildren) return;
+    final changed = _dropTargetKey != row.focusKey;
+    if (changed) {
+      _expandTimer?.cancel();
+      setState(() {
+        _dropTargetKey = row.focusKey;
+        _dropAllowed = allowed;
+      });
+    } else if (_dropAllowed != allowed) {
+      setState(() => _dropAllowed = allowed);
+    }
+    if (!changed || !allowed || row.expanded || !row.hasChildren) return;
     _expandTimer = Timer(const Duration(milliseconds: 700), () {
       if (!mounted || _dropTargetKey != row.focusKey) return;
       if (row.kind == TagTreeRowKind.group) {
@@ -232,6 +241,8 @@ class _TagTreeViewState extends State<TagTreeView> {
     final tag = row.tag!;
     return Draggable<Tag>(
       data: tag,
+      onDragStarted: () => widget.onDragStarted(tag),
+      onDragEnd: (_) => widget.onDragEnded(),
       feedback: Material(
         elevation: 4,
         borderRadius: BorderRadius.circular(UiTokens.radiusSm),
@@ -358,6 +369,8 @@ class _TagTreeViewState extends State<TagTreeView> {
                                   ),
                                 ),
                                 onSubmitted: (_) =>
+                                    widget.onSubmitRename(tag),
+                                onTapOutside: (_) =>
                                     widget.onSubmitRename(tag),
                                 onEditingComplete: () {},
                               )
