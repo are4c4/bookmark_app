@@ -635,6 +635,8 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
     var favorites = _favoritesOnly;
     var status = _statusFilter;
     var minRating = _minRating;
+    var tagMatchMode = _tagMatchMode;
+    var includeDescendants = _includeDescendants;
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
@@ -644,6 +646,24 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
             width: 390,
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('お気に入りのみ'), value: favorites, onChanged: (value) => setLocalState(() => favorites = value)),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('子タグを含める'),
+                value: includeDescendants,
+                onChanged: (value) =>
+                    setLocalState(() => includeDescendants = value),
+              ),
+              DropdownButtonFormField<String>(
+                initialValue: tagMatchMode,
+                decoration: const InputDecoration(labelText: '複数タグの条件'),
+                items: const [
+                  DropdownMenuItem(value: 'or', child: Text('いずれかを含む（OR）')),
+                  DropdownMenuItem(value: 'and', child: Text('すべてを含む（AND）')),
+                ],
+                onChanged: (value) =>
+                    setLocalState(() => tagMatchMode = value ?? 'or'),
+              ),
+              const SizedBox(height: 12),
               DropdownButtonFormField<String>(initialValue: status, decoration: const InputDecoration(labelText: 'ステータス'), items: [const DropdownMenuItem(value: '', child: Text('すべて')), ..._statusLabels.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))], onChanged: (value) => setLocalState(() => status = value ?? '')),
               const SizedBox(height: 12),
               DropdownButtonFormField<int>(initialValue: minRating, decoration: const InputDecoration(labelText: '最低評価'), items: List.generate(6, (index) => DropdownMenuItem(value: index, child: Text(index == 0 ? '指定なし' : '${'★' * index} 以上'))), onChanged: (value) => setLocalState(() => minRating = value ?? 0)),
@@ -651,7 +671,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('キャンセル')),
-            FilledButton(onPressed: () { setState(() { _favoritesOnly = favorites; _statusFilter = status; _minRating = minRating; _activeSavedViewId = null; }); Navigator.pop(dialogContext); }, child: const Text('適用')),
+            FilledButton(onPressed: () { setState(() { _favoritesOnly = favorites; _statusFilter = status; _minRating = minRating; _tagMatchMode = tagMatchMode; _includeDescendants = includeDescendants; _activeSavedViewId = null; }); Navigator.pop(dialogContext); }, child: const Text('適用')),
           ],
         ),
       ),
