@@ -195,6 +195,21 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
     await _switchProfile(profile);
   }
 
+  Future<void> _importProfileBackup(
+    String archivePath,
+    String name,
+  ) async {
+    final manager = _profileManager;
+    if (manager == null) return;
+    final profile = await manager.importProfileBackup(
+      archivePath,
+      name: name,
+    );
+    if (mounted) setState(() {});
+    await Future<void>.delayed(Duration.zero);
+    await _switchProfile(profile);
+  }
+
   Future<void> _renameProfile(DatabaseProfile profile, String name) async {
     final manager = _profileManager;
     if (manager == null) return;
@@ -373,6 +388,7 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
           onCreateProfile: _createProfile,
           onRenameProfile: _renameProfile,
           onDuplicateProfile: _duplicateProfile,
+          onImportProfileBackup: _importProfileBackup,
           onDeleteProfile: _deleteProfile,
           onSwitchWorkspace: _switchWorkspace,
         ),
