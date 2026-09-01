@@ -16,6 +16,8 @@ import '../services/photo_storage_service.dart';
 import '../widgets/app_toast.dart';
 import '../widgets/bookmark_create_dialog.dart';
 import '../widgets/bookmark_detail_panel.dart';
+import '../widgets/bookmark_list_metadata.dart';
+import '../widgets/database_create_tiles.dart';
 import '../widgets/bookmark_property_order_dialog.dart';
 import '../widgets/notion_bookmark_card.dart';
 import '../widgets/relation_database_picker.dart';
@@ -420,8 +422,18 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
             crossAxisCount: columns,
             mainAxisSpacing: 12,
             crossAxisSpacing: 12,
-            itemCount: bookmarks.length,
+            itemCount: bookmarks.length + 1,
             itemBuilder: (context, index) {
+              if (index == bookmarks.length) {
+                return DatabaseActionCard(
+                  label: '新しいブックマーク',
+                  icon: Icons.add,
+                  onPressed: () => showBookmarkCreateDialog(
+                    context: context,
+                    repository: widget.repository,
+                  ),
+                );
+              }
               final bookmark = bookmarks[index];
               final selected = _selectionMode
                   ? _batchSelectedIds.contains(bookmark.id)
@@ -536,17 +548,25 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
 
   Widget _list(List<BookmarkItem> bookmarks) => ListView.separated(
         padding: const EdgeInsets.fromLTRB(14, 8, 14, 90),
-        itemCount: bookmarks.length,
+        itemCount: bookmarks.length + 1,
         separatorBuilder: (_, __) => const Divider(height: 1),
         itemBuilder: (context, index) {
+          if (index == bookmarks.length) {
+            return DatabaseActionRow(
+              label: '新しいブックマーク',
+              icon: Icons.add,
+              onPressed: () => showBookmarkCreateDialog(
+                context: context,
+                repository: widget.repository,
+              ),
+            );
+          }
           final bookmark = bookmarks[index];
           return StreamBuilder<List<PersonRoleAssignment>>(
             stream: widget.repository.watchPersonRoles(bookmark),
             builder: (context, roleSnapshot) {
-              final details = _orderedListDetails(
-                bookmark,
-                roleSnapshot.data ?? const [],
-              );
+              final assignments =
+                  roleSnapshot.data ?? const <PersonRoleAssignment>[];
               final tile = Material(
                 color: Colors.transparent,
                 child: ListTile(
@@ -573,13 +593,14 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
                             )
                           : null,
                   title: Text(bookmark.title),
-                  subtitle: details.isEmpty
-                      ? null
-                      : Text(
-                          details.join('  ·  '),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                  subtitle: Padding(
+                    padding: const EdgeInsets.only(top: 5),
+                    child: BookmarkListMetadata(
+                      bookmark: bookmark,
+                      assignments: assignments,
+                      propertyTokens: _visiblePropertyTokens,
+                    ),
+                  ),
                   trailing: _selectionMode
                       ? null
                       : Row(mainAxisSize: MainAxisSize.min, children: [
@@ -870,32 +891,30 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
     String title, {
     String initialValue = '',
   }) async {
-    final controller = TextEditingController(text: initialValue);
     var value = initialValue;
-    final result = await showDialog<String>(
+    return showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: Text(title),
         content: TextFormField(
-          controller: controller,
+          initialValue: initialValue,
           autofocus: true,
           onChanged: (text) => value = text,
-          onFieldSubmitted: (_) => Navigator.pop(context, value.trim()),
+          onFieldSubmitted: (_) =>
+              Navigator.pop(dialogContext, value.trim()),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('キャンセル'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, value.trim()),
+            onPressed: () => Navigator.pop(dialogContext, value.trim()),
             child: const Text('保存'),
           ),
         ],
       ),
     );
-    controller.dispose();
-    return result;
   }
 
   String get _layoutKey => switch (_viewType) {
@@ -1727,9 +1746,10 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
               ),
             ]),
           ),
-          floatingActionButton: _selectionMode
-              ? null
-              : FloatingActionButton.extended(
+          floatingActionButton:
+              _selectionMode || _viewType != BookmarkStage1ViewType.table
+                  ? null
+                  : FloatingActionButton.extended(
                   onPressed: () => showBookmarkCreateDialog(
                     context: context,
                     repository: widget.repository,
