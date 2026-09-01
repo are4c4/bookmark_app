@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
 
+import '../data/bookmark_repository.dart';
 import '../ui/ui_tokens.dart';
+import 'auto_organize_settings_section.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({
     super.key,
     required this.themeMode,
     required this.onThemeModeChanged,
+    required this.repository,
   });
 
   final ThemeMode themeMode;
   final ValueChanged<ThemeMode> onThemeModeChanged;
+  final BookmarkRepository repository;
 
   @override
   Widget build(BuildContext context) {
@@ -70,6 +74,10 @@ class SettingsPage extends StatelessWidget {
               },
             ),
           ),
+          const SizedBox(height: UiTokens.space32),
+          const Divider(),
+          const SizedBox(height: UiTokens.space24),
+          AutoOrganizeSettingsSection(repository: repository),
         ],
       ),
     );
