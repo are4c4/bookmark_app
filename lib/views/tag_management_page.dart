@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
 import '../data/tag_group_store.dart';
+import '../ui/ui_tokens.dart';
 import '../widgets/bookmark_reverse_lookup_dialog.dart';
+import '../widgets/tag_detail_pane.dart';
+import '../widgets/tag_tree_view.dart';
+import 'tag_tree_model.dart';
 
 class TagManagementPage extends StatefulWidget {
   const TagManagementPage({super.key, required this.repository});
@@ -15,453 +20,932 @@ class TagManagementPage extends StatefulWidget {
 }
 
 class _TagManagementPageState extends State<TagManagementPage> {
-  late final TagGroupStore _groupStore;
-  var _ready = false;
+  late final TagGroupStore _store;
+  final _searchController = TextEditingController();
+  final _treeFocus = FocusNode(debugLabel: 'tag-tree');
+  final Set<int> _expandedTagIds = {};
+  final Set<int> _expandedGroupIds = {};
+  final Set<int> _multiSelectedIds = {};
+
+  bool _ready = false;
+  String _query = '';
+  TagUsageFilter _filter = TagUsageFilter.all;
+  int? _selectedTagId;
+  String? _focusedKey;
+  int? _editingTagId;
+  TextEditingController? _editController;
+  String? _editError;
+
+  List<Tag> _tags = const [];
+  List<TagGroupInfo> _groups = const [];
+  Map<int, int?> _groupByTag = const {};
+  Map<int, TagUsageStats> _usage = const {};
+  TagTreeModel _model = const TagTreeModel(
+    rows: [],
+    matchingTagIds: {},
+    allowedTagIds: {},
+  );
 
   BookmarkRepository get repository => widget.repository;
 
   @override
   void initState() {
     super.initState();
-    _groupStore = TagGroupStore(repository.lifecycleStore.database);
+    _store = TagGroupStore(repository.lifecycleStore.database);
     _initialize();
   }
 
   Future<void> _initialize() async {
-    await _groupStore.initialize();
+    await _store.initialize();
+    final state = await _store.loadExpansionState();
+    _expandedTagIds.addAll(state.tagIds);
+    _expandedGroupIds.addAll(state.groupIds);
+    if (!state.hasPersistedValue) {
+      final tags = await repository.watchTags().first;
+      final groups = await _store.listGroups();
+      final parentIds = tags
+          .map((tag) => tag.parentTagId)
+          .whereType<int>()
+          .toSet();
+      _expandedTagIds.addAll(parentIds);
+      _expandedGroupIds
+        ..addAll(groups.map((group) => group.id))
+        ..add(-1);
+      await _saveExpansion();
+    }
     if (mounted) setState(() => _ready = true);
   }
 
   @override
   void dispose() {
-    _groupStore.dispose();
+    _editController?.dispose();
+    _searchController.dispose();
+    _treeFocus.dispose();
+    _store.dispose();
     super.dispose();
   }
 
+  Future<void> _saveExpansion() => _store.saveExpansionState(
+        TagTreeExpansionState(
+          tagIds: _expandedTagIds,
+          groupIds: _expandedGroupIds,
+          hasPersistedValue: true,
+        ),
+      );
+
+  Tag? _tagById(int? id) {
+    if (id == null) return null;
+    for (final tag in _tags) {
+      if (tag.id == id) return tag;
+    }
+    return null;
+  }
+
+  TagGroupInfo? _groupById(int? id) {
+    if (id == null) return null;
+    for (final group in _groups) {
+      if (group.id == id) return group;
+    }
+    return null;
+  }
+
+  Set<int> _descendants(int tagId) {
+    final result = <int>{};
+    void visit(int parentId) {
+      for (final child in _tags.where(
+        (tag) => tag.parentTagId == parentId,
+      )) {
+        if (result.add(child.id)) visit(child.id);
+      }
+    }
+
+    visit(tagId);
+    return result;
+  }
+
+  void _focusRow(String key) {
+    _treeFocus.requestFocus();
+    setState(() => _focusedKey = key);
+  }
+
+  void _selectTag(Tag tag) {
+    if (_editingTagId != null && _editingTagId != tag.id) {
+      _cancelRename();
+    }
+    setState(() {
+      _selectedTagId = tag.id;
+      _focusedKey = 'tag:${tag.id}';
+    });
+  }
+
+  void _toggleGroup(int? groupId) {
+    if (_query.isNotEmpty || _filter != TagUsageFilter.all) return;
+    final key = groupId ?? -1;
+    setState(() {
+      if (!_expandedGroupIds.add(key)) _expandedGroupIds.remove(key);
+    });
+    _saveExpansion();
+  }
+
+  void _toggleTag(Tag tag) {
+    if (_query.isNotEmpty || _filter != TagUsageFilter.all) return;
+    setState(() {
+      if (!_expandedTagIds.add(tag.id)) {
+        _expandedTagIds.remove(tag.id);
+      }
+    });
+    _saveExpansion();
+  }
+
+  Future<void> _expandAll() async {
+    final parents =
+        _tags.map((tag) => tag.parentTagId).whereType<int>().toSet();
+    setState(() {
+      _expandedTagIds
+        ..clear()
+        ..addAll(parents);
+      _expandedGroupIds
+        ..clear()
+        ..addAll(_groups.map((group) => group.id))
+        ..add(-1);
+    });
+    await _saveExpansion();
+  }
+
+  Future<void> _collapseAll() async {
+    setState(() {
+      _expandedTagIds.clear();
+      _expandedGroupIds.clear();
+    });
+    await _saveExpansion();
+  }
+
+  void _beginRename(Tag tag) {
+    _editController?.dispose();
+    setState(() {
+      _editingTagId = tag.id;
+      _editController = TextEditingController(text: tag.name)
+        ..selection = TextSelection(
+          baseOffset: 0,
+          extentOffset: tag.name.length,
+        );
+      _editError = null;
+      _selectedTagId = tag.id;
+    });
+  }
+
+  Future<void> _submitRename(Tag tag) async {
+    final value = _editController?.text.trim() ?? '';
+    if (value.isEmpty) {
+      setState(() => _editError = 'タグ名を入力してください');
+      return;
+    }
+    try {
+      await _store.renameTag(tag.id, value);
+      _cancelRename();
+    } catch (error) {
+      if (mounted) setState(() => _editError = '$error');
+    }
+  }
+
+  void _cancelRename() {
+    _editController?.dispose();
+    _editController = null;
+    if (mounted) {
+      setState(() {
+        _editingTagId = null;
+        _editError = null;
+      });
+    }
+  }
+
+  void _toggleMulti(Tag tag) {
+    setState(() {
+      if (!_multiSelectedIds.add(tag.id)) {
+        _multiSelectedIds.remove(tag.id);
+      }
+      _selectedTagId = tag.id;
+    });
+  }
+
+  KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (event.logicalKey == LogicalKeyboardKey.escape) {
+      if (_editingTagId != null) {
+        _cancelRename();
+      } else if (_multiSelectedIds.isNotEmpty) {
+        setState(() => _multiSelectedIds.clear());
+      }
+      return KeyEventResult.handled;
+    }
+    if (_editingTagId != null) return KeyEventResult.ignored;
+    if (_model.rows.isEmpty) return KeyEventResult.ignored;
+
+    var index = _model.rows.indexWhere(
+      (row) => row.focusKey == _focusedKey,
+    );
+    if (index < 0) index = 0;
+
+    void focusIndex(int next) {
+      final clamped = next.clamp(0, _model.rows.length - 1);
+      final row = _model.rows[clamped];
+      setState(() {
+        _focusedKey = row.focusKey;
+        if (row.tag != null) _selectedTagId = row.tag!.id;
+      });
+    }
+
+    if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+      focusIndex(index - 1);
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+      focusIndex(index + 1);
+      return KeyEventResult.handled;
+    }
+    final row = _model.rows[index];
+    if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+      if (row.kind == TagTreeRowKind.group && row.expanded) {
+        _toggleGroup(row.groupId);
+      } else if (row.tag != null && row.expanded && row.hasChildren) {
+        _toggleTag(row.tag!);
+      } else if (row.tag?.parentTagId != null) {
+        final parentKey = 'tag:${row.tag!.parentTagId}';
+        final parentIndex =
+            _model.rows.indexWhere((candidate) => candidate.focusKey == parentKey);
+        if (parentIndex >= 0) focusIndex(parentIndex);
+      }
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+      if (row.kind == TagTreeRowKind.group && !row.expanded) {
+        _toggleGroup(row.groupId);
+      } else if (row.tag != null && row.hasChildren && !row.expanded) {
+        _toggleTag(row.tag!);
+      } else if (index + 1 < _model.rows.length) {
+        focusIndex(index + 1);
+      }
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.enter && row.tag != null) {
+      _beginRename(row.tag!);
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.space && row.tag != null) {
+      _toggleMulti(row.tag!);
+      return KeyEventResult.handled;
+    }
+    if ((event.logicalKey == LogicalKeyboardKey.delete ||
+            event.logicalKey == LogicalKeyboardKey.backspace) &&
+        row.tag != null) {
+      _deleteTag(row.tag!);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  bool _canDrop(Tag dragged, TagTreeRow target) {
+    if (target.tag == null) return true;
+    if (dragged.id == target.tag!.id) return false;
+    return !_descendants(dragged.id).contains(target.tag!.id);
+  }
+
+  Future<void> _drop(Tag dragged, TagTreeRow target) async {
+    try {
+      final snapshot = await _store.moveTag(
+        tagId: dragged.id,
+        parentTagId: target.tag?.id,
+        groupId: target.tag == null ? target.groupId : null,
+      );
+      if (!mounted) return;
+      final destination = target.tag == null
+          ? '${target.label}の最上位'
+          : '「${target.tag!.name}」の子';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('「${dragged.name}」を$destinationへ移動しました'),
+          action: SnackBarAction(
+            label: '元に戻す',
+            onPressed: () => _store.restoreMove(snapshot),
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('移動できませんでした: $error')),
+      );
+    }
+  }
+
   Future<String?> _askName(String title, {String initial = ''}) async {
-    var value = initial;
-    return showDialog<String>(
+    final controller = TextEditingController(text: initial);
+    final result = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (context) => AlertDialog(
         title: Text(title),
-        content: TextFormField(
-          initialValue: initial,
+        content: TextField(
+          controller: controller,
           autofocus: true,
-          onChanged: (text) => value = text,
-          onFieldSubmitted: (_) => Navigator.pop(dialogContext, value.trim()),
+          onSubmitted: (value) => Navigator.pop(context, value.trim()),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('キャンセル')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, value.trim()), child: const Text('保存')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(
+              context,
+              controller.text.trim(),
+            ),
+            child: const Text('保存'),
+          ),
         ],
       ),
     );
+    controller.dispose();
+    return result;
   }
 
   Future<void> _createGroup() async {
     final name = await _askName('タググループを追加');
     if (name?.isNotEmpty != true) return;
     try {
-      await _groupStore.createGroup(name!);
+      await _store.createGroup(name!);
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('グループを追加できませんでした: $error')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('グループを追加できませんでした: $error')),
+        );
       }
     }
   }
 
-  Future<void> _renameGroup(TagGroupInfo group) async {
-    final name = await _askName('グループ名を変更', initial: group.name);
-    if (name?.isNotEmpty != true || name == group.name) return;
-    await _groupStore.renameGroup(group.id, name!);
-  }
-
-  Future<void> _deleteGroup(TagGroupInfo group) async {
-    final ok = await showDialog<bool>(
+  Future<void> _manageGroups() async {
+    await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text('「${group.name}」を削除しますか？'),
-        content: const Text('グループだけを削除します。中のタグは削除されず「その他タグ」へ移動します。'),
+        title: const Text('タググループ管理'),
+        content: SizedBox(
+          width: 440,
+          child: StreamBuilder<List<TagGroupInfo>>(
+            stream: _store.watchGroups(),
+            builder: (context, snapshot) {
+              final groups = snapshot.data ?? const <TagGroupInfo>[];
+              if (groups.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.all(UiTokens.space16),
+                  child: Text('グループはありません'),
+                );
+              }
+              return ListView(
+                shrinkWrap: true,
+                children: [
+                  for (final group in groups)
+                    ListTile(
+                      title: Text(group.name),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            tooltip: '名前変更',
+                            onPressed: () async {
+                              final name = await _askName(
+                                'グループ名を変更',
+                                initial: group.name,
+                              );
+                              if (name?.isNotEmpty == true) {
+                                await _store.renameGroup(group.id, name!);
+                              }
+                            },
+                            icon: const Icon(Icons.edit_outlined),
+                          ),
+                          IconButton(
+                            tooltip: '削除',
+                            onPressed: () async {
+                              await _store.deleteGroup(group.id);
+                            },
+                            icon: const Icon(Icons.delete_outline),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('キャンセル')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('削除')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('閉じる'),
+          ),
         ],
       ),
     );
-    if (ok == true) await _groupStore.deleteGroup(group.id);
   }
 
-  List<Tag> _childrenOf(int? parentId, List<Tag> tags, Set<int> allowedIds) => tags
-      .where((tag) => tag.parentTagId == parentId && allowedIds.contains(tag.id))
-      .toList()
-    ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-
-  Set<int> _descendantIds(int tagId, List<Tag> tags) {
-    final result = <int>{};
-    void visit(int parentId) {
-      for (final child in tags.where((tag) => tag.parentTagId == parentId)) {
-        if (result.add(child.id)) visit(child.id);
-      }
-    }
-    visit(tagId);
-    return result;
-  }
-
-  Future<void> _createTag(
-    List<Tag> tags,
-    List<TagGroupInfo> groups,
-    Map<int, int?> groupByTag, {
-    int? initialGroupId,
-  }) async {
+  Future<void> _createTag() async {
     var name = '';
-    Tag? parent;
-    int? groupId = initialGroupId;
-
+    int? groupId;
+    int? parentId;
     final ok = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setLocalState) {
-          final parentCandidates = tags.where((tag) => groupByTag[tag.id] == groupId).toList();
-          if (parent != null && !parentCandidates.any((tag) => tag.id == parent!.id)) parent = null;
+          final parentCandidates = _tags
+              .where(
+                (tag) => (_groupByTag[tag.id] ?? tag.groupId) == groupId,
+              )
+              .toList();
           return AlertDialog(
             title: const Text('タグを追加'),
             content: SizedBox(
-              width: 430,
+              width: 440,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  TextFormField(
+                  TextField(
                     autofocus: true,
                     decoration: const InputDecoration(labelText: 'タグ名'),
                     onChanged: (value) => name = value,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: UiTokens.space12),
                   DropdownButtonFormField<int?>(
                     initialValue: groupId,
-                    decoration: const InputDecoration(labelText: 'タググループ'),
+                    decoration: const InputDecoration(
+                      labelText: 'タググループ',
+                    ),
                     items: [
-                      const DropdownMenuItem<int?>(value: null, child: Text('グループなし')),
-                      ...groups.map((group) => DropdownMenuItem<int?>(value: group.id, child: Text(group.name))),
+                      const DropdownMenuItem<int?>(
+                        value: null,
+                        child: Text('その他タグ'),
+                      ),
+                      for (final group in _groups)
+                        DropdownMenuItem<int?>(
+                          value: group.id,
+                          child: Text(group.name),
+                        ),
                     ],
                     onChanged: (value) => setLocalState(() {
                       groupId = value;
-                      parent = null;
+                      parentId = null;
                     }),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: UiTokens.space12),
                   DropdownButtonFormField<int?>(
-                    initialValue: parent?.id,
+                    initialValue: parentId,
                     decoration: const InputDecoration(labelText: '親タグ'),
                     items: [
-                      const DropdownMenuItem<int?>(value: null, child: Text('なし（最上位）')),
-                      ...parentCandidates.map((tag) => DropdownMenuItem<int?>(value: tag.id, child: Text(tag.name))),
+                      const DropdownMenuItem<int?>(
+                        value: null,
+                        child: Text('なし（最上位）'),
+                      ),
+                      for (final tag in parentCandidates)
+                        DropdownMenuItem<int?>(
+                          value: tag.id,
+                          child: Text(tag.name),
+                        ),
                     ],
-                    onChanged: (value) => setLocalState(() {
-                      parent = value == null ? null : parentCandidates.firstWhere((tag) => tag.id == value);
-                    }),
+                    onChanged: (value) =>
+                        setLocalState(() => parentId = value),
                   ),
                 ],
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('キャンセル')),
-              FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('追加')),
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('キャンセル'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('追加'),
+              ),
             ],
           );
         },
       ),
     );
-
     if (ok != true || name.trim().isEmpty) return;
-    final id = await repository.createTag(name.trim(), parent: parent);
-    await _groupStore.setTagGroup(id, groupId);
+    final id = await repository.createTag(name.trim());
+    await _store.moveTag(
+      tagId: id,
+      parentTagId: parentId,
+      groupId: groupId,
+    );
   }
 
-  Future<void> _editTag(
-    Tag tag,
-    List<Tag> tags,
-    List<TagGroupInfo> groups,
-    Map<int, int?> groupByTag,
-  ) async {
-    var name = tag.name;
-    var groupId = groupByTag[tag.id];
-    final descendants = _descendantIds(tag.id, tags);
-    Tag? parent = tag.parentTagId == null
-        ? null
-        : tags.where((item) => item.id == tag.parentTagId).firstOrNull;
-
+  Future<void> _moveDialog(Tag tag) async {
+    var groupId = _groupByTag[tag.id] ?? tag.groupId;
+    var parentId = tag.parentTagId;
+    final forbidden = _descendants(tag.id)..add(tag.id);
     final ok = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setLocalState) {
-          final parentCandidates = tags
-              .where((candidate) =>
-                  candidate.id != tag.id &&
-                  !descendants.contains(candidate.id) &&
-                  groupByTag[candidate.id] == groupId)
+          final candidates = _tags
+              .where(
+                (candidate) =>
+                    !forbidden.contains(candidate.id) &&
+                    (_groupByTag[candidate.id] ?? candidate.groupId) ==
+                        groupId,
+              )
               .toList();
-          if (parent != null && !parentCandidates.any((candidate) => candidate.id == parent!.id)) parent = null;
+          if (parentId != null &&
+              !candidates.any((candidate) => candidate.id == parentId)) {
+            parentId = null;
+          }
           return AlertDialog(
-            title: const Text('タグを編集'),
+            title: Text('「${tag.name}」を移動'),
             content: SizedBox(
-              width: 430,
+              width: 440,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  TextFormField(
-                    initialValue: name,
-                    decoration: const InputDecoration(labelText: 'タグ名'),
-                    onChanged: (value) => name = value,
-                  ),
-                  const SizedBox(height: 12),
                   DropdownButtonFormField<int?>(
                     initialValue: groupId,
-                    decoration: const InputDecoration(labelText: 'タググループ'),
+                    decoration:
+                        const InputDecoration(labelText: 'タググループ'),
                     items: [
-                      const DropdownMenuItem<int?>(value: null, child: Text('グループなし')),
-                      ...groups.map((group) => DropdownMenuItem<int?>(value: group.id, child: Text(group.name))),
+                      const DropdownMenuItem<int?>(
+                        value: null,
+                        child: Text('その他タグ'),
+                      ),
+                      for (final group in _groups)
+                        DropdownMenuItem<int?>(
+                          value: group.id,
+                          child: Text(group.name),
+                        ),
                     ],
                     onChanged: (value) => setLocalState(() {
                       groupId = value;
-                      parent = null;
+                      parentId = null;
                     }),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: UiTokens.space12),
                   DropdownButtonFormField<int?>(
-                    initialValue: parent?.id,
+                    initialValue: parentId,
                     decoration: const InputDecoration(labelText: '親タグ'),
                     items: [
-                      const DropdownMenuItem<int?>(value: null, child: Text('なし（最上位）')),
-                      ...parentCandidates.map((candidate) => DropdownMenuItem<int?>(value: candidate.id, child: Text(candidate.name))),
+                      const DropdownMenuItem<int?>(
+                        value: null,
+                        child: Text('なし（最上位）'),
+                      ),
+                      for (final candidate in candidates)
+                        DropdownMenuItem<int?>(
+                          value: candidate.id,
+                          child: Text(candidate.name),
+                        ),
                     ],
-                    onChanged: (value) => setLocalState(() {
-                      parent = value == null ? null : parentCandidates.firstWhere((candidate) => candidate.id == value);
-                    }),
+                    onChanged: (value) =>
+                        setLocalState(() => parentId = value),
                   ),
                 ],
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('キャンセル')),
-              FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('保存')),
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('キャンセル'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('移動'),
+              ),
             ],
           );
         },
       ),
     );
+    if (ok != true) return;
+    final snapshot = await _store.moveTag(
+      tagId: tag.id,
+      parentTagId: parentId,
+      groupId: groupId,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('「${tag.name}」を移動しました'),
+        action: SnackBarAction(
+          label: '元に戻す',
+          onPressed: () => _store.restoreMove(snapshot),
+        ),
+      ),
+    );
+  }
 
-    if (ok != true || name.trim().isEmpty) return;
-    await repository.renameTag(tag, name.trim());
-    await repository.setTagParent(tag, parent);
-    await _groupStore.setTagGroup(tag.id, groupId);
+  Future<void> _mergeTag(Tag source) async {
+    final forbidden = _descendants(source.id)..add(source.id);
+    final candidates =
+        _tags.where((tag) => !forbidden.contains(tag.id)).toList();
+    if (candidates.isEmpty) return;
+    var targetId = candidates.first.id;
+    final impact = await _store.mergeImpact(source.id);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setLocalState) => AlertDialog(
+          title: Text('「${source.name}」を統合'),
+          content: SizedBox(
+            width: 470,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                DropdownButtonFormField<int>(
+                  initialValue: targetId,
+                  decoration: const InputDecoration(labelText: '統合先タグ'),
+                  items: [
+                    for (final tag in candidates)
+                      DropdownMenuItem(
+                        value: tag.id,
+                        child: Text(tag.name),
+                      ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) setLocalState(() => targetId = value);
+                  },
+                ),
+                const SizedBox(height: UiTokens.space16),
+                Text('影響するブックマーク: ${impact.bookmarkCount}件'),
+                Text('保存ビュー: ${impact.savedViewCount}件'),
+                Text(
+                  '自動整理ルール: ${impact.autoOrganizeRuleCount}件',
+                ),
+                const SizedBox(height: UiTokens.space12),
+                const Text(
+                  '統合元の子タグは統合先の子へ移動します。'
+                  'ブックマーク本体は削除されません。',
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('キャンセル'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('統合'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (ok != true) return;
+    await _store.mergeTags(
+      sourceTagId: source.id,
+      targetTagId: targetId,
+    );
+    if (mounted) {
+      setState(() {
+        _selectedTagId = targetId;
+        _multiSelectedIds.remove(source.id);
+      });
+    }
   }
 
   Future<void> _deleteTag(Tag tag) async {
+    final stats = _usage[tag.id] ??
+        const TagUsageStats(directCount: 0, aggregateCount: 0);
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('タグを削除しますか？'),
-        content: Text('「${tag.name}」を削除します。ブックマーク自体は削除されません。'),
+      builder: (context) => AlertDialog(
+        title: Text('「${tag.name}」を削除しますか？'),
+        content: Text(
+          '直接使用 ${stats.directCount}件、子孫を含む '
+          '${stats.aggregateCount}件です。タグの関連だけが削除され、'
+          'ブックマーク本体は削除されません。',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('キャンセル')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('削除')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('削除'),
+          ),
         ],
       ),
     );
-    if (confirmed == true) await repository.deleteTag(tag);
+    if (confirmed != true) return;
+    await _store.deleteTag(tag.id);
+    if (mounted) {
+      setState(() {
+        _selectedTagId = null;
+        _multiSelectedIds.remove(tag.id);
+      });
+    }
   }
 
-  Future<void> _showRelatedBookmarks(
-    Tag tag,
-    List<Tag> allTags, {
-    bool includeDescendants = false,
-  }) {
-    final tagIds = <int>{tag.id};
-    if (includeDescendants) tagIds.addAll(_descendantIds(tag.id, allTags));
-    final stream = repository.watchAll().map(
-          (bookmarks) => bookmarks
-              .where((bookmark) => bookmark.tags.any((bookmarkTag) => tagIds.contains(bookmarkTag.id)))
-              .toList(),
-        );
-    return showBookmarkReverseLookupDialog(
-      context: context,
-      title: '${tag.name} のブックマーク${includeDescendants ? '（子タグを含む）' : ''}',
-      bookmarks: stream,
-    );
-  }
-
-  Widget _tagTree(
-    List<Tag> allTags,
-    Set<int> allowedIds,
-    Map<int, int> counts,
-    List<TagGroupInfo> groups,
-    Map<int, int?> groupByTag,
-    int? parentId,
-    int depth,
-  ) {
-    final children = _childrenOf(parentId, allTags, allowedIds);
-    return Column(
-      children: children.map((tag) {
-        final nested = _childrenOf(tag.id, allTags, allowedIds);
-        return Column(
-          children: [
-            ListTile(
-              contentPadding: EdgeInsets.only(left: 16 + depth * 24, right: 8),
-              leading: Icon(nested.isEmpty ? Icons.sell_outlined : Icons.folder_outlined, size: 19),
-              title: Text(tag.name),
-              subtitle: Text('${counts[tag.id] ?? 0} 件'),
-              onTap: () => _showRelatedBookmarks(tag, allTags),
-              trailing: PopupMenuButton<String>(
-                onSelected: (value) {
-                  if (value == 'desc') _showRelatedBookmarks(tag, allTags, includeDescendants: true);
-                  if (value == 'edit') _editTag(tag, allTags, groups, groupByTag);
-                  if (value == 'delete') _deleteTag(tag);
-                },
-                itemBuilder: (_) => [
-                  if (nested.isNotEmpty) const PopupMenuItem(value: 'desc', child: Text('子タグも含めて見る')),
-                  const PopupMenuItem(value: 'edit', child: Text('編集')),
-                  const PopupMenuItem(value: 'delete', child: Text('削除')),
-                ],
-              ),
-            ),
-            if (nested.isNotEmpty)
-              _tagTree(allTags, allowedIds, counts, groups, groupByTag, tag.id, depth + 1),
-          ],
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _groupSection(
-    TagGroupInfo? group,
-    List<Tag> tags,
-    Map<int, int?> groupByTag,
-    Map<int, int> counts,
-    List<TagGroupInfo> groups,
-  ) {
-    final ids = tags
-        .where((tag) => groupByTag[tag.id] == group?.id)
-        .map((tag) => tag.id)
-        .toSet();
-    if (ids.isEmpty && group == null) return const SizedBox.shrink();
-
-    return Card(
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Column(
-          children: [
-            ListTile(
-              leading: const Icon(Icons.category_outlined),
-              title: Text(group?.name ?? 'その他タグ', style: const TextStyle(fontWeight: FontWeight.w600)),
-              subtitle: Text('${ids.length} タグ'),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    tooltip: 'このグループにタグを追加',
-                    onPressed: () => _createTag(tags, groups, groupByTag, initialGroupId: group?.id),
-                    icon: const Icon(Icons.add),
-                  ),
-                  if (group != null)
-                    PopupMenuButton<String>(
-                      onSelected: (value) {
-                        if (value == 'rename') _renameGroup(group);
-                        if (value == 'delete') _deleteGroup(group);
-                      },
-                      itemBuilder: (_) => const [
-                        PopupMenuItem(value: 'rename', child: Text('グループ名を変更')),
-                        PopupMenuItem(value: 'delete', child: Text('グループを削除')),
-                      ],
-                    ),
-                ],
-              ),
-            ),
-            if (ids.isEmpty)
-              const Padding(
-                padding: EdgeInsets.fromLTRB(20, 8, 20, 16),
-                child: Align(alignment: Alignment.centerLeft, child: Text('タグはまだありません')),
-              )
-            else
-              _tagTree(tags, ids, counts, groups, groupByTag, null, 0),
-          ],
+  Future<void> _deleteSelectedUnused() async {
+    final selected = _multiSelectedIds
+        .map(_tagById)
+        .whereType<Tag>()
+        .toList();
+    final deletable = selected
+        .where((tag) => (_usage[tag.id]?.aggregateCount ?? 0) == 0)
+        .toList();
+    final protectedCount = selected.length - deletable.length;
+    if (deletable.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('使用中の子孫を持つタグは一括削除できません'),
         ),
+      );
+      return;
+    }
+    final names = deletable.map((tag) => tag.name).join('、');
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('${deletable.length}件の未使用タグを削除'),
+        content: Text(
+          '$names\n\n'
+          '${protectedCount > 0 ? '使用中の子孫を持つ$protectedCount件は除外します。' : ''}'
+          'ブックマーク本体は削除されません。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('削除'),
+          ),
+        ],
       ),
     );
+    if (confirmed != true) return;
+    await _store.deleteUnusedTags(deletable.map((tag) => tag.id));
+    if (mounted) setState(() => _multiSelectedIds.clear());
   }
+
+  Future<void> _showRelated(
+    Tag tag, {
+    required bool includeDescendants,
+  }) {
+    final ids = <int>{tag.id};
+    if (includeDescendants) ids.addAll(_descendants(tag.id));
+    return showBookmarkReverseLookupDialog(
+      context: context,
+      title: '${tag.name} のブックマーク'
+          '${includeDescendants ? '（子孫を含む）' : ''}',
+      bookmarks: repository.watchAll().map(
+            (bookmarks) => bookmarks
+                .where(
+                  (bookmark) => bookmark.tags.any(
+                    (bookmarkTag) => ids.contains(bookmarkTag.id),
+                  ),
+                )
+                .toList(),
+          ),
+    );
+  }
+
+  void _menuAction(Tag tag, String action) {
+    switch (action) {
+      case 'rename':
+        _beginRename(tag);
+      case 'move':
+        _moveDialog(tag);
+      case 'root':
+        _store
+            .moveTag(
+              tagId: tag.id,
+              groupId: _groupByTag[tag.id] ?? tag.groupId,
+            )
+            .then((snapshot) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('「${tag.name}」を最上位へ移動しました'),
+              action: SnackBarAction(
+                label: '元に戻す',
+                onPressed: () => _store.restoreMove(snapshot),
+              ),
+            ),
+          );
+        });
+      case 'merge':
+        _mergeTag(tag);
+      case 'delete':
+        _deleteTag(tag);
+    }
+  }
+
+  Future<void> _showKeyboardHelp() => showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('タグツリーのキーボード操作'),
+          content: const Text(
+            '↑ / ↓  前後の行へ移動\n'
+            '← / →  折りたたみ・展開・親子移動\n'
+            'Enter  名前変更\n'
+            'Space  複数選択\n'
+            'Delete / Backspace  削除確認\n'
+            'Escape  編集・複数選択を解除',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('閉じる'),
+            ),
+          ],
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
-    if (!_ready) return const Scaffold(body: Center(child: CircularProgressIndicator()));
-
+    if (!_ready) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
     return Scaffold(
       appBar: AppBar(
-        title: const Text('タグ管理'),
+        toolbarHeight: UiTokens.appBarHeight,
+        title: const Text(
+          'タグ管理',
+          style: TextStyle(fontSize: UiTokens.textLg),
+        ),
         actions: [
+          IconButton(
+            tooltip: 'キーボード操作',
+            onPressed: _showKeyboardHelp,
+            icon: const Icon(Icons.keyboard_outlined),
+          ),
+          TextButton.icon(
+            onPressed: _manageGroups,
+            icon: const Icon(
+              Icons.category_outlined,
+              size: UiTokens.iconNormal,
+            ),
+            label: const Text('グループ管理'),
+          ),
           TextButton.icon(
             onPressed: _createGroup,
-            icon: const Icon(Icons.create_new_folder_outlined, size: 18),
-            label: const Text('グループを追加'),
+            icon: const Icon(
+              Icons.create_new_folder_outlined,
+              size: UiTokens.iconNormal,
+            ),
+            label: const Text('グループ追加'),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: UiTokens.space8),
         ],
       ),
-      floatingActionButton: StreamBuilder<List<Tag>>(
-        stream: repository.watchTags(),
-        builder: (context, tagSnapshot) => StreamBuilder<List<TagGroupInfo>>(
-          stream: _groupStore.watchGroups(),
-          builder: (context, groupSnapshot) => StreamBuilder<Map<int, int?>>(
-            stream: _groupStore.watchTagGroupIds(),
-            builder: (context, mapSnapshot) => FloatingActionButton.extended(
-              onPressed: () => _createTag(
-                tagSnapshot.data ?? const <Tag>[],
-                groupSnapshot.data ?? const <TagGroupInfo>[],
-                mapSnapshot.data ?? const <int, int?>{},
-              ),
-              icon: const Icon(Icons.add),
-              label: const Text('タグを追加'),
-            ),
-          ),
-        ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _createTag,
+        icon: const Icon(Icons.add),
+        label: const Text('タグを追加'),
       ),
       body: StreamBuilder<List<Tag>>(
         stream: repository.watchTags(),
-        builder: (context, tagSnapshot) => StreamBuilder<List<TagGroupInfo>>(
-          stream: _groupStore.watchGroups(),
-          builder: (context, groupSnapshot) => StreamBuilder<Map<int, int?>>(
-            stream: _groupStore.watchTagGroupIds(),
-            builder: (context, mapSnapshot) => StreamBuilder<List<BookmarkItem>>(
-              stream: repository.watchAll(),
-              builder: (context, bookmarkSnapshot) {
-                final tags = tagSnapshot.data ?? const <Tag>[];
-                final groups = groupSnapshot.data ?? const <TagGroupInfo>[];
-                final groupByTag = mapSnapshot.data ?? const <int, int?>{};
-                final bookmarks = bookmarkSnapshot.data ?? const <BookmarkItem>[];
-                final counts = <int, int>{};
-                for (final bookmark in bookmarks) {
-                  for (final tag in bookmark.tags) {
-                    counts[tag.id] = (counts[tag.id] ?? 0) + 1;
-                  }
-                }
-
-                return ListView(
-                  padding: const EdgeInsets.only(top: 8, bottom: 100),
-                  children: [
-                    const Padding(
-                      padding: EdgeInsets.fromLTRB(20, 8, 20, 8),
-                      child: Text(
-                        'タググループは「テーマ」「用途」「難易度」など、独立した分類軸として使えます。親子関係は各グループ内で作れます。',
-                      ),
-                    ),
-                    ...groups.map((group) => _groupSection(group, tags, groupByTag, counts, groups)),
-                    _groupSection(null, tags, groupByTag, counts, groups),
-                    if (groups.isEmpty && tags.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.all(32),
-                        child: Center(child: Text('タググループまたはタグを追加してください')),
-                      ),
-                  ],
+        builder: (context, tagSnapshot) =>
+            StreamBuilder<List<TagGroupInfo>>(
+          stream: _store.watchGroups(),
+          builder: (context, groupSnapshot) =>
+              StreamBuilder<Map<int, int?>>(
+            stream: _store.watchTagGroupIds(),
+            builder: (context, groupMapSnapshot) =>
+                StreamBuilder<Map<int, TagUsageStats>>(
+              stream: _store.watchUsageStats(),
+              builder: (context, usageSnapshot) {
+                _tags = tagSnapshot.data ?? const <Tag>[];
+                _groups =
+                    groupSnapshot.data ?? const <TagGroupInfo>[];
+                _groupByTag =
+                    groupMapSnapshot.data ?? const <int, int?>{};
+                _usage =
+                    usageSnapshot.data ?? const <int, TagUsageStats>{};
+                _multiSelectedIds.removeWhere(
+                  (id) => !_tags.any((tag) => tag.id == id),
                 );
+                _model = TagTreeModel.build(
+                  tags: _tags,
+                  groups: _groups,
+                  groupByTag: _groupByTag,
+                  usage: _usage,
+                  expandedTagIds: _expandedTagIds,
+                  expandedGroupIds: _expandedGroupIds,
+                  query: _query,
+                  filter: _filter,
+                );
+                if (_focusedKey != null &&
+                    !_model.rows.any(
+                      (row) => row.focusKey == _focusedKey,
+                    )) {
+                  _focusedKey = _model.rows.isEmpty
+                      ? null
+                      : _model.rows.first.focusKey;
+                }
+                return _buildBody();
               },
             ),
           ),
@@ -469,8 +953,195 @@ class _TagManagementPageState extends State<TagManagementPage> {
       ),
     );
   }
-}
 
-extension _FirstOrNull<T> on Iterable<T> {
-  T? get firstOrNull => isEmpty ? null : first;
+  Widget _buildBody() {
+    final selected = _tagById(_selectedTagId);
+    final parent = _tagById(selected?.parentTagId);
+    final group = _groupById(
+      selected == null
+          ? null
+          : (_groupByTag[selected.id] ?? selected.groupId),
+    );
+    final childCount = selected == null
+        ? 0
+        : _tags.where((tag) => tag.parentTagId == selected.id).length;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final showDetails = constraints.maxWidth >= 900;
+        return Column(
+          children: [
+            _toolbar(),
+            const Divider(height: 1),
+            Expanded(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Focus(
+                      focusNode: _treeFocus,
+                      autofocus: true,
+                      onKeyEvent: _handleKey,
+                      child: TagTreeView(
+                        model: _model,
+                        query: _query,
+                        selectedTagId: _selectedTagId,
+                        focusedKey: _focusedKey,
+                        multiSelectedIds: _multiSelectedIds,
+                        editingTagId: _editingTagId,
+                        editController: _editController,
+                        editError: _editError,
+                        onSelectTag: _selectTag,
+                        onFocusRow: _focusRow,
+                        onToggleGroup: _toggleGroup,
+                        onToggleTag: _toggleTag,
+                        onToggleMultiSelect: _toggleMulti,
+                        onBeginRename: _beginRename,
+                        onSubmitRename: _submitRename,
+                        onCancelRename: _cancelRename,
+                        onMenuAction: _menuAction,
+                        onDrop: _drop,
+                        canDrop: _canDrop,
+                        onShowDirect: (tag) => _showRelated(
+                          tag,
+                          includeDescendants: false,
+                        ),
+                        onShowAggregate: (tag) => _showRelated(
+                          tag,
+                          includeDescendants: true,
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (showDetails)
+                    SizedBox(
+                      width: 330,
+                      child: TagDetailPane(
+                        tag: selected,
+                        usage:
+                            selected == null ? null : _usage[selected.id],
+                        parent: parent,
+                        group: group,
+                        childCount: childCount,
+                        onRename: selected == null
+                            ? () {}
+                            : () => _beginRename(selected),
+                        onMove: selected == null
+                            ? () {}
+                            : () => _moveDialog(selected),
+                        onMerge: selected == null
+                            ? () {}
+                            : () => _mergeTag(selected),
+                        onDelete: selected == null
+                            ? () {}
+                            : () => _deleteTag(selected),
+                        onShowDirect: selected == null
+                            ? () {}
+                            : () => _showRelated(
+                                  selected,
+                                  includeDescendants: false,
+                                ),
+                        onShowAggregate: selected == null
+                            ? () {}
+                            : () => _showRelated(
+                                  selected,
+                                  includeDescendants: true,
+                                ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _toolbar() => Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: UiTokens.space12,
+          vertical: UiTokens.space8,
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 280,
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: 'タグを検索',
+                  prefixIcon: const Icon(
+                    Icons.search,
+                    size: UiTokens.iconNormal,
+                  ),
+                  suffixIcon: _query.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: '検索を解除',
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _query = '');
+                          },
+                          icon: const Icon(Icons.close),
+                        ),
+                ),
+                onChanged: (value) => setState(() => _query = value),
+              ),
+            ),
+            const SizedBox(width: UiTokens.space12),
+            SegmentedButton<TagUsageFilter>(
+              showSelectedIcon: false,
+              segments: [
+                for (final filter in TagUsageFilter.values)
+                  ButtonSegment(
+                    value: filter,
+                    label: Text(filter.label),
+                  ),
+              ],
+              selected: {_filter},
+              onSelectionChanged: (selection) {
+                if (selection.isNotEmpty) {
+                  setState(() => _filter = selection.first);
+                }
+              },
+            ),
+            const Spacer(),
+            if (_filter == TagUsageFilter.unused)
+              TextButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _multiSelectedIds
+                      ..clear()
+                      ..addAll(
+                        _tags
+                            .where(
+                              (tag) =>
+                                  (_usage[tag.id]?.directCount ?? 0) == 0,
+                            )
+                            .map((tag) => tag.id),
+                      );
+                  });
+                },
+                icon: const Icon(Icons.select_all, size: 17),
+                label: const Text('未使用を選択'),
+              ),
+            if (_multiSelectedIds.isNotEmpty)
+              FilledButton.tonalIcon(
+                onPressed: _deleteSelectedUnused,
+                icon: const Icon(Icons.delete_outline, size: 17),
+                label: Text('${_multiSelectedIds.length}件を削除'),
+              ),
+            IconButton(
+              tooltip: 'すべて展開',
+              onPressed: _expandAll,
+              icon: const Icon(Icons.unfold_more),
+            ),
+            IconButton(
+              tooltip: 'すべて折りたたむ',
+              onPressed: _collapseAll,
+              icon: const Icon(Icons.unfold_less),
+            ),
+          ],
+        ),
+      );
 }
