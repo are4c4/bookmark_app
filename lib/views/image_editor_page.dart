@@ -220,8 +220,8 @@ class _ImageEditorPageState extends State<ImageEditorPage> {
     final tx = (frame.left - source.left * scale) * displaySize.width;
     final ty = (frame.top - source.top * scale) * displaySize.height;
     return Matrix4.identity()
-      ..translate(tx, ty)
-      ..scale(scale, scale);
+      ..translateByDouble(tx, ty, 0.0, 1.0)
+      ..scaleByDouble(scale, scale, 1.0, 1.0);
   }
 
   Widget _imageWidget({Matrix4? transform}) {
