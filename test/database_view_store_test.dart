@@ -100,4 +100,22 @@ void main() {
     );
     expect(views.map((view) => view.id), [duplicate.id, configured.id, defaultView.id]);
   });
+
+  test('collections share the generic database view model', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceStore = WorkspaceStore(database);
+    final workspaceId = await workspaceStore.initialize();
+    final store = DatabaseViewStore(database);
+
+    final view = await store.ensureDefaultView(
+      workspaceId: workspaceId,
+      definition: BuiltInDatabases.collections,
+    );
+
+    expect(view.databaseKey, 'collections');
+    expect(view.name, 'すべて');
+    expect(view.layoutType, 'list');
+    expect(BuiltInDatabases.collections.supportedLayouts, ['list']);
+  });
 }
