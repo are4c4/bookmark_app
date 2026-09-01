@@ -728,7 +728,7 @@ class AppDatabase extends _$AppDatabase {
               lastOpenedAt: bookmark.lastOpenedAt,
               openCount: bookmark.openCount,
               tags: tagsByBookmark[bookmark.id] ?? const [],
-              people: (peopleByBookmark[bookmark.id]?.values.toList() ?? const [])
+              people: (peopleByBookmark[bookmark.id]?.values.toList() ?? <Person>[])
                 ..sort(
                   (a, b) =>
                       a.name.toLowerCase().compareTo(b.name.toLowerCase()),
