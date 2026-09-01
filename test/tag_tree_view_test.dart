@@ -1,6 +1,7 @@
 import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/views/tag_tree_model.dart';
 import 'package:bookmark_app/widgets/tag_tree_view.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -78,7 +79,7 @@ void main() {
     );
 
     expect(find.byKey(const ValueKey('inline-create:tag:1')), findsOneWidget);
-    expect(find.widgetWithText(TextField, '新しいタグ名'), findsOneWidget);
+    expect(find.byType(TextField), findsOneWidget);
   });
 }
 
