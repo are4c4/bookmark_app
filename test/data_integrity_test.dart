@@ -17,14 +17,17 @@ void main() {
   late Directory tempDirectory;
 
   setUp(() async {
-    database = AppDatabase.forTesting(NativeDatabase.memory());
+    tempDirectory = await Directory.systemTemp.createTemp(
+      'bookmark_app_integrity_',
+    );
+    database = AppDatabase.forTesting(
+      NativeDatabase.memory(),
+      profileDirectoryPath: tempDirectory.path,
+    );
     final workspaceStore = WorkspaceStore(database);
     final workspaceId = await workspaceStore.initialize();
     lifecycleStore = BookmarkLifecycleStore(database);
     await lifecycleStore.initialize();
-    tempDirectory = await Directory.systemTemp.createTemp(
-      'bookmark_app_integrity_',
-    );
     repository = BookmarkRepository(
       database,
       workspaceStore: workspaceStore,
@@ -91,6 +94,11 @@ void main() {
     await backupFile.writeAsBytes([1, 2, 3]);
 
     final photoId = await repository.addPhoto(path: photoFile.path);
+    final storedPhoto = await (database.select(database.photos)
+          ..where((item) => item.id.equals(photoId)))
+        .getSingle();
+    expect(storedPhoto.path, 'photos/photo.jpg');
+
     final personId = await repository.createPerson('Author');
     await database.updatePerson(
       personId,
@@ -121,13 +129,18 @@ void main() {
     await attachmentFile.writeAsBytes([1, 2, 3]);
 
     final store = BookmarkAttachmentStore(database);
-    await store.add(
+    final attachmentId = await store.add(
       bookmarkId: bookmark.id,
       fileName: 'document.pdf',
       path: attachmentFile.path,
       kind: 'pdf',
       sizeBytes: 3,
     );
+    final storedAttachment =
+        await (database.select(database.bookmarkAttachments)
+              ..where((item) => item.id.equals(attachmentId)))
+            .getSingle();
+    expect(storedAttachment.path, 'attachments/document.pdf');
 
     await repository.permanentDelete(bookmark);
 
@@ -140,4 +153,29 @@ void main() {
       isNull,
     );
   });
+  test('saved views persist relation and tag matching filters', () async {
+    final personId = await repository.createPerson('Author');
+    final photoFile = File('${tempDirectory.path}/photos/cover.jpg');
+    await photoFile.create(recursive: true);
+    await photoFile.writeAsBytes([1]);
+    final photoId = await repository.addPhoto(path: photoFile.path);
+
+    final viewId = await repository.createSavedView(
+      name: 'Author photos',
+      layoutType: 'table',
+      tagMatchMode: 'and',
+      includeDescendants: false,
+      personFilterId: personId,
+      photoFilterId: photoId,
+    );
+    final view = await (database.select(database.savedViews)
+          ..where((item) => item.id.equals(viewId)))
+        .getSingle();
+
+    expect(view.tagMatchMode, 'and');
+    expect(view.includeDescendants, isFalse);
+    expect(view.personFilterId, personId);
+    expect(view.photoFilterId, photoId);
+  });
+
 }
