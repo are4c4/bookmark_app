@@ -242,7 +242,7 @@ class _TagManagementPageState extends State<TagManagementPage> {
         ? groupId
         : (_groupByTag[parent.id] ?? parent.groupId);
     final parentKey = parent == null
-        ? 'group:${groupId ?? -1}'
+        ? 'group:${groupId ?? 'other'}'
         : 'tag:${parent.id}';
     setState(() {
       _creatingUnderKey = parentKey;
