@@ -4,6 +4,7 @@ import '../data/generic_database_store.dart';
 import '../data/object_store.dart';
 import '../data/system_object_store.dart';
 import '../data/tag_object_bridge.dart';
+import '../data/workspace_store.dart';
 
 class ObjectSyncService {
   ObjectSyncService(this.database)
@@ -32,4 +33,9 @@ class ObjectSyncService {
   late final CoreObjectBridge coreBridge;
 
   Future<void> syncWorkspace(int workspaceId) => coreBridge.syncAll(workspaceId);
+
+  Future<void> syncActiveWorkspace() async {
+    final workspaceId = await WorkspaceStore(database).activeWorkspaceId();
+    if (workspaceId != null) await syncWorkspace(workspaceId);
+  }
 }
