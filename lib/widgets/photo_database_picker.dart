@@ -69,7 +69,14 @@ Future<PhotoPickerResult?> showPhotoDatabasePicker({
                 ),
                 const SizedBox(height: 12),
                 Expanded(
-                  child: GridView.builder(
+                  child: RadioGroup<int>(
+                    groupValue: coverId,
+                    onChanged: (value) {
+                      if (value != null && selectedIds.contains(value)) {
+                        setLocalState(() => coverId = value);
+                      }
+                    },
+                    child: GridView.builder(
                     gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                       maxCrossAxisExtent: 190,
                       crossAxisSpacing: 10,
@@ -154,16 +161,14 @@ Future<PhotoPickerResult?> showPhotoDatabasePicker({
                                 contentPadding: const EdgeInsets.symmetric(horizontal: 4),
                                 title: const Text('カバー', style: TextStyle(fontSize: 12)),
                                 value: photo.id,
-                                groupValue: coverId,
-                                onChanged: selected
-                                    ? (value) => setLocalState(() => coverId = value)
-                                    : null,
+                                enabled: selected,
                               ),
                             ],
                           ),
                         ),
                       );
                     },
+                  ),
                   ),
                 ),
                 const SizedBox(height: 8),
