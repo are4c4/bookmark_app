@@ -11,7 +11,6 @@ import '../data/bookmark_repository.dart';
 import '../data/database_view_store.dart';
 import '../database/database_definition.dart';
 import '../data/person_roles.dart';
-import '../data/saved_view_extensions.dart';
 import '../data/workspace_store.dart';
 import '../features/database/presentation/widgets/database_page_toolbar.dart';
 import '../services/bookmark_metadata_service.dart';
@@ -239,22 +238,6 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
 
   void _markViewChanged() => _scheduleDatabaseViewSave();
 
-  void _resetFilters() {
-    _searchController.clear();
-    setState(() {
-      _query = '';
-      _favoritesOnly = false;
-      _statusFilter = '';
-      _minRating = 0;
-      _selectedTagIds.clear();
-      _tagMatchMode = 'or';
-      _includeDescendants = true;
-      _personFilterId = null;
-      _photoFilterId = null;
-      _relationFilterLabel = null;
-      _markViewChanged();
-    });
-  }
 
   void _filterByTag(Tag tag) {
     _searchController.clear();
@@ -827,7 +810,6 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
       ? '${bookmark.openCount}回 · 未閲覧'
       : '${bookmark.openCount}回 · ${_formatDateTime(bookmark.lastOpenedAt!)}';
 
-  String _visiblePropertiesString() => _visiblePropertyTokens.join(',');
 
   Future<void> _showPropertiesDialog() async {
     final result = await showBookmarkPropertyOrderDialog(
