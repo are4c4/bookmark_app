@@ -781,6 +781,11 @@ class AppDatabase extends _$AppDatabase {
     ));
   }
 
+  Future<void> setGenre(int id, String genre) =>
+      (update(bookmarks)..where((b) => b.id.equals(id))).write(
+        BookmarksCompanion(genre: Value(genre.trim())),
+      );
+
   Future<void> setRating(int id, int rating) =>
       (update(bookmarks)..where((b) => b.id.equals(id))).write(BookmarksCompanion(rating: Value(rating.clamp(0, 5))));
   Future<int> deleteBookmark(int id) => (delete(bookmarks)..where((b) => b.id.equals(id))).go();
