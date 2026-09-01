@@ -19,7 +19,9 @@ void main() {
       ),
     );
 
-    await tester.doubleTap(find.text('Alice'));
+    await tester.tap(find.text('Alice'));
+    await tester.pump(const Duration(milliseconds: 80));
+    await tester.tap(find.text('Alice'));
     await tester.pump();
     expect(find.byKey(const ValueKey('inline-rename-field')), findsOneWidget);
 
