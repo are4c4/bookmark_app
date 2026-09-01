@@ -28,6 +28,8 @@ class _TagManagementPageState extends State<TagManagementPage> {
   final Set<int> _multiSelectedIds = {};
 
   bool _ready = false;
+  bool _dragging = false;
+  bool _dragCancelled = false;
   String _query = '';
   TagUsageFilter _filter = TagUsageFilter.all;
   int? _selectedTagId;
@@ -231,7 +233,9 @@ class _TagManagementPageState extends State<TagManagementPage> {
   KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.escape) {
-      if (_editingTagId != null) {
+      if (_dragging) {
+        setState(() => _dragCancelled = true);
+      } else if (_editingTagId != null) {
         _cancelRename();
       } else if (_multiSelectedIds.isNotEmpty) {
         setState(() => _multiSelectedIds.clear());
@@ -305,12 +309,14 @@ class _TagManagementPageState extends State<TagManagementPage> {
   }
 
   bool _canDrop(Tag dragged, TagTreeRow target) {
+    if (_dragCancelled) return false;
     if (target.tag == null) return true;
     if (dragged.id == target.tag!.id) return false;
     return !_descendants(dragged.id).contains(target.tag!.id);
   }
 
   Future<void> _drop(Tag dragged, TagTreeRow target) async {
+    if (_dragCancelled) return;
     try {
       final snapshot = await _store.moveTag(
         tagId: dragged.id,
@@ -1009,6 +1015,14 @@ class _TagManagementPageState extends State<TagManagementPage> {
                           tag,
                           includeDescendants: true,
                         ),
+                        onDragStarted: (_) => setState(() {
+                          _dragging = true;
+                          _dragCancelled = false;
+                        }),
+                        onDragEnded: () => setState(() {
+                          _dragging = false;
+                          _dragCancelled = false;
+                        }),
                       ),
                     ),
                   ),
