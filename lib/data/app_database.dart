@@ -807,7 +807,11 @@ class AppDatabase extends _$AppDatabase {
         tags: tagNames == null ? const Value.absent() : Value(_normalizeNamesText(tagNames)),
       ));
 
-  Future<void> deletePhoto(int id) => (delete(photos)..where((p) => p.id.equals(id))).go();
+  Future<void> deletePhoto(int id) => transaction(() async {
+        await (update(people)..where((person) => person.profilePhotoId.equals(id)))
+            .write(const PeopleCompanion(profilePhotoId: Value(null)));
+        await (delete(photos)..where((photo) => photo.id.equals(id))).go();
+      });
 
   Future<void> attachPhotoToBookmark(int bookmarkId, int photoId, {bool asCover = false}) => transaction(() async {
         if (asCover) {
