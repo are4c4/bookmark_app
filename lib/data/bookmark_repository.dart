@@ -1,5 +1,8 @@
 import 'package:rxdart/rxdart.dart';
 
+import '../services/attachment_storage_service.dart';
+import '../services/photo_storage_service.dart';
+
 import '../domain/bookmark_state.dart';
 import 'app_database.dart';
 import 'bookmark_lifecycle_store.dart';
@@ -207,6 +210,12 @@ class BookmarkRepository {
   Future<void> moveToTrash(BookmarkItem bookmark) => lifecycleStore.moveToTrash(bookmark.id);
   Future<void> restoreFromTrash(BookmarkItem bookmark) => lifecycleStore.restore(bookmark.id);
   Future<void> permanentDelete(BookmarkItem bookmark) async {
+    final attachmentStore = BookmarkAttachmentStore(_database);
+    final attachments = await attachmentStore.listForBookmark(bookmark.id);
+    const attachmentStorage = AttachmentStorageService();
+    for (final attachment in attachments) {
+      await attachmentStorage.deleteAttachment(attachment, attachmentStore);
+    }
     await lifecycleStore.remove(bookmark.id);
     await _database.deleteBookmark(bookmark.id);
   }
@@ -254,7 +263,10 @@ class BookmarkRepository {
       _database.addPhoto(path: path, title: title, note: note, tagNames: tagNames);
   Future<void> updatePhoto(PhotoRecord photo, {String? title, String? note, Iterable<String>? tagNames}) =>
       _database.updatePhoto(photo.id, title: title, note: note, tagNames: tagNames);
-  Future<void> deletePhoto(PhotoRecord photo) => _database.deletePhoto(photo.id);
+  Future<void> deletePhoto(PhotoRecord photo) async {
+    await _database.deletePhoto(photo.id);
+    await const PhotoStorageService().deleteManagedPhoto(photo.path);
+  }
   Future<void> attachPhoto(BookmarkItem bookmark, PhotoRecord photo, {bool asCover = false}) =>
       _database.attachPhotoToBookmark(bookmark.id, photo.id, asCover: asCover);
   Future<void> attachPhotos(BookmarkItem bookmark, Iterable<PhotoRecord> photos, {PhotoRecord? coverPhoto}) =>
