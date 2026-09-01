@@ -5,6 +5,7 @@ import 'package:drift/drift.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../data/app_database.dart';
+import 'profile_backup_service.dart';
 
 class DatabaseProfile {
   const DatabaseProfile({
@@ -279,6 +280,44 @@ class ProfileManager {
         await _rewriteCopiedPaths(source, copy);
       }
       await _writeProfileMetadata(copy);
+      return copy;
+    } catch (_) {
+      await deleteProfile(copy);
+      rethrow;
+    }
+  }
+
+  Future<DatabaseProfile> importProfileBackup(
+    String archivePath, {
+    required String name,
+  }) async {
+    final copy = await createProfile(name);
+    try {
+      await const ProfileBackupService().restoreProfile(
+        archivePath: archivePath,
+        targetDirectoryPath: copy.directoryPath,
+      );
+
+      DatabaseProfile? sourceProfile;
+      final importedMetadata = File(copy.profileMetadataPath);
+      if (await importedMetadata.exists()) {
+        try {
+          final raw = jsonDecode(await importedMetadata.readAsString());
+          if (raw is Map) {
+            sourceProfile = DatabaseProfile.fromJson(
+              Map<String, Object?>.from(raw),
+            );
+          }
+        } catch (_) {
+          sourceProfile = null;
+        }
+      }
+      if (sourceProfile != null) {
+        await _rewriteCopiedPaths(sourceProfile, copy);
+      }
+
+      await _writeProfileMetadata(copy);
+      await _save();
       return copy;
     } catch (_) {
       await deleteProfile(copy);
