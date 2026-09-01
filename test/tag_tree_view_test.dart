@@ -23,12 +23,76 @@ void main() {
     );
     expect(_tagText(tester).text.style?.color, darkTextColor);
   });
+
+  testWidgets('selected tag exposes add child action', (tester) async {
+    Tag? requestedParent;
+    await _pumpTagTree(
+      tester,
+      brightness: Brightness.light,
+      textColor: Colors.black,
+      selectedTagId: 1,
+      onAddChild: (tag) => requestedParent = tag,
+    );
+
+    final addButton = find.byKey(const ValueKey('add-child-tag:1'));
+    expect(addButton, findsOneWidget);
+    final iconButton = tester.widget<IconButton>(addButton);
+    expect(iconButton.onPressed, isNotNull);
+    iconButton.onPressed!.call();
+    await tester.pump();
+
+    expect(requestedParent?.id, 1);
+  });
+
+  testWidgets('focused group exposes contextual add action', (tester) async {
+    int? requestedGroup = 999;
+    await _pumpTagTree(
+      tester,
+      brightness: Brightness.light,
+      textColor: Colors.black,
+      includeGroup: true,
+      focusedKey: 'group:other',
+      onAddToGroup: (groupId) => requestedGroup = groupId,
+    );
+
+    final addButton = find.byKey(const ValueKey('add-group-tag:-1'));
+    expect(addButton, findsOneWidget);
+    final iconButton = tester.widget<IconButton>(addButton);
+    expect(iconButton.onPressed, isNotNull);
+    iconButton.onPressed!.call();
+    await tester.pump();
+
+    expect(requestedGroup, isNull);
+  });
+
+  testWidgets('inline create row renders below requested parent', (tester) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+
+    await _pumpTagTree(
+      tester,
+      brightness: Brightness.light,
+      textColor: Colors.black,
+      creatingUnderKey: 'tag:1',
+      createController: controller,
+    );
+
+    expect(find.byKey(const ValueKey('inline-create:tag:1')), findsOneWidget);
+    expect(find.byType(TextField), findsOneWidget);
+  });
 }
 
 Future<void> _pumpTagTree(
   WidgetTester tester, {
   required Brightness brightness,
   required Color textColor,
+  int? selectedTagId,
+  String? focusedKey,
+  bool includeGroup = false,
+  ValueChanged<Tag>? onAddChild,
+  ValueChanged<int?>? onAddToGroup,
+  String? creatingUnderKey,
+  TextEditingController? createController,
 }) async {
   final scheme = ColorScheme.fromSeed(
     seedColor: Colors.blue,
@@ -43,6 +107,13 @@ Future<void> _pumpTagTree(
   );
   final model = TagTreeModel(
     rows: [
+      if (includeGroup)
+        const TagTreeRow.group(
+          groupId: null,
+          label: 'その他タグ',
+          expanded: true,
+          hasChildren: true,
+        ),
       TagTreeRow.tag(
         tag: tag,
         depth: 0,
@@ -65,9 +136,15 @@ Future<void> _pumpTagTree(
         body: TagTreeView(
           model: model,
           query: '',
-          selectedTagId: null,
-          focusedKey: null,
+          selectedTagId: selectedTagId,
+          focusedKey: focusedKey,
           multiSelectedIds: const {},
+          creatingUnderKey: creatingUnderKey,
+          createController: createController,
+          onAddChild: onAddChild,
+          onAddToGroup: onAddToGroup,
+          onSubmitCreate: () {},
+          onCancelCreate: () {},
           onSelectTag: (_) {},
           onFocusRow: (_) {},
           onToggleGroup: (_) {},
