@@ -107,10 +107,13 @@ class _PhotoManagementPageState extends State<PhotoManagementPage> {
     final changed = await Navigator.of(context).push<bool>(
       MaterialPageRoute(builder: (_) => ImageEditorPage(path: photo.path)),
     );
-    if (changed == true && mounted) {
+    if (changed == true) {
       await FileImage(File(photo.path)).evict();
+      if (!mounted) return;
       setState(() {});
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('画像を更新しました')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('画像を更新しました')),
+      );
     }
   }
 
