@@ -388,6 +388,29 @@ class _TagManagementPageState extends State<TagManagementPage> {
     }
   }
 
+  Future<void> _deleteGroup(TagGroupInfo group) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('「${group.name}」を削除しますか？'),
+        content: const Text(
+          'グループ内のタグは削除せず、「その他タグ」へ移動します。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('削除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) await _store.deleteGroup(group.id);
+  }
+
   Future<void> _manageGroups() async {
     await showDialog<void>(
       context: context,
