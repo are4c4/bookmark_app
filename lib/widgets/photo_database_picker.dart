@@ -80,7 +80,6 @@ Future<PhotoPickerResult?> showPhotoDatabasePicker({
                     itemBuilder: (context, index) {
                       final photo = visiblePhotos[index];
                       final selected = selectedIds.contains(photo.id);
-                      final isCover = coverId == photo.id;
                       final tags = photoTagNames(photo);
 
                       return Card(
