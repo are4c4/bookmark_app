@@ -86,7 +86,7 @@ class FullTextSearchRepository {
             WHERE bc.bookmark_id = b.id
           ), '')
         FROM bookmarks b
-        WHERE b.deleted_at_state IS NULL
+        WHERE b.storage_state != 'trash'
       ''');
     });
   }
@@ -126,7 +126,7 @@ class FullTextSearchRepository {
             WHERE bc.bookmark_id = b.id
           ), '')
         FROM bookmarks b
-        WHERE b.id = ? AND b.deleted_at_state IS NULL
+        WHERE b.id = ? AND b.storage_state != 'trash'
       ''', [bookmarkId]);
     });
   }
