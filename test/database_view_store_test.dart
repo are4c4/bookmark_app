@@ -131,11 +131,11 @@ void main() {
     }
   });
 
-  test('generic views and person groups are formal schema v15 tables', () async {
+  test('generic views, person groups and custom databases are formal schema v16 tables', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
 
-    expect(database.schemaVersion, 15);
+    expect(database.schemaVersion, 16);
     final rows = await database.customSelect(
       "SELECT name FROM sqlite_master WHERE type = 'table'",
     ).get();
@@ -144,5 +144,9 @@ void main() {
     expect(tables, contains('database_views'));
     expect(tables, contains('person_groups'));
     expect(tables, contains('person_group_members'));
+    expect(tables, contains('generic_databases'));
+    expect(tables, contains('generic_properties'));
+    expect(tables, contains('generic_records'));
+    expect(tables, contains('generic_values'));
   });
 }
