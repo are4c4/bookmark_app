@@ -1,7 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:drift/drift.dart';
 import 'package:path_provider/path_provider.dart';
+
+import '../data/app_database.dart';
 
 class DatabaseProfile {
   const DatabaseProfile({
@@ -184,35 +187,103 @@ class ProfileManager {
     return profile;
   }
 
-  Future<DatabaseProfile> duplicateProfile(DatabaseProfile source, {String? name}) async {
-    final copy = await createProfile(name?.trim().isNotEmpty == true ? name!.trim() : '${source.name} copy');
-    final targetDirectory = Directory(copy.directoryPath);
-    await targetDirectory.create(recursive: true);
-
-    final sourceDb = File(source.databasePath);
-    if (await sourceDb.exists()) {
-      await sourceDb.copy(copy.databasePath);
-    }
-    for (final suffix in const ['-wal', '-shm']) {
-      final sidecar = File('${source.databasePath}$suffix');
-      if (await sidecar.exists()) {
-        await sidecar.copy('${copy.databasePath}$suffix');
+  Future<void> _copyDirectoryContents(
+    Directory source,
+    Directory target,
+  ) async {
+    if (!await source.exists()) return;
+    await target.create(recursive: true);
+    await for (final entity in source.list(recursive: false)) {
+      final name = entity.uri.pathSegments
+          .where((segment) => segment.isNotEmpty)
+          .last;
+      if (entity is Directory) {
+        await _copyDirectoryContents(entity, Directory('${target.path}/$name'));
+      } else if (entity is File) {
+        await entity.copy('${target.path}/$name');
       }
     }
+  }
 
-    final sourcePhotos = Directory(source.photoDirectoryPath);
-    final targetPhotos = Directory(copy.photoDirectoryPath);
-    await targetPhotos.create(recursive: true);
-    if (await sourcePhotos.exists()) {
-      await for (final entity in sourcePhotos.list()) {
-        if (entity is File) {
-          final name = entity.uri.pathSegments.last;
-          await entity.copy('${targetPhotos.path}/$name');
+  String? _pathInsideCopy(
+    String originalPath,
+    DatabaseProfile source,
+    DatabaseProfile copy,
+  ) {
+    final normalized = originalPath.replaceAll('\\', '/');
+    final sourceRoot =
+        source.directoryPath.replaceAll('\\', '/').replaceAll(RegExp(r'/+$'), '');
+    if (!normalized.startsWith('$sourceRoot/')) return null;
+    return '${copy.directoryPath}/${normalized.substring(sourceRoot.length + 1)}';
+  }
+
+  Future<void> _rewriteCopiedPaths(
+    DatabaseProfile source,
+    DatabaseProfile copy,
+  ) async {
+    final database = AppDatabase(databaseName: copy.databaseName);
+    try {
+      final photos = await database.select(database.photos).get();
+      for (final photo in photos) {
+        final copiedPath = _pathInsideCopy(photo.path, source, copy);
+        if (copiedPath == null || !await File(copiedPath).exists()) continue;
+        await (database.update(database.photos)
+              ..where((row) => row.id.equals(photo.id)))
+            .write(PhotosCompanion(path: Value(copiedPath)));
+      }
+
+      final attachments =
+          await database.select(database.bookmarkAttachments).get();
+      for (final attachment in attachments) {
+        final copiedPath = _pathInsideCopy(attachment.path, source, copy);
+        if (copiedPath == null || !await File(copiedPath).exists()) continue;
+        await (database.update(database.bookmarkAttachments)
+              ..where((row) => row.id.equals(attachment.id)))
+            .write(BookmarkAttachmentsCompanion(path: Value(copiedPath)));
+      }
+    } finally {
+      await database.close();
+    }
+  }
+
+  Future<DatabaseProfile> duplicateProfile(
+    DatabaseProfile source, {
+    String? name,
+  }) async {
+    final copy = await createProfile(
+      name?.trim().isNotEmpty == true ? name!.trim() : '${source.name} copy',
+    );
+
+    try {
+      final sourceDb = File(source.databasePath);
+      if (await sourceDb.exists()) {
+        await sourceDb.copy(copy.databasePath);
+      }
+      for (final suffix in const ['-wal', '-shm']) {
+        final sidecar = File('${source.databasePath}$suffix');
+        if (await sidecar.exists()) {
+          await sidecar.copy('${copy.databasePath}$suffix');
         }
       }
+
+      await _copyDirectoryContents(
+        Directory(source.photoDirectoryPath),
+        Directory(copy.photoDirectoryPath),
+      );
+      await _copyDirectoryContents(
+        Directory('${source.directoryPath}/attachments'),
+        Directory('${copy.directoryPath}/attachments'),
+      );
+
+      if (await File(copy.databasePath).exists()) {
+        await _rewriteCopiedPaths(source, copy);
+      }
+      await _writeProfileMetadata(copy);
+      return copy;
+    } catch (_) {
+      await deleteProfile(copy);
+      rethrow;
     }
-    await _writeProfileMetadata(copy);
-    return copy;
   }
 
   Future<void> deleteProfile(DatabaseProfile profile) async {
