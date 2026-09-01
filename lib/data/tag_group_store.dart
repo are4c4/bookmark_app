@@ -30,10 +30,12 @@ class TagTreeExpansionState {
   const TagTreeExpansionState({
     this.tagIds = const {},
     this.groupIds = const {},
+    this.hasPersistedValue = false,
   });
 
   final Set<int> tagIds;
   final Set<int> groupIds;
+  final bool hasPersistedValue;
 }
 
 class TagMoveSnapshot {
@@ -162,7 +164,11 @@ class TagGroupStore {
           .map((id) => id.toInt())
           .where(validGroups.contains)
           .toSet();
-      return TagTreeExpansionState(tagIds: tagIds, groupIds: groupIds);
+      return TagTreeExpansionState(
+        tagIds: tagIds,
+        groupIds: groupIds,
+        hasPersistedValue: true,
+      );
     } catch (_) {
       return const TagTreeExpansionState();
     }
@@ -426,6 +432,30 @@ class TagGroupStore {
       ));
       await (database.delete(database.tags)
             ..where((tag) => tag.id.equals(sourceTagId)))
+          .go();
+    });
+  }
+
+  Future<void> deleteTag(int id) async {
+    final tag = await (database.select(database.tags)
+          ..where((candidate) => candidate.id.equals(id)))
+        .getSingleOrNull();
+    if (tag == null) return;
+    await database.transaction(() async {
+      await (database.update(database.tags)
+            ..where((candidate) => candidate.parentTagId.equals(id)))
+          .write(TagsCompanion(
+        parentTagId: Value(tag.parentTagId),
+      ));
+      if (await _autoOrganizeRulesExist()) {
+        await database.customStatement(
+          'UPDATE auto_organize_rules SET tag_name = \'\' '
+          'WHERE tag_name = ?',
+          [tag.name],
+        );
+      }
+      await (database.delete(database.tags)
+            ..where((candidate) => candidate.id.equals(id)))
           .go();
     });
   }
