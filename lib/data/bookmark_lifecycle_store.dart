@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 
+import '../domain/bookmark_state.dart';
 import 'app_database.dart';
 
 class BookmarkLifecycleState {
@@ -175,6 +176,38 @@ class BookmarkLifecycleStore {
         ));
     if (changed == 0) {
       throw StateError('未整理状態を更新できませんでした (id=$bookmarkId)');
+    }
+  }
+
+  Future<void> setArchived(int bookmarkId, bool archived) async {
+    final current = await (database.select(database.bookmarks)
+          ..where((bookmark) => bookmark.id.equals(bookmarkId)))
+        .getSingleOrNull();
+    if (current == null) {
+      throw StateError('アーカイブ対象のブックマークが見つかりませんでした (id=$bookmarkId)');
+    }
+
+    final readingStatus = BookmarkReadingStatus.fromStorage(
+      current.readingStatus,
+    ).storageValue;
+    final changed = await (database.update(database.bookmarks)
+          ..where((bookmark) => bookmark.id.equals(bookmarkId)))
+        .write(
+      BookmarksCompanion(
+        status: Value(
+          archived ? BookmarkStorageState.archived.storageValue : readingStatus,
+        ),
+        readingStatus: Value(readingStatus),
+        storageState: Value(
+          archived
+              ? BookmarkStorageState.archived.storageValue
+              : BookmarkStorageState.active.storageValue,
+        ),
+        deletedAt: const Value(null),
+      ),
+    );
+    if (changed == 0) {
+      throw StateError('アーカイブ状態を更新できませんでした (id=$bookmarkId)');
     }
   }
 
