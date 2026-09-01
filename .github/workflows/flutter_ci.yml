@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - feature/database-gallery
+      - codex/data-integrity-audit
   pull_request:
     branches:
       - main
