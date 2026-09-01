@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../data/bookmark_repository.dart';
 import '../data/workspace_store.dart';
@@ -574,6 +575,84 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
     );
   }
 
+  Future<void> _showCommandPalette() async {
+    var query = '';
+    const destinations = <(String, IconData, int)>[
+      ('ブックマーク', Icons.bookmarks_outlined, 0),
+      ('全文検索', Icons.search, 1),
+      ('未整理', Icons.inbox_outlined, 2),
+      ('アーカイブ', Icons.archive_outlined, 3),
+      ('ゴミ箱', Icons.delete_outline, 4),
+      ('写真', Icons.photo_library_outlined, 5),
+      ('タグ', Icons.account_tree_outlined, 6),
+      ('人物', Icons.people_outline, 7),
+      ('コレクション', Icons.collections_bookmark_outlined, 8),
+      ('Profile管理', Icons.manage_accounts_outlined, 9),
+      ('設定', Icons.settings_outlined, 10),
+    ];
+
+    final selected = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setLocalState) {
+          final normalized = query.trim().toLowerCase();
+          final visible = destinations
+              .where(
+                (destination) =>
+                    normalized.isEmpty ||
+                    destination.$1.toLowerCase().contains(normalized),
+              )
+              .toList();
+          return AlertDialog(
+            title: const Text('コマンドパレット'),
+            content: SizedBox(
+              width: 520,
+              height: 420,
+              child: Column(
+                children: [
+                  TextField(
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.search),
+                      hintText: '移動先を検索',
+                    ),
+                    onChanged: (value) =>
+                        setLocalState(() => query = value),
+                  ),
+                  const SizedBox(height: UiTokens.space8),
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: visible.length,
+                      itemBuilder: (context, index) {
+                        final destination = visible[index];
+                        return ListTile(
+                          leading: Icon(
+                            destination.$2,
+                            size: UiTokens.iconNormal,
+                          ),
+                          title: Text(destination.$1),
+                          trailing: const Icon(
+                            Icons.keyboard_return,
+                            size: UiTokens.iconSmall,
+                          ),
+                          onTap: () =>
+                              Navigator.pop(dialogContext, destination.$3),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+    if (selected != null && mounted) {
+      setState(() => _index = selected);
+    }
+  }
+
   Widget _buildPage(int index, WorkspaceInfo? workspace) => switch (index) {
         0 => BookmarkUnifiedStage1Page(
             repository: widget.repository,
@@ -614,17 +693,28 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
   Widget build(BuildContext context) {
     final workspace = _activeWorkspace;
     final scheme = Theme.of(context).colorScheme;
-    return Scaffold(
-      body: Row(children: [
-        _sidebarCollapsed ? _collapsedSidebar() : _expandedSidebar(),
-        VerticalDivider(width: 1, color: scheme.outlineVariant),
-        Expanded(
-          child: IndexedStack(
-            index: _index,
-            children: _lazyPages(workspace),
-          ),
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(
+          LogicalKeyboardKey.keyK,
+          meta: true,
+        ): _showCommandPalette,
+      },
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
+          body: Row(children: [
+            _sidebarCollapsed ? _collapsedSidebar() : _expandedSidebar(),
+            VerticalDivider(width: 1, color: scheme.outlineVariant),
+            Expanded(
+              child: IndexedStack(
+                index: _index,
+                children: _lazyPages(workspace),
+              ),
+            ),
+          ]),
         ),
-      ]),
+      ),
     );
   }
 }
