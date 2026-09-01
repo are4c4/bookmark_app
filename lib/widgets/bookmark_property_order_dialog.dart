@@ -75,8 +75,7 @@ Future<BookmarkPropertyOrderResult?> showBookmarkPropertyOrderDialog({
                 child: ReorderableListView.builder(
                   buildDefaultDragHandles: false,
                   itemCount: order.length,
-                  onReorder: (oldIndex, newIndex) => setLocalState(() {
-                    if (newIndex > oldIndex) newIndex -= 1;
+                  onReorderItem: (oldIndex, newIndex) => setLocalState(() {
                     final item = order.removeAt(oldIndex);
                     order.insert(newIndex, item);
                   }),
@@ -108,11 +107,15 @@ Future<BookmarkPropertyOrderResult?> showBookmarkPropertyOrderDialog({
                               const SizedBox(width: 9),
                               Expanded(child: Text(labelFor(key))),
                               Icon(
-                                visible ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                                visible
+                                    ? Icons.visibility_outlined
+                                    : Icons.visibility_off_outlined,
                                 size: 18,
                                 color: visible
                                     ? Theme.of(context).colorScheme.onSurface
-                                    : Theme.of(context).colorScheme.onSurfaceVariant,
+                                    : Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
                               ),
                               const SizedBox(width: 8),
                             ],
