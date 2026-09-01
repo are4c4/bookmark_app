@@ -1,3 +1,5 @@
+import 'package:drift/drift.dart';
+
 import '../domain/object_model.dart';
 import 'generic_database_store.dart';
 
@@ -5,6 +7,32 @@ class ObjectStore {
   ObjectStore(this._genericStore);
 
   final GenericDatabaseStore _genericStore;
+  Future<void>? _relationSchemaReady;
+
+  Future<void> ensureRelationIndexSchema() => _relationSchemaReady ??=
+      _genericStore.database.transaction(() async {
+        await _genericStore.ensureSchema();
+        await _genericStore.database.customStatement('''
+          CREATE TABLE IF NOT EXISTS object_relation_edges (
+            source_object_id INTEGER NOT NULL
+              REFERENCES generic_records(id) ON DELETE CASCADE,
+            property_id INTEGER NOT NULL
+              REFERENCES generic_properties(id) ON DELETE CASCADE,
+            target_object_id INTEGER NOT NULL
+              REFERENCES generic_records(id) ON DELETE CASCADE,
+            position INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY(source_object_id, property_id, target_object_id)
+          )
+        ''');
+        await _genericStore.database.customStatement(
+          'CREATE INDEX IF NOT EXISTS object_relation_edges_target_idx '
+          'ON object_relation_edges(target_object_id, property_id, source_object_id)',
+        );
+        await _genericStore.database.customStatement(
+          'CREATE INDEX IF NOT EXISTS object_relation_edges_source_idx '
+          'ON object_relation_edges(source_object_id, property_id, position)',
+        );
+      });
 
   Future<List<AppObjectType>> listObjectTypes(int workspaceId) async {
     final definitions = await _genericStore.listDatabases(workspaceId);
@@ -106,11 +134,19 @@ class ObjectStore {
           ? value
           : ObjectRelationValue.fromJson(value);
       await _validateRelation(property, relation);
-      await _genericStore.setValue(
-        recordId: objectId,
-        propertyId: property.id,
-        value: relation.toJson(multiple: property.allowsMultipleRelations),
-      );
+      await ensureRelationIndexSchema();
+      await _genericStore.database.transaction(() async {
+        await _genericStore.setValue(
+          recordId: objectId,
+          propertyId: property.id,
+          value: relation.toJson(multiple: property.allowsMultipleRelations),
+        );
+        await _replaceRelationEdges(
+          objectId: objectId,
+          propertyId: property.id,
+          targetObjectIds: relation.objectIds,
+        );
+      });
       return;
     }
 
@@ -147,6 +183,89 @@ class ObjectStore {
     final objects = await listObjects(targetTypeId);
     return objects.where((object) => ids.contains(object.id)).toList(growable: false);
   }
+
+  Future<List<ObjectRelationEdge>> outgoingRelations(int objectId) async {
+    await ensureRelationIndexSchema();
+    final rows = await _genericStore.database.customSelect(
+      '''SELECT source_object_id, property_id, target_object_id, position
+         FROM object_relation_edges
+         WHERE source_object_id = ?
+         ORDER BY property_id, position, target_object_id''',
+      variables: [Variable<int>(objectId)],
+    ).get();
+    return rows.map(_mapRelationEdge).toList(growable: false);
+  }
+
+  Future<List<ObjectRelationEdge>> backlinks(int targetObjectId) async {
+    await ensureRelationIndexSchema();
+    final rows = await _genericStore.database.customSelect(
+      '''SELECT source_object_id, property_id, target_object_id, position
+         FROM object_relation_edges
+         WHERE target_object_id = ?
+         ORDER BY property_id, source_object_id, position''',
+      variables: [Variable<int>(targetObjectId)],
+    ).get();
+    return rows.map(_mapRelationEdge).toList(growable: false);
+  }
+
+  Future<void> rebuildRelationIndex(int objectTypeId) async {
+    await ensureRelationIndexSchema();
+    final type = await getObjectType(objectTypeId);
+    if (type == null) return;
+    final relationProperties = type.properties.where((property) => property.isRelation).toList();
+    if (relationProperties.isEmpty) return;
+    final relationPropertyIds = relationProperties.map((property) => property.id).toSet();
+    final objects = await listObjects(objectTypeId);
+
+    await _genericStore.database.transaction(() async {
+      for (final object in objects) {
+        for (final property in relationProperties) {
+          final relation = ObjectRelationValue.fromJson(object.values[property.id]);
+          await _replaceRelationEdges(
+            objectId: object.id,
+            propertyId: property.id,
+            targetObjectIds: relation.objectIds,
+          );
+        }
+      }
+      if (objects.isEmpty) return;
+      final objectIds = objects.map((object) => object.id).toList();
+      final objectPlaceholders = List.filled(objectIds.length, '?').join(',');
+      final propertyPlaceholders = List.filled(relationPropertyIds.length, '?').join(',');
+      await _genericStore.database.customStatement(
+        '''DELETE FROM object_relation_edges
+           WHERE source_object_id IN ($objectPlaceholders)
+             AND property_id NOT IN ($propertyPlaceholders)''',
+        [...objectIds, ...relationPropertyIds],
+      );
+    });
+  }
+
+  Future<void> _replaceRelationEdges({
+    required int objectId,
+    required int propertyId,
+    required List<int> targetObjectIds,
+  }) async {
+    await _genericStore.database.customStatement(
+      'DELETE FROM object_relation_edges WHERE source_object_id = ? AND property_id = ?',
+      [objectId, propertyId],
+    );
+    for (var position = 0; position < targetObjectIds.length; position++) {
+      await _genericStore.database.customStatement(
+        '''INSERT INTO object_relation_edges(
+             source_object_id, property_id, target_object_id, position
+           ) VALUES (?, ?, ?, ?)''',
+        [objectId, propertyId, targetObjectIds[position], position],
+      );
+    }
+  }
+
+  ObjectRelationEdge _mapRelationEdge(QueryRow row) => ObjectRelationEdge(
+        sourceObjectId: row.read<int>('source_object_id'),
+        propertyId: row.read<int>('property_id'),
+        targetObjectId: row.read<int>('target_object_id'),
+        position: row.read<int>('position'),
+      );
 
   Future<AppObjectType> _hydrateObjectType(
     GenericDatabaseDefinitionRecord definition,

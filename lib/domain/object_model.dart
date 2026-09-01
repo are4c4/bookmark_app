@@ -159,7 +159,8 @@ class AppObject {
 }
 
 class ObjectRelationValue {
-  const ObjectRelationValue({required this.objectIds});
+  const ObjectRelationValue({required List<int> objectIds})
+      : _objectIds = objectIds;
 
   factory ObjectRelationValue.single(int objectId) =>
       ObjectRelationValue(objectIds: <int>[objectId]);
@@ -183,7 +184,15 @@ class ObjectRelationValue {
     return const ObjectRelationValue(objectIds: <int>[]);
   }
 
-  final List<int> objectIds;
+  final List<int> _objectIds;
+
+  /// Relation targets are set-like but order-sensitive for presentation.
+  /// Keep the first occurrence and discard later duplicates.
+  List<int> get objectIds {
+    if (_objectIds.length < 2) return _objectIds;
+    final seen = <int>{};
+    return _objectIds.where(seen.add).toList(growable: false);
+  }
 
   bool get isEmpty => objectIds.isEmpty;
   bool get isSingle => objectIds.length == 1;
@@ -191,4 +200,23 @@ class ObjectRelationValue {
 
   dynamic toJson({required bool multiple}) =>
       multiple ? objectIds : singleOrNull;
+}
+
+/// A normalized relation edge used for fast backlinks and graph traversal.
+///
+/// The property value remains stored in `generic_values` for compatibility
+/// with existing generic database views. This edge is the query index for the
+/// object graph.
+class ObjectRelationEdge {
+  const ObjectRelationEdge({
+    required this.sourceObjectId,
+    required this.propertyId,
+    required this.targetObjectId,
+    required this.position,
+  });
+
+  final int sourceObjectId;
+  final int propertyId;
+  final int targetObjectId;
+  final int position;
 }
