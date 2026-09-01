@@ -118,4 +118,16 @@ void main() {
     expect(view.layoutType, 'list');
     expect(BuiltInDatabases.collections.supportedLayouts, ['list']);
   });
+
+  test('all core databases are registered through shared definitions', () {
+    expect(
+      BuiltInDatabases.all.map((definition) => definition.key).toSet(),
+      {'bookmarks', 'people', 'photos', 'collections'},
+    );
+    for (final definition in BuiltInDatabases.all) {
+      expect(definition.properties, isNotEmpty);
+      expect(definition.supportedLayouts, contains(definition.defaultLayout));
+      expect(BuiltInDatabases.byKey(definition.key), same(definition));
+    }
+  });
 }
