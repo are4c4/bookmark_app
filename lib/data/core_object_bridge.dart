@@ -27,14 +27,20 @@ class CoreObjectBridge {
         await systemObjectStore.ensureSchema();
         await database.customStatement('''
           CREATE TABLE IF NOT EXISTS photo_object_links (
-            photo_id INTEGER PRIMARY KEY REFERENCES photos(id) ON DELETE CASCADE,
-            object_id INTEGER NOT NULL UNIQUE REFERENCES generic_records(id) ON DELETE CASCADE
+            workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+            photo_id INTEGER NOT NULL REFERENCES photos(id) ON DELETE CASCADE,
+            object_id INTEGER NOT NULL REFERENCES generic_records(id) ON DELETE CASCADE,
+            PRIMARY KEY(workspace_id, photo_id),
+            UNIQUE(workspace_id, object_id)
           )
         ''');
         await database.customStatement('''
           CREATE TABLE IF NOT EXISTS bookmark_object_links (
-            bookmark_id INTEGER PRIMARY KEY REFERENCES bookmarks(id) ON DELETE CASCADE,
-            object_id INTEGER NOT NULL UNIQUE REFERENCES generic_records(id) ON DELETE CASCADE
+            workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+            bookmark_id INTEGER NOT NULL REFERENCES bookmarks(id) ON DELETE CASCADE,
+            object_id INTEGER NOT NULL REFERENCES generic_records(id) ON DELETE CASCADE,
+            PRIMARY KEY(workspace_id, bookmark_id),
+            UNIQUE(workspace_id, object_id)
           )
         ''');
       });
@@ -52,8 +58,8 @@ class CoreObjectBridge {
       photoTypeId: photoType.id,
       tagTypeId: tagType.id,
     );
-    await _syncPhotos(photoType);
-    await _syncBookmarks(bookmarkType);
+    await _syncPhotos(workspaceId, photoType);
+    await _syncBookmarks(workspaceId, bookmarkType);
   }
 
   Future<AppObjectType> _ensurePhotoType(int workspaceId) async {
@@ -162,7 +168,7 @@ class CoreObjectBridge {
     ))!;
   }
 
-  Future<void> _syncPhotos(AppObjectType photoType) async {
+  Future<void> _syncPhotos(int workspaceId, AppObjectType photoType) async {
     final photos = await database.select(database.photos).get();
     final legacyId = _property(photoType, 'Legacy Photo ID');
     final file = _property(photoType, 'File');
@@ -174,6 +180,7 @@ class CoreObjectBridge {
           ? photo.title!.trim()
           : '画像 ${photo.id}';
       final objectId = await _ensureLinkedObject(
+        workspaceId: workspaceId,
         table: 'photo_object_links',
         legacyColumn: 'photo_id',
         legacyId: photo.id,
@@ -188,8 +195,15 @@ class CoreObjectBridge {
     }
   }
 
-  Future<void> _syncBookmarks(AppObjectType bookmarkType) async {
-    final bookmarks = await database.select(database.bookmarks).get();
+  Future<void> _syncBookmarks(int workspaceId, AppObjectType bookmarkType) async {
+    final bookmarkIds = (await (database.select(database.bookmarkWorkspaces)
+          ..where((row) => row.workspaceId.equals(workspaceId)))
+        .get())
+        .map((row) => row.bookmarkId)
+        .toSet();
+    final bookmarks = (await database.select(database.bookmarks).get())
+        .where((bookmark) => bookmarkIds.contains(bookmark.id));
+
     final legacyId = _property(bookmarkType, 'Legacy Bookmark ID');
     final url = _property(bookmarkType, 'URL');
     final description = _property(bookmarkType, 'Description');
@@ -203,6 +217,7 @@ class CoreObjectBridge {
 
     for (final bookmark in bookmarks) {
       final objectId = await _ensureLinkedObject(
+        workspaceId: workspaceId,
         table: 'bookmark_object_links',
         legacyColumn: 'bookmark_id',
         legacyId: bookmark.id,
@@ -226,6 +241,7 @@ class CoreObjectBridge {
       final photoObjectIds = <int>[];
       for (final row in photoRows) {
         final linked = await _linkedObjectId(
+          workspaceId: workspaceId,
           table: 'photo_object_links',
           legacyColumn: 'photo_id',
           legacyId: row.read<int>('photo_id'),
@@ -244,7 +260,10 @@ class CoreObjectBridge {
       ).get();
       final tagObjectIds = <int>[];
       for (final row in tagRows) {
-        final linked = await tagBridge.objectIdForLegacyTag(row.read<int>('tag_id'));
+        final linked = await tagBridge.objectIdForLegacyTag(
+          workspaceId,
+          row.read<int>('tag_id'),
+        );
         if (linked != null) tagObjectIds.add(linked);
       }
       await objectStore.setRelation(
@@ -259,6 +278,7 @@ class CoreObjectBridge {
       type.properties.firstWhere((property) => property.name == name);
 
   Future<int> _ensureLinkedObject({
+    required int workspaceId,
     required String table,
     required String legacyColumn,
     required int legacyId,
@@ -266,6 +286,7 @@ class CoreObjectBridge {
     required String title,
   }) async {
     final existing = await _linkedObjectId(
+      workspaceId: workspaceId,
       table: table,
       legacyColumn: legacyColumn,
       legacyId: legacyId,
@@ -273,21 +294,22 @@ class CoreObjectBridge {
     if (existing != null) return existing;
     final objectId = await objectStore.createObject(objectTypeId: objectTypeId, title: title);
     await database.customStatement(
-      'INSERT INTO $table($legacyColumn, object_id) VALUES (?, ?)',
-      [legacyId, objectId],
+      'INSERT INTO $table(workspace_id, $legacyColumn, object_id) VALUES (?, ?, ?)',
+      [workspaceId, legacyId, objectId],
     );
     return objectId;
   }
 
   Future<int?> _linkedObjectId({
+    required int workspaceId,
     required String table,
     required String legacyColumn,
     required int legacyId,
   }) async {
     await ensureSchema();
     final row = await database.customSelect(
-      'SELECT object_id FROM $table WHERE $legacyColumn = ? LIMIT 1',
-      variables: [Variable<int>(legacyId)],
+      'SELECT object_id FROM $table WHERE workspace_id = ? AND $legacyColumn = ? LIMIT 1',
+      variables: [Variable<int>(workspaceId), Variable<int>(legacyId)],
     ).getSingleOrNull();
     return row?.read<int>('object_id');
   }
