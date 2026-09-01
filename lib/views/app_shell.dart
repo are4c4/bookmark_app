@@ -241,7 +241,7 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
       if (value == 'export') {
         final path = await _transfer.exportJson(widget.repository);
         if (!mounted || path == null) return;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('バックアップを書き出しました: $path')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('ブックマークを書き出しました: $path')));
       } else if (value == 'import') {
         final result = await _transfer.importFile(widget.repository);
         if (!mounted || result == null) return;
@@ -480,7 +480,7 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
             onSelected: _handleDataAction,
             itemBuilder: (_) => const [
               PopupMenuItem(value: 'import', child: Text('インポート')),
-              PopupMenuItem(value: 'export', child: Text('JSONバックアップ')),
+              PopupMenuItem(value: 'export', child: Text('ブックマークをJSON書き出し')),
             ],
             child: const Padding(
               padding: EdgeInsets.fromLTRB(14, 10, 10, 12),
