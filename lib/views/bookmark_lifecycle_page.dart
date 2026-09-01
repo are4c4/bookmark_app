@@ -40,9 +40,7 @@ class BookmarkLifecyclePage extends StatelessWidget {
 
   Stream<List<BookmarkItem>> _stream() => switch (mode) {
         BookmarkLifecycleMode.inbox => repository.watchInbox(),
-        BookmarkLifecycleMode.archive => repository.watchAll().map(
-            (items) => items.where((item) => item.status == 'archived').toList(),
-          ),
+        BookmarkLifecycleMode.archive => repository.watchArchive(),
         BookmarkLifecycleMode.trash => repository.watchTrash(),
       };
 
@@ -202,9 +200,9 @@ class BookmarkLifecyclePage extends StatelessWidget {
                     if (value == 'inbox_done') await repository.setInbox(bookmark, false);
                     if (value == 'archive') {
                       await repository.setInbox(bookmark, false);
-                      await repository.setStatus(bookmark, 'archived');
+                      await repository.archive(bookmark);
                     }
-                    if (value == 'unarchive') await repository.setStatus(bookmark, 'unread');
+                    if (value == 'unarchive') await repository.unarchive(bookmark);
                     if (value == 'trash') await repository.moveToTrash(bookmark);
                     if (value == 'restore') await repository.restoreFromTrash(bookmark);
                     if (value == 'delete') {
