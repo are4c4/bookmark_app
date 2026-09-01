@@ -7,7 +7,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('custom database list hides system object types', () async {
+  test('custom database list hides system object types but all-types list keeps them', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
     final workspaceId = await WorkspaceStore(database).initialize();
@@ -22,19 +22,31 @@ void main() {
       workspaceId: workspaceId,
       name: '書籍',
     );
-    final systemType = await systemStore.ensureSystemObjectType(
+    final tagType = await systemStore.ensureSystemObjectType(
       workspaceId: workspaceId,
       systemKey: 'tag',
       name: 'タグ',
       icon: '🏷️',
     );
+    final imageType = await systemStore.ensureSystemObjectType(
+      workspaceId: workspaceId,
+      systemKey: 'image',
+      name: '画像',
+      icon: '🖼️',
+    );
 
     final customDatabases = await genericStore.listDatabases(workspaceId);
-    final allDatabases = await genericStore.listAllDatabases(workspaceId);
+    final relationTargetTypes = await genericStore.listAllDatabases(workspaceId);
     final objectTypes = await objectStore.listObjectTypes(workspaceId);
 
     expect(customDatabases.map((item) => item.id), [customId]);
-    expect(allDatabases.map((item) => item.id), containsAll([customId, systemType.id]));
-    expect(objectTypes.map((item) => item.id), containsAll([customId, systemType.id]));
+    expect(
+      relationTargetTypes.map((item) => item.id),
+      containsAll([customId, tagType.id, imageType.id]),
+    );
+    expect(
+      objectTypes.map((item) => item.id),
+      containsAll([customId, tagType.id, imageType.id]),
+    );
   });
 }
