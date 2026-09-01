@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import '../data/app_database.dart';
 
 typedef CreateTagFromPicker = Future<Tag?> Function(String name, Tag? parent);
-typedef CreatePersonFromPicker = Future<Person?> Function(String name, String? note);
+typedef CreatePersonFromPicker = Future<Person?> Function(
+  String name,
+  String? note,
+);
 
 Future<List<Tag>?> showTagDatabasePicker({
   required BuildContext context,
@@ -117,36 +120,33 @@ Future<List<Tag>?> showTagDatabasePicker({
     );
   }
 
-  Future<void> quickSelectOrCreate(
-    String rawValue,
-    StateSetter setLocalState,
-  ) async {
-    final value = rawValue.trim();
-    if (value.isEmpty) return;
-    final existing = exactMatch(value);
-    if (existing != null) {
-      setLocalState(() {
-        selected.add(existing.id);
-        query = '';
-        controller.clear();
-      });
-      return;
-    }
-    if (onCreateTag == null) return;
-    final created = await onCreateTag(value, null);
-    if (created == null) return;
-    setLocalState(() {
-      if (!allTags.any((tag) => tag.id == created.id)) allTags.add(created);
-      selected.add(created.id);
-      query = '';
-      controller.clear();
-    });
-  }
-
-  final result = await showDialog<List<Tag>>(
+  await showDialog<void>(
     context: context,
     builder: (dialogContext) => StatefulBuilder(
       builder: (context, setLocalState) {
+        Future<void> quickSelectOrCreate(String rawValue) async {
+          final value = rawValue.trim();
+          if (value.isEmpty) return;
+          final existing = exactMatch(value);
+          if (existing != null) {
+            setLocalState(() {
+              selected.add(existing.id);
+              query = '';
+              controller.clear();
+            });
+            return;
+          }
+          if (onCreateTag == null) return;
+          final created = await onCreateTag(value, null);
+          if (created == null || !dialogContext.mounted) return;
+          setLocalState(() {
+            if (!allTags.any((tag) => tag.id == created.id)) allTags.add(created);
+            selected.add(created.id);
+            query = '';
+            controller.clear();
+          });
+        }
+
         final normalizedQuery = query.trim().toLowerCase();
         final entries = flatten()
             .where(
@@ -195,8 +195,7 @@ Future<List<Tag>?> showTagDatabasePicker({
                   autofocus: true,
                   textInputAction: TextInputAction.done,
                   onChanged: (value) => setLocalState(() => query = value),
-                  onSubmitted: (value) =>
-                      quickSelectOrCreate(value, setLocalState),
+                  onSubmitted: quickSelectOrCreate,
                   decoration: InputDecoration(
                     hintText: onCreateTag == null
                         ? 'タグを検索'
@@ -222,7 +221,7 @@ Future<List<Tag>?> showTagDatabasePicker({
                     child: InkWell(
                       key: const ValueKey('tag-picker-quick-action'),
                       borderRadius: BorderRadius.circular(6),
-                      onTap: () => quickSelectOrCreate(query, setLocalState),
+                      onTap: () => quickSelectOrCreate(query),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 10,
@@ -250,7 +249,7 @@ Future<List<Tag>?> showTagDatabasePicker({
                       child: TextButton.icon(
                         onPressed: () async {
                           final created = await createWithParent(dialogContext);
-                          if (created == null) return;
+                          if (created == null || !dialogContext.mounted) return;
                           setLocalState(() {
                             if (!allTags.any((tag) => tag.id == created.id)) {
                               allTags.add(created);
@@ -323,8 +322,7 @@ Future<List<Tag>?> showTagDatabasePicker({
                                         ),
                                         const SizedBox(width: 10),
                                         Expanded(child: Text(entry.tag.name)),
-                                        if (checked)
-                                          const Icon(Icons.check, size: 19),
+                                        if (checked) const Icon(Icons.check, size: 19),
                                       ],
                                     ),
                                   ),
@@ -348,14 +346,7 @@ Future<List<Tag>?> showTagDatabasePicker({
             ),
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('キャンセル'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(
-                dialogContext,
-                allTags.where((tag) => selected.contains(tag.id)).toList(),
-              ),
-              child: const Text('選択'),
+              child: const Text('閉じる'),
             ),
           ],
         );
@@ -364,7 +355,7 @@ Future<List<Tag>?> showTagDatabasePicker({
   );
 
   controller.dispose();
-  return result;
+  return allTags.where((tag) => selected.contains(tag.id)).toList();
 }
 
 Future<List<Person>?> showPeopleDatabasePicker({
@@ -444,38 +435,35 @@ Future<List<Person>?> showPeopleDatabasePicker({
     );
   }
 
-  Future<void> quickSelectOrCreate(
-    String rawValue,
-    StateSetter setLocalState,
-  ) async {
-    final value = rawValue.trim();
-    if (value.isEmpty) return;
-    final existing = exactMatch(value);
-    if (existing != null) {
-      setLocalState(() {
-        selected.add(existing.id);
-        query = '';
-        controller.clear();
-      });
-      return;
-    }
-    if (onCreatePerson == null) return;
-    final created = await onCreatePerson(value, null);
-    if (created == null) return;
-    setLocalState(() {
-      if (!allPeople.any((person) => person.id == created.id)) {
-        allPeople.add(created);
-      }
-      selected.add(created.id);
-      query = '';
-      controller.clear();
-    });
-  }
-
-  final result = await showDialog<List<Person>>(
+  await showDialog<void>(
     context: context,
     builder: (dialogContext) => StatefulBuilder(
       builder: (context, setLocalState) {
+        Future<void> quickSelectOrCreate(String rawValue) async {
+          final value = rawValue.trim();
+          if (value.isEmpty) return;
+          final existing = exactMatch(value);
+          if (existing != null) {
+            setLocalState(() {
+              selected.add(existing.id);
+              query = '';
+              controller.clear();
+            });
+            return;
+          }
+          if (onCreatePerson == null) return;
+          final created = await onCreatePerson(value, null);
+          if (created == null || !dialogContext.mounted) return;
+          setLocalState(() {
+            if (!allPeople.any((person) => person.id == created.id)) {
+              allPeople.add(created);
+            }
+            selected.add(created.id);
+            query = '';
+            controller.clear();
+          });
+        }
+
         final normalizedQuery = query.trim().toLowerCase();
         final filtered = allPeople.where((person) {
           if (normalizedQuery.isEmpty) return true;
@@ -524,8 +512,7 @@ Future<List<Person>?> showPeopleDatabasePicker({
                   autofocus: true,
                   textInputAction: TextInputAction.done,
                   onChanged: (value) => setLocalState(() => query = value),
-                  onSubmitted: (value) =>
-                      quickSelectOrCreate(value, setLocalState),
+                  onSubmitted: quickSelectOrCreate,
                   decoration: InputDecoration(
                     hintText: onCreatePerson == null
                         ? '人物名・メモを検索'
@@ -541,7 +528,7 @@ Future<List<Person>?> showPeopleDatabasePicker({
                     child: InkWell(
                       key: const ValueKey('person-picker-quick-action'),
                       borderRadius: BorderRadius.circular(6),
-                      onTap: () => quickSelectOrCreate(query, setLocalState),
+                      onTap: () => quickSelectOrCreate(query),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 10,
@@ -569,7 +556,7 @@ Future<List<Person>?> showPeopleDatabasePicker({
                       child: TextButton.icon(
                         onPressed: () async {
                           final created = await createWithDetails(dialogContext);
-                          if (created == null) return;
+                          if (created == null || !dialogContext.mounted) return;
                           setLocalState(() {
                             if (!allPeople.any((person) => person.id == created.id)) {
                               allPeople.add(created);
@@ -642,8 +629,7 @@ Future<List<Person>?> showPeopleDatabasePicker({
                                             ],
                                           ),
                                         ),
-                                        if (checked)
-                                          const Icon(Icons.check, size: 19),
+                                        if (checked) const Icon(Icons.check, size: 19),
                                       ],
                                     ),
                                   ),
@@ -667,14 +653,7 @@ Future<List<Person>?> showPeopleDatabasePicker({
             ),
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('キャンセル'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(
-                dialogContext,
-                allPeople.where((person) => selected.contains(person.id)).toList(),
-              ),
-              child: const Text('選択'),
+              child: const Text('閉じる'),
             ),
           ],
         );
@@ -683,5 +662,5 @@ Future<List<Person>?> showPeopleDatabasePicker({
   );
 
   controller.dispose();
-  return result;
+  return allPeople.where((person) => selected.contains(person.id)).toList();
 }
