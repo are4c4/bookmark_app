@@ -74,7 +74,7 @@ class SettingsPage extends StatelessWidget {
               },
             ),
           ),
-          const SizedBox(height: UiTokens.space32),
+          const SizedBox(height: UiTokens.space24),
           const Divider(),
           const SizedBox(height: UiTokens.space24),
           AutoOrganizeSettingsSection(repository: repository),
