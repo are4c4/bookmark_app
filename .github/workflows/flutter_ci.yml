@@ -18,7 +18,7 @@ concurrency:
 jobs:
   analyze-test-build:
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -42,7 +42,8 @@ jobs:
         run: flutter analyze
 
       - name: Test
-        run: flutter test
+        timeout-minutes: 5
+        run: flutter test --timeout 2m
 
       - name: Prepare macOS host project
         run: |
