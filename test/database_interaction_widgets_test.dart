@@ -1,3 +1,4 @@
+import 'package:bookmark_app/features/database/presentation/widgets/database_toolbar.dart';
 import 'package:bookmark_app/widgets/database_create_tiles.dart';
 import 'package:bookmark_app/widgets/detail_property_row.dart';
 import 'package:bookmark_app/widgets/resizable_detail_pane.dart';
@@ -11,7 +12,7 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: SizedBox(
-            width: 420,
+            width: 520,
             child: DetailPropertyRow(
               icon: Icons.sell_outlined,
               label: 'タグ',
@@ -26,6 +27,50 @@ void main() {
     await tester.tap(find.text('なし'));
     await tester.pump();
     expect(taps, 1);
+  });
+
+  testWidgets('property rows keep handle and label columns aligned', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 620,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                DetailPropertyRow(
+                  icon: Icons.sell_outlined,
+                  label: 'タグ',
+                  dragHandle: Icon(Icons.drag_indicator, size: 15),
+                  child: Text('エンタメ'),
+                ),
+                DetailPropertyRow(
+                  icon: Icons.person_outline,
+                  label: '出演者',
+                  dragHandle: Icon(Icons.drag_indicator, size: 15),
+                  child: Text('今田耕司'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final handles = find.byKey(const ValueKey('detail-property-handle-column'));
+    final labels = find.byKey(const ValueKey('detail-property-label-column'));
+    expect(handles, findsNWidgets(2));
+    expect(labels, findsNWidgets(2));
+
+    final firstHandle = tester.getTopLeft(handles.at(0));
+    final secondHandle = tester.getTopLeft(handles.at(1));
+    final firstLabel = tester.getTopLeft(labels.at(0));
+    final secondLabel = tester.getTopLeft(labels.at(1));
+
+    expect(firstHandle.dx, secondHandle.dx);
+    expect(firstLabel.dx, secondLabel.dx);
+    expect(tester.getSize(handles.at(0)).width, DetailPropertyRow.handleColumnWidth);
+    expect(tester.getSize(labels.at(0)).width, DetailPropertyRow.labelColumnWidth);
   });
 
   testWidgets('database create card creates item with Enter', (tester) async {
@@ -75,5 +120,40 @@ void main() {
     final after = tester.getSize(find.byKey(const ValueKey('detail-content'))).width;
 
     expect(after, greaterThan(before));
+  });
+
+  testWidgets('database toolbar uses compact layout menu and expandable search', (tester) async {
+    var layout = 'gallery';
+    var query = '';
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (context, setState) => Scaffold(
+            body: DatabaseToolbar(
+              leadingActions: const [TextButton(onPressed: null, child: Text('フィルター'))],
+              layoutType: layout,
+              supportedLayouts: const ['gallery', 'table', 'list'],
+              onLayoutChanged: (value) => setState(() => layout = value),
+              searchController: controller,
+              onSearchChanged: (value) => query = value,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('database-search-expanded')), findsNothing);
+    expect(find.text('ギャラリー'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('database-search-button')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('database-search-expanded')), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), 'Notion');
+    await tester.pump();
+    expect(query, 'Notion');
   });
 }
