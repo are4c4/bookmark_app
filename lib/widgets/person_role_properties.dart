@@ -29,22 +29,35 @@ class PersonRoleProperties extends StatelessWidget {
     return people.where((person) => person.id == id).firstOrNull;
   }
 
-  Future<void> _selectPeople(BuildContext context, String role, List<PersonRoleAssignment> assignments) async {
+  Future<void> _selectPeople(
+    BuildContext context,
+    String role,
+    List<PersonRoleAssignment> assignments,
+  ) async {
     final allPeople = await repository.watchPeople().first;
     if (!context.mounted) return;
     final selected = await showPeopleDatabasePicker(
       context: context,
       people: allPeople,
-      initiallySelectedIds: assignments.where((a) => a.role == role).map((a) => a.person.id),
+      initiallySelectedIds: assignments
+          .where((assignment) => assignment.role == role)
+          .map((assignment) => assignment.person.id),
       onCreatePerson: _createPerson,
     );
-    if (selected != null) await repository.setPeopleForRole(bookmark, role, selected);
+    if (selected != null) {
+      await repository.setPeopleForRole(bookmark, role, selected);
+    }
   }
 
-  Future<void> _addRole(BuildContext context, List<PersonRoleAssignment> assignments) async {
-    final controller = TextEditingController();
-    final existingRoles = assignments.map((a) => a.role).toSet();
-    final suggestions = defaultPersonRoles.where((role) => !existingRoles.contains(role)).toList();
+  Future<void> _addRole(
+    BuildContext context,
+    List<PersonRoleAssignment> assignments,
+  ) async {
+    final existingRoles = assignments.map((assignment) => assignment.role).toSet();
+    final suggestions = defaultPersonRoles
+        .where((role) => !existingRoles.contains(role))
+        .toList();
+    String typedRole = '';
     String? selectedRole;
 
     final role = await showDialog<String>(
@@ -54,37 +67,65 @@ class PersonRoleProperties extends StatelessWidget {
           title: const Text('人物プロパティを追加'),
           content: SizedBox(
             width: 420,
-            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-              if (suggestions.isNotEmpty) ...[
-                Text('候補', style: TextStyle(fontSize: 12.5, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: suggestions.map((suggestion) => ChoiceChip(
-                    label: Text(suggestion),
-                    selected: selectedRole == suggestion,
-                    onSelected: (_) => setLocalState(() {
-                      selectedRole = suggestion;
-                      controller.text = suggestion;
-                    }),
-                  )).toList(),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (suggestions.isNotEmpty) ...[
+                  Text(
+                    '候補',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: suggestions
+                        .map(
+                          (suggestion) => ChoiceChip(
+                            label: Text(suggestion),
+                            selected: selectedRole == suggestion,
+                            onSelected: (_) => setLocalState(() {
+                              selectedRole = suggestion;
+                              typedRole = '';
+                            }),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                TextFormField(
+                  autofocus: suggestions.isEmpty,
+                  decoration: InputDecoration(
+                    labelText: '役割名',
+                    hintText: selectedRole ?? '例: 著者、講師、監督',
+                  ),
+                  onChanged: (value) => setLocalState(() {
+                    typedRole = value;
+                    if (value.trim().isNotEmpty) selectedRole = null;
+                  }),
+                  onFieldSubmitted: (_) {
+                    final value = normalizePersonRole(
+                      selectedRole ?? typedRole,
+                    );
+                    if (value.isNotEmpty) Navigator.pop(dialogContext, value);
+                  },
                 ),
-                const SizedBox(height: 16),
               ],
-              TextField(
-                controller: controller,
-                autofocus: suggestions.isEmpty,
-                decoration: const InputDecoration(labelText: '役割名', hintText: '例: 著者、講師、監督'),
-                onChanged: (_) => setLocalState(() => selectedRole = null),
-              ),
-            ]),
+            ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('キャンセル')),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('キャンセル'),
+            ),
             FilledButton(
               onPressed: () {
-                final value = normalizePersonRole(controller.text);
+                final value = normalizePersonRole(selectedRole ?? typedRole);
                 if (value.isNotEmpty) Navigator.pop(dialogContext, value);
               },
               child: const Text('次へ'),
@@ -93,7 +134,6 @@ class PersonRoleProperties extends StatelessWidget {
         ),
       ),
     );
-    controller.dispose();
     if (role == null || !context.mounted) return;
     await _selectPeople(context, role, assignments);
   }
@@ -119,7 +159,10 @@ class PersonRoleProperties extends StatelessWidget {
 
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('「${dropped.title}」に $role: ${person.name} を追加しました')),
+        SnackBar(
+          duration: const Duration(seconds: 3),
+          content: Text('「${dropped.title}」に $role: ${person.name} を追加しました'),
+        ),
       );
     }
   }
@@ -139,7 +182,8 @@ class PersonRoleProperties extends StatelessWidget {
               value: genre,
               items: items,
               empty: genre.isEmpty,
-              onSelected: (value) => repository.lifecycleStore.setGenre(bookmark.id, value),
+              onSelected: (value) =>
+                  repository.lifecycleStore.setGenre(bookmark.id, value),
             ),
           );
         },
@@ -161,16 +205,31 @@ class PersonRoleProperties extends StatelessWidget {
           duration: const Duration(milliseconds: 120),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(5),
-            border: hovering ? Border.all(color: scheme.primary, width: 1.5) : null,
+            border: hovering
+                ? Border.all(color: scheme.primary, width: 1.5)
+                : null,
           ),
           child: ActionChip(
-            avatar: Icon(Icons.person_outline, size: 14, color: scheme.onSurfaceVariant),
+            avatar: Icon(
+              Icons.person_outline,
+              size: 14,
+              color: scheme.onSurfaceVariant,
+            ),
             label: Text(person.name),
             onPressed: () => onFilterByPerson?.call(person),
-            backgroundColor: hovering ? scheme.primaryContainer : scheme.surfaceContainerHighest,
+            backgroundColor: hovering
+                ? scheme.primaryContainer
+                : scheme.surfaceContainerHighest,
             side: BorderSide.none,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
-            labelStyle: TextStyle(fontSize: 12, color: hovering ? scheme.onPrimaryContainer : scheme.onSurfaceVariant),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(5),
+            ),
+            labelStyle: TextStyle(
+              fontSize: 12,
+              color: hovering
+                  ? scheme.onPrimaryContainer
+                  : scheme.onSurfaceVariant,
+            ),
             visualDensity: VisualDensity.compact,
           ),
         );
@@ -178,19 +237,33 @@ class PersonRoleProperties extends StatelessWidget {
     );
   }
 
-  Widget _personRow(BuildContext context, String role, List<Person> people, VoidCallback onAdd) {
+  Widget _personRow(
+    BuildContext context,
+    String role,
+    List<Person> people,
+    VoidCallback onAdd,
+  ) {
     final scheme = Theme.of(context).colorScheme;
     return DetailPropertyRow(
       icon: Icons.person_outline,
       label: role,
       onAdd: onAdd,
+      onTapValue: onAdd,
       addTooltip: '$roleを人物DBから選択・新規作成',
       child: people.isEmpty
-          ? Text('なし', style: TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant.withValues(alpha: .55)))
+          ? Text(
+              'なし',
+              style: TextStyle(
+                fontSize: 12.5,
+                color: scheme.onSurfaceVariant.withValues(alpha: .55),
+              ),
+            )
           : Wrap(
               spacing: 5,
               runSpacing: 5,
-              children: people.map((person) => _personChip(context, role, person)).toList(),
+              children: people
+                  .map((person) => _personChip(context, role, person))
+                  .toList(),
             ),
     );
   }
@@ -216,30 +289,36 @@ class PersonRoleProperties extends StatelessWidget {
           });
         if (roles.isEmpty) roles.add('出演者');
 
-        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          _genreRow(context),
-          ...roles.map((role) => _personRow(
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _genreRow(context),
+            ...roles.map(
+              (role) => _personRow(
                 context,
                 role,
                 grouped[role] ?? const <Person>[],
                 () => _selectPeople(context, role, assignments),
-              )),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(112, 2, 0, 4),
-            child: TextButton.icon(
-              onPressed: () => _addRole(context, assignments),
-              icon: const Icon(Icons.add, size: 15),
-              label: const Text('人物プロパティを追加'),
-              style: TextButton.styleFrom(
-                foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant,
-                textStyle: const TextStyle(fontSize: 12),
-                visualDensity: VisualDensity.compact,
               ),
             ),
-          ),
-          const SizedBox(height: 2),
-          BookmarkAttachmentSection(repository: repository, bookmark: bookmark),
-        ]);
+            Padding(
+              padding: const EdgeInsets.fromLTRB(112, 2, 0, 4),
+              child: TextButton.icon(
+                onPressed: () => _addRole(context, assignments),
+                icon: const Icon(Icons.add, size: 15),
+                label: const Text('人物プロパティを追加'),
+                style: TextButton.styleFrom(
+                  foregroundColor:
+                      Theme.of(context).colorScheme.onSurfaceVariant,
+                  textStyle: const TextStyle(fontSize: 12),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+            ),
+            const SizedBox(height: 2),
+            BookmarkAttachmentSection(repository: repository, bookmark: bookmark),
+          ],
+        );
       },
     );
   }
