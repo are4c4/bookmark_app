@@ -162,7 +162,7 @@ class TagGroupStore {
       final groupIds = (decoded['groups'] as List<dynamic>? ?? const [])
           .whereType<num>()
           .map((id) => id.toInt())
-          .where(validGroups.contains)
+          .where((id) => id == -1 || validGroups.contains(id))
           .toSet();
       return TagTreeExpansionState(
         tagIds: tagIds,
@@ -430,6 +430,13 @@ class TagGroupStore {
         parentTagId: Value(targetTagId),
         groupId: Value(target.groupId),
       ));
+      final sourceDescendants = _subtreeIds(sourceTagId, tags)
+        ..remove(sourceTagId);
+      for (final descendantId in sourceDescendants) {
+        await (database.update(database.tags)
+              ..where((tag) => tag.id.equals(descendantId)))
+            .write(TagsCompanion(groupId: Value(target.groupId)));
+      }
       await (database.delete(database.tags)
             ..where((tag) => tag.id.equals(sourceTagId)))
           .go();
