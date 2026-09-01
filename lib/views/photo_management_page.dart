@@ -12,6 +12,7 @@ import '../widgets/app_empty_state.dart';
 import '../widgets/bookmark_reverse_lookup_dialog.dart';
 import '../widgets/database_page_toolbar.dart';
 import '../widgets/detail_section.dart';
+import '../widgets/inline_rename_text.dart';
 import 'image_editor_page.dart';
 
 enum PhotoViewType { gallery, list, table }
@@ -39,6 +40,9 @@ class _PhotoManagementPageState extends State<PhotoManagementPage> {
       .toList();
 
   List<String> _photoTagNames(PhotoRecord photo) => _split(photo.tags);
+
+  Future<void> _renamePhoto(PhotoRecord photo, String title) =>
+      repository.updatePhoto(photo, title: title, note: photo.note);
 
   Future<void> _importPaths(Iterable<String> paths) async {
     try {
@@ -187,6 +191,16 @@ class _PhotoManagementPageState extends State<PhotoManagementPage> {
     );
   }
 
+  Widget _photoName(PhotoRecord photo, {TextStyle? style, int maxLines = 1, String keyPrefix = 'photo-name'}) =>
+      InlineRenameText(
+        key: ValueKey('$keyPrefix:${photo.id}'),
+        value: photo.title ?? '',
+        fallback: '写真 ${photo.id}',
+        style: style,
+        maxLines: maxLines,
+        onSubmitted: (value) => _renamePhoto(photo, value),
+      );
+
   Widget _card(PhotoRecord photo) {
     final tags = _photoTagNames(photo);
     final selected = _selectedPhotoId == photo.id;
@@ -212,7 +226,12 @@ class _PhotoManagementPageState extends State<PhotoManagementPage> {
             Padding(
               padding: const EdgeInsets.fromLTRB(10, UiTokens.space8, UiTokens.space8, 10),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(photo.title?.trim().isNotEmpty == true ? photo.title! : '写真 ${photo.id}', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: UiTokens.textMd, fontWeight: FontWeight.w600)),
+                _photoName(
+                  photo,
+                  keyPrefix: 'photo-card-name',
+                  maxLines: 2,
+                  style: const TextStyle(fontSize: UiTokens.textMd, fontWeight: FontWeight.w600),
+                ),
                 if (tags.isNotEmpty) ...[
                   const SizedBox(height: UiTokens.space6),
                   Wrap(spacing: UiTokens.space4, runSpacing: UiTokens.space4, children: tags.take(4).map((tag) => Chip(label: Text(tag), visualDensity: VisualDensity.compact)).toList()),
@@ -252,7 +271,11 @@ class _PhotoManagementPageState extends State<PhotoManagementPage> {
               borderRadius: BorderRadius.circular(UiTokens.radiusSm),
               child: SizedBox(width: 58, height: 44, child: Image.file(File(photo.path), fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined))),
             ),
-            title: Text(photo.title?.trim().isNotEmpty == true ? photo.title! : '写真 ${photo.id}', style: const TextStyle(fontWeight: FontWeight.w600)),
+            title: _photoName(
+              photo,
+              keyPrefix: 'photo-list-name',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
             subtitle: Text([if (tags.isNotEmpty) tags.join(', '), if (photo.note?.trim().isNotEmpty == true) photo.note!].join(' · '), maxLines: 2, overflow: TextOverflow.ellipsis),
             onTap: () => setState(() => _selectedPhotoId = photo.id),
           );
@@ -277,7 +300,7 @@ class _PhotoManagementPageState extends State<PhotoManagementPage> {
                 DataCell(Row(children: [
                   ClipRRect(borderRadius: BorderRadius.circular(UiTokens.radiusSm), child: SizedBox(width: 52, height: 40, child: Image.file(File(photo.path), fit: BoxFit.cover))),
                   const SizedBox(width: UiTokens.space8),
-                  Text(photo.title?.trim().isNotEmpty == true ? photo.title! : '写真 ${photo.id}'),
+                  SizedBox(width: 190, child: _photoName(photo, keyPrefix: 'photo-table-name')),
                 ])),
                 DataCell(Text(tags.join(', '))),
                 DataCell(SizedBox(width: 300, child: Text(photo.note ?? '', maxLines: 2, overflow: TextOverflow.ellipsis))),
@@ -312,7 +335,11 @@ class _PhotoManagementPageState extends State<PhotoManagementPage> {
               child: Image.file(File(photo.path), width: double.infinity, fit: BoxFit.fitWidth, errorBuilder: (_, __, ___) => const SizedBox(height: 220, child: Center(child: Icon(Icons.broken_image_outlined)))),
             ),
             const SizedBox(height: UiTokens.space16),
-            Text(photo.title?.trim().isNotEmpty == true ? photo.title! : '写真 ${photo.id}', style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w700)),
+            _photoName(
+              photo,
+              keyPrefix: 'photo-detail-name',
+              style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w700),
+            ),
             const SizedBox(height: UiTokens.space16),
             DetailSection(
               title: '情報',

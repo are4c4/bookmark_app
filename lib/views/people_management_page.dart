@@ -10,6 +10,7 @@ import '../widgets/app_empty_state.dart';
 import '../widgets/bookmark_reverse_lookup_dialog.dart';
 import '../widgets/database_page_toolbar.dart';
 import '../widgets/detail_section.dart';
+import '../widgets/inline_rename_text.dart';
 import '../widgets/photo_database_picker.dart';
 
 enum PeopleViewType { gallery, list, table }
@@ -35,6 +36,9 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
   List<BookmarkItem> _bookmarksFor(Person person, List<BookmarkItem> bookmarks) =>
       bookmarks.where((bookmark) => bookmark.people.any((candidate) => candidate.id == person.id)).toList();
 
+  Future<void> _renamePerson(Person person, String name) =>
+      repository.updatePerson(person, name, person.note);
+
   Future<void> _create() async {
     var name = '';
     var note = '';
@@ -45,7 +49,14 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
         content: SizedBox(
           width: 440,
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            TextFormField(autofocus: true, decoration: const InputDecoration(labelText: '名前'), onChanged: (v) => name = v),
+            TextFormField(
+              autofocus: true,
+              decoration: const InputDecoration(labelText: '名前'),
+              onChanged: (v) => name = v,
+              onFieldSubmitted: (_) {
+                if (name.trim().isNotEmpty) Navigator.pop(dialogContext, true);
+              },
+            ),
             const SizedBox(height: UiTokens.space12),
             TextFormField(maxLines: 3, decoration: const InputDecoration(labelText: 'メモ'), onChanged: (v) => note = v),
           ]),
@@ -205,7 +216,13 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
                         padding: const EdgeInsets.fromLTRB(10, UiTokens.space8, UiTokens.space4, 10),
                         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Text(person.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                            InlineRenameText(
+                              key: ValueKey('person-name:${person.id}'),
+                              value: person.name,
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                              maxLines: 2,
+                              onSubmitted: (value) => _renamePerson(person, value),
+                            ),
                             const SizedBox(height: UiTokens.space4),
                             Text('${related.length}件のブックマーク', style: TextStyle(fontSize: 11.5, color: scheme.onSurfaceVariant)),
                             if (person.note?.trim().isNotEmpty == true) ...[const SizedBox(height: UiTokens.space4), Text(person.note!, maxLines: 3, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: UiTokens.textSm, color: scheme.onSurfaceVariant))],
@@ -232,7 +249,12 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
           return ListTile(
             selected: _selectedPersonId == person.id,
             leading: _avatar(person, photos),
-            title: Text(person.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+            title: InlineRenameText(
+              key: ValueKey('person-list-name:${person.id}'),
+              value: person.name,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+              onSubmitted: (value) => _renamePerson(person, value),
+            ),
             subtitle: Text(['${related.length}件のブックマーク', if (person.note?.trim().isNotEmpty == true) person.note!].join(' · '), maxLines: 2, overflow: TextOverflow.ellipsis),
             trailing: _menu(person, photos, bookmarks),
             onTap: () => setState(() => _selectedPersonId = person.id),
@@ -251,7 +273,18 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
               selected: _selectedPersonId == person.id,
               onSelectChanged: (_) => setState(() => _selectedPersonId = person.id),
               cells: [
-                DataCell(Row(children: [_avatar(person, photos), const SizedBox(width: 10), Text(person.name)])),
+                DataCell(Row(children: [
+                  _avatar(person, photos),
+                  const SizedBox(width: 10),
+                  SizedBox(
+                    width: 180,
+                    child: InlineRenameText(
+                      key: ValueKey('person-table-name:${person.id}'),
+                      value: person.name,
+                      onSubmitted: (value) => _renamePerson(person, value),
+                    ),
+                  ),
+                ])),
                 DataCell(SizedBox(width: 280, child: Text(person.note ?? '', maxLines: 2, overflow: TextOverflow.ellipsis))),
                 DataCell(Text('${related.length}件')),
                 DataCell(_menu(person, photos, bookmarks)),
@@ -282,7 +315,12 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
           else
             SizedBox(height: 220, child: ColoredBox(color: scheme.surfaceContainerLow, child: const Center(child: Icon(Icons.person_outline, size: 64)))),
           const SizedBox(height: UiTokens.space16),
-          Text(person.name, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w700)),
+          InlineRenameText(
+            key: ValueKey('person-detail-name:${person.id}'),
+            value: person.name,
+            style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w700),
+            onSubmitted: (value) => _renamePerson(person, value),
+          ),
           const SizedBox(height: UiTokens.space6),
           Text('${related.length}件の関連ブックマーク', style: TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant)),
           const SizedBox(height: UiTokens.space16),
