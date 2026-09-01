@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
 
+/// Shared Notion-style property row used by database detail panes.
+///
+/// Every row uses the same four-column geometry:
+/// drag handle / property label / value / trailing action.
+/// Keeping these widths stable prevents icons, labels and actions from
+/// drifting when the value widget changes between properties.
 class DetailPropertyRow extends StatefulWidget {
   const DetailPropertyRow({
     super.key,
@@ -11,6 +17,12 @@ class DetailPropertyRow extends StatefulWidget {
     this.onTapValue,
     this.dragHandle,
   });
+
+  static const double rowHeight = 34;
+  static const double handleColumnWidth = 28;
+  static const double labelColumnWidth = 188;
+  static const double actionColumnWidth = 32;
+  static const double propertyIconSize = 16;
 
   final IconData icon;
   final String label;
@@ -31,8 +43,9 @@ class _DetailPropertyRowState extends State<DetailPropertyRow> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final effectiveValueTap = widget.onTapValue ?? widget.onAdd;
+
     final value = ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 30),
+      constraints: const BoxConstraints(minHeight: DetailPropertyRow.rowHeight),
       child: Align(
         alignment: Alignment.centerLeft,
         child: DefaultTextStyle.merge(
@@ -55,28 +68,40 @@ class _DetailPropertyRowState extends State<DetailPropertyRow> {
           color: _hovered ? scheme.surfaceContainerLowest : Colors.transparent,
           borderRadius: BorderRadius.circular(5),
         ),
-        padding: const EdgeInsets.symmetric(vertical: 2),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            if (widget.dragHandle != null)
-              SizedBox(
-                width: 22,
-                height: 30,
-                child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 90),
-                  opacity: _hovered ? 1 : .25,
-                  child: widget.dragHandle,
-                ),
-              ),
             SizedBox(
-              width: widget.dragHandle == null ? 112 : 100,
-              height: 30,
+              key: const ValueKey('detail-property-handle-column'),
+              width: DetailPropertyRow.handleColumnWidth,
+              height: DetailPropertyRow.rowHeight,
+              child: widget.dragHandle == null
+                  ? const SizedBox.shrink()
+                  : AnimatedOpacity(
+                      duration: const Duration(milliseconds: 90),
+                      opacity: _hovered ? 1 : .28,
+                      child: Center(child: widget.dragHandle),
+                    ),
+            ),
+            SizedBox(
+              key: const ValueKey('detail-property-label-column'),
+              width: DetailPropertyRow.labelColumnWidth,
+              height: DetailPropertyRow.rowHeight,
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Icon(widget.icon, size: 16, color: scheme.onSurfaceVariant),
-                  const SizedBox(width: 7),
+                  SizedBox(
+                    width: 22,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Icon(
+                        widget.icon,
+                        size: DetailPropertyRow.propertyIconSize,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
                   Expanded(
                     child: Align(
                       alignment: Alignment.centerLeft,
@@ -96,6 +121,7 @@ class _DetailPropertyRowState extends State<DetailPropertyRow> {
               ),
             ),
             Expanded(
+              key: const ValueKey('detail-property-value-column'),
               child: effectiveValueTap == null
                   ? value
                   : Material(
@@ -104,28 +130,34 @@ class _DetailPropertyRowState extends State<DetailPropertyRow> {
                         borderRadius: BorderRadius.circular(4),
                         onTap: effectiveValueTap,
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 3),
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
                           child: value,
                         ),
                       ),
                     ),
             ),
-            if (widget.onAdd != null)
-              SizedBox(
-                width: 28,
-                height: 30,
-                child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 90),
-                  opacity: _hovered ? 1 : .52,
-                  child: IconButton(
-                    padding: EdgeInsets.zero,
-                    visualDensity: VisualDensity.compact,
-                    tooltip: widget.addTooltip,
-                    onPressed: widget.onAdd,
-                    icon: Icon(Icons.add, size: 17, color: scheme.onSurfaceVariant),
-                  ),
-                ),
-              ),
+            SizedBox(
+              key: const ValueKey('detail-property-action-column'),
+              width: DetailPropertyRow.actionColumnWidth,
+              height: DetailPropertyRow.rowHeight,
+              child: widget.onAdd == null
+                  ? const SizedBox.shrink()
+                  : AnimatedOpacity(
+                      duration: const Duration(milliseconds: 90),
+                      opacity: _hovered ? 1 : .50,
+                      child: IconButton(
+                        padding: EdgeInsets.zero,
+                        visualDensity: VisualDensity.compact,
+                        tooltip: widget.addTooltip,
+                        onPressed: widget.onAdd,
+                        icon: Icon(
+                          Icons.add,
+                          size: 17,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+            ),
           ],
         ),
       ),
@@ -169,7 +201,7 @@ class DetailSelectField<T> extends StatelessWidget {
           )
           .toList(),
       child: SizedBox(
-        height: 30,
+        height: DetailPropertyRow.rowHeight,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
@@ -186,8 +218,8 @@ class DetailSelectField<T> extends StatelessWidget {
               ),
             ),
             SizedBox(
-              width: 28,
-              height: 30,
+              width: DetailPropertyRow.actionColumnWidth,
+              height: DetailPropertyRow.rowHeight,
               child: Center(
                 child: Icon(
                   Icons.keyboard_arrow_down,
