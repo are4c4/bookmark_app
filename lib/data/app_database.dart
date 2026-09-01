@@ -522,6 +522,14 @@ class AppDatabase extends _$AppDatabase {
               'ON pdf_annotations(attachment_id, page_number)',
             );
           }
+          if (from < 14) {
+            await m.addColumn(
+              savedViews,
+              savedViews.includeDescendants,
+            );
+            await m.addColumn(savedViews, savedViews.personFilterId);
+            await m.addColumn(savedViews, savedViews.photoFilterId);
+          }
         },
         beforeOpen: (_) async => customStatement('PRAGMA foreign_keys = ON'),
       );
