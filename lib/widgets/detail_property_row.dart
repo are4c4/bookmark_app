@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-class DetailPropertyRow extends StatelessWidget {
+class DetailPropertyRow extends StatefulWidget {
   const DetailPropertyRow({
     super.key,
     required this.icon,
@@ -8,6 +8,8 @@ class DetailPropertyRow extends StatelessWidget {
     required this.child,
     this.onAdd,
     this.addTooltip,
+    this.onTapValue,
+    this.dragHandle,
   });
 
   final IconData icon;
@@ -15,70 +17,116 @@ class DetailPropertyRow extends StatelessWidget {
   final Widget child;
   final VoidCallback? onAdd;
   final String? addTooltip;
+  final VoidCallback? onTapValue;
+  final Widget? dragHandle;
+
+  @override
+  State<DetailPropertyRow> createState() => _DetailPropertyRowState();
+}
+
+class _DetailPropertyRowState extends State<DetailPropertyRow> {
+  bool _hovered = false;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          SizedBox(
-            width: 112,
-            height: 30,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Icon(icon, size: 16, color: scheme.onSurfaceVariant),
-                const SizedBox(width: 7),
-                Expanded(
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        height: 1.0,
-                        color: scheme.onSurfaceVariant,
+    final value = ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 30),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: DefaultTextStyle.merge(
+          style: TextStyle(
+            fontSize: 12.5,
+            height: 1.0,
+            color: scheme.onSurface,
+          ),
+          child: widget.child,
+        ),
+      ),
+    );
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 90),
+        decoration: BoxDecoration(
+          color: _hovered ? scheme.surfaceContainerLowest : Colors.transparent,
+          borderRadius: BorderRadius.circular(5),
+        ),
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            if (widget.dragHandle != null)
+              SizedBox(
+                width: 22,
+                height: 30,
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 90),
+                  opacity: _hovered ? 1 : .25,
+                  child: widget.dragHandle,
+                ),
+              ),
+            SizedBox(
+              width: widget.dragHandle == null ? 112 : 100,
+              height: 30,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Icon(widget.icon, size: 16, color: scheme.onSurfaceVariant),
+                  const SizedBox(width: 7),
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        widget.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          height: 1.0,
+                          color: scheme.onSurfaceVariant,
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          Expanded(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 30),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: DefaultTextStyle.merge(
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    height: 1.0,
-                    color: scheme.onSurface,
+            Expanded(
+              child: widget.onTapValue == null
+                  ? value
+                  : Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(4),
+                        onTap: widget.onTapValue,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 3),
+                          child: value,
+                        ),
+                      ),
+                    ),
+            ),
+            if (widget.onAdd != null)
+              SizedBox(
+                width: 28,
+                height: 30,
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 90),
+                  opacity: _hovered ? 1 : .52,
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                    tooltip: widget.addTooltip,
+                    onPressed: widget.onAdd,
+                    icon: Icon(Icons.add, size: 17, color: scheme.onSurfaceVariant),
                   ),
-                  child: child,
                 ),
               ),
-            ),
-          ),
-          if (onAdd != null)
-            SizedBox(
-              width: 28,
-              height: 30,
-              child: IconButton(
-                padding: EdgeInsets.zero,
-                visualDensity: VisualDensity.compact,
-                tooltip: addTooltip,
-                onPressed: onAdd,
-                icon: Icon(Icons.add, size: 17, color: scheme.onSurfaceVariant),
-              ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
