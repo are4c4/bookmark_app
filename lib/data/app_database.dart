@@ -604,30 +604,6 @@ class AppDatabase extends _$AppDatabase {
     return query.map((row) => row.readTable(people)).get();
   }
 
-  Future<List<PhotoRecord>> _photosForBookmark(int bookmarkId) {
-    final query = select(photos).join([innerJoin(bookmarkPhotos, bookmarkPhotos.photoId.equalsExp(photos.id))])
-      ..where(bookmarkPhotos.bookmarkId.equals(bookmarkId))
-      ..orderBy([OrderingTerm.asc(photos.createdAt)]);
-    return query.map((row) => _resolvedPhoto(row.readTable(photos))).get();
-  }
-
-  Future<List<CollectionRecord>> _collectionsForBookmark(int bookmarkId) {
-    final query = select(collections).join([
-      innerJoin(bookmarkCollections, bookmarkCollections.collectionId.equalsExp(collections.id)),
-    ])
-      ..where(bookmarkCollections.bookmarkId.equals(bookmarkId))
-      ..orderBy([OrderingTerm.asc(collections.name)]);
-    return query.map((row) => row.readTable(collections)).get();
-  }
-
-  Future<PhotoRecord?> _coverPhotoForBookmark(int bookmarkId) async {
-    final query = select(photos).join([innerJoin(bookmarkPhotos, bookmarkPhotos.photoId.equalsExp(photos.id))])
-      ..where(bookmarkPhotos.bookmarkId.equals(bookmarkId) & bookmarkPhotos.isCover.equals(true));
-    final row = await query.getSingleOrNull();
-    final photo = row?.readTable(photos);
-    return photo == null ? null : _resolvedPhoto(photo);
-  }
-
   Future<List<Tag>> _tagsForSavedView(int savedViewId) {
     final query = select(tags).join([innerJoin(savedViewTags, savedViewTags.tagId.equalsExp(tags.id))])
       ..where(savedViewTags.savedViewId.equals(savedViewId))
