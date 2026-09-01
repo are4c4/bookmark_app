@@ -37,8 +37,11 @@ class TagObjectBridge {
         await systemObjectStore.ensureSchema();
         await database.customStatement('''
           CREATE TABLE IF NOT EXISTS tag_object_links (
-            tag_id INTEGER PRIMARY KEY REFERENCES tags(id) ON DELETE CASCADE,
-            object_id INTEGER NOT NULL UNIQUE REFERENCES generic_records(id) ON DELETE CASCADE
+            workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+            tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+            object_id INTEGER NOT NULL REFERENCES generic_records(id) ON DELETE CASCADE,
+            PRIMARY KEY(workspace_id, tag_id),
+            UNIQUE(workspace_id, object_id)
           )
         ''');
       });
@@ -86,7 +89,7 @@ class TagObjectBridge {
     final tags = await database.select(database.tags).get();
 
     for (final tag in tags) {
-      final objectId = await _ensureObjectForTag(schema, tag);
+      final objectId = await _ensureObjectForTag(workspaceId, schema, tag);
       await objectStore.renameObject(objectId, tag.name);
       await objectStore.setPropertyValue(
         objectId: objectId,
@@ -101,11 +104,11 @@ class TagObjectBridge {
     }
 
     for (final tag in tags) {
-      final objectId = await objectIdForLegacyTag(tag.id);
+      final objectId = await objectIdForLegacyTag(workspaceId, tag.id);
       if (objectId == null) continue;
       final parentObjectId = tag.parentTagId == null
           ? null
-          : await objectIdForLegacyTag(tag.parentTagId!);
+          : await objectIdForLegacyTag(workspaceId, tag.parentTagId!);
       await objectStore.setRelation(
         objectId: objectId,
         property: schema.parentProperty,
@@ -114,34 +117,40 @@ class TagObjectBridge {
     }
   }
 
-  Future<int?> objectIdForLegacyTag(int tagId) async {
+  Future<int?> objectIdForLegacyTag(int workspaceId, int tagId) async {
     await ensureSchema();
     final row = await database.customSelect(
-      'SELECT object_id FROM tag_object_links WHERE tag_id = ? LIMIT 1',
-      variables: [Variable<int>(tagId)],
+      'SELECT object_id FROM tag_object_links '
+      'WHERE workspace_id = ? AND tag_id = ? LIMIT 1',
+      variables: [Variable<int>(workspaceId), Variable<int>(tagId)],
     ).getSingleOrNull();
     return row?.read<int>('object_id');
   }
 
-  Future<int?> legacyTagIdForObject(int objectId) async {
+  Future<int?> legacyTagIdForObject(int workspaceId, int objectId) async {
     await ensureSchema();
     final row = await database.customSelect(
-      'SELECT tag_id FROM tag_object_links WHERE object_id = ? LIMIT 1',
-      variables: [Variable<int>(objectId)],
+      'SELECT tag_id FROM tag_object_links '
+      'WHERE workspace_id = ? AND object_id = ? LIMIT 1',
+      variables: [Variable<int>(workspaceId), Variable<int>(objectId)],
     ).getSingleOrNull();
     return row?.read<int>('tag_id');
   }
 
-  Future<int> _ensureObjectForTag(TagObjectSchema schema, Tag tag) async {
-    final existing = await objectIdForLegacyTag(tag.id);
+  Future<int> _ensureObjectForTag(
+    int workspaceId,
+    TagObjectSchema schema,
+    Tag tag,
+  ) async {
+    final existing = await objectIdForLegacyTag(workspaceId, tag.id);
     if (existing != null) return existing;
     final objectId = await objectStore.createObject(
       objectTypeId: schema.objectType.id,
       title: tag.name,
     );
     await database.customStatement(
-      'INSERT INTO tag_object_links(tag_id, object_id) VALUES (?, ?)',
-      [tag.id, objectId],
+      'INSERT INTO tag_object_links(workspace_id, tag_id, object_id) VALUES (?, ?, ?)',
+      [workspaceId, tag.id, objectId],
     );
     return objectId;
   }
