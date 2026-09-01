@@ -733,6 +733,7 @@ class _PhotoManagementPageState extends State<PhotoManagementPage> {
           DatabasePageToolbar(
             title: '写真',
             searchHint: '写真を検索',
+            searchValue: _query,
             onSearchChanged: (value) => setState(() {
               _query = value;
               _markDatabaseViewChanged();

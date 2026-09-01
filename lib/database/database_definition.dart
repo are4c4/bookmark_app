@@ -116,6 +116,7 @@ class BuiltInDatabases {
       DatabasePropertyDefinition(key: 'createdAt', label: '登録日時', type: DatabasePropertyType.date, icon: Icons.schedule_outlined, defaultVisible: false),
     ],
     defaultLayout: 'list',
+    supportedLayouts: ['list'],
   );
 
   static const all = [bookmarks, people, photos, collections];

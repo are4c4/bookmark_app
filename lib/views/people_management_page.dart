@@ -973,6 +973,7 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
           DatabasePageToolbar(
             title: '人物',
             searchHint: '人物を検索',
+            searchValue: _query,
             onSearchChanged: (value) => setState(() {
               _query = value;
               _markDatabaseViewChanged();

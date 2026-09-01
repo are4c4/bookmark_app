@@ -1,13 +1,18 @@
+import 'dart:async';
+
 import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/material.dart';
 
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
+import '../data/database_view_store.dart';
+import '../database/database_definition.dart';
 import '../ui/ui_tokens.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/app_toast.dart';
 import '../widgets/database_create_tiles.dart';
 import '../widgets/database_page_toolbar.dart';
+import '../widgets/database_view_tabs.dart';
 import '../widgets/inline_rename_text.dart';
 import '../widgets/notion_inline_field.dart';
 import '../widgets/resizable_detail_pane.dart';
@@ -24,9 +29,59 @@ class CollectionManagementPage extends StatefulWidget {
 class _CollectionManagementPageState extends State<CollectionManagementPage> {
   int? _selectedCollectionId;
   String _query = '';
+  late final DatabaseViewStore _databaseViewStore;
+  DatabaseViewConfig? _activeDatabaseView;
+  int? _activeDatabaseViewId;
+  Timer? _viewSaveTimer;
 
   BookmarkRepository get repository => widget.repository;
   AppDatabase get database => repository.workspaceStore.database;
+
+  @override
+  void initState() {
+    super.initState();
+    _databaseViewStore = DatabaseViewStore(database);
+  }
+
+  @override
+  void dispose() {
+    _viewSaveTimer?.cancel();
+    super.dispose();
+  }
+
+  void _applyDatabaseView(DatabaseViewConfig view) {
+    setState(() {
+      _activeDatabaseView = view;
+      _activeDatabaseViewId = view.id;
+      _query = (view.filters['query'] as String?) ?? '';
+    });
+  }
+
+  void _markDatabaseViewChanged() {
+    final active = _activeDatabaseView;
+    if (active == null) return;
+    _viewSaveTimer?.cancel();
+    _viewSaveTimer = Timer(const Duration(milliseconds: 500), () async {
+      if (!mounted || _activeDatabaseViewId != active.id) return;
+      final next = active.copyWith(
+        layoutType: 'list',
+        filters: {'query': _query},
+      );
+      await _databaseViewStore.updateView(next);
+      if (mounted && _activeDatabaseViewId == active.id) _activeDatabaseView = next;
+    });
+  }
+
+  Widget _databaseViewTabs() => Padding(
+        padding: const EdgeInsets.fromLTRB(12, 2, 10, 0),
+        child: DatabaseViewTabs(
+          store: _databaseViewStore,
+          definition: BuiltInDatabases.collections,
+          workspaceId: repository.workspaceId,
+          activeViewId: _activeDatabaseViewId,
+          onSelected: _applyDatabaseView,
+        ),
+      );
 
   Future<void> _createInline(String name) async {
     final value = name.trim();
@@ -403,10 +458,15 @@ class _CollectionManagementPageState extends State<CollectionManagementPage> {
     return Scaffold(
       body: Column(
         children: [
+          _databaseViewTabs(),
           DatabasePageToolbar(
             title: 'コレクション',
             searchHint: 'コレクションを検索',
-            onSearchChanged: (value) => setState(() => _query = value),
+            searchValue: _query,
+            onSearchChanged: (value) => setState(() {
+              _query = value;
+              _markDatabaseViewChanged();
+            }),
           ),
           Expanded(
             child: StreamBuilder<List<CollectionRecord>>(
