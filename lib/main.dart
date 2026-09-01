@@ -82,7 +82,10 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
     try {
       final manager = await ProfileManager.load();
       final profile = manager.state.activeProfile;
-      final database = AppDatabase(databaseName: profile.databaseName);
+      final database = AppDatabase(
+        databaseName: profile.databaseName,
+        profileDirectoryPath: profile.directoryPath,
+      );
       final repository = await _openRepository(database, profile);
       if (!mounted) {
         await _lifecycleStore?.dispose();
@@ -120,7 +123,10 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
     _workspaceStore = null;
     _lifecycleStore = null;
     try {
-      final database = AppDatabase(databaseName: profile.databaseName);
+      final database = AppDatabase(
+        databaseName: profile.databaseName,
+        profileDirectoryPath: profile.directoryPath,
+      );
       final repository = await _openRepository(database, profile);
       await manager.setActiveProfile(profile);
       if (!mounted) {
@@ -136,7 +142,10 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
       });
     } catch (error) {
       try {
-        final fallbackDatabase = AppDatabase(databaseName: previous.databaseName);
+        final fallbackDatabase = AppDatabase(
+          databaseName: previous.databaseName,
+          profileDirectoryPath: previous.directoryPath,
+        );
         final fallbackRepository = await _openRepository(fallbackDatabase, previous);
         await manager.setActiveProfile(previous);
         if (!mounted) {
