@@ -65,6 +65,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
   bool _selectionMode = false;
   bool _externalDragging = false;
   String _statusFilter = '';
+  String _tagMatchMode = 'or';
   int _minRating = 0;
   String _query = '';
   int? _selectedBookmarkId;
@@ -118,12 +119,17 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
       }
       if (_selectedTagIds.isNotEmpty) {
         final bookmarkTagIds = bookmark.tags.map((tag) => tag.id).toSet();
-        final allowed = <int>{};
-        for (final id in _selectedTagIds) {
-          allowed.add(id);
-          if (_includeDescendants) allowed.addAll(_descendantIds(id, allTags));
-        }
-        if (!allowed.any(bookmarkTagIds.contains)) return false;
+        final selectedMatches = _selectedTagIds.map((id) {
+          final allowed = <int>{id};
+          if (_includeDescendants) {
+            allowed.addAll(_descendantIds(id, allTags));
+          }
+          return allowed.any(bookmarkTagIds.contains);
+        });
+        final matches = _tagMatchMode == 'and'
+            ? selectedMatches.every((value) => value)
+            : selectedMatches.any((value) => value);
+        if (!matches) return false;
       }
       return true;
     }).toList();
@@ -149,6 +155,8 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
       _statusFilter = '';
       _minRating = 0;
       _selectedTagIds.clear();
+      _tagMatchMode = 'or';
+      _includeDescendants = true;
       _personFilterId = null;
       _photoFilterId = null;
       _relationFilterLabel = null;
@@ -686,6 +694,10 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
       searchQuery: _query,
       favoritesOnly: _favoritesOnly,
       tagIds: _selectedTagIds,
+      tagMatchMode: _tagMatchMode,
+      includeDescendants: _includeDescendants,
+      personFilterId: _personFilterId,
+      photoFilterId: _photoFilterId,
       sortField: _sortKey,
       sortDirection: _sortAscending ? 'asc' : 'desc',
       visibleProperties: _visiblePropertiesString(),
@@ -709,7 +721,10 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
       searchQuery: _query,
       favoritesOnly: _favoritesOnly,
       tagIds: _selectedTagIds,
-      tagMatchMode: config.view.tagMatchMode,
+      tagMatchMode: _tagMatchMode,
+      includeDescendants: _includeDescendants,
+      personFilterId: _personFilterId,
+      photoFilterId: _photoFilterId,
       sortField: _sortKey,
       sortDirection: _sortAscending ? 'asc' : 'desc',
       visibleProperties: _visiblePropertiesString(),
@@ -736,6 +751,10 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
       _favoritesOnly = config.view.favoritesOnly;
       _statusFilter = config.view.statusFilter;
       _minRating = config.view.minRating;
+      _tagMatchMode = config.view.tagMatchMode;
+      _includeDescendants = config.view.includeDescendants;
+      _personFilterId = config.view.personFilterId;
+      _photoFilterId = config.view.photoFilterId;
       _selectedTagIds..clear()..addAll(config.tags.map((tag) => tag.id));
       _sortAscending = config.view.sortDirection == 'asc';
       _sortField = switch (config.view.sortField) {
@@ -751,8 +770,6 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
       _visibleProperties..clear()..addAll(base);
       _visiblePersonRoles..clear()..addAll(roles);
       _activeSavedViewId = config.view.id;
-      _personFilterId = null;
-      _photoFilterId = null;
       _relationFilterLabel = null;
     });
   }
