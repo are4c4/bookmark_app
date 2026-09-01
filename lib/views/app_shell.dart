@@ -68,6 +68,7 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
   var _sidebarCollapsed = false;
   var _loadingWorkspaces = true;
   List<WorkspaceInfo> _workspaces = const [];
+  final Map<int, Widget> _pageCache = {};
 
   @override
   void initState() {
@@ -78,13 +79,21 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
   @override
   void didUpdateWidget(covariant BookmarkAppShell oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.repository != widget.repository) _reloadWorkspaces();
+    if (oldWidget.repository != widget.repository) {
+      _pageCache.clear();
+      _reloadWorkspaces();
+    } else if (oldWidget.profileState != widget.profileState ||
+        oldWidget.themeMode != widget.themeMode) {
+      _pageCache.remove(9);
+      _pageCache.remove(10);
+    }
   }
 
   Future<void> _reloadWorkspaces() async {
     final workspaces = await widget.repository.listWorkspaces();
     if (!mounted) return;
     setState(() {
+      _pageCache.remove(0);
       _workspaces = workspaces;
       _loadingWorkspaces = false;
     });
@@ -565,6 +574,42 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
     );
   }
 
+  Widget _buildPage(int index, WorkspaceInfo? workspace) => switch (index) {
+        0 => BookmarkUnifiedStage1Page(
+            repository: widget.repository,
+            profileName: widget.profileState.activeProfile.name,
+            workspaceName: workspace?.name ?? 'Workspace',
+          ),
+        1 => GlobalSearchPage(repository: widget.repository),
+        2 => BookmarkLifecyclePage.inbox(repository: widget.repository),
+        3 => BookmarkLifecyclePage.archive(repository: widget.repository),
+        4 => BookmarkLifecyclePage.trash(repository: widget.repository),
+        5 => PhotoManagementPage(repository: widget.repository),
+        6 => TagManagementPage(repository: widget.repository),
+        7 => PeopleManagementPage(repository: widget.repository),
+        8 => CollectionManagementPage(repository: widget.repository),
+        9 => ProfileManagementPage(
+            state: widget.profileState,
+            onSwitch: widget.onSwitchProfile,
+            onCreate: widget.onCreateProfile,
+            onRename: widget.onRenameProfile,
+            onDuplicate: widget.onDuplicateProfile,
+            onDelete: widget.onDeleteProfile,
+          ),
+        _ => SettingsPage(
+            themeMode: widget.themeMode,
+            onThemeModeChanged: widget.onThemeModeChanged,
+          ),
+      };
+
+  List<Widget> _lazyPages(WorkspaceInfo? workspace) {
+    _pageCache.putIfAbsent(_index, () => _buildPage(_index, workspace));
+    return List<Widget>.generate(
+      11,
+      (index) => _pageCache[index] ?? const SizedBox.shrink(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final workspace = _activeWorkspace;
@@ -574,33 +619,10 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
         _sidebarCollapsed ? _collapsedSidebar() : _expandedSidebar(),
         VerticalDivider(width: 1, color: scheme.outlineVariant),
         Expanded(
-          child: IndexedStack(index: _index, children: [
-            BookmarkUnifiedStage1Page(
-              repository: widget.repository,
-              profileName: widget.profileState.activeProfile.name,
-              workspaceName: workspace?.name ?? 'Workspace',
-            ),
-            GlobalSearchPage(repository: widget.repository),
-            BookmarkLifecyclePage.inbox(repository: widget.repository),
-            BookmarkLifecyclePage.archive(repository: widget.repository),
-            BookmarkLifecyclePage.trash(repository: widget.repository),
-            PhotoManagementPage(repository: widget.repository),
-            TagManagementPage(repository: widget.repository),
-            PeopleManagementPage(repository: widget.repository),
-            CollectionManagementPage(repository: widget.repository),
-            ProfileManagementPage(
-              state: widget.profileState,
-              onSwitch: widget.onSwitchProfile,
-              onCreate: widget.onCreateProfile,
-              onRename: widget.onRenameProfile,
-              onDuplicate: widget.onDuplicateProfile,
-              onDelete: widget.onDeleteProfile,
-            ),
-            SettingsPage(
-              themeMode: widget.themeMode,
-              onThemeModeChanged: widget.onThemeModeChanged,
-            ),
-          ]),
+          child: IndexedStack(
+            index: _index,
+            children: _lazyPages(workspace),
+          ),
         ),
       ]),
     );
