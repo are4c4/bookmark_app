@@ -62,7 +62,6 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
   bool _sortAscending = false;
   bool _favoritesOnly = false;
   bool _includeDescendants = true;
-  bool _sidebarCollapsed = false;
   bool _selectionMode = false;
   bool _externalDragging = false;
   String _statusFilter = '';
@@ -72,16 +71,12 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
   int? _selectedBookmarkId;
   int? _personFilterId;
   int? _photoFilterId;
-  int? _activeSavedViewId;
   String? _relationFilterLabel;
   double _detailWidth = 430;
-  Timer? _savedViewSaveTimer;
   Timer? _databaseViewSaveTimer;
   late final DatabaseViewStore _databaseViewStore;
   int? _activeDatabaseViewId;
   DatabaseViewConfig? _activeDatabaseView;
-
-  bool get _legacyBookmarkSidebarEnabled => false;
 
   List<BookmarkStage1Property> get _orderedVisibleProperties =>
       orderedVisibleBookmarkProperties(_propertyOrder, _visibleProperties);
@@ -103,16 +98,9 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
 
   @override
   void dispose() {
-    _savedViewSaveTimer?.cancel();
     _databaseViewSaveTimer?.cancel();
     _searchController.dispose();
     super.dispose();
-  }
-
-  List<Tag> _childrenOf(int? parentId, List<Tag> tags) {
-    final result = tags.where((tag) => tag.parentTagId == parentId).toList();
-    result.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-    return result;
   }
 
   List<BookmarkItem> _applyFilters(
@@ -194,7 +182,6 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
       }
       _activeDatabaseViewId = view.id;
       _activeDatabaseView = view;
-      _activeSavedViewId = null;
       _relationFilterLabel = null;
     });
   }
@@ -250,15 +237,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
         ),
       );
 
-  void _markViewChanged() {
-    _scheduleDatabaseViewSave();
-    final id = _activeSavedViewId;
-    if (id == null) return;
-    _savedViewSaveTimer?.cancel();
-    _savedViewSaveTimer = Timer(const Duration(milliseconds: 550), () {
-      if (mounted && _activeSavedViewId == id) _updateActiveView();
-    });
-  }
+  void _markViewChanged() => _scheduleDatabaseViewSave();
 
   void _resetFilters() {
     _searchController.clear();
@@ -1007,36 +986,6 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
     );
   }
 
-  Future<String?> _askName(
-    String title, {
-    String initialValue = '',
-  }) async {
-    var value = initialValue;
-    return showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(title),
-        content: TextFormField(
-          initialValue: initialValue,
-          autofocus: true,
-          onChanged: (text) => value = text,
-          onFieldSubmitted: (_) =>
-              Navigator.pop(dialogContext, value.trim()),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('キャンセル'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, value.trim()),
-            child: const Text('保存'),
-          ),
-        ],
-      ),
-    );
-  }
-
   String get _layoutKey => switch (_viewType) {
         BookmarkStage1ViewType.gallery => 'gallery',
         BookmarkStage1ViewType.list => 'list',
@@ -1048,126 +997,6 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
         BookmarkStage1SortField.title => 'title',
         BookmarkStage1SortField.url => 'url',
       };
-
-  Future<void> _saveCurrentView() async {
-    final name = await _askName('ビューを保存');
-    if (name?.isNotEmpty != true) return;
-    final id = await widget.repository.createSavedView(
-      name: name!,
-      layoutType: _layoutKey,
-      searchQuery: _query,
-      favoritesOnly: _favoritesOnly,
-      tagIds: _selectedTagIds,
-      tagMatchMode: _tagMatchMode,
-      includeDescendants: _includeDescendants,
-      personFilterId: _personFilterId,
-      photoFilterId: _photoFilterId,
-      sortField: _sortKey,
-      sortDirection: _sortAscending ? 'asc' : 'desc',
-      visibleProperties: _visiblePropertiesString(),
-      statusFilter: _statusFilter,
-      minRating: _minRating,
-    );
-    if (mounted) setState(() => _activeSavedViewId = id);
-  }
-
-  Future<void> _updateActiveView() async {
-    final id = _activeSavedViewId;
-    if (id == null) return _saveCurrentView();
-    final views = await widget.repository.watchSavedViews().first;
-    final matches = views.where((config) => config.view.id == id);
-    if (matches.isEmpty) return;
-    final config = matches.first;
-    await widget.repository.updateSavedView(
-      id: id,
-      name: config.view.name,
-      layoutType: _layoutKey,
-      searchQuery: _query,
-      favoritesOnly: _favoritesOnly,
-      tagIds: _selectedTagIds,
-      tagMatchMode: _tagMatchMode,
-      includeDescendants: _includeDescendants,
-      personFilterId: _personFilterId,
-      photoFilterId: _photoFilterId,
-      sortField: _sortKey,
-      sortDirection: _sortAscending ? 'asc' : 'desc',
-      visibleProperties: _visiblePropertiesString(),
-      statusFilter: _statusFilter,
-      minRating: _minRating,
-    );
-  }
-
-  Future<void> _duplicateSavedView(SavedViewConfig config) async {
-    final name = await _askName(
-      'ビューを複製',
-      initialValue: '${config.view.name} のコピー',
-    );
-    if (name?.isNotEmpty != true) return;
-    final id = await widget.repository.duplicateSavedView(
-      config,
-      name: name!,
-    );
-    if (mounted) setState(() => _activeSavedViewId = id);
-  }
-
-  void _applySavedView(SavedViewConfig config) {
-    final tokens = config.view.visibleProperties
-        .split(',')
-        .map((value) => value.trim())
-        .where((value) => value.isNotEmpty)
-        .toList();
-    final base = <BookmarkStage1Property>{};
-    final roles = <String>{};
-    for (final key in tokens) {
-      if (key.startsWith('role:')) {
-        roles.add(key.substring(5));
-      } else {
-        final property = bookmarkPropertyFromKey(key);
-        if (property != null) base.add(property);
-      }
-    }
-    _searchController.text = config.view.searchQuery;
-    setState(() {
-      _query = config.view.searchQuery;
-      _favoritesOnly = config.view.favoritesOnly;
-      _statusFilter = config.view.statusFilter;
-      _minRating = config.view.minRating;
-      _tagMatchMode = config.view.tagMatchMode;
-      _includeDescendants = config.view.includeDescendants;
-      _personFilterId = config.view.personFilterId;
-      _photoFilterId = config.view.photoFilterId;
-      _selectedTagIds
-        ..clear()
-        ..addAll(config.tags.map((tag) => tag.id));
-      _sortAscending = config.view.sortDirection == 'asc';
-      _sortField = switch (config.view.sortField) {
-        'title' => BookmarkStage1SortField.title,
-        'url' => BookmarkStage1SortField.url,
-        _ => BookmarkStage1SortField.createdAt,
-      };
-      _viewType = switch (config.view.layoutType) {
-        'list' => BookmarkStage1ViewType.list,
-        'table' => BookmarkStage1ViewType.table,
-        _ => BookmarkStage1ViewType.gallery,
-      };
-      _propertyOrder = normalizeBookmarkPropertyOrder(tokens);
-      _visibleProperties
-        ..clear()
-        ..addAll(base);
-      _visiblePersonRoles
-        ..clear()
-        ..addAll(roles);
-      _activeSavedViewId = config.view.id;
-      _relationFilterLabel = null;
-    });
-  }
-
-  Future<void> _deleteSavedView(SavedViewConfig config) async {
-    await widget.repository.deleteSavedView(config.view.id);
-    if (mounted && _activeSavedViewId == config.view.id) {
-      setState(() => _activeSavedViewId = null);
-    }
-  }
 
   Future<Tag?> _createTagFromPicker(String name, Tag? parent) async {
     final id = await widget.repository.createTag(name, parent: parent);
@@ -1462,211 +1291,6 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
     );
   }
 
-  Widget _tagTree(List<Tag> allTags, int? parentId, int depth) {
-    final children = _childrenOf(parentId, allTags);
-    return Column(
-      children: children.map((tag) {
-        final nested = _childrenOf(tag.id, allTags);
-        return Column(children: [
-          Material(
-            color: Colors.transparent,
-            child: ListTile(
-              dense: true,
-              visualDensity: VisualDensity.compact,
-              contentPadding: EdgeInsets.only(
-                left: 8 + depth * 16,
-                right: 6,
-              ),
-              leading: Icon(
-                nested.isEmpty ? Icons.sell_outlined : Icons.folder_outlined,
-                size: 17,
-              ),
-              title: Text(
-                tag.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 13),
-              ),
-              selected: _selectedTagIds.length == 1 &&
-                  _selectedTagIds.contains(tag.id),
-              onTap: () => _filterByTag(tag),
-            ),
-          ),
-          if (nested.isNotEmpty) _tagTree(allTags, tag.id, depth + 1),
-        ]);
-      }).toList(),
-    );
-  }
-
-  Widget _savedViewsSection() => StreamBuilder<List<SavedViewConfig>>(
-        stream: widget.repository.watchSavedViews(),
-        builder: (context, snapshot) {
-          final views = snapshot.data ?? const <SavedViewConfig>[];
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(9, 10, 0, 3),
-                child: Row(children: [
-                  const Expanded(
-                    child: Text(
-                      '保存ビュー',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: '現在のビューを保存',
-                    visualDensity: VisualDensity.compact,
-                    iconSize: 16,
-                    onPressed: _saveCurrentView,
-                    icon: const Icon(Icons.add),
-                  ),
-                ]),
-              ),
-              ...views.map(
-                (config) => Material(
-                  color: Colors.transparent,
-                  child: ListTile(
-                    dense: true,
-                    visualDensity: VisualDensity.compact,
-                    contentPadding: const EdgeInsets.only(left: 8, right: 0),
-                    leading: Icon(
-                      config.view.layoutType == 'table'
-                          ? Icons.table_rows
-                          : config.view.layoutType == 'list'
-                              ? Icons.view_list
-                              : Icons.grid_view,
-                      size: 16,
-                    ),
-                    title: Text(
-                      config.view.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 12.5),
-                    ),
-                    selected: _activeSavedViewId == config.view.id,
-                    onTap: () => _applySavedView(config),
-                    trailing: PopupMenuButton<String>(
-                      iconSize: 15,
-                      onSelected: (value) {
-                        if (value == 'delete') _deleteSavedView(config);
-                        if (value == 'duplicate') _duplicateSavedView(config);
-                      },
-                      itemBuilder: (_) => const [
-                        PopupMenuItem(
-                          value: 'duplicate',
-                          child: Text('ビューを複製'),
-                        ),
-                        PopupMenuDivider(),
-                        PopupMenuItem(value: 'delete', child: Text('削除')),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
-      );
-
-  Widget _sidebar(List<Tag> allTags) {
-    final scheme = Theme.of(context).colorScheme;
-    if (_sidebarCollapsed) {
-      return Material(
-        color: scheme.surfaceContainerLow,
-        child: SizedBox(
-          width: 42,
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: IconButton(
-                tooltip: 'サイドバーを開く',
-                onPressed: () => setState(() => _sidebarCollapsed = false),
-                icon: const Icon(Icons.chevron_right, size: 19),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-    return Material(
-      color: scheme.surfaceContainerLow,
-      child: SizedBox(
-        width: 220,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(8, 6, 8, 20),
-          children: [
-            Align(
-              alignment: Alignment.centerRight,
-              child: IconButton(
-                tooltip: 'サイドバーを閉じる',
-                visualDensity: VisualDensity.compact,
-                onPressed: () => setState(() => _sidebarCollapsed = true),
-                icon: const Icon(Icons.chevron_left, size: 18),
-              ),
-            ),
-            Material(
-              color: Colors.transparent,
-              child: ListTile(
-                dense: true,
-                leading: const Icon(Icons.all_inbox_outlined, size: 18),
-                title: const Text('すべて'),
-                onTap: _resetFilters,
-              ),
-            ),
-            Material(
-              color: Colors.transparent,
-              child: ListTile(
-                dense: true,
-                leading: const Icon(Icons.star_outline, size: 18),
-                title: const Text('お気に入り'),
-                selected: _favoritesOnly,
-                onTap: () {
-                  _searchController.clear();
-                  setState(() {
-                    _query = '';
-                    _favoritesOnly = true;
-                    _selectedTagIds.clear();
-                    _personFilterId = null;
-                    _photoFilterId = null;
-                    _relationFilterLabel = null;
-                    _markViewChanged();
-                  });
-                },
-              ),
-            ),
-            _savedViewsSection(),
-            const Divider(),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(9, 8, 0, 4),
-              child: Row(children: [
-                const Expanded(
-                  child: Text(
-                    'タグ',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                  ),
-                ),
-                Transform.scale(
-                  scale: .78,
-                  child: Switch(
-                    value: _includeDescendants,
-                    onChanged: (value) =>
-                        setState(() => _includeDescendants = value),
-                  ),
-                ),
-              ]),
-            ),
-            _tagTree(allTags, null, 0),
-          ],
-        ),
-      ),
-    );
-  }
-
   String? _extractUrl(String? rawText, List<String> paths) {
     final raw = rawText?.trim() ?? '';
     final match = RegExp(r'https?://[^\s<>\"]+').firstMatch(raw);
@@ -1820,14 +1444,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
                     .firstOrNull;
                 return LayoutBuilder(builder: (context, constraints) {
                   final wantsDetail = selected != null && !_selectionMode;
-                  // Database navigation now lives in the Notion-style
-                  // view tabs above the toolbar, avoiding a second sidebar.
-                  final showSidebar = _legacyBookmarkSidebarEnabled;
-                  final fixedSidebarWidth = showSidebar
-                      ? (_sidebarCollapsed ? 43.0 : 221.0)
-                      : 0.0;
-                  final availableForDetail =
-                      constraints.maxWidth - fixedSidebarWidth - 260;
+                  final availableForDetail = constraints.maxWidth - 260;
                   final showDetail =
                       wantsDetail && availableForDetail >= 320;
                   final maxDetailWidth = showDetail
@@ -1839,13 +1456,6 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
 
                   return Stack(children: [
                     Row(children: [
-                      if (showSidebar) ...[
-                        _sidebar(tags),
-                        VerticalDivider(
-                          width: 1,
-                          color: scheme.outlineVariant,
-                        ),
-                      ],
                       Expanded(
                         child: Column(children: [
                           _databaseViewTabs(),
