@@ -110,6 +110,12 @@ void main() {
     final targetId = await database.createTag('Target');
     final childId =
         await database.createTag('Source child', parentTagId: sourceId);
+    final grandchildId = await database.createTag(
+      'Source grandchild',
+      parentTagId: childId,
+    );
+    final targetGroupId = await store.createGroup('Target group');
+    await store.setTagGroup(targetId, targetGroupId);
     final bookmarkId = await database.addBookmark(
       url: 'https://merge.example',
       title: 'Merge',
@@ -157,6 +163,8 @@ void main() {
       isNull,
     );
     expect((await tag(childId)).parentTagId, targetId);
+    expect((await tag(childId)).groupId, targetGroupId);
+    expect((await tag(grandchildId)).groupId, targetGroupId);
     final relations = await (database.select(database.bookmarkTags)
           ..where((row) => row.bookmarkId.equals(bookmarkId)))
         .get();
@@ -187,7 +195,7 @@ void main() {
     await store.saveExpansionState(
       TagTreeExpansionState(
         tagIds: {id, 999},
-        groupIds: {groupId, 999},
+        groupIds: {groupId, -1, 999},
         hasPersistedValue: true,
       ),
     );
@@ -196,7 +204,7 @@ void main() {
 
     expect(state.hasPersistedValue, isTrue);
     expect(state.tagIds, {id});
-    expect(state.groupIds, {groupId});
+    expect(state.groupIds, {groupId, -1});
   });
 
   test('unused parent with a used descendant is protected', () async {
