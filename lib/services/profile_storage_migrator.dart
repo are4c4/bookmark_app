@@ -17,20 +17,31 @@ class ProfileStorageMigrator {
     final photos = await database.select(database.photos).get();
 
     for (final photo in photos) {
-      if (_isInside(photo.path, targetDir.path)) continue;
+      final resolvedPath = database.resolveStoredPath(photo.path);
+      if (_isInside(resolvedPath, targetDir.path)) {
+        final relativePath = database.toStoredPath(resolvedPath);
+        if (relativePath != photo.path) {
+          await (database.update(database.photos)
+                ..where((row) => row.id.equals(photo.id)))
+              .write(PhotosCompanion(path: Value(relativePath)));
+        }
+        continue;
+      }
 
-      final source = File(photo.path);
+      final source = File(resolvedPath);
       if (!await source.exists()) continue;
 
-      final fileName = _fileName(photo.path);
+      final fileName = _fileName(resolvedPath);
       final targetPath = '${targetDir.path}/${photo.id}_$fileName';
       final target = File(targetPath);
       if (!await target.exists()) {
         await source.copy(targetPath);
       }
 
-      await (database.update(database.photos)..where((row) => row.id.equals(photo.id))).write(
-        PhotosCompanion(path: Value(targetPath)),
+      await (database.update(database.photos)
+            ..where((row) => row.id.equals(photo.id)))
+          .write(
+        PhotosCompanion(path: Value(database.toStoredPath(targetPath))),
       );
     }
   }
