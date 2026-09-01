@@ -10,8 +10,12 @@ enum AutoOrganizeMatchField {
   final String storageValue;
   final String label;
 
-  static AutoOrganizeMatchField fromStorage(String value) =>
-      values.where((field) => field.storageValue == value).firstOrNull ?? all;
+  static AutoOrganizeMatchField fromStorage(String value) {
+    for (final field in values) {
+      if (field.storageValue == value) return field;
+    }
+    return all;
+  }
 }
 
 class AutoOrganizeRule {
