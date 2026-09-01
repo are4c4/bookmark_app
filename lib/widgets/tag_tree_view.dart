@@ -29,6 +29,14 @@ class TagTreeView extends StatefulWidget {
     required this.onShowAggregate,
     required this.onDragStarted,
     required this.onDragEnded,
+    this.onAddToGroup,
+    this.onAddChild,
+    this.onGroupMenuAction,
+    this.creatingUnderKey,
+    this.createController,
+    this.createError,
+    this.onSubmitCreate,
+    this.onCancelCreate,
     this.editingTagId,
     this.editController,
     this.editError,
@@ -42,6 +50,9 @@ class TagTreeView extends StatefulWidget {
   final int? editingTagId;
   final TextEditingController? editController;
   final String? editError;
+  final String? creatingUnderKey;
+  final TextEditingController? createController;
+  final String? createError;
   final ValueChanged<Tag> onSelectTag;
   final ValueChanged<String> onFocusRow;
   final ValueChanged<int?> onToggleGroup;
@@ -57,6 +68,11 @@ class TagTreeView extends StatefulWidget {
   final ValueChanged<Tag> onShowAggregate;
   final ValueChanged<Tag> onDragStarted;
   final VoidCallback onDragEnded;
+  final ValueChanged<int?>? onAddToGroup;
+  final ValueChanged<Tag>? onAddChild;
+  final void Function(int? groupId, String action)? onGroupMenuAction;
+  final VoidCallback? onSubmitCreate;
+  final VoidCallback? onCancelCreate;
 
   @override
   State<TagTreeView> createState() => _TagTreeViewState();
@@ -65,6 +81,7 @@ class TagTreeView extends StatefulWidget {
 class _TagTreeViewState extends State<TagTreeView> {
   Timer? _expandTimer;
   String? _dropTargetKey;
+  String? _hoveredKey;
   bool _dropAllowed = false;
 
   @override
@@ -138,16 +155,80 @@ class _TagTreeViewState extends State<TagTreeView> {
         ),
       );
     }
+
+    final rows = <({TagTreeRow row, bool createRow})>[];
+    for (final row in widget.model.rows) {
+      rows.add((row: row, createRow: false));
+      if (widget.creatingUnderKey == row.focusKey) {
+        rows.add((row: row, createRow: true));
+      }
+    }
+
     return ListView.builder(
       padding: const EdgeInsets.only(bottom: UiTokens.space24),
-      itemCount: widget.model.rows.length,
+      itemCount: rows.length,
       itemExtent: 38,
       itemBuilder: (context, index) {
-        final row = widget.model.rows[index];
+        final entry = rows[index];
+        if (entry.createRow) return _inlineCreateRow(entry.row);
+        final row = entry.row;
         return row.kind == TagTreeRowKind.group
             ? _groupRow(row)
             : _tagRow(row);
       },
+    );
+  }
+
+  Widget _inlineCreateRow(TagTreeRow parentRow) {
+    final scheme = Theme.of(context).colorScheme;
+    final indent = parentRow.kind == TagTreeRowKind.group
+        ? UiTokens.space8 + 26
+        : UiTokens.space8 + (parentRow.depth + 1) * 20 + 20;
+    return Container(
+      key: ValueKey('inline-create:${parentRow.focusKey}'),
+      height: 38,
+      padding: EdgeInsets.only(left: indent, right: UiTokens.space8),
+      color: scheme.surfaceContainerLowest,
+      child: Row(
+        children: [
+          const Icon(Icons.sell_outlined, size: UiTokens.iconSmall),
+          const SizedBox(width: UiTokens.space6),
+          Expanded(
+            child: TextField(
+              controller: widget.createController,
+              autofocus: true,
+              style: TextStyle(
+                fontSize: UiTokens.textMd,
+                color: scheme.onSurface,
+              ),
+              decoration: InputDecoration(
+                hintText: '新しいタグ名',
+                errorText: widget.createError,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: UiTokens.space6,
+                  vertical: UiTokens.space6,
+                ),
+              ),
+              onSubmitted: (_) => widget.onSubmitCreate?.call(),
+            ),
+          ),
+          IconButton(
+            tooltip: '追加',
+            visualDensity: VisualDensity.compact,
+            iconSize: UiTokens.iconSmall,
+            onPressed: widget.onSubmitCreate,
+            icon: const Icon(Icons.check),
+          ),
+          IconButton(
+            tooltip: 'キャンセル',
+            visualDensity: VisualDensity.compact,
+            iconSize: UiTokens.iconSmall,
+            onPressed: widget.onCancelCreate,
+            icon: const Icon(Icons.close),
+          ),
+        ],
+      ),
     );
   }
 
@@ -165,71 +246,110 @@ class _TagTreeViewState extends State<TagTreeView> {
         builder: (context, candidates, rejected) {
           final scheme = Theme.of(context).colorScheme;
           final dropping = _dropTargetKey == row.focusKey;
-          return Semantics(
-            button: true,
-            label: '${row.label}グループ、'
-                '${row.expanded ? '展開中' : '折りたたみ中'}',
-            child: InkWell(
-              onTap: () {
-                widget.onFocusRow(row.focusKey);
-                widget.onToggleGroup(row.groupId);
-              },
-              child: Container(
-                height: 38,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: UiTokens.space8,
-                ),
-                decoration: BoxDecoration(
-                  color: dropping
-                      ? (_dropAllowed
-                          ? scheme.primaryContainer
-                          : scheme.errorContainer)
-                      : widget.focusedKey == row.focusKey
-                          ? scheme.surfaceContainerHigh
-                          : null,
-                  border: dropping
-                      ? Border.all(
-                          color: _dropAllowed
-                              ? scheme.primary
-                              : scheme.error,
+          final showActions = _hoveredKey == row.focusKey ||
+              widget.focusedKey == row.focusKey ||
+              widget.creatingUnderKey == row.focusKey;
+          return MouseRegion(
+            onEnter: (_) => setState(() => _hoveredKey = row.focusKey),
+            onExit: (_) {
+              if (_hoveredKey == row.focusKey) {
+                setState(() => _hoveredKey = null);
+              }
+            },
+            child: Semantics(
+              button: true,
+              label: '${row.label}グループ、'
+                  '${row.expanded ? '展開中' : '折りたたみ中'}',
+              child: InkWell(
+                onTap: () {
+                  widget.onFocusRow(row.focusKey);
+                  widget.onToggleGroup(row.groupId);
+                },
+                child: Container(
+                  height: 38,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: UiTokens.space8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: dropping
+                        ? (_dropAllowed
+                            ? scheme.primaryContainer
+                            : scheme.errorContainer)
+                        : widget.focusedKey == row.focusKey
+                            ? scheme.surfaceContainerHigh
+                            : null,
+                    border: dropping
+                        ? Border.all(
+                            color: _dropAllowed
+                                ? scheme.primary
+                                : scheme.error,
+                          )
+                        : null,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        row.expanded
+                            ? Icons.expand_more
+                            : Icons.chevron_right,
+                        size: UiTokens.iconSmall,
+                      ),
+                      const SizedBox(width: UiTokens.space4),
+                      const Icon(
+                        Icons.category_outlined,
+                        size: UiTokens.iconNormal,
+                      ),
+                      const SizedBox(width: UiTokens.space6),
+                      Expanded(
+                        child: Text(
+                          row.label,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: UiTokens.textMd,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      if (dropping)
+                        Text(
+                          _dropAllowed ? '最上位へ移動' : '移動不可',
+                          style: TextStyle(
+                            fontSize: UiTokens.textXs,
+                            color: _dropAllowed
+                                ? scheme.primary
+                                : scheme.error,
+                          ),
                         )
-                      : null,
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      row.expanded
-                          ? Icons.expand_more
-                          : Icons.chevron_right,
-                      size: UiTokens.iconSmall,
-                    ),
-                    const SizedBox(width: UiTokens.space4),
-                    const Icon(
-                      Icons.category_outlined,
-                      size: UiTokens.iconNormal,
-                    ),
-                    const SizedBox(width: UiTokens.space6),
-                    Expanded(
-                      child: Text(
-                        row.label,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: UiTokens.textMd,
-                          fontWeight: FontWeight.w600,
+                      else if (showActions) ...[
+                        IconButton(
+                          key: ValueKey('add-group-tag:${row.groupId ?? -1}'),
+                          tooltip: '${row.label}にタグを追加',
+                          visualDensity: VisualDensity.compact,
+                          iconSize: UiTokens.iconSmall,
+                          onPressed: widget.onAddToGroup == null
+                              ? null
+                              : () => widget.onAddToGroup!(row.groupId),
+                          icon: const Icon(Icons.add),
                         ),
-                      ),
-                    ),
-                    if (dropping)
-                      Text(
-                        _dropAllowed ? '最上位へ移動' : '移動不可',
-                        style: TextStyle(
-                          fontSize: UiTokens.textXs,
-                          color: _dropAllowed
-                              ? scheme.primary
-                              : scheme.error,
+                        SizedBox(
+                          width: 30,
+                          child: PopupMenuButton<String>(
+                            tooltip: 'グループ操作',
+                            padding: EdgeInsets.zero,
+                            iconSize: UiTokens.iconNormal,
+                            onSelected: (action) => widget.onGroupMenuAction
+                                ?.call(row.groupId, action),
+                            itemBuilder: (_) => const [
+                              PopupMenuItem(
+                                value: 'add',
+                                child: Text('タグを追加'),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                  ],
+                      ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -278,186 +398,217 @@ class _TagTreeViewState extends State<TagTreeView> {
           final dropping = _dropTargetKey == row.focusKey;
           final editing = widget.editingTagId == tag.id;
           final showSelection = widget.multiSelectedIds.isNotEmpty;
+          final showAdd = !showSelection &&
+              (_hoveredKey == row.focusKey ||
+                  selected ||
+                  focused ||
+                  widget.creatingUnderKey == row.focusKey);
           final style = TextStyle(
             fontSize: UiTokens.textMd,
             fontWeight: FontWeight.w400,
             color: scheme.onSurface,
           );
-          return Semantics(
-            selected: selected,
-            label: '${tag.name}、直接${row.directCount}件、'
-                '子孫を含む${row.aggregateCount}件',
-            child: GestureDetector(
-              onDoubleTap: () => widget.onBeginRename(tag),
-              child: InkWell(
-                onTap: () {
-                  widget.onFocusRow(row.focusKey);
-                  widget.onSelectTag(tag);
-                },
-                child: Container(
-                  height: 38,
-                  padding: EdgeInsets.only(
-                    left: UiTokens.space8 + row.depth * 20,
-                    right: UiTokens.space4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: dropping
-                        ? (_dropAllowed
-                            ? scheme.primaryContainer
-                            : scheme.errorContainer)
-                        : selected
-                            ? scheme.secondaryContainer
-                            : focused
-                                ? scheme.surfaceContainerHigh
-                                : null,
-                    border: focused
-                        ? Border(
-                            left: BorderSide(
-                              color: scheme.primary,
-                              width: 2,
+          return MouseRegion(
+            onEnter: (_) => setState(() => _hoveredKey = row.focusKey),
+            onExit: (_) {
+              if (_hoveredKey == row.focusKey) {
+                setState(() => _hoveredKey = null);
+              }
+            },
+            child: Semantics(
+              selected: selected,
+              label: '${tag.name}、直接${row.directCount}件、'
+                  '子孫を含む${row.aggregateCount}件',
+              child: GestureDetector(
+                onDoubleTap: () => widget.onBeginRename(tag),
+                child: InkWell(
+                  onTap: () {
+                    widget.onFocusRow(row.focusKey);
+                    widget.onSelectTag(tag);
+                  },
+                  child: Container(
+                    height: 38,
+                    padding: EdgeInsets.only(
+                      left: UiTokens.space8 + row.depth * 20,
+                      right: UiTokens.space4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: dropping
+                          ? (_dropAllowed
+                              ? scheme.primaryContainer
+                              : scheme.errorContainer)
+                          : selected
+                              ? scheme.secondaryContainer
+                              : focused
+                                  ? scheme.surfaceContainerHigh
+                                  : null,
+                      border: focused
+                          ? Border(
+                              left: BorderSide(
+                                color: scheme.primary,
+                                width: 2,
+                              ),
+                            )
+                          : null,
+                    ),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 20,
+                          child: row.hasChildren
+                              ? IconButton(
+                                  padding: EdgeInsets.zero,
+                                  visualDensity: VisualDensity.compact,
+                                  tooltip: row.expanded ? '折りたたむ' : '展開する',
+                                  onPressed: () => widget.onToggleTag(tag),
+                                  icon: Icon(
+                                    row.expanded
+                                        ? Icons.expand_more
+                                        : Icons.chevron_right,
+                                    size: UiTokens.iconSmall,
+                                  ),
+                                )
+                              : const SizedBox.shrink(),
+                        ),
+                        if (showSelection)
+                          SizedBox(
+                            width: 28,
+                            child: Checkbox(
+                              value: widget.multiSelectedIds.contains(tag.id),
+                              onChanged: (_) =>
+                                  widget.onToggleMultiSelect(tag),
+                              visualDensity: VisualDensity.compact,
                             ),
                           )
-                        : null,
-                  ),
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: 20,
-                        child: row.hasChildren
-                            ? IconButton(
-                                padding: EdgeInsets.zero,
-                                visualDensity: VisualDensity.compact,
-                                tooltip: row.expanded ? '折りたたむ' : '展開する',
-                                onPressed: () => widget.onToggleTag(tag),
-                                icon: Icon(
-                                  row.expanded
-                                      ? Icons.expand_more
-                                      : Icons.chevron_right,
-                                  size: UiTokens.iconSmall,
-                                ),
-                              )
-                            : const SizedBox.shrink(),
-                      ),
-                      if (showSelection)
-                        SizedBox(
-                          width: 28,
-                          child: Checkbox(
-                            value: widget.multiSelectedIds.contains(tag.id),
-                            onChanged: (_) =>
-                                widget.onToggleMultiSelect(tag),
-                            visualDensity: VisualDensity.compact,
+                        else ...[
+                          const Icon(
+                            Icons.sell_outlined,
+                            size: UiTokens.iconSmall,
                           ),
-                        )
-                      else ...[
-                        const Icon(
-                          Icons.sell_outlined,
-                          size: UiTokens.iconSmall,
-                        ),
-                        const SizedBox(width: UiTokens.space6),
-                      ],
-                      Expanded(
-                        child: editing
-                            ? TextField(
-                                controller: widget.editController,
-                                autofocus: true,
-                                style: style,
-                                decoration: InputDecoration(
-                                  isDense: true,
-                                  errorText: widget.editError,
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: UiTokens.space4,
-                                    vertical: UiTokens.space6,
+                          const SizedBox(width: UiTokens.space6),
+                        ],
+                        Expanded(
+                          child: editing
+                              ? TextField(
+                                  controller: widget.editController,
+                                  autofocus: true,
+                                  style: style,
+                                  decoration: InputDecoration(
+                                    isDense: true,
+                                    errorText: widget.editError,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: UiTokens.space4,
+                                      vertical: UiTokens.space6,
+                                    ),
                                   ),
+                                  onSubmitted: (_) =>
+                                      widget.onSubmitRename(tag),
+                                  onTapOutside: (_) =>
+                                      widget.onSubmitRename(tag),
+                                  onEditingComplete: () {},
+                                )
+                              : RichText(
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  text: _highlight(tag.name, style),
                                 ),
-                                onSubmitted: (_) =>
-                                    widget.onSubmitRename(tag),
-                                onTapOutside: (_) =>
-                                    widget.onSubmitRename(tag),
-                                onEditingComplete: () {},
-                              )
-                            : RichText(
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                text: _highlight(tag.name, style),
+                        ),
+                        if (dropping)
+                          Padding(
+                            padding: const EdgeInsets.only(
+                              right: UiTokens.space8,
+                            ),
+                            child: Text(
+                              _dropAllowed ? '子にする' : '移動不可',
+                              style: TextStyle(
+                                fontSize: UiTokens.textXs,
+                                color: _dropAllowed
+                                    ? scheme.primary
+                                    : scheme.error,
                               ),
-                      ),
-                      if (dropping)
-                        Padding(
-                          padding: const EdgeInsets.only(
-                            right: UiTokens.space8,
-                          ),
-                          child: Text(
-                            _dropAllowed ? '子にする' : '移動不可',
-                            style: TextStyle(
-                              fontSize: UiTokens.textXs,
-                              color: _dropAllowed
-                                  ? scheme.primary
-                                  : scheme.error,
+                            ),
+                          )
+                        else ...[
+                          InkWell(
+                            onTap: () => widget.onShowDirect(tag),
+                            child: Text(
+                              '${row.directCount}',
+                              style: TextStyle(
+                                fontSize: UiTokens.textSm,
+                                color: scheme.onSurfaceVariant,
+                              ),
                             ),
                           ),
-                        )
-                      else ...[
-                        InkWell(
-                          onTap: () => widget.onShowDirect(tag),
-                          child: Text(
-                            '${row.directCount}',
+                          Text(
+                            ' / ',
                             style: TextStyle(
                               fontSize: UiTokens.textSm,
                               color: scheme.onSurfaceVariant,
                             ),
                           ),
-                        ),
-                        Text(
-                          ' / ',
-                          style: TextStyle(
-                            fontSize: UiTokens.textSm,
-                            color: scheme.onSurfaceVariant,
-                          ),
-                        ),
-                        InkWell(
-                          onTap: () => widget.onShowAggregate(tag),
-                          child: Text(
-                            '子孫含む${row.aggregateCount}',
-                            style: TextStyle(
-                              fontSize: UiTokens.textSm,
-                              color: scheme.onSurfaceVariant,
+                          InkWell(
+                            onTap: () => widget.onShowAggregate(tag),
+                            child: Text(
+                              '子孫含む${row.aggregateCount}',
+                              style: TextStyle(
+                                fontSize: UiTokens.textSm,
+                                color: scheme.onSurfaceVariant,
+                              ),
                             ),
                           ),
-                        ),
-                        SizedBox(
-                          width: 34,
-                          child: PopupMenuButton<String>(
-                            tooltip: 'タグ操作',
-                            padding: EdgeInsets.zero,
-                            iconSize: UiTokens.iconNormal,
-                            onSelected: (action) =>
-                                widget.onMenuAction(tag, action),
-                            itemBuilder: (_) => const [
-                              PopupMenuItem(
-                                value: 'rename',
-                                child: Text('名前変更'),
-                              ),
-                              PopupMenuItem(
-                                value: 'move',
-                                child: Text('親・グループを変更'),
-                              ),
-                              PopupMenuItem(
-                                value: 'root',
-                                child: Text('最上位へ移動'),
-                              ),
-                              PopupMenuItem(
-                                value: 'merge',
-                                child: Text('統合'),
-                              ),
-                              PopupMenuItem(
-                                value: 'delete',
-                                child: Text('削除'),
-                              ),
-                            ],
+                          if (showAdd)
+                            IconButton(
+                              key: ValueKey('add-child-tag:${tag.id}'),
+                              tooltip: '「${tag.name}」に子タグを追加',
+                              visualDensity: VisualDensity.compact,
+                              iconSize: UiTokens.iconSmall,
+                              onPressed: widget.onAddChild == null
+                                  ? null
+                                  : () => widget.onAddChild!(tag),
+                              icon: const Icon(Icons.add),
+                            )
+                          else
+                            const SizedBox(width: 28),
+                          SizedBox(
+                            width: 34,
+                            child: PopupMenuButton<String>(
+                              tooltip: 'タグ操作',
+                              padding: EdgeInsets.zero,
+                              iconSize: UiTokens.iconNormal,
+                              onSelected: (action) =>
+                                  widget.onMenuAction(tag, action),
+                              itemBuilder: (_) => const [
+                                PopupMenuItem(
+                                  value: 'add-child',
+                                  child: Text('子タグを追加'),
+                                ),
+                                PopupMenuDivider(),
+                                PopupMenuItem(
+                                  value: 'rename',
+                                  child: Text('名前変更'),
+                                ),
+                                PopupMenuItem(
+                                  value: 'move',
+                                  child: Text('親・グループを変更'),
+                                ),
+                                PopupMenuItem(
+                                  value: 'root',
+                                  child: Text('最上位へ移動'),
+                                ),
+                                PopupMenuItem(
+                                  value: 'merge',
+                                  child: Text('統合'),
+                                ),
+                                PopupMenuItem(
+                                  value: 'delete',
+                                  child: Text('削除'),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
               ),
