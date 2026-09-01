@@ -33,6 +33,17 @@ class NotionBookmarkCard extends StatefulWidget {
     required this.onToggleFavorite,
     required this.menu,
     this.personRoleGroups = const {},
+    this.propertyOrder = const [
+      'url',
+      'status',
+      'rating',
+      'tags',
+      'people',
+      'favorite',
+      'description',
+      'createdAt',
+      'history',
+    ],
   });
 
   final BookmarkItem bookmark;
@@ -52,6 +63,7 @@ class NotionBookmarkCard extends StatefulWidget {
   final VoidCallback onToggleFavorite;
   final Widget menu;
   final Map<String, List<Person>> personRoleGroups;
+  final List<String> propertyOrder;
 
   @override
   State<NotionBookmarkCard> createState() => _NotionBookmarkCardState();
@@ -143,6 +155,87 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
     );
   }
 
+  List<Widget> _orderedProperties() {
+    final bookmark = widget.bookmark;
+    final scheme = Theme.of(context).colorScheme;
+    final widgets = <Widget>[];
+
+    void add(Widget child, {double top = 8}) {
+      widgets
+        ..add(SizedBox(height: top))
+        ..add(child);
+    }
+
+    for (final key in widget.propertyOrder) {
+      switch (key) {
+        case 'image':
+          break;
+        case 'url':
+          if (widget.showUrl) {
+            add(
+              Text(
+                _compactUrl(bookmark.url),
+                style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              top: 5,
+            );
+          }
+        case 'status':
+          if (widget.showStatus) {
+            add(_chip(_statusLabels[bookmark.status] ?? bookmark.status, icon: Icons.flag_outlined));
+          }
+        case 'rating':
+          if (widget.showRating && bookmark.rating > 0) {
+            add(Text('★' * bookmark.rating, style: const TextStyle(fontSize: 13, color: Color(0xFFB8860B), letterSpacing: 1)), top: 7);
+          }
+        case 'tags':
+          if (widget.showTags && bookmark.tags.isNotEmpty) {
+            add(Wrap(spacing: 5, runSpacing: 5, children: bookmark.tags.map((tag) => _chip(tag.name)).toList()), top: 9);
+          }
+        case 'people':
+          if (widget.showPeople && bookmark.people.isNotEmpty) {
+            add(Wrap(spacing: 5, runSpacing: 5, children: bookmark.people.map((person) => _chip(person.name, icon: Icons.person_outline)).toList()), top: 7);
+          }
+        case 'favorite':
+          if (widget.showFavorite && bookmark.favorite) {
+            add(_chip('お気に入り', icon: Icons.star), top: 7);
+          }
+        case 'description':
+          if (widget.showDescription && bookmark.description?.trim().isNotEmpty == true) {
+            add(Text(bookmark.description!, style: TextStyle(fontSize: 12.5, height: 1.5, color: scheme.onSurfaceVariant)), top: 10);
+          }
+        case 'createdAt':
+          if (widget.showCreatedAt) {
+            add(Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.schedule, size: 12.5, color: scheme.onSurfaceVariant.withValues(alpha: .65)), const SizedBox(width: 4), Text(_date(bookmark.createdAt), style: TextStyle(fontSize: 11.5, color: scheme.onSurfaceVariant.withValues(alpha: .75))]), top: 10);
+          }
+        case 'history':
+          if (widget.showHistory) {
+            add(Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.history, size: 12.5, color: scheme.onSurfaceVariant.withValues(alpha: .65)), const SizedBox(width: 4), Text('${bookmark.openCount}回', style: TextStyle(fontSize: 11.5, color: scheme.onSurfaceVariant.withValues(alpha: .75))]), top: 7);
+          }
+        default:
+          if (key.startsWith('role:')) {
+            final role = key.substring(5);
+            final people = widget.personRoleGroups[role] ?? const <Person>[];
+            if (people.isNotEmpty) {
+              add(
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(role, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: scheme.onSurfaceVariant)),
+                    const SizedBox(height: 4),
+                    Wrap(spacing: 5, runSpacing: 5, children: people.map((person) => _chip(person.name, icon: Icons.person_outline)).toList()),
+                  ],
+                ),
+              );
+            }
+          }
+      }
+    }
+    return widgets;
+  }
+
   @override
   Widget build(BuildContext context) {
     final bookmark = widget.bookmark;
@@ -201,26 +294,7 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
                         ),
                       ),
                   ]),
-                  if (widget.showUrl) ...[const SizedBox(height: 5), Text(_compactUrl(bookmark.url), style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant), maxLines: 1, overflow: TextOverflow.ellipsis)],
-                  if (widget.showStatus) ...[const SizedBox(height: 8), _chip(_statusLabels[bookmark.status] ?? bookmark.status, icon: Icons.flag_outlined)],
-                  if (widget.showRating && bookmark.rating > 0) ...[const SizedBox(height: 7), Text('★' * bookmark.rating, style: const TextStyle(fontSize: 13, color: Color(0xFFB8860B), letterSpacing: 1))],
-                  if (widget.showTags && bookmark.tags.isNotEmpty) ...[const SizedBox(height: 9), Wrap(spacing: 5, runSpacing: 5, children: bookmark.tags.map((tag) => _chip(tag.name)).toList())],
-                  if (widget.showPeople && bookmark.people.isNotEmpty) ...[const SizedBox(height: 7), Wrap(spacing: 5, runSpacing: 5, children: bookmark.people.map((person) => _chip(person.name, icon: Icons.person_outline)).toList())],
-                  ...widget.personRoleGroups.entries.expand((entry) sync* {
-                    if (entry.value.isEmpty) return;
-                    yield const SizedBox(height: 8);
-                    yield Text(entry.key, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: scheme.onSurfaceVariant));
-                    yield const SizedBox(height: 4);
-                    yield Wrap(spacing: 5, runSpacing: 5, children: entry.value.map((person) => _chip(person.name, icon: Icons.person_outline)).toList());
-                  }),
-                  if (widget.showDescription && bookmark.description?.trim().isNotEmpty == true) ...[const SizedBox(height: 10), Text(bookmark.description!, style: TextStyle(fontSize: 12.5, height: 1.5, color: scheme.onSurfaceVariant))],
-                  if (widget.showCreatedAt || widget.showHistory) ...[
-                    const SizedBox(height: 10),
-                    Wrap(spacing: 10, runSpacing: 4, children: [
-                      if (widget.showCreatedAt) Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.schedule, size: 12.5, color: scheme.onSurfaceVariant.withValues(alpha: .65)), const SizedBox(width: 4), Text(_date(bookmark.createdAt), style: TextStyle(fontSize: 11.5, color: scheme.onSurfaceVariant.withValues(alpha: .75)))]),
-                      if (widget.showHistory) Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.history, size: 12.5, color: scheme.onSurfaceVariant.withValues(alpha: .65)), const SizedBox(width: 4), Text('${bookmark.openCount}回', style: TextStyle(fontSize: 11.5, color: scheme.onSurfaceVariant.withValues(alpha: .75)))]),
-                    ]),
-                  ],
+                  ..._orderedProperties(),
                 ]),
               ),
             ),
