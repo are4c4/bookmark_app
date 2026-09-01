@@ -55,6 +55,14 @@ class PhotoStorageService {
     return imported;
   }
 
+  Future<void> deleteManagedPhoto(String path) async {
+    final file = File(path);
+    if (await file.exists()) await file.delete();
+
+    final originalBackup = File('$path.bookmark_original');
+    if (await originalBackup.exists()) await originalBackup.delete();
+  }
+
   Future<Directory> _resolvePhotoDirectory() async {
     final explicit = photoDirectoryPath?.trim();
     if (explicit != null && explicit.isNotEmpty) return Directory(explicit);
