@@ -10,7 +10,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('mirrors photos, bookmarks, image relations and tag relations', () async {
+  test('mirrors workspace bookmarks, image relations and tag relations', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
     final workspaceId = await WorkspaceStore(database).initialize();
@@ -41,6 +41,10 @@ void main() {
     );
     final bookmarkId = (await database.customSelect("SELECT id FROM bookmarks WHERE url = 'https://example.com'").getSingle())
         .read<int>('id');
+    await database.customStatement(
+      'INSERT INTO bookmark_workspaces(bookmark_id, workspace_id) VALUES (?, ?)',
+      [bookmarkId, workspaceId],
+    );
     await database.customStatement(
       'INSERT INTO bookmark_photos(bookmark_id, photo_id, is_cover) VALUES (?, ?, 1)',
       [bookmarkId, photoId],
@@ -75,7 +79,7 @@ void main() {
       [images.single.id],
     );
 
-    final tagObjectId = await tagBridge.objectIdForLegacyTag(tagId);
+    final tagObjectId = await tagBridge.objectIdForLegacyTag(workspaceId, tagId);
     expect(
       ObjectRelationValue.fromJson(bookmarks.single.values[tagRelation.id]).objectIds,
       [tagObjectId],
