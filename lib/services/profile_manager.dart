@@ -222,7 +222,10 @@ class ProfileManager {
     DatabaseProfile source,
     DatabaseProfile copy,
   ) async {
-    final database = AppDatabase(databaseName: copy.databaseName);
+    final database = AppDatabase(
+      databaseName: copy.databaseName,
+      profileDirectoryPath: copy.directoryPath,
+    );
     try {
       final photos = await database.select(database.photos).get();
       for (final photo in photos) {
@@ -230,7 +233,7 @@ class ProfileManager {
         if (copiedPath == null || !await File(copiedPath).exists()) continue;
         await (database.update(database.photos)
               ..where((row) => row.id.equals(photo.id)))
-            .write(PhotosCompanion(path: Value(copiedPath)));
+            .write(PhotosCompanion(path: Value(database.toStoredPath(copiedPath))));
       }
 
       final attachments =
@@ -240,7 +243,9 @@ class ProfileManager {
         if (copiedPath == null || !await File(copiedPath).exists()) continue;
         await (database.update(database.bookmarkAttachments)
               ..where((row) => row.id.equals(attachment.id)))
-            .write(BookmarkAttachmentsCompanion(path: Value(copiedPath)));
+            .write(BookmarkAttachmentsCompanion(
+              path: Value(database.toStoredPath(copiedPath)),
+            ));
       }
     } finally {
       await database.close();
