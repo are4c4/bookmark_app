@@ -30,6 +30,11 @@ class ObjectSyncService {
     );
   }
 
+  /// Only one profile/workspace is active in the app at a time. Keeping the
+  /// active mirror here lets short-lived bootstrap calls safely replace the
+  /// previous listener without forcing repositories to own migration state.
+  static ObjectSyncService? _activeService;
+
   final AppDatabase database;
   final ObjectStore objectStore;
   late final SystemObjectStore systemObjectStore;
@@ -42,26 +47,35 @@ class ObjectSyncService {
   bool _syncQueued = false;
   bool _disposed = false;
 
-  Future<void> syncWorkspace(int workspaceId) => coreBridge.syncAll(workspaceId);
+  /// Activates a live Object mirror for [workspaceId].
+  ///
+  /// Calling this from startup or Workspace switching automatically disposes
+  /// the previous active mirror and then performs an immediate sync.
+  Future<void> syncWorkspace(int workspaceId) => startWatchingWorkspace(workspaceId);
 
   Future<void> syncActiveWorkspace() async {
     final workspaceId = await WorkspaceStore(database).activeWorkspaceId();
-    if (workspaceId != null) await syncWorkspace(workspaceId);
+    if (workspaceId != null) await startWatchingWorkspace(workspaceId);
   }
 
-  /// Keeps the Object mirror current while the app is open.
-  ///
-  /// Legacy bookmark/tag/photo tables remain authoritative during migration.
-  /// Changes to them are debounced and mirrored into the active Workspace's
-  /// system ObjectTypes. Object writes do not feed these streams, so this does
-  /// not create a synchronization loop.
   Future<void> startWatchingWorkspace(int workspaceId) async {
     if (_disposed) return;
-    if (_watchedWorkspaceId == workspaceId && _subscription != null) return;
+
+    final previous = _activeService;
+    if (previous != null && previous != this) {
+      await previous.dispose();
+    }
+    _activeService = this;
+
+    if (_watchedWorkspaceId == workspaceId && _subscription != null) {
+      await _syncNow(workspaceId);
+      return;
+    }
 
     await stopWatching();
+    if (_disposed) return;
     _watchedWorkspaceId = workspaceId;
-    await syncWorkspace(workspaceId);
+    await _syncNow(workspaceId);
 
     final workspaceStore = WorkspaceStore(database);
     final changes = Rx.merge<Object?>([
@@ -77,6 +91,8 @@ class ObjectSyncService {
     });
   }
 
+  Future<void> _syncNow(int workspaceId) => coreBridge.syncAll(workspaceId);
+
   void _queueSync(int workspaceId) {
     if (_syncing) {
       _syncQueued = true;
@@ -91,7 +107,7 @@ class ObjectSyncService {
     try {
       do {
         _syncQueued = false;
-        await syncWorkspace(workspaceId);
+        await _syncNow(workspaceId);
       } while (_syncQueued && !_disposed && _watchedWorkspaceId == workspaceId);
     } finally {
       _syncing = false;
@@ -109,6 +125,9 @@ class ObjectSyncService {
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
+    if (identical(_activeService, this)) {
+      _activeService = null;
+    }
     await stopWatching();
   }
 }
