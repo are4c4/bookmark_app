@@ -37,6 +37,11 @@ class _TagManagementPageState extends State<TagManagementPage> {
   int? _editingTagId;
   TextEditingController? _editController;
   String? _editError;
+  String? _creatingUnderKey;
+  int? _creatingGroupId;
+  int? _creatingParentId;
+  TextEditingController? _createController;
+  String? _createError;
 
   List<Tag> _tags = const [];
   List<TagGroupInfo> _groups = const [];
@@ -81,6 +86,7 @@ class _TagManagementPageState extends State<TagManagementPage> {
   @override
   void dispose() {
     _editController?.dispose();
+    _createController?.dispose();
     _searchController.dispose();
     _treeFocus.dispose();
     _store.dispose();
@@ -183,6 +189,7 @@ class _TagManagementPageState extends State<TagManagementPage> {
   }
 
   void _beginRename(Tag tag) {
+    _cancelInlineCreate();
     _editController?.dispose();
     setState(() {
       _editingTagId = tag.id;
@@ -221,6 +228,86 @@ class _TagManagementPageState extends State<TagManagementPage> {
     }
   }
 
+  void _beginInlineCreate({int? groupId, Tag? parent}) {
+    if (_query.isNotEmpty || _filter != TagUsageFilter.all) {
+      setState(() {
+        _query = '';
+        _filter = TagUsageFilter.all;
+        _searchController.clear();
+      });
+    }
+    if (_editingTagId != null) _cancelRename();
+    _createController?.dispose();
+    final resolvedGroupId = parent == null
+        ? groupId
+        : (_groupByTag[parent.id] ?? parent.groupId);
+    final parentKey = parent == null
+        ? 'group:${groupId ?? -1}'
+        : 'tag:${parent.id}';
+    setState(() {
+      _creatingUnderKey = parentKey;
+      _creatingGroupId = resolvedGroupId;
+      _creatingParentId = parent?.id;
+      _createController = TextEditingController();
+      _createError = null;
+      _focusedKey = parentKey;
+      if (parent != null) {
+        _expandedTagIds.add(parent.id);
+      } else {
+        _expandedGroupIds.add(groupId ?? -1);
+      }
+    });
+    _saveExpansion();
+  }
+
+  Future<void> _submitInlineCreate() async {
+    final name = _createController?.text.trim() ?? '';
+    if (name.isEmpty) {
+      if (mounted) setState(() => _createError = 'タグ名を入力してください');
+      return;
+    }
+    final groupId = _creatingGroupId;
+    final parentId = _creatingParentId;
+    try {
+      final id = await repository.createTag(name);
+      await _store.moveTag(
+        tagId: id,
+        parentTagId: parentId,
+        groupId: groupId,
+      );
+      if (!mounted) return;
+      _createController?.dispose();
+      _createController = null;
+      setState(() {
+        _creatingUnderKey = null;
+        _creatingGroupId = null;
+        _creatingParentId = null;
+        _createError = null;
+        _selectedTagId = id;
+        _focusedKey = 'tag:$id';
+        _expandedGroupIds.add(groupId ?? -1);
+        if (parentId != null) _expandedTagIds.add(parentId);
+      });
+      await _saveExpansion();
+      _treeFocus.requestFocus();
+    } catch (error) {
+      if (mounted) setState(() => _createError = '$error');
+    }
+  }
+
+  void _cancelInlineCreate() {
+    _createController?.dispose();
+    _createController = null;
+    if (mounted) {
+      setState(() {
+        _creatingUnderKey = null;
+        _creatingGroupId = null;
+        _creatingParentId = null;
+        _createError = null;
+      });
+    }
+  }
+
   void _toggleMulti(Tag tag) {
     setState(() {
       if (!_multiSelectedIds.add(tag.id)) {
@@ -235,6 +322,8 @@ class _TagManagementPageState extends State<TagManagementPage> {
     if (event.logicalKey == LogicalKeyboardKey.escape) {
       if (_dragging) {
         setState(() => _dragCancelled = true);
+      } else if (_creatingUnderKey != null) {
+        _cancelInlineCreate();
       } else if (_editingTagId != null) {
         _cancelRename();
       } else if (_multiSelectedIds.isNotEmpty) {
@@ -242,7 +331,9 @@ class _TagManagementPageState extends State<TagManagementPage> {
       }
       return KeyEventResult.handled;
     }
-    if (_editingTagId != null) return KeyEventResult.ignored;
+    if (_editingTagId != null || _creatingUnderKey != null) {
+      return KeyEventResult.ignored;
+    }
     if (_model.rows.isEmpty) return KeyEventResult.ignored;
 
     var index = _model.rows.indexWhere(
@@ -473,10 +564,16 @@ class _TagManagementPageState extends State<TagManagementPage> {
     );
   }
 
-  Future<void> _createTag() async {
+  Future<void> _createTag({int? initialGroupId, int? initialParentId}) async {
     var name = '';
-    int? groupId;
-    int? parentId;
+    int? groupId = initialGroupId;
+    int? parentId = initialParentId;
+    if (parentId != null) {
+      final parent = _tagById(parentId);
+      if (parent != null) {
+        groupId = _groupByTag[parent.id] ?? parent.groupId;
+      }
+    }
     final ok = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
@@ -497,6 +594,7 @@ class _TagManagementPageState extends State<TagManagementPage> {
                     autofocus: true,
                     decoration: const InputDecoration(labelText: 'タグ名'),
                     onChanged: (value) => name = value,
+                    onSubmitted: (_) => Navigator.pop(dialogContext, true),
                   ),
                   const SizedBox(height: UiTokens.space12),
                   DropdownButtonFormField<int?>(
@@ -562,6 +660,14 @@ class _TagManagementPageState extends State<TagManagementPage> {
       parentTagId: parentId,
       groupId: groupId,
     );
+    if (!mounted) return;
+    setState(() {
+      _expandedGroupIds.add(groupId ?? -1);
+      if (parentId != null) _expandedTagIds.add(parentId!);
+      _selectedTagId = id;
+      _focusedKey = 'tag:$id';
+    });
+    await _saveExpansion();
   }
 
   Future<void> _moveDialog(Tag tag) async {
@@ -838,6 +944,8 @@ class _TagManagementPageState extends State<TagManagementPage> {
 
   void _menuAction(Tag tag, String action) {
     switch (action) {
+      case 'add-child':
+        _beginInlineCreate(parent: tag);
       case 'rename':
         _beginRename(tag);
       case 'move':
@@ -867,6 +975,13 @@ class _TagManagementPageState extends State<TagManagementPage> {
     }
   }
 
+  void _groupMenuAction(int? groupId, String action) {
+    switch (action) {
+      case 'add':
+        _beginInlineCreate(groupId: groupId);
+    }
+  }
+
   Future<void> _showKeyboardHelp() => showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
@@ -877,7 +992,7 @@ class _TagManagementPageState extends State<TagManagementPage> {
             'Enter  名前変更\n'
             'Space  複数選択\n'
             'Delete / Backspace  削除確認\n'
-            'Escape  編集・複数選択を解除',
+            'Escape  編集・タグ追加・複数選択を解除',
           ),
           actions: [
             TextButton(
@@ -928,7 +1043,7 @@ class _TagManagementPageState extends State<TagManagementPage> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _createTag,
+        onPressed: () => _createTag(),
         icon: const Icon(Icons.add),
         label: const Text('タグを追加'),
       ),
@@ -1017,6 +1132,9 @@ class _TagManagementPageState extends State<TagManagementPage> {
                         editingTagId: _editingTagId,
                         editController: _editController,
                         editError: _editError,
+                        creatingUnderKey: _creatingUnderKey,
+                        createController: _createController,
+                        createError: _createError,
                         onSelectTag: _selectTag,
                         onFocusRow: _focusRow,
                         onToggleGroup: _toggleGroup,
@@ -1025,6 +1143,13 @@ class _TagManagementPageState extends State<TagManagementPage> {
                         onBeginRename: _beginRename,
                         onSubmitRename: _submitRename,
                         onCancelRename: _cancelRename,
+                        onAddToGroup: (groupId) =>
+                            _beginInlineCreate(groupId: groupId),
+                        onAddChild: (tag) =>
+                            _beginInlineCreate(parent: tag),
+                        onGroupMenuAction: _groupMenuAction,
+                        onSubmitCreate: _submitInlineCreate,
+                        onCancelCreate: _cancelInlineCreate,
                         onMenuAction: _menuAction,
                         onDrop: _drop,
                         canDrop: _canDrop,
