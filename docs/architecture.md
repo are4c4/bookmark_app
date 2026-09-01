@@ -67,7 +67,7 @@ The migration is incremental. Existing files under `lib/views` and `lib/widgets`
 ```text
 DatabasePage
  ├─ DatabaseViewTabs
- ├─ DatabaseToolbar
+ ├─ DatabasePageToolbar
  ├─ DatabaseContent
  │   ├─ Gallery / Masonry
  │   ├─ List
@@ -76,6 +76,13 @@ DatabasePage
 ```
 
 Feature-specific code should provide data and behavior through adapters / render specifications instead of reimplementing the shell.
+
+The toolbar follows these UI rules:
+- view tabs own their adjacent `+` create-view action;
+- filter / sort / property controls describe the active view;
+- layout selection uses one current-layout menu instead of three permanently visible buttons;
+- search is collapsed until requested or until a saved non-empty query is restored;
+- low-frequency actions such as multi-selection belong under the overflow menu when possible.
 
 ## Property model target
 
@@ -90,6 +97,14 @@ PropertyEditor
 
 A property should use the same renderer/editor in detail, list, gallery, and table contexts wherever practical.
 
+Detail rows use a stable four-column geometry:
+
+```text
+drag handle | property label | value | trailing action
+```
+
+This keeps drag handles, labels, values, and `+` / dropdown affordances aligned across property types.
+
 ## Widget lifetime rule
 
 Text editing controllers and focus nodes belong to the State object that owns the editable widget. Do not create a controller outside a dialog and dispose it immediately after `showDialog` returns when IME composition or route teardown can still reference it.
@@ -97,7 +112,8 @@ Text editing controllers and focus nodes belong to the State object that owns th
 ## Migration rule
 
 - Existing migrations are never rewritten in a way that risks installed user data.
-- Starting with the next schema version, new migration bodies should live in dedicated migration helpers instead of making `AppDatabase.migration` continually larger.
+- Migration bodies should live in dedicated helpers instead of making `AppDatabase.migration` continually larger.
+- v15 and v16 are now extracted into `app_database_migrations.dart`; future schema versions should follow the same pattern.
 - Every schema bump requires a migration regression test from the previous schema version when feasible.
 
 ## Refactor rule
