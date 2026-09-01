@@ -12,6 +12,8 @@ part 'app_database_schema.dart';
     BookmarkTags,
     People,
     BookmarkPeople,
+    PersonGroups,
+    PersonGroupMembers,
     Photos,
     BookmarkPhotos,
     Collections,
@@ -23,6 +25,7 @@ part 'app_database_schema.dart';
     BookmarkWorkspaces,
     SavedViewWorkspaces,
     WorkspaceSettings,
+    DatabaseViews,
     BookmarkAttachments,
     PdfAnnotations,
   ],
@@ -67,7 +70,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 14;
+  int get schemaVersion => 15;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -275,6 +278,29 @@ class AppDatabase extends _$AppDatabase {
             );
             await m.addColumn(savedViews, savedViews.personFilterId);
             await m.addColumn(savedViews, savedViews.photoFilterId);
+          }
+          if (from < 15) {
+            final existing = await customSelect(
+              "SELECT name FROM sqlite_master WHERE type = 'table'",
+            ).get();
+            final tableNames = existing.map((row) => row.read<String>('name')).toSet();
+            if (!tableNames.contains('person_groups')) {
+              await m.createTable(personGroups);
+            }
+            if (!tableNames.contains('person_group_members')) {
+              await m.createTable(personGroupMembers);
+            }
+            if (!tableNames.contains('database_views')) {
+              await m.createTable(databaseViews);
+            }
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS person_group_members_person_idx '
+              'ON person_group_members(person_id)',
+            );
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS database_views_scope_idx '
+              'ON database_views(workspace_id, database_key, sort_order, id)',
+            );
           }
         },
         beforeOpen: (_) async => customStatement('PRAGMA foreign_keys = ON'),

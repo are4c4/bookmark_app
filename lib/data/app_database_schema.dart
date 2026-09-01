@@ -72,6 +72,27 @@ class BookmarkPeople extends Table {
   Set<Column<Object>> get primaryKey => {bookmarkId, personId, role};
 }
 
+@DataClassName('PersonGroupRecord')
+class PersonGroups extends Table {
+  @override
+  String get tableName => 'person_groups';
+
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text().unique()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+}
+
+class PersonGroupMembers extends Table {
+  @override
+  String get tableName => 'person_group_members';
+
+  IntColumn get groupId => integer().references(PersonGroups, #id, onDelete: KeyAction.cascade)();
+  IntColumn get personId => integer().references(People, #id, onDelete: KeyAction.cascade)();
+
+  @override
+  Set<Column<Object>> get primaryKey => {groupId, personId};
+}
+
 @DataClassName('PhotoRecord')
 class Photos extends Table {
   IntColumn get id => integer().autoIncrement()();
@@ -190,6 +211,25 @@ class WorkspaceSettings extends Table {
 
   @override
   Set<Column<Object>> get primaryKey => {key};
+}
+
+@DataClassName('DatabaseViewRecord')
+class DatabaseViews extends Table {
+  @override
+  String get tableName => 'database_views';
+
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get workspaceId => integer().references(Workspaces, #id, onDelete: KeyAction.cascade)();
+  TextColumn get databaseKey => text()();
+  TextColumn get name => text()();
+  TextColumn get layoutType => text().withDefault(const Constant('gallery'))();
+  TextColumn get filtersJson => text().withDefault(const Constant('{}'))();
+  TextColumn get sortsJson => text().withDefault(const Constant('[]'))();
+  TextColumn get visibleProperties => text().withDefault(const Constant(''))();
+  TextColumn get propertyOrder => text().withDefault(const Constant(''))();
+  TextColumn get settingsJson => text().withDefault(const Constant('{}'))();
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }
 
 @DataClassName('BookmarkAttachmentRecord')
