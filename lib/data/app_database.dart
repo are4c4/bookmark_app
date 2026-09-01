@@ -635,29 +635,6 @@ class AppDatabase extends _$AppDatabase {
     return query.map((row) => row.readTable(tags)).get();
   }
 
-  Future<BookmarkItem> _toItem(Bookmark bookmark) async => BookmarkItem(
-        id: bookmark.id,
-        url: bookmark.url,
-        title: bookmark.title,
-        thumbnail: bookmark.thumbnail,
-        description: bookmark.description,
-        createdAt: bookmark.createdAt,
-        favorite: bookmark.favorite,
-        status: bookmark.status,
-        readingStatus: bookmark.readingStatus,
-        storageState: bookmark.storageState,
-        genre: bookmark.genre,
-        deletedAt: bookmark.deletedAt,
-        rating: bookmark.rating,
-        lastOpenedAt: bookmark.lastOpenedAt,
-        openCount: bookmark.openCount,
-        tags: await _tagsForBookmark(bookmark.id),
-        people: await _peopleForBookmark(bookmark.id),
-        photos: await _photosForBookmark(bookmark.id),
-        collections: await _collectionsForBookmark(bookmark.id),
-        coverPhoto: await _coverPhotoForBookmark(bookmark.id),
-      );
-
   Stream<List<BookmarkItem>> watchBookmarkItems() {
     final trigger = customSelect(
       'SELECT b.id FROM bookmarks b '
