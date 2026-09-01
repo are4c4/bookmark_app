@@ -95,7 +95,12 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
   Widget _cover() {
     final bookmark = widget.bookmark;
     if (bookmark.coverPhoto != null) {
-      return Image.file(File(bookmark.coverPhoto!.path), width: double.infinity, fit: BoxFit.fitWidth, errorBuilder: (_, __, ___) => _networkCover());
+      return Image.file(
+        File(bookmark.coverPhoto!.path),
+        width: double.infinity,
+        fit: BoxFit.fitWidth,
+        errorBuilder: (_, __, ___) => _networkCover(),
+      );
     }
     return _networkCover();
   }
@@ -103,24 +108,54 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
   Widget _networkCover() {
     final bookmark = widget.bookmark;
     if (bookmark.thumbnail?.trim().isNotEmpty == true) {
-      return Image.network(bookmark.thumbnail!, width: double.infinity, fit: BoxFit.fitWidth, errorBuilder: (_, __, ___) => _placeholder());
+      return Image.network(
+        bookmark.thumbnail!,
+        width: double.infinity,
+        fit: BoxFit.fitWidth,
+        errorBuilder: (_, __, ___) => _placeholder(),
+      );
     }
     return _placeholder();
   }
 
   Widget _placeholder() {
     final scheme = Theme.of(context).colorScheme;
-    return SizedBox(height: 160, child: ColoredBox(color: scheme.surfaceContainerLowest, child: Center(child: Icon(Icons.image_outlined, size: 34, color: scheme.onSurfaceVariant.withValues(alpha: .55)))));
+    return SizedBox(
+      height: 160,
+      child: ColoredBox(
+        color: scheme.surfaceContainerLowest,
+        child: Center(
+          child: Icon(
+            Icons.image_outlined,
+            size: 34,
+            color: scheme.onSurfaceVariant.withValues(alpha: .55),
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _chip(String label, {IconData? icon}) {
     final scheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-      decoration: BoxDecoration(color: scheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(4)),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(4),
+      ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        if (icon != null) ...[Icon(icon, size: 12.5, color: scheme.onSurfaceVariant), const SizedBox(width: 4)],
-        Text(label, style: TextStyle(fontSize: 12, height: 1.2, color: scheme.onSurfaceVariant)),
+        if (icon != null) ...[
+          Icon(icon, size: 12.5, color: scheme.onSurfaceVariant),
+          const SizedBox(width: 4),
+        ],
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            height: 1.2,
+            color: scheme.onSurfaceVariant,
+          ),
+        ),
       ]),
     );
   }
@@ -143,12 +178,14 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
           enabled: entry.enabled,
           height: entry.height,
           padding: entry.padding,
-          onTap: value == null ? entry.onTap : () {
-            entry.onTap?.call();
-            Future<void>.delayed(const Duration(milliseconds: 120), () {
-              if (mounted) menu.onSelected?.call(value);
-            });
-          },
+          onTap: value == null
+              ? entry.onTap
+              : () {
+                  entry.onTap?.call();
+                  Future<void>.delayed(const Duration(milliseconds: 120), () {
+                    if (mounted) menu.onSelected?.call(value);
+                  });
+                },
           child: entry.child,
         );
       }).toList(),
@@ -184,35 +221,120 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
           }
         case 'status':
           if (widget.showStatus) {
-            add(_chip(_statusLabels[bookmark.status] ?? bookmark.status, icon: Icons.flag_outlined));
+            add(
+              _chip(
+                _statusLabels[bookmark.status] ?? bookmark.status,
+                icon: Icons.flag_outlined,
+              ),
+            );
           }
         case 'rating':
           if (widget.showRating && bookmark.rating > 0) {
-            add(Text('★' * bookmark.rating, style: const TextStyle(fontSize: 13, color: Color(0xFFB8860B), letterSpacing: 1)), top: 7);
+            add(
+              Text(
+                '★' * bookmark.rating,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: Color(0xFFB8860B),
+                  letterSpacing: 1,
+                ),
+              ),
+              top: 7,
+            );
           }
         case 'tags':
           if (widget.showTags && bookmark.tags.isNotEmpty) {
-            add(Wrap(spacing: 5, runSpacing: 5, children: bookmark.tags.map((tag) => _chip(tag.name)).toList()), top: 9);
+            add(
+              Wrap(
+                spacing: 5,
+                runSpacing: 5,
+                children: bookmark.tags.map((tag) => _chip(tag.name)).toList(),
+              ),
+              top: 9,
+            );
           }
         case 'people':
           if (widget.showPeople && bookmark.people.isNotEmpty) {
-            add(Wrap(spacing: 5, runSpacing: 5, children: bookmark.people.map((person) => _chip(person.name, icon: Icons.person_outline)).toList()), top: 7);
+            add(
+              Wrap(
+                spacing: 5,
+                runSpacing: 5,
+                children: bookmark.people
+                    .map(
+                      (person) =>
+                          _chip(person.name, icon: Icons.person_outline),
+                    )
+                    .toList(),
+              ),
+              top: 7,
+            );
           }
         case 'favorite':
           if (widget.showFavorite && bookmark.favorite) {
             add(_chip('お気に入り', icon: Icons.star), top: 7);
           }
         case 'description':
-          if (widget.showDescription && bookmark.description?.trim().isNotEmpty == true) {
-            add(Text(bookmark.description!, style: TextStyle(fontSize: 12.5, height: 1.5, color: scheme.onSurfaceVariant)), top: 10);
+          if (widget.showDescription &&
+              bookmark.description?.trim().isNotEmpty == true) {
+            add(
+              Text(
+                bookmark.description!,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  height: 1.5,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+              top: 10,
+            );
           }
         case 'createdAt':
           if (widget.showCreatedAt) {
-            add(Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.schedule, size: 12.5, color: scheme.onSurfaceVariant.withValues(alpha: .65)), const SizedBox(width: 4), Text(_date(bookmark.createdAt), style: TextStyle(fontSize: 11.5, color: scheme.onSurfaceVariant.withValues(alpha: .75))]), top: 10);
+            add(
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.schedule,
+                    size: 12.5,
+                    color: scheme.onSurfaceVariant.withValues(alpha: .65),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    _date(bookmark.createdAt),
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: scheme.onSurfaceVariant.withValues(alpha: .75),
+                    ),
+                  ),
+                ],
+              ),
+              top: 10,
+            );
           }
         case 'history':
           if (widget.showHistory) {
-            add(Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.history, size: 12.5, color: scheme.onSurfaceVariant.withValues(alpha: .65)), const SizedBox(width: 4), Text('${bookmark.openCount}回', style: TextStyle(fontSize: 11.5, color: scheme.onSurfaceVariant.withValues(alpha: .75))]), top: 7);
+            add(
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.history,
+                    size: 12.5,
+                    color: scheme.onSurfaceVariant.withValues(alpha: .65),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${bookmark.openCount}回',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: scheme.onSurfaceVariant.withValues(alpha: .75),
+                    ),
+                  ),
+                ],
+              ),
+              top: 7,
+            );
           }
         default:
           if (key.startsWith('role:')) {
@@ -223,9 +345,25 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(role, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: scheme.onSurfaceVariant)),
+                    Text(
+                      role,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
                     const SizedBox(height: 4),
-                    Wrap(spacing: 5, runSpacing: 5, children: people.map((person) => _chip(person.name, icon: Icons.person_outline)).toList()),
+                    Wrap(
+                      spacing: 5,
+                      runSpacing: 5,
+                      children: people
+                          .map(
+                            (person) =>
+                                _chip(person.name, icon: Icons.person_outline),
+                          )
+                          .toList(),
+                    ),
                   ],
                 ),
               );
@@ -248,57 +386,158 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
         decoration: BoxDecoration(
           color: scheme.surface,
           borderRadius: BorderRadius.circular(5),
-          border: Border.all(color: widget.selected ? scheme.onSurfaceVariant : _hovered ? scheme.outline : scheme.outlineVariant),
-          boxShadow: _hovered ? [BoxShadow(color: scheme.shadow.withValues(alpha: .08), blurRadius: 7, offset: const Offset(0, 2))] : null,
+          border: Border.all(
+            color: widget.selected
+                ? scheme.onSurfaceVariant
+                : _hovered
+                    ? scheme.outline
+                    : scheme.outlineVariant,
+          ),
+          boxShadow: _hovered
+              ? [
+                  BoxShadow(
+                    color: scheme.shadow.withValues(alpha: .08),
+                    blurRadius: 7,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
         ),
         child: Material(
           color: Colors.transparent,
           borderRadius: BorderRadius.circular(5),
           clipBehavior: Clip.antiAlias,
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-            if (widget.showImage)
-              Stack(children: [
-                InkWell(onTap: _openLink, child: _cover()),
-                if (_hovered)
-                  Positioned(
-                    top: 7,
-                    right: 7,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(color: scheme.surface.withValues(alpha: .94), borderRadius: BorderRadius.circular(4), boxShadow: [BoxShadow(color: scheme.shadow.withValues(alpha: .12), blurRadius: 4)]),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        SizedBox(width: 30, height: 30, child: IconButton(padding: EdgeInsets.zero, tooltip: 'リンクを開く', onPressed: _openLink, iconSize: 17, icon: const Icon(Icons.open_in_new))),
-                        if (widget.showFavorite) SizedBox(width: 30, height: 30, child: IconButton(padding: EdgeInsets.zero, tooltip: 'お気に入り', onPressed: widget.onToggleFavorite, iconSize: 17, icon: Icon(bookmark.favorite ? Icons.star : Icons.star_border))),
-                        SizedBox(width: 30, height: 30, child: _menu()),
-                      ]),
-                    ),
-                  ),
-              ]),
-            InkWell(
-              onTap: widget.onTap,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 13),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Expanded(child: Text(bookmark.title, style: TextStyle(fontSize: 14.5, height: 1.28, fontWeight: FontWeight.w600, color: scheme.onSurface))),
-                    if (!widget.showImage)
-                      AnimatedOpacity(
-                        opacity: _hovered ? 1 : 0,
-                        duration: const Duration(milliseconds: 100),
-                        child: IgnorePointer(
-                          ignoring: !_hovered,
-                          child: Row(mainAxisSize: MainAxisSize.min, children: [
-                            SizedBox(width: 28, height: 28, child: IconButton(padding: EdgeInsets.zero, tooltip: 'リンクを開く', onPressed: _openLink, iconSize: 17, icon: const Icon(Icons.open_in_new))),
-                            if (widget.showFavorite) SizedBox(width: 28, height: 28, child: IconButton(padding: EdgeInsets.zero, tooltip: 'お気に入り', onPressed: widget.onToggleFavorite, iconSize: 17, icon: Icon(bookmark.favorite ? Icons.star : Icons.star_border))),
-                            SizedBox(width: 28, height: 28, child: _menu()),
-                          ]),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (widget.showImage)
+                Stack(children: [
+                  InkWell(onTap: _openLink, child: _cover()),
+                  if (_hovered)
+                    Positioned(
+                      top: 7,
+                      right: 7,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: scheme.surface.withValues(alpha: .94),
+                          borderRadius: BorderRadius.circular(4),
+                          boxShadow: [
+                            BoxShadow(
+                              color: scheme.shadow.withValues(alpha: .12),
+                              blurRadius: 4,
+                            ),
+                          ],
                         ),
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          SizedBox(
+                            width: 30,
+                            height: 30,
+                            child: IconButton(
+                              padding: EdgeInsets.zero,
+                              tooltip: 'リンクを開く',
+                              onPressed: _openLink,
+                              iconSize: 17,
+                              icon: const Icon(Icons.open_in_new),
+                            ),
+                          ),
+                          if (widget.showFavorite)
+                            SizedBox(
+                              width: 30,
+                              height: 30,
+                              child: IconButton(
+                                padding: EdgeInsets.zero,
+                                tooltip: 'お気に入り',
+                                onPressed: widget.onToggleFavorite,
+                                iconSize: 17,
+                                icon: Icon(
+                                  bookmark.favorite
+                                      ? Icons.star
+                                      : Icons.star_border,
+                                ),
+                              ),
+                            ),
+                          SizedBox(width: 30, height: 30, child: _menu()),
+                        ]),
                       ),
-                  ]),
-                  ..._orderedProperties(),
+                    ),
                 ]),
+              InkWell(
+                onTap: widget.onTap,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 13),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              bookmark.title,
+                              style: TextStyle(
+                                fontSize: 14.5,
+                                height: 1.28,
+                                fontWeight: FontWeight.w600,
+                                color: scheme.onSurface,
+                              ),
+                            ),
+                          ),
+                          if (!widget.showImage)
+                            AnimatedOpacity(
+                              opacity: _hovered ? 1 : 0,
+                              duration: const Duration(milliseconds: 100),
+                              child: IgnorePointer(
+                                ignoring: !_hovered,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    SizedBox(
+                                      width: 28,
+                                      height: 28,
+                                      child: IconButton(
+                                        padding: EdgeInsets.zero,
+                                        tooltip: 'リンクを開く',
+                                        onPressed: _openLink,
+                                        iconSize: 17,
+                                        icon: const Icon(Icons.open_in_new),
+                                      ),
+                                    ),
+                                    if (widget.showFavorite)
+                                      SizedBox(
+                                        width: 28,
+                                        height: 28,
+                                        child: IconButton(
+                                          padding: EdgeInsets.zero,
+                                          tooltip: 'お気に入り',
+                                          onPressed: widget.onToggleFavorite,
+                                          iconSize: 17,
+                                          icon: Icon(
+                                            bookmark.favorite
+                                                ? Icons.star
+                                                : Icons.star_border,
+                                          ),
+                                        ),
+                                      ),
+                                    SizedBox(
+                                      width: 28,
+                                      height: 28,
+                                      child: _menu(),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      ..._orderedProperties(),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ]),
+            ],
+          ),
         ),
       ),
     );
