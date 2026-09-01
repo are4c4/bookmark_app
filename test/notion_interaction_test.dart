@@ -30,7 +30,7 @@ void main() {
       'Alicia',
     );
     await tester.testTextInput.receiveAction(TextInputAction.done);
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
 
     expect(value, 'Alicia');
   });
@@ -38,6 +38,7 @@ void main() {
   testWidgets('tag picker creates and selects query with Enter', (tester) async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
+    final initialTags = await database.watchAllTags().first;
     List<Tag>? result;
 
     await tester.pumpWidget(
@@ -48,7 +49,7 @@ void main() {
               onPressed: () async {
                 result = await showTagDatabasePicker(
                   context: context,
-                  tags: await database.watchAllTags().first,
+                  tags: initialTags,
                   initiallySelectedIds: const [],
                   onCreateTag: (name, parent) async {
                     final id = await database.createTag(name);
@@ -66,6 +67,8 @@ void main() {
 
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
+    expect(find.text('タグDBから選択'), findsOneWidget);
+
     await tester.enterText(find.byType(TextField).first, '恋愛');
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
@@ -83,6 +86,7 @@ void main() {
   testWidgets('people picker creates and selects name with Enter', (tester) async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
+    final initialPeople = await database.watchAllPeople().first;
     List<Person>? result;
 
     await tester.pumpWidget(
@@ -93,7 +97,7 @@ void main() {
               onPressed: () async {
                 result = await showPeopleDatabasePicker(
                   context: context,
-                  people: await database.watchAllPeople().first,
+                  people: initialPeople,
                   initiallySelectedIds: const [],
                   onCreatePerson: (name, note) async {
                     final id = await database.createPerson(name, note: note);
@@ -111,6 +115,8 @@ void main() {
 
     await tester.tap(find.text('open people'));
     await tester.pumpAndSettle();
+    expect(find.text('人物DBから選択'), findsOneWidget);
+
     await tester.enterText(find.byType(TextField).first, '山田太郎');
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
