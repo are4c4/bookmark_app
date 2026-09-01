@@ -626,12 +626,119 @@ class AppDatabase extends _$AppDatabase {
 
   Stream<List<BookmarkItem>> watchBookmarkItems() {
     final trigger = customSelect(
-      'SELECT b.id FROM bookmarks b LEFT JOIN bookmark_tags bt ON bt.bookmark_id = b.id LEFT JOIN bookmark_people bp ON bp.bookmark_id = b.id LEFT JOIN bookmark_photos bph ON bph.bookmark_id = b.id LEFT JOIN bookmark_collections bc ON bc.bookmark_id = b.id GROUP BY b.id',
-      readsFrom: {bookmarks, bookmarkTags, tags, bookmarkPeople, people, bookmarkPhotos, photos, bookmarkCollections, collections},
+      'SELECT b.id FROM bookmarks b '
+      'LEFT JOIN bookmark_tags bt ON bt.bookmark_id = b.id '
+      'LEFT JOIN bookmark_people bp ON bp.bookmark_id = b.id '
+      'LEFT JOIN bookmark_photos bph ON bph.bookmark_id = b.id '
+      'LEFT JOIN bookmark_collections bc ON bc.bookmark_id = b.id '
+      'GROUP BY b.id',
+      readsFrom: {
+        bookmarks,
+        bookmarkTags,
+        tags,
+        bookmarkPeople,
+        people,
+        bookmarkPhotos,
+        photos,
+        bookmarkCollections,
+        collections,
+      },
     ).watch();
+
     return trigger.asyncMap((_) async {
-      final rows = await select(bookmarks).get();
-      return Future.wait(rows.map(_toItem));
+      final bookmarkRows = await select(bookmarks).get();
+      final tagsByBookmark = <int, List<Tag>>{};
+      final peopleByBookmark = <int, Map<int, Person>>{};
+      final photosByBookmark = <int, List<PhotoRecord>>{};
+      final coverByBookmark = <int, PhotoRecord>{};
+      final collectionsByBookmark = <int, List<CollectionRecord>>{};
+
+      final tagRows = await select(bookmarkTags).join([
+        innerJoin(tags, tags.id.equalsExp(bookmarkTags.tagId)),
+      ]).get();
+      for (final row in tagRows) {
+        final relation = row.readTable(bookmarkTags);
+        tagsByBookmark
+            .putIfAbsent(relation.bookmarkId, () => <Tag>[])
+            .add(row.readTable(tags));
+      }
+
+      final peopleRows = await select(bookmarkPeople).join([
+        innerJoin(people, people.id.equalsExp(bookmarkPeople.personId)),
+      ]).get();
+      for (final row in peopleRows) {
+        final relation = row.readTable(bookmarkPeople);
+        final person = row.readTable(people);
+        peopleByBookmark
+            .putIfAbsent(relation.bookmarkId, () => <int, Person>{})[person.id] =
+            person;
+      }
+
+      final photoRows = await select(bookmarkPhotos).join([
+        innerJoin(photos, photos.id.equalsExp(bookmarkPhotos.photoId)),
+      ]).get();
+      for (final row in photoRows) {
+        final relation = row.readTable(bookmarkPhotos);
+        final photo = _resolvedPhoto(row.readTable(photos));
+        photosByBookmark
+            .putIfAbsent(relation.bookmarkId, () => <PhotoRecord>[])
+            .add(photo);
+        if (relation.isCover) coverByBookmark[relation.bookmarkId] = photo;
+      }
+
+      final collectionRows = await select(bookmarkCollections).join([
+        innerJoin(
+          collections,
+          collections.id.equalsExp(bookmarkCollections.collectionId),
+        ),
+      ]).get();
+      for (final row in collectionRows) {
+        final relation = row.readTable(bookmarkCollections);
+        collectionsByBookmark
+            .putIfAbsent(relation.bookmarkId, () => <CollectionRecord>[])
+            .add(row.readTable(collections));
+      }
+
+      for (final values in tagsByBookmark.values) {
+        values.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      }
+      for (final values in photosByBookmark.values) {
+        values.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+      }
+      for (final values in collectionsByBookmark.values) {
+        values.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      }
+
+      return bookmarkRows
+          .map(
+            (bookmark) => BookmarkItem(
+              id: bookmark.id,
+              url: bookmark.url,
+              title: bookmark.title,
+              thumbnail: bookmark.thumbnail,
+              description: bookmark.description,
+              createdAt: bookmark.createdAt,
+              favorite: bookmark.favorite,
+              status: bookmark.status,
+              readingStatus: bookmark.readingStatus,
+              storageState: bookmark.storageState,
+              genre: bookmark.genre,
+              deletedAt: bookmark.deletedAt,
+              rating: bookmark.rating,
+              lastOpenedAt: bookmark.lastOpenedAt,
+              openCount: bookmark.openCount,
+              tags: tagsByBookmark[bookmark.id] ?? const [],
+              people: (peopleByBookmark[bookmark.id]?.values.toList() ?? const [])
+                ..sort(
+                  (a, b) =>
+                      a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+                ),
+              photos: photosByBookmark[bookmark.id] ?? const [],
+              collections: collectionsByBookmark[bookmark.id] ?? const [],
+              coverPhoto: coverByBookmark[bookmark.id],
+            ),
+          )
+          .toList();
     });
   }
 
