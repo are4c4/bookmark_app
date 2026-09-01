@@ -206,6 +206,7 @@ class BookmarkLifecyclePage extends StatelessWidget {
                     if (value == 'trash') await repository.moveToTrash(bookmark);
                     if (value == 'restore') await repository.restoreFromTrash(bookmark);
                     if (value == 'delete') {
+                      if (!context.mounted) return;
                       final ok = await showDialog<bool>(
                         context: context,
                         builder: (context) => AlertDialog(
