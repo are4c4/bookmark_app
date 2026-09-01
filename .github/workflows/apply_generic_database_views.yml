@@ -1,0 +1,36 @@
+name: Apply generic database views
+
+on:
+  push:
+    branches:
+      - feature/notion-database-foundation-v2
+    paths:
+      - tool/apply_generic_database_views.py
+      - .github/workflows/apply_generic_database_views.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: feature/notion-database-foundation-v2
+          fetch-depth: 0
+      - name: Apply generic database UI patch
+        run: python3 tool/apply_generic_database_views.py
+      - name: Remove one-shot patch files
+        run: rm -f tool/apply_generic_database_views.py .github/workflows/apply_generic_database_views.yml
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes"
+            exit 0
+          fi
+          git commit -m "Adopt user-defined database views across core databases"
+          git push origin HEAD:feature/notion-database-foundation-v2
