@@ -9,6 +9,7 @@ on:
   pull_request:
     branches:
       - main
+      - feature/database-gallery
 
 concurrency:
   group: flutter-ci-${{ github.workflow }}-${{ github.ref }}
