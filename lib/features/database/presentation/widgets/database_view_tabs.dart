@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../data/database_view_store.dart';
 import '../../../../database/database_definition.dart';
-import '../../../../widgets/database_create_tiles.dart';
+import 'database_create_tiles.dart';
 
 class DatabaseViewTabs extends StatefulWidget {
   const DatabaseViewTabs({

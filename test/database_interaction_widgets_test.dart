@@ -1,4 +1,4 @@
-import 'package:bookmark_app/features/database/presentation/widgets/database_toolbar.dart';
+import 'package:bookmark_app/features/database/presentation/widgets/database_page_toolbar.dart';
 import 'package:bookmark_app/widgets/database_create_tiles.dart';
 import 'package:bookmark_app/widgets/detail_property_row.dart';
 import 'package:bookmark_app/widgets/resizable_detail_pane.dart';
@@ -125,19 +125,17 @@ void main() {
   testWidgets('database toolbar uses compact layout menu and expandable search', (tester) async {
     var layout = 'gallery';
     var query = '';
-    final controller = TextEditingController();
-    addTearDown(controller.dispose);
-
     await tester.pumpWidget(
       MaterialApp(
         home: StatefulBuilder(
           builder: (context, setState) => Scaffold(
-            body: DatabaseToolbar(
+            body: DatabasePageToolbar(
               leadingActions: const [TextButton(onPressed: null, child: Text('フィルター'))],
               layoutType: layout,
               supportedLayouts: const ['gallery', 'table', 'list'],
               onLayoutChanged: (value) => setState(() => layout = value),
-              searchController: controller,
+              searchHint: '検索',
+              searchValue: query,
               onSearchChanged: (value) => query = value,
             ),
           ),

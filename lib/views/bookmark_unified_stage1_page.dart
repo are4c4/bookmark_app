@@ -13,7 +13,7 @@ import '../database/database_definition.dart';
 import '../data/person_roles.dart';
 import '../data/saved_view_extensions.dart';
 import '../data/workspace_store.dart';
-import '../features/database/presentation/widgets/database_toolbar.dart';
+import '../features/database/presentation/widgets/database_page_toolbar.dart';
 import '../services/bookmark_metadata_service.dart';
 import '../services/photo_storage_service.dart';
 import '../widgets/app_toast.dart';
@@ -1363,7 +1363,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
         (_minRating > 0 ? 1 : 0) +
         (_relationFilterLabel == null ? 0 : 1);
 
-    return DatabaseToolbar(
+    return DatabasePageToolbar(
       leadingActions: [
         TextButton.icon(
           onPressed: _showFilterDialog,
@@ -1453,7 +1453,8 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
         };
         _markViewChanged();
       }),
-      searchController: _searchController,
+      searchHint: '検索',
+      searchValue: _query,
       onSearchChanged: (value) => setState(() {
         _query = value;
         _markViewChanged();
