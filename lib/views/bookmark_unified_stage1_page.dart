@@ -11,22 +11,11 @@ import '../data/person_roles.dart';
 import '../data/workspace_store.dart';
 import '../services/bookmark_metadata_service.dart';
 import '../services/photo_storage_service.dart';
+import 'bookmark_query_engine.dart';
 import '../widgets/bookmark_create_dialog.dart';
 import '../widgets/bookmark_detail_panel.dart';
 import '../widgets/notion_bookmark_card.dart';
 import '../widgets/relation_database_picker.dart';
-
-enum BookmarkStage1ViewType { gallery, list, table }
-enum BookmarkStage1SortField { createdAt, title, url }
-enum BookmarkStage1Property { image, url, tags, people, description, createdAt, favorite, status, rating, history }
-
-const _statusLabels = <String, String>{
-  'unread': '未読',
-  'later': '後で見る',
-  'in_progress': '閲覧中 / 視聴中',
-  'done': '完了 / 視聴済み',
-  'archived': 'アーカイブ',
-};
 
 class BookmarkUnifiedStage1Page extends StatefulWidget {
   const BookmarkUnifiedStage1Page({
@@ -87,65 +76,23 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
     return result;
   }
 
-  Set<int> _descendantIds(int tagId, List<Tag> tags) {
-    final result = <int>{};
-    void visit(int parentId) {
-      for (final child in tags.where((tag) => tag.parentTagId == parentId)) {
-        if (result.add(child.id)) visit(child.id);
-      }
-    }
-    visit(tagId);
-    return result;
-  }
-
-  List<BookmarkItem> _applyFilters(List<BookmarkItem> source, List<Tag> allTags) {
-    final q = _query.trim().toLowerCase();
-    final result = source.where((bookmark) {
-      if (_favoritesOnly && !bookmark.favorite) return false;
-      if (_statusFilter.isNotEmpty && bookmark.status != _statusFilter) return false;
-      if (bookmark.rating < _minRating) return false;
-      if (_personFilterId != null && !bookmark.people.any((person) => person.id == _personFilterId)) return false;
-      if (_photoFilterId != null && !bookmark.photos.any((photo) => photo.id == _photoFilterId)) return false;
-      if (q.isNotEmpty) {
-        final searchable = [
-          bookmark.title,
-          bookmark.url,
-          bookmark.description ?? '',
-          _statusLabels[bookmark.status] ?? bookmark.status,
-          ...bookmark.tags.map((tag) => tag.name),
-          ...bookmark.people.map((person) => person.name),
-        ].join(' ').toLowerCase();
-        if (!searchable.contains(q)) return false;
-      }
-      if (_selectedTagIds.isNotEmpty) {
-        final bookmarkTagIds = bookmark.tags.map((tag) => tag.id).toSet();
-        final selectedMatches = _selectedTagIds.map((id) {
-          final allowed = <int>{id};
-          if (_includeDescendants) {
-            allowed.addAll(_descendantIds(id, allTags));
-          }
-          return allowed.any(bookmarkTagIds.contains);
-        });
-        final matches = _tagMatchMode == 'and'
-            ? selectedMatches.every((value) => value)
-            : selectedMatches.any((value) => value);
-        if (!matches) return false;
-      }
-      return true;
-    }).toList();
-
-    int compare(BookmarkItem a, BookmarkItem b) {
-      final value = switch (_sortField) {
-        BookmarkStage1SortField.createdAt => a.createdAt.compareTo(b.createdAt),
-        BookmarkStage1SortField.title => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
-        BookmarkStage1SortField.url => a.url.toLowerCase().compareTo(b.url.toLowerCase()),
-      };
-      return _sortAscending ? value : -value;
-    }
-
-    result.sort(compare);
-    return result;
-  }
+  List<BookmarkItem> _applyFilters(
+    List<BookmarkItem> source,
+    List<Tag> allTags,
+  ) =>
+      BookmarkQuery(
+        query: _query,
+        favoritesOnly: _favoritesOnly,
+        statusFilter: _statusFilter,
+        minRating: _minRating,
+        personFilterId: _personFilterId,
+        photoFilterId: _photoFilterId,
+        selectedTagIds: _selectedTagIds,
+        includeDescendants: _includeDescendants,
+        tagMatchMode: _tagMatchMode,
+        sortField: _sortField,
+        sortAscending: _sortAscending,
+      ).apply(source, allTags);
 
   void _resetFilters() {
     _searchController.clear();
@@ -446,7 +393,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
           final roleText = _roleText(roleSnapshot.data ?? const []);
           final details = <String>[
             if (_visibleProperties.contains(BookmarkStage1Property.url)) _compactUrl(bookmark.url),
-            if (_visibleProperties.contains(BookmarkStage1Property.status)) _statusLabels[bookmark.status] ?? bookmark.status,
+            if (_visibleProperties.contains(BookmarkStage1Property.status)) bookmarkStatusLabels[bookmark.status] ?? bookmark.status,
             if (_visibleProperties.contains(BookmarkStage1Property.rating) && bookmark.rating > 0) '★' * bookmark.rating,
             if (_visibleProperties.contains(BookmarkStage1Property.tags) && bookmark.tags.isNotEmpty) bookmark.tags.map((tag) => tag.name).join(', '),
             if (_visibleProperties.contains(BookmarkStage1Property.people) && bookmark.people.isNotEmpty) bookmark.people.map((person) => person.name).join(', '),
@@ -518,7 +465,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
               BookmarkStage1Property.description => DataCell(SizedBox(width: 260, child: Text(bookmark.description ?? '', maxLines: 2, overflow: TextOverflow.ellipsis))),
               BookmarkStage1Property.createdAt => DataCell(Text(_formatDate(bookmark.createdAt))),
               BookmarkStage1Property.favorite => DataCell(IconButton(onPressed: () => widget.repository.toggleFavorite(bookmark), icon: Icon(bookmark.favorite ? Icons.star : Icons.star_border, size: 18))),
-              BookmarkStage1Property.status => DataCell(Text(_statusLabels[bookmark.status] ?? bookmark.status)),
+              BookmarkStage1Property.status => DataCell(Text(bookmarkStatusLabels[bookmark.status] ?? bookmark.status)),
               BookmarkStage1Property.rating => DataCell(Text(bookmark.rating == 0 ? '' : '★' * bookmark.rating)),
               BookmarkStage1Property.history => DataCell(Text(_historyText(bookmark))),
             });
@@ -676,7 +623,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
                     setLocalState(() => tagMatchMode = value ?? 'or'),
               ),
               const SizedBox(height: 12),
-              DropdownButtonFormField<String>(initialValue: status, decoration: const InputDecoration(labelText: 'ステータス'), items: [const DropdownMenuItem(value: '', child: Text('すべて')), ..._statusLabels.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))], onChanged: (value) => setLocalState(() => status = value ?? '')),
+              DropdownButtonFormField<String>(initialValue: status, decoration: const InputDecoration(labelText: 'ステータス'), items: [const DropdownMenuItem(value: '', child: Text('すべて')), ...bookmarkStatusLabels.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))], onChanged: (value) => setLocalState(() => status = value ?? '')),
               const SizedBox(height: 12),
               DropdownButtonFormField<int>(initialValue: minRating, decoration: const InputDecoration(labelText: '最低評価'), items: List.generate(6, (index) => DropdownMenuItem(value: index, child: Text(index == 0 ? '指定なし' : '${'★' * index} 以上'))), onChanged: (value) => setLocalState(() => minRating = value ?? 0)),
             ]),
@@ -916,7 +863,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
           TextButton.icon(onPressed: _batchSelectedIds.isEmpty ? null : _moveBatch, icon: const Icon(Icons.drive_file_move_outline, size: 17), label: const Text('Workspaceへ移動')),
           PopupMenuButton<String>(
             onSelected: (value) => widget.repository.batchSetStatus(_batchSelectedIds, value),
-            itemBuilder: (_) => _statusLabels.entries.map((e) => PopupMenuItem(value: e.key, child: Text(e.value))).toList(),
+            itemBuilder: (_) => bookmarkStatusLabels.entries.map((e) => PopupMenuItem(value: e.key, child: Text(e.value))).toList(),
             child: const Padding(padding: EdgeInsets.all(8), child: Text('ステータス')),
           ),
           IconButton(tooltip: '選択を削除', onPressed: _batchSelectedIds.isEmpty ? null : _batchDelete, icon: const Icon(Icons.delete_outline)),
