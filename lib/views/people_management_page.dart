@@ -1,16 +1,17 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
+import '../data/person_group_store.dart';
 import '../ui/ui_tokens.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/bookmark_reverse_lookup_dialog.dart';
 import '../widgets/database_page_toolbar.dart';
 import '../widgets/detail_section.dart';
 import '../widgets/inline_rename_text.dart';
+import '../widgets/notion_inline_field.dart';
 import '../widgets/photo_database_picker.dart';
 
 enum PeopleViewType { gallery, list, table }
@@ -27,8 +28,16 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
   PeopleViewType _viewType = PeopleViewType.gallery;
   String _query = '';
   int? _selectedPersonId;
+  int? _selectedGroupId;
+  late final PersonGroupStore _personGroups;
 
   BookmarkRepository get repository => widget.repository;
+
+  @override
+  void initState() {
+    super.initState();
+    _personGroups = PersonGroupStore(repository.workspaceStore.database);
+  }
 
   PhotoRecord? _profilePhoto(Person person, List<PhotoRecord> photos) =>
       photos.where((photo) => photo.id == person.profilePhotoId).firstOrNull;
@@ -39,98 +48,66 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
   Future<void> _renamePerson(Person person, String name) =>
       repository.updatePerson(person, name, person.note);
 
+  Future<void> _saveNote(Person person, String note) =>
+      repository.updatePerson(person, person.name, note);
+
   Future<void> _create() async {
-    var name = '';
-    var note = '';
-    final ok = await showDialog<bool>(
+    final controller = TextEditingController();
+    final name = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('人物を追加'),
-        content: SizedBox(
-          width: 440,
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            TextFormField(
-              autofocus: true,
-              decoration: const InputDecoration(labelText: '名前'),
-              onChanged: (v) => name = v,
-              onFieldSubmitted: (_) {
-                if (name.trim().isNotEmpty) Navigator.pop(dialogContext, true);
-              },
-            ),
-            const SizedBox(height: UiTokens.space12),
-            TextFormField(maxLines: 3, decoration: const InputDecoration(labelText: 'メモ'), onChanged: (v) => note = v),
-          ]),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: '名前を入力して Enter',
+            border: OutlineInputBorder(),
+          ),
+          onSubmitted: (value) => Navigator.pop(dialogContext, value.trim()),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('キャンセル')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('追加')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('閉じる'),
+          ),
         ],
       ),
     );
-    if (ok == true && name.trim().isNotEmpty) await repository.createPerson(name.trim(), note: note.trim());
-  }
-
-  Future<void> _edit(Person person, List<PhotoRecord> photos) async {
-    var name = person.name;
-    var note = person.note ?? '';
-    PhotoRecord? profilePhoto = _profilePhoto(person, photos);
-    var updateProfilePhoto = false;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setLocalState) => AlertDialog(
-          title: const Text('人物プロフィールを編集'),
-          content: SizedBox(
-            width: 520,
-            child: SingleChildScrollView(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                TextFormField(initialValue: name, decoration: const InputDecoration(labelText: '名前'), onChanged: (v) => name = v),
-                const SizedBox(height: UiTokens.space12),
-                TextFormField(initialValue: note, maxLines: 4, decoration: const InputDecoration(labelText: 'メモ'), onChanged: (v) => note = v),
-                const SizedBox(height: UiTokens.space16),
-                const Text('プロフィール画像', style: TextStyle(fontWeight: FontWeight.w600)),
-                const SizedBox(height: UiTokens.space8),
-                if (profilePhoto != null)
-                  ClipRRect(borderRadius: BorderRadius.circular(UiTokens.radiusMd), child: SizedBox(width: 190, child: Image.file(File(profilePhoto!.path), fit: BoxFit.fitWidth)))
-                else
-                  Container(width: 190, height: 150, alignment: Alignment.center, color: Theme.of(context).colorScheme.surfaceContainerLow, child: const Icon(Icons.person_outline, size: 52)),
-                const SizedBox(height: UiTokens.space8),
-                Wrap(spacing: UiTokens.space8, children: [
-                  OutlinedButton.icon(
-                    onPressed: () async {
-                      final result = await showPhotoDatabasePicker(
-                        context: context,
-                        photos: photos,
-                        initiallySelectedIds: profilePhoto == null ? const [] : [profilePhoto!.id],
-                        initialCoverPhotoId: profilePhoto?.id,
-                        title: 'プロフィール画像を選択',
-                      );
-                      if (result == null) return;
-                      setLocalState(() {
-                        profilePhoto = result.coverPhoto ?? result.photos.firstOrNull;
-                        updateProfilePhoto = true;
-                      });
-                    },
-                    icon: const Icon(Icons.photo_library_outlined),
-                    label: const Text('写真DBから選択'),
-                  ),
-                  if (profilePhoto != null)
-                    TextButton(onPressed: () => setLocalState(() { profilePhoto = null; updateProfilePhoto = true; }), child: const Text('画像を解除')),
-                ]),
-              ]),
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('キャンセル')),
-            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('保存')),
-          ],
-        ),
-      ),
-    );
-    if (ok == true && name.trim().isNotEmpty) {
-      await repository.updatePerson(person, name.trim(), note.trim(), profilePhoto: profilePhoto, updateProfilePhoto: updateProfilePhoto);
+    controller.dispose();
+    if (name?.isNotEmpty == true) {
+      final id = await repository.createPerson(name!);
+      if (mounted) setState(() => _selectedPersonId = id);
     }
   }
+
+  Future<void> _chooseProfilePhoto(Person person, List<PhotoRecord> photos) async {
+    final current = _profilePhoto(person, photos);
+    final result = await showPhotoDatabasePicker(
+      context: context,
+      photos: photos,
+      initiallySelectedIds: current == null ? const [] : [current.id],
+      initialCoverPhotoId: current?.id,
+      title: 'プロフィール画像を選択',
+    );
+    if (result == null) return;
+    final photo = result.coverPhoto ?? result.photos.firstOrNull;
+    await repository.updatePerson(
+      person,
+      person.name,
+      person.note,
+      profilePhoto: photo,
+      updateProfilePhoto: true,
+    );
+  }
+
+  Future<void> _clearProfilePhoto(Person person) => repository.updatePerson(
+        person,
+        person.name,
+        person.note,
+        profilePhoto: null,
+        updateProfilePhoto: true,
+      );
 
   Future<void> _delete(Person person) async {
     final ok = await showDialog<bool>(
@@ -150,17 +127,201 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
     }
   }
 
+  Future<void> _showGroupManager() async {
+    final createController = TextEditingController();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setLocalState) => AlertDialog(
+          title: const Text('人物グループ'),
+          content: SizedBox(
+            width: 430,
+            height: 430,
+            child: Column(children: [
+              TextField(
+                controller: createController,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.add),
+                  hintText: 'グループ名を入力して Enter',
+                  border: OutlineInputBorder(),
+                ),
+                onSubmitted: (value) async {
+                  if (value.trim().isEmpty) return;
+                  await _personGroups.createGroup(value);
+                  createController.clear();
+                  if (dialogContext.mounted) setLocalState(() {});
+                },
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: FutureBuilder<List<PersonGroupInfo>>(
+                  future: _personGroups.listGroups(),
+                  builder: (context, snapshot) {
+                    final groups = snapshot.data ?? const <PersonGroupInfo>[];
+                    if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                    if (groups.isEmpty) {
+                      return const AppEmptyState(
+                        icon: Icons.group_work_outlined,
+                        title: 'グループはまだありません',
+                        message: '例：サカナクション、研究室、会社など',
+                      );
+                    }
+                    return ListView.builder(
+                      itemCount: groups.length,
+                      itemBuilder: (context, index) {
+                        final group = groups[index];
+                        return ListTile(
+                          leading: const Icon(Icons.group_outlined),
+                          title: InlineRenameText(
+                            value: group.name,
+                            onSubmitted: (value) async {
+                              await _personGroups.renameGroup(group.id, value);
+                              if (dialogContext.mounted) setLocalState(() {});
+                              if (mounted) setState(() {});
+                            },
+                          ),
+                          trailing: IconButton(
+                            tooltip: '削除',
+                            icon: const Icon(Icons.delete_outline, size: 18),
+                            onPressed: () async {
+                              await _personGroups.deleteGroup(group.id);
+                              if (_selectedGroupId == group.id && mounted) {
+                                setState(() => _selectedGroupId = null);
+                              }
+                              if (dialogContext.mounted) setLocalState(() {});
+                            },
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('閉じる')),
+          ],
+        ),
+      ),
+    );
+    createController.dispose();
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _editGroupsForPerson(Person person) async {
+    final groups = await _personGroups.listGroups();
+    final current = (await _personGroups.groupsForPerson(person.id)).map((group) => group.id).toSet();
+    if (!mounted) return;
+    final createController = TextEditingController();
+    final all = <PersonGroupInfo>[...groups];
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setLocalState) => AlertDialog(
+          title: Text('${person.name} の所属'),
+          content: SizedBox(
+            width: 430,
+            height: 440,
+            child: Column(children: [
+              TextField(
+                controller: createController,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.add),
+                  hintText: 'グループを作成して追加',
+                  border: OutlineInputBorder(),
+                ),
+                onSubmitted: (value) async {
+                  if (value.trim().isEmpty) return;
+                  final id = await _personGroups.createGroup(value);
+                  final refreshed = await _personGroups.listGroups();
+                  current.add(id);
+                  await _personGroups.setGroupsForPerson(person.id, current);
+                  all
+                    ..clear()
+                    ..addAll(refreshed);
+                  createController.clear();
+                  if (dialogContext.mounted) setLocalState(() {});
+                },
+              ),
+              const SizedBox(height: 10),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: all.length,
+                  itemBuilder: (context, index) {
+                    final group = all[index];
+                    final selected = current.contains(group.id);
+                    final scheme = Theme.of(context).colorScheme;
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 1),
+                      child: Material(
+                        color: selected ? scheme.secondaryContainer.withValues(alpha: .45) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(5),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(5),
+                          onTap: () async {
+                            selected ? current.remove(group.id) : current.add(group.id);
+                            await _personGroups.setGroupsForPerson(person.id, current);
+                            if (dialogContext.mounted) setLocalState(() {});
+                            if (mounted) setState(() {});
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                            child: Row(children: [
+                              const Icon(Icons.group_outlined, size: 18),
+                              const SizedBox(width: 10),
+                              Expanded(child: Text(group.name)),
+                              if (selected) const Icon(Icons.check, size: 19),
+                            ]),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('閉じる')),
+          ],
+        ),
+      ),
+    );
+    createController.dispose();
+  }
+
   Widget _image(Person person, List<PhotoRecord> photos) {
     final photo = _profilePhoto(person, photos);
     if (photo == null) {
-      return SizedBox(height: 190, child: ColoredBox(color: Theme.of(context).colorScheme.surfaceContainerLow, child: const Center(child: Icon(Icons.person_outline, size: 52))));
+      return SizedBox(
+        height: 190,
+        child: ColoredBox(
+          color: Theme.of(context).colorScheme.surfaceContainerLow,
+          child: const Center(child: Icon(Icons.person_outline, size: 52)),
+        ),
+      );
     }
-    return Image.file(File(photo.path), width: double.infinity, fit: BoxFit.fitWidth, errorBuilder: (_, __, ___) => const SizedBox(height: 190, child: Center(child: Icon(Icons.person_outline, size: 52))));
+    return SizedBox(
+      height: 190,
+      width: double.infinity,
+      child: Image.file(
+        File(photo.path),
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.person_outline, size: 52)),
+      ),
+    );
   }
 
   Widget _avatar(Person person, List<PhotoRecord> photos) {
     final photo = _profilePhoto(person, photos);
-    return CircleAvatar(radius: 22, backgroundImage: photo == null ? null : FileImage(File(photo.path)), child: photo == null ? const Icon(Icons.person_outline) : null);
+    return CircleAvatar(
+      radius: 22,
+      backgroundImage: photo == null ? null : FileImage(File(photo.path)),
+      child: photo == null ? const Icon(Icons.person_outline) : null,
+    );
   }
 
   void _showRelated(Person person, List<BookmarkItem> bookmarks) {
@@ -172,17 +333,17 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
     );
   }
 
-  Widget _menu(Person person, List<PhotoRecord> photos, List<BookmarkItem> bookmarks) => PopupMenuButton<String>(
+  Widget _menu(Person person, List<BookmarkItem> bookmarks) => PopupMenuButton<String>(
         onSelected: (value) {
           if (value == 'detail') setState(() => _selectedPersonId = person.id);
           if (value == 'bookmarks') _showRelated(person, bookmarks);
-          if (value == 'edit') _edit(person, photos);
+          if (value == 'groups') _editGroupsForPerson(person);
           if (value == 'delete') _delete(person);
         },
         itemBuilder: (_) => const [
           PopupMenuItem(value: 'detail', child: Text('詳細を表示')),
           PopupMenuItem(value: 'bookmarks', child: Text('関連ブックマークを見る')),
-          PopupMenuItem(value: 'edit', child: Text('プロフィールを編集 / 画像を設定')),
+          PopupMenuItem(value: 'groups', child: Text('所属グループを編集')),
           PopupMenuDivider(),
           PopupMenuItem(value: 'delete', child: Text('削除')),
         ],
@@ -190,12 +351,16 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
 
   Widget _gallery(List<Person> people, List<PhotoRecord> photos, List<BookmarkItem> bookmarks) => LayoutBuilder(
         builder: (context, constraints) {
-          final columns = constraints.maxWidth >= 1200 ? 5 : constraints.maxWidth >= 900 ? 4 : constraints.maxWidth >= 620 ? 3 : 2;
-          return MasonryGridView.count(
+          final width = constraints.maxWidth;
+          final columns = width >= 1250 ? 5 : width >= 960 ? 4 : width >= 680 ? 3 : width >= 430 ? 2 : 1;
+          return GridView.builder(
             padding: const EdgeInsets.fromLTRB(18, UiTokens.space16, 18, 100),
-            crossAxisCount: columns,
-            mainAxisSpacing: UiTokens.space12,
-            crossAxisSpacing: UiTokens.space12,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: columns,
+              crossAxisSpacing: UiTokens.space12,
+              mainAxisSpacing: UiTokens.space12,
+              childAspectRatio: .82,
+            ),
             itemCount: people.length,
             itemBuilder: (context, index) {
               final person = people[index];
@@ -209,26 +374,37 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
                 child: InkWell(
                   onTap: () => setState(() => _selectedPersonId = person.id),
                   child: Container(
-                    decoration: BoxDecoration(border: Border.all(color: selected ? scheme.primary : scheme.outlineVariant, width: selected ? 1.5 : 1), borderRadius: BorderRadius.circular(UiTokens.radiusMd)),
-                    child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: selected ? scheme.primary : scheme.outlineVariant,
+                        width: selected ? 1.5 : 1,
+                      ),
+                      borderRadius: BorderRadius.circular(UiTokens.radiusMd),
+                    ),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       _image(person, photos),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(10, UiTokens.space8, UiTokens.space4, 10),
-                        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            InlineRenameText(
-                              key: ValueKey('person-name:${person.id}'),
-                              value: person.name,
-                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                              maxLines: 2,
-                              onSubmitted: (value) => _renamePerson(person, value),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(10, 8, 4, 8),
+                          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Expanded(
+                              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                InlineRenameText(
+                                  value: person.name,
+                                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                                  maxLines: 2,
+                                  onSubmitted: (value) => _renamePerson(person, value),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${related.length}件のブックマーク',
+                                  style: TextStyle(fontSize: 11.5, color: scheme.onSurfaceVariant),
+                                ),
+                              ]),
                             ),
-                            const SizedBox(height: UiTokens.space4),
-                            Text('${related.length}件のブックマーク', style: TextStyle(fontSize: 11.5, color: scheme.onSurfaceVariant)),
-                            if (person.note?.trim().isNotEmpty == true) ...[const SizedBox(height: UiTokens.space4), Text(person.note!, maxLines: 3, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: UiTokens.textSm, color: scheme.onSurfaceVariant))],
-                          ])),
-                          _menu(person, photos, bookmarks),
-                        ]),
+                            _menu(person, bookmarks),
+                          ]),
+                        ),
                       ),
                     ]),
                   ),
@@ -250,13 +426,16 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
             selected: _selectedPersonId == person.id,
             leading: _avatar(person, photos),
             title: InlineRenameText(
-              key: ValueKey('person-list-name:${person.id}'),
               value: person.name,
               style: const TextStyle(fontWeight: FontWeight.w600),
               onSubmitted: (value) => _renamePerson(person, value),
             ),
-            subtitle: Text(['${related.length}件のブックマーク', if (person.note?.trim().isNotEmpty == true) person.note!].join(' · '), maxLines: 2, overflow: TextOverflow.ellipsis),
-            trailing: _menu(person, photos, bookmarks),
+            subtitle: Text(
+              ['${related.length}件のブックマーク', if (person.note?.trim().isNotEmpty == true) person.note!].join(' · '),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            trailing: _menu(person, bookmarks),
             onTap: () => setState(() => _selectedPersonId = person.id),
           );
         },
@@ -266,7 +445,12 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
         padding: const EdgeInsets.fromLTRB(18, UiTokens.space12, 18, 100),
         scrollDirection: Axis.horizontal,
         child: DataTable(
-          columns: const [DataColumn(label: Text('人物')), DataColumn(label: Text('メモ')), DataColumn(label: Text('ブックマーク')), DataColumn(label: Text(''))],
+          columns: const [
+            DataColumn(label: Text('人物')),
+            DataColumn(label: Text('メモ')),
+            DataColumn(label: Text('ブックマーク')),
+            DataColumn(label: Text('')),
+          ],
           rows: people.map((person) {
             final related = _bookmarksFor(person, bookmarks);
             return DataRow(
@@ -278,85 +462,182 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
                   const SizedBox(width: 10),
                   SizedBox(
                     width: 180,
-                    child: InlineRenameText(
-                      key: ValueKey('person-table-name:${person.id}'),
-                      value: person.name,
-                      onSubmitted: (value) => _renamePerson(person, value),
-                    ),
+                    child: InlineRenameText(value: person.name, onSubmitted: (value) => _renamePerson(person, value)),
                   ),
                 ])),
                 DataCell(SizedBox(width: 280, child: Text(person.note ?? '', maxLines: 2, overflow: TextOverflow.ellipsis))),
                 DataCell(Text('${related.length}件')),
-                DataCell(_menu(person, photos, bookmarks)),
+                DataCell(_menu(person, bookmarks)),
               ],
             );
           }).toList(),
         ),
       );
 
+  Widget _profileImageEditor(Person person, List<PhotoRecord> photos) {
+    final photo = _profilePhoto(person, photos);
+    final scheme = Theme.of(context).colorScheme;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Material(
+        color: scheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(UiTokens.radiusMd),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => _chooseProfilePhoto(person, photos),
+          child: Stack(alignment: Alignment.center, children: [
+            if (photo != null)
+              Image.file(File(photo.path), width: double.infinity, fit: BoxFit.fitWidth)
+            else
+              const SizedBox(
+                height: 220,
+                width: double.infinity,
+                child: Center(child: Icon(Icons.person_outline, size: 64)),
+              ),
+            Positioned(
+              right: 10,
+              bottom: 10,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: scheme.surface.withValues(alpha: .92),
+                  borderRadius: BorderRadius.circular(5),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.photo_camera_outlined, size: 16),
+                    const SizedBox(width: 5),
+                    Text(photo == null ? '画像を追加' : '画像を変更', style: const TextStyle(fontSize: 12)),
+                  ]),
+                ),
+              ),
+            ),
+          ]),
+        ),
+      ),
+      if (photo != null)
+        TextButton.icon(
+          onPressed: () => _clearProfilePhoto(person),
+          icon: const Icon(Icons.close, size: 15),
+          label: const Text('画像を解除'),
+        ),
+    ]);
+  }
+
+  Widget _groupsSection(Person person) => FutureBuilder<List<PersonGroupInfo>>(
+        future: _personGroups.groupsForPerson(person.id),
+        builder: (context, snapshot) {
+          final groups = snapshot.data ?? const <PersonGroupInfo>[];
+          final scheme = Theme.of(context).colorScheme;
+          return Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              ...groups.map(
+                (group) => Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: scheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.group_outlined, size: 13),
+                    const SizedBox(width: 4),
+                    Text(group.name, style: const TextStyle(fontSize: 12.5)),
+                  ]),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () => _editGroupsForPerson(person),
+                icon: const Icon(Icons.add, size: 15),
+                label: Text(groups.isEmpty ? 'グループを追加' : '所属を編集'),
+              ),
+            ],
+          );
+        },
+      );
+
   Widget _detail(Person person, List<PhotoRecord> photos, List<BookmarkItem> bookmarks) {
     final related = _bookmarksFor(person, bookmarks);
-    final profilePhoto = _profilePhoto(person, photos);
     final scheme = Theme.of(context).colorScheme;
     return Material(
       color: scheme.surface,
       child: Column(children: [
-        SizedBox(height: UiTokens.toolbarHeight, child: Row(children: [
-          const SizedBox(width: UiTokens.space16),
-          const Text('人物の詳細', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
-          const Spacer(),
-          IconButton(tooltip: '編集', onPressed: () => _edit(person, photos), icon: const Icon(Icons.edit_outlined, size: UiTokens.iconNormal)),
-          IconButton(tooltip: '閉じる', onPressed: () => setState(() => _selectedPersonId = null), icon: const Icon(Icons.close, size: 19)),
-        ])),
-        const Divider(height: 1),
-        Expanded(child: ListView(padding: const EdgeInsets.fromLTRB(18, 18, 18, 30), children: [
-          if (profilePhoto != null)
-            ClipRRect(borderRadius: BorderRadius.circular(UiTokens.radiusMd), child: Image.file(File(profilePhoto.path), width: double.infinity, fit: BoxFit.fitWidth))
-          else
-            SizedBox(height: 220, child: ColoredBox(color: scheme.surfaceContainerLow, child: const Center(child: Icon(Icons.person_outline, size: 64)))),
-          const SizedBox(height: UiTokens.space16),
-          InlineRenameText(
-            key: ValueKey('person-detail-name:${person.id}'),
-            value: person.name,
-            style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w700),
-            onSubmitted: (value) => _renamePerson(person, value),
-          ),
-          const SizedBox(height: UiTokens.space6),
-          Text('${related.length}件の関連ブックマーク', style: TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant)),
-          const SizedBox(height: UiTokens.space16),
-          DetailSection(
-            title: '基本情報',
-            icon: Icons.person_outline,
-            topDivider: false,
-            child: person.note?.trim().isNotEmpty == true
-                ? Text(person.note!, style: const TextStyle(fontSize: 13.5, height: 1.55))
-                : Text('メモはありません', style: TextStyle(color: scheme.onSurfaceVariant)),
-          ),
-          DetailSection(
-            title: 'Relation',
-            icon: Icons.link_outlined,
-            trailing: related.isEmpty ? null : TextButton(onPressed: () => _showRelated(person, bookmarks), child: const Text('すべて見る')),
-            child: related.isEmpty
-                ? Text('関連ブックマークはありません', style: TextStyle(color: scheme.onSurfaceVariant))
-                : Column(children: related.take(8).map((bookmark) => ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.bookmark_outline, size: UiTokens.iconNormal),
-                    title: Text(bookmark.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                    subtitle: Text(bookmark.url, maxLines: 1, overflow: TextOverflow.ellipsis),
-                  )).toList()),
-          ),
-          DetailSection(
-            title: '管理',
-            icon: Icons.settings_outlined,
-            child: ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(Icons.delete_outline, color: scheme.error),
-              title: Text('人物を削除', style: TextStyle(color: scheme.error)),
-              onTap: () => _delete(person),
+        SizedBox(
+          height: UiTokens.toolbarHeight,
+          child: Row(children: [
+            const SizedBox(width: UiTokens.space16),
+            const Text('人物の詳細', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+            const Spacer(),
+            PopupMenuButton<String>(
+              tooltip: 'その他',
+              onSelected: (value) {
+                if (value == 'delete') _delete(person);
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'delete', child: Text('人物を削除')),
+              ],
             ),
+            IconButton(
+              tooltip: '閉じる',
+              onPressed: () => setState(() => _selectedPersonId = null),
+              icon: const Icon(Icons.close, size: 19),
+            ),
+          ]),
+        ),
+        const Divider(height: 1),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 30),
+            children: [
+              _profileImageEditor(person, photos),
+              const SizedBox(height: 10),
+              InlineRenameText(
+                value: person.name,
+                style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w700),
+                onSubmitted: (value) => _renamePerson(person, value),
+              ),
+              const SizedBox(height: 4),
+              Text('${related.length}件の関連ブックマーク', style: TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant)),
+              const SizedBox(height: UiTokens.space16),
+              DetailSection(
+                title: '基本情報',
+                icon: Icons.person_outline,
+                topDivider: false,
+                child: NotionInlineField(
+                  value: person.note ?? '',
+                  hintText: 'メモを追加…',
+                  maxLines: null,
+                  style: const TextStyle(fontSize: 13.5, height: 1.55),
+                  onSaved: (value) => _saveNote(person, value),
+                ),
+              ),
+              DetailSection(
+                title: '所属',
+                icon: Icons.group_outlined,
+                child: _groupsSection(person),
+              ),
+              DetailSection(
+                title: 'Relation',
+                icon: Icons.link_outlined,
+                trailing: related.isEmpty
+                    ? null
+                    : TextButton(onPressed: () => _showRelated(person, bookmarks), child: const Text('すべて見る')),
+                child: related.isEmpty
+                    ? Text('関連ブックマークはありません', style: TextStyle(color: scheme.onSurfaceVariant))
+                    : Column(
+                        children: related.take(8).map((bookmark) => ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.bookmark_outline, size: UiTokens.iconNormal),
+                          title: Text(bookmark.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                          subtitle: Text(bookmark.url, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        )).toList(),
+                      ),
+              ),
+            ],
           ),
-        ])),
+        ),
       ]),
     );
   }
@@ -372,15 +653,52 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
         onSelectionChanged: (value) => setState(() => _viewType = value.first),
       );
 
+  Widget _groupFilter() => FutureBuilder<List<PersonGroupInfo>>(
+        future: _personGroups.listGroups(),
+        builder: (context, snapshot) {
+          final groups = snapshot.data ?? const <PersonGroupInfo>[];
+          final current = groups.where((group) => group.id == _selectedGroupId).firstOrNull;
+          return PopupMenuButton<int>(
+            tooltip: '人物グループ',
+            onSelected: (id) {
+              if (id == -2) {
+                _showGroupManager();
+                return;
+              }
+              setState(() => _selectedGroupId = id < 0 ? null : id);
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(value: -1, child: Text('すべての人物')),
+              ...groups.map((group) => PopupMenuItem(value: group.id, child: Text(group.name))),
+              const PopupMenuDivider(),
+              const PopupMenuItem(value: -2, child: Text('グループを管理…')),
+            ],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.group_outlined, size: 17),
+                const SizedBox(width: 5),
+                Text(current?.name ?? 'グループ'),
+              ]),
+            ),
+          );
+        },
+      );
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      floatingActionButton: FloatingActionButton.extended(onPressed: _create, icon: const Icon(Icons.person_add_alt_1_outlined), label: const Text('人物を追加')),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _create,
+        icon: const Icon(Icons.person_add_alt_1_outlined),
+        label: const Text('人物を追加'),
+      ),
       body: Column(children: [
         DatabasePageToolbar(
           title: '人物',
           searchHint: '人物を検索',
           onSearchChanged: (value) => setState(() => _query = value),
+          leadingActions: [_groupFilter()],
           viewSwitcher: _viewSwitcher(),
         ),
         Expanded(
@@ -397,33 +715,42 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
                     builder: (context, bookmarkSnapshot) {
                       final bookmarks = bookmarkSnapshot.data ?? const <BookmarkItem>[];
                       final all = peopleSnapshot.data!;
-                      final q = _query.trim().toLowerCase();
-                      final people = q.isEmpty ? all : all.where((person) => '${person.name} ${person.note ?? ''}'.toLowerCase().contains(q)).toList();
-                      final selected = all.where((person) => person.id == _selectedPersonId).firstOrNull;
-                      if (all.isEmpty && selected == null) {
-                        return AppEmptyState(
-                          icon: Icons.people_outline,
-                          title: '人物はまだありません',
-                          message: '著者・出演者・講師などを人物DBとして登録すると、ブックマークからRelationできます。',
-                          actionLabel: '人物を追加',
-                          onAction: _create,
-                        );
-                      }
-                      return Row(children: [
-                        Expanded(
-                          child: people.isEmpty
-                              ? const AppEmptyState(icon: Icons.search_off_outlined, title: '検索条件に一致する人物がいません')
-                              : switch (_viewType) {
-                                  PeopleViewType.gallery => _gallery(people, photos, bookmarks),
-                                  PeopleViewType.list => _list(people, photos, bookmarks),
-                                  PeopleViewType.table => _table(people, photos, bookmarks),
-                                },
-                        ),
-                        if (selected != null) ...[
-                          const VerticalDivider(width: 1),
-                          SizedBox(width: 400, child: _detail(selected, photos, bookmarks)),
-                        ],
-                      ]);
+                      return FutureBuilder<Set<int>>(
+                        future: _selectedGroupId == null ? Future.value(all.map((p) => p.id).toSet()) : _personGroups.memberIds(_selectedGroupId!),
+                        builder: (context, groupSnapshot) {
+                          final allowedIds = groupSnapshot.data ?? <int>{};
+                          final q = _query.trim().toLowerCase();
+                          final people = all.where((person) {
+                            if (_selectedGroupId != null && !allowedIds.contains(person.id)) return false;
+                            return q.isEmpty || '${person.name} ${person.note ?? ''}'.toLowerCase().contains(q);
+                          }).toList();
+                          final selected = all.where((person) => person.id == _selectedPersonId).firstOrNull;
+                          if (all.isEmpty && selected == null) {
+                            return AppEmptyState(
+                              icon: Icons.people_outline,
+                              title: '人物はまだありません',
+                              message: '著者・出演者・講師などを人物DBとして登録すると、ブックマークからRelationできます。',
+                              actionLabel: '人物を追加',
+                              onAction: _create,
+                            );
+                          }
+                          return Row(children: [
+                            Expanded(
+                              child: people.isEmpty
+                                  ? const AppEmptyState(icon: Icons.search_off_outlined, title: '条件に一致する人物がいません')
+                                  : switch (_viewType) {
+                                      PeopleViewType.gallery => _gallery(people, photos, bookmarks),
+                                      PeopleViewType.list => _list(people, photos, bookmarks),
+                                      PeopleViewType.table => _table(people, photos, bookmarks),
+                                    },
+                            ),
+                            if (selected != null) ...[
+                              const VerticalDivider(width: 1),
+                              SizedBox(width: 400, child: _detail(selected, photos, bookmarks)),
+                            ],
+                          ]);
+                        },
+                      );
                     },
                   );
                 },
