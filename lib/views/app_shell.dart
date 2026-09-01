@@ -678,6 +678,7 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
         _ => SettingsPage(
             themeMode: widget.themeMode,
             onThemeModeChanged: widget.onThemeModeChanged,
+            repository: widget.repository,
           ),
       };
 
