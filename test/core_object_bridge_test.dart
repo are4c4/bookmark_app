@@ -42,7 +42,7 @@ void main() {
     final bookmarkId = (await database.customSelect("SELECT id FROM bookmarks WHERE url = 'https://example.com'").getSingle())
         .read<int>('id');
     await database.customStatement(
-      'INSERT INTO bookmark_workspaces(bookmark_id, workspace_id) VALUES (?, ?)',
+      'INSERT INTO bookmark_workspace(bookmark_id, workspace_id) VALUES (?, ?)',
       [bookmarkId, workspaceId],
     );
     await database.customStatement(
