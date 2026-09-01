@@ -1,6 +1,7 @@
 import 'package:rxdart/rxdart.dart';
 
 import '../services/attachment_storage_service.dart';
+import '../services/auto_organize_service.dart';
 import '../services/photo_storage_service.dart';
 
 import '../domain/bookmark_state.dart';
@@ -17,13 +18,16 @@ class BookmarkRepository {
     required this.lifecycleStore,
     required this.workspaceId,
     this.profileDirectoryPath,
-  });
+    AutoOrganizeService? autoOrganizeService,
+  }) : autoOrganize =
+            autoOrganizeService ?? AutoOrganizeService(_database);
 
   final AppDatabase _database;
   final WorkspaceStore workspaceStore;
   final BookmarkLifecycleStore lifecycleStore;
   final int workspaceId;
   final String? profileDirectoryPath;
+  final AutoOrganizeService autoOrganize;
 
   String? get photoDirectoryPath =>
       profileDirectoryPath == null ? null : '$profileDirectoryPath/photos';
@@ -157,6 +161,12 @@ class BookmarkRepository {
     );
     await workspaceStore.assignBookmark(id, workspaceId);
     await lifecycleStore.ensureBookmark(id, inbox: inbox);
+    await autoOrganize.applyToBookmark(
+      bookmarkId: id,
+      url: url,
+      title: title,
+      description: description,
+    );
     return id;
   }
 
@@ -186,7 +196,40 @@ class BookmarkRepository {
       final people = await _resolvePeople(personNames);
       await _database.setPeopleForRole(id, '出演者', people);
     }
+    await autoOrganize.applyToBookmark(
+      bookmarkId: id,
+      url: url,
+      title: title,
+      description: description,
+    );
   }
+
+  Future<List<AutoOrganizeRule>> listAutoOrganizeRules() =>
+      autoOrganize.listRules();
+
+  Future<int> createAutoOrganizeRule({
+    required String name,
+    required AutoOrganizeMatchField matchField,
+    required String keyword,
+    String tagName = '',
+    String genre = '',
+  }) =>
+      autoOrganize.createRule(
+        name: name,
+        matchField: matchField,
+        keyword: keyword,
+        tagName: tagName,
+        genre: genre,
+      );
+
+  Future<void> setAutoOrganizeRuleEnabled(int id, bool enabled) =>
+      autoOrganize.setEnabled(id, enabled);
+
+  Future<void> deleteAutoOrganizeRule(int id) =>
+      autoOrganize.deleteRule(id);
+
+  Future<AutoOrganizeResult> applyAutoOrganizeToAll() async =>
+      autoOrganize.applyToAll(await watchAll().first);
 
   Future<void> setBookmarkTagsFromDatabase(BookmarkItem bookmark, Iterable<Tag> selectedTags) =>
       _database.setBookmarkTags(bookmark.id, selectedTags.map((tag) => tag.name));
