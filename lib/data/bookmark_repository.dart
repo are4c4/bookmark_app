@@ -9,6 +9,7 @@ import 'app_database.dart';
 import 'bookmark_attachment_store.dart';
 import 'bookmark_lifecycle_store.dart';
 import 'person_roles.dart';
+import 'tag_group_store.dart';
 import 'workspace_store.dart';
 
 class BookmarkRepository {
@@ -333,10 +334,29 @@ class BookmarkRepository {
   Future<void> removeRelation(int sourceId, int targetId, String type) =>
       _database.removeBookmarkRelation(sourceId, targetId, type);
 
-  Future<int> createTag(String name, {Tag? parent}) => _database.createTag(name, parentTagId: parent?.id);
-  Future<void> renameTag(Tag tag, String newName) => _database.renameTag(tag.id, newName);
-  Future<void> setTagParent(Tag tag, Tag? parent) => _database.setTagParent(tag.id, parent?.id);
-  Future<void> deleteTag(Tag tag) => _database.deleteTag(tag.id);
+  Future<int> createTag(String name, {Tag? parent}) async {
+    final id = await _database.createTag(name);
+    if (parent != null) {
+      await TagGroupStore(_database).moveTag(
+        tagId: id,
+        parentTagId: parent.id,
+      );
+    }
+    return id;
+  }
+
+  Future<void> renameTag(Tag tag, String newName) =>
+      TagGroupStore(_database).renameTag(tag.id, newName);
+
+  Future<void> setTagParent(Tag tag, Tag? parent) =>
+      TagGroupStore(_database).moveTag(
+        tagId: tag.id,
+        parentTagId: parent?.id,
+        groupId: parent == null ? tag.groupId : null,
+      );
+
+  Future<void> deleteTag(Tag tag) =>
+      TagGroupStore(_database).deleteTag(tag.id);
 
   Future<int> createSavedView({
     required String name,
