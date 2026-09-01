@@ -44,6 +44,34 @@ class ProfileStorageMigrator {
         PhotosCompanion(path: Value(database.toStoredPath(targetPath))),
       );
     }
+
+    final profileDirectory = targetDir.parent;
+    final attachmentDirectory =
+        Directory('${profileDirectory.path}/attachments');
+    await attachmentDirectory.create(recursive: true);
+    final attachments =
+        await database.select(database.bookmarkAttachments).get();
+    for (final attachment in attachments) {
+      final resolvedPath = database.resolveStoredPath(attachment.path);
+      var managedPath = resolvedPath;
+      if (!_isInside(resolvedPath, profileDirectory.path)) {
+        final source = File(resolvedPath);
+        if (!await source.exists()) continue;
+        managedPath =
+            '${attachmentDirectory.path}/${attachment.id}_${_fileName(resolvedPath)}';
+        if (!await File(managedPath).exists()) {
+          await source.copy(managedPath);
+        }
+      }
+      final relativePath = database.toStoredPath(managedPath);
+      if (relativePath != attachment.path) {
+        await (database.update(database.bookmarkAttachments)
+              ..where((row) => row.id.equals(attachment.id)))
+            .write(
+          BookmarkAttachmentsCompanion(path: Value(relativePath)),
+        );
+      }
+    }
   }
 
   bool _isInside(String path, String directory) {
