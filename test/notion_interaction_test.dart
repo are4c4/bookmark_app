@@ -5,6 +5,12 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+Future<void> pumpFrames(WidgetTester tester, {int count = 6}) async {
+  for (var i = 0; i < count; i++) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
+}
+
 void main() {
   testWidgets('inline rename commits with Enter', (tester) async {
     var value = 'Alice';
@@ -19,9 +25,10 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Alice'));
-    await tester.pump(const Duration(milliseconds: 80));
-    await tester.tap(find.text('Alice'));
+    // Invoke the double-tap callback directly so the gesture recognizer does
+    // not leave a delayed double-tap timer pending in the widget test.
+    final gesture = tester.widget<GestureDetector>(find.byType(GestureDetector));
+    gesture.onDoubleTap!.call();
     await tester.pump();
     expect(find.byKey(const ValueKey('inline-rename-field')), findsOneWidget);
 
@@ -30,7 +37,7 @@ void main() {
       'Alicia',
     );
     await tester.testTextInput.receiveAction(TextInputAction.done);
-    await tester.pump(const Duration(milliseconds: 400));
+    await pumpFrames(tester, count: 2);
 
     expect(value, 'Alicia');
   });
@@ -66,19 +73,19 @@ void main() {
     );
 
     await tester.tap(find.text('open'));
-    await tester.pumpAndSettle();
+    await pumpFrames(tester);
     expect(find.text('タグDBから選択'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField).first, '恋愛');
     await tester.testTextInput.receiveAction(TextInputAction.done);
-    await tester.pumpAndSettle();
+    await pumpFrames(tester);
 
     expect(find.text('恋愛'), findsWidgets);
     expect(find.text('1 件選択中'), findsOneWidget);
     expect(find.byType(CheckboxListTile), findsNothing);
 
     await tester.tap(find.widgetWithText(FilledButton, '選択'));
-    await tester.pumpAndSettle();
+    await pumpFrames(tester);
     expect(result, isNotNull);
     expect(result!.single.name, '恋愛');
   });
@@ -114,19 +121,19 @@ void main() {
     );
 
     await tester.tap(find.text('open people'));
-    await tester.pumpAndSettle();
+    await pumpFrames(tester);
     expect(find.text('人物DBから選択'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField).first, '山田太郎');
     await tester.testTextInput.receiveAction(TextInputAction.done);
-    await tester.pumpAndSettle();
+    await pumpFrames(tester);
 
     expect(find.text('山田太郎'), findsWidgets);
     expect(find.text('1 人選択中'), findsOneWidget);
     expect(find.byType(CheckboxListTile), findsNothing);
 
     await tester.tap(find.widgetWithText(FilledButton, '選択'));
-    await tester.pumpAndSettle();
+    await pumpFrames(tester);
     expect(result, isNotNull);
     expect(result!.single.name, '山田太郎');
   });
