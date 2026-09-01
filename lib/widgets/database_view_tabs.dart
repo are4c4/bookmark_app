@@ -205,100 +205,98 @@ class _DatabaseViewTabsState extends State<DatabaseViewTabs> {
 
     return SizedBox(
       height: 38,
-      child: Row(
-        children: [
-          Expanded(
-            child: ReorderableListView.builder(
-              scrollDirection: Axis.horizontal,
-              buildDefaultDragHandles: false,
-              itemCount: _views.length,
-              onReorderItem: (oldIndex, newIndex) async {
-                final next = [..._views];
-                final moved = next.removeAt(oldIndex);
-                next.insert(newIndex, moved);
-                setState(() => _views = next);
-                await widget.store.reorderViews(next);
-                widget.onViewsChanged?.call();
-              },
-              itemBuilder: (context, index) {
-                final view = _views[index];
-                final selected = view.id == widget.activeViewId;
-                return ReorderableDragStartListener(
-                  key: ValueKey(view.id),
-                  index: index,
-                  child: Padding(
-                    padding: const EdgeInsets.only(right: 2),
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(5),
-                        onTap: () => widget.onSelected(view),
-                        child: Container(
-                          padding: const EdgeInsets.only(left: 10, right: 2),
-                          decoration: BoxDecoration(
-                            border: Border(
-                              bottom: BorderSide(
-                                color: selected ? scheme.primary : Colors.transparent,
-                                width: 2,
-                              ),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                switch (view.layoutType) {
-                                  'list' => Icons.view_list,
-                                  'table' => Icons.table_rows,
-                                  _ => Icons.grid_view,
-                                },
-                                size: 15,
-                                color: selected ? scheme.onSurface : scheme.onSurfaceVariant,
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                view.name,
-                                style: TextStyle(
-                                  fontSize: 12.5,
-                                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                                  color: selected ? scheme.onSurface : scheme.onSurfaceVariant,
-                                ),
-                              ),
-                              PopupMenuButton<String>(
-                                tooltip: 'ビュー設定',
-                                iconSize: 15,
-                                padding: EdgeInsets.zero,
-                                onSelected: (value) {
-                                  if (value == 'rename') _rename(view);
-                                  if (value == 'duplicate') _duplicate(view);
-                                  if (value == 'delete') _delete(view);
-                                },
-                                itemBuilder: (_) => [
-                                  const PopupMenuItem(value: 'rename', child: Text('名前を変更')),
-                                  const PopupMenuItem(value: 'duplicate', child: Text('複製')),
-                                  if (_views.length > 1) ...const [
-                                    PopupMenuDivider(),
-                                    PopupMenuItem(value: 'delete', child: Text('削除')),
-                                  ],
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-          IconButton(
+      child: ReorderableListView.builder(
+        scrollDirection: Axis.horizontal,
+        buildDefaultDragHandles: false,
+        itemCount: _views.length,
+        footer: Padding(
+          padding: const EdgeInsets.only(left: 2, right: 8),
+          child: IconButton(
+            key: const ValueKey('database-view-add-button'),
             tooltip: 'ビューを追加',
             visualDensity: VisualDensity.compact,
             onPressed: _createView,
             icon: const Icon(Icons.add, size: 18),
           ),
-        ],
+        ),
+        onReorderItem: (oldIndex, newIndex) async {
+          final next = [..._views];
+          final moved = next.removeAt(oldIndex);
+          next.insert(newIndex, moved);
+          setState(() => _views = next);
+          await widget.store.reorderViews(next);
+          widget.onViewsChanged?.call();
+        },
+        itemBuilder: (context, index) {
+          final view = _views[index];
+          final selected = view.id == widget.activeViewId;
+          return ReorderableDragStartListener(
+            key: ValueKey(view.id),
+            index: index,
+            child: Padding(
+              padding: const EdgeInsets.only(right: 2),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(5),
+                  onTap: () => widget.onSelected(view),
+                  child: Container(
+                    padding: const EdgeInsets.only(left: 10, right: 2),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: selected ? scheme.primary : Colors.transparent,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          switch (view.layoutType) {
+                            'list' => Icons.view_list,
+                            'table' => Icons.table_rows,
+                            _ => Icons.grid_view,
+                          },
+                          size: 15,
+                          color: selected ? scheme.onSurface : scheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          view.name,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                            color: selected ? scheme.onSurface : scheme.onSurfaceVariant,
+                          ),
+                        ),
+                        PopupMenuButton<String>(
+                          tooltip: 'ビュー設定',
+                          iconSize: 15,
+                          padding: EdgeInsets.zero,
+                          onSelected: (value) {
+                            if (value == 'rename') _rename(view);
+                            if (value == 'duplicate') _duplicate(view);
+                            if (value == 'delete') _delete(view);
+                          },
+                          itemBuilder: (_) => [
+                            const PopupMenuItem(value: 'rename', child: Text('名前を変更')),
+                            const PopupMenuItem(value: 'duplicate', child: Text('複製')),
+                            if (_views.length > 1) ...const [
+                              PopupMenuDivider(),
+                              PopupMenuItem(value: 'delete', child: Text('削除')),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
