@@ -1,0 +1,36 @@
+name: Promote generic tables
+
+on:
+  push:
+    branches:
+      - feature/notion-database-foundation-v2
+    paths:
+      - tool/promote_generic_tables.py
+      - .github/workflows/promote_generic_tables.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: feature/notion-database-foundation-v2
+          fetch-depth: 0
+      - name: Promote generic tables into Drift schema
+        run: python3 tool/promote_generic_tables.py
+      - name: Remove one-shot patch files
+        run: rm -f tool/promote_generic_tables.py .github/workflows/promote_generic_tables.yml
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes"
+            exit 0
+          fi
+          git commit -m "Promote generic database tables to Drift schema v15"
+          git push origin HEAD:feature/notion-database-foundation-v2
