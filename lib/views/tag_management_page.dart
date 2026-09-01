@@ -5,6 +5,7 @@ import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
 import '../data/tag_group_store.dart';
 import '../ui/ui_tokens.dart';
+import '../widgets/app_toast.dart';
 import '../widgets/bookmark_reverse_lookup_dialog.dart';
 import '../widgets/tag_detail_pane.dart';
 import '../widgets/tag_tree_view.dart';
@@ -418,14 +419,11 @@ class _TagManagementPageState extends State<TagManagementPage> {
       final destination = target.tag == null
           ? '${target.label}の最上位'
           : '「${target.tag!.name}」の子';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('「${dragged.name}」を$destinationへ移動しました'),
-          action: SnackBarAction(
-            label: '元に戻す',
-            onPressed: () => _store.restoreMove(snapshot),
-          ),
-        ),
+      showAppToast(
+        context,
+        '「${dragged.name}」を$destinationへ移動しました',
+        actionLabel: '元に戻す',
+        onAction: () => _store.restoreMove(snapshot),
       );
     } catch (error) {
       if (!mounted) return;
@@ -759,14 +757,11 @@ class _TagManagementPageState extends State<TagManagementPage> {
       groupId: groupId,
     );
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('「${tag.name}」を移動しました'),
-        action: SnackBarAction(
-          label: '元に戻す',
-          onPressed: () => _store.restoreMove(snapshot),
-        ),
-      ),
+    showAppToast(
+      context,
+      '「${tag.name}」を移動しました',
+      actionLabel: '元に戻す',
+      onAction: () => _store.restoreMove(snapshot),
     );
   }
 
