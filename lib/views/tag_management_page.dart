@@ -452,9 +452,7 @@ class _TagManagementPageState extends State<TagManagementPage> {
                           ),
                           IconButton(
                             tooltip: '削除',
-                            onPressed: () async {
-                              await _store.deleteGroup(group.id);
-                            },
+                            onPressed: () => _deleteGroup(group),
                             icon: const Icon(Icons.delete_outline),
                           ),
                         ],
