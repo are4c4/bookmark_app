@@ -79,7 +79,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     final database = await _store.getDatabase(widget.databaseId);
     final properties = await _store.listProperties(widget.databaseId);
     final records = await _store.listRecords(widget.databaseId);
-    final objectTypes = await _store.listDatabases(widget.repository.workspaceId);
+    final objectTypes = await _store.listAllDatabases(widget.repository.workspaceId);
     final recordsByType = <int, List<GenericRecord>>{};
     for (final objectType in objectTypes) {
       recordsByType[objectType.id] = objectType.id == widget.databaseId
@@ -641,7 +641,6 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     return edges
         .map(
           (edge) => _BacklinkItem(
-            edge: edge,
             source: sources[edge.sourceObjectId],
             property: properties[edge.propertyId],
           ),
@@ -917,12 +916,10 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
 
 class _BacklinkItem {
   const _BacklinkItem({
-    required this.edge,
     required this.source,
     required this.property,
   });
 
-  final ObjectRelationEdge edge;
   final AppObject? source;
   final ObjectPropertyDefinition? property;
 }
