@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -5,12 +6,15 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
+import '../data/database_view_store.dart';
+import '../database/database_definition.dart';
 import '../data/person_group_store.dart';
 import '../ui/ui_tokens.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/bookmark_reverse_lookup_dialog.dart';
 import '../widgets/database_create_tiles.dart';
 import '../widgets/database_page_toolbar.dart';
+import '../widgets/database_view_tabs.dart';
 import '../widgets/detail_section.dart';
 import '../widgets/inline_rename_text.dart';
 import '../widgets/notion_inline_field.dart';
@@ -33,6 +37,10 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
   int? _selectedPersonId;
   int? _selectedGroupId;
   late final PersonGroupStore _personGroups;
+  late final DatabaseViewStore _databaseViewStore;
+  DatabaseViewConfig? _activeDatabaseView;
+  int? _activeDatabaseViewId;
+  Timer? _viewSaveTimer;
 
   BookmarkRepository get repository => widget.repository;
 
@@ -40,7 +48,59 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
   void initState() {
     super.initState();
     _personGroups = PersonGroupStore(repository.workspaceStore.database);
+    _databaseViewStore = DatabaseViewStore(repository.workspaceStore.database);
   }
+
+  @override
+  void dispose() {
+    _viewSaveTimer?.cancel();
+    super.dispose();
+  }
+
+  void _applyDatabaseView(DatabaseViewConfig view) {
+    final filters = view.filters;
+    setState(() {
+      _activeDatabaseView = view;
+      _activeDatabaseViewId = view.id;
+      _query = (filters['query'] as String?) ?? '';
+      _selectedGroupId = (filters['groupId'] as num?)?.toInt();
+      _viewType = switch (view.layoutType) {
+        'list' => PeopleViewType.list,
+        'table' => PeopleViewType.table,
+        _ => PeopleViewType.gallery,
+      };
+    });
+  }
+
+  void _markDatabaseViewChanged() {
+    final active = _activeDatabaseView;
+    if (active == null) return;
+    _viewSaveTimer?.cancel();
+    _viewSaveTimer = Timer(const Duration(milliseconds: 500), () async {
+      if (!mounted || _activeDatabaseViewId != active.id) return;
+      final next = active.copyWith(
+        layoutType: switch (_viewType) {
+          PeopleViewType.list => 'list',
+          PeopleViewType.table => 'table',
+          _ => 'gallery',
+        },
+        filters: {'query': _query, 'groupId': _selectedGroupId},
+      );
+      await _databaseViewStore.updateView(next);
+      if (mounted && _activeDatabaseViewId == active.id) _activeDatabaseView = next;
+    });
+  }
+
+  Widget _databaseViewTabs() => Padding(
+        padding: const EdgeInsets.fromLTRB(12, 2, 10, 0),
+        child: DatabaseViewTabs(
+          store: _databaseViewStore,
+          definition: BuiltInDatabases.people,
+          workspaceId: repository.workspaceId,
+          activeViewId: _activeDatabaseViewId,
+          onSelected: _applyDatabaseView,
+        ),
+      );
 
   PhotoRecord? _profilePhoto(Person person, List<PhotoRecord> photos) =>
       photos.where((photo) => photo.id == person.profilePhotoId).firstOrNull;
@@ -853,8 +913,10 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
           ),
         ],
         selected: {_viewType},
-        onSelectionChanged: (value) =>
-            setState(() => _viewType = value.first),
+        onSelectionChanged: (value) => setState(() {
+          _viewType = value.first;
+          _markDatabaseViewChanged();
+        }),
       );
 
   Widget _groupFilter() => FutureBuilder<List<PersonGroupInfo>>(
@@ -871,7 +933,10 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
                 _showGroupManager();
                 return;
               }
-              setState(() => _selectedGroupId = id < 0 ? null : id);
+              setState(() {
+                _selectedGroupId = id < 0 ? null : id;
+                _markDatabaseViewChanged();
+              });
             },
             itemBuilder: (_) => [
               const PopupMenuItem(value: -1, child: Text('すべての人物')),
@@ -904,10 +969,14 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
     return Scaffold(
       body: Column(
         children: [
+          _databaseViewTabs(),
           DatabasePageToolbar(
             title: '人物',
             searchHint: '人物を検索',
-            onSearchChanged: (value) => setState(() => _query = value),
+            onSearchChanged: (value) => setState(() {
+              _query = value;
+              _markDatabaseViewChanged();
+            }),
             leadingActions: [_groupFilter()],
             viewSwitcher: _viewSwitcher(),
           ),

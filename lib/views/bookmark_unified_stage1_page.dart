@@ -8,6 +8,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
+import '../data/database_view_store.dart';
+import '../database/database_definition.dart';
 import '../data/person_roles.dart';
 import '../data/saved_view_extensions.dart';
 import '../data/workspace_store.dart';
@@ -18,6 +20,7 @@ import '../widgets/bookmark_create_dialog.dart';
 import '../widgets/bookmark_detail_panel.dart';
 import '../widgets/bookmark_list_metadata.dart';
 import '../widgets/database_create_tiles.dart';
+import '../widgets/database_view_tabs.dart';
 import '../widgets/bookmark_property_order_dialog.dart';
 import '../widgets/notion_bookmark_card.dart';
 import '../widgets/relation_database_picker.dart';
@@ -72,6 +75,10 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
   String? _relationFilterLabel;
   double _detailWidth = 430;
   Timer? _savedViewSaveTimer;
+  Timer? _databaseViewSaveTimer;
+  late final DatabaseViewStore _databaseViewStore;
+  int? _activeDatabaseViewId;
+  DatabaseViewConfig? _activeDatabaseView;
 
   List<BookmarkStage1Property> get _orderedVisibleProperties =>
       orderedVisibleBookmarkProperties(_propertyOrder, _visibleProperties);
@@ -86,8 +93,15 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
       );
 
   @override
+  void initState() {
+    super.initState();
+    _databaseViewStore = DatabaseViewStore(widget.repository.workspaceStore.database);
+  }
+
+  @override
   void dispose() {
     _savedViewSaveTimer?.cancel();
+    _databaseViewSaveTimer?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -116,7 +130,123 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
         sortAscending: _sortAscending,
       ).apply(source, allTags);
 
+  void _applyDatabaseView(DatabaseViewConfig view) {
+    final filters = view.filters;
+    final sort = view.sorts.whereType<Map>().firstOrNull;
+    final tokens = view.visibleProperties.isEmpty
+        ? BuiltInDatabases.bookmarks.defaultVisibleProperties
+        : view.visibleProperties;
+    final base = <BookmarkStage1Property>{};
+    final roles = <String>{};
+    for (final key in tokens) {
+      if (key.startsWith('role:')) {
+        roles.add(key.substring(5));
+      } else {
+        final property = bookmarkPropertyFromKey(key);
+        if (property != null) base.add(property);
+      }
+    }
+    final query = (filters['query'] as String?) ?? '';
+    final rawTagIds = filters['tagIds'];
+    final tagIds = rawTagIds is List
+        ? rawTagIds.whereType<num>().map((value) => value.toInt()).toSet()
+        : <int>{};
+    final width = view.settings['detailWidth'];
+    _searchController.text = query;
+    setState(() {
+      _query = query;
+      _favoritesOnly = filters['favoritesOnly'] == true;
+      _statusFilter = (filters['status'] as String?) ?? '';
+      _minRating = (filters['minRating'] as num?)?.toInt() ?? 0;
+      _tagMatchMode = (filters['tagMatchMode'] as String?) ?? 'or';
+      _includeDescendants = filters['includeDescendants'] != false;
+      _personFilterId = (filters['personId'] as num?)?.toInt();
+      _photoFilterId = (filters['photoId'] as num?)?.toInt();
+      _selectedTagIds
+        ..clear()
+        ..addAll(tagIds);
+      _viewType = switch (view.layoutType) {
+        'list' => BookmarkStage1ViewType.list,
+        'table' => BookmarkStage1ViewType.table,
+        _ => BookmarkStage1ViewType.gallery,
+      };
+      final sortField = sort?['field'] as String?;
+      _sortField = switch (sortField) {
+        'title' => BookmarkStage1SortField.title,
+        'url' => BookmarkStage1SortField.url,
+        _ => BookmarkStage1SortField.createdAt,
+      };
+      _sortAscending = sort?['direction'] == 'asc';
+      _propertyOrder = normalizeBookmarkPropertyOrder(
+        view.propertyOrder.isEmpty ? tokens : view.propertyOrder,
+      );
+      _visibleProperties
+        ..clear()
+        ..addAll(base);
+      _visiblePersonRoles
+        ..clear()
+        ..addAll(roles);
+      if (width is num) _detailWidth = width.toDouble().clamp(320.0, 720.0);
+      _activeDatabaseViewId = view.id;
+      _activeDatabaseView = view;
+      _activeSavedViewId = null;
+      _relationFilterLabel = null;
+    });
+  }
+
+  void _scheduleDatabaseViewSave() {
+    final active = _activeDatabaseView;
+    if (active == null) return;
+    _databaseViewSaveTimer?.cancel();
+    _databaseViewSaveTimer = Timer(const Duration(milliseconds: 550), () {
+      if (mounted && _activeDatabaseViewId == active.id) {
+        _saveActiveDatabaseView();
+      }
+    });
+  }
+
+  Future<void> _saveActiveDatabaseView() async {
+    final active = _activeDatabaseView;
+    if (active == null) return;
+    final next = active.copyWith(
+      layoutType: _layoutKey,
+      filters: {
+        'query': _query,
+        'favoritesOnly': _favoritesOnly,
+        'tagIds': _selectedTagIds.toList(),
+        'tagMatchMode': _tagMatchMode,
+        'includeDescendants': _includeDescendants,
+        'status': _statusFilter,
+        'minRating': _minRating,
+        'personId': _personFilterId,
+        'photoId': _photoFilterId,
+      },
+      sorts: [
+        {'field': _sortKey, 'direction': _sortAscending ? 'asc' : 'desc'},
+      ],
+      visibleProperties: _visiblePropertyTokens,
+      propertyOrder: _propertyOrder,
+      settings: {...active.settings, 'detailWidth': _detailWidth},
+    );
+    await _databaseViewStore.updateView(next);
+    if (mounted && _activeDatabaseViewId == active.id) {
+      _activeDatabaseView = next;
+    }
+  }
+
+  Widget _databaseViewTabs() => Padding(
+        padding: const EdgeInsets.fromLTRB(12, 2, 10, 0),
+        child: DatabaseViewTabs(
+          store: _databaseViewStore,
+          definition: BuiltInDatabases.bookmarks,
+          workspaceId: widget.repository.workspaceId,
+          activeViewId: _activeDatabaseViewId,
+          onSelected: _applyDatabaseView,
+        ),
+      );
+
   void _markViewChanged() {
+    _scheduleDatabaseViewSave();
     final id = _activeSavedViewId;
     if (id == null) return;
     _savedViewSaveTimer?.cancel();
@@ -786,11 +916,14 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
   }
 
   Future<void> _showFilterDialog() async {
+    final allTags = await widget.repository.watchTags().first;
+    if (!mounted) return;
     var favorites = _favoritesOnly;
     var status = _statusFilter;
     var minRating = _minRating;
     var tagMatchMode = _tagMatchMode;
     var includeDescendants = _includeDescendants;
+    var selectedTagIds = {..._selectedTagIds};
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
@@ -799,6 +932,35 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
           content: SizedBox(
             width: 390,
             child: Column(mainAxisSize: MainAxisSize.min, children: [
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.sell_outlined, size: 19),
+                title: const Text('タグ'),
+                subtitle: Text(
+                  selectedTagIds.isEmpty
+                      ? 'すべて'
+                      : allTags
+                          .where((tag) => selectedTagIds.contains(tag.id))
+                          .map((tag) => tag.name)
+                          .join(', '),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () async {
+                  final selected = await showTagDatabasePicker(
+                    context: dialogContext,
+                    tags: allTags,
+                    initiallySelectedIds: selectedTagIds,
+                    onCreateTag: _createTagFromPicker,
+                  );
+                  if (selected != null && dialogContext.mounted) {
+                    setLocalState(() {
+                      selectedTagIds = selected.map((tag) => tag.id).toSet();
+                    });
+                  }
+                },
+              ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('お気に入りのみ'),
@@ -875,6 +1037,9 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
                   _minRating = minRating;
                   _tagMatchMode = tagMatchMode;
                   _includeDescendants = includeDescendants;
+                  _selectedTagIds
+                    ..clear()
+                    ..addAll(selectedTagIds);
                   _markViewChanged();
                 });
                 Navigator.pop(dialogContext);
@@ -1774,8 +1939,9 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
                     .firstOrNull;
                 return LayoutBuilder(builder: (context, constraints) {
                   final wantsDetail = selected != null && !_selectionMode;
-                  final showSidebar = constraints.maxWidth >= 520 &&
-                      (!wantsDetail || constraints.maxWidth >= 900);
+                  // Database navigation now lives in the Notion-style
+                  // view tabs above the toolbar, avoiding a second sidebar.
+                  const showSidebar = false;
                   final fixedSidebarWidth = showSidebar
                       ? (_sidebarCollapsed ? 43.0 : 221.0)
                       : 0.0;
@@ -1801,6 +1967,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
                       ],
                       Expanded(
                         child: Column(children: [
+                          _databaseViewTabs(),
                           _toolbar(),
                           if (_selectionMode) _batchBar(bookmarks),
                           Expanded(

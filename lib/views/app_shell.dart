@@ -493,18 +493,17 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
             child: ListView(padding: const EdgeInsets.only(bottom: UiTokens.space12), children: [
               _workspaceList(),
               const SizedBox(height: UiTokens.space6),
-              _sectionHeader('LIBRARY'),
+              _sectionHeader('DATABASES'),
               _navTile(0, Icons.bookmarks_outlined, 'ブックマーク'),
-              _subNavTile(2, Icons.inbox_outlined, '未整理'),
-              _subNavTile(3, Icons.archive_outlined, 'アーカイブ'),
-              _subNavTile(4, Icons.delete_outline, 'ゴミ箱'),
-              const SizedBox(height: UiTokens.space4),
+              _navTile(5, Icons.photo_library_outlined, '写真'),
+              _navTile(7, Icons.people_outline, '人物'),
+              _navTile(6, Icons.account_tree_outlined, 'タグ'),
+              _navTile(8, Icons.collections_bookmark_outlined, 'コレクション'),
+              const SizedBox(height: UiTokens.space6),
               _navTile(1, Icons.search, '全文検索'),
               const Padding(padding: EdgeInsets.symmetric(horizontal: UiTokens.space12, vertical: UiTokens.space6), child: Divider(height: 1)),
-              _navTile(5, Icons.photo_library_outlined, '写真'),
-              _navTile(6, Icons.account_tree_outlined, 'タグ'),
-              _navTile(7, Icons.people_outline, '人物'),
-              _navTile(8, Icons.collections_bookmark_outlined, 'コレクション'),
+              _sectionHeader('管理'),
+              _navTile(4, Icons.delete_outline, 'ゴミ箱'),
               _navTile(9, Icons.manage_accounts_outlined, 'Profile管理'),
               _navTile(10, Icons.settings_outlined, '設定'),
             ]),
@@ -544,18 +543,16 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
 
   Widget _collapsedSidebar() {
     final scheme = Theme.of(context).colorScheme;
-    final icons = [
-      Icons.bookmarks_outlined,
-      Icons.search,
-      Icons.inbox_outlined,
-      Icons.archive_outlined,
-      Icons.delete_outline,
-      Icons.photo_library_outlined,
-      Icons.account_tree_outlined,
-      Icons.people_outline,
-      Icons.collections_bookmark_outlined,
-      Icons.manage_accounts_outlined,
-      Icons.settings_outlined,
+    const destinations = <(int, IconData)>[
+      (0, Icons.bookmarks_outlined),
+      (5, Icons.photo_library_outlined),
+      (7, Icons.people_outline),
+      (6, Icons.account_tree_outlined),
+      (8, Icons.collections_bookmark_outlined),
+      (1, Icons.search),
+      (4, Icons.delete_outline),
+      (9, Icons.manage_accounts_outlined),
+      (10, Icons.settings_outlined),
     ];
     return Material(
       color: scheme.surfaceContainerLow,
@@ -565,10 +562,10 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
           const SizedBox(height: UiTokens.space8),
           IconButton(tooltip: 'サイドバーを開く', onPressed: () => setState(() => _sidebarCollapsed = false), icon: const Icon(Icons.keyboard_double_arrow_right, size: UiTokens.iconNormal)),
           const SizedBox(height: UiTokens.space8),
-          ...icons.asMap().entries.map((entry) => IconButton(
-            onPressed: () => setState(() => _index = entry.key),
-            style: IconButton.styleFrom(backgroundColor: _index == entry.key ? scheme.surfaceContainerHigh : Colors.transparent),
-            icon: Icon(entry.value, size: 19),
+          ...destinations.map((entry) => IconButton(
+            onPressed: () => setState(() => _index = entry.$1),
+            style: IconButton.styleFrom(backgroundColor: _index == entry.$1 ? scheme.surfaceContainerHigh : Colors.transparent),
+            icon: Icon(entry.$2, size: 19),
           )),
         ]),
       ),
@@ -579,14 +576,12 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
     var query = '';
     const destinations = <(String, IconData, int)>[
       ('ブックマーク', Icons.bookmarks_outlined, 0),
-      ('全文検索', Icons.search, 1),
-      ('未整理', Icons.inbox_outlined, 2),
-      ('アーカイブ', Icons.archive_outlined, 3),
-      ('ゴミ箱', Icons.delete_outline, 4),
       ('写真', Icons.photo_library_outlined, 5),
-      ('タグ', Icons.account_tree_outlined, 6),
       ('人物', Icons.people_outline, 7),
+      ('タグ', Icons.account_tree_outlined, 6),
       ('コレクション', Icons.collections_bookmark_outlined, 8),
+      ('全文検索', Icons.search, 1),
+      ('ゴミ箱', Icons.delete_outline, 4),
       ('Profile管理', Icons.manage_accounts_outlined, 9),
       ('設定', Icons.settings_outlined, 10),
     ];
