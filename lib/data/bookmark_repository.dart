@@ -5,6 +5,7 @@ import '../services/photo_storage_service.dart';
 
 import '../domain/bookmark_state.dart';
 import 'app_database.dart';
+import 'bookmark_attachment_store.dart';
 import 'bookmark_lifecycle_store.dart';
 import 'person_roles.dart';
 import 'workspace_store.dart';
