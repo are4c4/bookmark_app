@@ -1,6 +1,11 @@
 import '../data/person_roles.dart';
 import 'bookmark_query_engine.dart';
 
+const bookmarkDetailOnlyPropertyKeys = <String>{
+  'genre',
+  'collections',
+};
+
 String bookmarkPropertyKey(BookmarkStage1Property property) => switch (property) {
       BookmarkStage1Property.image => 'image',
       BookmarkStage1Property.url => 'url',
@@ -36,7 +41,9 @@ String bookmarkPropertyLabel(BookmarkStage1Property property) => switch (propert
 
 List<String> defaultBookmarkPropertyOrder() => [
       ...BookmarkStage1Property.values.map(bookmarkPropertyKey),
+      'genre',
       ...defaultPersonRoles.map((role) => 'role:$role'),
+      'collections',
     ];
 
 List<String> normalizeBookmarkPropertyOrder(Iterable<String> preferred) {
@@ -44,7 +51,9 @@ List<String> normalizeBookmarkPropertyOrder(Iterable<String> preferred) {
   final seen = <String>{};
   for (final key in preferred.map((value) => value.trim())) {
     if (key.isEmpty || !seen.add(key)) continue;
-    if (key.startsWith('role:') || bookmarkPropertyFromKey(key) != null) {
+    if (key.startsWith('role:') ||
+        bookmarkPropertyFromKey(key) != null ||
+        bookmarkDetailOnlyPropertyKeys.contains(key)) {
       result.add(key);
     }
   }

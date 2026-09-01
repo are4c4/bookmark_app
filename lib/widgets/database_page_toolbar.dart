@@ -6,12 +6,13 @@ import '../ui/ui_tokens.dart';
 ///
 /// Keeps title, search and view controls aligned across bookmarks, photos and
 /// people without forcing each page to duplicate layout constants.
-class DatabasePageToolbar extends StatelessWidget {
+class DatabasePageToolbar extends StatefulWidget {
   const DatabasePageToolbar({
     super.key,
     required this.title,
     required this.searchHint,
     required this.onSearchChanged,
+    this.searchValue = '',
     this.leadingActions = const [],
     this.viewSwitcher,
     this.trailingActions = const [],
@@ -19,10 +20,42 @@ class DatabasePageToolbar extends StatelessWidget {
 
   final String title;
   final String searchHint;
+  final String searchValue;
   final ValueChanged<String> onSearchChanged;
   final List<Widget> leadingActions;
   final Widget? viewSwitcher;
   final List<Widget> trailingActions;
+
+  @override
+  State<DatabasePageToolbar> createState() => _DatabasePageToolbarState();
+}
+
+class _DatabasePageToolbarState extends State<DatabasePageToolbar> {
+  late final TextEditingController _searchController;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController(text: widget.searchValue);
+  }
+
+  @override
+  void didUpdateWidget(covariant DatabasePageToolbar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.searchValue != widget.searchValue &&
+        _searchController.text != widget.searchValue) {
+      _searchController.value = TextEditingValue(
+        text: widget.searchValue,
+        selection: TextSelection.collapsed(offset: widget.searchValue.length),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -37,19 +70,19 @@ class DatabasePageToolbar extends StatelessWidget {
       child: Row(
         children: [
           Text(
-            title,
+            widget.title,
             style: const TextStyle(
               fontSize: UiTokens.textLg,
               fontWeight: FontWeight.w600,
             ),
           ),
-          if (leadingActions.isNotEmpty) ...[
+          if (widget.leadingActions.isNotEmpty) ...[
             const SizedBox(width: UiTokens.space12),
-            ...leadingActions,
+            ...widget.leadingActions,
           ],
           const Spacer(),
-          if (viewSwitcher != null) ...[
-            viewSwitcher!,
+          if (widget.viewSwitcher != null) ...[
+            widget.viewSwitcher!,
             const SizedBox(width: UiTokens.space12),
           ],
           ConstrainedBox(
@@ -57,10 +90,25 @@ class DatabasePageToolbar extends StatelessWidget {
             child: SizedBox(
               height: 36,
               child: TextField(
-                onChanged: onSearchChanged,
+                controller: _searchController,
+                onChanged: (value) {
+                  widget.onSearchChanged(value);
+                  setState(() {});
+                },
                 decoration: InputDecoration(
-                  hintText: searchHint,
+                  hintText: widget.searchHint,
                   prefixIcon: const Icon(Icons.search, size: UiTokens.iconNormal),
+                  suffixIcon: _searchController.text.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: '検索をクリア',
+                          icon: const Icon(Icons.close, size: 16),
+                          onPressed: () {
+                            _searchController.clear();
+                            widget.onSearchChanged('');
+                            setState(() {});
+                          },
+                        ),
                   filled: true,
                   fillColor: scheme.surfaceContainerLow,
                   border: OutlineInputBorder(
@@ -71,9 +119,9 @@ class DatabasePageToolbar extends StatelessWidget {
               ),
             ),
           ),
-          if (trailingActions.isNotEmpty) ...[
+          if (widget.trailingActions.isNotEmpty) ...[
             const SizedBox(width: UiTokens.space8),
-            ...trailingActions,
+            ...widget.trailingActions,
           ],
         ],
       ),

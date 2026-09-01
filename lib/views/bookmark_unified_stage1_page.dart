@@ -8,6 +8,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
+import '../data/database_view_store.dart';
+import '../database/database_definition.dart';
 import '../data/person_roles.dart';
 import '../data/saved_view_extensions.dart';
 import '../data/workspace_store.dart';
@@ -16,6 +18,9 @@ import '../services/photo_storage_service.dart';
 import '../widgets/app_toast.dart';
 import '../widgets/bookmark_create_dialog.dart';
 import '../widgets/bookmark_detail_panel.dart';
+import '../widgets/bookmark_list_metadata.dart';
+import '../widgets/database_create_tiles.dart';
+import '../widgets/database_view_tabs.dart';
 import '../widgets/bookmark_property_order_dialog.dart';
 import '../widgets/notion_bookmark_card.dart';
 import '../widgets/relation_database_picker.dart';
@@ -70,6 +75,12 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
   String? _relationFilterLabel;
   double _detailWidth = 430;
   Timer? _savedViewSaveTimer;
+  Timer? _databaseViewSaveTimer;
+  late final DatabaseViewStore _databaseViewStore;
+  int? _activeDatabaseViewId;
+  DatabaseViewConfig? _activeDatabaseView;
+
+  bool get _legacyBookmarkSidebarEnabled => false;
 
   List<BookmarkStage1Property> get _orderedVisibleProperties =>
       orderedVisibleBookmarkProperties(_propertyOrder, _visibleProperties);
@@ -84,8 +95,15 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
       );
 
   @override
+  void initState() {
+    super.initState();
+    _databaseViewStore = DatabaseViewStore(widget.repository.workspaceStore.database);
+  }
+
+  @override
   void dispose() {
     _savedViewSaveTimer?.cancel();
+    _databaseViewSaveTimer?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -114,7 +132,125 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
         sortAscending: _sortAscending,
       ).apply(source, allTags);
 
+  void _applyDatabaseView(DatabaseViewConfig view) {
+    final filters = view.filters;
+    final sort = view.sorts.whereType<Map>().firstOrNull;
+    final tokens = view.visibleProperties.isEmpty
+        ? BuiltInDatabases.bookmarks.defaultVisibleProperties
+        : view.visibleProperties;
+    final base = <BookmarkStage1Property>{};
+    final roles = <String>{};
+    for (final key in tokens) {
+      if (key.startsWith('role:')) {
+        roles.add(key.substring(5));
+      } else {
+        final property = bookmarkPropertyFromKey(key);
+        if (property != null) base.add(property);
+      }
+    }
+    final query = (filters['query'] as String?) ?? '';
+    final rawTagIds = filters['tagIds'];
+    final tagIds = rawTagIds is List
+        ? rawTagIds.whereType<num>().map((value) => value.toInt()).toSet()
+        : <int>{};
+    final width = view.settings['detailWidth'];
+    _searchController.text = query;
+    setState(() {
+      _query = query;
+      _favoritesOnly = filters['favoritesOnly'] == true;
+      _statusFilter = (filters['status'] as String?) ?? '';
+      _minRating = (filters['minRating'] as num?)?.toInt() ?? 0;
+      _tagMatchMode = (filters['tagMatchMode'] as String?) ?? 'or';
+      _includeDescendants = filters['includeDescendants'] != false;
+      _personFilterId = (filters['personId'] as num?)?.toInt();
+      _photoFilterId = (filters['photoId'] as num?)?.toInt();
+      _selectedTagIds
+        ..clear()
+        ..addAll(tagIds);
+      _viewType = switch (view.layoutType) {
+        'list' => BookmarkStage1ViewType.list,
+        'table' => BookmarkStage1ViewType.table,
+        _ => BookmarkStage1ViewType.gallery,
+      };
+      final sortField = sort?['field'] as String?;
+      _sortField = switch (sortField) {
+        'title' => BookmarkStage1SortField.title,
+        'url' => BookmarkStage1SortField.url,
+        _ => BookmarkStage1SortField.createdAt,
+      };
+      _sortAscending = sort?['direction'] == 'asc';
+      _propertyOrder = normalizeBookmarkPropertyOrder(
+        view.propertyOrder.isEmpty ? tokens : view.propertyOrder,
+      );
+      _visibleProperties
+        ..clear()
+        ..addAll(base);
+      _visiblePersonRoles
+        ..clear()
+        ..addAll(roles);
+      if (width is num) {
+        _detailWidth = width.toDouble().clamp(320.0, 720.0).toDouble();
+      }
+      _activeDatabaseViewId = view.id;
+      _activeDatabaseView = view;
+      _activeSavedViewId = null;
+      _relationFilterLabel = null;
+    });
+  }
+
+  void _scheduleDatabaseViewSave() {
+    final active = _activeDatabaseView;
+    if (active == null) return;
+    _databaseViewSaveTimer?.cancel();
+    _databaseViewSaveTimer = Timer(const Duration(milliseconds: 550), () {
+      if (mounted && _activeDatabaseViewId == active.id) {
+        _saveActiveDatabaseView();
+      }
+    });
+  }
+
+  Future<void> _saveActiveDatabaseView() async {
+    final active = _activeDatabaseView;
+    if (active == null) return;
+    final next = active.copyWith(
+      layoutType: _layoutKey,
+      filters: {
+        'query': _query,
+        'favoritesOnly': _favoritesOnly,
+        'tagIds': _selectedTagIds.toList(),
+        'tagMatchMode': _tagMatchMode,
+        'includeDescendants': _includeDescendants,
+        'status': _statusFilter,
+        'minRating': _minRating,
+        'personId': _personFilterId,
+        'photoId': _photoFilterId,
+      },
+      sorts: [
+        {'field': _sortKey, 'direction': _sortAscending ? 'asc' : 'desc'},
+      ],
+      visibleProperties: _visiblePropertyTokens,
+      propertyOrder: _propertyOrder,
+      settings: {...active.settings, 'detailWidth': _detailWidth},
+    );
+    await _databaseViewStore.updateView(next);
+    if (mounted && _activeDatabaseViewId == active.id) {
+      _activeDatabaseView = next;
+    }
+  }
+
+  Widget _databaseViewTabs() => Padding(
+        padding: const EdgeInsets.fromLTRB(12, 2, 10, 0),
+        child: DatabaseViewTabs(
+          store: _databaseViewStore,
+          definition: BuiltInDatabases.bookmarks,
+          workspaceId: widget.repository.workspaceId,
+          activeViewId: _activeDatabaseViewId,
+          onSelected: _applyDatabaseView,
+        ),
+      );
+
   void _markViewChanged() {
+    _scheduleDatabaseViewSave();
     final id = _activeSavedViewId;
     if (id == null) return;
     _savedViewSaveTimer?.cancel();
@@ -420,8 +556,18 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
             crossAxisCount: columns,
             mainAxisSpacing: 12,
             crossAxisSpacing: 12,
-            itemCount: bookmarks.length,
+            itemCount: bookmarks.length + 1,
             itemBuilder: (context, index) {
+              if (index == bookmarks.length) {
+                return DatabaseActionCard(
+                  label: '新しいブックマーク',
+                  icon: Icons.add,
+                  onPressed: () => showBookmarkCreateDialog(
+                    context: context,
+                    repository: widget.repository,
+                  ),
+                );
+              }
               final bookmark = bookmarks[index];
               final selected = _selectionMode
                   ? _batchSelectedIds.contains(bookmark.id)
@@ -482,71 +628,29 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
     return const Center(child: Icon(Icons.image_outlined));
   }
 
-  String _roleValue(List<PersonRoleAssignment> assignments, String role) =>
-      assignments
-          .where((assignment) => assignment.role == role)
-          .map((assignment) => assignment.person.name)
-          .join(', ');
 
-  List<String> _orderedListDetails(
-    BookmarkItem bookmark,
-    List<PersonRoleAssignment> assignments,
-  ) {
-    final details = <String>[];
-    for (final token in _visiblePropertyTokens) {
-      if (token.startsWith('role:')) {
-        final role = token.substring(5);
-        final value = _roleValue(assignments, role);
-        if (value.isNotEmpty) details.add('$role: $value');
-        continue;
-      }
-      final property = bookmarkPropertyFromKey(token);
-      if (property == null) continue;
-      switch (property) {
-        case BookmarkStage1Property.image:
-          break;
-        case BookmarkStage1Property.url:
-          details.add(_compactUrl(bookmark.url));
-        case BookmarkStage1Property.tags:
-          if (bookmark.tags.isNotEmpty) {
-            details.add(bookmark.tags.map((tag) => tag.name).join(', '));
-          }
-        case BookmarkStage1Property.people:
-          if (bookmark.people.isNotEmpty) {
-            details.add(bookmark.people.map((person) => person.name).join(', '));
-          }
-        case BookmarkStage1Property.description:
-          if (bookmark.description?.trim().isNotEmpty == true) {
-            details.add(bookmark.description!);
-          }
-        case BookmarkStage1Property.createdAt:
-          details.add(_formatDate(bookmark.createdAt));
-        case BookmarkStage1Property.favorite:
-          if (bookmark.favorite) details.add('お気に入り');
-        case BookmarkStage1Property.status:
-          details.add(bookmarkStatusLabels[bookmark.status] ?? bookmark.status);
-        case BookmarkStage1Property.rating:
-          if (bookmark.rating > 0) details.add('★' * bookmark.rating);
-        case BookmarkStage1Property.history:
-          details.add(_historyText(bookmark));
-      }
-    }
-    return details;
-  }
 
   Widget _list(List<BookmarkItem> bookmarks) => ListView.separated(
         padding: const EdgeInsets.fromLTRB(14, 8, 14, 90),
-        itemCount: bookmarks.length,
+        itemCount: bookmarks.length + 1,
         separatorBuilder: (_, __) => const Divider(height: 1),
         itemBuilder: (context, index) {
+          if (index == bookmarks.length) {
+            return DatabaseActionRow(
+              label: '新しいブックマーク',
+              icon: Icons.add,
+              onPressed: () => showBookmarkCreateDialog(
+                context: context,
+                repository: widget.repository,
+              ),
+            );
+          }
           final bookmark = bookmarks[index];
           return StreamBuilder<List<PersonRoleAssignment>>(
             stream: widget.repository.watchPersonRoles(bookmark),
             builder: (context, roleSnapshot) {
-              final details = _orderedListDetails(
-                bookmark,
-                roleSnapshot.data ?? const [],
-              );
+              final assignments =
+                  roleSnapshot.data ?? const <PersonRoleAssignment>[];
               final tile = Material(
                 color: Colors.transparent,
                 child: ListTile(
@@ -573,13 +677,14 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
                             )
                           : null,
                   title: Text(bookmark.title),
-                  subtitle: details.isEmpty
-                      ? null
-                      : Text(
-                          details.join('  ·  '),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                  subtitle: Padding(
+                    padding: const EdgeInsets.only(top: 5),
+                    child: BookmarkListMetadata(
+                      bookmark: bookmark,
+                      assignments: assignments,
+                      propertyTokens: _visiblePropertyTokens,
+                    ),
+                  ),
                   trailing: _selectionMode
                       ? null
                       : Row(mainAxisSize: MainAxisSize.min, children: [
@@ -765,11 +870,14 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
   }
 
   Future<void> _showFilterDialog() async {
+    final allTags = await widget.repository.watchTags().first;
+    if (!mounted) return;
     var favorites = _favoritesOnly;
     var status = _statusFilter;
     var minRating = _minRating;
     var tagMatchMode = _tagMatchMode;
     var includeDescendants = _includeDescendants;
+    var selectedTagIds = {..._selectedTagIds};
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
@@ -778,6 +886,35 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
           content: SizedBox(
             width: 390,
             child: Column(mainAxisSize: MainAxisSize.min, children: [
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.sell_outlined, size: 19),
+                title: const Text('タグ'),
+                subtitle: Text(
+                  selectedTagIds.isEmpty
+                      ? 'すべて'
+                      : allTags
+                          .where((tag) => selectedTagIds.contains(tag.id))
+                          .map((tag) => tag.name)
+                          .join(', '),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () async {
+                  final selected = await showTagDatabasePicker(
+                    context: dialogContext,
+                    tags: allTags,
+                    initiallySelectedIds: selectedTagIds,
+                    onCreateTag: _createTagFromPicker,
+                  );
+                  if (selected != null && dialogContext.mounted) {
+                    setLocalState(() {
+                      selectedTagIds = selected.map((tag) => tag.id).toSet();
+                    });
+                  }
+                },
+              ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('お気に入りのみ'),
@@ -854,6 +991,9 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
                   _minRating = minRating;
                   _tagMatchMode = tagMatchMode;
                   _includeDescendants = includeDescendants;
+                  _selectedTagIds
+                    ..clear()
+                    ..addAll(selectedTagIds);
                   _markViewChanged();
                 });
                 Navigator.pop(dialogContext);
@@ -870,32 +1010,30 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
     String title, {
     String initialValue = '',
   }) async {
-    final controller = TextEditingController(text: initialValue);
     var value = initialValue;
-    final result = await showDialog<String>(
+    return showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: Text(title),
         content: TextFormField(
-          controller: controller,
+          initialValue: initialValue,
           autofocus: true,
           onChanged: (text) => value = text,
-          onFieldSubmitted: (_) => Navigator.pop(context, value.trim()),
+          onFieldSubmitted: (_) =>
+              Navigator.pop(dialogContext, value.trim()),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('キャンセル'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, value.trim()),
+            onPressed: () => Navigator.pop(dialogContext, value.trim()),
             child: const Text('保存'),
           ),
         ],
       ),
     );
-    controller.dispose();
-    return result;
   }
 
   String get _layoutKey => switch (_viewType) {
@@ -1727,9 +1865,10 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
               ),
             ]),
           ),
-          floatingActionButton: _selectionMode
-              ? null
-              : FloatingActionButton.extended(
+          floatingActionButton:
+              _selectionMode || _viewType != BookmarkStage1ViewType.table
+                  ? null
+                  : FloatingActionButton.extended(
                   onPressed: () => showBookmarkCreateDialog(
                     context: context,
                     repository: widget.repository,
@@ -1754,8 +1893,9 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
                     .firstOrNull;
                 return LayoutBuilder(builder: (context, constraints) {
                   final wantsDetail = selected != null && !_selectionMode;
-                  final showSidebar = constraints.maxWidth >= 520 &&
-                      (!wantsDetail || constraints.maxWidth >= 900);
+                  // Database navigation now lives in the Notion-style
+                  // view tabs above the toolbar, avoiding a second sidebar.
+                  final showSidebar = _legacyBookmarkSidebarEnabled;
                   final fixedSidebarWidth = showSidebar
                       ? (_sidebarCollapsed ? 43.0 : 221.0)
                       : 0.0;
@@ -1781,6 +1921,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
                       ],
                       Expanded(
                         child: Column(children: [
+                          _databaseViewTabs(),
                           _toolbar(),
                           if (_selectionMode) _batchBar(bookmarks),
                           Expanded(
@@ -1821,6 +1962,13 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
                             key: ValueKey(selected.id),
                             repository: widget.repository,
                             bookmark: selected,
+                            propertyOrder: _propertyOrder,
+                            onPropertyOrderChanged: (order) {
+                              setState(() {
+                                _propertyOrder = normalizeBookmarkPropertyOrder(order);
+                                _markViewChanged();
+                              });
+                            },
                             onClose: () =>
                                 setState(() => _selectedBookmarkId = null),
                             onFilterByTag: _filterByTag,
