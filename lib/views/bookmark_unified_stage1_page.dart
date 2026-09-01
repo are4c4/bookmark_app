@@ -13,6 +13,7 @@ import '../database/database_definition.dart';
 import '../data/person_roles.dart';
 import '../data/saved_view_extensions.dart';
 import '../data/workspace_store.dart';
+import '../features/database/presentation/widgets/database_toolbar.dart';
 import '../services/bookmark_metadata_service.dart';
 import '../services/photo_storage_service.dart';
 import '../widgets/app_toast.dart';
@@ -1356,181 +1357,106 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
     );
   }
 
-  Widget _viewSwitcher() => SegmentedButton<BookmarkStage1ViewType>(
-        showSelectedIcon: false,
-        segments: const [
-          ButtonSegment(
-            value: BookmarkStage1ViewType.gallery,
-            icon: Icon(Icons.grid_view, size: 17),
-          ),
-          ButtonSegment(
-            value: BookmarkStage1ViewType.list,
-            icon: Icon(Icons.view_list, size: 17),
-          ),
-          ButtonSegment(
-            value: BookmarkStage1ViewType.table,
-            icon: Icon(Icons.table_rows, size: 17),
-          ),
-        ],
-        selected: {_viewType},
-        onSelectionChanged: (value) => setState(() {
-          _viewType = value.first;
-          _markViewChanged();
-        }),
-      );
-
   Widget _toolbar() {
     final filterCount = (_favoritesOnly ? 1 : 0) +
         (_statusFilter.isNotEmpty ? 1 : 0) +
         (_minRating > 0 ? 1 : 0) +
         (_relationFilterLabel == null ? 0 : 1);
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-      decoration: BoxDecoration(
-        color: scheme.surface,
-        border: Border(bottom: BorderSide(color: scheme.outlineVariant)),
-      ),
-      child: LayoutBuilder(builder: (context, constraints) {
-        final compact = constraints.maxWidth < 900;
-        final searchWidth = (constraints.maxWidth * .26)
-            .clamp(150.0, compact ? 190.0 : 240.0)
-            .toDouble();
-        return Row(children: [
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                TextButton.icon(
-                  onPressed: _showFilterDialog,
-                  icon: const Icon(Icons.filter_alt_outlined, size: 17),
-                  label: compact
-                      ? const SizedBox.shrink()
-                      : Text(
-                          filterCount == 0
-                              ? 'フィルター'
-                              : 'フィルター $filterCount',
-                        ),
-                ),
-                PopupMenuButton<BookmarkStage1SortField>(
-                  tooltip: '並べ替え',
-                  initialValue: _sortField,
-                  onSelected: (value) => setState(() {
-                    _sortField = value;
-                    _markViewChanged();
-                  }),
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(
-                      value: BookmarkStage1SortField.createdAt,
-                      child: Text('登録日時'),
-                    ),
-                    PopupMenuItem(
-                      value: BookmarkStage1SortField.title,
-                      child: Text('タイトル'),
-                    ),
-                    PopupMenuItem(
-                      value: BookmarkStage1SortField.url,
-                      child: Text('URL'),
-                    ),
-                  ],
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      Icon(Icons.swap_vert, size: 17),
-                      SizedBox(width: 6),
-                      Text('並べ替え'),
-                    ]),
-                  ),
-                ),
-                IconButton(
-                  tooltip: _sortAscending ? '昇順' : '降順',
-                  onPressed: () => setState(() {
-                    _sortAscending = !_sortAscending;
-                    _markViewChanged();
-                  }),
-                  icon: Icon(
-                    _sortAscending ? Icons.arrow_upward : Icons.arrow_downward,
-                    size: 18,
-                  ),
-                ),
-                if (!compact)
-                  TextButton.icon(
-                    onPressed: _showPropertiesDialog,
-                    icon: const Icon(Icons.tune, size: 17),
-                    label: const Text('プロパティ'),
-                  ),
-                if (!compact)
-                  TextButton.icon(
-                    onPressed: _toggleSelectionMode,
-                    icon: const Icon(Icons.check_box_outlined, size: 17),
-                    label: const Text('選択'),
-                  ),
-                PopupMenuButton<String>(
-                  tooltip: 'ビュー',
-                  onSelected: (value) {
-                    if (value == 'new') _saveCurrentView();
-                    if (value == 'properties') _showPropertiesDialog();
-                    if (value == 'select') _toggleSelectionMode();
-                  },
-                  itemBuilder: (_) => [
-                    const PopupMenuItem(
-                      value: 'new',
-                      child: Text('現在のビューを保存'),
-                    ),
-                    if (compact) ...const [
-                      PopupMenuDivider(),
-                      PopupMenuItem(
-                        value: 'properties',
-                        child: Text('プロパティ'),
-                      ),
-                      PopupMenuItem(
-                        value: 'select',
-                        child: Text('複数選択'),
-                      ),
-                    ],
-                  ],
-                  icon: const Icon(Icons.bookmark_add_outlined, size: 19),
-                ),
-              ]),
+
+    return DatabaseToolbar(
+      leadingActions: [
+        TextButton.icon(
+          onPressed: _showFilterDialog,
+          icon: const Icon(Icons.filter_alt_outlined, size: 17),
+          label: Text(
+            filterCount == 0 ? 'フィルター' : 'フィルター $filterCount',
+          ),
+        ),
+        PopupMenuButton<BookmarkStage1SortField>(
+          tooltip: '並べ替え',
+          initialValue: _sortField,
+          onSelected: (value) => setState(() {
+            _sortField = value;
+            _markViewChanged();
+          }),
+          itemBuilder: (_) => const [
+            PopupMenuItem(
+              value: BookmarkStage1SortField.createdAt,
+              child: Text('登録日時'),
+            ),
+            PopupMenuItem(
+              value: BookmarkStage1SortField.title,
+              child: Text('タイトル'),
+            ),
+            PopupMenuItem(
+              value: BookmarkStage1SortField.url,
+              child: Text('URL'),
+            ),
+          ],
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.swap_vert, size: 17),
+                SizedBox(width: 6),
+                Text('並べ替え'),
+              ],
             ),
           ),
-          const SizedBox(width: 10),
-          _viewSwitcher(),
-          const SizedBox(width: 10),
-          SizedBox(
-            width: searchWidth,
-            height: 36,
-            child: TextField(
-              controller: _searchController,
-              onChanged: (value) => setState(() {
-                _query = value;
-                _markViewChanged();
-              }),
-              decoration: InputDecoration(
-                hintText: '検索',
-                prefixIcon: const Icon(Icons.search, size: 18),
-                suffixIcon: _query.isEmpty
-                    ? null
-                    : IconButton(
-                        icon: const Icon(Icons.close, size: 16),
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() {
-                            _query = '';
-                            _markViewChanged();
-                          });
-                        },
-                      ),
-                filled: true,
-                fillColor: scheme.surfaceContainerLow,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(5),
-                  borderSide: BorderSide.none,
-                ),
+        ),
+        IconButton(
+          tooltip: _sortAscending ? '昇順' : '降順',
+          onPressed: () => setState(() {
+            _sortAscending = !_sortAscending;
+            _markViewChanged();
+          }),
+          icon: Icon(
+            _sortAscending ? Icons.arrow_upward : Icons.arrow_downward,
+            size: 18,
+          ),
+        ),
+        TextButton.icon(
+          onPressed: _showPropertiesDialog,
+          icon: const Icon(Icons.tune, size: 17),
+          label: const Text('プロパティ'),
+        ),
+      ],
+      trailingActions: [
+        PopupMenuButton<String>(
+          tooltip: 'その他',
+          icon: const Icon(Icons.more_horiz, size: 19),
+          onSelected: (value) {
+            if (value == 'select') _toggleSelectionMode();
+          },
+          itemBuilder: (_) => const [
+            PopupMenuItem(
+              value: 'select',
+              child: Row(
+                children: [
+                  Icon(Icons.check_box_outlined, size: 18),
+                  SizedBox(width: 8),
+                  Text('複数選択'),
+                ],
               ),
             ),
-          ),
-        ]);
+          ],
+        ),
+      ],
+      layoutType: _layoutKey,
+      supportedLayouts: const ['gallery', 'table', 'list'],
+      onLayoutChanged: (layout) => setState(() {
+        _viewType = switch (layout) {
+          'list' => BookmarkStage1ViewType.list,
+          'table' => BookmarkStage1ViewType.table,
+          _ => BookmarkStage1ViewType.gallery,
+        };
+        _markViewChanged();
+      }),
+      searchController: _searchController,
+      onSearchChanged: (value) => setState(() {
+        _query = value;
+        _markViewChanged();
       }),
     );
   }
