@@ -1179,5 +1179,15 @@ class AppDatabase extends _$AppDatabase {
         await _setSavedViewTags(id, tagIds);
       });
 
+  PhotoRecord _resolvedPhoto(PhotoRecord photo) => PhotoRecord(
+        id: photo.id,
+        path: resolveStoredPath(photo.path),
+        title: photo.title,
+        note: photo.note,
+        tags: photo.tags,
+        createdAt: photo.createdAt,
+      );
+
+
   Future<int> deleteSavedView(int id) => (delete(savedViews)..where((v) => v.id.equals(id))).go();
 }
