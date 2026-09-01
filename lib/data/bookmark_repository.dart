@@ -307,6 +307,9 @@ class BookmarkRepository {
     String visibleProperties = 'image,url,tags,favorite',
     String statusFilter = '',
     int minRating = 0,
+    bool includeDescendants = true,
+    int? personFilterId,
+    int? photoFilterId,
   }) async {
     final id = await _database.createSavedView(
       name: name,
@@ -320,6 +323,9 @@ class BookmarkRepository {
       visibleProperties: visibleProperties,
       statusFilter: statusFilter,
       minRating: minRating,
+      includeDescendants: includeDescendants,
+      personFilterId: personFilterId,
+      photoFilterId: photoFilterId,
     );
     await workspaceStore.assignSavedView(id, workspaceId);
     return id;
@@ -338,6 +344,9 @@ class BookmarkRepository {
     required String visibleProperties,
     String statusFilter = '',
     int minRating = 0,
+    bool includeDescendants = true,
+    int? personFilterId,
+    int? photoFilterId,
   }) => _database.updateSavedView(
         id: id,
         name: name,
@@ -351,6 +360,9 @@ class BookmarkRepository {
         visibleProperties: visibleProperties,
         statusFilter: statusFilter,
         minRating: minRating,
+        includeDescendants: includeDescendants,
+        personFilterId: personFilterId,
+        photoFilterId: photoFilterId,
       );
 
   Future<int> deleteSavedView(int id) => _database.deleteSavedView(id);
