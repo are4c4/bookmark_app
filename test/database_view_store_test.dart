@@ -130,4 +130,19 @@ void main() {
       expect(BuiltInDatabases.byKey(definition.key), same(definition));
     }
   });
+
+  test('generic views and person groups are formal schema v15 tables', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+
+    expect(database.schemaVersion, 15);
+    final rows = await database.customSelect(
+      "SELECT name FROM sqlite_master WHERE type = 'table'",
+    ).get();
+    final tables = rows.map((row) => row.read<String>('name')).toSet();
+
+    expect(tables, contains('database_views'));
+    expect(tables, contains('person_groups'));
+    expect(tables, contains('person_group_members'));
+  });
 }
