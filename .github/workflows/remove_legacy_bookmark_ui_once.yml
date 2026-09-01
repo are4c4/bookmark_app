@@ -1,0 +1,26 @@
+name: Remove legacy bookmark UI once
+
+on:
+  push:
+    branches:
+      - 'refactor/database-ui-architecture-v1'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: refactor/database-ui-architecture-v1
+      - run: python3 tool/remove_legacy_bookmark_ui.py
+      - run: rm tool/remove_legacy_bookmark_ui.py .github/workflows/remove_legacy_bookmark_ui_once.yml
+      - run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Remove disabled legacy bookmark sidebar UI'
+          git push origin HEAD:refactor/database-ui-architecture-v1
