@@ -268,7 +268,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     if (value == null) return '';
     if (property.type == 'checkbox') return value == true ? '✓' : '';
     if (property.type == 'multiSelect' && value is List) return value.join(', ');
-    if (property.type == 'rating' && value is num) return '★' * value.toInt().clamp(0, 5);
+    if (property.type == 'rating' && value is num) return '★' * value.toInt().clamp(0, 5).toInt();
     return '$value';
   }
 
@@ -502,8 +502,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                   physics: const NeverScrollableScrollPhysics(),
                   buildDefaultDragHandles: false,
                   itemCount: properties.length,
-                  onReorder: (oldIndex, newIndex) async {
-                    if (newIndex > oldIndex) newIndex--;
+                  onReorderItem: (oldIndex, newIndex) async {
                     final next = [...properties];
                     final moved = next.removeAt(oldIndex);
                     next.insert(newIndex, moved);

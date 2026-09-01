@@ -26,6 +26,10 @@ part 'app_database_schema.dart';
     SavedViewWorkspaces,
     WorkspaceSettings,
     DatabaseViews,
+    GenericDatabases,
+    GenericProperties,
+    GenericRecords,
+    GenericValues,
     BookmarkAttachments,
     PdfAnnotations,
   ],
@@ -70,7 +74,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 15;
+  int get schemaVersion => 16;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -300,6 +304,36 @@ class AppDatabase extends _$AppDatabase {
             await customStatement(
               'CREATE INDEX IF NOT EXISTS database_views_scope_idx '
               'ON database_views(workspace_id, database_key, sort_order, id)',
+            );
+          }
+          if (from < 16) {
+            final existing = await customSelect(
+              "SELECT name FROM sqlite_master WHERE type = 'table'",
+            ).get();
+            final tableNames = existing.map((row) => row.read<String>('name')).toSet();
+            if (!tableNames.contains('generic_databases')) {
+              await m.createTable(genericDatabases);
+            }
+            if (!tableNames.contains('generic_properties')) {
+              await m.createTable(genericProperties);
+            }
+            if (!tableNames.contains('generic_records')) {
+              await m.createTable(genericRecords);
+            }
+            if (!tableNames.contains('generic_values')) {
+              await m.createTable(genericValues);
+            }
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS generic_databases_workspace_idx '
+              'ON generic_databases(workspace_id, sort_order, id)',
+            );
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS generic_properties_database_idx '
+              'ON generic_properties(database_id, sort_order, id)',
+            );
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS generic_records_database_idx '
+              'ON generic_records(database_id, updated_at DESC, id DESC)',
             );
           }
         },

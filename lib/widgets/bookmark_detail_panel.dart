@@ -7,10 +7,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
 import 'bookmark_relation_section.dart';
-import 'detail_property_row.dart';
-import 'person_role_properties.dart';
+import 'bookmark_reorderable_properties.dart';
 import 'photo_database_picker.dart';
-import 'relation_database_picker.dart';
 
 const _statusLabels = <String, String>{
   'unread': '未読',
@@ -29,6 +27,8 @@ class BookmarkDetailPanel extends StatefulWidget {
     this.onFilterByTag,
     this.onFilterByPerson,
     this.onFilterByPhoto,
+    this.propertyOrder = const [],
+    this.onPropertyOrderChanged,
   });
 
   final BookmarkRepository repository;
@@ -37,6 +37,8 @@ class BookmarkDetailPanel extends StatefulWidget {
   final ValueChanged<Tag>? onFilterByTag;
   final ValueChanged<Person>? onFilterByPerson;
   final ValueChanged<PhotoRecord>? onFilterByPhoto;
+  final List<String> propertyOrder;
+  final ValueChanged<List<String>>? onPropertyOrderChanged;
 
   @override
   State<BookmarkDetailPanel> createState() => _BookmarkDetailPanelState();
@@ -189,16 +191,6 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
     return uri.host.startsWith('www.') ? uri.host.substring(4) : uri.host;
   }
 
-  String _formatDateTime(DateTime? value) {
-    if (value == null) return 'まだ開いていません';
-    final local = value.toLocal();
-    final y = local.year;
-    final m = local.month.toString().padLeft(2, '0');
-    final d = local.day.toString().padLeft(2, '0');
-    final h = local.hour.toString().padLeft(2, '0');
-    final min = local.minute.toString().padLeft(2, '0');
-    return '$y/$m/$d $h:$min';
-  }
 
   Future<void> _openUrl(String value) async {
     final uri = Uri.tryParse(value);
@@ -209,83 +201,6 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
     }
   }
 
-  Future<Tag?> _createTagFromPicker(String name, Tag? parent) async {
-    final id = await widget.repository.createTag(name, parent: parent);
-    final tags = await widget.repository.watchTags().first;
-    for (final tag in tags) {
-      if (tag.id == id) return tag;
-    }
-    return null;
-  }
-
-  Future<void> _selectTagsFromDatabase() async {
-    final allTags = await widget.repository.watchTags().first;
-    if (!mounted) return;
-    final selected = await showTagDatabasePicker(
-      context: context,
-      tags: allTags,
-      initiallySelectedIds: widget.bookmark.tags.map((tag) => tag.id),
-      onCreateTag: _createTagFromPicker,
-    );
-    if (selected != null) await widget.repository.setBookmarkTagsFromDatabase(widget.bookmark, selected);
-  }
-
-  Future<void> _addTagToDroppedBookmark(int bookmarkId, Tag tag) async {
-    final items = await widget.repository.watchAll().first;
-    final dropped = items.where((item) => item.id == bookmarkId).firstOrNull;
-    if (dropped == null) return;
-    final byId = <int, Tag>{for (final value in dropped.tags) value.id: value};
-    byId[tag.id] = tag;
-    await widget.repository.setBookmarkTagsFromDatabase(dropped, byId.values);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('「${dropped.title}」にタグ「${tag.name}」を追加しました')),
-      );
-    }
-  }
-
-  Future<void> _selectCollections() async {
-    final allCollections = await widget.repository.watchCollections().first;
-    final selectedIds = widget.bookmark.collections.map((e) => e.id).toSet();
-    if (!mounted) return;
-    final result = await showDialog<List<CollectionRecord>>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setLocalState) => AlertDialog(
-          title: const Text('コレクションを選択'),
-          content: SizedBox(
-            width: 430,
-            height: 360,
-            child: allCollections.isEmpty
-                ? const Center(child: Text('コレクションがありません'))
-                : ListView(
-                    children: allCollections
-                        .map((collection) => CheckboxListTile(
-                              value: selectedIds.contains(collection.id),
-                              title: Text(collection.name),
-                              subtitle: collection.note?.trim().isNotEmpty == true ? Text(collection.note!) : null,
-                              onChanged: (value) => setLocalState(() {
-                                value == true ? selectedIds.add(collection.id) : selectedIds.remove(collection.id);
-                              }),
-                            ))
-                        .toList(),
-                  ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('キャンセル')),
-            FilledButton(
-              onPressed: () => Navigator.pop(
-                dialogContext,
-                allCollections.where((collection) => selectedIds.contains(collection.id)).toList(),
-              ),
-              child: const Text('適用'),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (result != null) await widget.repository.setBookmarkCollections(widget.bookmark, result);
-  }
 
   Future<void> _addPhotosFromDatabase() async {
     final allPhotos = await widget.repository.watchPhotos().first;
@@ -329,72 +244,6 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
     );
   }
 
-  Widget _propertyRow({
-    required IconData icon,
-    required String label,
-    required Widget value,
-    VoidCallback? onAdd,
-    String? tooltip,
-  }) => DetailPropertyRow(
-        icon: icon,
-        label: label,
-        child: value,
-        onAdd: onAdd,
-        addTooltip: tooltip,
-      );
-
-  Widget _tagChip(Tag tag) {
-    final scheme = Theme.of(context).colorScheme;
-    return DragTarget<int>(
-      onWillAcceptWithDetails: (details) => details.data != widget.bookmark.id,
-      onAcceptWithDetails: (details) => _addTagToDroppedBookmark(details.data, tag),
-      builder: (context, candidates, rejected) {
-        final hovering = candidates.isNotEmpty;
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(4),
-            border: hovering ? Border.all(color: scheme.primary, width: 1.5) : null,
-          ),
-          child: ActionChip(
-            label: Text(tag.name),
-            onPressed: () => widget.onFilterByTag?.call(tag),
-            backgroundColor: hovering ? scheme.primaryContainer : scheme.surfaceContainerHighest,
-            side: BorderSide.none,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-            labelStyle: TextStyle(fontSize: 12, color: hovering ? scheme.onPrimaryContainer : scheme.onSurfaceVariant),
-            visualDensity: VisualDensity.compact,
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _rating(BookmarkItem bookmark) {
-    final scheme = Theme.of(context).colorScheme;
-    return SizedBox(
-      height: 30,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        mainAxisSize: MainAxisSize.min,
-        children: List.generate(5, (index) {
-          final value = index + 1;
-          return InkWell(
-            onTap: () => widget.repository.setRating(bookmark, bookmark.rating == value ? 0 : value),
-            borderRadius: BorderRadius.circular(3),
-            child: Padding(
-              padding: const EdgeInsets.all(1),
-              child: Icon(
-                value <= bookmark.rating ? Icons.star : Icons.star_border,
-                size: 18,
-                color: value <= bookmark.rating ? const Color(0xFFB8860B) : scheme.onSurfaceVariant,
-              ),
-            ),
-          );
-        }),
-      ),
-    );
-  }
 
   Widget _inlineTitle(BookmarkItem bookmark) {
     final scheme = Theme.of(context).colorScheme;
@@ -581,60 +430,14 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                           ],
                         ),
                         const SizedBox(height: 18),
-                        _propertyRow(
-                          icon: Icons.flag_outlined,
-                          label: 'ステータス',
-                          value: DetailSelectField<String>(
-                            value: bookmark.status,
-                            items: _statusLabels,
-                            onSelected: (value) => widget.repository.setStatus(bookmark, value),
-                          ),
-                        ),
-                        _propertyRow(icon: Icons.star_outline, label: '評価', value: _rating(bookmark)),
-                        _propertyRow(
-                          icon: Icons.sell_outlined,
-                          label: 'タグ',
-                          value: bookmark.tags.isEmpty
-                              ? Text('なし', style: TextStyle(fontSize: 12.5, height: 1.0, color: muted.withValues(alpha: .55)))
-                              : Wrap(
-                                  spacing: 5,
-                                  runSpacing: 5,
-                                  children: bookmark.tags.map(_tagChip).toList(),
-                                ),
-                          onAdd: _selectTagsFromDatabase,
-                          tooltip: 'タグDBから選択・新規作成',
-                        ),
-                        PersonRoleProperties(
+                        BookmarkReorderableProperties(
                           repository: widget.repository,
                           bookmark: bookmark,
+                          propertyOrder: widget.propertyOrder,
+                          onPropertyOrderChanged: (order) =>
+                              widget.onPropertyOrderChanged?.call(order),
+                          onFilterByTag: widget.onFilterByTag,
                           onFilterByPerson: widget.onFilterByPerson,
-                        ),
-                        _propertyRow(
-                          icon: Icons.collections_bookmark_outlined,
-                          label: 'コレクション',
-                          value: bookmark.collections.isEmpty
-                              ? Text('なし', style: TextStyle(fontSize: 12.5, height: 1.0, color: muted.withValues(alpha: .55)))
-                              : Wrap(
-                                  spacing: 5,
-                                  runSpacing: 5,
-                                  children: bookmark.collections
-                                      .map((collection) => Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-                                            decoration: BoxDecoration(color: scheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(4)),
-                                            child: Text(collection.name, style: const TextStyle(fontSize: 12)),
-                                          ))
-                                      .toList(),
-                                ),
-                          onAdd: _selectCollections,
-                          tooltip: 'コレクションを選択',
-                        ),
-                        _propertyRow(
-                          icon: Icons.history,
-                          label: '履歴',
-                          value: Text(
-                            '${bookmark.openCount}回 · ${_formatDateTime(bookmark.lastOpenedAt)}',
-                            style: TextStyle(fontSize: 12.5, height: 1.0, color: scheme.onSurface),
-                          ),
                         ),
                         const SizedBox(height: 18),
                         Divider(height: 1, color: scheme.outlineVariant),

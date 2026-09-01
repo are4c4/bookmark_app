@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../data/bookmark_repository.dart';
+import '../data/generic_database_store.dart';
 import '../data/workspace_store.dart';
 import '../services/bookmark_transfer_service.dart';
 import '../services/profile_manager.dart';
@@ -11,6 +12,7 @@ import 'bookmark_lifecycle_page.dart';
 import 'bookmark_unified_stage1_page.dart';
 import 'collection_management_page.dart';
 import 'global_search_page.dart';
+import 'generic_database_page.dart';
 import 'people_management_page.dart';
 import 'photo_management_page.dart';
 import 'profile_management_page.dart';
@@ -69,6 +71,8 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
   var _sidebarCollapsed = false;
   var _loadingWorkspaces = true;
   List<WorkspaceInfo> _workspaces = const [];
+  List<GenericDatabaseDefinitionRecord> _genericDatabases = const [];
+  int? _selectedGenericDatabaseId;
   final Map<int, Widget> _pageCache = {};
 
   @override
@@ -82,6 +86,7 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.repository != widget.repository) {
       _pageCache.clear();
+      _selectedGenericDatabaseId = null;
       _reloadWorkspaces();
     } else if (oldWidget.profileState != widget.profileState ||
         oldWidget.themeMode != widget.themeMode) {
@@ -97,6 +102,38 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
       _pageCache.remove(0);
       _workspaces = workspaces;
       _loadingWorkspaces = false;
+    });
+    await _reloadGenericDatabases();
+  }
+
+  Future<void> _reloadGenericDatabases() async {
+    final store = GenericDatabaseStore(widget.repository.workspaceStore.database);
+    final databases = await store.listDatabases(widget.repository.workspaceId);
+    if (!mounted) return;
+    setState(() {
+      _genericDatabases = databases;
+      if (_selectedGenericDatabaseId != null &&
+          !databases.any((item) => item.id == _selectedGenericDatabaseId)) {
+        _selectedGenericDatabaseId = null;
+      }
+      _pageCache.remove(11);
+    });
+  }
+
+  Future<void> _createGenericDatabase() async {
+    final name = await _askName('データベースを追加', hint: '例: 書籍');
+    if (name?.isNotEmpty != true) return;
+    final store = GenericDatabaseStore(widget.repository.workspaceStore.database);
+    final id = await store.createDatabase(
+      workspaceId: widget.repository.workspaceId,
+      name: name!,
+    );
+    await _reloadGenericDatabases();
+    if (!mounted) return;
+    setState(() {
+      _selectedGenericDatabaseId = id;
+      _index = 11;
+      _pageCache.remove(11);
     });
   }
 
@@ -448,25 +485,40 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
     );
   }
 
-  Widget _subNavTile(int index, IconData icon, String label) {
+
+  Widget _genericDatabaseTile(GenericDatabaseDefinitionRecord database) {
     final scheme = Theme.of(context).colorScheme;
-    final selected = _index == index;
+    final selected = _index == 11 && _selectedGenericDatabaseId == database.id;
     return Padding(
-      padding: const EdgeInsets.only(left: 22, right: UiTokens.space6, top: 1, bottom: 1),
+      padding: const EdgeInsets.symmetric(horizontal: UiTokens.space6, vertical: 1),
       child: Material(
         color: selected ? scheme.surfaceContainerHigh : Colors.transparent,
         borderRadius: BorderRadius.circular(UiTokens.radiusSm),
         child: InkWell(
           borderRadius: BorderRadius.circular(UiTokens.radiusSm),
-          onTap: () => setState(() => _index = index),
+          onTap: () => setState(() {
+            _selectedGenericDatabaseId = database.id;
+            _index = 11;
+            _pageCache.remove(11);
+          }),
           child: SizedBox(
-            height: UiTokens.sidebarChildRowHeight,
+            height: UiTokens.sidebarRowHeight,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 9),
               child: Row(children: [
-                Icon(icon, size: UiTokens.iconSmall, color: selected ? scheme.onSurface : scheme.onSurfaceVariant),
-                const SizedBox(width: UiTokens.space8),
-                Text(label, style: TextStyle(fontSize: 12.5, fontWeight: selected ? FontWeight.w600 : FontWeight.w400)),
+                Text(database.icon, style: const TextStyle(fontSize: 14)),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Text(
+                    database.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: UiTokens.textMd,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                    ),
+                  ),
+                ),
               ]),
             ),
           ),
@@ -499,6 +551,25 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
               _navTile(7, Icons.people_outline, '人物'),
               _navTile(6, Icons.account_tree_outlined, 'タグ'),
               _navTile(8, Icons.collections_bookmark_outlined, 'コレクション'),
+              ..._genericDatabases.map(_genericDatabaseTile),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: UiTokens.space6, vertical: 1),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(UiTokens.radiusSm),
+                  onTap: _createGenericDatabase,
+                  child: const SizedBox(
+                    height: UiTokens.sidebarRowHeight,
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 9),
+                      child: Row(children: [
+                        Icon(Icons.add, size: UiTokens.iconNormal),
+                        SizedBox(width: 9),
+                        Text('データベースを追加', style: TextStyle(fontSize: UiTokens.textMd)),
+                      ]),
+                    ),
+                  ),
+                ),
+              ),
               const SizedBox(height: UiTokens.space6),
               _navTile(1, Icons.search, '全文検索'),
               const Padding(padding: EdgeInsets.symmetric(horizontal: UiTokens.space12, vertical: UiTokens.space6), child: Divider(height: 1)),
@@ -670,17 +741,36 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
             onDuplicate: widget.onDuplicateProfile,
             onDelete: widget.onDeleteProfile,
           ),
-        _ => SettingsPage(
+        10 => SettingsPage(
             themeMode: widget.themeMode,
             onThemeModeChanged: widget.onThemeModeChanged,
             repository: widget.repository,
           ),
+        11 => _selectedGenericDatabaseId == null
+            ? Center(
+                child: FilledButton.icon(
+                  onPressed: _createGenericDatabase,
+                  icon: const Icon(Icons.add),
+                  label: const Text('データベースを作成'),
+                ),
+              )
+            : GenericDatabasePage(
+                key: ValueKey(_selectedGenericDatabaseId),
+                repository: widget.repository,
+                databaseId: _selectedGenericDatabaseId!,
+                onDatabaseChanged: _reloadGenericDatabases,
+              ),
+        _ => const SizedBox.shrink(),
       };
 
   List<Widget> _lazyPages(WorkspaceInfo? workspace) {
-    _pageCache.putIfAbsent(_index, () => _buildPage(_index, workspace));
+    if (_index == 11) {
+      _pageCache[11] = _buildPage(11, workspace);
+    } else {
+      _pageCache.putIfAbsent(_index, () => _buildPage(_index, workspace));
+    }
     return List<Widget>.generate(
-      11,
+      12,
       (index) => _pageCache[index] ?? const SizedBox.shrink(),
     );
   }

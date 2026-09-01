@@ -212,8 +212,7 @@ class _DatabaseViewTabsState extends State<DatabaseViewTabs> {
               scrollDirection: Axis.horizontal,
               buildDefaultDragHandles: false,
               itemCount: _views.length,
-              onReorder: (oldIndex, newIndex) async {
-                if (newIndex > oldIndex) newIndex--;
+              onReorderItem: (oldIndex, newIndex) async {
                 final next = [..._views];
                 final moved = next.removeAt(oldIndex);
                 next.insert(newIndex, moved);

@@ -80,6 +80,8 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
   int? _activeDatabaseViewId;
   DatabaseViewConfig? _activeDatabaseView;
 
+  bool get _legacyBookmarkSidebarEnabled => false;
+
   List<BookmarkStage1Property> get _orderedVisibleProperties =>
       orderedVisibleBookmarkProperties(_propertyOrder, _visibleProperties);
 
@@ -632,51 +634,6 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
           .map((assignment) => assignment.person.name)
           .join(', ');
 
-  List<String> _orderedListDetails(
-    BookmarkItem bookmark,
-    List<PersonRoleAssignment> assignments,
-  ) {
-    final details = <String>[];
-    for (final token in _visiblePropertyTokens) {
-      if (token.startsWith('role:')) {
-        final role = token.substring(5);
-        final value = _roleValue(assignments, role);
-        if (value.isNotEmpty) details.add('$role: $value');
-        continue;
-      }
-      final property = bookmarkPropertyFromKey(token);
-      if (property == null) continue;
-      switch (property) {
-        case BookmarkStage1Property.image:
-          break;
-        case BookmarkStage1Property.url:
-          details.add(_compactUrl(bookmark.url));
-        case BookmarkStage1Property.tags:
-          if (bookmark.tags.isNotEmpty) {
-            details.add(bookmark.tags.map((tag) => tag.name).join(', '));
-          }
-        case BookmarkStage1Property.people:
-          if (bookmark.people.isNotEmpty) {
-            details.add(bookmark.people.map((person) => person.name).join(', '));
-          }
-        case BookmarkStage1Property.description:
-          if (bookmark.description?.trim().isNotEmpty == true) {
-            details.add(bookmark.description!);
-          }
-        case BookmarkStage1Property.createdAt:
-          details.add(_formatDate(bookmark.createdAt));
-        case BookmarkStage1Property.favorite:
-          if (bookmark.favorite) details.add('お気に入り');
-        case BookmarkStage1Property.status:
-          details.add(bookmarkStatusLabels[bookmark.status] ?? bookmark.status);
-        case BookmarkStage1Property.rating:
-          if (bookmark.rating > 0) details.add('★' * bookmark.rating);
-        case BookmarkStage1Property.history:
-          details.add(_historyText(bookmark));
-      }
-    }
-    return details;
-  }
 
   Widget _list(List<BookmarkItem> bookmarks) => ListView.separated(
         padding: const EdgeInsets.fromLTRB(14, 8, 14, 90),
@@ -1943,7 +1900,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
                   final wantsDetail = selected != null && !_selectionMode;
                   // Database navigation now lives in the Notion-style
                   // view tabs above the toolbar, avoiding a second sidebar.
-                  const showSidebar = false;
+                  final showSidebar = _legacyBookmarkSidebarEnabled;
                   final fixedSidebarWidth = showSidebar
                       ? (_sidebarCollapsed ? 43.0 : 221.0)
                       : 0.0;
@@ -2010,6 +1967,13 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
                             key: ValueKey(selected.id),
                             repository: widget.repository,
                             bookmark: selected,
+                            propertyOrder: _propertyOrder,
+                            onPropertyOrderChanged: (order) {
+                              setState(() {
+                                _propertyOrder = normalizeBookmarkPropertyOrder(order);
+                                _markViewChanged();
+                              });
+                            },
                             onClose: () =>
                                 setState(() => _selectedBookmarkId = null),
                             onFilterByTag: _filterByTag,

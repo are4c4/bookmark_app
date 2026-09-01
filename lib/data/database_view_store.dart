@@ -248,19 +248,40 @@ class DatabaseViewStore {
   }
 
   Future<int> duplicateView(DatabaseViewConfig view) async {
-    final definition = BuiltInDatabases.byKey(view.databaseKey);
-    if (definition == null) throw StateError('Unknown database ${view.databaseKey}');
-    return createView(
+    await _ensureSchema();
+    final views = await listViews(
       workspaceId: view.workspaceId,
-      definition: definition,
-      name: '${view.name} のコピー',
-      layoutType: view.layoutType,
-      filters: view.filters,
-      sorts: view.sorts,
-      visibleProperties: view.visibleProperties,
-      propertyOrder: view.propertyOrder,
-      settings: view.settings,
+      databaseKey: view.databaseKey,
     );
+    final nextOrder = views.isEmpty
+        ? 0
+        : views.map((item) => item.sortOrder).reduce((a, b) => a > b ? a : b) + 1;
+    await database.customStatement(
+      '''
+      INSERT INTO database_views(
+        workspace_id, database_key, name, layout_type, filters_json,
+        sorts_json, visible_properties, property_order, settings_json,
+        sort_order
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ''',
+      [
+        view.workspaceId,
+        view.databaseKey,
+        '${view.name} のコピー',
+        view.layoutType,
+        jsonEncode(view.filters),
+        jsonEncode(view.sorts),
+        view.visibleProperties.join(','),
+        view.propertyOrder.join(','),
+        jsonEncode(view.settings),
+        nextOrder,
+      ],
+    );
+    final row = await database.customSelect(
+      'SELECT id FROM database_views WHERE workspace_id = ? AND database_key = ? ORDER BY id DESC LIMIT 1',
+      variables: [Variable<int>(view.workspaceId), Variable<String>(view.databaseKey)],
+    ).getSingle();
+    return row.read<int>('id');
   }
 
   Future<void> deleteView(int id) async {
