@@ -5,6 +5,7 @@ import 'data/bookmark_lifecycle_store.dart';
 import 'data/bookmark_repository.dart';
 import 'data/workspace_store.dart';
 import 'services/app_settings_service.dart';
+import 'services/object_sync_service.dart';
 import 'services/photo_storage_service.dart';
 import 'services/profile_manager.dart';
 import 'services/profile_storage_migrator.dart';
@@ -66,6 +67,7 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
     final workspaceId = await workspaceStore.initialize();
     final lifecycleStore = BookmarkLifecycleStore(database);
     await lifecycleStore.initialize();
+    await ObjectSyncService(database).syncWorkspace(workspaceId);
     _workspaceStore = workspaceStore;
     _lifecycleStore = lifecycleStore;
     PhotoStorageService.activePhotoDirectoryPath = profile.photoDirectoryPath;
@@ -183,6 +185,7 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
       return;
     }
     await store.setActiveWorkspace(workspace.id);
+    await ObjectSyncService(database).syncWorkspace(workspace.id);
     if (!mounted) return;
     setState(() {
       _repository = BookmarkRepository(
