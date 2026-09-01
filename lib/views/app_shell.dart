@@ -4,6 +4,7 @@ import '../data/bookmark_repository.dart';
 import '../data/workspace_store.dart';
 import '../services/bookmark_transfer_service.dart';
 import '../services/profile_manager.dart';
+import '../services/profile_backup_service.dart';
 import '../ui/ui_tokens.dart';
 import 'bookmark_lifecycle_page.dart';
 import 'bookmark_unified_stage1_page.dart';
@@ -26,6 +27,7 @@ class BookmarkAppShell extends StatefulWidget {
     required this.onCreateProfile,
     required this.onRenameProfile,
     required this.onDuplicateProfile,
+    required this.onImportProfileBackup,
     required this.onDeleteProfile,
     required this.onSwitchWorkspace,
   });
@@ -38,6 +40,8 @@ class BookmarkAppShell extends StatefulWidget {
   final Future<void> Function(String name) onCreateProfile;
   final Future<void> Function(DatabaseProfile profile, String name) onRenameProfile;
   final Future<void> Function(DatabaseProfile profile) onDuplicateProfile;
+  final Future<void> Function(String archivePath, String name)
+      onImportProfileBackup;
   final Future<void> Function(DatabaseProfile profile) onDeleteProfile;
   final Future<void> Function(WorkspaceInfo workspace) onSwitchWorkspace;
 
@@ -47,6 +51,7 @@ class BookmarkAppShell extends StatefulWidget {
 
 class _BookmarkAppShellState extends State<BookmarkAppShell> {
   static const _transfer = BookmarkTransferService();
+  static const _profileBackup = ProfileBackupService();
   static const _workspaceIcons = ['🏠', '📁', '📚', '🎬', '💻', '🧪', '⭐', '🗂️', '✍️', '🌱'];
   static const _workspaceColors = <int>[
     0xFF9B9A97,
@@ -246,6 +251,26 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
         final result = await _transfer.importFile(widget.repository);
         if (!mounted || result == null) return;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${result.imported}件を取り込みました（重複 ${result.skipped}件をスキップ）')));
+      } else if (value == 'profile_export') {
+        final active = widget.profileState.activeProfile;
+        final path = await _profileBackup.exportProfile(
+          profileName: active.name,
+          profileDirectoryPath: active.directoryPath,
+          database: widget.repository.lifecycleStore.database,
+        );
+        if (!mounted || path == null) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Profileバックアップを保存しました: $path')),
+        );
+      } else if (value == 'profile_import') {
+        final archivePath = await _profileBackup.pickBackupFile();
+        if (!mounted || archivePath == null) return;
+        final name = await _askName(
+          '復元するProfile名',
+          initial: '復元したProfile',
+        );
+        if (name?.isNotEmpty != true) return;
+        await widget.onImportProfileBackup(archivePath, name!);
       }
     } catch (error) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('データ操作に失敗しました: $error')));
@@ -479,8 +504,17 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
             tooltip: 'データ',
             onSelected: _handleDataAction,
             itemBuilder: (_) => const [
-              PopupMenuItem(value: 'import', child: Text('インポート')),
+              PopupMenuItem(value: 'import', child: Text('ブックマークをインポート')),
               PopupMenuItem(value: 'export', child: Text('ブックマークをJSON書き出し')),
+              PopupMenuDivider(),
+              PopupMenuItem(
+                value: 'profile_export',
+                child: Text('Profileを完全バックアップ'),
+              ),
+              PopupMenuItem(
+                value: 'profile_import',
+                child: Text('バックアップからProfileを復元'),
+              ),
             ],
             child: const Padding(
               padding: EdgeInsets.fromLTRB(14, 10, 10, 12),
