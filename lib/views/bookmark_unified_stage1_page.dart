@@ -186,7 +186,9 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
       _visiblePersonRoles
         ..clear()
         ..addAll(roles);
-      if (width is num) _detailWidth = width.toDouble().clamp(320.0, 720.0);
+      if (width is num) {
+        _detailWidth = width.toDouble().clamp(320.0, 720.0).toDouble();
+      }
       _activeDatabaseViewId = view.id;
       _activeDatabaseView = view;
       _activeSavedViewId = null;

@@ -91,7 +91,10 @@ class _DatabasePageToolbarState extends State<DatabasePageToolbar> {
               height: 36,
               child: TextField(
                 controller: _searchController,
-                onChanged: widget.onSearchChanged,
+                onChanged: (value) {
+                  widget.onSearchChanged(value);
+                  setState(() {});
+                },
                 decoration: InputDecoration(
                   hintText: widget.searchHint,
                   prefixIcon: const Icon(Icons.search, size: UiTokens.iconNormal),
