@@ -133,6 +133,12 @@ class SavedViews extends Table {
   TextColumn get visibleProperties => text().withDefault(const Constant('image,url,tags,favorite'))();
   TextColumn get statusFilter => text().withDefault(const Constant(''))();
   IntColumn get minRating => integer().withDefault(const Constant(0))();
+  BoolColumn get includeDescendants =>
+      boolean().withDefault(const Constant(true))();
+  IntColumn get personFilterId =>
+      integer().nullable().references(People, #id, onDelete: KeyAction.setNull)();
+  IntColumn get photoFilterId =>
+      integer().nullable().references(Photos, #id, onDelete: KeyAction.setNull)();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }
 
@@ -315,7 +321,7 @@ class AppDatabase extends _$AppDatabase {
     final root = profileDirectoryPath?.replaceAll('\\', '/').replaceAll(RegExp(r'/+
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 14;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -1093,6 +1099,9 @@ class AppDatabase extends _$AppDatabase {
     String visibleProperties = 'image,url,tags,favorite',
     String statusFilter = '',
     int minRating = 0,
+    bool includeDescendants = true,
+    int? personFilterId,
+    int? photoFilterId,
   }) => transaction(() async {
         final id = await into(savedViews).insert(SavedViewsCompanion.insert(
           name: name,
@@ -1105,6 +1114,9 @@ class AppDatabase extends _$AppDatabase {
           visibleProperties: Value(visibleProperties),
           statusFilter: Value(statusFilter),
           minRating: Value(minRating.clamp(0, 5)),
+          includeDescendants: Value(includeDescendants),
+          personFilterId: Value(personFilterId),
+          photoFilterId: Value(photoFilterId),
         ));
         await _setSavedViewTags(id, tagIds);
         return id;
@@ -1123,12 +1135,18 @@ class AppDatabase extends _$AppDatabase {
     required String visibleProperties,
     required String statusFilter,
     required int minRating,
+    required bool includeDescendants,
+    int? personFilterId,
+    int? photoFilterId,
   }) => transaction(() async {
         await (update(savedViews)..where((v) => v.id.equals(id))).write(SavedViewsCompanion(
           name: Value(name), layoutType: Value(layoutType), searchQuery: Value(searchQuery),
           favoritesOnly: Value(favoritesOnly), tagMatchMode: Value(tagMatchMode),
           sortField: Value(sortField), sortDirection: Value(sortDirection), visibleProperties: Value(visibleProperties),
           statusFilter: Value(statusFilter), minRating: Value(minRating.clamp(0, 5)),
+          includeDescendants: Value(includeDescendants),
+          personFilterId: Value(personFilterId),
+          photoFilterId: Value(photoFilterId),
         ));
         await _setSavedViewTags(id, tagIds);
       });
@@ -2071,6 +2089,14 @@ class AppDatabase extends _$AppDatabase {
               'CREATE INDEX IF NOT EXISTS pdf_annotations_attachment_idx '
               'ON pdf_annotations(attachment_id, page_number)',
             );
+          }
+          if (from < 14) {
+            await m.addColumn(
+              savedViews,
+              savedViews.includeDescendants,
+            );
+            await m.addColumn(savedViews, savedViews.personFilterId);
+            await m.addColumn(savedViews, savedViews.photoFilterId);
           }
         },
         beforeOpen: (_) async => customStatement('PRAGMA foreign_keys = ON'),
