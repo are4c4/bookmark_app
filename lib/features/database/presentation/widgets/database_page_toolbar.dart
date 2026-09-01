@@ -145,7 +145,7 @@ class _DatabasePageToolbarState extends State<DatabasePageToolbar> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Container(
-      minHeight: UiTokens.toolbarHeight,
+      constraints: const BoxConstraints(minHeight: UiTokens.toolbarHeight),
       padding: const EdgeInsets.symmetric(horizontal: UiTokens.space12),
       decoration: BoxDecoration(
         color: scheme.surface,
