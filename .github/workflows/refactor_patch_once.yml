@@ -1,0 +1,26 @@
+name: Apply refactor patch
+
+on:
+  push:
+    branches:
+      - 'refactor/database-ui-architecture-v1'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: refactor/database-ui-architecture-v1
+      - run: python3 tool/refactor_database_ui_patch.py
+      - run: rm tool/refactor_database_ui_patch.py .github/workflows/refactor_patch_once.yml
+      - run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Use shared database toolbar in bookmarks'
+          git push origin HEAD:refactor/database-ui-architecture-v1
