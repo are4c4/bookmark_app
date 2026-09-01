@@ -72,18 +72,16 @@ class BacklinkRepository {
   }
 
   Stream<List<BacklinkEntry>> watchFor(int bookmarkId) {
-    final query = _database.select(_database.bookmarkRelations)
-      ..where(
+    return _database.select(_database.bookmarkRelations).watch().asyncMap((relations) async {
+      final relevantRelations = relations.where(
         (relation) =>
-            relation.sourceBookmarkId.equals(bookmarkId) |
-            relation.targetBookmarkId.equals(bookmarkId),
+            relation.sourceBookmarkId == bookmarkId ||
+            relation.targetBookmarkId == bookmarkId,
       );
-
-    return query.watch().asyncMap((relations) async {
       final bookmarks = await _root.watchAll().first;
       return buildEntries(
         bookmarkId: bookmarkId,
-        relations: relations,
+        relations: relevantRelations,
         bookmarks: bookmarks,
       );
     });
