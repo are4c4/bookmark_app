@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/bidirectional_relation_store.dart';
 import '../data/daily_note_service.dart';
 import '../data/generic_database_store.dart';
+import '../data/object_body_block_edit_service.dart';
 import '../data/object_body_store.dart';
 import '../data/object_computed_value_store.dart';
 import '../data/object_detail_content_loader.dart';
@@ -16,12 +17,12 @@ import '../data/relation_read_service.dart';
 import '../data/system_object_store.dart';
 import '../data/weblink_object_service.dart';
 import '../data/weblink_value_promotion_service.dart';
-import '../domain/object_body_plain_text.dart';
+import '../domain/object_body.dart';
 import '../domain/object_detail_content.dart';
 import '../domain/object_detail_property_presentation.dart';
 import '../domain/object_model.dart';
+import '../features/object/presentation/widgets/object_body_document_view.dart';
 import '../features/object/presentation/widgets/object_detail_property_view.dart';
-import '../widgets/object_body_section.dart';
 
 class ObjectInspectorPage extends StatefulWidget {
   const ObjectInspectorPage({
@@ -40,7 +41,6 @@ class ObjectInspectorPage extends StatefulWidget {
 }
 
 class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
-  static const _bodyAdapter = ObjectBodyPlainTextAdapter();
   static const _propertyPresenter = ObjectDetailPropertyPresenter();
 
   ObjectGraphNodeRecord? _node;
@@ -53,6 +53,9 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
   bool _loading = true;
 
   ObjectBodyStore get _bodyStore => ObjectBodyStore(widget.store);
+
+  ObjectBodyBlockEditService get _bodyBlockEdits =>
+      ObjectBodyBlockEditService(bodyStore: _bodyStore);
 
   ObjectDetailContentLoader get _contentLoader => ObjectDetailContentLoader(
         objectStore: widget.objectStore,
@@ -158,15 +161,21 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
     await _openObject(note.id);
   }
 
-  Future<void> _saveBody(ObjectDetailContent content, String text) async {
-    if (!_bodyAdapter.canEdit(content.body)) return;
-    final stamp = DateTime.now().microsecondsSinceEpoch;
-    final updated = _bodyAdapter.write(
-      document: content.body,
+  Future<void> _editBodyText(ObjectBodyBlock block, String text) async {
+    await _bodyBlockEdits.updateText(
+      objectId: widget.objectId,
+      blockId: block.id,
       text: text,
-      blockIdForIndex: (index) => 'paragraph-${widget.objectId}-$stamp-$index',
     );
-    await _bodyStore.write(objectId: widget.objectId, document: updated);
+    await _load();
+  }
+
+  Future<void> _toggleChecklist(ObjectBodyBlock block, bool checked) async {
+    await _bodyBlockEdits.setChecklistChecked(
+      objectId: widget.objectId,
+      blockId: block.id,
+      checked: checked,
+    );
     await _load();
   }
 
@@ -472,9 +481,30 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
                   : null,
             );
           }),
-          ObjectBodySection(
+          const SizedBox(height: 24),
+          Text(
+            'Body',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          ObjectBodyDocumentView(
             document: content.body,
-            onSave: (text) => _saveBody(content, text),
+            onTextChanged: node.isSystemType
+                ? null
+                : (block, text) => _editBodyText(block, text),
+            onChecklistChanged: node.isSystemType
+                ? null
+                : (block, checked) => _toggleChecklist(block, checked),
+            onObjectReferenceTap: (block) {
+              final targetId = block.referencedObjectId;
+              if (targetId != null) _openObject(targetId);
+            },
+            emptyBuilder: (context) => Text(
+              'Bodyは空です',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
           ),
           if (_relations.backlinks.isNotEmpty) ...[
             const SizedBox(height: 24),
