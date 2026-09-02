@@ -43,10 +43,10 @@ Implementation runs should continue through multiple safe slices. One PR/commit/
 - PR #65 merged: Body/default persistence, Weblink Object service, Daily Note open-or-create, shared detail loading, paragraph-safe Body adapter.
 - PR #71 merged: shared Object detail editing/session, Daily Note detail bridge, persisted defaults resolution, reusable Image Object facade.
 - PR #68 merged: existing Object inspector uses shared detail content, Formula/Rollup, persisted Body editing, and general Object navigation for today's Daily Note.
-- PR #76 merged as `dac4a64f22d6ab63279ed3075664847f213cf992`: shared Object detail state can be composed with canonical Relation `neighborhood()` data.
-- PR #77 merged as `d952ec409fdf69b45219ae00d3c38d3c74b59619`: safe Value -> Object execution and reusable URL -> Weblink promotion are integrated; user-facing Relation writes delegate to `RelationMutationService`.
-- PR #78 merged as `521063771df658058dd625a5601a22f6ca77332e`: `ObjectInspectorPage` now renders outgoing Relations and Backlinks from the canonical Relation neighborhood instead of ad-hoc graph queries.
-- PR #79 is active: grouped Board Object creation has been replayed on current foundations. Its known stale test-constructor mismatch was fixed, and Relation-group initialization now routes through `RelationMutationService`.
+- PR #76 merged: shared Object detail state composes with canonical Relation `neighborhood()` data.
+- PR #77 merged: safe Value -> Object execution and reusable URL -> Weblink promotion; Relation writes delegate to `RelationMutationService`.
+- PR #78 merged: `ObjectInspectorPage` renders outgoing Relations and Backlinks from canonical Relation neighborhood data.
+- PR #79 remains active: grouped Board Object creation is replayed on current foundations; its Relation-group initialization routes through `RelationMutationService`, and its next integration surface is `GenericDatabasePage`.
 
 ### Relation foundation
 
@@ -56,6 +56,8 @@ Implementation runs should continue through multiple safe slices. One PR/commit/
 - PR #73 merged: canonical `RelationNeighborhood` outgoing + backlink payload.
 - PR #74 merged: fail-closed deterministic Relation index reconciliation for index-only drift.
 - PR #75 merged: `RelationTargetService` canonical same-workspace Relation-picker candidates.
+- PR #80 merged as `614d654e6bb08011d9cb4ca242b50174ce44e5e4`: `RelationTargetService.selectionFor()` now returns canonical source/target selection state, missing target diagnostics, and single-cardinality drift without mutating data.
+- PR #81 merged as `0390d12162cb2a2dd5c063e8e4cbca95f036a248`: `CoreObjectBridge` Images/Tags writes and orphan mirror cleanup now use the safe Relation lifecycle, including detaching incoming references before mirrored Object deletion.
 
 ### Existing generic foundations
 
@@ -75,24 +77,31 @@ Object query/filter/sort, grouping, Board view and drag/drop persistence, Formul
 
 ## Next repository-wide actions
 
-1. Validate and land Object PR #79, then wire grouped Board creation to the existing Board-column `新規Object` callback in `GenericDatabasePage`.
-2. Expose reversible URL Value -> reusable Weblink promotion through a narrow Object-owned UI affordance; preserve the source Value by default.
-3. Use `RelationTargetService` + `RelationMutationService` for Relation editing/pickers and `RelationReadService.neighborhood()` for Object graph context.
-4. Continue Object-centric Database/View integration and Board workflows under Issue #56 without duplicating Object or Relation records.
-5. Keep Relation lane focused on regressions found during integration rather than competing edits to Object-owned UI.
+1. Validate/land Object PR #79 and continue its `GenericDatabasePage` Board integration without bypassing the Relation lifecycle.
+2. In the same Object-owned `GenericDatabasePage` sequencing window, migrate real Relation editing/pickers to:
+   - `RelationTargetService.selectionFor()` for canonical current selection/candidates/diagnostics;
+   - `RelationMutationService.setRelation()` for writes.
+3. When a picker opens legacy/corrupt state, surface missing target ids/cardinality drift rather than silently rewriting the stored Relation merely by opening/closing the UI.
+4. Expose reversible URL Value -> reusable Weblink promotion through a narrow Object-owned UI affordance; preserve source Value by default.
+5. Continue Object-centric Database/View integration and Board workflows under Issue #56 without duplicating Object or Relation records.
+6. Keep Relation lane focused on concrete regressions discovered during integration rather than competing edits to Object-owned UI.
 
 ## Validation
 
-- PR #76 Flutter CI #434: success before merge.
-- PR #77 Flutter CI #439: success after analyzer correction; Drift generation, analyze, and tests passed before merge.
-- PR #78 Flutter CI #440: success before merge.
-- PR #79 CI #441 identified one stale test-helper constructor error before tests. The exact job log was inspected and corrected; newer CI is running on the corrected Relation-safe head.
-- Latest merged Relation slices #66/#69/#73/#74/#75 each passed Flutter CI before merge.
+- PR #76 Flutter CI: success before merge.
+- PR #77 Flutter CI: success after analyzer correction; Drift generation, analyze, and tests passed before merge.
+- PR #78 Flutter CI: success before merge.
+- PR #79 remains an active Object-lane integration PR.
+- Relation PR #80 corrected latest head `56f634d666c2d4e15fc5917f0559ef2fb02225cd`: dependency install, Drift generation, `flutter analyze`, full tests — success before merge. Its earlier run failed only one new test because candidate ordering was incorrectly asserted; implementation/analyzer were green.
+- Relation PR #81 head `c99ee94ea26bb2588e27321398ebe635870e2f8d`: dependency install, Drift generation, `flutter analyze`, full tests — success before merge.
+- Earlier merged Relation slices #66/#69/#73/#74/#75 each passed Flutter CI before merge.
 
 ## Known risks
 
-- `GenericDatabasePage`, Object detail presentation, Value promotion UI and `core_object_bridge.dart` are Object-owned integration surfaces even when they consume Relation APIs.
+- `GenericDatabasePage`, Object detail presentation, Value promotion UI and Board integration are Object-owned integration surfaces even when they consume Relation APIs.
 - Low-level generic ObjectStore operations remain available, but user-facing Relation mutations should use `RelationMutationService`.
-- Board Relation-group creation must preserve the same rule; do not bypass Relation lifecycle when wiring the UI.
+- `CoreObjectBridge` has completed its deliberately sequenced Relation lifecycle migration; future feature ownership returns to the Object lane.
+- `GenericDatabasePage` still contains a low-level Relation write until the Object lane completes the picker/editor migration; active PR #79 plans to touch that same file, so Relation lane should not create a competing edit.
+- Board Relation-group creation must preserve the same safe-mutation rule.
 - Do not auto-repair ambiguous persisted Relation values; only deterministic index-only reconciliation is currently safe.
 - Rich Body documents must not be flattened by the initial paragraph-safe editor.
