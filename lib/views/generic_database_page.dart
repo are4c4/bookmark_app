@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/bookmark_repository.dart';
 import '../data/database_view_store.dart';
 import '../data/generic_database_store.dart';
+import '../data/object_computed_value_store.dart';
 import '../data/object_graph_query_store.dart';
 import '../data/object_store.dart';
 import '../data/object_type_management_store.dart';
@@ -34,6 +35,7 @@ class GenericDatabasePage extends StatefulWidget {
 class _GenericDatabasePageState extends State<GenericDatabasePage> {
   late final GenericDatabaseStore _store;
   late final ObjectStore _objectStore;
+  late final ObjectComputedValueStore _computedStore;
   late final ObjectTypeManagementStore _managementStore;
   late final ObjectGraphQueryStore _graphStore;
   late final DatabaseViewStore _viewStore;
@@ -43,6 +45,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
   List<GenericRecord> _records = const [];
   List<GenericDatabaseDefinitionRecord> _objectTypes = const [];
   Map<int, List<GenericRecord>> _recordsByType = const {};
+  Map<int, Map<int, dynamic>> _computedValues = const {};
   DatabaseViewConfig? _activeView;
   int? _selectedRecordId;
   String _query = '';
@@ -58,6 +61,8 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     'url': 'URL',
     'rating': '評価',
     'relation': 'リレーション',
+    'formula': '数式',
+    'rollup': 'ロールアップ',
   };
 
   @override
@@ -65,6 +70,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     super.initState();
     _store = GenericDatabaseStore(widget.repository.workspaceStore.database);
     _objectStore = ObjectStore(_store);
+    _computedStore = ObjectComputedValueStore(_objectStore);
     _managementStore = ObjectTypeManagementStore(
       genericStore: _store,
       objectStore: _objectStore,
@@ -90,13 +96,42 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     final database = await _store.getDatabase(widget.databaseId);
     final properties = await _store.listProperties(widget.databaseId);
     final records = await _store.listRecords(widget.databaseId);
+    final objectType = await _objectStore.getObjectType(widget.databaseId);
+    final objects = await _objectStore.listObjects(widget.databaseId);
     final objectTypes = await _store.listAllDatabases(widget.repository.workspaceId);
     final recordsByType = <int, List<GenericRecord>>{};
-    for (final objectType in objectTypes) {
-      recordsByType[objectType.id] = objectType.id == widget.databaseId
+    for (final relatedType in objectTypes) {
+      recordsByType[relatedType.id] = relatedType.id == widget.databaseId
           ? records
-          : await _store.listRecords(objectType.id);
+          : await _store.listRecords(relatedType.id);
     }
+
+    final computedValues = <int, Map<int, dynamic>>{};
+    if (objectType != null) {
+      final computedProperties = objectType.properties
+          .where(
+            (property) =>
+                property.type == ObjectPropertyType.formula ||
+                property.type == ObjectPropertyType.rollup,
+          )
+          .toList(growable: false);
+      for (final object in objects) {
+        for (final property in computedProperties) {
+          try {
+            final value = await _computedStore.evaluate(
+              object: object,
+              property: property,
+            );
+            (computedValues[object.id] ??= <int, dynamic>{})[property.id] =
+                value;
+          } catch (_) {
+            (computedValues[object.id] ??= <int, dynamic>{})[property.id] =
+                null;
+          }
+        }
+      }
+    }
+
     if (!mounted) return;
     setState(() {
       _database = database;
@@ -104,6 +139,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
       _records = records;
       _objectTypes = objectTypes;
       _recordsByType = recordsByType;
+      _computedValues = computedValues;
       _loading = false;
     });
   }
@@ -244,6 +280,8 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
 
   DatabasePropertyType _databasePropertyType(String type) => switch (type) {
         'number' => DatabasePropertyType.number,
+        'formula' => DatabasePropertyType.number,
+        'rollup' => DatabasePropertyType.number,
         'select' => DatabasePropertyType.select,
         'multiSelect' => DatabasePropertyType.multiSelect,
         'checkbox' => DatabasePropertyType.checkbox,
@@ -255,6 +293,8 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
 
   IconData _propertyIcon(String type) => switch (type) {
         'number' => Icons.numbers,
+        'formula' => Icons.calculate_outlined,
+        'rollup' => Icons.functions,
         'select' => Icons.arrow_drop_down_circle_outlined,
         'multiSelect' => Icons.sell_outlined,
         'checkbox' => Icons.check_box_outlined,
@@ -288,6 +328,13 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
 
   String _relationDisplay(GenericPropertyRecord property, dynamic value) =>
       _relatedRecords(property, value).map((record) => record.title).join(', ');
+
+  dynamic _valueFor(GenericRecord record, GenericPropertyRecord property) {
+    if (property.type == 'formula' || property.type == 'rollup') {
+      return _computedValues[record.id]?[property.id];
+    }
+    return record.values[property.id];
+  }
 
   List<GenericPropertyRecord> get _orderedVisibleProperties {
     final order = _activeView?.propertyOrder ?? const <String>[];
@@ -324,7 +371,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     return _records.where((record) {
       if (record.title.toLowerCase().contains(normalized)) return true;
       for (final property in _properties) {
-        final display = _displayValue(property, record.values[property.id]);
+        final display = _displayValue(property, _valueFor(record, property));
         if (display.toLowerCase().contains(normalized)) return true;
       }
       return false;
@@ -371,93 +418,238 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     var optionsText = '';
     int? targetObjectTypeId;
     var multipleRelations = true;
+    var formulaExpression = '';
+    int? rollupRelationPropertyId;
+    int? rollupTargetPropertyId;
+    var rollupAggregation = 'count';
+    var rollupTargetProperties = <GenericPropertyRecord>[];
+
     final ok = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setLocalState) => AlertDialog(
-          title: const Text('プロパティを追加'),
-          content: SizedBox(
-            width: 430,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  autofocus: true,
-                  decoration: const InputDecoration(labelText: '名前'),
-                  onChanged: (value) => name = value,
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: type,
-                  decoration: const InputDecoration(labelText: '種類'),
-                  items: _propertyTypes.entries
-                      .map(
-                        (entry) => DropdownMenuItem(
-                          value: entry.key,
-                          child: Text(entry.value),
+        builder: (context, setLocalState) {
+          final relationProperties = _properties
+              .where((property) => property.type == 'relation')
+              .toList(growable: false);
+          final numericProperties = _properties
+              .where(
+                (property) =>
+                    property.type == 'number' || property.type == 'rating',
+              )
+              .toList(growable: false);
+          final canSave = switch (type) {
+            'relation' => targetObjectTypeId != null,
+            'formula' => formulaExpression.trim().isNotEmpty,
+            'rollup' => rollupRelationPropertyId != null &&
+                (rollupAggregation == 'count' ||
+                    rollupTargetPropertyId != null),
+            _ => true,
+          };
+
+          return AlertDialog(
+            title: const Text('プロパティを追加'),
+            content: SizedBox(
+              width: 460,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      autofocus: true,
+                      decoration: const InputDecoration(labelText: '名前'),
+                      onChanged: (value) => name = value,
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue: type,
+                      decoration: const InputDecoration(labelText: '種類'),
+                      items: _propertyTypes.entries
+                          .map(
+                            (entry) => DropdownMenuItem(
+                              value: entry.key,
+                              child: Text(entry.value),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) => setLocalState(() {
+                        type = value ?? 'text';
+                        if (type != 'relation') targetObjectTypeId = null;
+                        if (type != 'rollup') {
+                          rollupRelationPropertyId = null;
+                          rollupTargetPropertyId = null;
+                          rollupTargetProperties = <GenericPropertyRecord>[];
+                        }
+                      }),
+                    ),
+                    if (type == 'select' || type == 'multiSelect') ...[
+                      const SizedBox(height: 12),
+                      TextField(
+                        decoration: const InputDecoration(
+                          labelText: '選択肢',
+                          hintText: '例: 未読, 読書中, 読了',
                         ),
-                      )
-                      .toList(),
-                  onChanged: (value) => setLocalState(() {
-                    type = value ?? 'text';
-                    if (type != 'relation') targetObjectTypeId = null;
-                  }),
-                ),
-                if (type == 'select' || type == 'multiSelect') ...[
-                  const SizedBox(height: 12),
-                  TextField(
-                    decoration: const InputDecoration(
-                      labelText: '選択肢',
-                      hintText: '例: 未読, 読書中, 読了',
-                    ),
-                    onChanged: (value) => optionsText = value,
-                  ),
-                ],
-                if (type == 'relation') ...[
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<int>(
-                    initialValue: targetObjectTypeId,
-                    decoration: const InputDecoration(labelText: '関連先'),
-                    items: _objectTypes
-                        .map(
-                          (objectType) => DropdownMenuItem(
-                            value: objectType.id,
-                            child: Text('${objectType.icon} ${objectType.name}'),
+                        onChanged: (value) => optionsText = value,
+                      ),
+                    ],
+                    if (type == 'relation') ...[
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<int>(
+                        initialValue: targetObjectTypeId,
+                        decoration: const InputDecoration(labelText: '関連先'),
+                        items: _objectTypes
+                            .map(
+                              (objectType) => DropdownMenuItem(
+                                value: objectType.id,
+                                child: Text('${objectType.icon} ${objectType.name}'),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) =>
+                            setLocalState(() => targetObjectTypeId = value),
+                      ),
+                      const SizedBox(height: 4),
+                      SwitchListTile.adaptive(
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                        title: const Text('複数選択'),
+                        subtitle: Text(
+                          multipleRelations
+                              ? '複数のObjectを関連付けできます'
+                              : '1つのObjectだけ関連付けます',
+                        ),
+                        value: multipleRelations,
+                        onChanged: (value) =>
+                            setLocalState(() => multipleRelations = value),
+                      ),
+                    ],
+                    if (type == 'formula') ...[
+                      const SizedBox(height: 12),
+                      TextField(
+                        decoration: const InputDecoration(
+                          labelText: '数式',
+                          hintText: '例: {12} * 2 + 100',
+                        ),
+                        onChanged: (value) =>
+                            setLocalState(() => formulaExpression = value),
+                      ),
+                      if (numericProperties.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            '数値プロパティの参照',
+                            style: Theme.of(context).textTheme.labelMedium,
                           ),
-                        )
-                        .toList(),
-                    onChanged: (value) =>
-                        setLocalState(() => targetObjectTypeId = value),
-                  ),
-                  const SizedBox(height: 4),
-                  SwitchListTile.adaptive(
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                    title: const Text('複数選択'),
-                    subtitle: Text(
-                      multipleRelations ? '複数のObjectを関連付けできます' : '1つのObjectだけ関連付けます',
-                    ),
-                    value: multipleRelations,
-                    onChanged: (value) =>
-                        setLocalState(() => multipleRelations = value),
-                  ),
-                ],
-              ],
+                        ),
+                        const SizedBox(height: 6),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: numericProperties
+                                .map(
+                                  (property) => InputChip(
+                                    label: Text('${property.name} = {${property.id}}'),
+                                    onPressed: () {},
+                                  ),
+                                )
+                                .toList(),
+                          ),
+                        ),
+                      ],
+                    ],
+                    if (type == 'rollup') ...[
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<int>(
+                        initialValue: rollupRelationPropertyId,
+                        decoration: const InputDecoration(labelText: 'Relation'),
+                        items: relationProperties
+                            .map(
+                              (property) => DropdownMenuItem(
+                                value: property.id,
+                                child: Text(property.name),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) async {
+                          rollupRelationPropertyId = value;
+                          rollupTargetPropertyId = null;
+                          rollupTargetProperties = <GenericPropertyRecord>[];
+                          if (value != null) {
+                            final relation = relationProperties
+                                .firstWhere((property) => property.id == value);
+                            final targetId = _targetTypeId(relation);
+                            if (targetId != null) {
+                              final targetProperties =
+                                  await _store.listProperties(targetId);
+                              rollupTargetProperties = targetProperties
+                                  .where(
+                                    (property) =>
+                                        property.type == 'number' ||
+                                        property.type == 'rating',
+                                  )
+                                  .toList(growable: false);
+                            }
+                          }
+                          setLocalState(() {});
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        initialValue: rollupAggregation,
+                        decoration: const InputDecoration(labelText: '集計'),
+                        items: const [
+                          DropdownMenuItem(value: 'count', child: Text('件数')),
+                          DropdownMenuItem(value: 'sum', child: Text('合計')),
+                          DropdownMenuItem(value: 'average', child: Text('平均')),
+                          DropdownMenuItem(value: 'min', child: Text('最小')),
+                          DropdownMenuItem(value: 'max', child: Text('最大')),
+                        ],
+                        onChanged: (value) => setLocalState(() {
+                          rollupAggregation = value ?? 'count';
+                          if (rollupAggregation == 'count') {
+                            rollupTargetPropertyId = null;
+                          }
+                        }),
+                      ),
+                      if (rollupAggregation != 'count') ...[
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<int>(
+                          initialValue: rollupTargetPropertyId,
+                          decoration: const InputDecoration(labelText: '対象プロパティ'),
+                          items: rollupTargetProperties
+                              .map(
+                                (property) => DropdownMenuItem(
+                                  value: property.id,
+                                  child: Text(property.name),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (value) => setLocalState(
+                            () => rollupTargetPropertyId = value,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ],
+                ),
+              ),
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('キャンセル'),
-            ),
-            FilledButton(
-              onPressed: type == 'relation' && targetObjectTypeId == null
-                  ? null
-                  : () => Navigator.pop(dialogContext, true),
-              child: const Text('追加'),
-            ),
-          ],
-        ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('キャンセル'),
+              ),
+              FilledButton(
+                onPressed: canSave
+                    ? () => Navigator.pop(dialogContext, true)
+                    : null,
+                child: const Text('追加'),
+              ),
+            ],
+          );
+        },
       ),
     );
     if (ok != true || name.trim().isEmpty) return;
@@ -467,21 +659,44 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
         .map((value) => value.trim())
         .where((value) => value.isNotEmpty)
         .toList();
-    if (type == 'relation') {
-      await _objectStore.createRelationProperty(
-        objectTypeId: widget.databaseId,
-        name: name.trim(),
-        targetObjectTypeId: targetObjectTypeId!,
-        multiple: multipleRelations,
+    try {
+      if (type == 'relation') {
+        await _objectStore.createRelationProperty(
+          objectTypeId: widget.databaseId,
+          name: name.trim(),
+          targetObjectTypeId: targetObjectTypeId!,
+          multiple: multipleRelations,
+        );
+      } else if (type == 'formula') {
+        await _computedStore.createFormulaProperty(
+          objectTypeId: widget.databaseId,
+          name: name.trim(),
+          expression: formulaExpression,
+        );
+      } else if (type == 'rollup') {
+        await _computedStore.createRollupProperty(
+          objectTypeId: widget.databaseId,
+          name: name.trim(),
+          relationPropertyId: rollupRelationPropertyId!,
+          targetPropertyId: rollupTargetPropertyId,
+          aggregation: rollupAggregation,
+        );
+      } else {
+        await _store.createProperty(
+          databaseId: widget.databaseId,
+          name: name.trim(),
+          type: type,
+          config: options.isEmpty ? const {} : {'options': options},
+        );
+      }
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('プロパティを追加できませんでした: $error')),
       );
-    } else {
-      await _store.createProperty(
-        databaseId: widget.databaseId,
-        name: name.trim(),
-        type: type,
-        config: options.isEmpty ? const {} : {'options': options},
-      );
+      return;
     }
+
     await _reload();
 
     final active = _activeView;
@@ -544,7 +759,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                           (property) => Padding(
                             padding: const EdgeInsets.only(bottom: 5),
                             child: Text(
-                              '${property.name}: ${_displayValue(property, record.values[property.id])}',
+                              '${property.name}: ${_displayValue(property, _valueFor(record, property))}',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
@@ -585,7 +800,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                     _orderedVisibleProperties
                         .map(
                           (property) =>
-                              _displayValue(property, record.values[property.id]),
+                              _displayValue(property, _valueFor(record, property)),
                         )
                         .where((value) => value.isNotEmpty)
                         .join(' · '),
@@ -623,7 +838,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                       ...properties.map(
                         (property) => DataCell(
                           Text(
-                            _displayValue(property, record.values[property.id]),
+                            _displayValue(property, _valueFor(record, property)),
                           ),
                         ),
                       ),
@@ -777,6 +992,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     GenericRecord record,
     GenericPropertyRecord property,
   ) async {
+    if (property.type == 'formula' || property.type == 'rollup') return;
     final current = record.values[property.id];
     if (property.type == 'relation') {
       await _editRelation(record, property);
@@ -1032,13 +1248,15 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                   },
                   itemBuilder: (context, index) {
                     final property = properties[index];
-                    final value = record.values[property.id];
+                    final value = _valueFor(record, property);
+                    final computed =
+                        property.type == 'formula' || property.type == 'rollup';
                     return ReorderableDragStartListener(
                       key: ValueKey(property.id),
                       index: index,
                       child: InkWell(
                         borderRadius: BorderRadius.circular(5),
-                        onTap: () => _editValue(record, property),
+                        onTap: computed ? null : () => _editValue(record, property),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(vertical: 7),
                           child: Row(
@@ -1066,12 +1284,24 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                                 width: 120,
                                 child: Padding(
                                   padding: const EdgeInsets.only(top: 2),
-                                  child: Text(
-                                    property.name,
-                                    style: TextStyle(
-                                      fontSize: 12.5,
-                                      color: scheme.onSurfaceVariant,
-                                    ),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          property.name,
+                                          style: TextStyle(
+                                            fontSize: 12.5,
+                                            color: scheme.onSurfaceVariant,
+                                          ),
+                                        ),
+                                      ),
+                                      if (computed)
+                                        Icon(
+                                          Icons.lock_outline,
+                                          size: 12,
+                                          color: scheme.onSurfaceVariant,
+                                        ),
+                                    ],
                                   ),
                                 ),
                               ),
