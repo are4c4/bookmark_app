@@ -2,7 +2,10 @@ import 'package:drift/drift.dart';
 
 import '../domain/object_model.dart';
 import 'app_database.dart';
+import 'bidirectional_relation_store.dart';
+import 'generic_database_store.dart';
 import 'object_store.dart';
+import 'relation_mutation_service.dart';
 import 'system_object_store.dart';
 import 'tag_object_bridge.dart';
 
@@ -22,6 +25,16 @@ class CoreObjectBridge {
   final SystemObjectStore systemObjectStore;
   final TagObjectBridge tagBridge;
   Future<void>? _schemaReady;
+
+  late final GenericDatabaseStore _genericStore = GenericDatabaseStore(database);
+  late final RelationMutationService _relationMutations = RelationMutationService(
+        objectStore: objectStore,
+        genericStore: _genericStore,
+        bidirectionalStore: BidirectionalRelationStore(
+          genericStore: _genericStore,
+          objectStore: objectStore,
+        ),
+      );
 
   Future<void> ensureSchema() => _schemaReady ??= database.transaction(() async {
         await systemObjectStore.ensureSchema();
@@ -196,6 +209,7 @@ class CoreObjectBridge {
     }
 
     await _removeOrphanObjects(
+      workspaceId: workspaceId,
       objectType: photoType,
       legacyIdProperty: legacyId,
       validLegacyIds: validPhotoIds,
@@ -255,7 +269,7 @@ class CoreObjectBridge {
         );
         if (linked != null) photoObjectIds.add(linked);
       }
-      await objectStore.setRelation(
+      await _relationMutations.setRelation(
         objectId: objectId,
         property: images,
         targetObjectIds: photoObjectIds,
@@ -273,7 +287,7 @@ class CoreObjectBridge {
         );
         if (linked != null) tagObjectIds.add(linked);
       }
-      await objectStore.setRelation(
+      await _relationMutations.setRelation(
         objectId: objectId,
         property: tags,
         targetObjectIds: tagObjectIds,
@@ -281,6 +295,7 @@ class CoreObjectBridge {
     }
 
     await _removeOrphanObjects(
+      workspaceId: workspaceId,
       objectType: bookmarkType,
       legacyIdProperty: legacyId,
       validLegacyIds: bookmarkIds,
@@ -291,6 +306,7 @@ class CoreObjectBridge {
       type.properties.firstWhere((property) => property.name == name);
 
   Future<void> _removeOrphanObjects({
+    required int workspaceId,
     required AppObjectType objectType,
     required ObjectPropertyDefinition legacyIdProperty,
     required Set<int> validLegacyIds,
@@ -300,7 +316,11 @@ class CoreObjectBridge {
       final rawId = object.values[legacyIdProperty.id];
       final legacyId = rawId is int ? rawId : int.tryParse('$rawId');
       if (legacyId != null && validLegacyIds.contains(legacyId)) continue;
-      await objectStore.deleteObject(object.id);
+      await _relationMutations.deleteObject(
+        workspaceId: workspaceId,
+        objectTypeId: objectType.id,
+        objectId: object.id,
+      );
     }
   }
 
