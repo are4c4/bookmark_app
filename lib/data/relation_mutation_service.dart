@@ -1,5 +1,6 @@
 import '../domain/object_model.dart';
 import 'bidirectional_relation_store.dart';
+import 'generic_database_store.dart';
 import 'object_store.dart';
 
 /// Stable mutation facade for Relation consumers such as Object detail pages.
@@ -12,10 +13,12 @@ class RelationMutationService {
   const RelationMutationService({
     required this.objectStore,
     required this.bidirectionalStore,
+    required this.genericStore,
   });
 
   final ObjectStore objectStore;
   final BidirectionalRelationStore bidirectionalStore;
+  final GenericDatabaseStore genericStore;
 
   Future<void> setRelation({
     required int objectId,
@@ -38,6 +41,59 @@ class RelationMutationService {
       property: storedProperty,
       targetObjectIds: targetObjectIds,
     );
+  }
+
+  Future<ObjectPropertyDefinition> renameRelationProperty({
+    required ObjectPropertyDefinition property,
+    required String name,
+    String? inverseName,
+  }) async {
+    final storedProperty = await _canonicalRelationProperty(property);
+    final sourceType = (await objectStore.getObjectType(
+      storedProperty.objectTypeId,
+    ))!;
+    if (sourceType.kind == ObjectTypeKind.system) {
+      throw StateError('System Relation Properties cannot be renamed.');
+    }
+
+    final nextName = name.trim();
+    if (nextName.isEmpty) {
+      throw ArgumentError.value(name, 'name', 'Relation Property name is empty.');
+    }
+
+    final pair = await _pairIfManaged(storedProperty);
+    if (pair != null) {
+      return (await bidirectionalStore.renamePair(
+        property: pair.sourceProperty,
+        propertyName: nextName,
+        inversePropertyName: inverseName?.trim().isNotEmpty == true
+            ? inverseName!.trim()
+            : pair.inverseProperty.name,
+      ))
+          .sourceProperty;
+    }
+
+    for (final candidate in sourceType.properties) {
+      if (candidate.id != storedProperty.id && candidate.name == nextName) {
+        throw ArgumentError.value(
+          nextName,
+          'name',
+          'A Property with the same name already exists.',
+        );
+      }
+    }
+
+    await genericStore.updateProperty(
+      GenericPropertyRecord(
+        id: storedProperty.id,
+        databaseId: storedProperty.objectTypeId,
+        name: nextName,
+        type: storedProperty.storageType,
+        config: storedProperty.config,
+        sortOrder: storedProperty.sortOrder,
+      ),
+    );
+    return _canonicalRelationProperty(storedProperty);
   }
 
   Future<void> deleteRelationProperty(
