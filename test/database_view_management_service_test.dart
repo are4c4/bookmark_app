@@ -74,8 +74,8 @@ void main() {
     );
 
     expect(reordered.map((view) => view.id), <int>[c.id, a.id, b.id]);
-    expect(
-      () => service.reorder(
+    await expectLater(
+      service.reorder(
         workspaceId: workspaceId,
         databaseKey: definition.key,
         orderedViewIds: <int>[a.id, b.id],
