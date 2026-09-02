@@ -51,6 +51,9 @@ The active phase is **Database/View integration and user-facing UX**. Most Objec
 - PR #88 merged as `2ba2142d13de7e7a3a60cf0de1b7f4dea4bdf878`: adopted dual-path View creation service with independent persisted View identities. CI #481 passed.
 - PR #89 merged as `844c4e213cbf37a40e0760d52cc8590203ec6720`: real `DatabaseViewTabs` now uses duplicate-current as primary `+`, blank View as secondary creation, and scoped rename/reorder/delete management. CI #488 passed.
 - PR #90 merged as `1383f5d1f70db53206b3ff5aabf55db2464c316a`: typed View-level Object opening-mode override persistence and `View > Database > ObjectType > app` resolution. CI #489 passed.
+- PR #91 merged as `f68f50f6c38e891151ab290b5d2102a0937ff17d`: reversible URL Value -> reusable Weblink promotion is exposed in the real Object inspector while preserving the scalar URL and using canonical Relation writes. CI #494 passed.
+- PR #92 merged as `183b2e5aef5b495ab89cf700df83008b211798cf`: real View settings expose inherited / side peek / center peek / full page opening-mode overrides. Initial CI #495 caught only deprecated Flutter radio APIs; corrected head `39b06067f257e337060e8bc7b299f6cc6f6cee76` passed CI #498 before merge.
+- PR #93 merged as `6c6421967ebeb1fb78a129af912b623df40a8ae5`: real Object inspector now uses the shared Object detail mutation service for custom Object title and basic text/URL/number Value editing. CI #497 passed.
 
 ### Integrated Relation foundations on `main`
 
@@ -80,12 +83,12 @@ Complete collection semantics in the real page, collection-aware creation, Board
 ### Milestone B — Multi-View Database UX
 Multiple independent Views per Database, top tabs, duplicate-current/blank creation, rename/reorder/delete, independent config and overflow handling.
 
-Core create/rename/reorder/duplicate/delete behavior is now integrated in the shared tabs; overflow and wider page-level integration remain.
+Core create/rename/reorder/duplicate/delete behavior is integrated in the shared tabs. Per-View opening-mode configuration is also user-editable. Overflow and wider page-level integration remain.
 
 ### Milestone C — Object Knowledge System
 User-facing reusable Tag/Weblink/Image flows, Value -> Object affordances, richer relations/backlinks, shared contextual Object detail/opening, stronger Daily Note integration.
 
-Typed View-level Object opening-mode storage/resolution is now available; navigation/presentation still needs wiring.
+URL -> reusable Weblink promotion is now exposed in the real Object inspector. The full-page inspector also supports shared title and basic Value editing. Typed View-level opening mode is persisted and configurable; actual contextual navigation/presentation still needs wiring.
 
 ### Milestone D — Document / Knowledge Layer
 Real block editing, RichText/Document Property, media/file blocks, embedded Objects, embedded Database/Views, and higher-level time-based note compositions.
@@ -98,10 +101,10 @@ Real block editing, RichText/Document Property, media/file blocks, embedded Obje
 4. Migrate real Relation picker/editor UI onto `ObjectRelationEditorService`; surface missing-target/cardinality diagnostics without silent repair.
 5. Wire the merged Database collection settings dialog through `DatabaseCollectionConfigService` in the real page.
 6. Add focused page/widget regression coverage for collection-aware reload/create/Relation edit paths.
-7. Add View overflow handling and expose `DatabaseViewOpenModeService` in View settings/open behavior.
-8. Expose reversible URL Value -> reusable Weblink promotion through a narrow Object-owned affordance while preserving the source URL by default.
-9. Complete contextual side-peek / center-peek / full-page Object opening after Database/View navigation state is stable.
-10. Continue Milestone C/D after the Database/View core is coherent; manual include/exclude remains deferred until dynamic collection + multi-View behavior is stable.
+7. Consume `DatabaseViewOpenModeService.resolve()` in real Object navigation, then complete side-peek / center-peek / full-page routing while preserving Database/View context.
+8. Add View overflow handling for many top tabs.
+9. Extend shared Object detail editing to additional typed Value editors without bypassing Relation/Computed boundaries.
+10. Continue Milestone C/D only after the Database/View core is coherent; manual include/exclude remains deferred until dynamic collection + multi-View behavior is stable.
 
 ## Validation status
 
@@ -109,15 +112,21 @@ Real block editing, RichText/Document Property, media/file blocks, embedded Obje
 - PR #86 Flutter CI #477: success.
 - PR #87 Flutter CI #480: success.
 - PR #88 Flutter CI #481: success.
-- PR #89 Flutter CI #488: Drift generation, `flutter analyze`, full tests — success before merge.
-- PR #90 Flutter CI #489: Drift generation, `flutter analyze`, full tests — success before merge.
+- PR #89 Flutter CI #488: Drift generation, `flutter analyze`, full tests — success.
+- PR #90 Flutter CI #489: Drift generation, `flutter analyze`, full tests — success.
+- PR #91 Flutter CI #494: Drift generation, `flutter analyze`, full tests — success.
+- PR #92 CI #495: branch-caused analyzer deprecation-only failure; fixed immediately.
+- PR #92 corrected CI #498: Drift generation, `flutter analyze`, full tests — success.
+- PR #93 Flutter CI #497: Drift generation, `flutter analyze`, full tests — success.
 
 ## Known risks / sequencing constraints
 
 - `GenericDatabasePage` is the main integration hotspot. Avoid parallel broad edits from Object and Relation lanes.
 - Legacy page logic still assumes in places that Database id and ObjectType id are identical; remove that assumption incrementally using the merged collection loader/creation adapters.
+- The current GitHub write surface only supports whole-file replacement for existing files. `GenericDatabasePage` is large enough that this is an avoidable corruption/merge risk; prefer a patch-capable implementation environment for that hotspot.
 - User-facing Relation mutation must use `RelationMutationService`; picker loading must not silently rewrite legacy/corrupt state.
 - Board Relation-group creation must continue through the safe mutation facade.
 - Database collection definitions must remain distinct from View config and must not duplicate Object ownership.
 - ObjectType and Database are conceptually distinct even though legacy UI/storage still overlaps them in places; migrate incrementally rather than destructively.
+- View opening-mode settings are persisted and user-editable, but actual navigation does not yet consume them.
 - Rich Body documents must never be flattened by the initial paragraph-safe editor.
