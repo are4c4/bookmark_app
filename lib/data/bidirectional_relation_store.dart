@@ -43,16 +43,29 @@ class BidirectionalRelationStore {
       );
     }
 
+    final normalizedSourceName = sourceName.trim();
+    final normalizedInverseName = inverseName.trim();
+    if (normalizedSourceName.isEmpty || normalizedInverseName.isEmpty) {
+      throw ArgumentError('Relation property names cannot be empty.');
+    }
+    await _assertPropertyNameAvailable(sourceType, normalizedSourceName);
+    await _assertPropertyNameAvailable(
+      targetType,
+      normalizedInverseName,
+      additionallyReservedName:
+          sourceObjectTypeId == targetObjectTypeId ? normalizedSourceName : null,
+    );
+
     return genericStore.database.transaction(() async {
       final sourceId = await objectStore.createRelationProperty(
         objectTypeId: sourceObjectTypeId,
-        name: sourceName,
+        name: normalizedSourceName,
         targetObjectTypeId: targetObjectTypeId,
         multiple: sourceMultiple,
       );
       final inverseId = await objectStore.createRelationProperty(
         objectTypeId: targetObjectTypeId,
-        name: inverseName,
+        name: normalizedInverseName,
         targetObjectTypeId: sourceObjectTypeId,
         multiple: inverseMultiple,
       );
@@ -78,6 +91,105 @@ class BidirectionalRelationStore {
         inverseProperty: refreshedTarget.properties
             .firstWhere((property) => property.id == inverseId),
       );
+    });
+  }
+
+  Future<BidirectionalRelationPair?> pairFor(
+    ObjectPropertyDefinition property,
+  ) async {
+    if (!property.isRelation || property.config['bidirectional'] != true) {
+      return null;
+    }
+    final inversePropertyId = _intConfig(property.config['inversePropertyId']);
+    final targetTypeId = property.targetObjectTypeId;
+    if (inversePropertyId == null || targetTypeId == null) return null;
+
+    final targetType = await objectStore.getObjectType(targetTypeId);
+    if (targetType == null) return null;
+    ObjectPropertyDefinition? inverse;
+    for (final candidate in targetType.properties) {
+      if (candidate.id == inversePropertyId) {
+        inverse = candidate;
+        break;
+      }
+    }
+    if (inverse == null || !inverse.isRelation) return null;
+    if (_intConfig(inverse.config['inversePropertyId']) != property.id) {
+      return null;
+    }
+
+    return BidirectionalRelationPair(
+      sourceProperty: property,
+      inverseProperty: inverse,
+    );
+  }
+
+  Future<BidirectionalRelationPair> renamePair({
+    required ObjectPropertyDefinition property,
+    required String propertyName,
+    required String inversePropertyName,
+  }) async {
+    final pair = await pairFor(property);
+    if (pair == null) {
+      throw StateError('The Relation property is not a valid bidirectional pair.');
+    }
+
+    final nextPropertyName = propertyName.trim();
+    final nextInverseName = inversePropertyName.trim();
+    if (nextPropertyName.isEmpty || nextInverseName.isEmpty) {
+      throw ArgumentError('Relation property names cannot be empty.');
+    }
+
+    final sourceType = await objectStore.getObjectType(
+      pair.sourceProperty.objectTypeId,
+    );
+    final inverseType = await objectStore.getObjectType(
+      pair.inverseProperty.objectTypeId,
+    );
+    if (sourceType == null || inverseType == null) {
+      throw StateError('A paired ObjectType no longer exists.');
+    }
+    await _assertPropertyNameAvailable(
+      sourceType,
+      nextPropertyName,
+      exceptPropertyId: pair.sourceProperty.id,
+    );
+    await _assertPropertyNameAvailable(
+      inverseType,
+      nextInverseName,
+      exceptPropertyId: pair.inverseProperty.id,
+      additionallyReservedName:
+          sourceType.id == inverseType.id && nextPropertyName != nextInverseName
+              ? nextPropertyName
+              : null,
+    );
+
+    await genericStore.database.transaction(() async {
+      await _renameProperty(pair.sourceProperty.id, nextPropertyName);
+      await _renameProperty(pair.inverseProperty.id, nextInverseName);
+    });
+
+    final refreshedSource = (await objectStore.getObjectType(sourceType.id))!;
+    final refreshedInverse = (await objectStore.getObjectType(inverseType.id))!;
+    return BidirectionalRelationPair(
+      sourceProperty: refreshedSource.properties
+          .firstWhere((candidate) => candidate.id == pair.sourceProperty.id),
+      inverseProperty: refreshedInverse.properties
+          .firstWhere((candidate) => candidate.id == pair.inverseProperty.id),
+    );
+  }
+
+  Future<void> deletePair(ObjectPropertyDefinition property) async {
+    final pair = await pairFor(property);
+    if (pair == null) {
+      throw StateError('The Relation property is not a valid bidirectional pair.');
+    }
+
+    await genericStore.database.transaction(() async {
+      await objectStore.deleteProperty(pair.sourceProperty.id);
+      if (pair.inverseProperty.id != pair.sourceProperty.id) {
+        await objectStore.deleteProperty(pair.inverseProperty.id);
+      }
     });
   }
 
@@ -202,6 +314,50 @@ class BidirectionalRelationStore {
         },
       ),
     );
+  }
+
+  Future<void> _renameProperty(int propertyId, String name) async {
+    final property = await _propertyById(propertyId);
+    if (property == null) {
+      throw StateError('Relation property $propertyId does not exist.');
+    }
+    await genericStore.updateProperty(
+      GenericPropertyRecord(
+        id: property.id,
+        databaseId: property.databaseId,
+        name: name,
+        type: property.type,
+        sortOrder: property.sortOrder,
+        config: property.config,
+      ),
+    );
+  }
+
+  Future<void> _assertPropertyNameAvailable(
+    AppObjectType objectType,
+    String name, {
+    int? exceptPropertyId,
+    String? additionallyReservedName,
+  }) async {
+    if (additionallyReservedName != null &&
+        additionallyReservedName == name &&
+        exceptPropertyId == null) {
+      throw ArgumentError.value(
+        name,
+        'name',
+        'Relation property names must be distinct in the same ObjectType.',
+      );
+    }
+    for (final property in objectType.properties) {
+      if (property.id == exceptPropertyId) continue;
+      if (property.name == name) {
+        throw ArgumentError.value(
+          name,
+          'name',
+          'A property with the same name already exists.',
+        );
+      }
+    }
   }
 
   Future<GenericPropertyRecord?> _propertyById(int propertyId) async {
