@@ -3,97 +3,102 @@
 > Durable handoff for the Object implementation lane. Update this file before every Object-lane run ends.
 
 ## Lane scope
-
 Object/ObjectType architecture, Property value semantics, Object-centric Database/View integration, Object detail presentation, Body/block model, reusable Object types, Daily Notes, and Value-to-Object promotion contracts.
 
 ## Active Issue
-
 `#56` — Integrate generic Object database UX toward Notion/Capacities workflow.
 
 ## Current integration state
+`main` now contains the major Object/Relation foundations, Database collection services, multi-View management, opening-mode services, shared Object detail/value editing contracts, Daily Note navigation, and rich Body block persistence/presentation/action foundations through merged PR #107.
 
-`main` through commit `24981453be435b39918b95d768c9335dffdbbe4b` contains the major Object/Relation foundations, Database/View integration services, multi-View management, opening-mode services, shared Object detail contracts, safe Body block persistence/presentation, Daily Note navigation, and shared Flutter Body/Property/Daily Note widgets through PR #106.
-
-The highest-priority Milestone A work remains real `GenericDatabasePage` integration, but that large hotspot still requires a patch-capable environment to edit safely. No active Relation PR currently conflicts; the Relation lane remains intentionally out of `GenericDatabasePage`.
+The highest-priority Object work is **real-host integration**, especially `GenericDatabasePage`, the actual Object detail/navigation host, and Daily Note navigation. Do not add another parallel abstraction when an existing service/widget can be consumed by the real host.
 
 ## Active branch / PR
+- Branch: `feature/object-body-reference-inserts`
+- PR: #108 — `Add typed Object Body reference insertion`
+- Latest head: `07d4e7d34de9b5024e813c4f674f19f93cc38663`
+- PR is open and mergeable.
+- Flutter CI #590 succeeded on latest head.
 
-- Branch: `feature/object-body-block-actions`
-- PR: #107 — `Add Object Body block action controls`
-- Latest implementation head before this handoff update: `497b128dee2d9b5e505f1aa8e6dcd27488a0d7b6`
-- PR is mergeable.
-- Latest-head Flutter CI #573 is pending/queued; the connector runtime has no local Flutter SDK, so executable validation is delegated to GitHub Actions.
+## Recent integrated checkpoints
+### #107 merged
+PR #107 added:
+- generic non-reference Body insert kinds
+- latest-read `moveUp` / `moveDown`
+- atomic `insertAfter`
+- persisted `ObjectBodyBlockActionController`
+- shared `ObjectBodyInsertMenuButton`
+- shared per-block move/insert/delete action chrome
+- `ObjectBodyDocumentView.blockActionsBuilder`
 
-## Checkpoints completed in this sustained run
+It passed Flutter CI #574 and was squash-merged as `39fdc54b276a5241eb2fd07214b868d1abb0e466`.
 
-1. **Added generic Body insert action contracts**
-   - Added `ObjectBodyInsertKind` for paragraph, headings 1–3, bulleted/numbered list items, checklist, quote, callout, code, and divider.
-   - Added `ObjectBodyInsertBlockFactory` for generic non-reference block creation while keeping Object/Database/asset reference insertion on dedicated target-selection flows.
-   - Added `ObjectBodyBlockPositionResolver` / `ObjectBodyBlockPosition` so shared UI can derive first/middle/last movement eligibility from current document order.
+### #108 current work
+PR #108 adds:
+- deterministic Body block-id allocation
+- payload-preserving block duplication
+- typed insertion requests for Object / Database-View / Image / File references
+- latest-read reference insertion controller that never persists unresolved placeholders
+- semantic collision-free reference block ids
+- persisted duplicate-after-source service
+- duplicate/reference actions in shared block chrome
+- shared reference-insert menu chrome
+- focused tests for invalid-id fail-closed behavior, ordering, duplication payload preservation, and reference selection callbacks
 
-2. **Added latest-read relative Body reordering and atomic insert-after**
-   - Extended `ObjectBodyBlockEditService` with `moveUp()` / `moveDown()` using the latest persisted document and preserving unknown/rich block payloads.
-   - Boundary moves are safe no-ops; empty/missing ids fail closed.
-   - Added `insertAfter()` that resolves the anchor and inserts against the same latest read so hosts never compute stale numeric insertion indices.
+Latest Flutter CI #590 is green.
 
-3. **Added persisted Body block action controller**
-   - Added `ObjectBodyBlockActionController` bridging generic block kinds to append/insert-after/move/remove persistence.
-   - `insert()` supports the first block in an empty Body.
-   - `insertAfter()` creates the selected block kind and delegates to atomic latest-read insertion.
-   - Reference-bearing blocks remain outside this generic controller by design.
+## Integrated Object foundations available to consume
+- Database collection: #82/#85/#86/#87
+- Board grouped creation: #79/#87
+- multi-View management/overflow: #88/#89/#94
+- Object opening settings/resolution: #90/#92/#98
+- URL -> Weblink promotion UI: #91
+- shared Object detail/value editing/presentation: #93/#95/#97/#99/#100
+- `GenericDatabasePageServices`: #96
+- Body block editing/contracts/presentation/widgets/actions: #101/#103/#105/#106/#107
+- Daily Note navigation/detail/widgets: #102/#104/#106
+- canonical Relation APIs consumed by Object UI: `RelationMutationService`, `RelationReadService.neighborhood()`, `RelationTargetService`
 
-4. **Added reusable block editing chrome**
-   - Added `ObjectBodyBlockActionBar` for move up/down, insert-after, and delete callbacks.
-   - Movement buttons disable correctly at document boundaries.
-   - Added `ObjectBodyInsertMenuButton` so both empty Body UI and per-block insert-after UI share the same block-kind menu and labels.
-
-5. **Made shared Body document rendering action-injectable**
-   - Extended `ObjectBodyDocumentView` with optional `blockActionsBuilder` and `ObjectBodyBlockPositionResolver`.
-   - Existing read/edit rendering remains unchanged when no action builder is supplied.
-   - Hosts can now attach action chrome per block without reimplementing presentation or ordering logic.
-
-6. **Added focused regression coverage**
-   - Insert-kind construction and position boundaries.
-   - Persisted move up/down, boundary no-op, invalid identity fail-closed behavior, and unknown block preservation.
-   - First-block insertion, selected-kind insert-after, move/remove controller delegation, and failure preservation.
-   - Insert-menu selection/labels, action-bar callbacks/boundary enablement, and document action-builder position delivery.
-
-## Validation
-
-- PR #107 is open and mergeable.
-- An earlier CI attempt began while the branch was still changing; new commits correctly superseded it.
-- Latest implementation head `497b128dee2d9b5e505f1aa8e6dcd27488a0d7b6` triggered Flutter CI #573.
-- CI #573 is currently pending/queued; no job-level failure is available to diagnose yet.
-- This connector runtime does not expose a local Flutter SDK, so there is no independent local `flutter analyze`/test execution path.
-
-## Work in progress
-
-- Do not merge PR #107 until latest-head CI completes successfully or a branch-caused failure is fixed.
-- If CI reports analyze/test failures, inspect the exact job logs and repair them on the same branch.
+## Integration-first rule
+1. Prefer connecting existing services/widgets to real user-facing hosts over creating more Object-layer abstractions.
+2. New foundation work is appropriate only when it unblocks concrete host integration, fixes correctness, or can safely proceed while a required hotspot is unavailable.
+3. `GenericDatabasePage`, Object detail/navigation, and Daily Note host work outrank speculative Body/Object expansions.
+4. Broad edits to large hotspot files should use a patch-capable environment; this GitHub connector performs whole-file replacement and is not appropriate for risky large rewrites.
+5. Finish Milestone A/B real-host integration and begin active app use before adding manual collection membership complexity.
 
 ## Exact next actions
-
-1. Inspect CI #573 for PR #107 latest head; fix any branch-caused analyze/test failure and merge #107 when green.
-2. After #107 lands, wire `ObjectBodyInsertMenuButton` + `ObjectBodyBlockActionBar` through `ObjectBodyDocumentView.blockActionsBuilder` in the real shared Object detail host when a patch-capable environment is available; generate stable new block ids at the host/application boundary.
-3. Continue highest-priority Milestone A page integration in a patch-capable environment: `GenericDatabasePageServices` -> real `GenericDatabasePage` for Database-first collection reload/create, Board create-in-group, canonical Relation picker/editor, and collection settings.
-4. Integrate shared `ObjectDetailPropertyView` / `ObjectBodyDocumentView` into the real Object detail host and wire Body text/checklist callbacks to `ObjectBodyBlockEditService`.
-5. Wire `DailyNoteNavigationBar` to `DailyNoteDetailNavigationService` and `ObjectOpenPresentationService` to side/center/full-page navigation.
-6. Add `RichText/Document Property` only when broad enum/switch/query/UI changes can be safely patched across existing hotspots.
+1. Merge PR #108 if latest head remains green and no new conflict appears.
+2. In a patch-capable environment, wire `GenericDatabasePageServices` into real `GenericDatabasePage` for:
+   - Database-first collection reload
+   - collection-aware normal Object creation
+   - Board create-in-group
+   - canonical Relation picker/editor
+   - collection settings
+3. Add page/widget regression coverage proving Database membership resolves before View projection and creation targets the configured ObjectType.
+4. Integrate `ObjectDetailPropertyView` and `ObjectBodyDocumentView` into the actual Object detail host.
+5. Wire Body text/checklist edits, insert/remove/move, duplicate, and #108 reference insertion through the shared controllers without flattening rich/unknown blocks.
+6. Consume `ObjectOpenPresentationService` in real View navigation and implement side peek / center peek / full page while preserving Database/View context.
+7. Wire `DailyNoteNavigationBar` to `DailyNoteDetailNavigationService` in the shared Object host.
+8. Add `RichText/Document Property` only in a patch-capable environment because it affects exhaustive Property switches and query/group/Board/detail paths.
+9. Defer manuallyIncluded/manuallyExcluded collection membership until real dynamic collection + multi-View usage proves the need.
 
 ## Cross-lane boundaries
-
-- Relation lifecycle, bidirectional integrity, target/source validation, backlink/index repair, stale metadata handling, and Tag hierarchy mutation remain Relation-owned.
-- User-facing Relation writes must use canonical Relation APIs; Object UI must not duplicate Relation validation/index lifecycle.
+- Relation lifecycle, bidirectional integrity, source/target validation, backlink/index repair, stale metadata handling, and Tag hierarchy mutation remain Relation-owned.
+- User-facing Relation writes must use canonical Relation mutation APIs; Object UI must not reimplement Relation validation/index lifecycle.
 - `GenericDatabasePage`, Object detail UI, Database collection integration, Board create UI, Value promotion, Body/block editing, Daily Notes, and multi-View UX remain Object-owned.
-- PR #107 is Object/Body-only and does not modify Relation lifecycle/index code, `GenericDatabasePage`, Object inspector, schema, or migrations.
+- PR #108 is Object/Body-only and does not modify Relation lifecycle/index, `GenericDatabasePage`, Object inspector, schema, or migrations.
 
 ## Risks / blockers
-
 - No product/design blocker is active.
-- `GenericDatabasePage` and the real Object detail/navigation hosts remain large existing hotspots. This connector writes existing files as whole-file replacements, so broad integration there is an avoidable corruption/conflict risk without patch-capable editing.
-- Rich Body documents must never be flattened through the paragraph-safe adapter; PR #107 continues using the safe block persistence contracts established by #101/#103/#105/#106.
-- Reference-bearing Body blocks require explicit target selection and intentionally are not created by the generic insert menu/controller.
+- `GenericDatabasePage` and real Object detail/navigation hosts are large integration hotspots and should not be broadly replaced through this connector.
+- Legacy page logic still assumes Database id == ObjectType id in places; use the merged collection adapters incrementally.
+- Rich Body documents must never be flattened through the paragraph-safe adapter.
+- Reference blocks require explicit target selection; unresolved placeholder blocks must never be persisted.
+
+## Validation
+- PR #107: Flutter CI #574 success before merge.
+- PR #108: Flutter CI #590 success on latest head; PR remains open/mergeable.
+- This connector runtime does not expose a local Flutter SDK; executable validation relies on GitHub Actions for connector-only runs.
 
 ## Stop reason
-
-This run completed multiple coherent Object checkpoints on PR #107: generic block insertion contracts, latest-read relative movement and atomic insert-after persistence, a persisted action controller including empty-Body insertion, shared insert/action Flutter chrome, document-level action injection, and focused regression tests. Latest-head Flutter CI #573 is pending in external GitHub Actions and this runtime has no local Flutter validation path. The remaining immediately higher-value Object work requires broad edits to `GenericDatabasePage` or the real Object detail/navigation hosts, which are unsafe through whole-file replacement in this runtime. This matches the AGENTS.md runtime/tooling stopping criterion rather than stopping merely because a PR or individual slice is complete.
+This handoff is a design/progress refresh, not an implementation stop caused by lack of Object work. The next highest-value changes require patch-capable edits to real host files; connector-only runs should avoid inventing additional abstractions merely to stay busy.
