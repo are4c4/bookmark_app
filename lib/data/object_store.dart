@@ -68,6 +68,7 @@ class ObjectStore {
 
   Future<void> deleteObjectType(int id) async {
     await _assertSchemaMutable(id);
+    await _assertNoIncomingRelationProperties(id);
     await _genericStore.deleteDatabase(id);
   }
 
@@ -101,7 +102,20 @@ class ObjectStore {
     required int targetObjectTypeId,
     bool multiple = true,
     bool allowSystemMutation = false,
-  }) {
+  }) async {
+    final sourceType = await getObjectType(objectTypeId);
+    final targetType = await getObjectType(targetObjectTypeId);
+    if (sourceType == null || targetType == null) {
+      throw ArgumentError(
+        'Relation source and target ObjectTypes must both exist.',
+      );
+    }
+    if (sourceType.workspaceId != targetType.workspaceId) {
+      throw ArgumentError(
+        'Relation source and target ObjectTypes must belong to the same workspace.',
+      );
+    }
+
     return createProperty(
       objectTypeId: objectTypeId,
       name: name,
@@ -148,20 +162,26 @@ class ObjectStore {
     required dynamic value,
   }) async {
     if (property.isRelation) {
+      final storedProperty = await _validateRelationSource(
+        objectId: objectId,
+        property: property,
+      );
       final relation = value is ObjectRelationValue
           ? value
           : ObjectRelationValue.fromJson(value);
-      await _validateRelation(property, relation);
+      await _validateRelation(storedProperty, relation);
       await ensureRelationIndexSchema();
       await _genericStore.database.transaction(() async {
         await _genericStore.setValue(
           recordId: objectId,
-          propertyId: property.id,
-          value: relation.toJson(multiple: property.allowsMultipleRelations),
+          propertyId: storedProperty.id,
+          value: relation.toJson(
+            multiple: storedProperty.allowsMultipleRelations,
+          ),
         );
         await _replaceRelationEdges(
           objectId: objectId,
-          propertyId: property.id,
+          propertyId: storedProperty.id,
           targetObjectIds: relation.objectIds,
         );
       });
@@ -180,6 +200,13 @@ class ObjectStore {
     required ObjectPropertyDefinition property,
     required List<int> targetObjectIds,
   }) {
+    if (!property.isRelation) {
+      throw ArgumentError.value(
+        property.id,
+        'property',
+        'Property is not a Relation.',
+      );
+    }
     return setPropertyValue(
       objectId: objectId,
       property: property,
@@ -303,6 +330,23 @@ class ObjectStore {
     }
   }
 
+  Future<void> _assertNoIncomingRelationProperties(int objectTypeId) async {
+    final targetType = await getObjectType(objectTypeId);
+    if (targetType == null) return;
+    final types = await listObjectTypes(targetType.workspaceId);
+    for (final type in types) {
+      if (type.id == objectTypeId) continue;
+      for (final property in type.properties) {
+        if (property.isRelation && property.targetObjectTypeId == objectTypeId) {
+          throw StateError(
+            'Cannot delete ObjectType ${targetType.name} while Relation Property '
+            '${type.name}.${property.name} targets it.',
+          );
+        }
+      }
+    }
+  }
+
   Future<ObjectPropertyDefinition?> _propertyById(int propertyId) async {
     final row = await _genericStore.database.customSelect(
       '''SELECT id, database_id, name, type, config_json, sort_order
@@ -354,6 +398,33 @@ class ObjectStore {
       updatedAt: record.updatedAt,
       values: record.values,
     );
+  }
+
+  Future<ObjectPropertyDefinition> _validateRelationSource({
+    required int objectId,
+    required ObjectPropertyDefinition property,
+  }) async {
+    final storedProperty = await _propertyById(property.id);
+    if (storedProperty == null ||
+        !storedProperty.isRelation ||
+        storedProperty.objectTypeId != property.objectTypeId) {
+      throw ArgumentError.value(
+        property.id,
+        'property',
+        'Relation property must belong to its declared source ObjectType.',
+      );
+    }
+
+    final sourceExists = (await listObjects(storedProperty.objectTypeId))
+        .any((object) => object.id == objectId);
+    if (!sourceExists) {
+      throw ArgumentError.value(
+        objectId,
+        'objectId',
+        'Source Object must belong to ObjectType ${storedProperty.objectTypeId}.',
+      );
+    }
+    return storedProperty;
   }
 
   Future<void> _validateRelation(
