@@ -65,6 +65,8 @@ class ObjectBoardCreateService {
     required ObjectPropertyDefinition groupProperty,
     required ObjectGroupBucket<AppObject> targetGroup,
   }) async {
+    // Validate/derive the preset before creating the Object so unsupported
+    // grouped Properties cannot leave an orphan record.
     final value = planner.initialValue(
       property: groupProperty,
       targetGroup: targetGroup,
@@ -74,21 +76,31 @@ class ObjectBoardCreateService {
       objectTypeId: objectTypeId,
       title: title,
     );
-    if (value != null) {
-      if (groupProperty.isRelation) {
-        await relationMutations.setRelation(
-          objectId: objectId,
-          property: groupProperty,
-          targetObjectIds: ObjectRelationValue.fromJson(value).objectIds,
-        );
-      } else {
-        await _objectStore.setPropertyValue(
-          objectId: objectId,
-          property: groupProperty,
-          value: value,
-        );
+    try {
+      if (value != null) {
+        if (groupProperty.isRelation) {
+          final relation = value is ObjectRelationValue
+              ? value
+              : ObjectRelationValue.fromJson(value);
+          await relationMutations.setRelation(
+            objectId: objectId,
+            property: groupProperty,
+            targetObjectIds: relation.objectIds,
+          );
+        } else {
+          await _objectStore.setPropertyValue(
+            objectId: objectId,
+            property: groupProperty,
+            value: value,
+          );
+        }
       }
+      return objectId;
+    } catch (_) {
+      // This Object was created by this operation and has not been exposed to
+      // the caller yet. Roll it back if the grouped preset cannot be written.
+      await _objectStore.deleteObject(objectId);
+      rethrow;
     }
-    return objectId;
   }
 }
