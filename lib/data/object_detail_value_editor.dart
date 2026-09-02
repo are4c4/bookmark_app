@@ -28,8 +28,8 @@ class ObjectDetailValueEditorDescriptor {
 /// Object-owned description/dispatch layer for Value editors shared by
 /// full-page, side-peek and center-peek Object detail surfaces.
 ///
-/// Relation and Computed Properties deliberately resolve to [unsupported].
-/// This keeps those mutations on their canonical Relation/Computed paths.
+/// Relation, Computed and read-only/system-derived Value Properties deliberately
+/// resolve to [unsupported]. This keeps those mutations on their canonical paths.
 class ObjectDetailValueEditor {
   const ObjectDetailValueEditor(this.editService);
 
@@ -74,6 +74,11 @@ class ObjectDetailValueEditor {
         return const ObjectDetailValueEditorDescriptor(
           kind: ObjectDetailValueEditorKind.rating,
         );
+      case ObjectPropertyType.title:
+      case ObjectPropertyType.image:
+      case ObjectPropertyType.file:
+      case ObjectPropertyType.createdTime:
+      case ObjectPropertyType.updatedTime:
       case ObjectPropertyType.objectRelation:
       case ObjectPropertyType.formula:
       case ObjectPropertyType.rollup:
@@ -168,7 +173,7 @@ class ObjectDetailValueEditor {
         throw ArgumentError.value(
           property.type,
           'property',
-          'Relation and Computed Properties are not edited as Values.',
+          'Property is not edited through the Object detail Value editor.',
         );
     }
   }
