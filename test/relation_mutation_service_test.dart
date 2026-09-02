@@ -8,6 +8,17 @@ import 'package:bookmark_app/domain/object_model.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+RelationMutationService serviceFor(
+  GenericDatabaseStore genericStore,
+  ObjectStore objectStore,
+  BidirectionalRelationStore bidirectionalStore,
+) =>
+    RelationMutationService(
+      objectStore: objectStore,
+      bidirectionalStore: bidirectionalStore,
+      genericStore: genericStore,
+    );
+
 void main() {
   test('safe mutation facade synchronizes a bidirectional Relation', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
@@ -19,10 +30,7 @@ void main() {
       genericStore: genericStore,
       objectStore: objectStore,
     );
-    final service = RelationMutationService(
-      objectStore: objectStore,
-      bidirectionalStore: bidirectionalStore,
-    );
+    final service = serviceFor(genericStore, objectStore, bidirectionalStore);
 
     final bookTypeId = await objectStore.createObjectType(workspaceId: workspaceId, name: 'Book');
     final personTypeId = await objectStore.createObjectType(workspaceId: workspaceId, name: 'Person');
@@ -58,10 +66,7 @@ void main() {
       genericStore: genericStore,
       objectStore: objectStore,
     );
-    final service = RelationMutationService(
-      objectStore: objectStore,
-      bidirectionalStore: bidirectionalStore,
-    );
+    final service = serviceFor(genericStore, objectStore, bidirectionalStore);
 
     final bookTypeId = await objectStore.createObjectType(workspaceId: workspaceId, name: 'Book');
     final personTypeId = await objectStore.createObjectType(workspaceId: workspaceId, name: 'Person');
@@ -88,10 +93,7 @@ void main() {
       genericStore: genericStore,
       objectStore: objectStore,
     );
-    final service = RelationMutationService(
-      objectStore: objectStore,
-      bidirectionalStore: bidirectionalStore,
-    );
+    final service = serviceFor(genericStore, objectStore, bidirectionalStore);
 
     final bookTypeId = await objectStore.createObjectType(workspaceId: workspaceId, name: 'Book');
     final personTypeId = await objectStore.createObjectType(workspaceId: workspaceId, name: 'Person');
@@ -115,10 +117,7 @@ void main() {
       ),
     );
 
-    await expectLater(
-      service.deleteRelationProperty(pair.sourceProperty),
-      throwsStateError,
-    );
+    await expectLater(service.deleteRelationProperty(pair.sourceProperty), throwsStateError);
     expect((await objectStore.getObjectType(bookTypeId))!.properties, hasLength(1));
     expect((await objectStore.getObjectType(personTypeId))!.properties, hasLength(1));
   });
@@ -133,10 +132,7 @@ void main() {
       genericStore: genericStore,
       objectStore: objectStore,
     );
-    final service = RelationMutationService(
-      objectStore: objectStore,
-      bidirectionalStore: bidirectionalStore,
-    );
+    final service = serviceFor(genericStore, objectStore, bidirectionalStore);
 
     final bookTypeId = await objectStore.createObjectType(workspaceId: workspaceId, name: 'Book');
     final personTypeId = await objectStore.createObjectType(workspaceId: workspaceId, name: 'Person');
@@ -163,5 +159,66 @@ void main() {
       throwsArgumentError,
     );
     expect(await objectStore.outgoingRelations(bookId), isEmpty);
+  });
+
+  test('safe rename updates both names for a bidirectional pair', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final bidirectionalStore = BidirectionalRelationStore(
+      genericStore: genericStore,
+      objectStore: objectStore,
+    );
+    final service = serviceFor(genericStore, objectStore, bidirectionalStore);
+
+    final bookTypeId = await objectStore.createObjectType(workspaceId: workspaceId, name: 'Book');
+    final personTypeId = await objectStore.createObjectType(workspaceId: workspaceId, name: 'Person');
+    final pair = await bidirectionalStore.createPair(
+      sourceObjectTypeId: bookTypeId,
+      sourceName: 'Author',
+      targetObjectTypeId: personTypeId,
+      inverseName: 'Books',
+    );
+
+    final renamed = await service.renameRelationProperty(
+      property: pair.sourceProperty,
+      name: 'Writer',
+      inverseName: 'Written books',
+    );
+
+    expect(renamed.name, 'Writer');
+    expect((await objectStore.getObjectType(bookTypeId))!.properties.single.name, 'Writer');
+    expect((await objectStore.getObjectType(personTypeId))!.properties.single.name, 'Written books');
+  });
+
+  test('safe rename preserves unidirectional Relation configuration', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final bidirectionalStore = BidirectionalRelationStore(
+      genericStore: genericStore,
+      objectStore: objectStore,
+    );
+    final service = serviceFor(genericStore, objectStore, bidirectionalStore);
+
+    final bookTypeId = await objectStore.createObjectType(workspaceId: workspaceId, name: 'Book');
+    final personTypeId = await objectStore.createObjectType(workspaceId: workspaceId, name: 'Person');
+    await objectStore.createRelationProperty(
+      objectTypeId: bookTypeId,
+      name: 'Author',
+      targetObjectTypeId: personTypeId,
+      multiple: false,
+    );
+    final relation = (await objectStore.getObjectType(bookTypeId))!.properties.single;
+
+    final renamed = await service.renameRelationProperty(property: relation, name: 'Writer');
+
+    expect(renamed.name, 'Writer');
+    expect(renamed.targetObjectTypeId, personTypeId);
+    expect(renamed.allowsMultipleRelations, isFalse);
   });
 }
