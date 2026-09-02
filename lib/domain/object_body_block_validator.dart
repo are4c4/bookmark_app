@@ -21,15 +21,18 @@ class ObjectBodyBlockValidator {
         if (level == null || level < 1 || level > 3) {
           throw const FormatException('Heading level must be between 1 and 3.');
         }
+        break;
       case ObjectBodyBlockType.checklist:
         if (block.attributes[ObjectBodyBlockAttribute.checked] is! bool) {
           throw const FormatException('Checklist checked must be a bool.');
         }
+        break;
       case ObjectBodyBlockType.objectReference:
         _requirePositive(
           block.attributes[ObjectBodyBlockAttribute.objectId],
           'objectId',
         );
+        break;
       case ObjectBodyBlockType.databaseView:
         _requirePositive(
           block.attributes[ObjectBodyBlockAttribute.databaseId],
@@ -37,12 +40,14 @@ class ObjectBodyBlockValidator {
         );
         final viewId = block.attributes[ObjectBodyBlockAttribute.viewId];
         if (viewId != null) _requirePositive(viewId, 'viewId');
+        break;
       case ObjectBodyBlockType.image:
       case ObjectBodyBlockType.file:
         _requirePositive(
           block.attributes[ObjectBodyBlockAttribute.assetId],
           'assetId',
         );
+        break;
       case ObjectBodyBlockType.paragraph:
       case ObjectBodyBlockType.bulletedListItem:
       case ObjectBodyBlockType.numberedListItem:
