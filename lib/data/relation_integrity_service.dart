@@ -201,7 +201,7 @@ class RelationIntegrityService {
             );
           }
 
-          if (pair != null && property.config['pairRole'] == 'source') {
+          if (pair != null) {
             final targetsById = {
               for (final target in targetObjects) target.id: target,
             };
