@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../../../data/database_view_creation_service.dart';
+import '../../../../data/database_view_management_service.dart';
 import '../../../../data/database_view_store.dart';
 import '../../../../database/database_definition.dart';
-import 'database_create_tiles.dart';
 
 class DatabaseViewTabs extends StatefulWidget {
   const DatabaseViewTabs({
@@ -30,6 +31,11 @@ class _DatabaseViewTabsState extends State<DatabaseViewTabs> {
   List<DatabaseViewConfig> _views = const [];
   bool _loading = true;
 
+  DatabaseViewCreationService get _creation =>
+      DatabaseViewCreationService(widget.store);
+  DatabaseViewManagementService get _management =>
+      DatabaseViewManagementService(widget.store);
+
   @override
   void initState() {
     super.initState();
@@ -39,7 +45,8 @@ class _DatabaseViewTabsState extends State<DatabaseViewTabs> {
   @override
   void didUpdateWidget(covariant DatabaseViewTabs oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.workspaceId != widget.workspaceId || oldWidget.definition.key != widget.definition.key) {
+    if (oldWidget.workspaceId != widget.workspaceId ||
+        oldWidget.definition.key != widget.definition.key) {
       _reload(initial: true);
     }
   }
@@ -47,89 +54,57 @@ class _DatabaseViewTabsState extends State<DatabaseViewTabs> {
   Future<void> _reload({bool initial = false}) async {
     if (mounted && initial) setState(() => _loading = true);
     if (widget.definition.key == BuiltInDatabases.bookmarks.key) {
-      await widget.store.importLegacyBookmarkViews(workspaceId: widget.workspaceId);
+      await widget.store.importLegacyBookmarkViews(
+        workspaceId: widget.workspaceId,
+      );
     }
-    await widget.store.ensureDefaultView(workspaceId: widget.workspaceId, definition: widget.definition);
-    final views = await widget.store.listViews(workspaceId: widget.workspaceId, databaseKey: widget.definition.key);
+    await widget.store.ensureDefaultView(
+      workspaceId: widget.workspaceId,
+      definition: widget.definition,
+    );
+    final views = await widget.store.listViews(
+      workspaceId: widget.workspaceId,
+      databaseKey: widget.definition.key,
+    );
     if (!mounted) return;
     setState(() {
       _views = views;
       _loading = false;
     });
-    if (views.isNotEmpty && (widget.activeViewId == null || !views.any((view) => view.id == widget.activeViewId))) {
+    if (views.isNotEmpty &&
+        (widget.activeViewId == null ||
+            !views.any((view) => view.id == widget.activeViewId))) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) widget.onSelected(views.first);
       });
     }
   }
 
+  DatabaseViewConfig? get _activeView {
+    for (final view in _views) {
+      if (view.id == widget.activeViewId) return view;
+    }
+    return _views.isEmpty ? null : _views.first;
+  }
+
   Future<void> _createView() async {
-    var layout = widget.definition.defaultLayout;
-    final created = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('ビューを追加'),
-        content: SizedBox(
-          width: 420,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              StatefulBuilder(
-                builder: (context, setLocalState) => SegmentedButton<String>(
-                  showSelectedIcon: false,
-                  segments: widget.definition.supportedLayouts
-                      .map((value) => ButtonSegment<String>(
-                            value: value,
-                            icon: Icon(
-                              switch (value) {
-                                'list' => Icons.view_list,
-                                'table' => Icons.table_rows,
-                                _ => Icons.grid_view,
-                              },
-                              size: 17,
-                            ),
-                            label: Text(
-                              switch (value) {
-                                'list' => 'リスト',
-                                'table' => 'テーブル',
-                                _ => 'ギャラリー',
-                              },
-                            ),
-                          ))
-                      .toList(),
-                  selected: {layout},
-                  onSelectionChanged: (selection) {
-                    if (selection.isNotEmpty) setLocalState(() => layout = selection.first);
-                  },
-                ),
-              ),
-              const SizedBox(height: 16),
-              SafeQuickCreateField(
-                autofocus: true,
-                hintText: 'ビュー名を入力して Enter',
-                prefixIcon: Icons.add,
-                onSubmitted: (name) async {
-                  final id = await widget.store.createView(
-                    workspaceId: widget.workspaceId,
-                    definition: widget.definition,
-                    name: name,
-                    layoutType: layout,
-                  );
-                  if (dialogContext.mounted) Navigator.pop(dialogContext, '$id');
-                },
-              ),
-            ],
-          ),
-        ),
-        actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('閉じる'))],
-      ),
-    );
-    if (created == null) return;
+    final source = _activeView;
+    if (source == null) return;
+    final duplicate = await _creation.duplicateCurrent(source);
     await _reload();
-    final id = int.tryParse(created);
-    final view = _views.where((candidate) => candidate.id == id).firstOrNull;
-    if (view != null) widget.onSelected(view);
+    if (!mounted) return;
+    widget.onSelected(duplicate);
+    widget.onViewsChanged?.call();
+  }
+
+  Future<void> _createBlankView() async {
+    final blank = await _creation.createBlank(
+      workspaceId: widget.workspaceId,
+      definition: widget.definition,
+    );
+    await _reload();
+    if (!mounted) return;
+    widget.onSelected(blank);
     widget.onViewsChanged?.call();
   }
 
@@ -143,31 +118,38 @@ class _DatabaseViewTabsState extends State<DatabaseViewTabs> {
           initialValue: view.name,
           autofocus: true,
           onChanged: (text) => value = text,
-          onFieldSubmitted: (_) => Navigator.pop(dialogContext, value.trim()),
+          onFieldSubmitted: (_) =>
+              Navigator.pop(dialogContext, value.trim()),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('キャンセル')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, value.trim()), child: const Text('保存')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, value.trim()),
+            child: const Text('保存'),
+          ),
         ],
       ),
     );
     if (result?.trim().isEmpty != false) return;
-    await widget.store.renameView(view.id, result!);
+    await _management.rename(view, result!);
     await _reload();
     widget.onViewsChanged?.call();
   }
 
   Future<void> _duplicate(DatabaseViewConfig view) async {
-    final id = await widget.store.duplicateView(view);
+    final duplicate = await _creation.duplicateCurrent(view);
     await _reload();
-    final duplicate = _views.where((candidate) => candidate.id == id).firstOrNull;
-    if (duplicate != null) widget.onSelected(duplicate);
+    if (!mounted) return;
+    widget.onSelected(duplicate);
     widget.onViewsChanged?.call();
   }
 
   Future<void> _delete(DatabaseViewConfig view) async {
     if (_views.length <= 1) return;
-    await widget.store.deleteView(view.id);
+    await _management.delete(view);
     await _reload();
     widget.onViewsChanged?.call();
   }
@@ -180,7 +162,11 @@ class _DatabaseViewTabsState extends State<DatabaseViewTabs> {
         height: 36,
         child: Align(
           alignment: Alignment.centerLeft,
-          child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 1.5)),
+          child: SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 1.5),
+          ),
         ),
       );
     }
@@ -193,12 +179,32 @@ class _DatabaseViewTabsState extends State<DatabaseViewTabs> {
         itemCount: _views.length,
         footer: Padding(
           padding: const EdgeInsets.only(left: 2, right: 8),
-          child: IconButton(
-            key: const ValueKey('database-view-add-button'),
-            tooltip: 'ビューを追加',
-            visualDensity: VisualDensity.compact,
-            onPressed: _createView,
-            icon: const Icon(Icons.add, size: 18),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                key: const ValueKey('database-view-add-button'),
+                tooltip: '現在のビューを複製',
+                visualDensity: VisualDensity.compact,
+                onPressed: _activeView == null ? null : _createView,
+                icon: const Icon(Icons.add, size: 18),
+              ),
+              PopupMenuButton<String>(
+                key: const ValueKey('database-view-create-menu'),
+                tooltip: 'ビュー作成メニュー',
+                iconSize: 16,
+                padding: EdgeInsets.zero,
+                onSelected: (value) {
+                  if (value == 'blank') _createBlankView();
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                    value: 'blank',
+                    child: Text('空のViewを作成'),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
         onReorderItem: (oldIndex, newIndex) async {
@@ -206,8 +212,17 @@ class _DatabaseViewTabsState extends State<DatabaseViewTabs> {
           final moved = next.removeAt(oldIndex);
           next.insert(newIndex, moved);
           setState(() => _views = next);
-          await widget.store.reorderViews(next);
-          widget.onViewsChanged?.call();
+          try {
+            await _management.reorder(
+              workspaceId: widget.workspaceId,
+              databaseKey: widget.definition.key,
+              orderedViewIds: next.map((view) => view.id).toList(),
+            );
+            widget.onViewsChanged?.call();
+          } catch (_) {
+            await _reload();
+            rethrow;
+          }
         },
         itemBuilder: (context, index) {
           final view = _views[index];
@@ -226,7 +241,12 @@ class _DatabaseViewTabsState extends State<DatabaseViewTabs> {
                     padding: const EdgeInsets.only(left: 10, right: 2),
                     decoration: BoxDecoration(
                       border: Border(
-                        bottom: BorderSide(color: selected ? scheme.primary : Colors.transparent, width: 2),
+                        bottom: BorderSide(
+                          color: selected
+                              ? scheme.primary
+                              : Colors.transparent,
+                          width: 2,
+                        ),
                       ),
                     ),
                     child: Row(
@@ -239,15 +259,21 @@ class _DatabaseViewTabsState extends State<DatabaseViewTabs> {
                             _ => Icons.grid_view,
                           },
                           size: 15,
-                          color: selected ? scheme.onSurface : scheme.onSurfaceVariant,
+                          color: selected
+                              ? scheme.onSurface
+                              : scheme.onSurfaceVariant,
                         ),
                         const SizedBox(width: 6),
                         Text(
                           view.name,
                           style: TextStyle(
                             fontSize: 12.5,
-                            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                            color: selected ? scheme.onSurface : scheme.onSurfaceVariant,
+                            fontWeight: selected
+                                ? FontWeight.w600
+                                : FontWeight.w400,
+                            color: selected
+                                ? scheme.onSurface
+                                : scheme.onSurfaceVariant,
                           ),
                         ),
                         PopupMenuButton<String>(
@@ -260,11 +286,20 @@ class _DatabaseViewTabsState extends State<DatabaseViewTabs> {
                             if (value == 'delete') _delete(view);
                           },
                           itemBuilder: (_) => [
-                            const PopupMenuItem(value: 'rename', child: Text('名前を変更')),
-                            const PopupMenuItem(value: 'duplicate', child: Text('複製')),
+                            const PopupMenuItem(
+                              value: 'rename',
+                              child: Text('名前を変更'),
+                            ),
+                            const PopupMenuItem(
+                              value: 'duplicate',
+                              child: Text('複製'),
+                            ),
                             if (_views.length > 1) ...const [
                               PopupMenuDivider(),
-                              PopupMenuItem(value: 'delete', child: Text('削除')),
+                              PopupMenuItem(
+                                value: 'delete',
+                                child: Text('削除'),
+                              ),
                             ],
                           ],
                         ),
@@ -279,8 +314,4 @@ class _DatabaseViewTabsState extends State<DatabaseViewTabs> {
       ),
     );
   }
-}
-
-extension _FirstOrNull<T> on Iterable<T> {
-  T? get firstOrNull => isEmpty ? null : first;
 }
