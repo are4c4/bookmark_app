@@ -51,11 +51,23 @@ class ObjectPropertyDefinition {
   final Map<String, dynamic> config;
 
   ObjectPropertySemantics get semantics => switch (type) {
+        ObjectPropertyType.title ||
+        ObjectPropertyType.text ||
+        ObjectPropertyType.number ||
+        ObjectPropertyType.checkbox ||
+        ObjectPropertyType.date ||
+        ObjectPropertyType.url ||
+        ObjectPropertyType.select ||
+        ObjectPropertyType.multiSelect ||
+        ObjectPropertyType.image ||
+        ObjectPropertyType.file ||
+        ObjectPropertyType.rating ||
+        ObjectPropertyType.createdTime ||
+        ObjectPropertyType.updatedTime => ObjectPropertySemantics.value,
         ObjectPropertyType.objectRelation =>
           ObjectPropertySemantics.objectRelation,
         ObjectPropertyType.formula || ObjectPropertyType.rollup =>
           ObjectPropertySemantics.computed,
-        _ => ObjectPropertySemantics.value,
       };
 
   bool get isValue => semantics == ObjectPropertySemantics.value;
