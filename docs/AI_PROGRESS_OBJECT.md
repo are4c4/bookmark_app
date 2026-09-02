@@ -19,6 +19,7 @@ Latest relevant commits:
 - `df08e74` / `4f19b14` — reversible Value-to-Object promotion planning + tests
 - `e7c4036` / `5c73986` — versioned Object Body block model + tests
 - `25999e2` / `bab99ef` — ObjectType defaults resolution contract + tests
+- `c6b48a1` / `e490eb7` — shared Object detail content payload + tests
 
 ## Checkpoints completed in this run
 
@@ -46,27 +47,33 @@ Latest relevant commits:
    - Database/View overrides are intentionally not stored in this Object-owned contract, preserving the architectural precedence `View > Database > ObjectType > app`.
    - Defaults cover visible Property ids, Property ordering, and Object opening mode.
 
+5. **Shared Object detail content payload**
+   - Added container-agnostic `ObjectDetailContent` for side peek / center peek / full-page surfaces.
+   - Stored Property values and externally supplied Formula/Rollup values resolve through one content payload.
+   - Navigation chrome, backlinks, and Relation fetching remain outside the payload to avoid cross-lane ownership conflicts.
+
 ## Validation
 
-- PR #61 functional head (`4ac5ac1`) passed Flutter CI run #328 (`flutter analyze` + test workflow).
+- PR #61 functional head (`4ac5ac1`) passed Flutter CI run #328 (`flutter analyze` + test workflow) before merge.
 - Added focused tests:
   - `test/object_value_promotion_test.dart`
   - `test/object_body_test.dart`
   - `test/object_type_defaults_test.dart`
-- This chat session only has GitHub connector access, so local `flutter analyze` / `flutter test` execution is unavailable. The new branch should use PR CI as executable validation.
-- Changes after PR #61 are domain-only and do not touch Drift schema, existing bookmark/tag persistence, or Relation write lifecycle.
+  - `test/object_detail_content_test.dart`
+- This chat session only has GitHub connector access, so local `flutter analyze` / `flutter test` execution is unavailable. PR #64 is the executable CI validation source for the new domain contracts.
+- Changes after PR #61 are domain-only and do not touch Drift schema, existing bookmark/tag persistence, `object_store.dart`, or Relation write lifecycle.
 
 ## Work in progress
 
-- Open and validate the current branch PR.
-- If CI reports failures caused by these domain contracts, fix them before integration.
+- PR #64 — `Add Object promotion, Body, and defaults contracts` is open.
+- Inspect PR #64 CI and fix failures caused by this branch before integration.
 
 ## Exact next actions
 
-1. Validate and land `feature/object-promotion-contracts` after CI is green.
-2. Add a thin Object-owned detail-content model/component contract shared by side peek / center peek / full page, without owning navigation chrome.
-3. Add persistence for `ObjectBodyDocument` in a backward-compatible, non-destructive slice; keep editor UI simple initially.
-4. Persist ObjectType defaults only after confirming the smallest compatible storage location; avoid copying Database/View overrides into ObjectType data.
+1. Validate and land PR #64 after CI is green.
+2. Add persistence for `ObjectBodyDocument` in a backward-compatible, non-destructive slice; keep editor UI simple initially.
+3. Persist ObjectType defaults only after confirming the smallest compatible storage location; avoid copying Database/View overrides into ObjectType data.
+4. Connect `ObjectDetailContent` to one existing Object detail surface, then reuse it for other presentation containers without duplicating data logic.
 5. Add reusable Weblink ObjectType defaults/template and an explicit URL-value promotion mapper using the promotion plan.
 6. Add Daily Note as a normal ObjectType with unique date semantics after Body/default foundations are persisted.
 7. Keep Tag hierarchy lifecycle and Relation integrity changes in the Relation lane; Object lane may consume stable Relation APIs but should not duplicate them.
@@ -86,4 +93,4 @@ Latest relevant commits:
 
 ## Stop reason
 
-This run completed four safe checkpoints. The next meaningful slices (Body persistence and promotion execution) begin to touch shared persistence/Relation integration and should be taken after CI validates the current domain branch and the concurrent Relation integrity branch stabilizes. This matches the cross-lane sequencing / validation boundary in `AGENTS.md` rather than stopping because a single PR or CI is pending.
+This run completed five safe Object-lane checkpoints. The remaining next slices now require either executable validation of PR #64 or changes to shared persistence/Relation integration. Because local Flutter execution is unavailable in this chat and concurrent Relation work owns adjacent write-integrity code, the next safe step is gated by CI/cross-lane sequencing rather than by the completion of a single PR.
