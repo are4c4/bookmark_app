@@ -67,6 +67,16 @@ void main() {
     expect(next, ['本', '仕事']);
   });
 
+  test('multi-select move does not duplicate an existing target value', () {
+    final next = planner.nextValue(
+      object: object(['数学', '仕事', '本']),
+      property: property(ObjectPropertyType.multiSelect),
+      sourceGroup: group('math', '数学'),
+      targetGroup: group('work', '仕事'),
+    ) as List<dynamic>;
+    expect(next, ['仕事', '本']);
+  });
+
   test('multi-select move to unassigned removes only the source value', () {
     final next = planner.nextValue(
       object: object(['数学', '本']),
