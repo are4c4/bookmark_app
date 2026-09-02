@@ -162,21 +162,27 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
   }
 
   Future<void> _editBodyText(ObjectBodyBlock block, String text) async {
-    await _bodyBlockEdits.updateText(
+    final document = await _bodyBlockEdits.updateText(
       objectId: widget.objectId,
       blockId: block.id,
       text: text,
     );
-    await _load();
+    final current = _content;
+    if (mounted && current != null) {
+      setState(() => _content = current.copyWith(body: document));
+    }
   }
 
   Future<void> _toggleChecklist(ObjectBodyBlock block, bool checked) async {
-    await _bodyBlockEdits.setChecklistChecked(
+    final document = await _bodyBlockEdits.setChecklistChecked(
       objectId: widget.objectId,
       blockId: block.id,
       checked: checked,
     );
-    await _load();
+    final current = _content;
+    if (mounted && current != null) {
+      setState(() => _content = current.copyWith(body: document));
+    }
   }
 
   Future<void> _editTitle(
