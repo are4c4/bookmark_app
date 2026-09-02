@@ -15,6 +15,13 @@ Widget host(ObjectBodyDocument document, Future<void> Function(String) onSave) {
 
 void main() {
   testWidgets('paragraph Body is displayed and can be edited', (tester) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
     String? saved;
     final document = ObjectBodyDocument(
       blocks: <ObjectBodyBlock>[
