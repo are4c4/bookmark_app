@@ -97,4 +97,55 @@ void main() {
 
     expect((await f.store.read(f.objectId)).toJson(), original.toJson());
   });
+
+  test('insertAllocated assigns a semantic collision-free block id', () async {
+    final f = await fixture();
+    await f.store.write(
+      objectId: f.objectId,
+      document: const ObjectBodyDocument(blocks: [
+        ObjectBodyBlock(
+          id: 'object-ref-1',
+          type: ObjectBodyBlockType.paragraph,
+          text: 'Existing',
+        ),
+      ]),
+    );
+
+    final result = await f.controller.insertAllocated(
+      objectId: f.objectId,
+      request: const ObjectBodyObjectReferenceInsert(objectId: 22),
+    );
+
+    expect(result.blockId, 'object-ref-2');
+    expect(result.document.blocks.last.id, 'object-ref-2');
+    expect(result.document.blocks.last.referencedObjectId, 22);
+  });
+
+  test('insertAfterAllocated returns the generated asset block identity', () async {
+    final f = await fixture();
+    await f.store.write(
+      objectId: f.objectId,
+      document: const ObjectBodyDocument(blocks: [
+        ObjectBodyBlock(id: 'a', type: ObjectBodyBlockType.paragraph, text: 'A'),
+        ObjectBodyBlock(id: 'file-1', type: ObjectBodyBlockType.paragraph),
+      ]),
+    );
+
+    final result = await f.controller.insertAfterAllocated(
+      objectId: f.objectId,
+      anchorBlockId: 'a',
+      request: const ObjectBodyAssetReferenceInsert(
+        kind: ObjectBodyAssetReferenceKind.file,
+        assetId: 7,
+      ),
+    );
+
+    expect(result.blockId, 'file-2');
+    expect(result.document.blocks.map((block) => block.id).toList(), [
+      'a',
+      'file-2',
+      'file-1',
+    ]);
+    expect(result.document.blocks[1].referencedAssetId, 7);
+  });
 }
