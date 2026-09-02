@@ -3,14 +3,17 @@ import 'package:flutter/material.dart';
 import '../../../../domain/object_body_block_contracts.dart';
 import '../../../../domain/object_body_block_presentation.dart';
 
-/// Shared Flutter renderer for one Object Body block.
+/// Shared Flutter renderer/editor for one Object Body block.
 ///
 /// This widget deliberately depends on the widget-independent presentation
 /// model rather than reinterpreting persisted Body payloads in each host.
+/// Supplying [onTextChanged] turns known text-like blocks into inline editors;
+/// omitting it keeps the same component read-only.
 class ObjectBodyBlockView extends StatelessWidget {
   const ObjectBodyBlockView({
     super.key,
     required this.presentation,
+    this.onTextChanged,
     this.onChecklistChanged,
     this.onObjectReferenceTap,
     this.onDatabaseViewTap,
@@ -18,6 +21,7 @@ class ObjectBodyBlockView extends StatelessWidget {
   });
 
   final ObjectBodyBlockPresentation presentation;
+  final ValueChanged<String>? onTextChanged;
   final ValueChanged<bool>? onChecklistChanged;
   final VoidCallback? onObjectReferenceTap;
   final VoidCallback? onDatabaseViewTap;
@@ -30,13 +34,17 @@ class ObjectBodyBlockView extends StatelessWidget {
       case ObjectBodyBlockPresentationKind.text:
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Text(block.text ?? ''),
+          child: _textControl(
+            initialValue: block.text ?? '',
+            onChanged: onTextChanged,
+          ),
         );
       case ObjectBodyBlockPresentationKind.heading:
         return Padding(
           padding: const EdgeInsets.only(top: 12, bottom: 4),
-          child: Text(
-            block.text ?? '',
+          child: _textControl(
+            initialValue: block.text ?? '',
+            onChanged: onTextChanged,
             style: _headingStyle(context, presentation.headingLevel),
           ),
         );
@@ -52,8 +60,11 @@ class ObjectBodyBlockView extends StatelessWidget {
             ),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: Text(block.text ?? ''),
+                padding: const EdgeInsets.only(top: 8),
+                child: _textControl(
+                  initialValue: block.text ?? '',
+                  onChanged: onTextChanged,
+                ),
               ),
             ),
           ],
@@ -78,7 +89,11 @@ class ObjectBodyBlockView extends StatelessWidget {
                     style: Theme.of(context).textTheme.labelSmall,
                   ),
                 ),
-              SelectableText(block.text ?? ''),
+              _textControl(
+                initialValue: block.text ?? '',
+                onChanged: onTextChanged,
+                maxLines: null,
+              ),
             ],
           ),
         );
@@ -118,6 +133,29 @@ class ObjectBodyBlockView extends StatelessWidget {
           label: 'Unsupported block: ${block.type}',
         );
     }
+  }
+
+  Widget _textControl({
+    required String initialValue,
+    required ValueChanged<String>? onChanged,
+    TextStyle? style,
+    int? maxLines = 1,
+  }) {
+    if (onChanged == null) {
+      return Text(initialValue, style: style);
+    }
+    return TextFormField(
+      key: ValueKey('body-text-${presentation.block.id}'),
+      initialValue: initialValue,
+      maxLines: maxLines,
+      style: style,
+      decoration: const InputDecoration(
+        isDense: true,
+        border: InputBorder.none,
+        contentPadding: EdgeInsets.zero,
+      ),
+      onChanged: onChanged,
+    );
   }
 
   TextStyle? _headingStyle(BuildContext context, int? level) {
