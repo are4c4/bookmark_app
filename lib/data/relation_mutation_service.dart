@@ -2,6 +2,7 @@ import '../domain/object_model.dart';
 import 'bidirectional_relation_store.dart';
 import 'generic_database_store.dart';
 import 'object_store.dart';
+import 'relation_index_service.dart';
 
 /// Stable mutation facade for Relation consumers such as Object detail pages.
 ///
@@ -109,6 +110,102 @@ class RelationMutationService {
     await objectStore.deleteProperty(storedProperty.id);
   }
 
+  /// Deletes an Object after detaching every incoming Relation that references
+  /// it, including legacy values that were not yet present in the edge index.
+  ///
+  /// This is the Relation-safe deletion path for Object detail consumers. The
+  /// low-level [ObjectStore.deleteObject] remains available for storage-owned
+  /// workflows that have already handled relation lifecycle explicitly.
+  Future<void> deleteObject({
+    required int workspaceId,
+    required int objectTypeId,
+    required int objectId,
+  }) async {
+    final objectType = await objectStore.getObjectType(objectTypeId);
+    if (objectType == null || objectType.workspaceId != workspaceId) {
+      throw ArgumentError.value(
+        objectTypeId,
+        'objectTypeId',
+        'ObjectType must exist in the supplied workspace.',
+      );
+    }
+    final targetExists = (await objectStore.listObjects(objectTypeId))
+        .any((object) => object.id == objectId);
+    if (!targetExists) {
+      throw ArgumentError.value(
+        objectId,
+        'objectId',
+        'Object does not belong to ObjectType $objectTypeId.',
+      );
+    }
+
+    await RelationIndexService(objectStore).rebuildWorkspace(workspaceId);
+    final backlinks = await objectStore.backlinks(objectId);
+    if (backlinks.isEmpty) {
+      await objectStore.deleteObject(objectId);
+      return;
+    }
+
+    final objectTypes = await objectStore.listObjectTypes(workspaceId);
+    final propertiesById = <int, ObjectPropertyDefinition>{};
+    for (final type in objectTypes) {
+      for (final property in type.properties) {
+        if (property.isRelation) propertiesById[property.id] = property;
+      }
+    }
+
+    final sourceObjectsByType = <int, Map<int, AppObject>>{};
+    final plans = <_RelationDetachPlan>[];
+    for (final edge in backlinks) {
+      final property = propertiesById[edge.propertyId];
+      if (property == null) {
+        throw StateError(
+          'Backlink references missing Relation Property ${edge.propertyId}.',
+        );
+      }
+      await _pairIfManaged(property);
+
+      final sourceObjects = sourceObjectsByType.putIfAbsent(
+        property.objectTypeId,
+        () => <int, AppObject>{},
+      );
+      if (sourceObjects.isEmpty) {
+        for (final object in await objectStore.listObjects(property.objectTypeId)) {
+          sourceObjects[object.id] = object;
+        }
+      }
+      final source = sourceObjects[edge.sourceObjectId];
+      if (source == null) {
+        throw StateError(
+          'Backlink source Object ${edge.sourceObjectId} no longer exists.',
+        );
+      }
+
+      final nextIds = ObjectRelationValue.fromJson(source.values[property.id])
+          .objectIds
+          .where((id) => id != objectId)
+          .toList(growable: false);
+      plans.add(
+        _RelationDetachPlan(
+          sourceObjectId: source.id,
+          property: property,
+          targetObjectIds: nextIds,
+        ),
+      );
+    }
+
+    // All pair/property/source validation is completed before the first write.
+    // Apply detachments first so no surviving Object stores a deleted id.
+    for (final plan in plans) {
+      await setRelation(
+        objectId: plan.sourceObjectId,
+        property: plan.property,
+        targetObjectIds: plan.targetObjectIds,
+      );
+    }
+    await objectStore.deleteObject(objectId);
+  }
+
   Future<ObjectPropertyDefinition> _canonicalRelationProperty(
     ObjectPropertyDefinition property,
   ) async {
@@ -153,4 +250,16 @@ class RelationMutationService {
     }
     return pair;
   }
+}
+
+class _RelationDetachPlan {
+  const _RelationDetachPlan({
+    required this.sourceObjectId,
+    required this.property,
+    required this.targetObjectIds,
+  });
+
+  final int sourceObjectId;
+  final ObjectPropertyDefinition property;
+  final List<int> targetObjectIds;
 }
