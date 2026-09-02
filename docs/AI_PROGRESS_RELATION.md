@@ -13,11 +13,14 @@ Own Relation and backlink lifecycle, bidirectional Relation integrity, relation 
 ## Current state
 
 - Relation lifecycle foundation PR #66 is merged.
-- Read-only integrity audit PR #69 is merged at `23fc9703`.
-- Relation neighborhood read API PR #73 is merged at `578f8361`.
-- Fail-closed Relation index reconciliation PR #74 is merged at `fd2810d0`.
-- Canonical Relation target candidate API PR #75 is merged at `b6511bf3`.
-- Latest `main` before this handoff update: `b6511bf36e37e0bea84ac99da745ee40f85e1cb1`.
+- Read-only integrity audit PR #69 is merged.
+- Relation neighborhood read API PR #73 is merged.
+- Fail-closed Relation index reconciliation PR #74 is merged.
+- Canonical Relation target candidate API PR #75 is merged.
+- Canonical Relation selection-context PR #80 is merged as `614d654e6bb08011d9cb4ca242b50174ce44e5e4`.
+- Core Object mirror lifecycle PR #81 is merged as `0390d12162cb2a2dd5c063e8e4cbca95f036a248`.
+- Object PRs #76/#77/#78 have already adopted `RelationNeighborhood` / `RelationMutationService` in shared detail, Value promotion, and Object inspector flows.
+- Object PR #79 remains active around Board grouped creation and intends to edit `GenericDatabasePage` next.
 - No active Relation implementation PR remains from this sustained run.
 
 ## Stable Relation APIs now on main
@@ -48,7 +51,11 @@ Own Relation and backlink lifecycle, bidirectional Relation integrity, relation 
 - `RelationTargetService`
   - resolves the persisted Relation Property instead of trusting stale caller config;
   - validates workspace and target ObjectType ownership;
-  - returns canonical target ObjectType and immutable candidate Object list for Relation pickers.
+  - returns canonical target ObjectType and immutable candidate Object list;
+  - `selectionFor()` returns canonical source Object + current selected ids/Objects + valid candidates;
+  - missing target ids remain visible as diagnostics rather than being silently discarded;
+  - legacy single-Relation cardinality drift is surfaced read-only;
+  - a source Object outside the persisted source ObjectType is rejected.
 
 ### Persistence / integrity
 
@@ -65,56 +72,64 @@ Own Relation and backlink lifecycle, bidirectional Relation integrity, relation 
   - refuses reconciliation before writes when any ambiguous schema/value/bidirectional issue exists;
   - verifies post-rebuild integrity.
 
-### Tag hierarchy
+### Tag / legacy mirror lifecycle
 
 - Legacy Tag -> Tag Object synchronization uses the general Relation lifecycle path.
 - Removing orphan Tag Objects cleans incoming Parent Relations rather than leaving deleted Object ids in surviving values.
+- `CoreObjectBridge` bookmark Images/Tags synchronization now writes through `RelationMutationService`.
+- Removing orphan mirrored Image/Bookmark Objects now uses Relation-safe Object deletion, so surviving Objects are detached before the mirrored Object disappears.
 
 ## Checkpoints completed in the latest sustained run
 
-1. Finished and merged PR #69 read-only Relation integrity audit.
-2. Added symmetric bidirectional mismatch detection, cardinality diagnostics, stale/missing index diagnostics, and audit read caching.
-3. Added and merged PR #73 `RelationReadService.neighborhood()` for shared Object detail / Daily Note graph consumption.
-4. Added and merged PR #74 fail-closed deterministic Relation index reconciliation.
-5. Added and merged PR #75 canonical Relation target candidate loading for safe picker UIs.
-6. Confirmed Object lane is consuming Relation-owned APIs instead of duplicating lifecycle logic:
-   - Object PR #70 uses `RelationMutationService` for Value -> Object promotion execution.
-   - Object PR #72 uses `RelationReadService` for shared Object detail Relation context.
-7. Deliberately did not edit `GenericDatabasePage`, `core_object_bridge.dart`, Object detail UI, or promotion UI from the Relation lane.
+1. Re-read latest main after Object PRs #76/#77/#78 adopted stable Relation APIs.
+2. Audited production low-level Relation mutations/deletions.
+3. Added PR #80 `RelationSelectionContext` for a complete read-only Relation-picker payload.
+4. Added tests for canonical current selection, missing target ids, legacy single-cardinality drift, and wrong-source rejection.
+5. Initial #80 full test run exposed only an invalid ordering assumption in the new test; analyzer was green and 251 other tests passed. The assertion was corrected to unordered candidate comparison.
+6. #80 replacement latest-head CI passed dependency install, Drift generation, `flutter analyze`, and full tests; PR #80 was merged.
+7. Used the explicitly allowed deliberately-sequenced cross-lane path for `core_object_bridge.dart`, because active Object PR #79 was Board-only and did not touch that file.
+8. Added PR #81 migrating bookmark Images/Tags writes to `RelationMutationService` and mirror orphan deletion to Relation-safe Object deletion.
+9. Added regression coverage proving deletion of a mirrored Image Object detaches an incoming Relation from a surviving custom Object rather than leaving a stale deleted Object id.
+10. PR #81 latest-head CI passed dependency install, Drift generation, `flutter analyze`, and full tests; PR #81 was merged.
+11. Re-audited remaining user-facing low-level Relation writes. The remaining concrete caller is `GenericDatabasePage`, which is Object-owned and is the next surface expected to be edited by active Object PR #79.
 
 ## Validation
 
-All latest heads were validated through GitHub Actions before merge:
+Latest Relation heads were validated through GitHub Actions before merge:
 
-- PR #69: dependency install, Drift generation, `flutter analyze`, full test suite — success.
-- PR #73: dependency install, Drift generation, `flutter analyze`, full test suite — success.
-- PR #74: dependency install, Drift generation, `flutter analyze`, full test suite — success.
-- PR #75: dependency install, Drift generation, `flutter analyze`, full test suite — success.
+- PR #80 first head: Drift generation + `flutter analyze` success; one new test failed only because it incorrectly assumed candidate ordering. All other tests passed.
+- PR #80 corrected head `56f634d666c2d4e15fc5917f0559ef2fb02225cd`: dependency install, Drift generation, `flutter analyze`, full test suite — success.
+- PR #81 head `c99ee94ea26bb2588e27321398ebe635870e2f8d`: dependency install, Drift generation, `flutter analyze`, full test suite — success.
 
-Local Flutter execution was unavailable in the connector-only session; GitHub Actions was the executable validation source.
+Previous merged Relation PRs #66/#69/#73/#74/#75 were also CI-green before merge.
+
+Local Flutter execution is unavailable in the connector-only session; GitHub Actions is the executable validation source.
 
 ## Exact next actions
 
-1. Let the Object lane adopt the stable Relation services in its owned surfaces:
-   - use `RelationTargetService` + `RelationMutationService` for real Relation editing/pickers;
-   - use `RelationNeighborhood` / `RelationReadService` for Object detail and Daily Note graph context;
-   - migrate `core_object_bridge.dart` Relation writes/deletions only from the Object lane or in a deliberately sequenced integration slice.
-2. Keep integrity audit and repair separate. Do not add automatic repair for missing targets, cardinality conflicts, broken bidirectional values, or other ambiguous user data without an explicit product/data policy decision.
-3. If a concrete Relation regression appears during Object-lane integration, resume this lane with a focused failing test and additive fix.
-4. Continue Tag hierarchy changes only through the general Relation APIs; do not create a special Relation persistence silo.
+1. Sequence the remaining real Relation editor migration through the Object lane after/with its `GenericDatabasePage` Board work:
+   - picker load: `RelationTargetService.selectionFor()`;
+   - picker save: `RelationMutationService.setRelation()`;
+   - never silently remove `missingTargetObjectIds` merely by opening the picker.
+2. Keep `GenericDatabasePage` out of the Relation lane while active Object PR #79 is preparing to edit the same surface.
+3. Keep integrity audit and repair separate. Do not auto-repair missing targets, cardinality conflicts, broken bidirectional values, or other ambiguous user data without explicit product/data policy.
+4. Resume this lane with a focused failing test if Object integration exposes a concrete Relation regression.
+5. Continue Tag hierarchy and legacy mirror behavior only through the general Relation APIs; do not create special Relation persistence silos.
 
 ## Cross-lane boundary
 
-- ObjectType defaults, Value semantics, Body/block persistence, Object detail containers, Daily Note creation, Value-to-Object promotion UX, `GenericDatabasePage`, and `core_object_bridge.dart` integration belong to `docs/AI_PROGRESS_OBJECT.md`.
+- ObjectType defaults, Value semantics, Body/block persistence, Object detail containers, Daily Note creation, Value-to-Object promotion UX, `GenericDatabasePage`, and Board integration belong to `docs/AI_PROGRESS_OBJECT.md`.
+- `core_object_bridge.dart` has now completed its deliberately sequenced Relation lifecycle migration and should return to normal Object ownership for future feature changes.
 - `lib/data/object_store.dart` is shared infrastructure; future Relation edits there must stay narrow and refresh from latest main before integration.
-- Relation services are now intentionally stable consumption boundaries for Object-owned UI and workflows.
+- Relation services are intentionally stable consumption boundaries for Object-owned UI and workflows.
 
 ## Known risks / blockers
 
 - `ObjectStore.deleteObject` and `ObjectStore.deleteProperty` remain deliberately low-level generic operations. Relation-aware callers should use `RelationMutationService`.
-- Existing Object-owned UI can still call lower-level Relation APIs until the Object lane migrates it; do not create a competing Relation-lane edit of those files while Object work is active.
+- `GenericDatabasePage` still contains a low-level Relation write until the Object lane completes its picker/editor migration.
+- Object PR #79 plans to touch `GenericDatabasePage`; a concurrent Relation edit there would create an avoidable cross-lane conflict.
 - Ambiguous automatic Relation-value repair could discard user intent and remains outside routine autonomous changes.
 
 ## Stop reason
 
-The Relation lane has completed the currently actionable standalone work from Issue #56: source/target integrity, bidirectional lifecycle, backlinks/read APIs, target-candidate API, persistence/index handling, diagnostics, deterministic index-only reconciliation, Tag hierarchy lifecycle, and regression coverage are integrated and green. The next concrete steps are now Object-owned integration surfaces already under active Object-lane PRs, while the only deeper Relation-only repair work would require an explicit policy for ambiguous user data. This matches the AGENTS.md stopping conditions: no remaining safe independent Relation slice without crossing the active Object-lane boundary or making a material data-repair decision.
+This continuation exhausted the newly available independent Relation work: canonical selection diagnostics and legacy mirror lifecycle are implemented, tested, merged, and handed off. The remaining concrete user-facing Relation editor lives in `GenericDatabasePage`, the same Object-owned file that active Object PR #79 intends to modify next. Editing it concurrently would violate the repository ownership/concurrency rule. Deeper automatic repair still requires an explicit policy for ambiguous user data. This matches the AGENTS.md stopping conditions: the next actionable step is an unavoidable cross-lane sequencing boundary, not merely pending CI or completion of one PR.
