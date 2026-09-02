@@ -48,7 +48,10 @@ class ObjectDetailValueInputCodec {
       case ObjectDetailValueEditorKind.rating:
         if (trimmed.isEmpty) return null;
         final value = int.tryParse(trimmed);
-        if (value == null || value < 0 || value > 5) {
+        if (value == null) {
+          throw ArgumentError.value(input, 'input', 'Rating Value must be an integer.');
+        }
+        if (value < 0 || value > 5) {
           throw RangeError.range(value, 0, 5, 'input', 'Rating Value must be 0-5.');
         }
         return value;
