@@ -12,67 +12,73 @@ Own Object/ObjectType architecture, Property value semantics, Object-centric Dat
 
 ## Current integration state
 
-- `main` now includes Object detail/Body UI from PR #68, shared Relation detail context from PR #76, safe Value -> Object/Weblink promotion from PR #77, and canonical Relation-neighborhood rendering in `ObjectInspectorPage` from PR #78.
-- PR #79 (`feature/object-board-create-in-group-v2`) is open and replays grouped Board Object creation on current foundations. Its first CI failure was an exact stale test-constructor mismatch and has been fixed; a follow-up change also routes Relation presets through `RelationMutationService` rather than direct Relation writes.
-- Stale PR #60 is closed as superseded by #79. Superseded stale Object PRs #70 and #72 also remain closed.
+- `main` includes Object detail/Body UI (#68), shared Relation detail context (#76), safe Value -> Object/Weblink promotion (#77), canonical Relation-neighborhood rendering (#78), and grouped Board Object creation service/planner (#79).
+- PR #79 head `35642c88376b8bb38ddfaf85b3605fc6d18d616b` passed Flutter CI #458 after fixing Relation preset decoding, then squash-merged as `6b991708f294e83b236d396a84d3841e4e43bcd4`.
+- Active Object branch: `feature/database-collection-semantics`.
+- Active PR #82 adds Phase-1 `Database = target ObjectType + collectionFilter` semantics and is mergeable.
 
 ## Checkpoints completed in the latest sustained run
 
-1. **Merged shared Object detail Relation context**
-   - Verified PR #76 head `86369405b703a3f34bca51a9fe48cbe295ad7dbe` had green Flutter CI #434.
-   - Squash-merged #76 as `dac4a64f22d6ab63279ed3075664847f213cf992`.
-   - Object detail now has a reusable context loader composed with the Relation lane's canonical `neighborhood()` API.
+1. **Fixed and landed grouped Board Object creation**
+   - CI #449 exposed that `ObjectRelationValue` was being passed back through `fromJson`, producing an empty Relation value.
+   - Fixed Relation-group creation to preserve the planned target ids and continue routing writes through `RelationMutationService`.
+   - Added rollback so a failed grouped preset does not leave an orphan new Object.
+   - Flutter CI #458 passed Drift generation, `flutter analyze`, and the full test suite before merge.
+   - Squash-merged PR #79 as `6b991708f294e83b236d396a84d3841e4e43bcd4`.
 
-2. **Fixed, validated, and merged Value -> Object execution**
-   - CI on PR #77 exposed an analyzer-redundant non-null assertion that remained after replaying the older slice.
-   - Removed the exact remaining assertion at `e6857b9bf097905fd9dd0b355fac142c46ffe09d`.
-   - Flutter CI #439 then passed Drift generation, `flutter analyze`, and the full test step.
-   - Squash-merged PR #77 as `d952ec409fdf69b45219ae00d3c38d3c74b59619`.
-   - Generic promotion preserves the source Value by default, rejects stale plans before target creation, delegates link writes to `RelationMutationService`, supports rollback, and provides URL -> reusable Weblink promotion.
+2. **Added Database collection Phase-1 persistence and compatibility contract**
+   - Added `DatabaseCollectionDefinition` and additive `database_collection_definitions` persistence.
+   - Legacy databases with no explicit collection definition resolve as self ObjectType + empty collection filter, preserving current behavior without rewriting data.
+   - Explicit definitions validate same-workspace target ObjectTypes and filter Property ownership.
+   - Malformed persisted collection filters fail closed instead of silently broadening membership.
+   - Deferred target FK allows an explicit self-target Database to be deleted while protecting ObjectTypes referenced by another Database collection.
 
-3. **Moved Object inspector Relation rendering onto the canonical read API**
-   - PR #78 replaced ad-hoc ObjectGraph backlink/target resolution in `ObjectInspectorPage` with one `RelationReadService.neighborhood()` payload.
-   - Outgoing Relation chips and Backlinks now read the same resolved Relation model.
-   - Flutter CI #440 passed, including analyze and tests.
-   - Squash-merged #78 as `521063771df658058dd625a5601a22f6ca77332e`.
+3. **Separated Database membership from View projection end-to-end**
+   - Added `DatabaseCollectionResolver` to load the target ObjectType and apply Database-level `collectionFilter` only.
+   - Added `DatabaseCollectionViewProjector` to compose collection membership first, then the existing View search/filter/sort/group pipeline.
+   - Added regression coverage for `北海道` Database collection followed by independent `行きたい=true` View filtering.
+   - Cross-Database View application is rejected.
 
-4. **Replayed grouped Board Object creation on current foundations**
-   - Replayed stale PR #60 as PR #79 instead of force-merging its old base.
-   - `ObjectBoardCreatePlanner` derives initial grouped values for scalar, Multi-select, Relation, and unassigned buckets while sharing eligibility rules with Board drag/drop.
-   - CI #441 failed before tests because the test helper did not provide the newer required `ObjectGroupBucket.isEmptyGroup` argument. Exact job logs identified the issue; commit `ba445f171644c55d444809e3fdf2c1998693b546` fixes it.
-   - Commit `8f3922c9cc85885121025c4a5ddea1f95feb711e` additionally routes Relation-group initialization through the stable `RelationMutationService` rather than bypassing Relation lifecycle rules.
-   - Latest PR #79 CI is running on the corrected head.
+4. **Added UI-facing collection configuration facade**
+   - Added `DatabaseCollectionConfigService` to expose current effective definition, target ObjectType, same-workspace ObjectType candidates, save, and reset-to-legacy operations.
+   - UI does not need to duplicate workspace/target/filter validation.
+
+5. **Inspected and corrected PR #82 CI failures**
+   - CI #466 passed Drift generation and `flutter analyze`; only two new tests failed.
+   - Both failures were ordering expectations: `ObjectStore.listObjects()` already returns its existing storage order, while the tests incorrectly assumed insertion order.
+   - Corrected the tests without changing membership implementation.
+   - Latest branch head is `80904b14a9901040db9c7de61b123fd3a216cb23`; newer Flutter CI is running.
 
 ## Validation
 
-- PR #76 Flutter CI #434: success before merge.
-- PR #77 Flutter CI #439: success after analyzer correction; Drift generation, analyze, and tests all passed before merge.
-- PR #78 Flutter CI #440: success before merge.
-- PR #79 CI #441: failed only in analyze due to missing required `isEmptyGroup` in the new test helper; exact workflow logs inspected and correction pushed. A newer CI run is in progress for the corrected Relation-safe head.
-- This connector runtime does not provide a local Flutter SDK, so executable validation is delegated to PR CI and exact workflow job logs.
+- PR #79 Flutter CI #458: success before merge.
+- PR #82 CI #466: Drift generation and analyze success; 266 tests passed, 2 new ordering assertions failed and were corrected.
+- Latest PR #82 CI is running on head `80904b14a9901040db9c7de61b123fd3a216cb23`.
+- This connector runtime does not provide a local Flutter SDK, so executable validation is delegated to PR CI and exact workflow logs.
 
 ## Exact next actions
 
-1. Inspect the latest CI for PR #79 head `8f3922c9cc85885121025c4a5ddea1f95feb711e`; fix any branch-caused failure, then merge when green.
-2. After #79 lands, connect `ObjectBoardCreateService` to the existing `ObjectBoardView.onCreateInGroup` callback in `GenericDatabasePage`, prompting for a title, creating in the selected bucket, reloading, and selecting the new Object.
-3. Add focused page/widget regression coverage for Board-column creation so the grouped Property is initialized through the real UI path.
-4. Expose URL -> Weblink promotion through a narrow Object-owned UI affordance after the inspector's canonical Relation-neighborhood integration; preserve the scalar URL by default.
-5. Use `RelationTargetService` for any new Relation picker/editing UI and continue to avoid duplicating target validation.
-6. Continue Daily Note through general Object detail/Relation mechanisms; avoid a special note data silo.
+1. Inspect latest CI for PR #82; fix only branch-caused failures and merge when green.
+2. After #82 lands, connect `GenericDatabasePage` loading/projection to `DatabaseCollectionResolver` / `DatabaseCollectionViewProjector` so the real page shows target ObjectType membership before View filtering.
+3. Add a narrow Database collection settings UI using `DatabaseCollectionConfigService`; start with target ObjectType and collection filter editing, keeping View controls separate.
+4. Connect merged `ObjectBoardCreateService` to `ObjectBoardView.onCreateInGroup` in `GenericDatabasePage`, prompting for title, creating in the selected bucket, reloading, and selecting the new Object.
+5. Add focused page/widget coverage for Board-column creation and Database-vs-View filtering.
+6. Continue URL -> Weblink promotion UI and Relation picker migration only through stable Relation APIs.
 
 ## Cross-lane boundaries
 
-- Relation lifecycle, bidirectional integrity, target/source validation, backlink/index repair, and Tag hierarchy mutation stay in `docs/AI_PROGRESS_RELATION.md`.
-- Stable Relation APIs available to Object lane: `RelationMutationService`, `RelationReadService.neighborhood()`, `RelationTargetService`, and integrity/index services for diagnostics/reconciliation.
-- Object-owned callers may consume those APIs, but should not reimplement Relation validation/index lifecycle.
-- Object detail UI, Daily Note UI, Value promotion UI, and Object-centric Database/View interactions remain Object-owned surfaces.
+- Relation lifecycle, bidirectional integrity, source/target validation, backlink/index repair, and Tag hierarchy mutation stay in `docs/AI_PROGRESS_RELATION.md`.
+- Stable Relation APIs consumed by Object lane include `RelationMutationService`, `RelationReadService.neighborhood()`, and `RelationTargetService`.
+- Object-owned callers may consume those APIs but must not reimplement Relation lifecycle/index rules.
+- Database collection semantics, Object detail UI, Daily Note UI, Value promotion UI, and Object-centric Database/View interactions remain Object-owned.
 
 ## Blockers / risks
 
-- PR #79 needs latest-head CI before merge; its known constructor mismatch has already been fixed.
-- Board grouped creation for Relation properties must continue using the Relation mutation facade; do not regress to low-level direct Relation writes.
+- PR #82 still requires latest-head CI before merge.
+- Real-page collection integration must not collapse Database `collectionFilter` into View filters or duplicate Objects when a collection targets another ObjectType.
+- Board Relation-group creation must continue using `RelationMutationService`.
 - Rich Body documents must never be flattened by the thin paragraph editor.
 
 ## Stop reason
 
-No product/design blocker was reached in this run. Multiple safe checkpoints were completed and validated/merged, and the remaining active #79 slice has an exact CI-derived fix plus a Relation-safe write path pushed. Continue from the latest #79 CI, then wire the already-existing Board column create callback into `GenericDatabasePage` once the service slice is green.
+No product/design blocker is currently known. Continue from PR #82 latest-head CI, then land the Phase-1 collection foundation and wire it into the real generic Database page in a separate focused slice.
