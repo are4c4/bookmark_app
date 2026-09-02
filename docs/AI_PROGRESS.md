@@ -1,10 +1,10 @@
 # AI Progress Handoff
 
-> This file is the durable checkpoint for AI development runs. Update it before every run ends.
+> Repository-wide integration checkpoint for AI development. Lane-specific implementation details live in the lane handoff files.
 
 ## Current goal
 
-Integrate the existing generic Object/database foundations into a coherent user-facing workflow inspired by Notion and Capacities, while preserving bookmark behavior and keeping the architecture generic.
+Integrate the generic Object/database foundations into a coherent user-facing workflow inspired by Notion and Capacities while preserving bookmark behavior and keeping the architecture generic.
 
 ## Active Issue
 
@@ -12,67 +12,67 @@ Integrate the existing generic Object/database foundations into a coherent user-
 
 https://github.com/are4c4/bookmark_app/issues/56
 
-## Active branch
+## Development lanes
 
-Current implementation slice: `feature/object-view-toolbar` (PR #54).
+The implementation is split into two concurrent-capable lanes:
 
-Future slices should use focused feature branches from the latest `main` unless continuing an existing active PR is safer.
+1. **Database / View lane** — `docs/AI_PROGRESS_DB_VIEW.md`
+   - Database collection semantics
+   - Database/View separation
+   - Filter/Sort/Group/layout integration
+   - multiple Views and top-tab navigation
+   - Gallery/List/Table/Board projection and database-page UX
+
+2. **Object / Relation lane** — `docs/AI_PROGRESS_OBJECT_RELATION.md`
+   - Object/ObjectType/Property architecture
+   - Value vs Object Relation semantics
+   - Tag-as-Object, reusable Object types, backlinks
+   - Object detail content, Body/block model
+   - Daily Notes and time-based Object patterns
+
+Each implementation chat/run should pick one primary lane and update only its matching progress file unless repository-wide integration state changes.
 
 ## Latest relevant state
 
-- `main` includes the persistent AI handoff workflow from PR #55.
-- PR #54 is open and adds a reusable Object view toolbar for Filter / Sort / Group / layout selection.
-- Recent merged foundations include Object query/filter/sort, grouping, Board view, Board drag/drop persistence, Formula/Rollup, bidirectional Relations, ObjectType templates, and ObjectType management.
+- `main` includes the persistent AI handoff workflow and now the two-lane development model.
+- Existing generic foundations include Object query/filter/sort, grouping, Board view, Board drag/drop persistence, Formula/Rollup, bidirectional Relations, ObjectType templates, and ObjectType management.
+- PR #54 was the previously known reusable Object view toolbar slice; current GitHub state must be inspected before continuing or superseding it.
+- Issue #56 contains the current product/design decisions and remains the shared implementation contract.
 
-## Completed
+## Repository-wide design contract
 
-- Established `AGENTS.md` and this persistent handoff file for autonomous continuation.
-- Created Issue #56 as the current implementation contract.
-- Implemented and merged generic Object query/filter/sort infrastructure.
-- Implemented and merged generic grouping infrastructure and grouping configuration UI.
-- Implemented and merged reusable Board view and typed drag/drop grouped-property updates.
-- Implemented and merged Formula / Rollup computed-property support.
-- Implemented and merged bidirectional Relation infrastructure and management support.
-- Implemented and merged ObjectType templates and ObjectType management.
+- Object is global and unique; Databases collect/show Objects rather than own duplicate records.
+- Database = which Objects; View = how to see them.
+- ObjectType = schema + defaults.
+- Effective defaults resolve as `View override > Database override > ObjectType default > app default`.
+- Object content = structured Properties + free Body designed for blocks.
+- Property semantics distinguish Value, Object Relation, and computed properties.
+- Tags are Objects; Select/MultiSelect remain for local option sets.
+- Date is a Value; Daily Note is an Object keyed by a unique date.
+- Object detail presentation should support side peek, center peek, and full page with shared content.
 
-## In progress
+## Integration policy
 
-- PR #54: reusable Object view toolbar.
-- Transition from isolated reusable Object/database components to end-to-end integration in the real generic database page.
+- Keep `main` releasable.
+- Use focused lane-specific branches/PRs.
+- Avoid both lanes concurrently owning broad refactors of the same core file.
+- If a change crosses lanes, document the dependency and sequence the overlapping work where practical.
+- Rebase/refresh from latest `main` before merging overlapping foundation changes.
+- Preserve existing bookmark data and behavior; no destructive migrations without explicit approval.
 
-## Next actions
+## Next repository-wide actions
 
-1. Review PR #54 against the latest `main`; rebase/rebuild only if needed, then validate and merge it when safe.
-2. Create the next focused branch from updated `main` to wire the Object view toolbar into `GenericDatabasePage`.
-3. Persist Filter / Sort / Group / layout changes through the existing database view store and verify restoration after reopening.
-4. Route Gallery / List / Table / Board through the shared Object projection/query pipeline so active view rules behave consistently.
-5. Connect Board grouping, drag/drop mutation, and grouped Object creation end-to-end in the real database UI.
-6. Add integration/regression tests for the actual page-level workflow.
-7. Continue with the next unmet acceptance criterion in Issue #56 without waiting for routine user confirmation.
+- Database / View lane resumes from `docs/AI_PROGRESS_DB_VIEW.md`.
+- Object / Relation lane resumes from `docs/AI_PROGRESS_OBJECT_RELATION.md`.
+- Planning/design chat continues to refine Issue #56 when material product decisions are made.
+- Integrate lane PRs into `main` in small, validated slices.
 
 ## Validation
 
-- The handoff/Issue changes are documentation and project-management changes only.
-- For implementation slices, run the most relevant Flutter analyze/tests available in the environment and record exact results here before ending each run.
+The lane split itself is documentation/project-management work. Feature runs must record exact Flutter analyze/test results in their lane progress files.
 
-## Known blockers / risks
+## Known risks
 
-- PR #54 was opened from a `main` state just before PR #55 merged, so confirm it still applies cleanly before integration.
-- GitHub Actions usage limits may affect CI availability; prefer targeted local/static tests when CI is unavailable and record that limitation.
-- Avoid large parallel edits to `GenericDatabasePage`; integration should be split into focused, mergeable slices to reduce conflicts.
-- Do not introduce destructive schema migrations or regress bookmark-specific behavior while generalizing the app.
-- Chat execution sessions can still end because of product/runtime limits; always leave exact next actions here before a run ends.
-
-## Handoff template
-
-When updating this file during feature work, keep the sections above concrete:
-
-- **Current goal:** one current outcome
-- **Active Issue:** issue number/title
-- **Active branch:** exact branch or PR
-- **Latest relevant state:** latest commit/PR/CI context
-- **Completed:** concrete finished items
-- **In progress:** one current slice
-- **Next actions:** numbered executable steps
-- **Validation:** commands/checks and results
-- **Known blockers / risks:** only real unresolved items
+- Parallel work is useful only when file ownership is reasonably separate; otherwise sequence the slices.
+- GitHub Actions usage limits may affect CI availability; record local/static validation when CI is unavailable.
+- Block-editor and migration work can expand quickly; keep the initial slices narrow and backward-compatible.
