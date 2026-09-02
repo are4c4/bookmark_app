@@ -162,21 +162,26 @@ class ObjectStore {
     required dynamic value,
   }) async {
     if (property.isRelation) {
-      await _validateRelationSource(objectId: objectId, property: property);
+      final storedProperty = await _validateRelationSource(
+        objectId: objectId,
+        property: property,
+      );
       final relation = value is ObjectRelationValue
           ? value
           : ObjectRelationValue.fromJson(value);
-      await _validateRelation(property, relation);
+      await _validateRelation(storedProperty, relation);
       await ensureRelationIndexSchema();
       await _genericStore.database.transaction(() async {
         await _genericStore.setValue(
           recordId: objectId,
-          propertyId: property.id,
-          value: relation.toJson(multiple: property.allowsMultipleRelations),
+          propertyId: storedProperty.id,
+          value: relation.toJson(
+            multiple: storedProperty.allowsMultipleRelations,
+          ),
         );
         await _replaceRelationEdges(
           objectId: objectId,
-          propertyId: property.id,
+          propertyId: storedProperty.id,
           targetObjectIds: relation.objectIds,
         );
       });
@@ -195,6 +200,13 @@ class ObjectStore {
     required ObjectPropertyDefinition property,
     required List<int> targetObjectIds,
   }) {
+    if (!property.isRelation) {
+      throw ArgumentError.value(
+        property.id,
+        'property',
+        'Property is not a Relation.',
+      );
+    }
     return setPropertyValue(
       objectId: objectId,
       property: property,
@@ -388,7 +400,7 @@ class ObjectStore {
     );
   }
 
-  Future<void> _validateRelationSource({
+  Future<ObjectPropertyDefinition> _validateRelationSource({
     required int objectId,
     required ObjectPropertyDefinition property,
   }) async {
@@ -403,15 +415,16 @@ class ObjectStore {
       );
     }
 
-    final sourceExists = (await listObjects(property.objectTypeId))
+    final sourceExists = (await listObjects(storedProperty.objectTypeId))
         .any((object) => object.id == objectId);
     if (!sourceExists) {
       throw ArgumentError.value(
         objectId,
         'objectId',
-        'Source Object must belong to ObjectType ${property.objectTypeId}.',
+        'Source Object must belong to ObjectType ${storedProperty.objectTypeId}.',
       );
     }
+    return storedProperty;
   }
 
   Future<void> _validateRelation(
