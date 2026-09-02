@@ -68,6 +68,7 @@ class ObjectStore {
 
   Future<void> deleteObjectType(int id) async {
     await _assertSchemaMutable(id);
+    await _assertNoIncomingRelationProperties(id);
     await _genericStore.deleteDatabase(id);
   }
 
@@ -314,6 +315,23 @@ class ObjectStore {
   Future<void> _assertSchemaMutable(int objectTypeId) async {
     if (await _kindForObjectType(objectTypeId) == ObjectTypeKind.system) {
       throw StateError('System ObjectTypes are managed by the application and cannot be modified.');
+    }
+  }
+
+  Future<void> _assertNoIncomingRelationProperties(int objectTypeId) async {
+    final targetType = await getObjectType(objectTypeId);
+    if (targetType == null) return;
+    final types = await listObjectTypes(targetType.workspaceId);
+    for (final type in types) {
+      if (type.id == objectTypeId) continue;
+      for (final property in type.properties) {
+        if (property.isRelation && property.targetObjectTypeId == objectTypeId) {
+          throw StateError(
+            'Cannot delete ObjectType ${targetType.name} while Relation Property '
+            '${type.name}.${property.name} targets it.',
+          );
+        }
+      }
     }
   }
 
