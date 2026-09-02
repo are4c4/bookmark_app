@@ -62,14 +62,16 @@ class ObjectBoardCreateService {
     required ObjectPropertyDefinition groupProperty,
     required ObjectGroupBucket<AppObject> targetGroup,
   }) async {
-    final objectId = await _objectStore.createObject(
-      objectTypeId: objectTypeId,
-      title: title,
-    );
-
+    // Resolve and validate the preset before creating the Object so an
+    // unsupported grouped Property cannot leave an orphaned Object behind.
     final value = planner.initialValue(
       property: groupProperty,
       targetGroup: targetGroup,
+    );
+
+    final objectId = await _objectStore.createObject(
+      objectTypeId: objectTypeId,
+      title: title,
     );
     if (value != null) {
       await _objectStore.setPropertyValue(
