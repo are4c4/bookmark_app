@@ -112,6 +112,7 @@ class SystemObjectStore {
       name: name,
       type: type,
       config: config,
+      allowSystemMutation: true,
     );
     final refreshed = (await objectStore.getObjectType(objectTypeId))!;
     return refreshed.properties.firstWhere((property) => property.id == id);
