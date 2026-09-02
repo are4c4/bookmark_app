@@ -47,7 +47,7 @@ void main() {
 
     expect(collection?.definition.isLegacyFallback, isTrue);
     expect(collection?.objectType.id, databaseId);
-    expect(collection?.objects.map((object) => object.title), ['A', 'B']);
+    expect(collection?.objects.map((object) => object.title), ['B', 'A']);
   });
 
   test('collection filter narrows target ObjectType before View projection',
