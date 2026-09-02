@@ -33,8 +33,9 @@ The active phase is Database/View integration and user-facing UX. Most Object/Re
 - #100 merged as `09802d5aaef8d1f4ae6d3e9f8e4d7e46a6b6c498`: container-agnostic Object-detail Property presentation and canonical Relation-renderer separation.
 - #99 merged as `96b15bae63299a6dc566558066e2d5902e5a6f3f`: shared typed text-input normalization for Object-detail number/select/multi-select/date/rating editing.
 - #101 merged as `e7a8f6aec9e9631f01e486a5f7671df7b3cd5010`: immutable + persisted Object Body block operations that preserve unknown/future block payloads instead of flattening rich documents.
+- #102 merged as `bc6f5adc4d5c2c3a4d088de8cb84e09e1f9f4e16`: Daily Note today/previous/next calendar navigation while reusing canonical open-or-create semantics.
 
-PR #83 remains closed/unmerged and is not an active implementation path. PR #102 is the active additive Daily Note navigation slice.
+PR #83 remains closed/unmerged and is not an active implementation path.
 
 ### Integrated Relation foundations on `main`
 
@@ -63,7 +64,7 @@ Collection semantics in the real page, collection-aware creation, Board create-i
 Multiple independent Views, top tabs, duplicate-current/blank creation, rename/reorder/delete, independent config and overflow handling. Core management and overflow are integrated.
 
 ### Milestone C — Object Knowledge System
-Reusable Tag/Weblink/Image flows, Value -> Object affordances, richer Relations/backlinks, shared contextual Object detail/opening, stronger Daily Notes. Opening-mode persistence/settings/resolution, URL promotion, shared typed Value editor/input normalization and shared Property presentation are integrated; real contextual navigation/UI consumption remains. Daily Note previous/today/next navigation is in active PR #102.
+Reusable Tag/Weblink/Image flows, Value -> Object affordances, richer Relations/backlinks, shared contextual Object detail/opening, stronger Daily Notes. Opening-mode persistence/settings/resolution, URL promotion, shared typed Value editor/input normalization and shared Property presentation are integrated; Daily Note calendar navigation is now integrated via #102. Real contextual navigation/UI consumption remains.
 
 ### Milestone D — Document / Knowledge Layer
 Real block editing, RichText/Document Property, media/file blocks, embedded Objects/Database Views and higher-level time-based note compositions. Safe block-level mutation/persistence primitives are integrated via #101; real block UI remains.
@@ -74,7 +75,7 @@ Real block editing, RichText/Document Property, media/file blocks, embedded Obje
 2. Add page/widget regression coverage proving Database membership resolves before View projection and new Objects target the configured ObjectType.
 3. Consume `ObjectOpenPresentationService` in real View navigation, then implement side peek / center peek / full page while preserving Database/View context.
 4. Consume `ObjectDetailPropertyPresenter`, `ObjectDetailValueEditor`, and `ObjectDetailValueInputCodec` in shared Object detail UI so typed Value behavior is consistent across presentations.
-5. Merge PR #102 when latest-head CI is green, then expose Daily Note previous/today/next through shared Object navigation when a patch-capable UI environment is available.
+5. Expose Daily Note previous/today/next through shared Object navigation using the merged #102 service when a patch-capable UI environment is available.
 6. Build real block UI incrementally on `ObjectBodyBlockEditService`; never flatten unknown/rich blocks through the paragraph adapter.
 7. Manual include/exclude remains deferred until dynamic collection + multi-View behavior is stable.
 
@@ -85,7 +86,7 @@ Real block editing, RichText/Document Property, media/file blocks, embedded Obje
 - #100 Flutter CI #525: Drift generation, `flutter analyze`, and tests succeeded before merge.
 - #99 corrected head passed Flutter CI #526 with `No issues found!` and 305 tests passed before merge.
 - #101 head `33ba0a9cd42ac031d9a0100dfe52a543ff02ca4a`: Flutter CI #531 succeeded before merge.
-- #102 corrected head `b4034236a8abdf66ec807d15cabd9df2aeeab8f5`: latest Flutter CI #533 running.
+- #102 corrected head `b4034236a8abdf66ec807d15cabd9df2aeeab8f5`: Flutter CI #533 succeeded before merge.
 - Earlier merged #82/#86/#87/#88/#89/#90/#91/#92/#93/#94/#95/#96 passed their relevant PR CI as recorded in lane history.
 
 ## Known risks / sequencing constraints
