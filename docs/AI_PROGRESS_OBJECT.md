@@ -10,110 +10,96 @@ Own Object/ObjectType architecture, Property value semantics, Object-centric Dat
 
 `#56` — Integrate generic Object database UX toward Notion/Capacities workflow
 
-Issue #56 now contains the current delivery milestones and implementation order. Treat it as the active product/design contract.
+Issue #56 is the active product/design contract and contains delivery Milestones A–D.
 
 ## Current integration state
 
-`main` includes:
+`main` includes the major Object/Relation foundations plus the following current Database/View work:
 
-- shared Object detail/Body UI, Formula/Rollup rendering, persisted Body editing and Daily Note entry from PR #68;
-- shared Relation detail context from PR #76;
-- safe Value -> Object and URL -> reusable Weblink execution from PR #77;
-- canonical Relation-neighborhood rendering in `ObjectInspectorPage` from PR #78;
-- grouped Board Object creation planner/service from PR #79, including Relation-safe grouped initialization through `RelationMutationService`.
+- PR #79 merged: grouped Board Object creation planner/service, including Relation-safe grouped initialization.
+- PR #82 merged as `689c84de46cee1292f7f126eb3d5719658f8d8e8`: Phase-1 `Database = target ObjectType + collectionFilter`, separate persistence, resolver, config service, and Database-first/View-second projection composition. Latest head CI #474 passed before merge.
+- PR #85 merged: focused Database collection settings dialog on current main, including target ObjectType selection and collection-filter editing without leaking View state.
+- PR #86 merged as `d3632b2ac725a87b3eae66eb86e582d5c3bd5544`: `GenericDatabaseCollectionPageLoader` keeps Database identity/View scope on the collection container while loading filtered Objects/records/Properties from the configured target ObjectType. CI #477 passed before merge.
 
-PR #79 is **merged**. Any older handoff text describing it as open/pending is stale.
+### Active Object PRs
 
-PR #82 (`feature/database-collection-semantics`) is the active core integration dependency for the next Database/View phase. It is owned by the Object/database integration path and currently provides `Database = target ObjectType + collectionFilter` foundations, Database-first membership resolution, separate View projection composition, collection config support, and non-destructive persistence.
+- PR #87 `feature/object-page-integration-services`
+  - adds `GenericDatabaseObjectCreateService` so normal and Board grouped creation target the resolved collection ObjectType instead of assuming `databaseId == objectTypeId`;
+  - adds `ObjectRelationEditorService` so real picker/editor UI can load canonical selection diagnostics through `RelationTargetService.selectionFor()` and persist explicit choices through `RelationMutationService`;
+  - focused tests cover cross-ObjectType collection creation, grouped presets, canonical Relation selection, and invalid-target rejection;
+  - Flutter CI #480 is running on head `43a75a6a2b03bdf8424dc9814a82d847ceecf688`.
 
-PR #83 is closed/unmerged because it was started accidentally after a user stop request. Do not resume that branch as an active implementation path.
+- PR #88 `feature/object-view-creation-service`
+  - adds `DatabaseViewCreationService` for the adopted dual-path View creation UX;
+  - duplicate-current creates a new persisted identity while copying View configuration;
+  - blank View starts from Database definition defaults with empty View query/settings state;
+  - tests verify duplicated View independence and blank defaults;
+  - Flutter CI #481 is running on head `6f4ad751490849d8e612844a17e59366c7b60a0b`.
 
-## Completed Object-lane foundations
+PR #83 remains closed/unmerged and is not an active implementation branch.
 
-1. **Property semantics**
-   - explicit Value / Object Relation / Computed distinction.
+## Completed checkpoints in this run
 
-2. **ObjectType/default contracts**
-   - ObjectType defaults and persisted/default-resolution foundations.
+1. **Validated the collection-semantics foundation already landed**
+   - Confirmed PR #82 was merged and its latest head Flutter CI #474 completed successfully.
 
-3. **Body / shared detail foundation**
-   - versioned/extensible Body persistence;
-   - paragraph-safe simple editing that refuses to flatten richer documents;
-   - shared Object detail loading/editing/session contracts.
+2. **Landed collection-aware page loading**
+   - Inspected PR #86 and CI #477.
+   - CI was green, so squash-merged #86 as `d3632b2ac725a87b3eae66eb86e582d5c3bd5544`.
+   - The real page now has a narrow loader available that preserves Database identity while resolving target ObjectType membership separately.
 
-4. **Reusable Object types / promotion**
-   - Weblink and Image Object facades;
-   - Value -> Object planning/execution;
-   - URL -> reusable Weblink promotion with source Value preserved by default.
+3. **Added collection-aware creation adapter**
+   - `GenericDatabaseObjectCreateService.create()` resolves the current collection target before creating an Object.
+   - `createInGroup()` resolves the canonical target ObjectType Property and delegates grouped presets to the existing Relation-safe `ObjectBoardCreateService`.
+   - This prevents the legacy `databaseId` assumption from creating records in the collection container when the Database targets another ObjectType.
 
-5. **Daily Note foundation**
-   - unique-date open-or-create and shared detail bridge without a special data silo.
+4. **Added canonical Relation editor adapter**
+   - `ObjectRelationEditorService.load()` delegates to canonical `RelationTargetService.selectionFor()`.
+   - `save()` validates selected ids against canonical candidates/cardinality and delegates writes to `RelationMutationService`.
+   - Merely loading/opening editor state remains read-only and does not silently repair legacy/corrupt values.
 
-6. **Relation consumption in Object UI**
-   - Object detail consumes canonical Relation neighborhood/read APIs;
-   - outgoing Relations and Backlinks render from the same canonical payload.
-
-7. **Board integration foundation**
-   - typed drag/drop grouped mutation support;
-   - grouped Object creation planner/service;
-   - scalar, Multi-select, Relation, and unassigned presets;
-   - Relation groups route through `RelationMutationService`.
-
-## Current phase
-
-The Object lane is now primarily an **integration/UX lane**, not a new-foundation lane.
-
-Priority is to complete Milestones A/B from Issue #56:
-
-- Database collection semantics in the real generic page;
-- Board create-in-group real UI;
-- canonical Relation picker/editor real UI;
-- multi-View Database UX;
-- contextual Object opening.
-
-Advanced Body blocks, embedded Views, and richer Daily Note composition should not displace the Database/View core until Milestone A/B is coherent.
+5. **Added adopted View creation paths**
+   - `DatabaseViewCreationService.duplicateCurrent()` implements duplicate-current as the primary path with a new identity.
+   - `createBlank()` implements the secondary blank path from Database definition defaults.
+   - Regression coverage verifies the duplicate can mutate independently from its source.
 
 ## Exact next actions
 
-1. Inspect the latest head and Flutter CI for PR #82. Fix branch-caused failures and merge only when latest-head validation is green (unless explicitly directed otherwise).
-2. After #82 lands, integrate `DatabaseCollectionResolver` / Database-first collection membership into `GenericDatabasePage`, then apply View projection as an independent second stage.
-3. Preserve legacy databases via the self-type/all-Objects fallback until the user explicitly configures collection semantics.
-4. Connect merged `ObjectBoardCreateService` to `ObjectBoardView.onCreateInGroup` in `GenericDatabasePage`: prompt for title, create in selected bucket, reload, and select/open the new Object.
-5. Add focused page/widget regression coverage for the real Board-column create path, including a grouped Property preset. Relation presets must remain on the canonical mutation facade.
-6. Migrate real Relation picker/editor loading to `RelationTargetService.selectionFor()` (or the current canonical selection API) and writes to `RelationMutationService.setRelation()`.
-7. Surface missing target ids / legacy single-cardinality drift as diagnostics. Merely opening/closing a picker must not silently repair or drop persisted Relation values.
-8. Expose URL -> Weblink promotion through a narrow Object-owned UI affordance, preserving the scalar URL by default.
-9. Implement multiple independent Views per Database and top-tab navigation.
-10. Implement duplicate-current View as the default `+` action, blank View as secondary, then rename/reorder/delete/overflow behavior.
-11. Complete shared side peek / center peek / full-page Object opening after Database/View navigation state is stable enough to preserve origin context.
-12. Continue Daily Note / blocks / embedded Views after the usable Database and multi-View milestones are complete.
+1. Inspect CI #480 for PR #87 and CI #481 for PR #88. Fix any branch-caused failure; merge each when latest-head CI is green.
+2. Refresh from latest `main` after those merges before touching `GenericDatabasePage`.
+3. Wire `GenericDatabaseCollectionPageLoader` into `GenericDatabasePage._reload()` so Database-level membership resolves first and existing View projection remains the second stage.
+4. Replace legacy `_createRecord` assumptions with `GenericDatabaseObjectCreateService`, so creation always targets the collection ObjectType.
+5. Connect `ObjectBoardView.onCreateInGroup` to `GenericDatabaseObjectCreateService.createInGroup()`: prompt for title, create, reload, and select/open the new Object.
+6. Migrate the real Relation picker/editor in `GenericDatabasePage` onto `ObjectRelationEditorService`; surface missing target ids/cardinality drift without silent repair.
+7. Add focused widget/page regression coverage for the real collection-aware reload/create/Relation edit paths.
+8. Wire the merged Database collection settings dialog through `DatabaseCollectionConfigService` in the real page.
+9. After Milestone A page integration is coherent, wire `DatabaseViewCreationService` to top-tab multi-View UX, then rename/reorder/delete/overflow behavior.
+10. Expose URL -> reusable Weblink promotion through a narrow Object-owned affordance while preserving the source URL by default.
 
 ## Cross-lane boundaries
 
 - Relation lifecycle, bidirectional integrity, target/source validation, backlink/index repair, stale metadata handling, and Tag hierarchy mutation stay Relation-owned.
-- Stable Relation APIs available to Object lane include `RelationMutationService`, `RelationReadService.neighborhood()`, `RelationTargetService`/selection context, and integrity/index services.
-- Object-owned UI may consume those APIs but must not duplicate Relation validation/index lifecycle.
-- `GenericDatabasePage`, Object detail UI, Daily Note UI, Value promotion UI, Database collection integration, and View UX are Object-owned surfaces.
-- Because `GenericDatabasePage` is now a hotspot, do not allow Relation lane to perform a competing broad refactor there; sequence shared work.
+- Stable Relation APIs consumed by Object UI include `RelationMutationService`, `RelationReadService.neighborhood()`, and `RelationTargetService.selectionFor()`.
+- Object UI must not duplicate Relation validation/index lifecycle.
+- `GenericDatabasePage`, Object detail UI, Database collection integration, Board create UI, Value promotion UI and multi-View UX are Object-owned surfaces.
+- `GenericDatabasePage` remains the main integration hotspot; avoid competing broad Relation-lane edits there.
 
-## Validation / known state
+## Validation
 
-- PR #76: merged after green Flutter CI.
-- PR #77: merged after analyzer correction and green Flutter CI.
-- PR #78: merged after green Flutter CI.
-- PR #79: merged; grouped create service is on `main`.
-- PR #82: open; always inspect its latest head and latest CI before integration.
-- Connector runtime may not provide a local Flutter SDK, so executable validation can be delegated to GitHub CI when needed, but exact failures should be inspected and fixed rather than guessed.
+- PR #82 latest-head Flutter CI #474: success before merge.
+- PR #86 Flutter CI #477: success before merge.
+- PR #87 Flutter CI #480: in progress at handoff time.
+- PR #88 Flutter CI #481: in progress at handoff time.
+- This connector runtime does not expose a local Flutter SDK, so executable validation is delegated to GitHub CI; exact branch-caused failures must be inspected and corrected.
 
-## Risks
+## Risks / blockers
 
-- ObjectType and Database remain overlapped in parts of the legacy UI/storage. The new model requires conceptual separation, but migration should remain incremental and non-destructive.
-- Database `collectionFilter` and View filters must remain separate in domain, persistence, and execution order.
-- User-facing Relation writes must not regress to direct low-level Relation mutations.
-- Board Relation-group creation must continue using Relation-safe mutation.
+- No product/design blocker is active.
+- The main remaining Milestone A risk is the legacy assumption inside `GenericDatabasePage` that Database id and ObjectType id are the same; the new loader/create adapters are specifically designed to remove that assumption incrementally.
+- User-facing Relation writes must not regress to low-level direct Relation mutation.
+- Board Relation-group creation must continue through `RelationMutationService` via the existing Board create service.
 - Rich Body documents must never be flattened by the thin paragraph editor.
-- Manual include/exclude collection overrides are deliberately deferred until dynamic collection + multi-View behavior is stable.
 
-## Stop reason for this handoff refresh
+## Stop reason
 
-This file was refreshed from the planning/design chat because implementation state had advanced beyond its previous checkpoint: PR #79 is merged, Issue #56 now has Milestones A–D and a revised execution order, and PR #82 is the active collection-semantics foundation. No product blocker was introduced by this documentation update.
+Multiple safe checkpoints were completed in this run. Two focused PRs are now under executable CI, while the next major step is the broad `GenericDatabasePage` wiring that should be sequenced after their latest-head results and refreshed `main` to avoid stacking conflicting integration histories. Pending CI alone was not used as a stopping reason; independent View creation work was completed while CI ran.
