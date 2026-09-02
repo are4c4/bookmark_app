@@ -1,9 +1,17 @@
 import 'package:flutter/material.dart';
 
 import '../data/generic_database_store.dart';
+import '../data/object_body_store.dart';
+import '../data/object_computed_value_store.dart';
+import '../data/object_detail_content_loader.dart';
+import '../data/object_detail_session_loader.dart';
 import '../data/object_graph_query_store.dart';
 import '../data/object_store.dart';
+import '../data/object_type_defaults_service.dart';
+import '../data/object_type_defaults_store.dart';
+import '../domain/object_detail_session.dart';
 import '../domain/object_model.dart';
+import '../domain/object_type_defaults.dart';
 
 class ObjectInspectorPage extends StatefulWidget {
   const ObjectInspectorPage({
@@ -23,8 +31,7 @@ class ObjectInspectorPage extends StatefulWidget {
 
 class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
   ObjectGraphNodeRecord? _node;
-  AppObjectType? _type;
-  AppObject? _object;
+  ObjectDetailSession? _session;
   List<ObjectGraphBacklinkRecord> _backlinks = const [];
   Map<int, ObjectGraphNodeRecord> _relatedNodes = const {};
   bool _loading = true;
@@ -33,6 +40,20 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
   void initState() {
     super.initState();
     _load();
+  }
+
+  ObjectDetailSessionLoader _sessionLoader() {
+    final bodyStore = ObjectBodyStore(widget.store);
+    final defaultsStore = ObjectTypeDefaultsStore(widget.store);
+    return ObjectDetailSessionLoader(
+      contentLoader: ObjectDetailContentLoader(
+        objectStore: widget.objectStore,
+        bodyStore: bodyStore,
+        computedStore: ObjectComputedValueStore(widget.objectStore),
+      ),
+      defaultsService: ObjectTypeDefaultsService(store: defaultsStore),
+      appFallback: const ObjectTypeDefaults(openMode: ObjectOpenMode.fullPage),
+    );
   }
 
   Future<void> _load() async {
@@ -44,22 +65,19 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
       return;
     }
 
-    final type = await widget.objectStore.getObjectType(node.objectTypeId);
-    final objects = await widget.objectStore.listObjects(node.objectTypeId);
-    AppObject? object;
-    for (final candidate in objects) {
-      if (candidate.id == node.objectId) {
-        object = candidate;
-        break;
-      }
-    }
+    final session = await _sessionLoader().load(
+      objectTypeId: node.objectTypeId,
+      objectId: node.objectId,
+    );
     final backlinks = await graph.backlinks(node.objectId);
     final relatedNodes = <int, ObjectGraphNodeRecord>{};
-    if (object != null && type != null) {
-      for (final property in type.properties) {
+    if (session != null) {
+      final content = session.content;
+      for (final property in content.objectType.properties) {
         if (!property.isRelation) continue;
-        for (final targetId
-            in ObjectRelationValue.fromJson(object.values[property.id]).objectIds) {
+        for (final targetId in ObjectRelationValue.fromJson(
+          content.object.valueFor(property.id),
+        ).objectIds) {
           final target = await graph.getNode(targetId);
           if (target != null) relatedNodes[targetId] = target;
         }
@@ -69,8 +87,7 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
     if (!mounted) return;
     setState(() {
       _node = node;
-      _type = type;
-      _object = object;
+      _session = session;
       _backlinks = backlinks;
       _relatedNodes = relatedNodes;
       _loading = false;
@@ -120,20 +137,79 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
     );
   }
 
+  List<ObjectPropertyDefinition> _visibleProperties(ObjectDetailSession session) {
+    final properties = session.content.objectType.properties
+        .where((property) => property.config['hidden'] != true)
+        .toList(growable: false);
+    final visibleIds = session.defaults.visiblePropertyIds;
+    final filtered = visibleIds.isEmpty
+        ? properties.toList()
+        : properties
+            .where((property) => visibleIds.contains(property.id))
+            .toList();
+    final order = session.defaults.propertyOrder;
+    if (order.isEmpty) return filtered;
+    final rank = <int, int>{
+      for (var index = 0; index < order.length; index++) order[index]: index,
+    };
+    filtered.sort((a, b) {
+      final aRank = rank[a.id];
+      final bRank = rank[b.id];
+      if (aRank != null && bRank != null) return aRank.compareTo(bRank);
+      if (aRank != null) return -1;
+      if (bRank != null) return 1;
+      return a.sortOrder.compareTo(b.sortOrder);
+    });
+    return filtered;
+  }
+
+  List<Widget> _bodyWidgets(ObjectDetailSession session) {
+    final blocks = session.content.body.blocks;
+    if (blocks.isEmpty) return const <Widget>[];
+    return <Widget>[
+      const SizedBox(height: 24),
+      const Divider(),
+      const SizedBox(height: 12),
+      Text(
+        'Body',
+        style: const TextStyle(fontWeight: FontWeight.w600),
+      ),
+      const SizedBox(height: 10),
+      ...blocks.map((block) {
+        if (block.type == 'paragraph') {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: SelectableText(block.text ?? ''),
+          );
+        }
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.extension_outlined),
+            title: Text(block.type),
+            subtitle: const Text('このBlockは現在のInspectorでは読み取り専用です'),
+          ),
+        );
+      }),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     final node = _node;
-    final object = _object;
-    final type = _type;
-    if (node == null || object == null || type == null) {
+    final session = _session;
+    if (node == null || session == null) {
       return Scaffold(
         appBar: AppBar(),
         body: const Center(child: Text('Objectが見つかりません')),
       );
     }
+    final content = session.content;
+    final object = content.object;
 
     return Scaffold(
       appBar: AppBar(
@@ -160,15 +236,12 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
                 ),
           ),
           const SizedBox(height: 24),
-          ...type.properties.map((property) {
-            final value = object.values[property.id];
-            if (property.config['hidden'] == true) return const SizedBox.shrink();
+          ..._visibleProperties(session).map((property) {
+            final value = content.valueFor(property);
             return ListTile(
               contentPadding: EdgeInsets.zero,
               leading: Icon(
-                property.type == ObjectPropertyType.objectRelation
-                    ? Icons.swap_horiz
-                    : Icons.tune,
+                property.isRelation ? Icons.swap_horiz : Icons.tune,
                 size: 18,
               ),
               title: Text(property.name),
@@ -180,6 +253,7 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
                   : Text(_displayValue(property, value)),
             );
           }),
+          ..._bodyWidgets(session),
           if (_backlinks.isNotEmpty) ...[
             const SizedBox(height: 24),
             const Divider(),
