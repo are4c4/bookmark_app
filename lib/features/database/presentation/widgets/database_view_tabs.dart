@@ -4,6 +4,7 @@ import '../../../../data/database_view_creation_service.dart';
 import '../../../../data/database_view_management_service.dart';
 import '../../../../data/database_view_open_mode_service.dart';
 import '../../../../data/database_view_store.dart';
+import '../../../../data/database_view_tab_overflow_policy.dart';
 import '../../../../database/database_definition.dart';
 import '../../../../domain/object_type_defaults.dart';
 
@@ -30,6 +31,8 @@ class DatabaseViewTabs extends StatefulWidget {
 }
 
 class _DatabaseViewTabsState extends State<DatabaseViewTabs> {
+  static const _overflowPolicy = DatabaseViewTabOverflowPolicy();
+
   List<DatabaseViewConfig> _views = const [];
   bool _loading = true;
 
@@ -229,6 +232,39 @@ class _DatabaseViewTabsState extends State<DatabaseViewTabs> {
     widget.onViewsChanged?.call();
   }
 
+  Future<void> _reorderVisible(
+    List<DatabaseViewConfig> visibleViews,
+    int oldIndex,
+    int newIndex,
+  ) async {
+    final reorderedVisible = [...visibleViews];
+    final moved = reorderedVisible.removeAt(oldIndex);
+    reorderedVisible.insert(newIndex, moved);
+    final visibleIds = visibleViews.map((view) => view.id).toSet();
+    final replacement = reorderedVisible.iterator;
+    final next = <DatabaseViewConfig>[];
+    for (final view in _views) {
+      if (visibleIds.contains(view.id)) {
+        replacement.moveNext();
+        next.add(replacement.current);
+      } else {
+        next.add(view);
+      }
+    }
+    setState(() => _views = next);
+    try {
+      await _management.reorder(
+        workspaceId: widget.workspaceId,
+        databaseKey: widget.definition.key,
+        orderedViewIds: next.map((view) => view.id).toList(),
+      );
+      widget.onViewsChanged?.call();
+    } catch (_) {
+      await _reload();
+      rethrow;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -246,17 +282,53 @@ class _DatabaseViewTabsState extends State<DatabaseViewTabs> {
       );
     }
 
+    final partition = _overflowPolicy.partition(
+      views: _views,
+      activeViewId: widget.activeViewId,
+    );
+    final visibleViews = partition.visible;
+
     return SizedBox(
       height: 38,
       child: ReorderableListView.builder(
         scrollDirection: Axis.horizontal,
         buildDefaultDragHandles: false,
-        itemCount: _views.length,
+        itemCount: visibleViews.length,
         footer: Padding(
           padding: const EdgeInsets.only(left: 2, right: 8),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (partition.hasOverflow)
+                PopupMenuButton<int>(
+                  key: const ValueKey('database-view-overflow-menu'),
+                  tooltip: 'その他のビュー',
+                  onSelected: (viewId) {
+                    final view = _views.singleWhere(
+                      (candidate) => candidate.id == viewId,
+                    );
+                    widget.onSelected(view);
+                  },
+                  itemBuilder: (_) => partition.overflow
+                      .map(
+                        (view) => PopupMenuItem<int>(
+                          key: ValueKey('database-view-overflow-item-${view.id}'),
+                          value: view.id,
+                          child: Text(view.name),
+                        ),
+                      )
+                      .toList(growable: false),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('その他', style: TextStyle(fontSize: 12.5)),
+                        Icon(Icons.arrow_drop_down, size: 16),
+                      ],
+                    ),
+                  ),
+                ),
               IconButton(
                 key: const ValueKey('database-view-add-button'),
                 tooltip: '現在のビューを複製',
@@ -282,25 +354,10 @@ class _DatabaseViewTabsState extends State<DatabaseViewTabs> {
             ],
           ),
         ),
-        onReorderItem: (oldIndex, newIndex) async {
-          final next = [..._views];
-          final moved = next.removeAt(oldIndex);
-          next.insert(newIndex, moved);
-          setState(() => _views = next);
-          try {
-            await _management.reorder(
-              workspaceId: widget.workspaceId,
-              databaseKey: widget.definition.key,
-              orderedViewIds: next.map((view) => view.id).toList(),
-            );
-            widget.onViewsChanged?.call();
-          } catch (_) {
-            await _reload();
-            rethrow;
-          }
-        },
+        onReorderItem: (oldIndex, newIndex) =>
+            _reorderVisible(visibleViews, oldIndex, newIndex),
         itemBuilder: (context, index) {
-          final view = _views[index];
+          final view = visibleViews[index];
           final selected = view.id == widget.activeViewId;
           return ReorderableDragStartListener(
             key: ValueKey(view.id),
