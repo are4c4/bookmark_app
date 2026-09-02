@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../data/generic_database_store.dart';
+import '../data/object_body_store.dart';
+import '../data/object_computed_value_store.dart';
+import '../data/object_detail_content_loader.dart';
 import '../data/object_graph_query_store.dart';
 import '../data/object_store.dart';
+import '../domain/object_body_plain_text.dart';
+import '../domain/object_detail_content.dart';
 import '../domain/object_model.dart';
 
 class ObjectInspectorPage extends StatefulWidget {
@@ -22,12 +27,21 @@ class ObjectInspectorPage extends StatefulWidget {
 }
 
 class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
+  static const _bodyAdapter = ObjectBodyPlainTextAdapter();
+
   ObjectGraphNodeRecord? _node;
-  AppObjectType? _type;
-  AppObject? _object;
+  ObjectDetailContent? _content;
   List<ObjectGraphBacklinkRecord> _backlinks = const [];
   Map<int, ObjectGraphNodeRecord> _relatedNodes = const {};
   bool _loading = true;
+
+  ObjectBodyStore get _bodyStore => ObjectBodyStore(widget.store);
+
+  ObjectDetailContentLoader get _contentLoader => ObjectDetailContentLoader(
+        objectStore: widget.objectStore,
+        bodyStore: _bodyStore,
+        computedStore: ObjectComputedValueStore(widget.objectStore),
+      );
 
   @override
   void initState() {
@@ -44,33 +58,31 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
       return;
     }
 
-    final type = await widget.objectStore.getObjectType(node.objectTypeId);
-    final objects = await widget.objectStore.listObjects(node.objectTypeId);
-    AppObject? object;
-    for (final candidate in objects) {
-      if (candidate.id == node.objectId) {
-        object = candidate;
-        break;
-      }
+    final content = await _contentLoader.load(
+      objectTypeId: node.objectTypeId,
+      objectId: node.objectId,
+    );
+    if (content == null) {
+      if (mounted) setState(() => _loading = false);
+      return;
     }
+
     final backlinks = await graph.backlinks(node.objectId);
     final relatedNodes = <int, ObjectGraphNodeRecord>{};
-    if (object != null && type != null) {
-      for (final property in type.properties) {
-        if (!property.isRelation) continue;
-        for (final targetId
-            in ObjectRelationValue.fromJson(object.values[property.id]).objectIds) {
-          final target = await graph.getNode(targetId);
-          if (target != null) relatedNodes[targetId] = target;
-        }
+    for (final property in content.objectType.properties) {
+      if (!property.isRelation) continue;
+      for (final targetId in ObjectRelationValue.fromJson(
+        content.object.values[property.id],
+      ).objectIds) {
+        final target = await graph.getNode(targetId);
+        if (target != null) relatedNodes[targetId] = target;
       }
     }
 
     if (!mounted) return;
     setState(() {
       _node = node;
-      _type = type;
-      _object = object;
+      _content = content;
       _backlinks = backlinks;
       _relatedNodes = relatedNodes;
       _loading = false;
@@ -87,6 +99,52 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _editBody(ObjectDetailContent content) async {
+    if (!_bodyAdapter.canEdit(content.body)) return;
+
+    final controller = TextEditingController(text: _bodyAdapter.read(content.body));
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('本文を編集'),
+        content: SizedBox(
+          width: 560,
+          child: TextField(
+            controller: controller,
+            autofocus: true,
+            minLines: 8,
+            maxLines: 18,
+            decoration: const InputDecoration(
+              hintText: '本文を書き始める…',
+              border: OutlineInputBorder(),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(controller.text),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (result == null) return;
+
+    final stamp = DateTime.now().microsecondsSinceEpoch;
+    final updated = _bodyAdapter.write(
+      document: content.body,
+      text: result,
+      blockIdForIndex: (index) => 'paragraph-${widget.objectId}-$stamp-$index',
+    );
+    await _bodyStore.write(objectId: widget.objectId, document: updated);
+    await _load();
   }
 
   String _displayValue(ObjectPropertyDefinition property, dynamic value) {
@@ -120,20 +178,69 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
     );
   }
 
+  Widget _bodySection(ObjectDetailContent content) {
+    final editable = _bodyAdapter.canEdit(content.body);
+    final paragraphs = editable ? _bodyAdapter.read(content.body) : null;
+    final hasText = paragraphs?.trim().isNotEmpty == true;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 24),
+        const Divider(),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                '本文',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+            ),
+            if (editable)
+              TextButton.icon(
+                onPressed: () => _editBody(content),
+                icon: const Icon(Icons.edit_outlined, size: 17),
+                label: Text(hasText ? '編集' : '書き始める'),
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (!editable)
+          const Text(
+            'この本文にはリッチブロックが含まれています。対応エディタが追加されるまで、内容を保護するため簡易編集は無効です。',
+          )
+        else if (!hasText)
+          Text(
+            '本文はまだありません。',
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+          )
+        else
+          SelectableText(
+            paragraphs!,
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(height: 1.6),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     final node = _node;
-    final object = _object;
-    final type = _type;
-    if (node == null || object == null || type == null) {
+    final content = _content;
+    if (node == null || content == null) {
       return Scaffold(
         appBar: AppBar(),
         body: const Center(child: Text('Objectが見つかりません')),
       );
     }
+    final object = content.object;
+    final type = content.objectType;
 
     return Scaffold(
       appBar: AppBar(
@@ -161,14 +268,16 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
           ),
           const SizedBox(height: 24),
           ...type.properties.map((property) {
-            final value = object.values[property.id];
+            final value = content.valueFor(property);
             if (property.config['hidden'] == true) return const SizedBox.shrink();
             return ListTile(
               contentPadding: EdgeInsets.zero,
               leading: Icon(
                 property.type == ObjectPropertyType.objectRelation
                     ? Icons.swap_horiz
-                    : Icons.tune,
+                    : property.isComputed
+                        ? Icons.calculate_outlined
+                        : Icons.tune,
                 size: 18,
               ),
               title: Text(property.name),
@@ -180,6 +289,7 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
                   : Text(_displayValue(property, value)),
             );
           }),
+          _bodySection(content),
           if (_backlinks.isNotEmpty) ...[
             const SizedBox(height: 24),
             const Divider(),
