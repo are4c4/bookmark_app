@@ -12,90 +12,84 @@ Own Relation and backlink lifecycle, bidirectional Relation integrity, relation 
 
 ## Current state
 
-- PR #62 is merged to `main`; bidirectional pair validation rejects broken inverse metadata.
-- PR #63 passed Flutter CI run #349 but became unmergeable after concurrent Object-lane PR #64 advanced `main`; #63 is closed as superseded.
-- Replacement PR #66 uses `feature/relation-write-integrity-v2` and contains the replayed Relation integrity work plus stable mutation/read/index/lifecycle APIs.
-- Object PR #65 subsequently advanced `main` to `93d8cf18` with Object Body/defaults persistence, Weblink, Daily Note, and detail-loader work. PR #66 remains narrow and currently reports mergeable; re-check after final CI.
-- Object-owned UI surfaces are intentionally untouched.
+- PR #66 is merged to `main` at `6770a5f1`; source/target validation, stable Relation mutation/read/index APIs, bidirectional lifecycle hardening, Relation-safe Object deletion, and Tag hierarchy cleanup are integrated.
+- Current branch: `feature/relation-integrity-audit`.
+- Current PR: #69 — `Add read-only Relation integrity audit`.
+- Latest implementation commit before this handoff update: `7f37680ff80c98ddc4abe9fb4ba41b5171da6a96`.
+- Object-owned UI surfaces remain intentionally untouched.
 
-## Checkpoints completed in the current sustained run
+## Completed integration checkpoints
 
-1. Confirmed superseded PR #63 was functionally green before conflict: Drift generation, `flutter analyze`, and full tests passed.
-2. Replayed Relation write integrity on latest Object-lane base:
-   - source Object must belong to the persisted Relation Property's ObjectType;
-   - writes use canonical persisted Property metadata;
-   - forged target/cardinality config cannot redirect Relation edges;
-   - `setRelation` rejects non-Relation Properties.
-3. Replayed Relation Property creation integrity: source/target ObjectTypes must exist and belong to the same workspace.
-4. Replayed ObjectType deletion protection: deletion is blocked while another ObjectType targets it; self-Relation ObjectTypes remain deletable atomically.
-5. Added Property-filtered backlink/outgoing edge helpers.
-6. Added `RelationMutationService` as the stable mutation facade:
-   - canonical persisted Properties;
-   - valid bidirectional inverse synchronization;
-   - fail-closed inconsistent pair metadata;
-   - pair-safe Relation Property deletion.
-7. Added unified Relation rename lifecycle:
-   - bidirectional names update together transactionally;
-   - unidirectional rename preserves target/cardinality/config;
-   - duplicate/system mutations are rejected.
-8. Added `RelationReadService` resolving edge-index entries into canonical Relation Property + neighboring Object records.
-9. Added `RelationIndexService` for idempotent ObjectType/workspace index bootstrap from legacy `generic_values`.
-10. Added Relation-safe Object deletion:
-    - validates workspace/Object ownership;
-    - rebuilds legacy indexes first;
-    - validates all incoming Relation metadata before writing;
-    - detaches deleted IDs from surviving values;
-    - preserves bidirectional inverse consistency;
-    - deletes the Object last.
-11. Hardened low-level `BidirectionalRelationStore.setRelation` itself:
-    - canonical persisted source Property;
-    - managed-pair detection from persisted metadata;
-    - valid reciprocal pair required before mutation;
-    - stale/forged metadata cannot redirect writes;
-    - broken pair metadata fails closed.
-12. Added broad regression coverage for write/create/delete/rename/read/index/bidirectional lifecycle, including legacy-unindexed data and wrong-workspace deletion.
-13. Migrated Relation-owned Tag hierarchy synchronization to the safe mutation facade:
-    - `Parent` Relation writes use `RelationMutationService`;
-    - orphan Tag Objects use Relation-safe Object deletion;
-    - deleting a legacy parent Tag no longer leaves a surviving child Object with a stale `Parent` Object id;
-    - added Tag hierarchy cleanup regression coverage.
-14. Reviewed `core_object_bridge.dart`: it still contains direct Relation writes/orphan deletion, but it is an Object-owned integration surface. No concurrent edit was made; adoption of the safe facade is handed off to Object-lane integration after #66 stabilizes.
+1. Relation writes validate source ObjectType ownership and use canonical persisted Property metadata.
+2. Relation Property creation validates source/target existence and same-workspace ownership.
+3. Target ObjectType deletion is protected while incoming Relation Properties exist.
+4. Property-filtered backlink/outgoing edge helpers are available.
+5. `RelationMutationService` provides safe set/delete/rename/Object-delete lifecycle behavior.
+6. `RelationReadService` resolves indexed edges into canonical Property/Object neighbors.
+7. `RelationIndexService` rebuilds Relation indexes from legacy persisted values.
+8. `BidirectionalRelationStore.setRelation` canonicalizes persisted pair metadata and fails closed on broken pairs.
+9. Tag hierarchy synchronization uses Relation-safe mutation/deletion paths.
+10. PR #66 latest head passed dependency install, Drift generation, `flutter analyze`, and the full test suite before merge.
 
-## Branch / PR
+## Current sustained-run checkpoints — PR #69
 
-- Branch: `feature/relation-write-integrity-v2`
-- PR #66 — `Harden Relation lifecycle and stable APIs`
-- Latest Relation implementation checkpoint before final documentation updates: `e58f8d77bce0a0692e04b990a29fea0d50305f60`
-- Always inspect the actual #66 head before resuming because handoff/documentation commits follow implementation commits.
+1. Added `RelationIntegrityService` as a read-only workspace audit API.
+2. Audit detects:
+   - missing target ObjectType metadata;
+   - cross-workspace target ObjectTypes;
+   - persisted references to missing target Objects;
+   - single-Relation cardinality violations in legacy/corrupt values;
+   - missing normalized edge-index entries;
+   - stale normalized edge-index entries;
+   - invalid bidirectional pair metadata;
+   - bidirectional inverse-value mismatches.
+3. Bidirectional consistency audit is symmetric: it catches both source-without-inverse and inverse-only stale references.
+4. Audit caches Object lists per ObjectType and outgoing edge lists per Object during one workspace scan to avoid repeated Relation-index reads for multiple Properties.
+5. Audit is deliberately non-destructive. Repair remains an explicit separate action through existing index/lifecycle APIs.
+6. Added focused regression coverage for:
+   - healthy Relations;
+   - missing normalized edges without mutating stored values;
+   - stale normalized edges;
+   - missing target Objects;
+   - single-Relation cardinality violations;
+   - broken bidirectional pair metadata;
+   - forward inverse-value mismatch;
+   - inverse-only bidirectional mismatch;
+   - cross-workspace target metadata.
+7. PR #69 is open; latest-head Flutter CI must pass before merge.
 
 ## Validation
 
-- Superseded PR #63 head `b6cb3888c942cb3bdab2c5e921784ac5ed2cea67` passed Flutter CI run #349 completely.
-- PR #66 runs fresh Flutter CI on each latest head; intermediate runs are expected to be cancelled by workflow concurrency during this sustained run.
-- Final integration requirement: latest #66 head must pass dependency install, Drift generation, `flutter analyze`, and full tests.
-- Local Flutter execution is unavailable in this connector-only session, so GitHub Actions is the executable validation source.
+- PR #66 final latest-head Flutter CI passed Drift generation, `flutter analyze`, and full tests before merge.
+- PR #69 runs fresh Flutter CI on each latest head. Intermediate runs may be superseded as this sustained run adds checkpoints.
+- Local Flutter execution is unavailable in this connector-only session; GitHub Actions is the executable validation source.
 
-## Next priorities
+## Work in progress
 
-1. Inspect the final PR #66 latest-head Flutter CI and fix only Relation-caused failures.
-2. If green and still conflict-free against current `main` (`93d8cf18` or newer), merge #66. If Object lane advances into a real conflict, replay narrow Relation-owned changes rather than force merging shared files.
-3. After #66 integration, coordinate Object-lane adoption of `RelationMutationService` / `RelationReadService` in `GenericDatabasePage`, `core_object_bridge.dart`, shared Object detail, promotion execution, and Daily Note composition.
-4. Continue Tag hierarchy behavior only through general Relation APIs; no special Relation persistence silo.
-5. Add orphan/stale-edge diagnostics only if actual repair needs appear after index bootstrap is used in practice.
+- Code for the current audit slice is intentionally frozen after `7f37680f` so one final CI can validate the complete branch state.
+- If final CI exposes a Relation-caused analyzer/test failure, fix that failure and rerun latest-head CI before merge.
+
+## Exact next actions
+
+1. Validate PR #69 latest-head CI: dependency install, Drift generation, `flutter analyze`, and full tests.
+2. Re-check latest `main` and PR mergeability after CI.
+3. Merge #69 when green and conflict-free; replay only narrow Relation-owned changes if concurrent Object work creates a real conflict.
+4. After #69 integration, keep audit and repair separate. A future repair planner may only automate deterministic index reconstruction; do not silently choose between conflicting user Relation values.
+5. Coordinate Object-lane adoption of `RelationMutationService` / `RelationReadService` in `GenericDatabasePage`, `core_object_bridge.dart`, shared Object detail, promotion execution, and Daily Note composition rather than editing those surfaces concurrently here.
+6. Continue Tag hierarchy behavior only through general Relation APIs; no special Relation persistence silo.
 
 ## Cross-lane boundary
 
 - ObjectType defaults, Value semantics, Body/block persistence, Object detail containers, Daily Note creation, Value-to-Object promotion UX, `GenericDatabasePage`, and `core_object_bridge.dart` integration belong to `docs/AI_PROGRESS_OBJECT.md`.
-- `lib/data/object_store.dart` is shared infrastructure; Relation changes there must stay narrow and be refreshed from latest main before integration.
-- `relation_queries.dart`, `relation_read_service.dart`, `relation_mutation_service.dart`, and `relation_index_service.dart` are additive Relation APIs intended for Object-lane consumption.
+- `lib/data/object_store.dart` is shared infrastructure; Relation changes there must stay narrow and refresh from latest main before integration.
+- `relation_queries.dart`, `relation_read_service.dart`, `relation_mutation_service.dart`, `relation_index_service.dart`, and `relation_integrity_service.dart` are additive Relation APIs intended for Object-lane consumption.
 
 ## Known risks / blockers
 
-- Concurrent Object work can advance main during Relation CI; #63 already demonstrated this. Prefer narrow replay/rebase over force merging.
-- `ObjectStore.deleteObject` remains deliberately low-level; relation-aware callers should use `RelationMutationService.deleteObject`.
-- `ObjectStore.deleteProperty` remains a generic low-level schema operation; relation-aware callers should use `RelationMutationService.deleteRelationProperty`.
-- No destructive schema migration or unresolved product-design decision is required for current Relation work.
+- Concurrent Object work can advance main during Relation CI; prefer narrow replay/rebase over force merging.
+- `ObjectStore.deleteObject` and `ObjectStore.deleteProperty` remain deliberately low-level generic operations. Relation-aware callers should use `RelationMutationService`.
+- Integrity audit must remain read-only; automatic repair of ambiguous user data would be a destructive policy decision and is outside routine Relation-lane changes.
 
 ## Stop condition
 
-No product blocker is active. The immediate integration boundary is final latest-head CI plus conflict check for PR #66; after merge, the next direct consumer changes are predominantly Object-owned and must be sequenced through the Object lane rather than edited concurrently here.
+No product blocker is active. Continue through PR #69 validation/integration. Stop before ambiguous/destructive automatic repair or broad Object-owned UI integration, or if an unavoidable cross-lane conflict requires sequencing.
