@@ -14,76 +14,73 @@ https://github.com/are4c4/bookmark_app/issues/56
 
 ## Development lanes
 
-The implementation is split into two concurrent-capable lanes matching the current implementation chats:
-
 1. **Object lane** — `docs/AI_PROGRESS_OBJECT.md`
    - Object/ObjectType/Property architecture
-   - Object-centric Database/View integration
    - reusable Object types
    - Object detail content and Body/block model
    - Daily Notes and Value-to-Object promotion
 
 2. **Relation lane** — `docs/AI_PROGRESS_RELATION.md`
    - Relation/backlink lifecycle
-   - bidirectional Relation integrity
-   - relation write validation and source/target constraints
-   - rename/delete propagation and stale metadata handling
-   - Relation APIs and Tag hierarchy expressed through Relations
+   - bidirectional integrity
+   - relation write validation and read/mutation/index APIs
+   - rename/delete propagation and Tag hierarchy expressed through Relations
 
-`docs/AI_PROGRESS_OBJECT_RELATION.md` is retained only as legacy combined context. New runs should write to the dedicated Object or Relation handoff file.
-
-Each implementation chat/run must pick one primary lane and update its matching progress file unless repository-wide integration state changes.
+`docs/AI_PROGRESS_OBJECT_RELATION.md` is legacy combined context only.
 
 ## Sustained-run policy
 
-Implementation runs should not stop after the first small PR/commit/checkpoint when Issue #56 still contains safe work for that lane. After each coherent slice, commit/push, record the checkpoint, then continue with the next non-conflicting slice.
-
-Pending/queued CI by itself is not a blocker. While CI is pending, continue with work that does not depend on the result. Stop only for a genuine design/risk/cross-lane blocker, external infrastructure with no independent work remaining, or an actual runtime/tool/session limit.
+Implementation runs should continue across multiple safe checkpoints. Pending CI alone is not a blocker; stop only for a genuine design/risk/cross-lane/external validation boundary or runtime limit.
 
 ## Latest relevant state
 
-- `main` includes the persistent AI handoff workflow and sustained multi-slice execution rules.
-- PR #61 is merged; Value / Object Relation / Computed property semantics are now on `main` (`b4b3845`).
-- Object lane is continuing on `feature/object-promotion-contracts` with reversible Value-to-Object planning, versioned Body blocks, and ObjectType defaults contracts.
-- PR #62 is the current Relation-lane slice for bidirectional Relation pair integrity.
-- Existing generic foundations include Object query/filter/sort, grouping, Board view, Board drag/drop persistence, Formula/Rollup, bidirectional Relations, ObjectType templates, and ObjectType management.
-- Issue #56 remains the shared product/design implementation contract.
+- PR #61 merged: explicit Value / Object Relation / Computed Property semantics.
+- PR #62 merged: bidirectional Relation pair integrity hardening.
+- PR #64 merged: reversible Value-to-Object planning, versioned Body model, ObjectType defaults contract, and shared Object detail content.
+- PR #65 merged at `93d8cf1` after Flutter CI #372 passed: Object Body/default persistence, reusable Weblink Object, Daily Note open-or-create, shared detail loading, Weblink reuse, and safe paragraph Body adapter are now on `main`.
+- Object PR #67 is open for shared Object detail editing, Daily Note detail bridging, persisted ObjectType default resolution, and Object detail sessions.
+- Relation PR #66 is open for broader Relation lifecycle plus stable read/mutation/index facades. It was based before #65 advanced `main` and must be refreshed/replayed by the Relation lane before integration.
+- Existing Database/View foundations include shared Object query/filter/sort/group projection, Gallery/List/Table/Board, Board drag/drop, Formula/Rollup, and generic database integration.
 
 ## Repository-wide design contract
 
-- Object is global and unique; Databases collect/show Objects rather than own duplicate records.
+- Object is global and unique; Databases collect/show Objects rather than own duplicates.
 - Database = which Objects; View = how to see them.
 - ObjectType = schema + defaults.
 - Effective defaults resolve as `View override > Database override > ObjectType default > app default`.
-- Object content = structured Properties + free Body designed for blocks.
-- Property semantics distinguish Value, Object Relation, and computed properties.
-- Tags are Objects; Select/MultiSelect remain for local option sets.
-- Date is a Value; Daily Note is an Object keyed by a unique date.
-- Object detail presentation should support side peek, center peek, and full page with shared content.
+- Object content = structured Properties + versioned free Body blocks.
+- Property semantics distinguish Value, Object Relation, and Computed.
+- Tags are Objects; Select/MultiSelect remain local option sets.
+- Date is a Value; Daily Note is a normal Object keyed uniquely by local date.
+- Object detail should reuse one content/editing core across side peek, center peek, and full page.
 
 ## Integration policy
 
 - Keep `main` releasable.
-- Use focused lane-specific branches/PRs/checkpoints.
+- Use focused lane-specific branches/PRs.
 - Avoid both lanes concurrently owning broad refactors of the same core file.
-- If a change crosses lanes, document the dependency and sequence overlapping work where practical.
-- Rebase/refresh from latest `main` before merging overlapping foundation changes.
-- Preserve existing bookmark data and behavior; no destructive migrations without explicit approval.
+- Replay/rebase narrow work on latest `main` instead of force-merging stale shared handoff conflicts.
+- Preserve existing bookmark/tag data; no destructive migration without explicit approval.
 
 ## Next repository-wide actions
 
-- Object lane resumes from `docs/AI_PROGRESS_OBJECT.md` and should continue through multiple safe slices per run.
-- Relation lane resumes from `docs/AI_PROGRESS_RELATION.md` and should continue through multiple safe slices per run.
-- Planning/design chat continues to refine Issue #56 when material product decisions are made.
-- Integrate validated lane PRs into `main` in reviewable increments without treating each PR creation as the end of a chat run.
+- Validate and integrate Object PR #67 when its latest-head CI is green.
+- Relation lane refreshes #66 onto latest `main`, validates it, and lands stable Relation mutation/read/index APIs.
+- After both are stable, Object lane can implement Value-to-Object Relation execution by consuming the Relation facade rather than duplicating lifecycle rules.
+- Database/View integration may then consume Object detail sessions/open defaults in narrow UI slices.
 
 ## Validation
 
-Feature runs must record exact Flutter analyze/test results in their lane progress files. PR #61's functional head passed Flutter CI #328 before merge.
+- PR #61 functional head passed Flutter CI before merge.
+- PR #62 passed Flutter CI before merge.
+- PR #64 passed Flutter CI #346 before merge.
+- PR #65 latest head passed Flutter CI #372 before merge.
+- PR #67 requires fresh latest-head CI.
+- Relation #66 intermediate CI runs may be cancelled while its branch changes; only latest-head green CI should gate merge.
 
 ## Known risks
 
-- Parallel work is useful only when file ownership is reasonably separate; otherwise sequence the slices.
-- GitHub Actions usage limits may affect CI availability; pending CI alone should not stop independent work.
-- Block-editor and migration work can expand quickly; keep individual commits reviewable while allowing several checkpoints per run.
-- Promotion execution and Tag hierarchy work depend on stable Relation APIs; sequence those with the Relation lane rather than duplicating lifecycle logic.
+- Parallel Object/Relation work can make stale branches unmergeable even when code changes do not overlap; refresh from latest `main` before integration.
+- Promotion execution depends on stable Relation mutation APIs.
+- Direct Object detail UI integration may overlap Database/View presentation ownership; keep the first surface narrow.
+- Block editing should preserve unknown future blocks and avoid flattening richer content.
