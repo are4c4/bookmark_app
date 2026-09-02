@@ -62,9 +62,10 @@ class ObjectValuePromotionExecutionService {
       );
     }
 
-    final canonicalSourceProperty = sourceType.properties
-        .where((property) => property.id == plan.sourceProperty.id)
-        .firstOrNull;
+    final canonicalSourceProperty = _propertyById(
+      sourceType.properties,
+      plan.sourceProperty.id,
+    );
     if (canonicalSourceProperty == null || !canonicalSourceProperty.isValue) {
       throw ArgumentError.value(
         plan.sourceProperty.id,
@@ -73,9 +74,7 @@ class ObjectValuePromotionExecutionService {
       );
     }
 
-    final sourceObject = (await objectStore.listObjects(sourceType.id))
-        .where((object) => object.id == sourceObjectId)
-        .firstOrNull;
+    final sourceObject = await _objectById(sourceType.id, sourceObjectId);
     if (sourceObject == null) {
       throw ArgumentError.value(
         sourceObjectId,
@@ -100,17 +99,17 @@ class ObjectValuePromotionExecutionService {
         title: plan.targetObjectTitle,
       );
       createdTargetObject = true;
-      targetObject = (await objectStore.listObjects(targetType.id))
-          .singleWhere((object) => object.id == id);
+      targetObject = (await _objectById(targetType.id, id))!;
     } else {
-      targetObject = (await objectStore.listObjects(targetType.id))
-          .where((object) => object.id == targetObjectId)
-          .firstOrNull as AppObject? ??
-          (throw ArgumentError.value(
-            targetObjectId,
-            'targetObjectId',
-            'Promotion target Object does not belong to the target ObjectType.',
-          ));
+      final existingTarget = await _objectById(targetType.id, targetObjectId);
+      if (existingTarget == null) {
+        throw ArgumentError.value(
+          targetObjectId,
+          'targetObjectId',
+          'Promotion target Object does not belong to the target ObjectType.',
+        );
+      }
+      targetObject = existingTarget;
     }
 
     var createdRelationProperty = false;
@@ -138,8 +137,7 @@ class ObjectValuePromotionExecutionService {
         );
         createdRelationProperty = true;
         final refreshedSourceType = await objectStore.getObjectType(sourceType.id);
-        relation = refreshedSourceType!.properties
-            .singleWhere((property) => property.id == relationId);
+        relation = _propertyById(refreshedSourceType!.properties, relationId)!;
       } else {
         _validateSuppliedRelation(
           relation,
@@ -148,16 +146,16 @@ class ObjectValuePromotionExecutionService {
         );
       }
 
-      final refreshedSource = (await objectStore.listObjects(sourceType.id))
-          .singleWhere((object) => object.id == sourceObjectId);
+      final linkedRelation = relation;
+      final refreshedSource = (await _objectById(sourceType.id, sourceObjectId))!;
       final currentIds = ObjectRelationValue.fromJson(
-        refreshedSource.values[relation.id],
+        refreshedSource.values[linkedRelation.id],
       ).objectIds;
       final nextIds = <int>[...currentIds];
       if (!nextIds.contains(targetObject.id)) nextIds.add(targetObject.id);
       await relationMutations.setRelation(
         objectId: sourceObjectId,
-        property: relation,
+        property: linkedRelation,
         targetObjectIds: nextIds,
       );
     } catch (_) {
@@ -170,6 +168,7 @@ class ObjectValuePromotionExecutionService {
       rethrow;
     }
 
+    final linkedRelation = relation!;
     var sourceValueCleared = false;
     if (plan.sourceDisposition ==
         ObjectValuePromotionSourceDisposition.clearAfterLink) {
@@ -183,11 +182,28 @@ class ObjectValuePromotionExecutionService {
 
     return ObjectValuePromotionExecutionResult(
       targetObject: targetObject,
-      relationProperty: relation,
+      relationProperty: linkedRelation,
       createdTargetObject: createdTargetObject,
       createdRelationProperty: createdRelationProperty,
       sourceValueCleared: sourceValueCleared,
     );
+  }
+
+  Future<AppObject?> _objectById(int objectTypeId, int objectId) async {
+    for (final object in await objectStore.listObjects(objectTypeId)) {
+      if (object.id == objectId) return object;
+    }
+    return null;
+  }
+
+  ObjectPropertyDefinition? _propertyById(
+    List<ObjectPropertyDefinition> properties,
+    int propertyId,
+  ) {
+    for (final property in properties) {
+      if (property.id == propertyId) return property;
+    }
+    return null;
   }
 
   ObjectPropertyDefinition? _matchingRelation(
