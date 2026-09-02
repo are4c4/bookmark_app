@@ -13,7 +13,7 @@ class DailyNoteNavigationService {
   Future<AppObject> openToday({required int workspaceId, DateTime? now}) {
     return dailyNotes.openOrCreate(
       workspaceId: workspaceId,
-      date: (now ?? DateTime.now()).toLocal(),
+      date: _calendarDate(now ?? DateTime.now()),
     );
   }
 
@@ -23,7 +23,7 @@ class DailyNoteNavigationService {
   }) {
     return dailyNotes.openOrCreate(
       workspaceId: workspaceId,
-      date: _calendarDate(currentDate).subtract(const Duration(days: 1)),
+      date: _offsetCalendarDate(currentDate, -1),
     );
   }
 
@@ -33,12 +33,17 @@ class DailyNoteNavigationService {
   }) {
     return dailyNotes.openOrCreate(
       workspaceId: workspaceId,
-      date: _calendarDate(currentDate).add(const Duration(days: 1)),
+      date: _offsetCalendarDate(currentDate, 1),
     );
   }
 
   DateTime _calendarDate(DateTime value) {
     final local = value.toLocal();
     return DateTime(local.year, local.month, local.day);
+  }
+
+  DateTime _offsetCalendarDate(DateTime value, int dayOffset) {
+    final local = value.toLocal();
+    return DateTime(local.year, local.month, local.day + dayOffset);
   }
 }
