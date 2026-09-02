@@ -134,7 +134,49 @@ class GenericDatabaseStore {
     }
   }
 
+  Future<bool> _hasSystemObjectRegistry() async {
+    await ensureSchema();
+    final row = await database.customSelect(
+      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'system_object_types' LIMIT 1",
+    ).getSingleOrNull();
+    return row != null;
+  }
+
+  GenericDatabaseDefinitionRecord _mapDatabase(QueryRow row) =>
+      GenericDatabaseDefinitionRecord(
+        id: row.read<int>('id'),
+        workspaceId: row.read<int>('workspace_id'),
+        name: row.read<String>('name'),
+        icon: row.read<String>('icon'),
+        sortOrder: row.read<int>('sort_order'),
+      );
+
+  /// User-created databases only. System ObjectTypes are intentionally hidden
+  /// from the normal DATABASES section in the sidebar.
   Future<List<GenericDatabaseDefinitionRecord>> listDatabases(int workspaceId) async {
+    await ensureSchema();
+    final hasSystemRegistry = await _hasSystemObjectRegistry();
+    final rows = await database.customSelect(
+      hasSystemRegistry
+          ? '''SELECT d.id, d.workspace_id, d.name, d.icon, d.sort_order
+               FROM generic_databases d
+               WHERE d.workspace_id = ?
+                 AND NOT EXISTS (
+                   SELECT 1 FROM system_object_types s
+                   WHERE s.object_type_id = d.id
+                 )
+               ORDER BY d.sort_order, d.id'''
+          : '''SELECT id, workspace_id, name, icon, sort_order
+               FROM generic_databases
+               WHERE workspace_id = ?
+               ORDER BY sort_order, id''',
+      variables: [Variable<int>(workspaceId)],
+    ).get();
+    return rows.map(_mapDatabase).toList();
+  }
+
+  /// All storage-backed ObjectTypes, including built-in system types.
+  Future<List<GenericDatabaseDefinitionRecord>> listAllDatabases(int workspaceId) async {
     await ensureSchema();
     final rows = await database.customSelect(
       '''SELECT id, workspace_id, name, icon, sort_order
@@ -143,17 +185,7 @@ class GenericDatabaseStore {
          ORDER BY sort_order, id''',
       variables: [Variable<int>(workspaceId)],
     ).get();
-    return rows
-        .map(
-          (row) => GenericDatabaseDefinitionRecord(
-            id: row.read<int>('id'),
-            workspaceId: row.read<int>('workspace_id'),
-            name: row.read<String>('name'),
-            icon: row.read<String>('icon'),
-            sortOrder: row.read<int>('sort_order'),
-          ),
-        )
-        .toList();
+    return rows.map(_mapDatabase).toList();
   }
 
   Future<GenericDatabaseDefinitionRecord?> getDatabase(int id) async {
@@ -163,14 +195,7 @@ class GenericDatabaseStore {
          FROM generic_databases WHERE id = ? LIMIT 1''',
       variables: [Variable<int>(id)],
     ).getSingleOrNull();
-    if (row == null) return null;
-    return GenericDatabaseDefinitionRecord(
-      id: row.read<int>('id'),
-      workspaceId: row.read<int>('workspace_id'),
-      name: row.read<String>('name'),
-      icon: row.read<String>('icon'),
-      sortOrder: row.read<int>('sort_order'),
-    );
+    return row == null ? null : _mapDatabase(row);
   }
 
   Future<int> createDatabase({
@@ -179,7 +204,7 @@ class GenericDatabaseStore {
     String icon = '🗃️',
   }) async {
     await ensureSchema();
-    final existing = await listDatabases(workspaceId);
+    final existing = await listAllDatabases(workspaceId);
     final order = existing.isEmpty
         ? 0
         : existing.map((item) => item.sortOrder).reduce((a, b) => a > b ? a : b) + 1;

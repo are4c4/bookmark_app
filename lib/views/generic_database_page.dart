@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import '../data/bookmark_repository.dart';
 import '../data/database_view_store.dart';
 import '../data/generic_database_store.dart';
+import '../data/object_store.dart';
 import '../database/database_definition.dart';
+import '../domain/object_model.dart';
 import '../features/database/presentation/database_property_presenter.dart';
 import '../widgets/database_create_tiles.dart';
 import '../widgets/database_view_tabs.dart';
@@ -28,10 +30,13 @@ class GenericDatabasePage extends StatefulWidget {
 
 class _GenericDatabasePageState extends State<GenericDatabasePage> {
   late final GenericDatabaseStore _store;
+  late final ObjectStore _objectStore;
   late final DatabaseViewStore _viewStore;
   GenericDatabaseDefinitionRecord? _database;
   List<GenericPropertyRecord> _properties = const [];
   List<GenericRecord> _records = const [];
+  List<GenericDatabaseDefinitionRecord> _objectTypes = const [];
+  Map<int, List<GenericRecord>> _recordsByType = const {};
   DatabaseViewConfig? _activeView;
   int? _selectedRecordId;
   String _query = '';
@@ -46,12 +51,14 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     'date': '日付',
     'url': 'URL',
     'rating': '評価',
+    'relation': 'リレーション',
   };
 
   @override
   void initState() {
     super.initState();
     _store = GenericDatabaseStore(widget.repository.workspaceStore.database);
+    _objectStore = ObjectStore(_store);
     _viewStore = DatabaseViewStore(widget.repository.workspaceStore.database);
     _reload();
   }
@@ -72,11 +79,20 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     final database = await _store.getDatabase(widget.databaseId);
     final properties = await _store.listProperties(widget.databaseId);
     final records = await _store.listRecords(widget.databaseId);
+    final objectTypes = await _store.listAllDatabases(widget.repository.workspaceId);
+    final recordsByType = <int, List<GenericRecord>>{};
+    for (final objectType in objectTypes) {
+      recordsByType[objectType.id] = objectType.id == widget.databaseId
+          ? records
+          : await _store.listRecords(objectType.id);
+    }
     if (!mounted) return;
     setState(() {
       _database = database;
       _properties = properties;
       _records = records;
+      _objectTypes = objectTypes;
+      _recordsByType = recordsByType;
       _loading = false;
     });
   }
@@ -118,8 +134,28 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
         'date' => Icons.calendar_today_outlined,
         'url' => Icons.link,
         'rating' => Icons.star_outline,
+        'relation' => Icons.swap_horiz,
         _ => Icons.text_fields,
       };
+
+  int? _targetTypeId(GenericPropertyRecord property) {
+    final value = property.config['targetObjectTypeId'];
+    return value is int ? value : int.tryParse('$value');
+  }
+
+  List<int> _relationIds(dynamic value) => ObjectRelationValue.fromJson(value).objectIds;
+
+  String _relationDisplay(GenericPropertyRecord property, dynamic value) {
+    final targetTypeId = _targetTypeId(property);
+    if (targetTypeId == null) return '';
+    final ids = _relationIds(value).toSet();
+    if (ids.isEmpty) return '';
+    final records = _recordsByType[targetTypeId] ?? const <GenericRecord>[];
+    return records
+        .where((record) => ids.contains(record.id))
+        .map((record) => record.title)
+        .join(', ');
+  }
 
   List<GenericPropertyRecord> get _orderedVisibleProperties {
     final order = _activeView?.propertyOrder ?? const <String>[];
@@ -177,6 +213,8 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     var name = '';
     var type = 'text';
     var optionsText = '';
+    int? targetObjectTypeId;
+    var multipleRelations = true;
     final ok = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
@@ -199,7 +237,10 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                   items: _propertyTypes.entries
                       .map((entry) => DropdownMenuItem(value: entry.key, child: Text(entry.value)))
                       .toList(),
-                  onChanged: (value) => setLocalState(() => type = value ?? 'text'),
+                  onChanged: (value) => setLocalState(() {
+                    type = value ?? 'text';
+                    if (type != 'relation') targetObjectTypeId = null;
+                  }),
                 ),
                 if (type == 'select' || type == 'multiSelect') ...[
                   const SizedBox(height: 12),
@@ -211,12 +252,39 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                     onChanged: (value) => optionsText = value,
                   ),
                 ],
+                if (type == 'relation') ...[
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int>(
+                    initialValue: targetObjectTypeId,
+                    decoration: const InputDecoration(labelText: '関連先のObject Type'),
+                    items: _objectTypes
+                        .map(
+                          (objectType) => DropdownMenuItem(
+                            value: objectType.id,
+                            child: Text('${objectType.icon} ${objectType.name}'),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) => setLocalState(() => targetObjectTypeId = value),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('複数のObjectを選択可能'),
+                    value: multipleRelations,
+                    onChanged: (value) => setLocalState(() => multipleRelations = value),
+                  ),
+                ],
               ],
             ),
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('キャンセル')),
-            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('追加')),
+            FilledButton(
+              onPressed: type == 'relation' && targetObjectTypeId == null
+                  ? null
+                  : () => Navigator.pop(dialogContext, true),
+              child: const Text('追加'),
+            ),
           ],
         ),
       ),
@@ -227,12 +295,21 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
         .map((value) => value.trim())
         .where((value) => value.isNotEmpty)
         .toList();
-    await _store.createProperty(
-      databaseId: widget.databaseId,
-      name: name,
-      type: type,
-      config: options.isEmpty ? const {} : {'options': options},
-    );
+    if (type == 'relation') {
+      await _objectStore.createRelationProperty(
+        objectTypeId: widget.databaseId,
+        name: name.trim(),
+        targetObjectTypeId: targetObjectTypeId!,
+        multiple: multipleRelations,
+      );
+    } else {
+      await _store.createProperty(
+        databaseId: widget.databaseId,
+        name: name,
+        type: type,
+        config: options.isEmpty ? const {} : {'options': options},
+      );
+    }
     await _reload();
     final active = _activeView;
     if (active != null) {
@@ -265,8 +342,10 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     }).toList();
   }
 
-  String _displayValue(GenericPropertyRecord property, dynamic value) =>
-      formatDatabasePropertyValue(_databasePropertyType(property.type), value);
+  String _displayValue(GenericPropertyRecord property, dynamic value) {
+    if (property.type == 'relation') return _relationDisplay(property, value);
+    return formatDatabasePropertyValue(_databasePropertyType(property.type), value);
+  }
 
   Widget _gallery(List<GenericRecord> records) => GridView.builder(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
@@ -394,8 +473,104 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     );
   }
 
+  Future<void> _editRelation(
+    GenericRecord record,
+    GenericPropertyRecord property,
+  ) async {
+    final targetTypeId = _targetTypeId(property);
+    if (targetTypeId == null) return;
+    final candidates = _recordsByType[targetTypeId] ?? await _store.listRecords(targetTypeId);
+    final multiple = property.config['multiple'] == true;
+    final selectedIds = _relationIds(record.values[property.id]).toSet();
+    var query = '';
+    final result = await showDialog<Set<int>>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setLocalState) {
+          final normalized = query.trim().toLowerCase();
+          final visible = candidates
+              .where((candidate) =>
+                  normalized.isEmpty || candidate.title.toLowerCase().contains(normalized))
+              .toList();
+          return AlertDialog(
+            title: Text(property.name),
+            content: SizedBox(
+              width: 480,
+              height: 520,
+              child: Column(
+                children: [
+                  TextField(
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.search),
+                      hintText: 'Objectを検索',
+                    ),
+                    onChanged: (value) => setLocalState(() => query = value),
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: visible.length,
+                      itemBuilder: (context, index) {
+                        final candidate = visible[index];
+                        final selected = selectedIds.contains(candidate.id);
+                        return CheckboxListTile(
+                          value: selected,
+                          title: Text(candidate.title),
+                          secondary: const Icon(Icons.description_outlined, size: 18),
+                          onChanged: (_) => setLocalState(() {
+                            if (selected) {
+                              selectedIds.remove(candidate.id);
+                            } else {
+                              if (!multiple) selectedIds.clear();
+                              selectedIds.add(candidate.id);
+                            }
+                          }),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('キャンセル'),
+              ),
+              TextButton(
+                onPressed: () => setLocalState(selectedIds.clear),
+                child: const Text('クリア'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, selectedIds),
+                child: const Text('保存'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    if (result == null) return;
+    final objectType = await _objectStore.getObjectType(widget.databaseId);
+    if (objectType == null) return;
+    final objectProperty = objectType.properties.firstWhere(
+      (candidate) => candidate.id == property.id,
+    );
+    await _objectStore.setRelation(
+      objectId: record.id,
+      property: objectProperty,
+      targetObjectIds: result.toList(growable: false),
+    );
+    await _reload();
+  }
+
   Future<void> _editValue(GenericRecord record, GenericPropertyRecord property) async {
     final current = record.values[property.id];
+    if (property.type == 'relation') {
+      await _editRelation(record, property);
+      return;
+    }
     if (property.type == 'checkbox') {
       await _store.setValue(recordId: record.id, propertyId: property.id, value: current != true);
       await _reload();
@@ -445,6 +620,79 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     }
     await _store.setValue(recordId: record.id, propertyId: property.id, value: parsed);
     await _reload();
+  }
+
+  Future<List<_BacklinkItem>> _loadBacklinks(int objectId) async {
+    final edges = await _objectStore.backlinks(objectId);
+    if (edges.isEmpty) return const [];
+    final objectTypes = await _objectStore.listObjectTypes(widget.repository.workspaceId);
+    final sourceIds = edges.map((edge) => edge.sourceObjectId).toSet();
+    final sources = <int, AppObject>{};
+    final properties = <int, ObjectPropertyDefinition>{};
+    for (final type in objectTypes) {
+      for (final property in type.properties) {
+        properties[property.id] = property;
+      }
+      final objects = await _objectStore.listObjects(type.id);
+      for (final object in objects) {
+        if (sourceIds.contains(object.id)) sources[object.id] = object;
+      }
+    }
+    return edges
+        .map(
+          (edge) => _BacklinkItem(
+            source: sources[edge.sourceObjectId],
+            property: properties[edge.propertyId],
+          ),
+        )
+        .where((item) => item.source != null)
+        .toList(growable: false);
+  }
+
+  Widget _backlinks(GenericRecord record) {
+    final scheme = Theme.of(context).colorScheme;
+    return FutureBuilder<List<_BacklinkItem>>(
+      key: ValueKey('backlinks:${record.id}:${record.updatedAt}'),
+      future: _loadBacklinks(record.id),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: LinearProgressIndicator(),
+          );
+        }
+        final items = snapshot.data ?? const <_BacklinkItem>[];
+        if (items.isEmpty) return const SizedBox.shrink();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: 20),
+            Divider(height: 1, color: scheme.outlineVariant),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Icon(Icons.link, size: 16, color: scheme.onSurfaceVariant),
+                const SizedBox(width: 7),
+                Text(
+                  'Backlinks  ${items.length}',
+                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+            const SizedBox(height: 7),
+            ...items.map(
+              (item) => ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.description_outlined, size: 17),
+                title: Text(item.source!.title),
+                subtitle: item.property == null ? null : Text(item.property!.name),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Widget _detail(GenericRecord record) {
@@ -550,6 +798,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                   icon: const Icon(Icons.add, size: 16),
                   label: const Text('プロパティを追加'),
                 ),
+                _backlinks(record),
               ],
             ),
           ),
@@ -663,4 +912,14 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
       ),
     );
   }
+}
+
+class _BacklinkItem {
+  const _BacklinkItem({
+    required this.source,
+    required this.property,
+  });
+
+  final AppObject? source;
+  final ObjectPropertyDefinition? property;
 }
