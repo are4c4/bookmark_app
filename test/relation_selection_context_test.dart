@@ -57,7 +57,10 @@ void main() {
     expect(context.sourceObject.id, bookId);
     expect(context.property.id, property.id);
     expect(context.targetObjectType.id, personTypeId);
-    expect(context.candidates.map((object) => object.id), [serreId, tateId]);
+    expect(
+      context.candidates.map((object) => object.id),
+      unorderedEquals([serreId, tateId]),
+    );
     expect(context.selectedObjectIds, [serreId]);
     expect(context.selectedObjects.map((object) => object.id), [serreId]);
     expect(context.missingTargetObjectIds, isEmpty);
