@@ -3,11 +3,13 @@ import 'package:flutter/services.dart';
 
 import '../data/bookmark_repository.dart';
 import '../data/generic_database_store.dart';
+import '../data/object_type_template_store.dart';
 import '../data/workspace_store.dart';
 import '../services/bookmark_transfer_service.dart';
 import '../services/profile_manager.dart';
 import '../services/profile_backup_service.dart';
 import '../ui/ui_tokens.dart';
+import '../widgets/object_type_template_picker.dart';
 import 'bookmark_lifecycle_page.dart';
 import 'bookmark_unified_stage1_page.dart';
 import 'collection_management_page.dart';
@@ -121,20 +123,52 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
   }
 
   Future<void> _createGenericDatabase() async {
-    final name = await _askName('データベースを追加', hint: '例: 書籍');
-    if (name?.isNotEmpty != true) return;
+    final choice = await showObjectTypeTemplatePicker(context);
+    if (!mounted || choice == null) return;
+
     final store = GenericDatabaseStore(widget.repository.workspaceStore.database);
-    final id = await store.createDatabase(
-      workspaceId: widget.repository.workspaceId,
-      name: name!,
-    );
-    await _reloadGenericDatabases();
-    if (!mounted) return;
-    setState(() {
-      _selectedGenericDatabaseId = id;
-      _index = 11;
-      _pageCache.remove(11);
-    });
+    try {
+      late final int id;
+      if (choice is EmptyObjectTypeChoice) {
+        final name = await _askName(
+          '空のデータベースを作成',
+          initial: '新しいデータベース',
+          hint: '例: 書籍',
+        );
+        if (name?.isNotEmpty != true) return;
+        id = await store.createDatabase(
+          workspaceId: widget.repository.workspaceId,
+          name: name!,
+        );
+      } else if (choice is TemplateObjectTypeChoice) {
+        final template = choice.template;
+        final name = await _askName(
+          '${template.name}テンプレートから作成',
+          initial: template.name,
+        );
+        if (name?.isNotEmpty != true) return;
+        id = await ObjectTypeTemplateStore(store).createFromTemplate(
+          workspaceId: widget.repository.workspaceId,
+          template: template,
+          name: name!,
+        );
+      } else {
+        return;
+      }
+
+      await _reloadGenericDatabases();
+      if (!mounted) return;
+      setState(() {
+        _selectedGenericDatabaseId = id;
+        _index = 11;
+        _pageCache.remove(11);
+      });
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('データベースを作成できませんでした: $error')),
+      );
+    }
   }
 
   WorkspaceInfo? get _activeWorkspace {
@@ -484,7 +518,6 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
       ),
     );
   }
-
 
   Widget _genericDatabaseTile(GenericDatabaseDefinitionRecord database) {
     final scheme = Theme.of(context).colorScheme;
