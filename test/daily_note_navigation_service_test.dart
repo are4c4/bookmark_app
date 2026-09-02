@@ -9,6 +9,22 @@ import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+DailyNoteService buildDailyNoteService({
+  required AppDatabase database,
+  required GenericDatabaseStore genericStore,
+  required ObjectStore objectStore,
+}) {
+  return DailyNoteService(
+    genericStore: genericStore,
+    objectStore: objectStore,
+    systemObjects: SystemObjectStore(
+      database: database,
+      objectStore: objectStore,
+    ),
+    defaultsStore: ObjectTypeDefaultsStore(genericStore),
+  );
+}
+
 void main() {
   test('previous/next/today navigate Daily Notes by local calendar date', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
@@ -16,13 +32,13 @@ void main() {
     final workspaceId = await WorkspaceStore(database).initialize();
     final genericStore = GenericDatabaseStore(database);
     final objectStore = ObjectStore(genericStore);
-    final dailyNotes = DailyNoteService(
-      genericStore: genericStore,
-      objectStore: objectStore,
-      systemObjects: SystemObjectStore(genericStore),
-      defaultsStore: ObjectTypeDefaultsStore(genericStore),
+    final navigation = DailyNoteNavigationService(
+      buildDailyNoteService(
+        database: database,
+        genericStore: genericStore,
+        objectStore: objectStore,
+      ),
     );
-    final navigation = DailyNoteNavigationService(dailyNotes);
 
     final today = await navigation.openToday(
       workspaceId: workspaceId,
@@ -49,13 +65,13 @@ void main() {
     final workspaceId = await WorkspaceStore(database).initialize();
     final genericStore = GenericDatabaseStore(database);
     final objectStore = ObjectStore(genericStore);
-    final dailyNotes = DailyNoteService(
-      genericStore: genericStore,
-      objectStore: objectStore,
-      systemObjects: SystemObjectStore(genericStore),
-      defaultsStore: ObjectTypeDefaultsStore(genericStore),
+    final navigation = DailyNoteNavigationService(
+      buildDailyNoteService(
+        database: database,
+        genericStore: genericStore,
+        objectStore: objectStore,
+      ),
     );
-    final navigation = DailyNoteNavigationService(dailyNotes);
 
     final first = await navigation.openToday(
       workspaceId: workspaceId,
