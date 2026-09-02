@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../../../data/database_view_creation_service.dart';
 import '../../../../data/database_view_management_service.dart';
+import '../../../../data/database_view_open_mode_service.dart';
 import '../../../../data/database_view_store.dart';
 import '../../../../database/database_definition.dart';
+import '../../../../domain/object_type_defaults.dart';
 
 class DatabaseViewTabs extends StatefulWidget {
   const DatabaseViewTabs({
@@ -35,6 +37,8 @@ class _DatabaseViewTabsState extends State<DatabaseViewTabs> {
       DatabaseViewCreationService(widget.store);
   DatabaseViewManagementService get _management =>
       DatabaseViewManagementService(widget.store);
+  DatabaseViewOpenModeService get _openModes =>
+      DatabaseViewOpenModeService(widget.store);
 
   @override
   void initState() {
@@ -136,6 +140,77 @@ class _DatabaseViewTabsState extends State<DatabaseViewTabs> {
     if (result?.trim().isEmpty != false) return;
     await _management.rename(view, result!);
     await _reload();
+    widget.onViewsChanged?.call();
+  }
+
+  Future<void> _editOpenMode(DatabaseViewConfig view) async {
+    ObjectOpenMode? current;
+    try {
+      current = _openModes.overrideFor(view);
+    } on FormatException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Objectの開き方を読み込めませんでした: $error')),
+      );
+      return;
+    }
+
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: const Text('Objectの開き方'),
+        children: [
+          ListTile(
+            leading: Icon(
+              current == null
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_unchecked,
+            ),
+            title: const Text('継承（デフォルト）'),
+            subtitle: const Text('Database / ObjectType の設定を使用'),
+            onTap: () => Navigator.pop(dialogContext, 'inherit'),
+          ),
+          ListTile(
+            leading: Icon(
+              current == ObjectOpenMode.sidePeek
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_unchecked,
+            ),
+            title: const Text('サイドピーク'),
+            onTap: () =>
+                Navigator.pop(dialogContext, ObjectOpenMode.sidePeek.name),
+          ),
+          ListTile(
+            leading: Icon(
+              current == ObjectOpenMode.centerPeek
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_unchecked,
+            ),
+            title: const Text('センターピーク'),
+            onTap: () =>
+                Navigator.pop(dialogContext, ObjectOpenMode.centerPeek.name),
+          ),
+          ListTile(
+            leading: Icon(
+              current == ObjectOpenMode.fullPage
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_unchecked,
+            ),
+            title: const Text('フルページ'),
+            onTap: () =>
+                Navigator.pop(dialogContext, ObjectOpenMode.fullPage.name),
+          ),
+        ],
+      ),
+    );
+    if (selected == null) return;
+    final mode = selected == 'inherit'
+        ? null
+        : ObjectOpenMode.values.singleWhere((item) => item.name == selected);
+    final updated = await _openModes.setOverride(view: view, mode: mode);
+    await _reload();
+    if (!mounted) return;
+    if (updated.id == widget.activeViewId) widget.onSelected(updated);
     widget.onViewsChanged?.call();
   }
 
@@ -277,11 +352,13 @@ class _DatabaseViewTabsState extends State<DatabaseViewTabs> {
                           ),
                         ),
                         PopupMenuButton<String>(
+                          key: ValueKey('database-view-menu-${view.id}'),
                           tooltip: 'ビュー設定',
                           iconSize: 15,
                           padding: EdgeInsets.zero,
                           onSelected: (value) {
                             if (value == 'rename') _rename(view);
+                            if (value == 'openMode') _editOpenMode(view);
                             if (value == 'duplicate') _duplicate(view);
                             if (value == 'delete') _delete(view);
                           },
@@ -289,6 +366,10 @@ class _DatabaseViewTabsState extends State<DatabaseViewTabs> {
                             const PopupMenuItem(
                               value: 'rename',
                               child: Text('名前を変更'),
+                            ),
+                            const PopupMenuItem(
+                              value: 'openMode',
+                              child: Text('Objectの開き方'),
                             ),
                             const PopupMenuItem(
                               value: 'duplicate',
