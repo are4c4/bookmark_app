@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../data/bookmark_repository.dart';
 import '../data/database_view_store.dart';
 import '../data/generic_database_store.dart';
+import '../data/generic_object_view_coordinator.dart';
+import '../data/object_board_move_service.dart';
 import '../data/object_computed_value_store.dart';
 import '../data/object_graph_query_store.dart';
 import '../data/object_store.dart';
@@ -13,6 +15,8 @@ import '../features/database/presentation/database_property_presenter.dart';
 import '../widgets/database_create_tiles.dart';
 import '../widgets/database_view_tabs.dart';
 import '../widgets/notion_inline_field.dart';
+import '../widgets/object_board_view.dart';
+import '../widgets/object_view_toolbar.dart';
 import '../widgets/resizable_detail_pane.dart';
 import 'object_inspector_page.dart';
 
@@ -39,8 +43,13 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
   late final ObjectTypeManagementStore _managementStore;
   late final ObjectGraphQueryStore _graphStore;
   late final DatabaseViewStore _viewStore;
+  late final ObjectBoardMoveService _boardMoveService;
+
+  static const _viewCoordinator = GenericObjectViewCoordinator();
 
   GenericDatabaseDefinitionRecord? _database;
+  AppObjectType? _objectType;
+  List<AppObject> _objects = const [];
   List<GenericPropertyRecord> _properties = const [];
   List<GenericRecord> _records = const [];
   List<GenericDatabaseDefinitionRecord> _objectTypes = const [];
@@ -70,6 +79,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     super.initState();
     _store = GenericDatabaseStore(widget.repository.workspaceStore.database);
     _objectStore = ObjectStore(_store);
+    _boardMoveService = ObjectBoardMoveService(_objectStore);
     _computedStore = ObjectComputedValueStore(_objectStore);
     _managementStore = ObjectTypeManagementStore(
       genericStore: _store,
@@ -135,6 +145,8 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     if (!mounted) return;
     setState(() {
       _database = database;
+      _objectType = objectType;
+      _objects = objects;
       _properties = properties;
       _records = records;
       _objectTypes = objectTypes;
@@ -275,7 +287,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
             )
             .toList(),
         defaultLayout: 'table',
-        supportedLayouts: const ['gallery', 'list', 'table'],
+        supportedLayouts: const ['gallery', 'list', 'table', 'board'],
       );
 
   DatabasePropertyType _databasePropertyType(String type) => switch (type) {
@@ -336,6 +348,26 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     return record.values[property.id];
   }
 
+  dynamic _projectedValueFor(AppObject object, int? propertyId) {
+    if (propertyId == null) return object.title;
+    final computed = _computedValues[object.id];
+    if (computed != null && computed.containsKey(propertyId)) {
+      return computed[propertyId];
+    }
+    return object.values[propertyId];
+  }
+
+  GenericObjectViewProjection? get _viewProjection {
+    final active = _activeView;
+    if (active == null) return null;
+    return _viewCoordinator.project(
+      objects: _objects,
+      records: _records,
+      view: active,
+      valueResolver: _projectedValueFor,
+    );
+  }
+
   List<GenericPropertyRecord> get _orderedVisibleProperties {
     final order = _activeView?.propertyOrder ?? const <String>[];
     final visible = (_activeView?.visibleProperties ?? const <String>[]).toSet();
@@ -365,23 +397,19 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     return null;
   }
 
-  List<GenericRecord> get _filteredRecords {
-    final normalized = _query.trim().toLowerCase();
-    if (normalized.isEmpty) return _records;
-    return _records.where((record) {
-      if (record.title.toLowerCase().contains(normalized)) return true;
-      for (final property in _properties) {
-        final display = _displayValue(property, _valueFor(record, property));
-        if (display.toLowerCase().contains(normalized)) return true;
-      }
-      return false;
-    }).toList(growable: false);
-  }
-
   Future<void> _selectView(DatabaseViewConfig view) async {
     setState(() {
       _activeView = view;
-      _query = (view.filters['query'] as String?) ?? '';
+      _query = '${view.filters['query'] ?? ''}';
+    });
+  }
+
+  Future<void> _persistView(DatabaseViewConfig next) async {
+    await _viewStore.updateView(next);
+    if (!mounted) return;
+    setState(() {
+      _activeView = next;
+      _query = '${next.filters['query'] ?? ''}';
     });
   }
 
@@ -399,8 +427,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
       propertyOrder: propertyOrder ?? active.propertyOrder,
       visibleProperties: visibleProperties ?? active.visibleProperties,
     );
-    await _viewStore.updateView(next);
-    if (mounted) setState(() => _activeView = next);
+    await _persistView(next);
   }
 
   Future<void> _createRecord(String title) async {
@@ -858,6 +885,59 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _board(GenericObjectViewProjection projection) {
+    final objectType = _objectType;
+    final groupRule = projection.objectProjection.groupRule;
+    ObjectPropertyDefinition? groupProperty;
+    if (objectType != null && groupRule != null) {
+      for (final property in objectType.properties) {
+        if (property.id == groupRule.propertyId) {
+          groupProperty = property;
+          break;
+        }
+      }
+    }
+    final movable = groupProperty != null &&
+        _boardMoveService.planner.canMove(groupProperty);
+
+    return ObjectBoardView(
+      groups: projection.objectProjection.groups,
+      onObjectTap: (object) =>
+          setState(() => _selectedRecordId = object.id),
+      onMoveObject: !movable
+          ? null
+          : (object, sourceGroup, targetGroup) async {
+              try {
+                await _boardMoveService.move(
+                  object: object,
+                  property: groupProperty!,
+                  sourceGroup: sourceGroup,
+                  targetGroup: targetGroup,
+                );
+                await _reload();
+              } catch (error) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('カードを移動できませんでした: $error')),
+                );
+              }
+            },
+      cardSubtitleBuilder: (object) {
+        final record = _records
+            .where((candidate) => candidate.id == object.id)
+            .firstOrNull;
+        if (record == null) return null;
+        final values = _orderedVisibleProperties
+            .map((property) =>
+                _displayValue(property, _valueFor(record, property)))
+            .where((value) => value.isNotEmpty)
+            .take(2)
+            .toList(growable: false);
+        return values.isEmpty ? null : values.join(' · ');
+      },
     );
   }
 
@@ -1356,9 +1436,11 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     if (database == null) {
       return const Center(child: Text('データベースが見つかりません'));
     }
-    final records = _filteredRecords;
+    final projection = _viewProjection;
+    final records = projection?.records ?? _records;
     final selected = _selectedRecord;
-    final layout = _activeView?.layoutType ?? 'table';
+    final activeView = _activeView;
+    final layout = activeView?.layoutType ?? 'table';
 
     return Scaffold(
       body: Column(
@@ -1438,42 +1520,34 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
             store: _viewStore,
             definition: _definition,
             workspaceId: widget.repository.workspaceId,
-            activeViewId: _activeView?.id,
+            activeViewId: activeView?.id,
             onSelected: _selectView,
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 7),
             child: Row(
               children: [
-                SegmentedButton<String>(
-                  showSelectedIcon: false,
-                  segments: const [
-                    ButtonSegment(
-                      value: 'gallery',
-                      icon: Icon(Icons.grid_view, size: 16),
+                if (activeView != null)
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: ObjectViewToolbar(
+                        view: activeView,
+                        properties: _objectType?.properties ?? const [],
+                        onViewChanged: (next) {
+                          _persistView(next);
+                        },
+                      ),
                     ),
-                    ButtonSegment(
-                      value: 'list',
-                      icon: Icon(Icons.view_list, size: 16),
-                    ),
-                    ButtonSegment(
-                      value: 'table',
-                      icon: Icon(Icons.table_rows, size: 16),
-                    ),
-                  ],
-                  selected: {layout},
-                  onSelectionChanged: (selection) {
-                    if (selection.isNotEmpty) {
-                      _saveView(layoutType: selection.first);
-                    }
-                  },
-                ),
-                const Spacer(),
+                  )
+                else
+                  const Spacer(),
+                const SizedBox(width: 12),
                 SizedBox(
                   width: 250,
                   height: 36,
                   child: TextFormField(
-                    key: ValueKey('${_activeView?.id}:$_query'),
+                    key: ValueKey('${activeView?.id}:$_query'),
                     initialValue: _query,
                     decoration: const InputDecoration(
                       prefixIcon: Icon(Icons.search, size: 17),
@@ -1496,6 +1570,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                   child: switch (layout) {
                     'gallery' => _gallery(records),
                     'list' => _list(records),
+                    'board' when projection != null => _board(projection),
                     _ => _table(records),
                   },
                 ),
