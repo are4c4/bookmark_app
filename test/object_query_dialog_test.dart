@@ -128,4 +128,23 @@ void main() {
     expect(result!.sorts.single.propertyId, isNull);
     expect(result!.sorts.single.direction, ObjectSortDirection.ascending);
   });
+
+  testWidgets('value-less filter hides the value editor', (tester) async {
+    await tester.pumpWidget(
+      host(
+        const ObjectQueryDialog(
+          properties: properties,
+          initialFilters: [
+            ObjectFilterRule(
+              propertyId: 10,
+              operator: ObjectFilterOperator.isEmpty,
+            ),
+          ],
+        ),
+      ),
+    );
+
+    expect(find.text('空'), findsOneWidget);
+    expect(find.widgetWithText(TextFormField, '値'), findsNothing);
+  });
 }
