@@ -21,6 +21,7 @@ ObjectGroupBucket<AppObject> bucket(dynamic value) => ObjectGroupBucket<AppObjec
       label: value == null ? '未設定' : '$value',
       value: value,
       items: const [],
+      isEmptyGroup: value == null,
     );
 
 void main() {
