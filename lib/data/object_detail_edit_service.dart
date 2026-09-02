@@ -96,7 +96,9 @@ class ObjectDetailEditService {
     required String? value,
   }) {
     final normalized = value?.trim();
-    if (normalized?.isNotEmpty == true && DateTime.tryParse(normalized!) == null) {
+    if (normalized != null &&
+        normalized.isNotEmpty &&
+        DateTime.tryParse(normalized) == null) {
       throw ArgumentError.value(value, 'value', 'Date Value must be parseable.');
     }
     return _setTypedValue(
