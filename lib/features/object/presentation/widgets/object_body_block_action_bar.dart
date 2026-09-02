@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../../../../domain/object_body.dart';
 import '../../../../domain/object_body_block_actions.dart';
+import '../../../../domain/object_body_reference_insert.dart';
 import 'object_body_insert_menu_button.dart';
+import 'object_body_reference_insert_menu_button.dart';
 
 /// Shared per-block editing chrome for Body hosts.
 ///
 /// The widget is intentionally persistence-agnostic: hosts decide how to
-/// create block ids and dispatch the callbacks to ObjectBodyBlockEditService.
+/// dispatch the callbacks to the Object-owned Body services.
 class ObjectBodyBlockActionBar extends StatelessWidget {
   const ObjectBodyBlockActionBar({
     super.key,
@@ -15,16 +17,20 @@ class ObjectBodyBlockActionBar extends StatelessWidget {
     required this.position,
     this.onMoveUp,
     this.onMoveDown,
+    this.onDuplicate,
     this.onDelete,
     this.onInsertAfter,
+    this.onInsertReferenceAfter,
   });
 
   final ObjectBodyBlock block;
   final ObjectBodyBlockPosition position;
   final VoidCallback? onMoveUp;
   final VoidCallback? onMoveDown;
+  final VoidCallback? onDuplicate;
   final VoidCallback? onDelete;
   final ValueChanged<ObjectBodyInsertKind>? onInsertAfter;
+  final ValueChanged<ObjectBodyReferenceInsertKind>? onInsertReferenceAfter;
 
   @override
   Widget build(BuildContext context) {
@@ -43,11 +49,24 @@ class ObjectBodyBlockActionBar extends StatelessWidget {
           onPressed: position.canMoveDown ? onMoveDown : null,
           icon: const Icon(Icons.arrow_downward),
         ),
+        if (onDuplicate != null)
+          IconButton(
+            key: ValueKey('body-block-duplicate-${block.id}'),
+            tooltip: '複製',
+            onPressed: onDuplicate,
+            icon: const Icon(Icons.copy_outlined),
+          ),
         if (onInsertAfter != null)
           ObjectBodyInsertMenuButton(
             key: ValueKey('body-block-insert-after-${block.id}'),
             tooltip: '下にブロックを追加',
             onSelected: onInsertAfter!,
+          ),
+        if (onInsertReferenceAfter != null)
+          ObjectBodyReferenceInsertMenuButton(
+            key: ValueKey('body-block-insert-reference-after-${block.id}'),
+            tooltip: '下に参照を追加',
+            onSelected: onInsertReferenceAfter!,
           ),
         IconButton(
           key: ValueKey('body-block-delete-${block.id}'),
