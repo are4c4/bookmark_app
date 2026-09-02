@@ -114,6 +114,36 @@ void main() {
     expect(report.issuesOf(RelationIntegrityIssueKind.missingIndexEdge), hasLength(1));
   });
 
+  test('audit detects single-Relation cardinality violation in legacy value', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final service = await serviceFor(database);
+
+    final bookTypeId = await objectStore.createObjectType(workspaceId: workspaceId, name: 'Book');
+    final personTypeId = await objectStore.createObjectType(workspaceId: workspaceId, name: 'Person');
+    await objectStore.createRelationProperty(
+      objectTypeId: bookTypeId,
+      name: 'Primary author',
+      targetObjectTypeId: personTypeId,
+      multiple: false,
+    );
+    final property = (await objectStore.getObjectType(bookTypeId))!.properties.single;
+    final bookId = await objectStore.createObject(objectTypeId: bookTypeId, title: 'Book');
+    final firstPerson = await objectStore.createObject(objectTypeId: personTypeId, title: 'A');
+    final secondPerson = await objectStore.createObject(objectTypeId: personTypeId, title: 'B');
+    await genericStore.setValue(
+      recordId: bookId,
+      propertyId: property.id,
+      value: {'objectIds': [firstPerson, secondPerson]},
+    );
+
+    final report = await service.auditWorkspace(workspaceId);
+    expect(report.issuesOf(RelationIntegrityIssueKind.cardinalityViolation), hasLength(1));
+  });
+
   test('audit detects broken bidirectional pair metadata', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
