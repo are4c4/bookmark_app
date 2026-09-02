@@ -623,7 +623,6 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                     : () => setLocalState(selectedIds.clear),
                 child: const Text('クリア'),
               ),
-              const Spacer(),
               TextButton(
                 onPressed: () => Navigator.pop(dialogContext),
                 child: const Text('キャンセル'),
