@@ -4,6 +4,7 @@ import '../../../../data/database_view_creation_service.dart';
 import '../../../../data/database_view_management_service.dart';
 import '../../../../data/database_view_open_mode_service.dart';
 import '../../../../data/database_view_store.dart';
+import '../../../../data/database_view_tab_overflow_policy.dart';
 import '../../../../database/database_definition.dart';
 import '../../../../domain/object_type_defaults.dart';
 
@@ -30,6 +31,8 @@ class DatabaseViewTabs extends StatefulWidget {
 }
 
 class _DatabaseViewTabsState extends State<DatabaseViewTabs> {
+  static const _overflowPolicy = DatabaseViewTabOverflowPolicy();
+
   List<DatabaseViewConfig> _views = const [];
   bool _loading = true;
 
@@ -229,6 +232,102 @@ class _DatabaseViewTabsState extends State<DatabaseViewTabs> {
     widget.onViewsChanged?.call();
   }
 
+  Future<void> _reorderVisible(
+    List<DatabaseViewConfig> visibleViews,
+    int oldIndex,
+    int newIndex,
+  ) async {
+    final reorderedVisible = [...visibleViews];
+    final moved = reorderedVisible.removeAt(oldIndex);
+    reorderedVisible.insert(newIndex, moved);
+    final visibleIds = visibleViews.map((view) => view.id).toSet();
+    final replacement = reorderedVisible.iterator;
+    final next = <DatabaseViewConfig>[];
+    for (final view in _views) {
+      if (visibleIds.contains(view.id)) {
+        replacement.moveNext();
+        next.add(replacement.current);
+      } else {
+        next.add(view);
+      }
+    }
+    setState(() => _views = next);
+    try {
+      await _management.reorder(
+        workspaceId: widget.workspaceId,
+        databaseKey: widget.definition.key,
+        orderedViewIds: next.map((view) => view.id).toList(),
+      );
+      widget.onViewsChanged?.call();
+    } catch (_) {
+      await _reload();
+      rethrow;
+    }
+  }
+
+  Widget _controls(DatabaseViewTabPartition partition) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 2, right: 8),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (partition.hasOverflow)
+            PopupMenuButton<int>(
+              key: const ValueKey('database-view-overflow-menu'),
+              tooltip: 'その他のビュー',
+              onSelected: (viewId) {
+                final view = _views.singleWhere(
+                  (candidate) => candidate.id == viewId,
+                );
+                widget.onSelected(view);
+              },
+              itemBuilder: (_) => partition.overflow
+                  .map(
+                    (view) => PopupMenuItem<int>(
+                      key: ValueKey('database-view-overflow-item-${view.id}'),
+                      value: view.id,
+                      child: Text(view.name),
+                    ),
+                  )
+                  .toList(growable: false),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('その他', style: TextStyle(fontSize: 12.5)),
+                    Icon(Icons.arrow_drop_down, size: 16),
+                  ],
+                ),
+              ),
+            ),
+          IconButton(
+            key: const ValueKey('database-view-add-button'),
+            tooltip: '現在のビューを複製',
+            visualDensity: VisualDensity.compact,
+            onPressed: _activeView == null ? null : _createView,
+            icon: const Icon(Icons.add, size: 18),
+          ),
+          PopupMenuButton<String>(
+            key: const ValueKey('database-view-create-menu'),
+            tooltip: 'ビュー作成メニュー',
+            iconSize: 16,
+            padding: EdgeInsets.zero,
+            onSelected: (value) {
+              if (value == 'blank') _createBlankView();
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: 'blank',
+                child: Text('空のViewを作成'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -246,152 +345,120 @@ class _DatabaseViewTabsState extends State<DatabaseViewTabs> {
       );
     }
 
+    final partition = _overflowPolicy.partition(
+      views: _views,
+      activeViewId: widget.activeViewId,
+    );
+    final visibleViews = partition.visible;
+
     return SizedBox(
       height: 38,
-      child: ReorderableListView.builder(
-        scrollDirection: Axis.horizontal,
-        buildDefaultDragHandles: false,
-        itemCount: _views.length,
-        footer: Padding(
-          padding: const EdgeInsets.only(left: 2, right: 8),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                key: const ValueKey('database-view-add-button'),
-                tooltip: '現在のビューを複製',
-                visualDensity: VisualDensity.compact,
-                onPressed: _activeView == null ? null : _createView,
-                icon: const Icon(Icons.add, size: 18),
-              ),
-              PopupMenuButton<String>(
-                key: const ValueKey('database-view-create-menu'),
-                tooltip: 'ビュー作成メニュー',
-                iconSize: 16,
-                padding: EdgeInsets.zero,
-                onSelected: (value) {
-                  if (value == 'blank') _createBlankView();
-                },
-                itemBuilder: (_) => const [
-                  PopupMenuItem(
-                    value: 'blank',
-                    child: Text('空のViewを作成'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        onReorderItem: (oldIndex, newIndex) async {
-          final next = [..._views];
-          final moved = next.removeAt(oldIndex);
-          next.insert(newIndex, moved);
-          setState(() => _views = next);
-          try {
-            await _management.reorder(
-              workspaceId: widget.workspaceId,
-              databaseKey: widget.definition.key,
-              orderedViewIds: next.map((view) => view.id).toList(),
-            );
-            widget.onViewsChanged?.call();
-          } catch (_) {
-            await _reload();
-            rethrow;
-          }
-        },
-        itemBuilder: (context, index) {
-          final view = _views[index];
-          final selected = view.id == widget.activeViewId;
-          return ReorderableDragStartListener(
-            key: ValueKey(view.id),
-            index: index,
-            child: Padding(
-              padding: const EdgeInsets.only(right: 2),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(5),
-                  onTap: () => widget.onSelected(view),
-                  child: Container(
-                    padding: const EdgeInsets.only(left: 10, right: 2),
-                    decoration: BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(
-                          color: selected
-                              ? scheme.primary
-                              : Colors.transparent,
-                          width: 2,
+      child: Row(
+        children: [
+          Expanded(
+            child: ReorderableListView.builder(
+              scrollDirection: Axis.horizontal,
+              buildDefaultDragHandles: false,
+              itemCount: visibleViews.length,
+              onReorderItem: (oldIndex, newIndex) =>
+                  _reorderVisible(visibleViews, oldIndex, newIndex),
+              itemBuilder: (context, index) {
+                final view = visibleViews[index];
+                final selected = view.id == widget.activeViewId;
+                return ReorderableDragStartListener(
+                  key: ValueKey(view.id),
+                  index: index,
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 2),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(5),
+                        onTap: () => widget.onSelected(view),
+                        child: Container(
+                          padding: const EdgeInsets.only(left: 10, right: 2),
+                          decoration: BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(
+                                color: selected
+                                    ? scheme.primary
+                                    : Colors.transparent,
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                switch (view.layoutType) {
+                                  'list' => Icons.view_list,
+                                  'table' => Icons.table_rows,
+                                  _ => Icons.grid_view,
+                                },
+                                size: 15,
+                                color: selected
+                                    ? scheme.onSurface
+                                    : scheme.onSurfaceVariant,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                view.name,
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: selected
+                                      ? FontWeight.w600
+                                      : FontWeight.w400,
+                                  color: selected
+                                      ? scheme.onSurface
+                                      : scheme.onSurfaceVariant,
+                                ),
+                              ),
+                              PopupMenuButton<String>(
+                                key: ValueKey('database-view-menu-${view.id}'),
+                                tooltip: 'ビュー設定',
+                                iconSize: 15,
+                                padding: EdgeInsets.zero,
+                                onSelected: (value) {
+                                  if (value == 'rename') _rename(view);
+                                  if (value == 'openMode') _editOpenMode(view);
+                                  if (value == 'duplicate') _duplicate(view);
+                                  if (value == 'delete') _delete(view);
+                                },
+                                itemBuilder: (_) => [
+                                  const PopupMenuItem(
+                                    value: 'rename',
+                                    child: Text('名前を変更'),
+                                  ),
+                                  const PopupMenuItem(
+                                    value: 'openMode',
+                                    child: Text('Objectの開き方'),
+                                  ),
+                                  const PopupMenuItem(
+                                    value: 'duplicate',
+                                    child: Text('複製'),
+                                  ),
+                                  if (_views.length > 1) ...const [
+                                    PopupMenuDivider(),
+                                    PopupMenuItem(
+                                      value: 'delete',
+                                      child: Text('削除'),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          switch (view.layoutType) {
-                            'list' => Icons.view_list,
-                            'table' => Icons.table_rows,
-                            _ => Icons.grid_view,
-                          },
-                          size: 15,
-                          color: selected
-                              ? scheme.onSurface
-                              : scheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          view.name,
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: selected
-                                ? FontWeight.w600
-                                : FontWeight.w400,
-                            color: selected
-                                ? scheme.onSurface
-                                : scheme.onSurfaceVariant,
-                          ),
-                        ),
-                        PopupMenuButton<String>(
-                          key: ValueKey('database-view-menu-${view.id}'),
-                          tooltip: 'ビュー設定',
-                          iconSize: 15,
-                          padding: EdgeInsets.zero,
-                          onSelected: (value) {
-                            if (value == 'rename') _rename(view);
-                            if (value == 'openMode') _editOpenMode(view);
-                            if (value == 'duplicate') _duplicate(view);
-                            if (value == 'delete') _delete(view);
-                          },
-                          itemBuilder: (_) => [
-                            const PopupMenuItem(
-                              value: 'rename',
-                              child: Text('名前を変更'),
-                            ),
-                            const PopupMenuItem(
-                              value: 'openMode',
-                              child: Text('Objectの開き方'),
-                            ),
-                            const PopupMenuItem(
-                              value: 'duplicate',
-                              child: Text('複製'),
-                            ),
-                            if (_views.length > 1) ...const [
-                              PopupMenuDivider(),
-                              PopupMenuItem(
-                                value: 'delete',
-                                child: Text('削除'),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ],
-                    ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
-          );
-        },
+          ),
+          _controls(partition),
+        ],
       ),
     );
   }
