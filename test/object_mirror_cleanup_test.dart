@@ -5,6 +5,7 @@ import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
 import 'package:bookmark_app/data/tag_object_bridge.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
+import 'package:bookmark_app/domain/object_model.dart';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -46,7 +47,7 @@ void main() {
     expect(links, isEmpty);
   });
 
-  test('workspace removal and photo deletion clean mirrored objects and links', () async {
+  test('workspace removal and photo deletion clean mirrored objects and Relations', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
     final workspaceId = await WorkspaceStore(database).initialize();
@@ -93,8 +94,31 @@ void main() {
       workspaceId: workspaceId,
       systemKey: CoreObjectBridge.bookmarkSystemKey,
     );
-    expect(await objectStore.listObjects(imageType!.id), hasLength(1));
+    final imageObjects = await objectStore.listObjects(imageType!.id);
+    expect(imageObjects, hasLength(1));
     expect(await objectStore.listObjects(bookmarkType!.id), hasLength(1));
+
+    final noteTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Note',
+    );
+    await objectStore.createRelationProperty(
+      objectTypeId: noteTypeId,
+      name: 'Image',
+      targetObjectTypeId: imageType.id,
+      multiple: false,
+    );
+    final imageProperty =
+        (await objectStore.getObjectType(noteTypeId))!.properties.single;
+    final noteId = await objectStore.createObject(
+      objectTypeId: noteTypeId,
+      title: 'Keeps a reference',
+    );
+    await objectStore.setRelation(
+      objectId: noteId,
+      property: imageProperty,
+      targetObjectIds: [imageObjects.single.id],
+    );
 
     await database.customStatement(
       'DELETE FROM bookmark_workspace WHERE bookmark_id = ? AND workspace_id = ?',
@@ -105,6 +129,11 @@ void main() {
 
     expect(await objectStore.listObjects(imageType.id), isEmpty);
     expect(await objectStore.listObjects(bookmarkType.id), isEmpty);
+    final note = (await objectStore.listObjects(noteTypeId)).single;
+    expect(
+      ObjectRelationValue.fromJson(note.values[imageProperty.id]).objectIds,
+      isEmpty,
+    );
     final photoLinks = await database.customSelect(
       'SELECT object_id FROM photo_object_links WHERE workspace_id = ?',
       variables: [Variable<int>(workspaceId)],
