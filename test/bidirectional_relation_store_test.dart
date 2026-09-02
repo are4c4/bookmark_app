@@ -125,6 +125,52 @@ void main() {
     );
   });
 
+  test('editing the inverse side also synchronizes the source side', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final relations = BidirectionalRelationStore(
+      genericStore: genericStore,
+      objectStore: objectStore,
+    );
+    final bookTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: '書籍',
+    );
+    final personTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: '人物',
+    );
+    final pair = await relations.createPair(
+      sourceObjectTypeId: bookTypeId,
+      sourceName: '著者',
+      targetObjectTypeId: personTypeId,
+      inverseName: '著書',
+    );
+    final bookId = await objectStore.createObject(
+      objectTypeId: bookTypeId,
+      title: '本A',
+    );
+    final personId = await objectStore.createObject(
+      objectTypeId: personTypeId,
+      title: '人物A',
+    );
+
+    await relations.setRelation(
+      objectId: personId,
+      property: pair.inverseProperty,
+      targetObjectIds: [bookId],
+    );
+
+    final book = (await objectStore.listObjects(bookTypeId)).single;
+    expect(
+      ObjectRelationValue.fromJson(book.values[pair.sourceProperty.id]).objectIds,
+      [personId],
+    );
+  });
+
   test('single-valued inverse rejects conflicting links atomically', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
