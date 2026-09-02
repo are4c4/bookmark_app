@@ -87,6 +87,7 @@ class TagObjectBridge {
   Future<void> syncLegacyTags(int workspaceId) async {
     final schema = await ensureTagObjectType(workspaceId);
     final tags = await database.select(database.tags).get();
+    final validTagIds = tags.map((tag) => tag.id).toSet();
 
     for (final tag in tags) {
       final objectId = await _ensureObjectForTag(workspaceId, schema, tag);
@@ -115,6 +116,8 @@ class TagObjectBridge {
         targetObjectIds: parentObjectId == null ? const [] : [parentObjectId],
       );
     }
+
+    await _removeOrphanTagObjects(schema, validTagIds);
   }
 
   Future<int?> objectIdForLegacyTag(int workspaceId, int tagId) async {
@@ -153,5 +156,18 @@ class TagObjectBridge {
       [workspaceId, tag.id, objectId],
     );
     return objectId;
+  }
+
+  Future<void> _removeOrphanTagObjects(
+    TagObjectSchema schema,
+    Set<int> validTagIds,
+  ) async {
+    final objects = await objectStore.listObjects(schema.objectType.id);
+    for (final object in objects) {
+      final rawId = object.values[schema.legacyTagIdProperty.id];
+      final legacyId = rawId is int ? rawId : int.tryParse('$rawId');
+      if (legacyId == null || validTagIds.contains(legacyId)) continue;
+      await objectStore.deleteObject(object.id);
+    }
   }
 }

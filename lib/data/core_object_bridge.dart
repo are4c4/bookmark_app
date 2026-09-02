@@ -170,6 +170,7 @@ class CoreObjectBridge {
 
   Future<void> _syncPhotos(int workspaceId, AppObjectType photoType) async {
     final photos = await database.select(database.photos).get();
+    final validPhotoIds = photos.map((photo) => photo.id).toSet();
     final legacyId = _property(photoType, 'Legacy Photo ID');
     final file = _property(photoType, 'File');
     final note = _property(photoType, 'Note');
@@ -193,6 +194,12 @@ class CoreObjectBridge {
       await objectStore.setPropertyValue(objectId: objectId, property: note, value: photo.note);
       await objectStore.setPropertyValue(objectId: objectId, property: legacyTags, value: photo.tags);
     }
+
+    await _removeOrphanObjects(
+      objectType: photoType,
+      legacyIdProperty: legacyId,
+      validLegacyIds: validPhotoIds,
+    );
   }
 
   Future<void> _syncBookmarks(int workspaceId, AppObjectType bookmarkType) async {
@@ -272,10 +279,30 @@ class CoreObjectBridge {
         targetObjectIds: tagObjectIds,
       );
     }
+
+    await _removeOrphanObjects(
+      objectType: bookmarkType,
+      legacyIdProperty: legacyId,
+      validLegacyIds: bookmarkIds,
+    );
   }
 
   ObjectPropertyDefinition _property(AppObjectType type, String name) =>
       type.properties.firstWhere((property) => property.name == name);
+
+  Future<void> _removeOrphanObjects({
+    required AppObjectType objectType,
+    required ObjectPropertyDefinition legacyIdProperty,
+    required Set<int> validLegacyIds,
+  }) async {
+    final objects = await objectStore.listObjects(objectType.id);
+    for (final object in objects) {
+      final rawId = object.values[legacyIdProperty.id];
+      final legacyId = rawId is int ? rawId : int.tryParse('$rawId');
+      if (legacyId != null && validLegacyIds.contains(legacyId)) continue;
+      await objectStore.deleteObject(object.id);
+    }
+  }
 
   Future<int> _ensureLinkedObject({
     required int workspaceId,
