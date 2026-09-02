@@ -6,6 +6,7 @@ enum RelationIntegrityIssueKind {
   missingTargetObjectType,
   crossWorkspaceTarget,
   missingTargetObject,
+  cardinalityViolation,
   missingIndexEdge,
   staleIndexEdge,
   invalidBidirectionalPair,
@@ -134,9 +135,24 @@ class RelationIntegrityService {
         }
 
         for (final source in sourceObjects) {
-          final storedIds = ObjectRelationValue.fromJson(
+          final storedValue = ObjectRelationValue.fromJson(
             source.values[property.id],
-          ).objectIds.toSet();
+          );
+          final storedObjectIds = storedValue.objectIds;
+          final storedIds = storedObjectIds.toSet();
+          if (!property.allowsMultipleRelations && storedObjectIds.length > 1) {
+            issues.add(
+              RelationIntegrityIssue(
+                kind: RelationIntegrityIssueKind.cardinalityViolation,
+                objectTypeId: sourceType.id,
+                propertyId: property.id,
+                sourceObjectId: source.id,
+                message:
+                    'Object ${source.id} stores ${storedObjectIds.length} targets for single Relation ${property.name}.',
+              ),
+            );
+          }
+
           final indexedIds = (await objectStore.outgoingRelations(source.id))
               .where((edge) => edge.propertyId == property.id)
               .map((edge) => edge.targetObjectId)
