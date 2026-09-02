@@ -109,12 +109,12 @@ void main() {
     final formula = content.objectType.properties
         .singleWhere((candidate) => candidate.id == formulaId);
 
-    expect(
-      () => edits.setValue(content: content, property: relation, value: null),
+    await expectLater(
+      edits.setValue(content: content, property: relation, value: null),
       throwsArgumentError,
     );
-    expect(
-      () => edits.setValue(content: content, property: formula, value: 1),
+    await expectLater(
+      edits.setValue(content: content, property: formula, value: 1),
       throwsArgumentError,
     );
   });
@@ -154,8 +154,8 @@ void main() {
     );
     final content = (await loader.load(objectTypeId: typeId, objectId: objectId))!;
 
-    expect(
-      () => edits.setPlainTextBody(
+    await expectLater(
+      edits.setPlainTextBody(
         content: content,
         text: 'replacement',
         blockIdForIndex: (index) => 'p$index',
