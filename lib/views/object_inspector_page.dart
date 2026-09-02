@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../data/daily_note_service.dart';
 import '../data/generic_database_store.dart';
 import '../data/object_body_store.dart';
 import '../data/object_computed_value_store.dart';
 import '../data/object_detail_content_loader.dart';
 import '../data/object_graph_query_store.dart';
 import '../data/object_store.dart';
+import '../data/object_type_defaults_store.dart';
+import '../data/system_object_store.dart';
 import '../domain/object_body_plain_text.dart';
 import '../domain/object_detail_content.dart';
 import '../domain/object_model.dart';
@@ -102,6 +105,23 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
     );
   }
 
+  Future<void> _openToday(ObjectDetailContent content) async {
+    final service = DailyNoteService(
+      genericStore: widget.store,
+      objectStore: widget.objectStore,
+      systemObjects: SystemObjectStore(
+        database: widget.store.database,
+        objectStore: widget.objectStore,
+      ),
+      defaultsStore: ObjectTypeDefaultsStore(widget.store),
+    );
+    final note = await service.openOrCreate(
+      workspaceId: content.objectType.workspaceId,
+    );
+    if (!mounted || note.id == widget.objectId) return;
+    await _openObject(note.id);
+  }
+
   Future<void> _saveBody(ObjectDetailContent content, String text) async {
     if (!_bodyAdapter.canEdit(content.body)) return;
     final stamp = DateTime.now().microsecondsSinceEpoch;
@@ -175,6 +195,13 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
             ],
           ],
         ),
+        actions: [
+          IconButton(
+            tooltip: '今日のノート',
+            onPressed: () => _openToday(content),
+            icon: const Icon(Icons.today_outlined),
+          ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(24, 24, 24, 48),
