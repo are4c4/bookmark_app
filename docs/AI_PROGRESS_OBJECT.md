@@ -12,65 +12,67 @@ Own Object/ObjectType architecture, Property value semantics, Object-centric Dat
 
 ## Current integration state
 
-- `main` includes PR #68 at merge commit `c112f165ffbda7b032fd51426579cfdc4325de0e`.
-- PR #76 (`feature/object-detail-relation-context-v2`) is open on that `main` and composes shared Object detail state with the canonical Relation `neighborhood()` API.
-- PR #77 (`feature/object-value-promotion-execution-v2`) is open on that `main` and replays safe Value -> Object execution plus URL -> reusable Weblink promotion.
-- Superseded stale Object PRs #70 and #72 are closed; do not resume them.
+- `main` now includes Object detail/Body UI from PR #68, shared Relation detail context from PR #76, safe Value -> Object/Weblink promotion from PR #77, and canonical Relation-neighborhood rendering in `ObjectInspectorPage` from PR #78.
+- PR #79 (`feature/object-board-create-in-group-v2`) is open and replays grouped Board Object creation on current foundations. Its first CI failure was an exact stale test-constructor mismatch and has been fixed; a follow-up change also routes Relation presets through `RelationMutationService` rather than direct Relation writes.
+- Stale PR #60 is closed as superseded by #79. Superseded stale Object PRs #70 and #72 also remain closed.
 
-## Checkpoints completed in the latest run
+## Checkpoints completed in the latest sustained run
 
-1. **Landed Object detail/Body UI integration**
-   - Verified PR #68 head `447f1babac5ee9774098923c87a207b522321273` passed Flutter CI #423.
-   - Squash-merged #68 into `main` as `c112f165ffbda7b032fd51426579cfdc4325de0e`.
-   - `ObjectInspectorPage` now consumes shared Object detail content, shows Formula/Rollup values and persisted Body, supports paragraph-safe Body editing, and exposes today's Daily Note through general Object navigation.
+1. **Merged shared Object detail Relation context**
+   - Verified PR #76 head `86369405b703a3f34bca51a9fe48cbe295ad7dbe` had green Flutter CI #434.
+   - Squash-merged #76 as `dac4a64f22d6ab63279ed3075664847f213cf992`.
+   - Object detail now has a reusable context loader composed with the Relation lane's canonical `neighborhood()` API.
 
-2. **Replayed Object detail Relation context on latest main**
-   - Created PR #76 from current `main` rather than force-merging stale #72.
-   - Added `ObjectDetailRelationContext` and loader.
-   - Uses merged Relation PR #73's `RelationReadService.neighborhood()` as one canonical outgoing + backlink payload.
-   - Keeps Relation lifecycle/index logic out of Object-owned code.
-   - Added focused regression coverage for both outgoing and incoming Relation context.
-   - PR #76 CI #434 is currently in progress.
+2. **Fixed, validated, and merged Value -> Object execution**
+   - CI on PR #77 exposed an analyzer-redundant non-null assertion that remained after replaying the older slice.
+   - Removed the exact remaining assertion at `e6857b9bf097905fd9dd0b355fac142c46ffe09d`.
+   - Flutter CI #439 then passed Drift generation, `flutter analyze`, and the full test step.
+   - Squash-merged PR #77 as `d952ec409fdf69b45219ae00d3c38d3c74b59619`.
+   - Generic promotion preserves the source Value by default, rejects stale plans before target creation, delegates link writes to `RelationMutationService`, supports rollback, and provides URL -> reusable Weblink promotion.
 
-3. **Replayed safe Value -> Object execution on latest main**
-   - Created PR #77 from current `main` rather than force-merging stale #70.
-   - Added `ObjectValuePromotionExecutionService` using `RelationMutationService` for canonical Relation writes.
-   - Preserves source Value by default; stale plans fail before target creation; destructive source clearing still requires explicit confirmation.
-   - Supports existing-target linking and rollback of newly-created records on link failure.
-   - Added `WeblinkValuePromotionService` so repeated URL promotion reuses the same Weblink Object while preserving the scalar URL.
-   - Added focused execution and Weblink-reuse tests.
-   - PR #77 CI #435 is currently in progress.
+3. **Moved Object inspector Relation rendering onto the canonical read API**
+   - PR #78 replaced ad-hoc ObjectGraph backlink/target resolution in `ObjectInspectorPage` with one `RelationReadService.neighborhood()` payload.
+   - Outgoing Relation chips and Backlinks now read the same resolved Relation model.
+   - Flutter CI #440 passed, including analyze and tests.
+   - Squash-merged #78 as `521063771df658058dd625a5601a22f6ca77332e`.
+
+4. **Replayed grouped Board Object creation on current foundations**
+   - Replayed stale PR #60 as PR #79 instead of force-merging its old base.
+   - `ObjectBoardCreatePlanner` derives initial grouped values for scalar, Multi-select, Relation, and unassigned buckets while sharing eligibility rules with Board drag/drop.
+   - CI #441 failed before tests because the test helper did not provide the newer required `ObjectGroupBucket.isEmptyGroup` argument. Exact job logs identified the issue; commit `ba445f171644c55d444809e3fdf2c1998693b546` fixes it.
+   - Commit `8f3922c9cc85885121025c4a5ddea1f95feb711e` additionally routes Relation-group initialization through the stable `RelationMutationService` rather than bypassing Relation lifecycle rules.
+   - Latest PR #79 CI is running on the corrected head.
 
 ## Validation
 
-- PR #68 Flutter CI #423: success before merge.
-- PR #76 Flutter CI #434: in progress at handoff.
-- PR #77 Flutter CI #435: in progress at handoff.
-- This connector runtime does not provide a local Flutter SDK, so executable analyze/tests are delegated to PR CI.
+- PR #76 Flutter CI #434: success before merge.
+- PR #77 Flutter CI #439: success after analyzer correction; Drift generation, analyze, and tests all passed before merge.
+- PR #78 Flutter CI #440: success before merge.
+- PR #79 CI #441: failed only in analyze due to missing required `isEmptyGroup` in the new test helper; exact workflow logs inspected and correction pushed. A newer CI run is in progress for the corrected Relation-safe head.
+- This connector runtime does not provide a local Flutter SDK, so executable validation is delegated to PR CI and exact workflow job logs.
 
 ## Exact next actions
 
-1. Inspect final CI for PR #76; if green, merge it. If failures are caused by this slice, fix them first.
-2. Inspect final CI for PR #77; if green, merge it after refreshing mergeability against whatever lands first. Replay rather than force-merge if `main` advances into a real conflict.
-3. After #76 lands, connect resolved Relation neighborhood data to an existing shared Object detail presentation surface without duplicating graph queries.
-4. After #77 lands, expose Value -> Object promotion through a narrow Object-owned UI/service entry point; preserve the source Value by default and require explicit confirmation for destructive clearing.
-5. Use `RelationTargetService` from merged PR #75 when implementing Relation picker/editing surfaces; do not duplicate target validation in Object UI.
+1. Inspect the latest CI for PR #79 head `8f3922c9cc85885121025c4a5ddea1f95feb711e`; fix any branch-caused failure, then merge when green.
+2. After #79 lands, connect `ObjectBoardCreateService` to the existing `ObjectBoardView.onCreateInGroup` callback in `GenericDatabasePage`, prompting for a title, creating in the selected bucket, reloading, and selecting the new Object.
+3. Add focused page/widget regression coverage for Board-column creation so the grouped Property is initialized through the real UI path.
+4. Expose URL -> Weblink promotion through a narrow Object-owned UI affordance after the inspector's canonical Relation-neighborhood integration; preserve the scalar URL by default.
+5. Use `RelationTargetService` for any new Relation picker/editing UI and continue to avoid duplicating target validation.
 6. Continue Daily Note through general Object detail/Relation mechanisms; avoid a special note data silo.
-7. Continue Issue #56 Object-centric Database/View integration only where it does not conflict with Relation-owned lifecycle code.
 
 ## Cross-lane boundaries
 
 - Relation lifecycle, bidirectional integrity, target/source validation, backlink/index repair, and Tag hierarchy mutation stay in `docs/AI_PROGRESS_RELATION.md`.
 - Stable Relation APIs available to Object lane: `RelationMutationService`, `RelationReadService.neighborhood()`, `RelationTargetService`, and integrity/index services for diagnostics/reconciliation.
-- Object detail UI, Daily Note UI, Value promotion UI, and `core_object_bridge.dart` remain Object-owned synchronization surfaces.
+- Object-owned callers may consume those APIs, but should not reimplement Relation validation/index lifecycle.
+- Object detail UI, Daily Note UI, Value promotion UI, and Object-centric Database/View interactions remain Object-owned surfaces.
 
 ## Blockers / risks
 
-- #76 and #77 require latest-head CI before merge.
-- Both PRs started from the same `c112f165...` base; whichever merges first may advance `main`. Re-check mergeability for the other and replay only if necessary.
-- Do not auto-repair ambiguous persisted Relation values; Relation lane intentionally supports only deterministic index reconciliation.
+- PR #79 needs latest-head CI before merge; its known constructor mismatch has already been fixed.
+- Board grouped creation for Relation properties must continue using the Relation mutation facade; do not regress to low-level direct Relation writes.
 - Rich Body documents must never be flattened by the thin paragraph editor.
 
 ## Stop reason
 
-The run completed multiple safe checkpoints: merged validated #68, replayed stale Relation-context work as #76 using the newer neighborhood API, and replayed stale Value-promotion work as #77 on current main. Both new PRs are now in executable CI. Further integration of these exact slices depends on their latest-head validation; the next independent Object work should avoid editing the same new files until CI reports whether fixes are required.
+No product/design blocker was reached in this run. Multiple safe checkpoints were completed and validated/merged, and the remaining active #79 slice has an exact CI-derived fix plus a Relation-safe write path pushed. Continue from the latest #79 CI, then wire the already-existing Board column create callback into `GenericDatabasePage` once the service slice is green.
