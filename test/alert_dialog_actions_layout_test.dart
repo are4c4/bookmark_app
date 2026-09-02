@@ -15,7 +15,6 @@ void main() {
                   content: const Text('Content'),
                   actions: const [
                     TextButton(onPressed: null, child: Text('クリア')),
-                    Spacer(),
                     TextButton(onPressed: null, child: Text('キャンセル')),
                     TextButton(onPressed: null, child: Text('保存')),
                   ],
@@ -33,5 +32,8 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.text('Relation'), findsOneWidget);
+    expect(find.text('クリア'), findsOneWidget);
+    expect(find.text('キャンセル'), findsOneWidget);
+    expect(find.text('保存'), findsOneWidget);
   });
 }
