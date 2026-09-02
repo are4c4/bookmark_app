@@ -94,7 +94,7 @@ void main() {
       find.byKey(const ValueKey('body-block-insert-reference-after-b')),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Objectを参照'));
+    await tester.tap(find.text('Object を参照'));
     await tester.pumpAndSettle();
 
     expect(selected, ObjectBodyReferenceInsertKind.object);
