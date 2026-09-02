@@ -16,7 +16,7 @@ void main() {
     addTearDown(database.close);
     final workspaceStore = WorkspaceStore(database);
     final workspaceId = await workspaceStore.initialize();
-    final otherWorkspaceId = await workspaceStore.createWorkspace(name: 'Other');
+    final otherWorkspaceId = await workspaceStore.createWorkspace('Other');
     final genericStore = GenericDatabaseStore(database);
     final objectStore = ObjectStore(genericStore);
     final collectionStore = DatabaseCollectionStore(
@@ -55,9 +55,12 @@ void main() {
       context.availableObjectTypes.map((type) => type.id).toSet(),
       containsAll(<int>{databaseId, placeTypeId}),
     );
-    expect(context.availableObjectTypes.every(
-      (type) => type.workspaceId == workspaceId,
-    ), isTrue);
+    expect(
+      context.availableObjectTypes.every(
+        (type) => type.workspaceId == workspaceId,
+      ),
+      isTrue,
+    );
   });
 
   test('save reuses persisted validation for collection filter Properties',
