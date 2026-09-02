@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../data/bidirectional_relation_store.dart';
 import '../data/daily_note_service.dart';
 import '../data/generic_database_store.dart';
+import '../data/object_body_block_action_controller.dart';
+import '../data/object_body_block_duplicate_service.dart';
 import '../data/object_body_block_edit_service.dart';
 import '../data/object_body_store.dart';
 import '../data/object_computed_value_store.dart';
@@ -18,11 +20,15 @@ import '../data/system_object_store.dart';
 import '../data/weblink_object_service.dart';
 import '../data/weblink_value_promotion_service.dart';
 import '../domain/object_body.dart';
+import '../domain/object_body_block_actions.dart';
 import '../domain/object_body_block_contracts.dart';
+import '../domain/object_body_block_identity.dart';
 import '../domain/object_detail_content.dart';
 import '../domain/object_detail_property_presentation.dart';
 import '../domain/object_model.dart';
+import '../features/object/presentation/widgets/object_body_block_action_bar.dart';
 import '../features/object/presentation/widgets/object_body_document_view.dart';
+import '../features/object/presentation/widgets/object_body_insert_menu_button.dart';
 import '../features/object/presentation/widgets/object_detail_property_view.dart';
 
 class ObjectInspectorPage extends StatefulWidget {
@@ -43,6 +49,7 @@ class ObjectInspectorPage extends StatefulWidget {
 
 class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
   static const _propertyPresenter = ObjectDetailPropertyPresenter();
+  static const _bodyBlockIds = ObjectBodyBlockIdAllocator();
 
   ObjectGraphNodeRecord? _node;
   ObjectDetailContent? _content;
@@ -57,6 +64,12 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
 
   ObjectBodyBlockEditService get _bodyBlockEdits =>
       ObjectBodyBlockEditService(bodyStore: _bodyStore);
+
+  ObjectBodyBlockActionController get _bodyActions =>
+      ObjectBodyBlockActionController(editService: _bodyBlockEdits);
+
+  ObjectBodyBlockDuplicateService get _bodyDuplicates =>
+      ObjectBodyBlockDuplicateService(editService: _bodyBlockEdits);
 
   ObjectDetailContentLoader get _contentLoader => ObjectDetailContentLoader(
         objectStore: widget.objectStore,
@@ -162,27 +175,99 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
     await _openObject(note.id);
   }
 
-  Future<void> _editBodyText(ObjectBodyBlock block, String text) async {
-    final document = await _bodyBlockEdits.updateText(
-      objectId: widget.objectId,
-      blockId: block.id,
-      text: text,
-    );
+  void _applyBodyDocument(ObjectBodyDocument document) {
     final current = _content;
     if (mounted && current != null) {
       setState(() => _content = current.copyWith(body: document));
     }
   }
 
-  Future<void> _toggleChecklist(ObjectBodyBlock block, bool checked) async {
-    final document = await _bodyBlockEdits.setChecklistChecked(
-      objectId: widget.objectId,
-      blockId: block.id,
-      checked: checked,
+  Future<void> _runBodyMutation(
+    Future<ObjectBodyDocument> Function() mutation,
+  ) async {
+    try {
+      _applyBodyDocument(await mutation());
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Bodyを更新できませんでした: $error')),
+      );
+    }
+  }
+
+  Future<void> _editBodyText(ObjectBodyBlock block, String text) =>
+      _runBodyMutation(
+        () => _bodyBlockEdits.updateText(
+          objectId: widget.objectId,
+          blockId: block.id,
+          text: text,
+        ),
+      );
+
+  Future<void> _toggleChecklist(ObjectBodyBlock block, bool checked) =>
+      _runBodyMutation(
+        () => _bodyBlockEdits.setChecklistChecked(
+          objectId: widget.objectId,
+          blockId: block.id,
+          checked: checked,
+        ),
+      );
+
+  Future<void> _insertBodyBlock(
+    ObjectBodyInsertKind kind, {
+    String? afterBlockId,
+  }) async {
+    final latest = await _bodyStore.read(widget.objectId);
+    final newBlockId = _bodyBlockIds.next(latest, prefix: kind.name);
+    await _runBodyMutation(
+      () => afterBlockId == null
+          ? _bodyActions.insert(
+              objectId: widget.objectId,
+              newBlockId: newBlockId,
+              kind: kind,
+            )
+          : _bodyActions.insertAfter(
+              objectId: widget.objectId,
+              anchorBlockId: afterBlockId,
+              newBlockId: newBlockId,
+              kind: kind,
+            ),
     );
-    final current = _content;
-    if (mounted && current != null) {
-      setState(() => _content = current.copyWith(body: document));
+  }
+
+  Future<void> _moveBodyBlockUp(ObjectBodyBlock block) => _runBodyMutation(
+        () => _bodyActions.moveUp(
+          objectId: widget.objectId,
+          blockId: block.id,
+        ),
+      );
+
+  Future<void> _moveBodyBlockDown(ObjectBodyBlock block) => _runBodyMutation(
+        () => _bodyActions.moveDown(
+          objectId: widget.objectId,
+          blockId: block.id,
+        ),
+      );
+
+  Future<void> _deleteBodyBlock(ObjectBodyBlock block) => _runBodyMutation(
+        () => _bodyActions.remove(
+          objectId: widget.objectId,
+          blockId: block.id,
+        ),
+      );
+
+  Future<void> _duplicateBodyBlock(ObjectBodyBlock block) async {
+    try {
+      final result = await _bodyDuplicates.duplicateAfter(
+        objectId: widget.objectId,
+        sourceBlockId: block.id,
+      );
+      _applyBodyDocument(result.document);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Bodyを更新できませんでした: $error')),
+      );
     }
   }
 
@@ -506,12 +591,43 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
               final targetId = block.referencedObjectId;
               if (targetId != null) _openObject(targetId);
             },
-            emptyBuilder: (context) => Text(
-              'Bodyは空です',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+            blockActionsBuilder: node.isSystemType
+                ? null
+                : (context, block, position) => ObjectBodyBlockActionBar(
+                      block: block,
+                      position: position,
+                      onMoveUp: () => _moveBodyBlockUp(block),
+                      onMoveDown: () => _moveBodyBlockDown(block),
+                      onDuplicate: () => _duplicateBodyBlock(block),
+                      onDelete: () => _deleteBodyBlock(block),
+                      onInsertAfter: (kind) => _insertBodyBlock(
+                        kind,
+                        afterBlockId: block.id,
+                      ),
+                    ),
+            emptyBuilder: (context) => node.isSystemType
+                ? Text(
+                    'Bodyは空です',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  )
+                : Row(
+                    children: [
+                      Text(
+                        'Bodyは空です',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color:
+                                  Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                      ),
+                      const SizedBox(width: 8),
+                      ObjectBodyInsertMenuButton(
+                        key: const ValueKey('body-empty-insert'),
+                        onSelected: _insertBodyBlock,
+                      ),
+                    ],
                   ),
-            ),
           ),
           if (_relations.backlinks.isNotEmpty) ...[
             const SizedBox(height: 24),
