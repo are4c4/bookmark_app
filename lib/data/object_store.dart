@@ -61,17 +61,24 @@ class ObjectStore {
     );
   }
 
-  Future<void> renameObjectType(int id, String name) =>
-      _genericStore.renameDatabase(id, name);
+  Future<void> renameObjectType(int id, String name) async {
+    await _assertSchemaMutable(id);
+    await _genericStore.renameDatabase(id, name);
+  }
 
-  Future<void> deleteObjectType(int id) => _genericStore.deleteDatabase(id);
+  Future<void> deleteObjectType(int id) async {
+    await _assertSchemaMutable(id);
+    await _genericStore.deleteDatabase(id);
+  }
 
   Future<int> createProperty({
     required int objectTypeId,
     required String name,
     required ObjectPropertyType type,
     Map<String, dynamic> config = const <String, dynamic>{},
-  }) {
+    bool allowSystemMutation = false,
+  }) async {
+    if (!allowSystemMutation) await _assertSchemaMutable(objectTypeId);
     final storageType = ObjectPropertyDefinition(
       id: -1,
       objectTypeId: objectTypeId,
@@ -93,6 +100,7 @@ class ObjectStore {
     required String name,
     required int targetObjectTypeId,
     bool multiple = true,
+    bool allowSystemMutation = false,
   }) {
     return createProperty(
       objectTypeId: objectTypeId,
@@ -102,10 +110,20 @@ class ObjectStore {
         'targetObjectTypeId': targetObjectTypeId,
         'multiple': multiple,
       },
+      allowSystemMutation: allowSystemMutation,
     );
   }
 
-  Future<void> deleteProperty(int id) => _genericStore.deleteProperty(id);
+  Future<void> deleteProperty(
+    int id, {
+    bool allowSystemMutation = false,
+  }) async {
+    if (!allowSystemMutation) {
+      final property = await _propertyById(id);
+      if (property != null) await _assertSchemaMutable(property.objectTypeId);
+    }
+    await _genericStore.deleteProperty(id);
+  }
 
   Future<List<AppObject>> listObjects(int objectTypeId) async {
     final records = await _genericStore.listRecords(objectTypeId);
@@ -277,6 +295,27 @@ class ObjectStore {
       variables: [Variable<int>(objectTypeId)],
     ).getSingleOrNull();
     return row == null ? ObjectTypeKind.custom : ObjectTypeKind.system;
+  }
+
+  Future<void> _assertSchemaMutable(int objectTypeId) async {
+    if (await _kindForObjectType(objectTypeId) == ObjectTypeKind.system) {
+      throw StateError('System ObjectTypes are managed by the application and cannot be modified.');
+    }
+  }
+
+  Future<ObjectPropertyDefinition?> _propertyById(int propertyId) async {
+    final row = await _genericStore.database.customSelect(
+      '''SELECT id, database_id, name, type, config_json, sort_order
+         FROM generic_properties WHERE id = ? LIMIT 1''',
+      variables: [Variable<int>(propertyId)],
+    ).getSingleOrNull();
+    if (row == null) return null;
+    final type = await getObjectType(row.read<int>('database_id'));
+    if (type == null) return null;
+    for (final property in type.properties) {
+      if (property.id == propertyId) return property;
+    }
+    return null;
   }
 
   Future<AppObjectType> _hydrateObjectType(
