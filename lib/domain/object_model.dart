@@ -22,6 +22,17 @@ enum ObjectPropertyType {
   rollup,
 }
 
+/// High-level persistence/behavior semantics for an Object property.
+///
+/// Keep this separate from [ObjectPropertyType]: formats such as URL, Date,
+/// Select, and Rating are all lightweight values, while Object Relations point
+/// at independently meaningful Objects and computed properties are derived.
+enum ObjectPropertySemantics {
+  value,
+  objectRelation,
+  computed,
+}
+
 class ObjectPropertyDefinition {
   const ObjectPropertyDefinition({
     required this.id,
@@ -39,7 +50,17 @@ class ObjectPropertyDefinition {
   final int sortOrder;
   final Map<String, dynamic> config;
 
-  bool get isRelation => type == ObjectPropertyType.objectRelation;
+  ObjectPropertySemantics get semantics => switch (type) {
+        ObjectPropertyType.objectRelation =>
+          ObjectPropertySemantics.objectRelation,
+        ObjectPropertyType.formula || ObjectPropertyType.rollup =>
+          ObjectPropertySemantics.computed,
+        _ => ObjectPropertySemantics.value,
+      };
+
+  bool get isValue => semantics == ObjectPropertySemantics.value;
+  bool get isRelation => semantics == ObjectPropertySemantics.objectRelation;
+  bool get isComputed => semantics == ObjectPropertySemantics.computed;
 
   int? get targetObjectTypeId {
     final value = config['targetObjectTypeId'];
