@@ -267,16 +267,29 @@ class ObjectStore {
         position: row.read<int>('position'),
       );
 
+  Future<ObjectTypeKind> _kindForObjectType(int objectTypeId) async {
+    final registry = await _genericStore.database.customSelect(
+      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'system_object_types' LIMIT 1",
+    ).getSingleOrNull();
+    if (registry == null) return ObjectTypeKind.custom;
+    final row = await _genericStore.database.customSelect(
+      'SELECT 1 FROM system_object_types WHERE object_type_id = ? LIMIT 1',
+      variables: [Variable<int>(objectTypeId)],
+    ).getSingleOrNull();
+    return row == null ? ObjectTypeKind.custom : ObjectTypeKind.system;
+  }
+
   Future<AppObjectType> _hydrateObjectType(
     GenericDatabaseDefinitionRecord definition,
   ) async {
     final properties = await _genericStore.listProperties(definition.id);
+    final kind = await _kindForObjectType(definition.id);
     return AppObjectType(
       id: definition.id,
       workspaceId: definition.workspaceId,
       name: definition.name,
       icon: definition.icon,
-      kind: ObjectTypeKind.custom,
+      kind: kind,
       sortOrder: definition.sortOrder,
       properties: properties.map(_mapProperty).toList(growable: false),
     );
