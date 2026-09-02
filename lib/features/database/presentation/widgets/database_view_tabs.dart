@@ -160,30 +160,45 @@ class _DatabaseViewTabsState extends State<DatabaseViewTabs> {
       builder: (dialogContext) => SimpleDialog(
         title: const Text('Objectの開き方'),
         children: [
-          RadioListTile<String>(
-            value: 'inherit',
-            groupValue: current?.name ?? 'inherit',
+          ListTile(
+            leading: Icon(
+              current == null
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_unchecked,
+            ),
             title: const Text('継承（デフォルト）'),
             subtitle: const Text('Database / ObjectType の設定を使用'),
-            onChanged: (value) => Navigator.pop(dialogContext, value),
+            onTap: () => Navigator.pop(dialogContext, 'inherit'),
           ),
-          RadioListTile<String>(
-            value: ObjectOpenMode.sidePeek.name,
-            groupValue: current?.name ?? 'inherit',
+          ListTile(
+            leading: Icon(
+              current == ObjectOpenMode.sidePeek
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_unchecked,
+            ),
             title: const Text('サイドピーク'),
-            onChanged: (value) => Navigator.pop(dialogContext, value),
+            onTap: () =>
+                Navigator.pop(dialogContext, ObjectOpenMode.sidePeek.name),
           ),
-          RadioListTile<String>(
-            value: ObjectOpenMode.centerPeek.name,
-            groupValue: current?.name ?? 'inherit',
+          ListTile(
+            leading: Icon(
+              current == ObjectOpenMode.centerPeek
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_unchecked,
+            ),
             title: const Text('センターピーク'),
-            onChanged: (value) => Navigator.pop(dialogContext, value),
+            onTap: () =>
+                Navigator.pop(dialogContext, ObjectOpenMode.centerPeek.name),
           ),
-          RadioListTile<String>(
-            value: ObjectOpenMode.fullPage.name,
-            groupValue: current?.name ?? 'inherit',
+          ListTile(
+            leading: Icon(
+              current == ObjectOpenMode.fullPage
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_unchecked,
+            ),
             title: const Text('フルページ'),
-            onChanged: (value) => Navigator.pop(dialogContext, value),
+            onTap: () =>
+                Navigator.pop(dialogContext, ObjectOpenMode.fullPage.name),
           ),
         ],
       ),
