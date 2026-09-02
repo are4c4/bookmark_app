@@ -19,13 +19,14 @@ class DailyNoteDetailService {
     required int workspaceId,
     required DateTime localDate,
   }) async {
-    final daily = await dailyNotes.openOrCreate(
+    final definition = await dailyNotes.ensureDefinition(workspaceId);
+    final object = await dailyNotes.openOrCreate(
       workspaceId: workspaceId,
-      localDate: localDate,
+      date: localDate,
     );
     final content = await detailLoader.load(
-      objectTypeId: daily.objectType.id,
-      objectId: daily.object.id,
+      objectTypeId: definition.objectType.id,
+      objectId: object.id,
     );
     if (content == null) {
       throw StateError('Daily Note disappeared after open-or-create.');
