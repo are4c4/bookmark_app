@@ -6,9 +6,11 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('built-in templates expose stable keys and useful schemas', () {
+  test('built-in templates expose stable unique keys and useful schemas', () {
     final templates = ObjectTypeTemplateStore.templates;
-    expect(templates.map((item) => item.key).toSet(), {
+    final keys = templates.map((item) => item.key).toList();
+    expect(keys.toSet().length, keys.length);
+    expect(keys.toSet(), {
       'book',
       'person',
       'project',
