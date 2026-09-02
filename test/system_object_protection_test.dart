@@ -48,6 +48,14 @@ void main() {
       throwsStateError,
     );
     await expectLater(
+      objectStore.createRelationProperty(
+        objectTypeId: systemType.id,
+        name: '任意Relation',
+        targetObjectTypeId: systemType.id,
+      ),
+      throwsStateError,
+    );
+    await expectLater(
       objectStore.deleteProperty(managedProperty.id),
       throwsStateError,
     );
