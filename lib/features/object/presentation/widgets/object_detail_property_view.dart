@@ -1,0 +1,76 @@
+import 'package:flutter/material.dart';
+
+import '../../../../domain/object_detail_property_presentation.dart';
+
+/// Shared read-oriented Property row for full-page/side/center Object detail.
+///
+/// Relations deliberately require a caller-provided canonical renderer rather
+/// than falling back to persisted ids. Hidden Properties are omitted here so
+/// every presentation mode observes the same visibility contract.
+class ObjectDetailPropertyView extends StatelessWidget {
+  const ObjectDetailPropertyView({
+    super.key,
+    required this.presentation,
+    this.relationChild,
+    this.trailing,
+  });
+
+  final ObjectDetailPropertyPresentation presentation;
+  final Widget? relationChild;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    if (presentation.isHidden) {
+      return const SizedBox.shrink();
+    }
+
+    final property = presentation.property;
+    final valueWidget = presentation.usesRelationRenderer
+        ? relationChild ??
+            Text(
+              'Relation',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            )
+        : Text(
+            presentation.displayText ?? 'なし',
+            textAlign: TextAlign.end,
+          );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Row(
+              children: [
+                if (presentation.isComputed)
+                  const Padding(
+                    padding: EdgeInsets.only(right: 4),
+                    child: Icon(Icons.functions, size: 16),
+                  ),
+                Expanded(
+                  child: Text(
+                    property.name,
+                    style: Theme.of(context).textTheme.labelLarge,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: valueWidget),
+          if (trailing != null) ...[
+            const SizedBox(width: 8),
+            trailing!,
+          ],
+        ],
+      ),
+    );
+  }
+}
