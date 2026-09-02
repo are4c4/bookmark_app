@@ -24,38 +24,13 @@ class ObjectBodySection extends StatelessWidget {
 
   Future<void> _edit(BuildContext context) async {
     if (!_adapter.canEdit(document)) return;
-    final controller = TextEditingController(text: _adapter.read(document));
     final result = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text('$titleを編集'),
-        content: SizedBox(
-          width: 560,
-          child: TextField(
-            key: const ValueKey('object-body-editor'),
-            controller: controller,
-            autofocus: true,
-            minLines: 8,
-            maxLines: 18,
-            decoration: InputDecoration(
-              hintText: '$titleを書き始める…',
-              border: const OutlineInputBorder(),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('キャンセル'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(controller.text),
-            child: const Text('保存'),
-          ),
-        ],
+      builder: (_) => _ObjectBodyEditDialog(
+        title: title,
+        initialText: _adapter.read(document),
       ),
     );
-    controller.dispose();
     if (result != null) await onSave(result);
   }
 
@@ -106,6 +81,66 @@ class ObjectBodySection extends StatelessWidget {
             paragraphs!,
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(height: 1.6),
           ),
+      ],
+    );
+  }
+}
+
+class _ObjectBodyEditDialog extends StatefulWidget {
+  const _ObjectBodyEditDialog({
+    required this.title,
+    required this.initialText,
+  });
+
+  final String title;
+  final String initialText;
+
+  @override
+  State<_ObjectBodyEditDialog> createState() => _ObjectBodyEditDialogState();
+}
+
+class _ObjectBodyEditDialogState extends State<_ObjectBodyEditDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialText);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('${widget.title}を編集'),
+      content: SizedBox(
+        width: 560,
+        child: TextField(
+          key: const ValueKey('object-body-editor'),
+          controller: _controller,
+          autofocus: true,
+          minLines: 8,
+          maxLines: 18,
+          decoration: InputDecoration(
+            hintText: '${widget.title}を書き始める…',
+            border: const OutlineInputBorder(),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('キャンセル'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_controller.text),
+          child: const Text('保存'),
+        ),
       ],
     );
   }
