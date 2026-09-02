@@ -26,6 +26,7 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
   AppObjectType? _type;
   AppObject? _object;
   List<ObjectGraphBacklinkRecord> _backlinks = const [];
+  Map<int, ObjectGraphNodeRecord> _relatedNodes = const {};
   bool _loading = true;
 
   @override
@@ -53,6 +54,17 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
       }
     }
     final backlinks = await graph.backlinks(node.objectId);
+    final relatedNodes = <int, ObjectGraphNodeRecord>{};
+    if (object != null && type != null) {
+      for (final property in type.properties) {
+        if (!property.isRelation) continue;
+        for (final targetId
+            in ObjectRelationValue.fromJson(object.values[property.id]).objectIds) {
+          final target = await graph.getNode(targetId);
+          if (target != null) relatedNodes[targetId] = target;
+        }
+      }
+    }
 
     if (!mounted) return;
     setState(() {
@@ -60,19 +72,52 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
       _type = type;
       _object = object;
       _backlinks = backlinks;
+      _relatedNodes = relatedNodes;
       _loading = false;
     });
   }
 
+  Future<void> _openObject(int objectId) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ObjectInspectorPage(
+          store: widget.store,
+          objectStore: widget.objectStore,
+          objectId: objectId,
+        ),
+      ),
+    );
+  }
+
   String _displayValue(ObjectPropertyDefinition property, dynamic value) {
     if (value == null) return 'なし';
-    if (property.type == ObjectPropertyType.objectRelation) {
-      final ids = ObjectRelationValue.fromJson(value).objectIds;
-      return ids.isEmpty ? 'なし' : '${ids.length}件のObject';
-    }
     if (value is List) return value.join(', ');
     if (value is bool) return value ? 'はい' : 'いいえ';
     return '$value';
+  }
+
+  Widget _relationValue(ObjectPropertyDefinition property, dynamic value) {
+    final ids = ObjectRelationValue.fromJson(value).objectIds;
+    if (ids.isEmpty) return const Text('なし');
+    final nodes = ids
+        .map((id) => _relatedNodes[id])
+        .whereType<ObjectGraphNodeRecord>()
+        .toList(growable: false);
+    if (nodes.isEmpty) return Text('${ids.length}件のObject');
+    return Wrap(
+      spacing: 6,
+      runSpacing: 5,
+      children: nodes
+          .map(
+            (node) => ActionChip(
+              visualDensity: VisualDensity.compact,
+              avatar: Text(node.objectTypeIcon),
+              label: Text(node.title),
+              onPressed: () => _openObject(node.objectId),
+            ),
+          )
+          .toList(),
+    );
   }
 
   @override
@@ -127,7 +172,12 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
                 size: 18,
               ),
               title: Text(property.name),
-              subtitle: Text(_displayValue(property, value)),
+              subtitle: property.isRelation
+                  ? Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: _relationValue(property, value),
+                    )
+                  : Text(_displayValue(property, value)),
             );
           }),
           if (_backlinks.isNotEmpty) ...[
@@ -148,15 +198,7 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
                   '${backlink.sourceObjectTypeName} · ${backlink.propertyName}',
                 ),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => ObjectInspectorPage(
-                      store: widget.store,
-                      objectStore: widget.objectStore,
-                      objectId: backlink.sourceObjectId,
-                    ),
-                  ),
-                ),
+                onTap: () => _openObject(backlink.sourceObjectId),
               ),
             ),
           ],
