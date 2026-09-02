@@ -4,105 +4,68 @@
 
 ## Lane scope
 
-Own Object/ObjectType architecture, Property value semantics, Database/View integration that is primarily Object-centric, Object detail presentation, Body/block model, reusable Object types, Daily Notes, and Value-to-Object promotion contracts.
+Own Object/ObjectType architecture, Property value semantics, reusable Object types, shared Object detail/content, Body/block model, Daily Notes, and Value-to-Object promotion. Consume Relation-lane APIs; do not reimplement Relation lifecycle.
 
 ## Active Issue
 
 `#56` — Integrate generic Object database UX toward Notion/Capacities workflow
 
-## Current branch / PR
+## Current state
 
-- Branch: `feature/object-body-defaults-persistence`
-- PR #65 — `Persist Object Body and ObjectType defaults`
-- Latest implementation commits include `6f119d5` (safe Body plain-text adapter tests); this handoff update follows those commits.
-- Base `main` includes merged PR #64 at `3358cb6d`.
+- `main` includes Object PRs #61, #64, #65, and #71 plus Relation PR #66.
+- #65 persisted Object Body/defaults and added Weblink, Daily Note, detail loading, and paragraph-safe Body foundations.
+- #66 provides stable `RelationMutationService`, `RelationReadService`, and Relation index/lifecycle guarantees.
+- #71 (`f89ea089`) replayed the CI-validated shared detail/editing work after #66 advanced main:
+  - `ObjectDetailEditService`
+  - `DailyNoteDetailService`
+  - persisted ObjectType default resolution
+  - `ObjectDetailSession` / loader
+  - reusable Image Object facade reusing the existing `image` system ObjectType.
+- PR #68 separately owns ObjectInspector/Body UI and Daily Note entry UX. Avoid duplicating that presentation work.
+- PR #70 owns Value -> Object promotion execution and Weblink promotion using Relation #66 APIs.
+- PR #72 (current branch `feature/object-detail-relation-context`) adds resolved Relation/Backlink context on top of the shared Object detail session.
 
-## Checkpoints completed in this run
+## Checkpoints completed in the latest sustained run
 
-1. **Validated and landed PR #64**
-   - Confirmed Flutter CI #346 succeeded on PR #64.
-   - Merged promotion planning, versioned Body model, ObjectType defaults contract, and shared detail content into `main`.
-
-2. **Object Body persistence**
-   - Added `ObjectBodyStore` with additive `object_bodies` storage keyed by global Object id.
-   - Persists the versioned `ObjectBodyDocument` JSON contract without rewriting `generic_records` or Property data.
-   - Object deletion cascades Body deletion; Body can also be cleared independently.
-
-3. **ObjectType defaults persistence**
-   - Added JSON serialization for `ObjectTypeDefaults`.
-   - Added additive `object_type_defaults` storage keyed by ObjectType id.
-   - Stores only ObjectType-owned defaults; Database/View overrides remain outside this layer.
-   - Writing empty defaults clears the persisted override row.
-
-4. **Reusable Weblink Object**
-   - Added idempotent `Weblink` system ObjectType with a URL Value Property.
-   - Existing Bookmark storage remains unchanged.
-   - Added URL Value -> Weblink promotion planning that preserves the original scalar URL.
-   - Added `findOrCreate` so sequential reuse of the same normalized URL returns the existing Weblink Object rather than creating another one.
-
-5. **Daily Note open-or-create**
-   - Added Daily Note as a normal system ObjectType with a Date Value Property.
-   - Added additive `daily_note_registry` enforcing one registered Daily Note per workspace/local calendar date.
-   - `openOrCreate` reuses a registered note, adopts matching pre-registry Objects, or creates a normal Object and sets its date.
-   - Daily Note defaults to full-page opening and remains compatible with the general Body/Property/Relation model.
-
-6. **Shared Object detail loading**
-   - Added `ObjectDetailContentLoader` to compose Object + ObjectType + persisted Body + Formula/Rollup values into one `ObjectDetailContent` payload.
-   - Side peek, center peek, and full-page surfaces can consume this common payload without duplicating data logic.
-   - Relation/backlink fetching remains outside the loader and can be composed from Relation-lane APIs.
-
-7. **Safe initial Body text adapter**
-   - Added `ObjectBodyPlainTextAdapter` for an intentionally thin first editor layer.
-   - Plain-text editing is allowed only when every block is a paragraph.
-   - Existing paragraph block ids are preserved when possible; newly needed ids are supplied by the caller.
-   - Richer/unknown block documents are rejected rather than silently flattened or discarded.
-
-## Tests added / updated
-
-- `test/object_body_store_test.dart`
-- `test/object_type_defaults_store_test.dart`
-- `test/weblink_object_service_test.dart`
-- `test/daily_note_service_test.dart`
-- `test/object_detail_content_loader_test.dart`
-- `test/object_body_plain_text_test.dart`
+1. Validated PR #65 latest head with Flutter CI #372 and merged it.
+2. Built shared Object detail editing, Daily Note detail bridge, ObjectType default service/session, and reusable Image Object foundations; original #67 passed CI #395 but conflicted only because #66 advanced main.
+3. Replayed the #67 code/tests onto latest main as #71; Flutter CI #408 passed and #71 merged as `f89ea089`.
+4. Confirmed Relation #66 merged and its stable read/mutation/index APIs are available to Object consumers.
+5. Continued existing promotion work on PR #70; identified/fixed an analyzer nullability issue in `ObjectValuePromotionExecutionService`. Latest-head CI must pass before integration.
+6. Added PR #72 `ObjectDetailRelationContext` / loader consuming `RelationReadService` for outgoing Relations and Backlinks, with focused regression coverage.
+7. Detected overlapping ObjectInspector work in PR #68 and stopped the duplicate inspector branch instead of competing with it.
 
 ## Validation
 
-- PR #64 head passed Flutter CI #346 before merge.
-- PR #65 is open and mergeable. CI runs on intermediate heads were superseded/cancelled as additional safe checkpoints were pushed; validate the newest final head before merge.
-- This chat has GitHub connector access but no local Flutter runtime, so `flutter analyze` / `flutter test` cannot be executed locally here.
-- All new persistence is additive (`CREATE TABLE IF NOT EXISTS`); there is no destructive schema migration or Bookmark/Tag rewrite.
-
-## Work in progress
-
-- Validate PR #65 newest head and fix analyzer/test failures caused by this branch.
-- Do not merge PR #65 until its latest-head CI is green.
+- PR #65 latest head passed Flutter CI #372 before merge.
+- Superseded #67 latest head passed Flutter CI #395 before concurrent #66 made it unmergeable.
+- Replay PR #71 passed Flutter CI #408 and merged.
+- Relation #66 final head passed Flutter CI #390 before merge.
+- PR #70 had an analyzer failure on an intermediate head; nullability was fixed and fresh latest-head CI is running/required.
+- PR #72 requires fresh CI after this handoff commit.
+- No local Flutter runtime is available in this chat; executable validation comes from PR CI.
 
 ## Exact next actions
 
-1. Inspect the newest PR #65 Flutter CI run; fix failures caused by Object-lane changes, then merge when green.
-2. Refresh from latest `main` after Relation PR #66 if it lands first; avoid force-merging shared handoff conflicts.
-3. Connect `ObjectDetailContentLoader` plus the paragraph-safe Body adapter to one existing Object detail presentation surface; keep navigation chrome separate.
-4. After Relation PR #66 stabilizes source/target validation and backlink helpers, implement the execution half of Value -> Object promotion as a small consumer of those APIs; preserve source Value by default.
-5. Add Daily Note entry/navigation UX only through general Object detail/open-mode mechanisms; do not create a special note editor silo.
-6. Consider database-level Weblink URL uniqueness only if concurrent creation becomes a demonstrated need; current `findOrCreate` handles normal sequential reuse.
-7. Keep Tag hierarchy mutation and Relation lifecycle work in the Relation lane.
+1. Validate PR #72 latest head; fix Object-caused analyzer/test failures, then merge when green.
+2. Validate PR #70 latest head; if main advancement makes it unmergeable, replay only its promotion code/tests onto latest main rather than overwriting shared handoffs.
+3. After #70 lands, exercise promotion from Object detail/UI only through `ObjectValuePromotionExecutionService` / Weblink facade; preserve the source Value by default.
+4. Let PR #68 own ObjectInspector/Body/Daily Note entry presentation; after it stabilizes, consume `ObjectDetailSession` and Relation context there only through coordinated follow-up rather than parallel rewrites.
+5. Continue reusable Object-type/default patterns where useful, while keeping Tag hierarchy mutation in the Relation lane.
 
-## Cross-lane dependencies / boundaries
+## Cross-lane boundaries
 
-- Relation lifecycle, bidirectional pair integrity, source/target validation, backlink queries, and Relation deletion/rename propagation belong to `docs/AI_PROGRESS_RELATION.md`.
-- Relation PR #66 (`feature/relation-write-integrity-v2`) is currently open on the same `3358cb6d` base and owns `object_store.dart` Relation integrity changes plus repository-wide handoff updates.
-- This Object branch deliberately does not modify `object_store.dart`, `bidirectional_relation_store.dart`, or Relation lifecycle code.
-- `docs/AI_PROGRESS.md` is not edited on PR #65 because Relation PR #66 is already updating that shared repository-wide handoff with the #64 integration state; avoid creating an avoidable cross-lane handoff conflict. If #65 merges after #66, update repository-wide state from latest `main` in the next integration checkpoint.
-- Value-to-Object **link execution** should consume the stable Relation APIs after #66 rather than reimplement validation.
+- Relation lifecycle, validation, bidirectional synchronization, index repair, rename/delete cleanup, and Tag hierarchy Relations belong to `docs/AI_PROGRESS_RELATION.md`.
+- Object code may consume `RelationMutationService` and `RelationReadService` but must not bypass them with new lifecycle logic.
+- Database/View navigation/query layout remains outside this lane unless a narrow Object detail integration explicitly consumes Object-owned APIs.
+- PR #68 is the active owner of ObjectInspector presentation; do not create a competing inspector implementation.
 
-## Blockers / risks
+## Risks / blockers
 
-- PR #65 requires newest-head executable CI validation before merge.
-- Connecting detail UI may touch broader presentation files; refresh latest `main` and keep the first integration slice narrow.
-- Daily Note uniqueness is enforced through the additive registry; future external imports should adopt/register matching date Objects rather than bypassing the service.
-- Weblink `findOrCreate` prevents ordinary sequential duplicates but does not provide a concurrency-level uniqueness constraint.
+- Parallel PRs can become unmergeable solely from shared handoff edits; prefer replaying narrow code/test diffs on latest main.
+- Promotion source clearing is destructive and must remain explicit/confirmed; default behavior preserves the scalar Value.
+- A simplified Body editor must never flatten unknown/richer block kinds.
 
-## Stop reason
+## Stop condition for the next run
 
-This continuation landed PR #64 and then completed seven safe Object-lane checkpoints on PR #65. Intermediate CI runs were cancelled by subsequent commits; the newest complete branch state now needs executable analyze/test validation. The next deeper change—Value-to-Object Relation execution—is also intentionally sequenced after concurrent Relation PR #66 lands its write-integrity APIs. This is a validation/cross-lane sequencing boundary under `AGENTS.md`, not a stop caused merely by one PR or a queued CI run.
+Continue through multiple safe Object checkpoints. Pending CI alone is not a stop condition; stop only for a genuine cross-lane/product/destructive-operation blocker, external validation failure with no independent work left, or runtime/tool limit.
