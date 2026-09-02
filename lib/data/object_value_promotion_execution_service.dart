@@ -168,7 +168,7 @@ class ObjectValuePromotionExecutionService {
       rethrow;
     }
 
-    final linkedRelation = relation!;
+    final linkedRelation = relation;
     var sourceValueCleared = false;
     if (plan.sourceDisposition ==
         ObjectValuePromotionSourceDisposition.clearAfterLink) {
