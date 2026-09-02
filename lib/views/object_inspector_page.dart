@@ -18,7 +18,9 @@ import '../data/weblink_object_service.dart';
 import '../data/weblink_value_promotion_service.dart';
 import '../domain/object_body_plain_text.dart';
 import '../domain/object_detail_content.dart';
+import '../domain/object_detail_property_presentation.dart';
 import '../domain/object_model.dart';
+import '../features/object/presentation/widgets/object_detail_property_view.dart';
 import '../widgets/object_body_section.dart';
 
 class ObjectInspectorPage extends StatefulWidget {
@@ -39,6 +41,7 @@ class ObjectInspectorPage extends StatefulWidget {
 
 class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
   static const _bodyAdapter = ObjectBodyPlainTextAdapter();
+  static const _propertyPresenter = ObjectDetailPropertyPresenter();
 
   ObjectGraphNodeRecord? _node;
   ObjectDetailContent? _content;
@@ -335,13 +338,6 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
     }
   }
 
-  String _displayValue(ObjectPropertyDefinition property, dynamic value) {
-    if (value == null) return 'なし';
-    if (value is List) return value.join(', ');
-    if (value is bool) return value ? 'はい' : 'いいえ';
-    return '$value';
-  }
-
   Widget _relationValue(ObjectPropertyDefinition property) {
     final outgoing = _relations.outgoing
         .where((relation) => relation.property.id == property.id)
@@ -426,28 +422,18 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
           ),
           const SizedBox(height: 24),
           ...type.properties.map((property) {
-            final value = content.valueFor(property);
-            if (property.config['hidden'] == true) return const SizedBox.shrink();
+            final presentation = _propertyPresenter.present(
+              content: content,
+              property: property,
+            );
+            final value = presentation.value;
             final canEditValue = _canEditSimpleValue(node, property);
             final canPromoteWeblink = _canPromoteWeblink(node, property, value);
             final promoting = _promotingWeblinkPropertyIds.contains(property.id);
-            return ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(
-                property.type == ObjectPropertyType.objectRelation
-                    ? Icons.swap_horiz
-                    : property.isComputed
-                        ? Icons.calculate_outlined
-                        : Icons.tune,
-                size: 18,
-              ),
-              title: Text(property.name),
-              subtitle: property.isRelation
-                  ? Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: _relationValue(property),
-                    )
-                  : Text(_displayValue(property, value)),
+            return ObjectDetailPropertyView(
+              key: ValueKey('object-detail-property-${property.id}'),
+              presentation: presentation,
+              relationChild: property.isRelation ? _relationValue(property) : null,
               trailing: canEditValue || canPromoteWeblink
                   ? Row(
                       mainAxisSize: MainAxisSize.min,
