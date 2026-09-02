@@ -35,6 +35,23 @@ void main() {
     );
   }
 
+  test('insert can create the first block in an empty Body', () async {
+    final f = await fixture();
+
+    final next = await f.controller.insert(
+      objectId: f.objectId,
+      newBlockId: 'first',
+      kind: ObjectBodyInsertKind.heading2,
+      text: 'Start',
+    );
+
+    expect(next.blocks, hasLength(1));
+    expect(next.blocks.single.id, 'first');
+    expect(next.blocks.single.type, ObjectBodyBlockType.heading);
+    expect(next.blocks.single.text, 'Start');
+    expect(next.blocks.single.attributes[ObjectBodyBlockAttribute.level], 2);
+  });
+
   test('insertAfter creates selected block immediately after latest anchor', () async {
     final f = await fixture();
     await f.store.write(
