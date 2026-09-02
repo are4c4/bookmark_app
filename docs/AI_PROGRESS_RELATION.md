@@ -12,9 +12,10 @@ Own Relation and backlink lifecycle, bidirectional Relation integrity, relation 
 
 ## Current state
 
-- PR #66 is merged to `main` at `6770a5f1`; source/target validation, stable Relation mutation/read/index APIs, bidirectional lifecycle hardening, Relation-safe Object deletion, and Tag hierarchy cleanup are now integrated.
+- PR #66 is merged to `main` at `6770a5f1`; source/target validation, stable Relation mutation/read/index APIs, bidirectional lifecycle hardening, Relation-safe Object deletion, and Tag hierarchy cleanup are integrated.
 - Current branch: `feature/relation-integrity-audit`.
 - Current PR: #69 — `Add read-only Relation integrity audit`.
+- Latest implementation commit before this handoff update: `7f37680ff80c98ddc4abe9fb4ba41b5171da6a96`.
 - Object-owned UI surfaces remain intentionally untouched.
 
 ## Completed integration checkpoints
@@ -42,9 +43,20 @@ Own Relation and backlink lifecycle, bidirectional Relation integrity, relation 
    - stale normalized edge-index entries;
    - invalid bidirectional pair metadata;
    - bidirectional inverse-value mismatches.
-3. Audit is deliberately non-destructive. Repair remains an explicit separate action through existing index/lifecycle APIs.
-4. Added focused regression coverage for healthy Relations, missing edges, missing targets, cardinality violations, broken pairs, inverse mismatches, and cross-workspace metadata.
-5. PR #69 is open; latest-head Flutter CI must pass before merge.
+3. Bidirectional consistency audit is symmetric: it catches both source-without-inverse and inverse-only stale references.
+4. Audit caches Object lists per ObjectType and outgoing edge lists per Object during one workspace scan to avoid repeated Relation-index reads for multiple Properties.
+5. Audit is deliberately non-destructive. Repair remains an explicit separate action through existing index/lifecycle APIs.
+6. Added focused regression coverage for:
+   - healthy Relations;
+   - missing normalized edges without mutating stored values;
+   - stale normalized edges;
+   - missing target Objects;
+   - single-Relation cardinality violations;
+   - broken bidirectional pair metadata;
+   - forward inverse-value mismatch;
+   - inverse-only bidirectional mismatch;
+   - cross-workspace target metadata.
+7. PR #69 is open; latest-head Flutter CI must pass before merge.
 
 ## Validation
 
@@ -52,13 +64,19 @@ Own Relation and backlink lifecycle, bidirectional Relation integrity, relation 
 - PR #69 runs fresh Flutter CI on each latest head. Intermediate runs may be superseded as this sustained run adds checkpoints.
 - Local Flutter execution is unavailable in this connector-only session; GitHub Actions is the executable validation source.
 
-## Next priorities
+## Work in progress
 
-1. Validate PR #69 latest-head CI; fix Relation-caused analyzer/test failures only.
-2. Merge #69 when green and conflict-free.
-3. After #69 integration, keep audit and repair separate. Consider an explicit, narrowly scoped repair planner only if a deterministic safe action can be derived from audit results without silently discarding Relation values.
-4. Coordinate Object-lane adoption of `RelationMutationService` / `RelationReadService` in `GenericDatabasePage`, `core_object_bridge.dart`, shared Object detail, promotion execution, and Daily Note composition rather than editing those surfaces concurrently here.
-5. Continue Tag hierarchy behavior only through general Relation APIs; no special Relation persistence silo.
+- Code for the current audit slice is intentionally frozen after `7f37680f` so one final CI can validate the complete branch state.
+- If final CI exposes a Relation-caused analyzer/test failure, fix that failure and rerun latest-head CI before merge.
+
+## Exact next actions
+
+1. Validate PR #69 latest-head CI: dependency install, Drift generation, `flutter analyze`, and full tests.
+2. Re-check latest `main` and PR mergeability after CI.
+3. Merge #69 when green and conflict-free; replay only narrow Relation-owned changes if concurrent Object work creates a real conflict.
+4. After #69 integration, keep audit and repair separate. A future repair planner may only automate deterministic index reconstruction; do not silently choose between conflicting user Relation values.
+5. Coordinate Object-lane adoption of `RelationMutationService` / `RelationReadService` in `GenericDatabasePage`, `core_object_bridge.dart`, shared Object detail, promotion execution, and Daily Note composition rather than editing those surfaces concurrently here.
+6. Continue Tag hierarchy behavior only through general Relation APIs; no special Relation persistence silo.
 
 ## Cross-lane boundary
 
@@ -74,4 +92,4 @@ Own Relation and backlink lifecycle, bidirectional Relation integrity, relation 
 
 ## Stop condition
 
-No product blocker is active. Continue through PR #69 validation/integration and additional clearly safe Relation-owned diagnostics or API hardening. Stop before ambiguous/destructive automatic repair or broad Object-owned UI integration.
+No product blocker is active. Continue through PR #69 validation/integration. Stop before ambiguous/destructive automatic repair or broad Object-owned UI integration, or if an unavoidable cross-lane conflict requires sequencing.
