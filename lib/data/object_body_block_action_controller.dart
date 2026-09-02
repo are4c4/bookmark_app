@@ -15,6 +15,21 @@ class ObjectBodyBlockActionController {
   final ObjectBodyBlockEditService editService;
   final ObjectBodyInsertBlockFactory insertFactory;
 
+  /// Appends a generic non-reference block, including into an empty Body.
+  Future<ObjectBodyDocument> insert({
+    required int objectId,
+    required String newBlockId,
+    required ObjectBodyInsertKind kind,
+    String text = '',
+  }) {
+    final block = insertFactory.build(
+      kind: kind,
+      id: newBlockId,
+      text: text,
+    );
+    return editService.insert(objectId: objectId, block: block);
+  }
+
   Future<ObjectBodyDocument> insertAfter({
     required int objectId,
     required String anchorBlockId,
