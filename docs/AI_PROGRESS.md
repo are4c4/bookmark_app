@@ -47,23 +47,12 @@ The active phase is **Database/View integration and user-facing UX**. Most Objec
 - PR #82 merged as `689c84de46cee1292f7f126eb3d5719658f8d8e8`: Phase-1 `Database = target ObjectType + collectionFilter`, separate persistence, collection resolver/config service, and Database-first/View-second projection composition. Latest-head Flutter CI #474 passed.
 - PR #85 merged: Database collection settings dialog for target ObjectType and collection-filter editing, independent from View configuration.
 - PR #86 merged as `d3632b2ac725a87b3eae66eb86e582d5c3bd5544`: collection-aware page loader that preserves Database identity/View scope while sourcing filtered Objects/records/Properties from the target ObjectType. Flutter CI #477 passed.
+- PR #87 merged as `13e301634c764e252263647e700638d0e06d4e5a`: collection-aware normal/Board Object creation plus canonical Object-owned Relation editor adapter. Flutter CI #480 passed.
+- PR #88 merged as `2ba2142d13de7e7a3a60cf0de1b7f4dea4bdf878`: adopted dual-path View creation service (duplicate-current primary, blank secondary) with independent persisted View identities. Flutter CI #481 passed.
 
 ### Integrated Relation foundations on `main`
 
 - PR #62/#66/#69/#73/#74/#75/#80/#81: canonical Relation validation/mutation/read/index lifecycle, integrity audit, deterministic index reconciliation, neighborhood reads, canonical picker candidates/selection diagnostics, safe deletion, and core Image/Tag lifecycle migration.
-
-### Active Object integration PRs
-
-- PR #87 `feature/object-page-integration-services`
-  - collection-aware normal/Board Object creation;
-  - canonical Object-owned Relation editor adapter consuming `RelationTargetService.selectionFor()` + `RelationMutationService`;
-  - focused tests for cross-ObjectType collection creation, grouped presets, canonical Relation selection and invalid-target rejection;
-  - Flutter CI #480 running on head `43a75a6a2b03bdf8424dc9814a82d847ceecf688` at the latest handoff.
-
-- PR #88 `feature/object-view-creation-service`
-  - adopted dual-path View creation service: duplicate-current as primary, blank View as secondary;
-  - duplicate receives a new identity and remains independently mutable;
-  - Flutter CI #481 running on head `6f4ad751490849d8e612844a17e59366c7b60a0b` at the latest handoff.
 
 PR #83 remains closed/unmerged and is not an active implementation path.
 
@@ -97,29 +86,28 @@ Real block editing, RichText/Document Property, media/file blocks, embedded Obje
 
 ## Next repository-wide actions
 
-1. Validate/land PR #87 and PR #88 when latest-head Flutter CI is green; fix branch-caused failures first.
-2. Refresh `GenericDatabasePage` from latest `main` after those merges.
-3. Wire `GenericDatabaseCollectionPageLoader` into the real page so Database membership resolves first and existing View projection remains the second stage.
-4. Replace legacy Object creation assumptions with the collection-aware creation service; connect Board `onCreateInGroup` end-to-end.
-5. Migrate real Relation picker/editor UI onto the canonical Object-owned adapter; surface missing-target/cardinality diagnostics without silent repair.
-6. Wire the merged Database collection settings dialog through `DatabaseCollectionConfigService` in the real page.
-7. Add focused page/widget regression coverage for collection-aware reload/create/Relation edit paths.
-8. Wire the adopted duplicate-current and blank View creation paths into top-tab multi-View UX, then rename/reorder/delete/overflow.
-9. Expose reversible URL Value -> reusable Weblink promotion through a narrow Object-owned affordance while preserving the source URL by default.
-10. Complete contextual side-peek / center-peek / full-page Object opening after Database/View navigation state is stable.
-11. Continue Milestone C/D after the Database/View core is coherent; manual include/exclude remains deferred until dynamic collection + multi-View behavior is stable.
+1. Refresh `GenericDatabasePage` from latest `main`.
+2. Wire `GenericDatabaseCollectionPageLoader` into the real page so Database membership resolves first and existing View projection remains the second stage.
+3. Replace legacy Object creation assumptions with `GenericDatabaseObjectCreateService`; connect Board `onCreateInGroup` end-to-end.
+4. Migrate real Relation picker/editor UI onto `ObjectRelationEditorService`; surface missing-target/cardinality diagnostics without silent repair.
+5. Wire the merged Database collection settings dialog through `DatabaseCollectionConfigService` in the real page.
+6. Add focused page/widget regression coverage for collection-aware reload/create/Relation edit paths.
+7. Wire `DatabaseViewCreationService` into top-tab multi-View UX, then rename/reorder/delete/overflow behavior.
+8. Expose reversible URL Value -> reusable Weblink promotion through a narrow Object-owned affordance while preserving the source URL by default.
+9. Complete contextual side-peek / center-peek / full-page Object opening after Database/View navigation state is stable.
+10. Continue Milestone C/D after the Database/View core is coherent; manual include/exclude remains deferred until dynamic collection + multi-View behavior is stable.
 
 ## Validation status
 
 - PR #82 latest-head Flutter CI #474: success before merge.
 - PR #86 Flutter CI #477: success before merge.
-- PR #87 Flutter CI #480: in progress at latest handoff.
-- PR #88 Flutter CI #481: in progress at latest handoff.
+- PR #87 Flutter CI #480: success before merge.
+- PR #88 Flutter CI #481: success before merge.
 
 ## Known risks / sequencing constraints
 
 - `GenericDatabasePage` is the main integration hotspot. Avoid parallel broad edits from Object and Relation lanes.
-- Legacy page logic still assumes in places that Database id and ObjectType id are identical; remove that assumption incrementally using the new collection loader/creation adapters.
+- Legacy page logic still assumes in places that Database id and ObjectType id are identical; remove that assumption incrementally using the merged collection loader/creation adapters.
 - User-facing Relation mutation must use `RelationMutationService`; picker loading must not silently rewrite legacy/corrupt state.
 - Board Relation-group creation must continue through the safe mutation facade.
 - Database collection definitions must remain distinct from View config and must not duplicate Object ownership.
