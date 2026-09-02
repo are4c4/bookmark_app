@@ -87,4 +87,59 @@ void main() {
     expect(firstType!.id, isNot(secondType!.id));
     expect(firstObjectId, isNot(secondObjectId));
   });
+
+  test('removing a legacy parent tag clears surviving child Object Parent relation', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final objectStore = ObjectStore(GenericDatabaseStore(database));
+    final systemStore = SystemObjectStore(database: database, objectStore: objectStore);
+    final bridge = TagObjectBridge(
+      database: database,
+      objectStore: objectStore,
+      systemObjectStore: systemStore,
+    );
+
+    await database.customStatement("INSERT INTO tags(name) VALUES ('くだもの')");
+    final parentId = (await database.customSelect(
+      "SELECT id FROM tags WHERE name = 'くだもの'",
+    ).getSingle())
+        .read<int>('id');
+    await database.customStatement(
+      "INSERT INTO tags(name, parent_tag_id) VALUES ('りんご', ?)",
+      [parentId],
+    );
+    final childId = (await database.customSelect(
+      "SELECT id FROM tags WHERE name = 'りんご'",
+    ).getSingle())
+        .read<int>('id');
+
+    await bridge.syncLegacyTags(workspaceId);
+    final parentObjectId = await bridge.objectIdForLegacyTag(workspaceId, parentId);
+    final childObjectId = await bridge.objectIdForLegacyTag(workspaceId, childId);
+    expect(parentObjectId, isNotNull);
+    expect(childObjectId, isNotNull);
+
+    await database.customStatement(
+      'UPDATE tags SET parent_tag_id = NULL WHERE id = ?',
+      [childId],
+    );
+    await database.customStatement('DELETE FROM tags WHERE id = ?', [parentId]);
+    await bridge.syncLegacyTags(workspaceId);
+
+    final tagType = (await systemStore.getSystemObjectType(
+      workspaceId: workspaceId,
+      systemKey: TagObjectBridge.systemKey,
+    ))!;
+    final parentProperty = tagType.properties.firstWhere((p) => p.name == 'Parent');
+    final objects = await objectStore.listObjects(tagType.id);
+    final child = objects.singleWhere((object) => object.id == childObjectId);
+
+    expect(objects.any((object) => object.id == parentObjectId), isFalse);
+    expect(
+      ObjectRelationValue.fromJson(child.values[parentProperty.id]).objectIds,
+      isEmpty,
+    );
+    expect(await objectStore.backlinks(parentObjectId!), isEmpty);
+  });
 }

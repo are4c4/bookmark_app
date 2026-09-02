@@ -200,39 +200,37 @@ class BidirectionalRelationStore {
     required ObjectPropertyDefinition property,
     required List<int> targetObjectIds,
   }) async {
-    if (!property.isRelation) {
-      throw ArgumentError.value(
-        property.id,
-        'property',
-        'Property is not a relation.',
-      );
-    }
-    final inversePropertyId = _intConfig(property.config['inversePropertyId']);
-    if (inversePropertyId == null) {
+    final storedProperty = await _canonicalRelationProperty(property);
+    final hasPairMetadata = storedProperty.config['bidirectional'] == true ||
+        storedProperty.config['inversePropertyId'] != null;
+    if (!hasPairMetadata) {
       await objectStore.setRelation(
         objectId: objectId,
-        property: property,
+        property: storedProperty,
         targetObjectIds: targetObjectIds,
       );
       return;
     }
 
-    final source = await _objectById(property.objectTypeId, objectId);
+    final pair = await pairFor(storedProperty);
+    if (pair == null) {
+      throw StateError(
+        'Relation property ${storedProperty.name} has inconsistent bidirectional metadata.',
+      );
+    }
+    final sourceProperty = pair.sourceProperty;
+    final inverseProperty = pair.inverseProperty;
+    final source = await _objectById(sourceProperty.objectTypeId, objectId);
     if (source == null) {
-      throw ArgumentError.value(objectId, 'objectId', 'Object does not exist.');
+      throw ArgumentError.value(
+        objectId,
+        'objectId',
+        'Object does not belong to the Relation source ObjectType.',
+      );
     }
-    final targetTypeId = property.targetObjectTypeId;
-    if (targetTypeId == null) {
-      throw StateError('Relation property has no target ObjectType.');
-    }
-    final targetType = await objectStore.getObjectType(targetTypeId);
-    if (targetType == null) {
-      throw StateError('Target ObjectType does not exist.');
-    }
-    final inverseProperty = targetType.properties
-        .firstWhere((candidate) => candidate.id == inversePropertyId);
+    final targetTypeId = sourceProperty.targetObjectTypeId!;
 
-    final oldIds = ObjectRelationValue.fromJson(source.values[property.id])
+    final oldIds = ObjectRelationValue.fromJson(source.values[sourceProperty.id])
         .objectIds
         .toSet();
     final nextIds = targetObjectIds.toSet();
@@ -257,7 +255,7 @@ class BidirectionalRelationStore {
 
       await objectStore.setRelation(
         objectId: objectId,
-        property: property,
+        property: sourceProperty,
         targetObjectIds: targetObjectIds,
       );
 
@@ -290,6 +288,36 @@ class BidirectionalRelationStore {
         );
       }
     });
+  }
+
+  Future<ObjectPropertyDefinition> _canonicalRelationProperty(
+    ObjectPropertyDefinition property,
+  ) async {
+    final sourceType = await objectStore.getObjectType(property.objectTypeId);
+    if (sourceType == null) {
+      throw ArgumentError.value(
+        property.objectTypeId,
+        'property',
+        'Relation source ObjectType does not exist.',
+      );
+    }
+    for (final candidate in sourceType.properties) {
+      if (candidate.id == property.id) {
+        if (!candidate.isRelation) {
+          throw ArgumentError.value(
+            property.id,
+            'property',
+            'Property is not a persisted Relation Property.',
+          );
+        }
+        return candidate;
+      }
+    }
+    throw ArgumentError.value(
+      property.id,
+      'property',
+      'Relation Property does not belong to its declared source ObjectType.',
+    );
   }
 
   Future<void> _linkPropertyPair({

@@ -2,7 +2,10 @@ import 'package:drift/drift.dart';
 
 import '../domain/object_model.dart';
 import 'app_database.dart';
+import 'bidirectional_relation_store.dart';
+import 'generic_database_store.dart';
 import 'object_store.dart';
+import 'relation_mutation_service.dart';
 import 'system_object_store.dart';
 
 class TagObjectSchema {
@@ -24,13 +27,24 @@ class TagObjectBridge {
     required this.database,
     required this.objectStore,
     required this.systemObjectStore,
-  });
+  }) {
+    final genericStore = GenericDatabaseStore(database);
+    _relationMutations = RelationMutationService(
+      objectStore: objectStore,
+      bidirectionalStore: BidirectionalRelationStore(
+        genericStore: genericStore,
+        objectStore: objectStore,
+      ),
+      genericStore: genericStore,
+    );
+  }
 
   static const systemKey = 'tag';
 
   final AppDatabase database;
   final ObjectStore objectStore;
   final SystemObjectStore systemObjectStore;
+  late final RelationMutationService _relationMutations;
   Future<void>? _schemaReady;
 
   Future<void> ensureSchema() => _schemaReady ??= database.transaction(() async {
@@ -110,14 +124,14 @@ class TagObjectBridge {
       final parentObjectId = tag.parentTagId == null
           ? null
           : await objectIdForLegacyTag(workspaceId, tag.parentTagId!);
-      await objectStore.setRelation(
+      await _relationMutations.setRelation(
         objectId: objectId,
         property: schema.parentProperty,
         targetObjectIds: parentObjectId == null ? const [] : [parentObjectId],
       );
     }
 
-    await _removeOrphanTagObjects(schema, validTagIds);
+    await _removeOrphanTagObjects(workspaceId, schema, validTagIds);
   }
 
   Future<int?> objectIdForLegacyTag(int workspaceId, int tagId) async {
@@ -159,6 +173,7 @@ class TagObjectBridge {
   }
 
   Future<void> _removeOrphanTagObjects(
+    int workspaceId,
     TagObjectSchema schema,
     Set<int> validTagIds,
   ) async {
@@ -167,7 +182,11 @@ class TagObjectBridge {
       final rawId = object.values[schema.legacyTagIdProperty.id];
       final legacyId = rawId is int ? rawId : int.tryParse('$rawId');
       if (legacyId == null || validTagIds.contains(legacyId)) continue;
-      await objectStore.deleteObject(object.id);
+      await _relationMutations.deleteObject(
+        workspaceId: workspaceId,
+        objectTypeId: schema.objectType.id,
+        objectId: object.id,
+      );
     }
   }
 }
