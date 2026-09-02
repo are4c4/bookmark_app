@@ -5,6 +5,7 @@ import '../data/database_view_store.dart';
 import '../data/generic_database_store.dart';
 import '../data/object_graph_query_store.dart';
 import '../data/object_store.dart';
+import '../data/object_type_management_store.dart';
 import '../database/database_definition.dart';
 import '../domain/object_model.dart';
 import '../features/database/presentation/database_property_presenter.dart';
@@ -33,6 +34,7 @@ class GenericDatabasePage extends StatefulWidget {
 class _GenericDatabasePageState extends State<GenericDatabasePage> {
   late final GenericDatabaseStore _store;
   late final ObjectStore _objectStore;
+  late final ObjectTypeManagementStore _managementStore;
   late final ObjectGraphQueryStore _graphStore;
   late final DatabaseViewStore _viewStore;
 
@@ -63,6 +65,10 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     super.initState();
     _store = GenericDatabaseStore(widget.repository.workspaceStore.database);
     _objectStore = ObjectStore(_store);
+    _managementStore = ObjectTypeManagementStore(
+      genericStore: _store,
+      objectStore: _objectStore,
+    );
     _graphStore = ObjectGraphQueryStore(_store);
     _viewStore = DatabaseViewStore(widget.repository.workspaceStore.database);
     _reload();
@@ -100,6 +106,122 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
       _recordsByType = recordsByType;
       _loading = false;
     });
+  }
+
+  Future<void> _editDatabaseIdentity() async {
+    final database = _database;
+    if (database == null) return;
+    var name = database.name;
+    var icon = database.icon;
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('データベースを編集'),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                initialValue: name,
+                autofocus: true,
+                decoration: const InputDecoration(labelText: '名前'),
+                onChanged: (value) => name = value,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                initialValue: icon,
+                decoration: const InputDecoration(
+                  labelText: 'アイコン',
+                  hintText: '例: 📚',
+                ),
+                onChanged: (value) => icon = value,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    if (saved != true || name.trim().isEmpty) return;
+    try {
+      await _managementStore.updateIdentity(
+        objectTypeId: database.id,
+        name: name,
+        icon: icon,
+      );
+      widget.onDatabaseChanged();
+      await _reload();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('データベースを更新できませんでした: $error')),
+      );
+    }
+  }
+
+  Future<void> _duplicateDatabase() async {
+    final database = _database;
+    if (database == null) return;
+    try {
+      await _managementStore.duplicateSchema(objectTypeId: database.id);
+      widget.onDatabaseChanged();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('「${database.name}」の構造を複製しました')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('データベースを複製できませんでした: $error')),
+      );
+    }
+  }
+
+  Future<void> _deleteDatabase() async {
+    final database = _database;
+    if (database == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('「${database.name}」を削除しますか？'),
+        content: const Text('このデータベース内のObjectとプロパティも削除されます。この操作は元に戻せません。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('削除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await _managementStore.deleteCustomType(database.id);
+      if (!mounted) return;
+      setState(() {
+        _database = null;
+        _selectedRecordId = null;
+      });
+      widget.onDatabaseChanged();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('データベースを削除できませんでした: $error')),
+      );
+    }
   }
 
   DatabaseDefinition get _definition => DatabaseDefinition(
@@ -1028,7 +1150,10 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                         fontWeight: FontWeight.w600,
                       ),
                       onSaved: (value) async {
-                        await _store.renameDatabase(database.id, value);
+                        await _managementStore.updateIdentity(
+                          objectTypeId: database.id,
+                          name: value,
+                        );
                         widget.onDatabaseChanged();
                         await _reload();
                       },
@@ -1038,6 +1163,42 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                     tooltip: 'プロパティを追加',
                     onPressed: _createProperty,
                     icon: const Icon(Icons.add_circle_outline, size: 19),
+                  ),
+                  PopupMenuButton<String>(
+                    tooltip: 'データベース設定',
+                    icon: const Icon(Icons.more_horiz, size: 19),
+                    onSelected: (value) {
+                      if (value == 'edit') _editDatabaseIdentity();
+                      if (value == 'duplicate') _duplicateDatabase();
+                      if (value == 'delete') _deleteDatabase();
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(
+                        value: 'edit',
+                        child: ListTile(
+                          dense: true,
+                          leading: Icon(Icons.edit_outlined, size: 18),
+                          title: Text('名前・アイコンを編集'),
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'duplicate',
+                        child: ListTile(
+                          dense: true,
+                          leading: Icon(Icons.copy_outlined, size: 18),
+                          title: Text('構造を複製'),
+                        ),
+                      ),
+                      PopupMenuDivider(),
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: ListTile(
+                          dense: true,
+                          leading: Icon(Icons.delete_outline, size: 18),
+                          title: Text('削除'),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
