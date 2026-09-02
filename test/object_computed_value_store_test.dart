@@ -58,6 +58,30 @@ void main() {
     expect(await computed.evaluate(object: object, property: total), 2500);
   });
 
+  test('formula handles parentheses and unary minus', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final objectStore = ObjectStore(GenericDatabaseStore(database));
+    final computed = ObjectComputedValueStore(objectStore);
+
+    final typeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: '計算',
+    );
+    final formulaId = await computed.createFormulaProperty(
+      objectTypeId: typeId,
+      name: '式',
+      expression: '-(2 + 3) * 4',
+    );
+    await objectStore.createObject(objectTypeId: typeId, title: '式');
+    final type = (await objectStore.getObjectType(typeId))!;
+    final formula = type.properties.firstWhere((item) => item.id == formulaId);
+    final object = (await objectStore.listObjects(typeId)).single;
+
+    expect(await computed.evaluate(object: object, property: formula), -20);
+  });
+
   test('rollup aggregates numeric values through a relation', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
