@@ -14,11 +14,8 @@ https://github.com/are4c4/bookmark_app/issues/56
 
 ## Development lanes
 
-The implementation is split into two concurrent-capable lanes matching the current implementation chats:
-
 1. **Object lane** — `docs/AI_PROGRESS_OBJECT.md`
    - Object/ObjectType/Property architecture
-   - Object-centric Database/View integration
    - reusable Object types
    - Object detail content and Body/block model
    - Daily Notes and Value-to-Object promotion
@@ -27,30 +24,26 @@ The implementation is split into two concurrent-capable lanes matching the curre
    - Relation/backlink lifecycle
    - bidirectional Relation integrity
    - relation write validation and source/target constraints
-   - rename/delete propagation and stale metadata handling
-   - Relation APIs and Tag hierarchy expressed through Relations
+   - rename/delete propagation and Relation APIs
 
-`docs/AI_PROGRESS_OBJECT_RELATION.md` is retained only as legacy combined context. New runs should write to the dedicated Object or Relation handoff file.
-
-Each implementation chat/run must pick one primary lane and update its matching progress file unless repository-wide integration state changes.
+`docs/AI_PROGRESS_OBJECT_RELATION.md` is legacy combined context only.
 
 ## Sustained-run policy
 
-Implementation runs should not stop after the first small PR/commit/checkpoint when Issue #56 still contains safe work for that lane. After each coherent slice, commit/push, record the checkpoint, then continue with the next non-conflicting slice.
-
-Pending/queued CI by itself is not a blocker. While CI is pending, continue with work that does not depend on the result. Stop only for a genuine design/risk/cross-lane blocker, external infrastructure with no independent work remaining, or an actual runtime/tool/session limit.
+Implementation runs do not stop after one small PR/commit/checkpoint while safe Issue #56 work remains. Pending CI alone is not a blocker; continue with non-dependent work. Stop only for a genuine design/risk/cross-lane blocker, unavailable external infrastructure with no independent work remaining, or a runtime/tool/session limit.
 
 ## Latest relevant state
 
-- `main` includes the persistent AI handoff workflow and sustained multi-slice execution rules.
-- PR #61 is merged; Value / Object Relation / Computed property semantics are on `main`.
-- PR #62 is merged; bidirectional Relation pair validation rejects broken inverse metadata.
-- PR #64 is merged; Object promotion planning, versioned Body blocks, ObjectType defaults contract, and shared Object detail contracts are on `main`.
-- PR #65 is merged at `93d8cf18`; Object Body/defaults persistence, Weblink Object service, Daily Note open-or-create, detail loading, and safe plain-text Body adapter are on `main`.
-- Relation PR #63 passed Flutter CI but became unmergeable after concurrent Object-lane advancement; it is closed as superseded.
-- Relation PR #66 (`feature/relation-write-integrity-v2`) is the active replacement and now provides source/target validation, stable Relation mutation/read/index services, bidirectional lifecycle hardening, Relation-safe Object deletion, and Tag hierarchy cleanup.
-- Existing generic foundations include Object query/filter/sort, grouping, Board view, Board drag/drop persistence, Formula/Rollup, bidirectional Relations, ObjectType templates, and ObjectType management.
-- Issue #56 remains the shared product/design implementation contract.
+- `main` is at `6770a5f` after Relation PR #66 merged.
+- PR #61 merged Value / Object Relation / Computed semantics.
+- PR #62 merged bidirectional Relation pair integrity hardening.
+- PR #64 merged Value-to-Object planning, Body contracts, ObjectType defaults contract, and shared Object detail content.
+- PR #65 merged Object Body/defaults persistence, Weblink Object, Daily Note open-or-create, Object detail loading, and safe paragraph Body adaptation. Its final CI passed.
+- PR #66 merged stable Relation mutation/read/index APIs, source/target validation, bidirectional lifecycle hardening, Relation-safe Object deletion, and Tag hierarchy cleanup. Its final CI passed.
+- Object PR #67 is open with shared Object detail editing/session/default-resolution/Image facade work; its head passed CI but needs replay/rebase because `main` advanced concurrently.
+- Object PR #68 is open with actual Object inspector integration, reusable Body UI, and today/Daily Note navigation; latest corrective CI is running.
+- Object PR #70 is open with generic Value-to-Object execution plus URL -> reusable Weblink promotion built on the merged Relation mutation facade; a follow-up analyzer correction is awaiting fresh CI.
+- Issue #56 remains the shared implementation contract.
 
 ## Repository-wide design contract
 
@@ -69,29 +62,26 @@ Pending/queued CI by itself is not a blocker. While CI is pending, continue with
 - Keep `main` releasable.
 - Use focused lane-specific branches/PRs/checkpoints.
 - Avoid both lanes concurrently owning broad refactors of the same core file.
-- If a change crosses lanes, document the dependency and sequence overlapping work where practical.
-- Rebase/refresh from latest `main` before merging overlapping foundation changes.
+- Rebase/replay stale branches rather than force-merging shared handoff conflicts.
 - Preserve existing bookmark data and behavior; no destructive migrations without explicit approval.
 
 ## Next repository-wide actions
 
-- Object lane resumes from `docs/AI_PROGRESS_OBJECT.md`; its next Relation-dependent execution work should consume stable Relation APIs rather than reimplement lifecycle rules.
-- Relation lane resumes from `docs/AI_PROGRESS_RELATION.md`; validate and integrate PR #66 against current main, replaying only narrow Relation-owned changes if another Object PR advances the base.
-- After #66 integration, migrate Object-owned UI callers to the stable Relation facade only through coordinated Object-lane work.
-- Planning/design chat continues to refine Issue #56 when material product decisions are made.
+- Object lane: finish CI correction/integration for #68 and #70, then replay the already-green #67 onto the newest `main` without restoring stale handoff text.
+- Relation lane: continue from `docs/AI_PROGRESS_RELATION.md`; Object consumers should now use the stable Relation facades merged in #66 rather than low-level lifecycle duplication.
+- After Object detail/session pieces land, converge side/center/full-page containers on one Object-owned content/session layer, with Database/View presentation overrides remaining above it.
+- Planning/design chat continues to refine Issue #56 for material product decisions.
 
 ## Validation
 
-- PR #61 functional head passed Flutter CI before merge.
-- PR #62 passed Flutter CI before merge.
-- PR #63 head `b6cb3888` passed Flutter CI run #349; it was superseded only because concurrent Object work advanced `main`.
-- Object PR #64 passed its final Flutter CI before merge.
-- Object PR #65 is merged; its detailed validation status is recorded in `docs/AI_PROGRESS_OBJECT.md`.
-- Relation PR #66 requires one final latest-head CI with Drift generation, `flutter analyze`, and full tests green before merge.
+- PR #65 final Flutter CI succeeded.
+- PR #66 final Flutter CI #390 succeeded before merge.
+- PR #67 head Flutter CI #395 succeeded.
+- PR #68 corrective CI is pending/running after an initial test-only failure; its analyzer passed on the failed run.
+- PR #70 received an analyzer correction after CI #402 failed before tests; newest CI is pending.
 
 ## Known risks
 
-- Parallel work is useful only when file ownership is reasonably separate; otherwise replay narrow lane changes on latest `main` rather than force-merging stale shared handoff files.
-- GitHub Actions usage limits may affect CI availability; pending CI alone should not stop independent work.
-- Object `GenericDatabasePage` and `core_object_bridge.dart` remain Object-owned integration surfaces even where they currently call low-level Relation APIs; Relation lane should expose services and hand off adoption rather than create concurrent broad edits.
-- Promotion execution and Daily Note relation composition depend on stable Relation APIs; sequence those with Relation PR #66 rather than duplicating lifecycle logic.
+- PR #67 is stale only because concurrent work advanced `main`; replay its Object-owned files carefully after #68/#70 rather than forcing shared progress-file conflicts.
+- GitHub Actions usage/queueing may delay validation; pending CI alone should not stop independent implementation.
+- Block-editor scope can expand quickly; retain the current block-safe persistence contract and thin paragraph editing until richer block UX is deliberately scheduled.
