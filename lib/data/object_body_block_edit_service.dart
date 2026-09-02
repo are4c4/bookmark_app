@@ -30,6 +30,34 @@ class ObjectBodyBlockEditService {
         ),
       );
 
+  /// Inserts [block] immediately after [anchorBlockId] in the latest Body.
+  ///
+  /// Resolving the anchor and mutating happen against the same latest read, so
+  /// hosts do not need to compute a potentially stale numeric insertion index.
+  Future<ObjectBodyDocument> insertAfter({
+    required int objectId,
+    required String anchorBlockId,
+    required ObjectBodyBlock block,
+  }) => _mutate(objectId, (document) {
+        final anchor = anchorBlockId.trim();
+        if (anchor.isEmpty) {
+          throw ArgumentError.value(
+            anchorBlockId,
+            'anchorBlockId',
+            'Block id is empty.',
+          );
+        }
+        final index = document.blocks.indexWhere((item) => item.id == anchor);
+        if (index < 0) {
+          throw StateError('Body block not found: $anchor');
+        }
+        return editor.insertBlock(
+          document: document,
+          block: block,
+          index: index + 1,
+        );
+      });
+
   Future<ObjectBodyDocument> update({
     required int objectId,
     required ObjectBodyBlock block,
@@ -98,6 +126,42 @@ class ObjectBodyBlockEditService {
           toIndex: toIndex,
         ),
       );
+
+  /// Moves a block one position upward using the latest persisted ordering.
+  /// Already-first blocks are left unchanged rather than failing.
+  Future<ObjectBodyDocument> moveUp({
+    required int objectId,
+    required String blockId,
+  }) => _moveByOffset(objectId: objectId, blockId: blockId, offset: -1);
+
+  /// Moves a block one position downward using the latest persisted ordering.
+  /// Already-last blocks are left unchanged rather than failing.
+  Future<ObjectBodyDocument> moveDown({
+    required int objectId,
+    required String blockId,
+  }) => _moveByOffset(objectId: objectId, blockId: blockId, offset: 1);
+
+  Future<ObjectBodyDocument> _moveByOffset({
+    required int objectId,
+    required String blockId,
+    required int offset,
+  }) => _mutate(objectId, (document) {
+        final normalized = blockId.trim();
+        if (normalized.isEmpty) {
+          throw ArgumentError.value(blockId, 'blockId', 'Block id is empty.');
+        }
+        final index = document.blocks.indexWhere((block) => block.id == normalized);
+        if (index < 0) {
+          throw StateError('Body block not found: $normalized');
+        }
+        final target = index + offset;
+        if (target < 0 || target >= document.blocks.length) return document;
+        return editor.moveBlock(
+          document: document,
+          blockId: normalized,
+          toIndex: target,
+        );
+      });
 
   Future<ObjectBodyDocument> _mutate(
     int objectId,
