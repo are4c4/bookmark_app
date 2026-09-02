@@ -127,6 +127,7 @@ class _ObjectQueryDialogState extends State<ObjectQueryDialog> {
                   propertyId: null,
                   operator: ObjectFilterOperator.contains,
                   value: '',
+                  revision: 0,
                 ),
               );
             }),
@@ -160,10 +161,7 @@ class _ObjectQueryDialogState extends State<ObjectQueryDialog> {
                 initialValue: filter.propertyId,
                 decoration: const InputDecoration(labelText: 'プロパティ'),
                 items: [
-                  const DropdownMenuItem<int?>(
-                    value: null,
-                    child: Text('名前'),
-                  ),
+                  const DropdownMenuItem<int?>(value: null, child: Text('名前')),
                   ...widget.properties.map(
                     (property) => DropdownMenuItem<int?>(
                       value: property.id,
@@ -188,12 +186,10 @@ class _ObjectQueryDialogState extends State<ObjectQueryDialog> {
                 initialValue: filter.operator,
                 decoration: const InputDecoration(labelText: '条件'),
                 items: operators
-                    .map(
-                      (operator) => DropdownMenuItem(
-                        value: operator,
-                        child: Text(_operatorLabel(operator)),
-                      ),
-                    )
+                    .map((operator) => DropdownMenuItem(
+                          value: operator,
+                          child: Text(_operatorLabel(operator)),
+                        ))
                     .toList(growable: false),
                 onChanged: (value) => setState(() {
                   if (value != null) filter.operator = value;
@@ -290,10 +286,7 @@ class _ObjectQueryDialogState extends State<ObjectQueryDialog> {
                 initialValue: sort.propertyId,
                 decoration: const InputDecoration(labelText: 'プロパティ'),
                 items: [
-                  const DropdownMenuItem<int?>(
-                    value: null,
-                    child: Text('名前'),
-                  ),
+                  const DropdownMenuItem<int?>(value: null, child: Text('名前')),
                   ...widget.properties.map(
                     (property) => DropdownMenuItem<int?>(
                       value: property.id,
