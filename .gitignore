@@ -7,7 +7,25 @@
 .buildlog/
 .history
 
+# Local secrets and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.pfx
+*.keystore
+service-account*.json
+google-services.json
+GoogleService-Info.plist
 
+# Local application data / databases
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
 
 # Flutter repo-specific
 /bin/cache/
