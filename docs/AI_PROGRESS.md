@@ -14,8 +14,6 @@ https://github.com/are4c4/bookmark_app/issues/56
 
 ## Development lanes
 
-The implementation is split into two concurrent-capable lanes matching the current implementation chats:
-
 1. **Object lane** — `docs/AI_PROGRESS_OBJECT.md`
    - Object/ObjectType/Property architecture
    - Object-centric Database/View integration
@@ -28,42 +26,38 @@ The implementation is split into two concurrent-capable lanes matching the curre
    - bidirectional Relation integrity
    - relation write validation and source/target constraints
    - rename/delete propagation and stale metadata handling
-   - Relation APIs and Tag hierarchy expressed through Relations
+   - stable Relation APIs consumed by Object surfaces
 
-`docs/AI_PROGRESS_OBJECT_RELATION.md` is retained only as legacy combined context. New runs should write to the dedicated Object or Relation handoff file.
-
-Each implementation chat/run must pick one primary lane and update its matching progress file unless repository-wide integration state changes.
+`docs/AI_PROGRESS_OBJECT_RELATION.md` is legacy combined context only.
 
 ## Sustained-run policy
 
-Implementation runs should not stop after the first small PR/commit/checkpoint when Issue #56 still contains safe work for that lane. After each coherent slice, commit/push, record the checkpoint, then continue with the next non-conflicting slice.
-
-Pending/queued CI by itself is not a blocker. While CI is pending, continue with work that does not depend on that CI result. Stop only for a genuine design/risk/cross-lane blocker, external infrastructure with no independent safe work remaining, or an actual runtime/tool/session limit.
+Implementation runs should continue through multiple safe slices. One PR/commit/test or merely pending CI is not a stopping condition when independent safe work remains. Keep branches focused and avoid concurrent broad edits to the same core file.
 
 ## Latest relevant state
 
-### Object foundation
+### Object foundation / integration
 
-- PR #61 is merged; Value / Object Relation / Computed Property semantics are on `main`.
-- PR #64 is merged; Object promotion planning, versioned Body blocks, ObjectType defaults contract, and shared Object detail contracts are on `main`.
-- PR #65 is merged; Object Body/defaults persistence, Weblink Object service, Daily Note open-or-create, detail loading, and safe plain-text Body adapter are on `main`.
-- Active Object work is consuming the stable Relation APIs rather than duplicating lifecycle logic:
-  - PR #70 uses `RelationMutationService` for Value -> Object promotion execution.
-  - PR #72 uses `RelationReadService` for shared Object detail Relation context.
+- PR #61 merged: explicit Value / Object Relation / Computed Property semantics.
+- PR #64 merged: Value-to-Object planning, versioned Body blocks, ObjectType defaults contract, shared Object detail contracts.
+- PR #65 merged: Body/default persistence, Weblink Object service, Daily Note open-or-create, shared detail loading, paragraph-safe Body adapter.
+- PR #71 merged: shared Object detail editing/session, Daily Note detail bridge, persisted defaults resolution, reusable Image Object facade.
+- PR #68 merged into `main` as `c112f165ffbda7b032fd51426579cfdc4325de0e`: the existing Object inspector now uses shared detail content, renders Formula/Rollup, exposes persisted Body editing safely, and provides a general Object-surface entry for today's Daily Note.
+- PR #76 is open on current Object base: shared Object detail + canonical `RelationNeighborhood` composition. It supersedes stale #72.
+- PR #77 is open on current Object base: safe Value -> Object execution plus reusable URL -> Weblink promotion. It supersedes stale #70.
 
 ### Relation foundation
 
-- PR #62 is merged; bidirectional pair validation rejects broken inverse metadata.
-- PR #66 is merged; source/target validation, stable mutation/read/index APIs, bidirectional lifecycle hardening, Relation-safe Object deletion, and Tag hierarchy cleanup are on `main`.
-- PR #69 is merged; read-only Relation integrity auditing is on `main`.
-- PR #73 is merged; `RelationNeighborhood` provides one resolved outgoing + backlink payload for Object-detail consumers.
-- PR #74 is merged; normalized Relation index drift can be reconciled only when audit proves the inconsistency is index-only.
-- PR #75 is merged; `RelationTargetService` provides canonical same-workspace target candidates for Relation pickers.
-- Latest Relation code integration commit before handoff updates: `b6511bf36e37e0bea84ac99da745ee40f85e1cb1`.
+- PR #62 merged: broken bidirectional inverse metadata fails closed.
+- PR #66 merged: canonical Relation source/target validation, mutation/read/index APIs, lifecycle hardening, Relation-safe Object deletion, Tag hierarchy cleanup.
+- PR #69 merged: read-only Relation integrity auditing.
+- PR #73 merged: canonical `RelationNeighborhood` outgoing + backlink payload.
+- PR #74 merged: fail-closed deterministic Relation index reconciliation for index-only drift.
+- PR #75 merged: `RelationTargetService` canonical same-workspace Relation-picker candidates.
 
 ### Existing generic foundations
 
-Object query/filter/sort, grouping, Board view and drag/drop persistence, Formula/Rollup, bidirectional Relations, ObjectType templates, ObjectType management, Body/default persistence, Daily Notes, reusable Weblink, and stable Relation graph/lifecycle services are present. Issue #56 remains the shared product/design contract for turning these foundations into one coherent user-facing workflow.
+Object query/filter/sort, grouping, Board view and drag/drop persistence, Formula/Rollup, bidirectional Relations, ObjectType templates/management, Body/default persistence, Daily Notes, Weblink/Image reusable Object facades, and stable Relation graph/lifecycle services are present.
 
 ## Repository-wide design contract
 
@@ -77,40 +71,25 @@ Object query/filter/sort, grouping, Board view and drag/drop persistence, Formul
 - Date is a Value; Daily Note is an Object keyed by a unique date.
 - Object detail presentation should support side peek, center peek, and full page with shared content.
 
-## Integration policy
-
-- Keep `main` releasable.
-- Use focused lane-specific branches/PRs/checkpoints.
-- Avoid both lanes concurrently owning broad refactors of the same core file.
-- If a change crosses lanes, document the dependency and sequence overlapping work where practical.
-- Rebase/refresh from latest `main` before merging overlapping foundation changes.
-- Preserve existing bookmark data and behavior; no destructive migrations without explicit approval.
-
 ## Next repository-wide actions
 
-1. Object lane should continue user-facing integration using the now-stable Relation boundaries:
-   - `RelationTargetService` + `RelationMutationService` for Relation editing/pickers;
-   - `RelationReadService` / `RelationNeighborhood` for Object detail and Daily Note graph context;
-   - sequence any `core_object_bridge.dart` migration from the Object lane because it is an Object-owned synchronization surface.
-2. Continue Object detail, Value-to-Object promotion, Daily Note, Database/View and Board integration under `docs/AI_PROGRESS_OBJECT.md`.
-3. Relation lane should remain available for focused regressions discovered during Object integration, but should not broaden into competing edits of Object-owned UI.
-4. Do not implement ambiguous Relation-value auto-repair without an explicit data/product policy. Deterministic index-only reconciliation is already supported.
+1. Validate and land Object PR #76, then use its shared Relation context in Object detail/Daily Note presentation.
+2. Validate and land Object PR #77, then expose reversible Value -> Object promotion through a narrow Object-owned UI/service path.
+3. Use `RelationTargetService` + `RelationMutationService` for Relation editing/pickers and `RelationReadService.neighborhood()` for Object graph context.
+4. Continue Object-centric Database/View integration and Board workflows under Issue #56 without duplicating Object or Relation records.
+5. Keep Relation lane focused on regressions found during integration rather than competing edits to Object-owned UI.
 
 ## Validation
 
-The latest merged Relation slices were individually validated through GitHub Actions before merge:
-
-- PR #66: Drift generation, `flutter analyze`, full tests — success.
-- PR #69: Drift generation, `flutter analyze`, full tests — success.
-- PR #73: Drift generation, `flutter analyze`, full tests — success.
-- PR #74: Drift generation, `flutter analyze`, full tests — success.
-- PR #75: Drift generation, `flutter analyze`, full tests — success.
-
-Object-lane validation details remain in `docs/AI_PROGRESS_OBJECT.md` and the active Object PRs.
+- PR #68 head Flutter CI #423 succeeded before merge.
+- PR #76 CI #434 is in progress at this handoff.
+- PR #77 CI #435 is in progress at this handoff.
+- Latest merged Relation slices #66/#69/#73/#74/#75 each passed Flutter CI before merge.
 
 ## Known risks
 
-- Parallel work is useful only when file ownership is reasonably separate; replay narrow lane changes on latest `main` rather than force-merging stale shared files.
-- `GenericDatabasePage`, Object detail presentation, Value promotion UI and `core_object_bridge.dart` are Object-owned integration surfaces even where they use Relation APIs.
-- Low-level `ObjectStore` delete/property APIs remain available for generic infrastructure; Relation-aware user-facing flows should consume `RelationMutationService`.
-- Integrity diagnostics and deterministic index reconstruction are safe; repairing ambiguous persisted Relation values could discard user intent and requires an explicit decision.
+- PR #76 and #77 were both created from the same Object base; re-check mergeability after either lands.
+- `GenericDatabasePage`, Object detail presentation, Value promotion UI and `core_object_bridge.dart` are Object-owned integration surfaces even when they consume Relation APIs.
+- Low-level generic ObjectStore operations remain available, but user-facing Relation mutations should use `RelationMutationService`.
+- Do not auto-repair ambiguous persisted Relation values; only deterministic index-only reconciliation is currently safe.
+- Rich Body documents must not be flattened by the initial paragraph-safe editor.
