@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../data/bookmark_repository.dart';
 import '../data/database_view_store.dart';
+import '../data/generic_database_page_services.dart';
 import '../data/generic_database_store.dart';
 import '../data/generic_object_view_coordinator.dart';
 import '../data/object_board_move_service.dart';
@@ -12,6 +13,7 @@ import '../data/object_type_management_store.dart';
 import '../database/database_definition.dart';
 import '../domain/object_model.dart';
 import '../features/database/presentation/database_property_presenter.dart';
+import '../widgets/database_collection_settings_dialog.dart';
 import '../widgets/database_create_tiles.dart';
 import '../widgets/database_view_tabs.dart';
 import '../widgets/notion_inline_field.dart';
@@ -39,6 +41,7 @@ class GenericDatabasePage extends StatefulWidget {
 class _GenericDatabasePageState extends State<GenericDatabasePage> {
   late final GenericDatabaseStore _store;
   late final ObjectStore _objectStore;
+  late final GenericDatabasePageServices _pageServices;
   late final ObjectComputedValueStore _computedStore;
   late final ObjectTypeManagementStore _managementStore;
   late final ObjectGraphQueryStore _graphStore;
@@ -79,6 +82,10 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     super.initState();
     _store = GenericDatabaseStore(widget.repository.workspaceStore.database);
     _objectStore = ObjectStore(_store);
+    _pageServices = GenericDatabasePageServices.fromStores(
+      genericStore: _store,
+      objectStore: _objectStore,
+    );
     _boardMoveService = ObjectBoardMoveService(_objectStore);
     _computedStore = ObjectComputedValueStore(_objectStore);
     _managementStore = ObjectTypeManagementStore(
@@ -103,17 +110,19 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
 
   Future<void> _reload() async {
     if (mounted) setState(() => _loading = true);
-    final database = await _store.getDatabase(widget.databaseId);
-    final properties = await _store.listProperties(widget.databaseId);
-    final records = await _store.listRecords(widget.databaseId);
-    final objectType = await _objectStore.getObjectType(widget.databaseId);
-    final objects = await _objectStore.listObjects(widget.databaseId);
-    final objectTypes = await _store.listAllDatabases(widget.repository.workspaceId);
+    final page = await _pageServices.loader.load(widget.databaseId);
+    final database = page?.database;
+    final properties = page?.properties ?? const <GenericPropertyRecord>[];
+    final records = page?.records ?? const <GenericRecord>[];
+    final objectType = page?.objectType;
+    final objects = page?.objects ?? const <AppObject>[];
+    final objectTypes =
+        await _store.listAllDatabases(widget.repository.workspaceId);
     final recordsByType = <int, List<GenericRecord>>{};
     for (final relatedType in objectTypes) {
-      recordsByType[relatedType.id] = relatedType.id == widget.databaseId
-          ? records
-          : await _store.listRecords(relatedType.id);
+      // Relation display must resolve all target Objects, not just members of
+      // the active collection when its target ObjectType matches this type.
+      recordsByType[relatedType.id] = await _store.listRecords(relatedType.id);
     }
 
     final computedValues = <int, Map<int, dynamic>>{};
@@ -152,6 +161,10 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
       _objectTypes = objectTypes;
       _recordsByType = recordsByType;
       _computedValues = computedValues;
+      if (_selectedRecordId != null &&
+          !records.any((record) => record.id == _selectedRecordId)) {
+        _selectedRecordId = null;
+      }
       _loading = false;
     });
   }
@@ -231,6 +244,36 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('データベースを複製できませんでした: $error')),
+      );
+    }
+  }
+
+  Future<void> _editCollectionSettings() async {
+    try {
+      final config = await _pageServices.collectionConfig.load(widget.databaseId);
+      if (config == null || !mounted) return;
+      final draft = await showDatabaseCollectionSettingsDialog(
+        context,
+        config: config,
+      );
+      if (draft == null) return;
+      await _pageServices.collectionConfig.save(
+        databaseId: widget.databaseId,
+        workspaceId: widget.repository.workspaceId,
+        targetObjectTypeId: draft.targetObjectTypeId,
+        collectionFilter: draft.collectionFilter,
+      );
+      if (!mounted) return;
+      setState(() {
+        _activeView = null;
+        _selectedRecordId = null;
+        _query = '';
+      });
+      await _reload();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('コレクション設定を保存できませんでした: $error')),
       );
     }
   }
@@ -430,16 +473,62 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     await _persistView(next);
   }
 
-  Future<void> _createRecord(String title) async {
-    final id = await _store.createRecord(
-      databaseId: widget.databaseId,
-      title: title,
+  Future<String?> _askObjectTitle() async {
+    var title = '';
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('新規Object'),
+        content: TextField(
+          autofocus: true,
+          decoration: const InputDecoration(labelText: '名前'),
+          onChanged: (value) => title = value,
+          onSubmitted: (value) => Navigator.pop(dialogContext, value.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, title.trim()),
+            child: const Text('作成'),
+          ),
+        ],
+      ),
     );
-    await _reload();
-    if (mounted) setState(() => _selectedRecordId = id);
+    final normalized = result?.trim() ?? '';
+    return normalized.isEmpty ? null : normalized;
+  }
+
+  Future<void> _createRecord(String title) async {
+    try {
+      final id = await _pageServices.creator.create(
+        databaseId: widget.databaseId,
+        title: title,
+      );
+      await _reload();
+      if (!mounted) return;
+      if (_records.any((record) => record.id == id)) {
+        setState(() => _selectedRecordId = id);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Objectを作成しましたが、現在のコレクション条件には一致しません。'),
+          ),
+        );
+      }
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Objectを作成できませんでした: $error')),
+      );
+    }
   }
 
   Future<void> _createProperty() async {
+    final sourceObjectTypeId = _objectType?.id;
+    if (sourceObjectTypeId == null) return;
     var name = '';
     var type = 'text';
     var optionsText = '';
@@ -689,20 +778,20 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     try {
       if (type == 'relation') {
         await _objectStore.createRelationProperty(
-          objectTypeId: widget.databaseId,
+          objectTypeId: sourceObjectTypeId,
           name: name.trim(),
           targetObjectTypeId: targetObjectTypeId!,
           multiple: multipleRelations,
         );
       } else if (type == 'formula') {
         await _computedStore.createFormulaProperty(
-          objectTypeId: widget.databaseId,
+          objectTypeId: sourceObjectTypeId,
           name: name.trim(),
           expression: formulaExpression,
         );
       } else if (type == 'rollup') {
         await _computedStore.createRollupProperty(
-          objectTypeId: widget.databaseId,
+          objectTypeId: sourceObjectTypeId,
           name: name.trim(),
           relationPropertyId: rollupRelationPropertyId!,
           targetPropertyId: rollupTargetPropertyId,
@@ -710,7 +799,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
         );
       } else {
         await _store.createProperty(
-          databaseId: widget.databaseId,
+          databaseId: sourceObjectTypeId,
           name: name.trim(),
           type: type,
           config: options.isEmpty ? const {} : {'options': options},
@@ -902,6 +991,8 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     }
     final movable = groupProperty != null &&
         _boardMoveService.planner.canMove(groupProperty);
+    final creatable = groupProperty != null &&
+        _pageServices.creator.boardCreate.planner.canPreset(groupProperty);
 
     return ObjectBoardView(
       groups: projection.objectProjection.groups,
@@ -925,6 +1016,38 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                 );
               }
             },
+      onCreateInGroup: !creatable
+          ? null
+          : (targetGroup) async {
+              final title = await _askObjectTitle();
+              if (title == null) return;
+              try {
+                final id = await _pageServices.creator.createInGroup(
+                  databaseId: widget.databaseId,
+                  title: title,
+                  groupProperty: groupProperty!,
+                  targetGroup: targetGroup,
+                );
+                await _reload();
+                if (!mounted) return;
+                if (_records.any((record) => record.id == id)) {
+                  setState(() => _selectedRecordId = id);
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Objectを作成しましたが、現在のコレクション条件には一致しません。',
+                      ),
+                    ),
+                  );
+                }
+              } catch (error) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Objectを作成できませんでした: $error')),
+                );
+              }
+            },
       cardSubtitleBuilder: (object) {
         final record = _records
             .where((candidate) => candidate.id == object.id)
@@ -945,127 +1068,166 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     GenericRecord record,
     GenericPropertyRecord property,
   ) async {
-    final targetTypeId = _targetTypeId(property);
-    if (targetTypeId == null) return;
-    final candidates = _recordsByType[targetTypeId] ??
-        await _store.listRecords(targetTypeId);
-    final multiple = property.config['multiple'] == true;
-    final selectedIds = _relationIds(record.values[property.id]).toSet();
-    var query = '';
+    final objectType = _objectType;
+    if (objectType == null) return;
+    ObjectPropertyDefinition? objectProperty;
+    for (final candidate in objectType.properties) {
+      if (candidate.id == property.id) {
+        objectProperty = candidate;
+        break;
+      }
+    }
+    if (objectProperty == null || !objectProperty.isRelation) return;
 
-    final result = await showDialog<Set<int>>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setLocalState) {
-          final normalized = query.trim().toLowerCase();
-          final visible = candidates
-              .where(
-                (candidate) => normalized.isEmpty ||
-                    candidate.title.toLowerCase().contains(normalized),
-              )
-              .toList(growable: false);
-          return AlertDialog(
-            titlePadding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
-            contentPadding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-            actionsPadding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-            title: Row(
-              children: [
-                Expanded(child: Text(property.name)),
-                Text(
-                  '${selectedIds.length}件選択',
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                ),
-              ],
-            ),
-            content: SizedBox(
-              width: 460,
-              height: 430,
-              child: Column(
+    try {
+      final selection = await _pageServices.relationEditor.load(
+        workspaceId: widget.repository.workspaceId,
+        sourceObjectId: record.id,
+        property: objectProperty,
+      );
+      if (!mounted) return;
+      final selectedIds = selection.selectedObjectIds.toSet();
+      var query = '';
+
+      final result = await showDialog<Set<int>>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (context, setLocalState) {
+            final normalized = query.trim().toLowerCase();
+            final visible = selection.candidates
+                .where(
+                  (candidate) => normalized.isEmpty ||
+                      candidate.title.toLowerCase().contains(normalized),
+                )
+                .toList(growable: false);
+            return AlertDialog(
+              titlePadding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
+              contentPadding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+              actionsPadding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+              title: Row(
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: TextField(
-                      autofocus: true,
-                      decoration: const InputDecoration(
-                        prefixIcon: Icon(Icons.search, size: 18),
-                        hintText: 'Objectを検索',
-                      ),
-                      onChanged: (value) =>
-                          setLocalState(() => query = value),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Expanded(
-                    child: visible.isEmpty
-                        ? const Center(child: Text('該当するObjectがありません'))
-                        : ListView.builder(
-                            itemCount: visible.length,
-                            itemBuilder: (context, index) {
-                              final candidate = visible[index];
-                              final selected = selectedIds.contains(candidate.id);
-                              return ListTile(
-                                dense: true,
-                                leading: Icon(
-                                  multiple
-                                      ? (selected
-                                          ? Icons.check_box
-                                          : Icons.check_box_outline_blank)
-                                      : (selected
-                                          ? Icons.radio_button_checked
-                                          : Icons.radio_button_unchecked),
-                                  size: 19,
-                                ),
-                                title: Text(candidate.title),
-                                onTap: () => setLocalState(() {
-                                  if (selected) {
-                                    selectedIds.remove(candidate.id);
-                                  } else {
-                                    if (!multiple) selectedIds.clear();
-                                    selectedIds.add(candidate.id);
-                                  }
-                                }),
-                              );
-                            },
-                          ),
+                  Expanded(child: Text(property.name)),
+                  Text(
+                    '${selectedIds.length}件選択',
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                   ),
                 ],
               ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: selectedIds.isEmpty
-                    ? null
-                    : () => setLocalState(selectedIds.clear),
-                child: const Text('クリア'),
+              content: SizedBox(
+                width: 460,
+                height: 470,
+                child: Column(
+                  children: [
+                    if (selection.missingTargetObjectIds.isNotEmpty ||
+                        selection.hasCardinalityViolation)
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .errorContainer
+                              .withValues(alpha: .5),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          [
+                            if (selection.missingTargetObjectIds.isNotEmpty)
+                              '見つからないObject: ${selection.missingTargetObjectIds.join(', ')}',
+                            if (selection.hasCardinalityViolation)
+                              '単一Relationに複数の値が保存されています。明示的に選び直して保存してください。',
+                          ].join('\n'),
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: TextField(
+                        autofocus: true,
+                        decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.search, size: 18),
+                          hintText: 'Objectを検索',
+                        ),
+                        onChanged: (value) =>
+                            setLocalState(() => query = value),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Expanded(
+                      child: visible.isEmpty
+                          ? const Center(child: Text('該当するObjectがありません'))
+                          : ListView.builder(
+                              itemCount: visible.length,
+                              itemBuilder: (context, index) {
+                                final candidate = visible[index];
+                                final selected = selectedIds.contains(candidate.id);
+                                return ListTile(
+                                  dense: true,
+                                  leading: Icon(
+                                    selection.property.allowsMultipleRelations
+                                        ? (selected
+                                            ? Icons.check_box
+                                            : Icons.check_box_outline_blank)
+                                        : (selected
+                                            ? Icons.radio_button_checked
+                                            : Icons.radio_button_unchecked),
+                                    size: 19,
+                                  ),
+                                  title: Text(candidate.title),
+                                  onTap: () => setLocalState(() {
+                                    if (selected) {
+                                      selectedIds.remove(candidate.id);
+                                    } else {
+                                      if (!selection
+                                          .property.allowsMultipleRelations) {
+                                        selectedIds.clear();
+                                      }
+                                      selectedIds.add(candidate.id);
+                                    }
+                                  }),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
               ),
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('キャンセル'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(dialogContext, selectedIds),
-                child: const Text('保存'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-    if (result == null) return;
+              actions: [
+                TextButton(
+                  onPressed: selectedIds.isEmpty
+                      ? null
+                      : () => setLocalState(selectedIds.clear),
+                  child: const Text('クリア'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('キャンセル'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(dialogContext, selectedIds),
+                  child: const Text('保存'),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+      if (result == null) return;
 
-    final objectType = await _objectStore.getObjectType(widget.databaseId);
-    if (objectType == null) return;
-    final objectProperty = objectType.properties.firstWhere(
-      (candidate) => candidate.id == property.id,
-    );
-    await _objectStore.setRelation(
-      objectId: record.id,
-      property: objectProperty,
-      targetObjectIds: result.toList(growable: false),
-    );
-    await _reload();
+      await _pageServices.relationEditor.save(
+        context: selection,
+        selectedObjectIds: result,
+      );
+      await _reload();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Relationを更新できませんでした: $error')),
+      );
+    }
   }
 
   Future<void> _editValue(
@@ -1480,11 +1642,20 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                     tooltip: 'データベース設定',
                     icon: const Icon(Icons.more_horiz, size: 19),
                     onSelected: (value) {
+                      if (value == 'collection') _editCollectionSettings();
                       if (value == 'edit') _editDatabaseIdentity();
                       if (value == 'duplicate') _duplicateDatabase();
                       if (value == 'delete') _deleteDatabase();
                     },
                     itemBuilder: (_) => const [
+                      PopupMenuItem(
+                        value: 'collection',
+                        child: ListTile(
+                          dense: true,
+                          leading: Icon(Icons.filter_alt_outlined, size: 18),
+                          title: Text('コレクション設定'),
+                        ),
+                      ),
                       PopupMenuItem(
                         value: 'edit',
                         child: ListTile(
