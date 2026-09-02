@@ -25,12 +25,45 @@ class ResolvedOutgoingRelation {
   final AppObject targetObject;
 }
 
+class RelationNeighborhood {
+  const RelationNeighborhood({
+    required this.outgoing,
+    required this.backlinks,
+  });
+
+  final List<ResolvedOutgoingRelation> outgoing;
+  final List<ResolvedRelationBacklink> backlinks;
+
+  bool get isEmpty => outgoing.isEmpty && backlinks.isEmpty;
+}
+
 /// Resolves relation-index edges into stable Object/Property references for UI
 /// consumers without exposing generic table details.
 class RelationReadService {
   const RelationReadService(this.objectStore);
 
   final ObjectStore objectStore;
+
+  /// Loads both directions around one Object for Object detail / Daily Note
+  /// surfaces without forcing callers to coordinate two different APIs.
+  Future<RelationNeighborhood> neighborhood({
+    required int workspaceId,
+    required int objectTypeId,
+    required int objectId,
+  }) async {
+    final outgoingRelations = await outgoing(
+      sourceObjectTypeId: objectTypeId,
+      sourceObjectId: objectId,
+    );
+    final incomingRelations = await backlinks(
+      workspaceId: workspaceId,
+      targetObjectId: objectId,
+    );
+    return RelationNeighborhood(
+      outgoing: List.unmodifiable(outgoingRelations),
+      backlinks: List.unmodifiable(incomingRelations),
+    );
+  }
 
   Future<List<ResolvedRelationBacklink>> backlinks({
     required int workspaceId,
