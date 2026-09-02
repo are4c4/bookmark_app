@@ -14,7 +14,7 @@ Own Object/ObjectType architecture, Property value semantics, Database/View inte
 
 - Branch: `feature/object-body-defaults-persistence`
 - PR #65 — `Persist Object Body and ObjectType defaults`
-- Latest implementation checkpoints include commits through `0c819a6` (Weblink reuse test); this handoff update follows those commits.
+- Latest implementation commits include `6f119d5` (safe Body plain-text adapter tests); this handoff update follows those commits.
 - Base `main` includes merged PR #64 at `3358cb6d`.
 
 ## Checkpoints completed in this run
@@ -51,6 +51,12 @@ Own Object/ObjectType architecture, Property value semantics, Database/View inte
    - Side peek, center peek, and full-page surfaces can consume this common payload without duplicating data logic.
    - Relation/backlink fetching remains outside the loader and can be composed from Relation-lane APIs.
 
+7. **Safe initial Body text adapter**
+   - Added `ObjectBodyPlainTextAdapter` for an intentionally thin first editor layer.
+   - Plain-text editing is allowed only when every block is a paragraph.
+   - Existing paragraph block ids are preserved when possible; newly needed ids are supplied by the caller.
+   - Richer/unknown block documents are rejected rather than silently flattened or discarded.
+
 ## Tests added / updated
 
 - `test/object_body_store_test.dart`
@@ -58,27 +64,28 @@ Own Object/ObjectType architecture, Property value semantics, Database/View inte
 - `test/weblink_object_service_test.dart`
 - `test/daily_note_service_test.dart`
 - `test/object_detail_content_loader_test.dart`
+- `test/object_body_plain_text_test.dart`
 
 ## Validation
 
 - PR #64 head passed Flutter CI #346 before merge.
-- PR #65 is open and mergeable; CI has been triggered repeatedly as checkpoints were pushed. The latest complete executable validation must be read from the newest PR #65 head before merge.
+- PR #65 is open and mergeable. CI runs on intermediate heads were superseded/cancelled as additional safe checkpoints were pushed; validate the newest final head before merge.
 - This chat has GitHub connector access but no local Flutter runtime, so `flutter analyze` / `flutter test` cannot be executed locally here.
 - All new persistence is additive (`CREATE TABLE IF NOT EXISTS`); there is no destructive schema migration or Bookmark/Tag rewrite.
 
 ## Work in progress
 
-- Validate PR #65 latest head and fix analyzer/test failures caused by this branch.
+- Validate PR #65 newest head and fix analyzer/test failures caused by this branch.
 - Do not merge PR #65 until its latest-head CI is green.
 
 ## Exact next actions
 
 1. Inspect the newest PR #65 Flutter CI run; fix failures caused by Object-lane changes, then merge when green.
 2. Refresh from latest `main` after Relation PR #66 if it lands first; avoid force-merging shared handoff conflicts.
-3. Connect `ObjectDetailContentLoader` to one existing Object detail presentation surface, then reuse the same content component for other opening modes.
-4. Add a thin Body editor/rendering slice using `ObjectBodyStore`, starting with paragraph text and preserving unknown block kinds.
-5. After Relation PR #66 stabilizes source/target validation and backlink helpers, implement the execution half of Value -> Object promotion as a small consumer of those APIs; preserve source Value by default.
-6. Add Daily Note entry/navigation UX only through general Object detail/open-mode mechanisms; do not create a special note editor silo.
+3. Connect `ObjectDetailContentLoader` plus the paragraph-safe Body adapter to one existing Object detail presentation surface; keep navigation chrome separate.
+4. After Relation PR #66 stabilizes source/target validation and backlink helpers, implement the execution half of Value -> Object promotion as a small consumer of those APIs; preserve source Value by default.
+5. Add Daily Note entry/navigation UX only through general Object detail/open-mode mechanisms; do not create a special note editor silo.
+6. Consider database-level Weblink URL uniqueness only if concurrent creation becomes a demonstrated need; current `findOrCreate` handles normal sequential reuse.
 7. Keep Tag hierarchy mutation and Relation lifecycle work in the Relation lane.
 
 ## Cross-lane dependencies / boundaries
@@ -91,11 +98,11 @@ Own Object/ObjectType architecture, Property value semantics, Database/View inte
 
 ## Blockers / risks
 
-- PR #65 still requires latest-head executable CI validation before merge.
-- Connecting detail UI may touch files with broader presentation ownership; refresh latest `main` and keep the first integration slice narrow.
-- Daily Note uniqueness is enforced through the additive registry; any future external imports should adopt/register matching date Objects rather than bypass the service.
-- Weblink `findOrCreate` prevents ordinary sequential duplicates but does not yet add a database-level unique URL registry; add one only if concurrent creation becomes a real requirement.
+- PR #65 requires newest-head executable CI validation before merge.
+- Connecting detail UI may touch broader presentation files; refresh latest `main` and keep the first integration slice narrow.
+- Daily Note uniqueness is enforced through the additive registry; future external imports should adopt/register matching date Objects rather than bypassing the service.
+- Weblink `findOrCreate` prevents ordinary sequential duplicates but does not provide a concurrency-level uniqueness constraint.
 
 ## Stop reason
 
-This run completed six new Object-lane checkpoints after landing PR #64. The remaining immediate gate is executable validation of PR #65's latest head; the next deeper integration step (Value-to-Object Relation execution) is intentionally sequenced after concurrent Relation PR #66 stabilizes its write-integrity APIs. This is a validation/cross-lane sequencing boundary under `AGENTS.md`, not a stop caused merely by opening one PR or by queued CI.
+This continuation landed PR #64 and then completed seven safe Object-lane checkpoints on PR #65. Intermediate CI runs were cancelled by subsequent commits; the newest complete branch state now needs executable analyze/test validation. The next deeper change—Value-to-Object Relation execution—is also intentionally sequenced after concurrent Relation PR #66 lands its write-integrity APIs. This is a validation/cross-lane sequencing boundary under `AGENTS.md`, not a stop caused merely by one PR or a queued CI run.
