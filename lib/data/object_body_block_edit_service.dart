@@ -1,4 +1,5 @@
 import '../domain/object_body.dart';
+import '../domain/object_body_block_contracts.dart';
 import '../domain/object_body_editor.dart';
 import 'object_body_store.dart';
 
@@ -37,6 +38,46 @@ class ObjectBodyBlockEditService {
         (document) => editor.updateBlock(document: document, block: block),
       );
 
+  /// Updates only the text payload of a known text-editable block.
+  ///
+  /// The latest persisted block is re-read first, so unrelated attributes and
+  /// future metadata survive edits made by a shared Flutter text control.
+  Future<ObjectBodyDocument> updateText({
+    required int objectId,
+    required String blockId,
+    required String text,
+  }) => _mutate(objectId, (document) {
+        final block = _blockById(document, blockId);
+        if (!_textEditableTypes.contains(block.type)) {
+          throw StateError('Body block $blockId is not text-editable.');
+        }
+        return editor.updateBlock(
+          document: document,
+          block: block.copyWith(text: text),
+        );
+      });
+
+  /// Updates checklist state without replacing its text or other attributes.
+  Future<ObjectBodyDocument> setChecklistChecked({
+    required int objectId,
+    required String blockId,
+    required bool checked,
+  }) => _mutate(objectId, (document) {
+        final block = _blockById(document, blockId);
+        if (block.type != ObjectBodyBlockType.checklist) {
+          throw StateError('Body block $blockId is not a checklist.');
+        }
+        return editor.updateBlock(
+          document: document,
+          block: block.copyWith(
+            attributes: <String, dynamic>{
+              ...block.attributes,
+              ObjectBodyBlockAttribute.checked: checked,
+            },
+          ),
+        );
+      });
+
   Future<ObjectBodyDocument> remove({
     required int objectId,
     required String blockId,
@@ -67,4 +108,22 @@ class ObjectBodyBlockEditService {
     await bodyStore.write(objectId: objectId, document: next);
     return next;
   }
+
+  ObjectBodyBlock _blockById(ObjectBodyDocument document, String blockId) {
+    for (final block in document.blocks) {
+      if (block.id == blockId) return block;
+    }
+    throw StateError('Body block not found: $blockId');
+  }
+
+  static const _textEditableTypes = <String>{
+    ObjectBodyBlockType.paragraph,
+    ObjectBodyBlockType.heading,
+    ObjectBodyBlockType.bulletedListItem,
+    ObjectBodyBlockType.numberedListItem,
+    ObjectBodyBlockType.checklist,
+    ObjectBodyBlockType.quote,
+    ObjectBodyBlockType.callout,
+    ObjectBodyBlockType.code,
+  };
 }
