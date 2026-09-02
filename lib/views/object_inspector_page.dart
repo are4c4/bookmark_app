@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../data/bidirectional_relation_store.dart';
 import '../data/daily_note_service.dart';
 import '../data/generic_database_store.dart';
 import '../data/object_body_store.dart';
@@ -8,8 +9,12 @@ import '../data/object_detail_content_loader.dart';
 import '../data/object_graph_query_store.dart';
 import '../data/object_store.dart';
 import '../data/object_type_defaults_store.dart';
+import '../data/object_value_promotion_execution_service.dart';
+import '../data/relation_mutation_service.dart';
 import '../data/relation_read_service.dart';
 import '../data/system_object_store.dart';
+import '../data/weblink_object_service.dart';
+import '../data/weblink_value_promotion_service.dart';
 import '../domain/object_body_plain_text.dart';
 import '../domain/object_detail_content.dart';
 import '../domain/object_model.dart';
@@ -40,6 +45,7 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
     outgoing: <ResolvedOutgoingRelation>[],
     backlinks: <ResolvedRelationBacklink>[],
   );
+  final Set<int> _promotingWeblinkPropertyIds = <int>{};
   bool _loading = true;
 
   ObjectBodyStore get _bodyStore => ObjectBodyStore(widget.store);
@@ -48,6 +54,30 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
         objectStore: widget.objectStore,
         bodyStore: _bodyStore,
         computedStore: ObjectComputedValueStore(widget.objectStore),
+      );
+
+  RelationMutationService get _relationMutations => RelationMutationService(
+        objectStore: widget.objectStore,
+        bidirectionalStore: BidirectionalRelationStore(
+          genericStore: widget.store,
+          objectStore: widget.objectStore,
+        ),
+        genericStore: widget.store,
+      );
+
+  WeblinkValuePromotionService get _weblinkPromotions =>
+      WeblinkValuePromotionService(
+        weblinks: WeblinkObjectService(
+          systemObjects: SystemObjectStore(
+            database: widget.store.database,
+            objectStore: widget.objectStore,
+          ),
+          defaultsStore: ObjectTypeDefaultsStore(widget.store),
+        ),
+        executor: ObjectValuePromotionExecutionService(
+          objectStore: widget.objectStore,
+          relationMutations: _relationMutations,
+        ),
       );
 
   @override
@@ -130,6 +160,52 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
     await _load();
   }
 
+  bool _canPromoteWeblink(
+    ObjectGraphNodeRecord node,
+    ObjectPropertyDefinition property,
+    dynamic value,
+  ) {
+    if (node.isSystemType || property.type != ObjectPropertyType.url) {
+      return false;
+    }
+    final raw = value is String ? value.trim() : '';
+    final uri = Uri.tryParse(raw);
+    return raw.isNotEmpty && uri != null && uri.hasScheme;
+  }
+
+  Future<void> _promoteWeblink(
+    ObjectDetailContent content,
+    ObjectPropertyDefinition property,
+    String url,
+  ) async {
+    if (_promotingWeblinkPropertyIds.contains(property.id)) return;
+    setState(() => _promotingWeblinkPropertyIds.add(property.id));
+    try {
+      final result = await _weblinkPromotions.promote(
+        workspaceId: content.objectType.workspaceId,
+        sourceObjectId: content.object.id,
+        sourceProperty: property,
+        url: url,
+      );
+      await _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('「${result.targetObject.title}」をWeblinkとして関連付けました'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Weblinkに昇格できませんでした: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _promotingWeblinkPropertyIds.remove(property.id));
+      }
+    }
+  }
+
   String _displayValue(ObjectPropertyDefinition property, dynamic value) {
     if (value == null) return 'なし';
     if (value is List) return value.join(', ');
@@ -209,6 +285,8 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
           ...type.properties.map((property) {
             final value = content.valueFor(property);
             if (property.config['hidden'] == true) return const SizedBox.shrink();
+            final canPromoteWeblink = _canPromoteWeblink(node, property, value);
+            final promoting = _promotingWeblinkPropertyIds.contains(property.id);
             return ListTile(
               contentPadding: EdgeInsets.zero,
               leading: Icon(
@@ -226,6 +304,26 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
                       child: _relationValue(property),
                     )
                   : Text(_displayValue(property, value)),
+              trailing: canPromoteWeblink
+                  ? TextButton.icon(
+                      key: ValueKey('promote-weblink-${property.id}'),
+                      onPressed: promoting
+                          ? null
+                          : () => _promoteWeblink(
+                                content,
+                                property,
+                                '$value',
+                              ),
+                      icon: promoting
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 1.5),
+                            )
+                          : const Icon(Icons.open_in_new, size: 16),
+                      label: const Text('Weblinkに昇格'),
+                    )
+                  : null,
             );
           }),
           ObjectBodySection(
