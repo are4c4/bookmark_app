@@ -114,6 +114,8 @@ class BidirectionalRelationStore {
       }
     }
     if (inverse == null || !inverse.isRelation) return null;
+    if (inverse.config['bidirectional'] != true) return null;
+    if (inverse.targetObjectTypeId != property.objectTypeId) return null;
     if (_intConfig(inverse.config['inversePropertyId']) != property.id) {
       return null;
     }
