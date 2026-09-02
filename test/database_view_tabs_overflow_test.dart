@@ -54,17 +54,22 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('View 8'), findsOneWidget);
-    expect(find.text('View 6'), findsNothing);
-    expect(find.text('View 7'), findsNothing);
-    expect(find.byKey(const ValueKey('database-view-overflow-menu')), findsOneWidget);
+    // Tabs themselves are keyed by persisted View id. The active View must be
+    // promoted into the directly-visible partition even though it is last.
+    expect(find.byKey(ValueKey(ids.last)), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('database-view-overflow-menu')),
+      findsOneWidget,
+    );
 
     await tester.tap(find.byKey(const ValueKey('database-view-overflow-menu')));
     await tester.pumpAndSettle();
 
-    expect(find.text('View 6'), findsOneWidget);
-    expect(find.text('View 7'), findsOneWidget);
-    await tester.tap(find.text('View 7'));
+    final view7Item = find.byKey(
+      ValueKey('database-view-overflow-item-${ids[6]}'),
+    );
+    expect(view7Item, findsOneWidget);
+    await tester.tap(view7Item);
     await tester.pumpAndSettle();
 
     expect(selected?.id, ids[6]);
