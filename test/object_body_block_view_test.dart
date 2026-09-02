@@ -1,3 +1,4 @@
+import 'package:bookmark_app/domain/object_body.dart';
 import 'package:bookmark_app/domain/object_body_block_contracts.dart';
 import 'package:bookmark_app/domain/object_body_block_presentation.dart';
 import 'package:bookmark_app/features/object/presentation/widgets/object_body_block_view.dart';
