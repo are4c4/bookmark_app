@@ -30,6 +30,34 @@ class ObjectBodyBlockEditService {
         ),
       );
 
+  /// Inserts [block] immediately after [anchorBlockId] in the latest Body.
+  ///
+  /// Resolving the anchor and mutating happen against the same latest read, so
+  /// hosts do not need to compute a potentially stale numeric insertion index.
+  Future<ObjectBodyDocument> insertAfter({
+    required int objectId,
+    required String anchorBlockId,
+    required ObjectBodyBlock block,
+  }) => _mutate(objectId, (document) {
+        final anchor = anchorBlockId.trim();
+        if (anchor.isEmpty) {
+          throw ArgumentError.value(
+            anchorBlockId,
+            'anchorBlockId',
+            'Block id is empty.',
+          );
+        }
+        final index = document.blocks.indexWhere((item) => item.id == anchor);
+        if (index < 0) {
+          throw StateError('Body block not found: $anchor');
+        }
+        return editor.insertBlock(
+          document: document,
+          block: block,
+          index: index + 1,
+        );
+      });
+
   Future<ObjectBodyDocument> update({
     required int objectId,
     required ObjectBodyBlock block,
