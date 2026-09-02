@@ -148,6 +148,7 @@ class ObjectStore {
     required dynamic value,
   }) async {
     if (property.isRelation) {
+      await _validateRelationSource(objectId: objectId, property: property);
       final relation = value is ObjectRelationValue
           ? value
           : ObjectRelationValue.fromJson(value);
@@ -354,6 +355,32 @@ class ObjectStore {
       updatedAt: record.updatedAt,
       values: record.values,
     );
+  }
+
+  Future<void> _validateRelationSource({
+    required int objectId,
+    required ObjectPropertyDefinition property,
+  }) async {
+    final storedProperty = await _propertyById(property.id);
+    if (storedProperty == null ||
+        !storedProperty.isRelation ||
+        storedProperty.objectTypeId != property.objectTypeId) {
+      throw ArgumentError.value(
+        property.id,
+        'property',
+        'Relation property must belong to its declared source ObjectType.',
+      );
+    }
+
+    final sourceExists = (await listObjects(property.objectTypeId))
+        .any((object) => object.id == objectId);
+    if (!sourceExists) {
+      throw ArgumentError.value(
+        objectId,
+        'objectId',
+        'Source Object must belong to ObjectType ${property.objectTypeId}.',
+      );
+    }
   }
 
   Future<void> _validateRelation(
