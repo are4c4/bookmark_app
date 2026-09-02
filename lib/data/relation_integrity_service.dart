@@ -61,6 +61,7 @@ class RelationIntegrityService {
     final issues = <RelationIntegrityIssue>[];
     final objectTypes = await objectStore.listObjectTypes(workspaceId);
     final objectsByType = <int, List<AppObject>>{};
+    final outgoingByObject = <int, List<ObjectRelationEdge>>{};
 
     Future<List<AppObject>> objectsFor(int objectTypeId) async {
       final cached = objectsByType[objectTypeId];
@@ -68,6 +69,14 @@ class RelationIntegrityService {
       final objects = await objectStore.listObjects(objectTypeId);
       objectsByType[objectTypeId] = objects;
       return objects;
+    }
+
+    Future<List<ObjectRelationEdge>> outgoingFor(int objectId) async {
+      final cached = outgoingByObject[objectId];
+      if (cached != null) return cached;
+      final edges = await objectStore.outgoingRelations(objectId);
+      outgoingByObject[objectId] = edges;
+      return edges;
     }
 
     for (final sourceType in objectTypes) {
@@ -153,7 +162,7 @@ class RelationIntegrityService {
             );
           }
 
-          final indexedIds = (await objectStore.outgoingRelations(source.id))
+          final indexedIds = (await outgoingFor(source.id))
               .where((edge) => edge.propertyId == property.id)
               .map((edge) => edge.targetObjectId)
               .toSet();
