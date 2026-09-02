@@ -8,7 +8,7 @@ import 'object_query_engine.dart';
 
 typedef ObjectViewValueResolver = dynamic Function(
   AppObject object,
-  int propertyId,
+  int? propertyId,
 );
 
 class ObjectViewProjection {
@@ -47,14 +47,13 @@ class ObjectViewProjector {
   }) {
     final query = queryAdapter.decode(view);
     final groupRule = groupAdapter.decode(view);
-    final resolved = valueResolver ??
-        (AppObject object, int propertyId) => object.values[propertyId];
+    final resolve = valueResolver ?? _defaultResolver;
 
     var result = objects.toList(growable: false);
     final search = query.searchQuery.trim().toLowerCase();
     if (search.isNotEmpty) {
       result = result
-          .where((object) => _matchesSearch(object, search, resolved))
+          .where((object) => _matchesSearch(object, search, resolve))
           .toList(growable: false);
     }
 
@@ -62,7 +61,7 @@ class ObjectViewProjector {
       objects: result,
       filters: query.filters,
       sorts: query.sorts,
-      valueResolver: resolved,
+      valueResolver: resolve,
     );
 
     final groups = groupRule == null
@@ -70,7 +69,7 @@ class ObjectViewProjector {
         : groupEngine.group(
             objects: result,
             rule: groupRule,
-            valueResolver: resolved,
+            valueResolver: (object, propertyId) => resolve(object, propertyId),
           );
 
     return ObjectViewProjection(
@@ -81,14 +80,16 @@ class ObjectViewProjector {
     );
   }
 
+  dynamic _defaultResolver(AppObject object, int? propertyId) =>
+      propertyId == null ? object.title : object.values[propertyId];
+
   bool _matchesSearch(
     AppObject object,
     String search,
     ObjectViewValueResolver resolve,
   ) {
     if (object.title.toLowerCase().contains(search)) return true;
-    final propertyIds = <int>{...object.values.keys};
-    for (final propertyId in propertyIds) {
+    for (final propertyId in object.values.keys) {
       if (_searchable(resolve(object, propertyId)).contains(search)) return true;
     }
     return false;
