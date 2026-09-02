@@ -59,34 +59,18 @@ class RelationIntegrityService {
   Future<RelationIntegrityReport> auditWorkspace(int workspaceId) async {
     final issues = <RelationIntegrityIssue>[];
     final objectTypes = await objectStore.listObjectTypes(workspaceId);
-    final typeById = {for (final type in objectTypes) type.id: type};
     final objectsByType = <int, List<AppObject>>{};
 
-    Future<List<AppObject>> objectsFor(int objectTypeId) async =>
-        objectsByType.putIfAbsent(
-          objectTypeId,
-          () => <AppObject>[],
-        ).isNotEmpty
-            ? objectsByType[objectTypeId]!
-            : objectsByType[objectTypeId] =
-                await objectStore.listObjects(objectTypeId);
-
-    // Preserve an explicitly cached empty list as well.
-    Future<List<AppObject>> cachedObjectsFor(int objectTypeId) async {
-      if (objectsByType.containsKey(objectTypeId)) {
-        return objectsByType[objectTypeId]!;
-      }
+    Future<List<AppObject>> objectsFor(int objectTypeId) async {
+      final cached = objectsByType[objectTypeId];
+      if (cached != null) return cached;
       final objects = await objectStore.listObjects(objectTypeId);
       objectsByType[objectTypeId] = objects;
       return objects;
     }
 
-    // Avoid the helper above accidentally reloading empty lists.
-    // ignore: unused_local_variable
-    final _ = objectsFor;
-
     for (final sourceType in objectTypes) {
-      final sourceObjects = await cachedObjectsFor(sourceType.id);
+      final sourceObjects = await objectsFor(sourceType.id);
       for (final property in sourceType.properties.where((item) => item.isRelation)) {
         final targetTypeId = property.targetObjectTypeId;
         if (targetTypeId == null) {
@@ -95,7 +79,8 @@ class RelationIntegrityService {
               kind: RelationIntegrityIssueKind.missingTargetObjectType,
               objectTypeId: sourceType.id,
               propertyId: property.id,
-              message: 'Relation Property ${sourceType.name}.${property.name} has no target ObjectType.',
+              message:
+                  'Relation Property ${sourceType.name}.${property.name} has no target ObjectType.',
             ),
           );
           continue;
@@ -108,7 +93,8 @@ class RelationIntegrityService {
               kind: RelationIntegrityIssueKind.missingTargetObjectType,
               objectTypeId: sourceType.id,
               propertyId: property.id,
-              message: 'Relation Property ${sourceType.name}.${property.name} targets missing ObjectType $targetTypeId.',
+              message:
+                  'Relation Property ${sourceType.name}.${property.name} targets missing ObjectType $targetTypeId.',
             ),
           );
           continue;
@@ -119,15 +105,14 @@ class RelationIntegrityService {
               kind: RelationIntegrityIssueKind.crossWorkspaceTarget,
               objectTypeId: sourceType.id,
               propertyId: property.id,
-              message: 'Relation Property ${sourceType.name}.${property.name} targets ObjectType $targetTypeId in another workspace.',
+              message:
+                  'Relation Property ${sourceType.name}.${property.name} targets ObjectType $targetTypeId in another workspace.',
             ),
           );
           continue;
         }
 
-        final targetObjects = typeById.containsKey(targetTypeId)
-            ? await cachedObjectsFor(targetTypeId)
-            : await objectStore.listObjects(targetTypeId);
+        final targetObjects = await objectsFor(targetTypeId);
         final validTargetIds = targetObjects.map((object) => object.id).toSet();
 
         final hasPairMetadata = property.config['bidirectional'] == true ||
@@ -141,7 +126,8 @@ class RelationIntegrityService {
                 kind: RelationIntegrityIssueKind.invalidBidirectionalPair,
                 objectTypeId: sourceType.id,
                 propertyId: property.id,
-                message: 'Relation Property ${sourceType.name}.${property.name} has inconsistent bidirectional metadata.',
+                message:
+                    'Relation Property ${sourceType.name}.${property.name} has inconsistent bidirectional metadata.',
               ),
             );
           }
@@ -165,7 +151,8 @@ class RelationIntegrityService {
                   propertyId: property.id,
                   sourceObjectId: source.id,
                   targetObjectId: targetId,
-                  message: 'Object ${source.id} stores missing Relation target $targetId for ${property.name}.',
+                  message:
+                      'Object ${source.id} stores missing Relation target $targetId for ${property.name}.',
                 ),
               );
             }
@@ -177,7 +164,8 @@ class RelationIntegrityService {
                   propertyId: property.id,
                   sourceObjectId: source.id,
                   targetObjectId: targetId,
-                  message: 'Relation value ${source.id} -> $targetId for ${property.name} is missing from the normalized edge index.',
+                  message:
+                      'Relation value ${source.id} -> $targetId for ${property.name} is missing from the normalized edge index.',
                 ),
               );
             }
@@ -191,13 +179,16 @@ class RelationIntegrityService {
                 propertyId: property.id,
                 sourceObjectId: source.id,
                 targetObjectId: targetId,
-                message: 'Relation edge ${source.id} -> $targetId for ${property.name} is not present in the persisted Property value.',
+                message:
+                    'Relation edge ${source.id} -> $targetId for ${property.name} is not present in the persisted Property value.',
               ),
             );
           }
 
           if (pair != null && property.config['pairRole'] == 'source') {
-            final targetsById = {for (final target in targetObjects) target.id: target};
+            final targetsById = {
+              for (final target in targetObjects) target.id: target,
+            };
             for (final targetId in storedIds.intersection(validTargetIds)) {
               final target = targetsById[targetId]!;
               final inverseIds = ObjectRelationValue.fromJson(
@@ -211,7 +202,8 @@ class RelationIntegrityService {
                     propertyId: property.id,
                     sourceObjectId: source.id,
                     targetObjectId: targetId,
-                    message: 'Bidirectional Relation ${property.name} points to $targetId but inverse ${pair.inverseProperty.name} does not contain ${source.id}.',
+                    message:
+                        'Bidirectional Relation ${property.name} points to $targetId but inverse ${pair.inverseProperty.name} does not contain ${source.id}.',
                   ),
                 );
               }
