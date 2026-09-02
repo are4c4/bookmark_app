@@ -167,4 +167,111 @@ void main() {
       [missingTargetId],
     );
   });
+
+  test('explicit save can replace a legacy missing target with a valid selection', () async {
+    final sourceTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Source',
+    );
+    final targetTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Target',
+    );
+    await objectStore.createRelationProperty(
+      objectTypeId: sourceTypeId,
+      name: 'Targets',
+      targetObjectTypeId: targetTypeId,
+      multiple: true,
+    );
+    final property =
+        (await objectStore.getObjectType(sourceTypeId))!.properties.single;
+    final sourceId = await objectStore.createObject(
+      objectTypeId: sourceTypeId,
+      title: 'Source',
+    );
+    final validTargetId = await objectStore.createObject(
+      objectTypeId: targetTypeId,
+      title: 'Valid',
+    );
+    const missingTargetId = 999999;
+    await genericStore.setValue(
+      recordId: sourceId,
+      propertyId: property.id,
+      value: const <String, dynamic>{'objectIds': [missingTargetId]},
+    );
+
+    final context = await editor.load(
+      workspaceId: workspaceId,
+      sourceObjectId: sourceId,
+      property: property,
+    );
+    expect(context.missingTargetObjectIds, [missingTargetId]);
+
+    await editor.save(
+      context: context,
+      selectedObjectIds: [validTargetId],
+    );
+
+    final source = (await objectStore.listObjects(sourceTypeId)).single;
+    expect(
+      ObjectRelationValue.fromJson(source.values[property.id]).objectIds,
+      [validTargetId],
+    );
+  });
+
+  test('explicit save can resolve legacy single-Relation cardinality drift', () async {
+    final sourceTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Source',
+    );
+    final targetTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Target',
+    );
+    await objectStore.createRelationProperty(
+      objectTypeId: sourceTypeId,
+      name: 'Target',
+      targetObjectTypeId: targetTypeId,
+      multiple: false,
+    );
+    final property =
+        (await objectStore.getObjectType(sourceTypeId))!.properties.single;
+    final sourceId = await objectStore.createObject(
+      objectTypeId: sourceTypeId,
+      title: 'Source',
+    );
+    final firstTargetId = await objectStore.createObject(
+      objectTypeId: targetTypeId,
+      title: 'First',
+    );
+    final secondTargetId = await objectStore.createObject(
+      objectTypeId: targetTypeId,
+      title: 'Second',
+    );
+    await genericStore.setValue(
+      recordId: sourceId,
+      propertyId: property.id,
+      value: <String, dynamic>{
+        'objectIds': [firstTargetId, secondTargetId],
+      },
+    );
+
+    final context = await editor.load(
+      workspaceId: workspaceId,
+      sourceObjectId: sourceId,
+      property: property,
+    );
+    expect(context.hasCardinalityViolation, isTrue);
+
+    await editor.save(
+      context: context,
+      selectedObjectIds: [secondTargetId],
+    );
+
+    final source = (await objectStore.listObjects(sourceTypeId)).single;
+    expect(
+      ObjectRelationValue.fromJson(source.values[property.id]).objectIds,
+      [secondTargetId],
+    );
+  });
 }
