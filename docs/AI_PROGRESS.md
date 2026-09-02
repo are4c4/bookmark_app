@@ -14,30 +14,39 @@ https://github.com/are4c4/bookmark_app/issues/56
 
 ## Development lanes
 
-The implementation is split into two concurrent-capable lanes:
+The implementation is split into two concurrent-capable lanes matching the current implementation chats:
 
-1. **Database / View lane** — `docs/AI_PROGRESS_DB_VIEW.md`
-   - Database collection semantics
-   - Database/View separation
-   - Filter/Sort/Group/layout integration
-   - multiple Views and top-tab navigation
-   - Gallery/List/Table/Board projection and database-page UX
-
-2. **Object / Relation lane** — `docs/AI_PROGRESS_OBJECT_RELATION.md`
+1. **Object lane** — `docs/AI_PROGRESS_OBJECT.md`
    - Object/ObjectType/Property architecture
-   - Value vs Object Relation semantics
-   - Tag-as-Object, reusable Object types, backlinks
-   - Object detail content, Body/block model
-   - Daily Notes and time-based Object patterns
+   - Object-centric Database/View integration
+   - reusable Object types
+   - Object detail content and Body/block model
+   - Daily Notes and Value-to-Object promotion
 
-Each implementation chat/run should pick one primary lane and update only its matching progress file unless repository-wide integration state changes.
+2. **Relation lane** — `docs/AI_PROGRESS_RELATION.md`
+   - Relation/backlink lifecycle
+   - bidirectional Relation integrity
+   - relation write validation and source/target constraints
+   - rename/delete propagation and stale metadata handling
+   - Relation APIs and Tag hierarchy expressed through Relations
+
+`docs/AI_PROGRESS_OBJECT_RELATION.md` is retained only as legacy combined context. New runs should write to the dedicated Object or Relation handoff file.
+
+Each implementation chat/run must pick one primary lane and update its matching progress file unless repository-wide integration state changes.
+
+## Sustained-run policy
+
+Implementation runs should not stop after the first small PR/commit/checkpoint when Issue #56 still contains safe work for that lane. After each coherent slice, commit/push, record the checkpoint, then continue with the next non-conflicting slice.
+
+Pending/queued CI by itself is not a blocker. While CI is pending, continue with work that does not depend on the result. Stop only for a genuine design/risk/cross-lane blocker, external infrastructure with no independent work remaining, or an actual runtime/tool/session limit.
 
 ## Latest relevant state
 
-- `main` includes the persistent AI handoff workflow and now the two-lane development model.
+- `main` includes the persistent AI handoff workflow and sustained multi-slice execution rules.
+- PR #61 is the current known Object-lane slice for Value / Object Relation / Computed property semantics.
+- PR #62 is the current known Relation-lane slice for bidirectional Relation pair integrity.
 - Existing generic foundations include Object query/filter/sort, grouping, Board view, Board drag/drop persistence, Formula/Rollup, bidirectional Relations, ObjectType templates, and ObjectType management.
-- PR #54 was the previously known reusable Object view toolbar slice; current GitHub state must be inspected before continuing or superseding it.
-- Issue #56 contains the current product/design decisions and remains the shared implementation contract.
+- Issue #56 remains the shared product/design implementation contract.
 
 ## Repository-wide design contract
 
@@ -54,25 +63,25 @@ Each implementation chat/run should pick one primary lane and update only its ma
 ## Integration policy
 
 - Keep `main` releasable.
-- Use focused lane-specific branches/PRs.
+- Use focused lane-specific branches/PRs/checkpoints.
 - Avoid both lanes concurrently owning broad refactors of the same core file.
-- If a change crosses lanes, document the dependency and sequence the overlapping work where practical.
+- If a change crosses lanes, document the dependency and sequence overlapping work where practical.
 - Rebase/refresh from latest `main` before merging overlapping foundation changes.
 - Preserve existing bookmark data and behavior; no destructive migrations without explicit approval.
 
 ## Next repository-wide actions
 
-- Database / View lane resumes from `docs/AI_PROGRESS_DB_VIEW.md`.
-- Object / Relation lane resumes from `docs/AI_PROGRESS_OBJECT_RELATION.md`.
+- Object lane resumes from `docs/AI_PROGRESS_OBJECT.md` and should continue through multiple safe slices per run.
+- Relation lane resumes from `docs/AI_PROGRESS_RELATION.md` and should continue through multiple safe slices per run.
 - Planning/design chat continues to refine Issue #56 when material product decisions are made.
-- Integrate lane PRs into `main` in small, validated slices.
+- Integrate validated lane PRs into `main` in reviewable increments without treating each PR creation as the end of a chat run.
 
 ## Validation
 
-The lane split itself is documentation/project-management work. Feature runs must record exact Flutter analyze/test results in their lane progress files.
+Lane-split and sustained-run changes are documentation/project-management changes. Feature runs must record exact Flutter analyze/test results in their lane progress files.
 
 ## Known risks
 
 - Parallel work is useful only when file ownership is reasonably separate; otherwise sequence the slices.
-- GitHub Actions usage limits may affect CI availability; record local/static validation when CI is unavailable.
-- Block-editor and migration work can expand quickly; keep the initial slices narrow and backward-compatible.
+- GitHub Actions usage limits may affect CI availability; pending CI alone should not stop independent work.
+- Block-editor and migration work can expand quickly; keep individual commits reviewable while allowing several checkpoints per run.
