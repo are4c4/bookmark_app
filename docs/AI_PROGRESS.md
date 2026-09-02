@@ -14,7 +14,7 @@ Product direction: **Capacities-like Object-centric data model + Notion-like Dat
 
 ## Current implementation position
 
-The active phase is Database/View integration and user-facing UX. Most Object/Relation primitives are already available and should be consumed rather than reimplemented.
+The active phase is Database/View integration and user-facing UX. Most Object/Relation primitives are already available and should be consumed rather than reimplemented. The large real-page/navigation integration hotspots still need patch-capable editing; independent additive Object slices continue only where they directly prepare those flows without competing with Relation work.
 
 ### Integrated Object / database foundations on `main`
 
@@ -22,20 +22,17 @@ The active phase is Database/View integration and user-facing UX. Most Object/Re
 - #79: grouped Board Object creation with Relation-safe presets.
 - #82: Database = target ObjectType + collectionFilter foundation and Database-first/View-second projection contract.
 - #85/#86/#87: collection settings UI, collection-aware page loader, collection-aware normal/Board creation, canonical Object-owned Relation editor adapter.
-- #88/#89: duplicate-current/blank View creation and scoped rename/reorder/delete.
-- #90/#92: persisted View Object opening modes and real settings UI.
+- #88/#89/#94: multi-View creation/management/overflow.
+- #90/#92/#98: persisted View Object opening modes, settings UI, and effective presentation resolution.
 - #91: reversible URL -> reusable Weblink promotion in Object inspector.
-- #93/#95: shared Object inspector editing and typed checkbox/select/multi-select/date/rating mutation contracts.
-- #94: View tab overflow policy and `その他` handling.
-- #96: `GenericDatabasePageServices` composition root for collection loader/config, collection-aware create/Board create and canonical Relation editor.
-- #97 merged as `8aeba4da7fc8a093eb20b16afe87aea426eee22d`: shared typed `ObjectDetailValueEditor` descriptor/dispatch contract.
-- #98 merged as `123c8aabc6ab8913e30b657023953cd03ec8a9cb`: persisted View/ObjectType opening-mode resolution through `ObjectOpenPresentationService`.
-- #100 merged as `09802d5aaef8d1f4ae6d3e9f8e4d7e46a6b6c498`: container-agnostic Object-detail Property presentation and canonical Relation-renderer separation.
-- #99 merged as `96b15bae63299a6dc566558066e2d5902e5a6f3f`: shared typed text-input normalization for Object-detail number/select/multi-select/date/rating editing.
-- #101 merged as `e7a8f6aec9e9631f01e486a5f7671df7b3cd5010`: immutable + persisted Object Body block operations that preserve unknown/future block payloads instead of flattening rich documents.
-- #102 merged as `bc6f5adc4d5c2c3a4d088de8cb84e09e1f9f4e16`: Daily Note today/previous/next calendar navigation while reusing canonical open-or-create semantics.
+- #93/#95/#97/#99/#100: shared Object inspector/detail editing, typed mutation/input contracts, and shared Property presentation.
+- #96: `GenericDatabasePageServices` composition root.
+- #101: immutable + persisted Object Body block operations preserving unknown/future block payloads.
+- #102: Daily Note previous/today/next calendar navigation using canonical open-or-create semantics.
+- #103 merged as `32ab0dd7b57349060c4a98c5fad80573be19cca3`: rich Body block factories/contracts, known-payload validation, and embedded Object/Database/View/asset reference indexing while retaining unknown-block forward compatibility.
+- #104 merged as `60b2194bfcf602a7001c426b9459a3468126f092`: Daily Note calendar navigation composed directly into shared `ObjectDetailContent`.
 
-PR #83 remains closed/unmerged and is not an active implementation path.
+PR #105 is the active Object slice, adding widget-independent Body block presentation metadata for later real block UI. PR #83 remains closed/unmerged and is not active.
 
 ### Integrated Relation foundations on `main`
 
@@ -64,38 +61,33 @@ Collection semantics in the real page, collection-aware creation, Board create-i
 Multiple independent Views, top tabs, duplicate-current/blank creation, rename/reorder/delete, independent config and overflow handling. Core management and overflow are integrated.
 
 ### Milestone C — Object Knowledge System
-Reusable Tag/Weblink/Image flows, Value -> Object affordances, richer Relations/backlinks, shared contextual Object detail/opening, stronger Daily Notes. Opening-mode persistence/settings/resolution, URL promotion, shared typed Value editor/input normalization and shared Property presentation are integrated; Daily Note calendar navigation is now integrated via #102. Real contextual navigation/UI consumption remains.
+Reusable Tag/Weblink/Image flows, Value -> Object affordances, richer Relations/backlinks, shared contextual Object detail/opening, stronger Daily Notes. Opening-mode persistence/settings/resolution, URL promotion, shared typed Value editor/input normalization, shared Property presentation, calendar Daily Note navigation, and navigation-to-shared-detail composition are integrated; real contextual navigation/UI consumption remains.
 
 ### Milestone D — Document / Knowledge Layer
-Real block editing, RichText/Document Property, media/file blocks, embedded Objects/Database Views and higher-level time-based note compositions. Safe block-level mutation/persistence primitives are integrated via #101; real block UI remains.
+Real block editing, RichText/Document Property, media/file blocks, embedded Objects/Database Views and higher-level time-based note compositions. Safe block mutation/persistence plus typed rich-block/reference contracts are integrated; PR #105 adds shared block presentation metadata. Real Flutter block UI remains.
 
 ## Next repository-wide actions
 
 1. In a patch-capable environment, wire `GenericDatabasePageServices` into real `GenericDatabasePage` for collection-aware reload/create/Board create/Relation edit/collection settings.
 2. Add page/widget regression coverage proving Database membership resolves before View projection and new Objects target the configured ObjectType.
 3. Consume `ObjectOpenPresentationService` in real View navigation, then implement side peek / center peek / full page while preserving Database/View context.
-4. Consume `ObjectDetailPropertyPresenter`, `ObjectDetailValueEditor`, and `ObjectDetailValueInputCodec` in shared Object detail UI so typed Value behavior is consistent across presentations.
-5. Expose Daily Note previous/today/next through shared Object navigation using the merged #102 service when a patch-capable UI environment is available.
-6. Build real block UI incrementally on `ObjectBodyBlockEditService`; never flatten unknown/rich blocks through the paragraph adapter.
+4. Consume the shared Object detail Property presenter/editor/input contracts in shared Object detail UI.
+5. Expose Daily Note previous/today/next in shared Object navigation through #104.
+6. Build real Body block UI incrementally on #101/#103/#105 contracts; never flatten unknown/rich blocks through the paragraph adapter.
 7. Manual include/exclude remains deferred until dynamic collection + multi-View behavior is stable.
 
 ## Validation status
 
-- #97 corrected Flutter CI #520: success before merge.
-- #98 Flutter CI #517: success before merge.
-- #100 Flutter CI #525: Drift generation, `flutter analyze`, and tests succeeded before merge.
-- #99 corrected head passed Flutter CI #526 with `No issues found!` and 305 tests passed before merge.
-- #101 head `33ba0a9cd42ac031d9a0100dfe52a543ff02ca4a`: Flutter CI #531 succeeded before merge.
-- #102 corrected head `b4034236a8abdf66ec807d15cabd9df2aeeab8f5`: Flutter CI #533 succeeded before merge.
-- Earlier merged #82/#86/#87/#88/#89/#90/#91/#92/#93/#94/#95/#96 passed their relevant PR CI as recorded in lane history.
+- #103 latest head `eb0454e7466e38cdbd7252ca479f8920dceb8703`: Flutter CI #541 succeeded (Drift generation, `flutter analyze`, tests) before merge.
+- #104 head `795fbdc39b1363b961113b19f18b1f724b739560`: Flutter CI #542 succeeded before merge.
+- #105 latest-head Flutter CI pending at this update.
+- Earlier merged Object and Relation slices passed their relevant PR CI as recorded in lane history.
 
 ## Known risks / sequencing constraints
 
 - `GenericDatabasePage` is the main integration hotspot; avoid parallel broad Object/Relation edits.
 - Legacy page logic still assumes Database id and ObjectType id are identical in places; use merged collection adapters to remove this incrementally.
 - The current GitHub connector replaces existing files as a whole. Broad direct replacement of `GenericDatabasePage` or large Object detail/navigation surfaces is an avoidable corruption/merge risk; prefer a patch-capable environment.
-- The execution container cannot currently resolve GitHub directly, so it cannot obtain a patchable clone as a workaround.
 - User-facing Relation writes must use `RelationMutationService`; picker loading must not silently rewrite legacy/corrupt state.
 - Board Relation-group creation must stay on the safe mutation facade.
-- Opening-mode persistence/settings/resolution and shared detail contracts exist, but actual contextual navigation/detail UI still needs wiring.
-- Rich Body documents must not be flattened by the paragraph-safe editor; #101 provides narrow block-level mutation primitives for future UI.
+- Rich Body documents must not be flattened by the paragraph-safe editor; #101/#103 establish safe mutation and typed rich-block/reference contracts.
