@@ -3,133 +3,101 @@
 > Durable handoff for the Relation implementation lane. Update this file before every Relation-lane run ends.
 
 ## Lane scope
-
-Own Relation and backlink lifecycle, bidirectional Relation integrity, relation write validation, rename/delete propagation, relation-target constraints, Tag hierarchy where implemented through Relations, and reusable Relation APIs consumed by the Object lane.
+Own Relation/backlink lifecycle, bidirectional integrity, relation write validation, rename/delete propagation, target constraints, stale/inconsistent metadata handling, Tag hierarchy through Relations, and reusable Relation APIs consumed by Object-owned hosts.
 
 ## Active Issue
-
 `#56` — Integrate generic Object database UX toward Notion/Capacities workflow
 
 ## Current state
+- Relation foundation PRs #62/#66/#69/#73/#74/#75/#80/#81 are merged.
+- PR #109 `Cover canonical Relation editor integration safety` is merged as `d51b5023ede27bcf0c66670620e86643a1b07038`.
+- Object/database foundations #79/#82/#85/#86/#87/#96 are also on main, including `ObjectRelationEditorService` and `GenericDatabasePageServices.relationEditor` composition.
+- Object PR #108 is merged; there is no active Object foundation PR competing with Relation code now.
+- No active Relation implementation PR remains.
 
-- Relation lifecycle foundation PR #66 is merged.
-- Read-only integrity audit PR #69 is merged.
-- Relation neighborhood read API PR #73 is merged.
-- Fail-closed Relation index reconciliation PR #74 is merged.
-- Canonical Relation target candidate API PR #75 is merged.
-- Canonical Relation selection-context PR #80 is merged as `614d654e6bb08011d9cb4ca242b50174ce44e5e4`.
-- Core Object mirror lifecycle PR #81 is merged as `0390d12162cb2a2dd5c063e8e4cbca95f036a248`.
-- Object PRs #76/#77/#78 have already adopted `RelationNeighborhood` / `RelationMutationService` in shared detail, Value promotion, and Object inspector flows.
-- Object PR #79 remains active around Board grouped creation and intends to edit `GenericDatabasePage` next.
-- No active Relation implementation PR remains from this sustained run.
-
-## Stable Relation APIs now on main
+## Stable Relation APIs on main
 
 ### Mutation / lifecycle
-
 - `RelationMutationService`
   - canonical persisted Property resolution;
-  - safe unidirectional and bidirectional Relation writes;
-  - pair-aware Relation Property rename/delete;
+  - safe unidirectional and bidirectional writes;
+  - pair-aware rename/delete;
   - Relation-safe Object deletion that detaches surviving references first;
   - fail-closed behavior for inconsistent bidirectional metadata.
 - `BidirectionalRelationStore`
-  - reciprocal pair integrity validation;
-  - canonical persisted pair writes;
+  - reciprocal pair validation;
+  - canonical pair writes;
   - transactional pair rename/delete.
 
 ### Read / backlinks
-
 - `RelationReadService`
   - resolved outgoing Relations;
   - resolved backlinks;
-  - `RelationNeighborhood` for one Object's outgoing + incoming graph context.
-- Property-filtered edge helpers remain available for lower-level callers.
+  - `RelationNeighborhood` for shared Object graph context.
+- Property-filtered edge helpers remain available for low-level callers.
 
-### Target selection
-
+### Picker / editor
 - `RelationTargetService`
-  - resolves the persisted Relation Property instead of trusting stale caller config;
+  - resolves persisted Relation metadata rather than trusting stale caller config;
   - validates workspace and target ObjectType ownership;
-  - returns canonical target ObjectType and immutable candidate Object list;
-  - `selectionFor()` returns canonical source Object + current selected ids/Objects + valid candidates;
-  - missing target ids remain visible as diagnostics rather than being silently discarded;
-  - legacy single-Relation cardinality drift is surfaced read-only;
-  - a source Object outside the persisted source ObjectType is rejected.
+  - `selectionFor()` returns canonical source Object, candidates, selected ids/Objects, missing target ids, and single-cardinality diagnostics without mutation.
+- `ObjectRelationEditorService`
+  - load delegates to canonical selection;
+  - explicit save accepts only canonical candidates and enforces cardinality;
+  - writes delegate to `RelationMutationService`.
+- `GenericDatabasePageServices.relationEditor` composes these canonical services for the real Database page host.
 
 ### Persistence / integrity
-
-- `RelationIndexService`
-  - rebuilds normalized edge indexes from persisted Relation values.
-- `RelationIntegrityService`
-  - read-only detection of missing/cross-workspace target ObjectTypes, missing targets, cardinality violations, missing/stale index edges, invalid bidirectional metadata, and inverse-value mismatches;
-  - symmetric bidirectional validation;
-  - no automatic user-value mutation.
-- `RelationIndexReconcileService`
-  - no-op on healthy workspaces;
-  - repairs only `missingIndexEdge` / `staleIndexEdge` drift;
-  - treats persisted Relation values as source of truth;
-  - refuses reconciliation before writes when any ambiguous schema/value/bidirectional issue exists;
-  - verifies post-rebuild integrity.
+- `RelationIndexService` rebuilds normalized edges from persisted Relation values.
+- `RelationIntegrityService` audits missing/cross-workspace targets, cardinality, index drift, bidirectional metadata and inverse mismatches without mutating user values.
+- `RelationIndexReconcileService` repairs only deterministic index-only drift and refuses ambiguous repair.
 
 ### Tag / legacy mirror lifecycle
+- Legacy Tag -> Tag Object synchronization uses general Relation lifecycle APIs.
+- Removing orphan Tag Objects cleans incoming Parent Relations.
+- `CoreObjectBridge` Images/Tags writes use `RelationMutationService`.
+- Orphan mirrored Image/Bookmark deletion uses Relation-safe Object deletion.
 
-- Legacy Tag -> Tag Object synchronization uses the general Relation lifecycle path.
-- Removing orphan Tag Objects cleans incoming Parent Relations rather than leaving deleted Object ids in surviving values.
-- `CoreObjectBridge` bookmark Images/Tags synchronization now writes through `RelationMutationService`.
-- Removing orphan mirrored Image/Bookmark Objects now uses Relation-safe Object deletion, so surviving Objects are detached before the mirrored Object disappears.
-
-## Checkpoints completed in the latest sustained run
-
-1. Re-read latest main after Object PRs #76/#77/#78 adopted stable Relation APIs.
-2. Audited production low-level Relation mutations/deletions.
-3. Added PR #80 `RelationSelectionContext` for a complete read-only Relation-picker payload.
-4. Added tests for canonical current selection, missing target ids, legacy single-cardinality drift, and wrong-source rejection.
-5. Initial #80 full test run exposed only an invalid ordering assumption in the new test; analyzer was green and 251 other tests passed. The assertion was corrected to unordered candidate comparison.
-6. #80 replacement latest-head CI passed dependency install, Drift generation, `flutter analyze`, and full tests; PR #80 was merged.
-7. Used the explicitly allowed deliberately-sequenced cross-lane path for `core_object_bridge.dart`, because active Object PR #79 was Board-only and did not touch that file.
-8. Added PR #81 migrating bookmark Images/Tags writes to `RelationMutationService` and mirror orphan deletion to Relation-safe Object deletion.
-9. Added regression coverage proving deletion of a mirrored Image Object detaches an incoming Relation from a surviving custom Object rather than leaving a stale deleted Object id.
-10. PR #81 latest-head CI passed dependency install, Drift generation, `flutter analyze`, and full tests; PR #81 was merged.
-11. Re-audited remaining user-facing low-level Relation writes. The remaining concrete caller is `GenericDatabasePage`, which is Object-owned and is the next surface expected to be edited by active Object PR #79.
+## Checkpoints completed in this sustained run
+1. Re-read AGENTS.md, Issue #56, repository handoff, Relation handoff, latest main/PR/CI.
+2. Confirmed Object foundations #79/#82/#85/#86/#87/#96 had already introduced the canonical Object-owned Relation editor and page composition root.
+3. Opened PR #109 from `feature/relation-editor-regressions`.
+4. Added regression coverage proving editor saves synchronize bidirectional inverse values.
+5. Added stale picker coverage: a target deleted after picker load is rejected at save and leaves source data unchanged.
+6. Added missing-target boundary coverage: opening the picker does not repair/drop legacy missing ids; explicit valid save can replace them.
+7. Added single-cardinality boundary coverage: legacy multiple values are diagnosed read-only and can be resolved only by explicit valid save.
+8. Added page-composition coverage proving `GenericDatabasePageServices.relationEditor` preserves bidirectional lifecycle and missing-target diagnostics.
+9. Added stale UI Property coverage proving rename/delete re-resolve persisted bidirectional metadata and cannot orphan the inverse Property.
+10. Audited remaining production low-level `setRelation`, `deleteProperty`, and `deleteObject` callers. No new standalone Relation lifecycle leak was found; remaining low-level deletes outside Relation internals are rollback-only paths for newly-created, not-yet-exposed Objects/Properties.
+11. PR #109 latest-head Flutter CI #597 passed dependency install, Drift generation, `flutter analyze`, and the full test suite, then #109 was squash-merged.
+12. Object PR #108 merged concurrently, but its Body-only changes were confirmed non-overlapping with #109 before integration.
 
 ## Validation
-
-Latest Relation heads were validated through GitHub Actions before merge:
-
-- PR #80 first head: Drift generation + `flutter analyze` success; one new test failed only because it incorrectly assumed candidate ordering. All other tests passed.
-- PR #80 corrected head `56f634d666c2d4e15fc5917f0559ef2fb02225cd`: dependency install, Drift generation, `flutter analyze`, full test suite — success.
-- PR #81 head `c99ee94ea26bb2588e27321398ebe635870e2f8d`: dependency install, Drift generation, `flutter analyze`, full test suite — success.
-
-Previous merged Relation PRs #66/#69/#73/#74/#75 were also CI-green before merge.
-
-Local Flutter execution is unavailable in the connector-only session; GitHub Actions is the executable validation source.
+- PR #109 head `576346d836c2ad07c3f2a590640751dd8b107741`: Drift generation — success; `flutter analyze` — success; full test suite — success (Flutter CI #597).
+- Previous Relation PRs #66/#69/#73/#74/#75/#80/#81 were also CI-green before merge.
+- Local Flutter execution was unavailable in this connector-only run; GitHub Actions was the executable validation source.
 
 ## Exact next actions
-
-1. Sequence the remaining real Relation editor migration through the Object lane after/with its `GenericDatabasePage` Board work:
-   - picker load: `RelationTargetService.selectionFor()`;
-   - picker save: `RelationMutationService.setRelation()`;
-   - never silently remove `missingTargetObjectIds` merely by opening the picker.
-2. Keep `GenericDatabasePage` out of the Relation lane while active Object PR #79 is preparing to edit the same surface.
-3. Keep integrity audit and repair separate. Do not auto-repair missing targets, cardinality conflicts, broken bidirectional values, or other ambiguous user data without explicit product/data policy.
-4. Resume this lane with a focused failing test if Object integration exposes a concrete Relation regression.
-5. Continue Tag hierarchy and legacy mirror behavior only through the general Relation APIs; do not create special Relation persistence silos.
+1. Highest priority is now real-host integration in `GenericDatabasePage` using the already-merged page composition root:
+   - load Relation picker through `GenericDatabasePageServices.relationEditor.load()`;
+   - save only explicit user selections through `.save()` / `RelationMutationService`;
+   - display canonical resolved Objects rather than raw ids;
+   - surface missing-target/cardinality diagnostics without silently repairing them on open.
+2. Add page/widget regression coverage for real Relation picker behavior once the real host is patched.
+3. Keep integrity audit and repair separate; do not auto-repair missing targets, cardinality conflicts, or broken bidirectional values without explicit policy.
+4. Resume Relation implementation with a focused failing regression if real-host integration exposes a lifecycle/read/index bug.
 
 ## Cross-lane boundary
-
-- ObjectType defaults, Value semantics, Body/block persistence, Object detail containers, Daily Note creation, Value-to-Object promotion UX, `GenericDatabasePage`, and Board integration belong to `docs/AI_PROGRESS_OBJECT.md`.
-- `core_object_bridge.dart` has now completed its deliberately sequenced Relation lifecycle migration and should return to normal Object ownership for future feature changes.
-- `lib/data/object_store.dart` is shared infrastructure; future Relation edits there must stay narrow and refresh from latest main before integration.
-- Relation services are intentionally stable consumption boundaries for Object-owned UI and workflows.
+- `GenericDatabasePage`, Object detail/navigation, Daily Note host integration, Body UI and View/Database navigation are Object-owned host surfaces.
+- Relation services are stable consumption boundaries for those hosts.
+- `lib/data/object_store.dart` is shared infrastructure; future Relation edits there must stay narrow and refresh latest main first.
+- Broad `GenericDatabasePage` changes should use a patch-capable environment; whole-file replacement through connector APIs is an avoidable corruption/merge risk.
 
 ## Known risks / blockers
-
-- `ObjectStore.deleteObject` and `ObjectStore.deleteProperty` remain deliberately low-level generic operations. Relation-aware callers should use `RelationMutationService`.
-- `GenericDatabasePage` still contains a low-level Relation write until the Object lane completes its picker/editor migration.
-- Object PR #79 plans to touch `GenericDatabasePage`; a concurrent Relation edit there would create an avoidable cross-lane conflict.
-- Ambiguous automatic Relation-value repair could discard user intent and remains outside routine autonomous changes.
+- `GenericDatabasePage` still contains a legacy direct `ObjectStore.setRelation` path until the real host is migrated to `GenericDatabasePageServices.relationEditor`.
+- The current connector-only environment is not patch-capable for a broad safe edit of that hotspot, and the user declined Work-mode handoff in this run.
+- Low-level generic ObjectStore operations remain intentionally available for persistence internals and rollback paths; normal user-facing Relation mutations must use the canonical facade.
+- Ambiguous automatic Relation-value repair could discard user intent and remains outside routine autonomous work.
 
 ## Stop reason
-
-This continuation exhausted the newly available independent Relation work: canonical selection diagnostics and legacy mirror lifecycle are implemented, tested, merged, and handed off. The remaining concrete user-facing Relation editor lives in `GenericDatabasePage`, the same Object-owned file that active Object PR #79 intends to modify next. Editing it concurrently would violate the repository ownership/concurrency rule. Deeper automatic repair still requires an explicit policy for ambiguous user data. This matches the AGENTS.md stopping conditions: the next actionable step is an unavoidable cross-lane sequencing boundary, not merely pending CI or completion of one PR.
+This run completed all newly available independent Relation work and merged #109 green. The remaining highest-value Relation task is the real `GenericDatabasePage` picker/editor migration, which Issue #56 explicitly classifies as a broad hotspot change requiring a patch-capable environment. The available connector path would require risky whole-file replacement, while Work-mode handoff was declined. No other concrete Relation regression or independent correctness gap remains from the audits. This matches the AGENTS.md stopping condition: the next safe step is blocked by the required execution environment/cross-lane host boundary, not by pending CI or completion of one PR.
