@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../domain/object_body.dart';
 import '../../../../domain/object_body_block_actions.dart';
+import 'object_body_insert_menu_button.dart';
 
 /// Shared per-block editing chrome for Body hosts.
 ///
@@ -43,18 +44,10 @@ class ObjectBodyBlockActionBar extends StatelessWidget {
           icon: const Icon(Icons.arrow_downward),
         ),
         if (onInsertAfter != null)
-          PopupMenuButton<ObjectBodyInsertKind>(
+          ObjectBodyInsertMenuButton(
             key: ValueKey('body-block-insert-after-${block.id}'),
             tooltip: '下にブロックを追加',
-            onSelected: onInsertAfter,
-            itemBuilder: (context) => [
-              for (final kind in ObjectBodyInsertKind.values)
-                PopupMenuItem(
-                  value: kind,
-                  child: Text(_label(kind)),
-                ),
-            ],
-            icon: const Icon(Icons.add),
+            onSelected: onInsertAfter!,
           ),
         IconButton(
           key: ValueKey('body-block-delete-${block.id}'),
@@ -65,18 +58,4 @@ class ObjectBodyBlockActionBar extends StatelessWidget {
       ],
     );
   }
-
-  String _label(ObjectBodyInsertKind kind) => switch (kind) {
-        ObjectBodyInsertKind.paragraph => 'テキスト',
-        ObjectBodyInsertKind.heading1 => '見出し 1',
-        ObjectBodyInsertKind.heading2 => '見出し 2',
-        ObjectBodyInsertKind.heading3 => '見出し 3',
-        ObjectBodyInsertKind.bulletedListItem => '箇条書き',
-        ObjectBodyInsertKind.numberedListItem => '番号付きリスト',
-        ObjectBodyInsertKind.checklist => 'チェックリスト',
-        ObjectBodyInsertKind.quote => '引用',
-        ObjectBodyInsertKind.callout => 'コールアウト',
-        ObjectBodyInsertKind.code => 'コード',
-        ObjectBodyInsertKind.divider => '区切り線',
-      };
 }
