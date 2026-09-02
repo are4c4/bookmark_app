@@ -43,7 +43,7 @@ jobs:
 
   build-macos:
     name: build-macos
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: macos-latest
     timeout-minutes: 12
     steps:
