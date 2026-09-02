@@ -29,17 +29,15 @@ Do not keep expanding parallel foundations merely because hotspot integration is
 - #102/#104/#106: Daily Note previous/today/next navigation services plus shared navigation widget.
 
 PR #83 remains closed/unmerged and is not active.
-
-PR #110 was closed unmerged after the latest Issue/handoff refresh showed that its loader replay duplicated already-integrated #86/#87/#96 functionality.
+PR #110 was closed unmerged because it duplicated already-integrated #86/#87/#96 functionality.
 
 ### Latest Object integration
-- PR #108 passed Flutter CI #590 on its functional head and was squash-merged as `273578d94f272e9e37169f02afafcf1d60c60082`.
-- There is currently no active Object implementation PR; the next Object work is real-host integration rather than another foundation branch.
+- PR #108 passed Flutter CI #590 and was squash-merged as `273578d94f272e9e37169f02afafcf1d60c60082`.
+- There is currently no active Object foundation PR; the next Object work is real-host integration rather than another abstraction branch.
 
 ### Integrated Relation foundations on `main`
-#62/#66/#69/#73/#74/#75/#80/#81 provide canonical Relation validation/mutation/read/index lifecycle, integrity audit, deterministic index reconciliation, neighborhood reads, picker candidates/selection diagnostics, safe deletion, and core Image/Tag lifecycle migration.
-
-Relation PR #109 is active tests-only work around the canonical editor integration boundary and remains Relation-lane owned.
+- #62/#66/#69/#73/#74/#75/#80/#81 provide canonical Relation validation/mutation/read/index lifecycle, integrity audit, deterministic index reconciliation, neighborhood reads, picker candidates/selection diagnostics, safe deletion, and core Image/Tag lifecycle migration.
+- #109 adds CI-green regression coverage around the real editor integration boundary: bidirectional save/inverse synchronization, stale picker fail-closed behavior, missing-target non-mutation on load, explicit repair boundaries, page-composition behavior, and stale bidirectional rename/delete callers. It was squash-merged as `d51b5023ede27bcf0c66670620e86643a1b07038`.
 
 ## Repository-wide design contract
 - Object is global and unique; Databases collect/show Objects rather than own duplicate records.
@@ -76,22 +74,26 @@ Safe block persistence/editing, rich/reference contracts, shared rendering/actio
 
 ## Next repository-wide actions
 1. In a patch-capable environment, wire `GenericDatabasePageServices` into real `GenericDatabasePage` for Database-first collection reload, collection-aware normal/Board creation, canonical Relation picker/editor, and collection settings.
-2. Add page/widget regression coverage proving Database membership resolves before View projection and new Objects target the configured ObjectType.
-3. Integrate shared `ObjectDetailPropertyView` and `ObjectBodyDocumentView` into the real Object detail host, including #107/#108 block actions/reference insertion while preserving rich/unknown payloads.
-4. Consume `ObjectOpenPresentationService` in real navigation and implement side peek / center peek / full page while preserving Database/View context.
-5. Wire `DailyNoteNavigationBar` to `DailyNoteDetailNavigationService` in shared Object navigation.
-6. Implement `RichText/Document Property` only in a patch-capable environment because of broad enum/query/group/Board/detail impact.
-7. Manual include/exclude remains deferred until dynamic collection + multi-View behavior is proven in real use.
+2. For Relation editing in the real page, use `GenericDatabasePageServices.relationEditor.load/save`; preserve missing-target/cardinality diagnostics on open and mutate only after explicit user save.
+3. Add page/widget regression coverage proving Database membership resolves before View projection, new Objects target the configured ObjectType, and bidirectional Relation edits remain consistent end-to-end.
+4. Integrate shared `ObjectDetailPropertyView` and `ObjectBodyDocumentView` into the real Object detail host, including #107/#108 block actions/reference insertion while preserving rich/unknown payloads.
+5. Consume `ObjectOpenPresentationService` in real navigation and implement side peek / center peek / full page while preserving Database/View context.
+6. Wire `DailyNoteNavigationBar` to `DailyNoteDetailNavigationService` in shared Object navigation.
+7. Implement `RichText/Document Property` only in a patch-capable environment because of broad enum/query/group/Board/detail impact.
+8. Manual include/exclude remains deferred until dynamic collection + multi-View behavior is proven in real use.
 
 ## Validation status
 - #107 Flutter CI #574 succeeded before squash merge as `39fdc54b276a5241eb2fd07214b868d1abb0e466`.
 - #108 functional head Flutter CI #590 succeeded before squash merge as `273578d94f272e9e37169f02afafcf1d60c60082`.
+- #109 head `576346d836c2ad07c3f2a590640751dd8b107741` passed Drift generation, `flutter analyze`, and the full test suite in Flutter CI #597 before squash merge as `d51b5023ede27bcf0c66670620e86643a1b07038`.
 - Earlier merged Object and Relation slices passed their relevant PR CI as recorded in lane history.
 
 ## Known risks / sequencing constraints
 - `GenericDatabasePage` is the main integration hotspot; avoid parallel broad Object/Relation edits.
 - Legacy page logic still assumes Database id and ObjectType id are identical in places; use merged collection adapters to remove this incrementally.
+- `GenericDatabasePage` still contains a direct low-level `ObjectStore.setRelation` path; the real host must migrate to the canonical page Relation editor before Milestone A is complete.
 - Broad direct replacement of `GenericDatabasePage`, `ObjectInspectorPage`, or other large navigation/detail surfaces is an avoidable corruption/merge risk; prefer patch-capable editing.
-- `RichText/Document Property` has broad exhaustive-switch and UI/query impact.
 - User-facing Relation writes must use `RelationMutationService`; picker loading must not silently rewrite legacy/corrupt state; Relation display should use canonical resolved Objects rather than persisted ids.
+- Ambiguous Relation repair remains explicit-only; deterministic index-only repair is the only automatic reconciliation currently allowed.
+- `RichText/Document Property` has broad exhaustive-switch and UI/query impact.
 - Rich Body documents must never be flattened by the paragraph-safe editor.
