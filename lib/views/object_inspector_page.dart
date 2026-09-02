@@ -9,6 +9,7 @@ import '../data/object_store.dart';
 import '../domain/object_body_plain_text.dart';
 import '../domain/object_detail_content.dart';
 import '../domain/object_model.dart';
+import '../widgets/object_body_section.dart';
 
 class ObjectInspectorPage extends StatefulWidget {
   const ObjectInspectorPage({
@@ -101,46 +102,12 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
     );
   }
 
-  Future<void> _editBody(ObjectDetailContent content) async {
+  Future<void> _saveBody(ObjectDetailContent content, String text) async {
     if (!_bodyAdapter.canEdit(content.body)) return;
-
-    final controller = TextEditingController(text: _bodyAdapter.read(content.body));
-    final result = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('本文を編集'),
-        content: SizedBox(
-          width: 560,
-          child: TextField(
-            controller: controller,
-            autofocus: true,
-            minLines: 8,
-            maxLines: 18,
-            decoration: const InputDecoration(
-              hintText: '本文を書き始める…',
-              border: OutlineInputBorder(),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('キャンセル'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(controller.text),
-            child: const Text('保存'),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
-    if (result == null) return;
-
     final stamp = DateTime.now().microsecondsSinceEpoch;
     final updated = _bodyAdapter.write(
       document: content.body,
-      text: result,
+      text: text,
       blockIdForIndex: (index) => 'paragraph-${widget.objectId}-$stamp-$index',
     );
     await _bodyStore.write(objectId: widget.objectId, document: updated);
@@ -175,54 +142,6 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
             ),
           )
           .toList(),
-    );
-  }
-
-  Widget _bodySection(ObjectDetailContent content) {
-    final editable = _bodyAdapter.canEdit(content.body);
-    final paragraphs = editable ? _bodyAdapter.read(content.body) : null;
-    final hasText = paragraphs?.trim().isNotEmpty == true;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 24),
-        const Divider(),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                '本文',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-              ),
-            ),
-            if (editable)
-              TextButton.icon(
-                onPressed: () => _editBody(content),
-                icon: const Icon(Icons.edit_outlined, size: 17),
-                label: Text(hasText ? '編集' : '書き始める'),
-              ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        if (!editable)
-          const Text(
-            'この本文にはリッチブロックが含まれています。対応エディタが追加されるまで、内容を保護するため簡易編集は無効です。',
-          )
-        else if (!hasText)
-          Text(
-            '本文はまだありません。',
-            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
-          )
-        else
-          SelectableText(
-            paragraphs!,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(height: 1.6),
-          ),
-      ],
     );
   }
 
@@ -289,7 +208,10 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
                   : Text(_displayValue(property, value)),
             );
           }),
-          _bodySection(content),
+          ObjectBodySection(
+            document: content.body,
+            onSave: (text) => _saveBody(content, text),
+          ),
           if (_backlinks.isNotEmpty) ...[
             const SizedBox(height: 24),
             const Divider(),
