@@ -11,7 +11,9 @@ Product direction: **Capacities-like Object-centric data model + Notion-like Dat
 `#56` — Integrate generic Object database UX toward Notion/Capacities workflow. Issue #56 is the product/design contract and contains Milestones A–D.
 
 ## Current implementation position
-The active phase is Database/View and shared Object-detail UI integration. Most Object/Relation primitives and many reusable Flutter presentation components now exist and should be consumed rather than reimplemented. The remaining highest-value gaps sit in the large real page/detail/navigation hosts, which need patch-capable editing.
+Most Object/Relation primitives and many reusable Flutter presentation/editing components now exist. The highest-value remaining work is **real-host integration** in `GenericDatabasePage`, the actual Object detail/navigation host, and Daily Note navigation.
+
+Do not keep expanding parallel foundations merely because hotspot integration is inconvenient. Prefer consuming existing services/widgets in real hosts. New foundation slices are justified when they unblock concrete integration, close a correctness gap, or can safely proceed while a required hotspot is unavailable.
 
 ### Integrated Object / database foundations on `main`
 - #61/#64/#65/#68/#71/#76/#77/#78: Property semantics, Body/defaults, Daily Notes, reusable Weblink/Image, shared detail, canonical Relation neighborhood consumption, safe Value promotion.
@@ -23,15 +25,15 @@ The active phase is Database/View and shared Object-detail UI integration. Most 
 - #91: reversible URL -> reusable Weblink promotion in Object inspector.
 - #93/#95/#97/#99/#100: shared Object inspector/detail editing, typed mutation/input contracts, and shared Property presentation.
 - #96: `GenericDatabasePageServices` composition root.
-- #101: immutable + persisted Object Body block operations preserving unknown/future block payloads.
-- #102: Daily Note previous/today/next calendar navigation using canonical open-or-create semantics.
-- #103: rich Body block factories/contracts, known-payload validation, and embedded Object/Database/View/asset reference indexing while retaining unknown-block forward compatibility.
-- #104: Daily Note calendar navigation composed directly into shared `ObjectDetailContent`.
-- #105: widget-independent shared Body block presentation metadata for text/heading/checklist/code/reference/Database View/asset/unknown blocks.
-- #106: reusable Flutter Body/document/Property/Daily Note widgets and safe latest-read Body text/checklist mutations.
-- #107 merged as `39fdc54b276a5241eb2fd07214b868d1abb0e466`: generic Body insert kinds, latest-read relative move/atomic insert-after persistence, persisted block action controller, shared insert/action chrome, and `ObjectBodyDocumentView` action injection.
+- #101/#103/#105/#106/#107: safe Body block mutation/persistence, rich/reference block contracts, presentation metadata, reusable Flutter rendering/editing, insert/remove/move/insert-after action chrome.
+- #102/#104/#106: Daily Note previous/today/next navigation services plus shared navigation widget.
 
 PR #83 remains closed/unmerged and is not active.
+
+### Active Object PR
+- #108 `Add typed Object Body reference insertion` is open and mergeable.
+- Latest head `07d4e7d34de9b5024e813c4f674f19f93cc38663` has green Flutter CI #590.
+- It adds typed Object/Database/View/Image/File reference insertion, safe block-id allocation, payload-preserving duplication, and shared reference-insert chrome without persisting unresolved placeholders.
 
 ### Integrated Relation foundations on `main`
 #62/#66/#69/#73/#74/#75/#80/#81 provide canonical Relation validation/mutation/read/index lifecycle, integrity audit, deterministic index reconciliation, neighborhood reads, picker candidates/selection diagnostics, safe deletion, and core Image/Tag lifecycle migration.
@@ -51,40 +53,43 @@ PR #83 remains closed/unmerged and is not active.
 
 ## Delivery milestones
 ### Milestone A — Usable Object Database
-Collection semantics in the real page, collection-aware creation, Board create-in-group UI, canonical Relation editor integration, and consistent layouts/query controls.
+Core services exist. Remaining emphasis is real `GenericDatabasePage` consumption of collection-aware reload/create/Board create/Relation editing/collection settings plus integrated regression coverage.
 
 ### Milestone B — Multi-View Database UX
-Multiple independent Views, top tabs, duplicate-current/blank creation, rename/reorder/delete, independent config and overflow handling. Core management and overflow are integrated.
+Core View creation/management/overflow is integrated. Remaining emphasis is end-to-end use in the real Database host and preserving sidebar Database navigation vs top-tab View navigation.
 
 ### Milestone C — Object Knowledge System
-Reusable Tag/Weblink/Image flows, Value -> Object affordances, richer Relations/backlinks, shared contextual Object detail/opening, stronger Daily Notes. Opening-mode persistence/settings/resolution, URL promotion, typed Value editor/input normalization, shared Property presentation, Daily Note navigation/services, plus shared Flutter Property and Daily Note navigation widgets are integrated; real host/navigation consumption remains.
+Reusable Weblink/Image flows, Value promotion, shared Object detail, opening-mode persistence/settings/resolution, typed Value editing, Daily Note services/widgets are integrated. Remaining emphasis is real side/center/full-page navigation and host consumption.
 
 ### Milestone D — Document / Knowledge Layer
-Real block editing, RichText/Document Property, media/file blocks, embedded Objects/Database Views and higher-level time-based note compositions. Safe block mutation/persistence, typed rich-block/reference contracts, reference indexing, presentation metadata, reusable Flutter rendering/editing, and generic insert/remove/move chrome are integrated through #101/#103/#105/#106/#107. Host integration and reference-target insertion UX remain.
+Safe block persistence/editing, rich/reference contracts, shared rendering/action chrome are substantially implemented. PR #108 continues reference insertion/duplication. Remaining emphasis is real Object Body host integration, target-selection flows, `RichText/Document Property`, embedded Database/View behavior, and higher-level note compositions.
+
+## Integration-first sequencing rule
+1. Prefer wiring existing services/widgets into real user-facing hosts over creating another parallel abstraction.
+2. `GenericDatabasePage`, Object detail/navigation, and Daily Note host integration outrank speculative new Object/Body foundations.
+3. Use a patch-capable environment for broad changes to large hotspot files; avoid whole-file replacement risk.
+4. Finish Milestone A/B real-host integration and begin active app use before adding manual membership complexity.
+5. Let real usage drive the next Milestone C/D expansions.
 
 ## Next repository-wide actions
-1. In a patch-capable environment, wire `GenericDatabasePageServices` into real `GenericDatabasePage` for collection-aware reload/create/Board create/Relation edit/collection settings.
-2. Add page/widget regression coverage proving Database membership resolves before View projection and new Objects target the configured ObjectType.
-3. Integrate shared `ObjectDetailPropertyView` and `ObjectBodyDocumentView` into the real Object detail/inspector host; wire text/checklist edits plus #107 insert/remove/move chrome while preserving rich/unknown blocks.
-4. Consume `ObjectOpenPresentationService` in real View navigation, then implement side peek / center peek / full page while preserving Database/View context.
-5. Wire `DailyNoteNavigationBar` to `DailyNoteDetailNavigationService` in shared Object navigation.
-6. Complete explicit reference-bearing Body insertion flows without ever persisting unresolved placeholder blocks.
-7. Implement `RichText/Document Property` in a patch-capable environment because the Property enum member affects exhaustive switches in query/group/Board/detail paths and `GenericDatabasePage`.
-8. Manual include/exclude remains deferred until dynamic collection + multi-View behavior is stable.
+1. Validate/merge #108 while latest head remains green.
+2. In a patch-capable environment, wire `GenericDatabasePageServices` into real `GenericDatabasePage` for Database-first collection reload, collection-aware normal/Board creation, canonical Relation picker/editor, and collection settings.
+3. Add page/widget regression coverage proving Database membership resolves before View projection and new Objects target the configured ObjectType.
+4. Integrate shared `ObjectDetailPropertyView` and `ObjectBodyDocumentView` into the real Object detail host, including #107/#108 block actions/reference insertion while preserving rich/unknown payloads.
+5. Consume `ObjectOpenPresentationService` in real navigation and implement side peek / center peek / full page while preserving Database/View context.
+6. Wire `DailyNoteNavigationBar` to `DailyNoteDetailNavigationService` in shared Object navigation.
+7. Implement `RichText/Document Property` only in a patch-capable environment because of broad enum/query/group/Board/detail impact.
+8. Manual include/exclude remains deferred until dynamic collection + multi-View behavior is proven in real use.
 
 ## Validation status
-- #103 Flutter CI #541 succeeded before merge.
-- #104 Flutter CI #542 succeeded before merge.
-- #105 Flutter CI #547 succeeded before merge.
-- #106 corrected Flutter CI #559 succeeded before merge.
 - #107 Flutter CI #574 succeeded before squash merge as `39fdc54b276a5241eb2fd07214b868d1abb0e466`.
+- #108 latest head Flutter CI #590 succeeded; PR remains open/mergeable.
 - Earlier merged Object and Relation slices passed their relevant PR CI as recorded in lane history.
 
 ## Known risks / sequencing constraints
 - `GenericDatabasePage` is the main integration hotspot; avoid parallel broad Object/Relation edits.
 - Legacy page logic still assumes Database id and ObjectType id are identical in places; use merged collection adapters to remove this incrementally.
-- The current GitHub connector replaces existing files as a whole. Broad direct replacement of `GenericDatabasePage`, `ObjectInspectorPage`, or other large navigation/detail surfaces is an avoidable corruption/merge risk; prefer a patch-capable environment.
-- `RichText/Document Property` has broad exhaustive-switch and UI/query impact, including `GenericDatabasePage`, so it should be sequenced in a patch-capable environment.
+- Broad direct replacement of `GenericDatabasePage`, `ObjectInspectorPage`, or other large navigation/detail surfaces is an avoidable corruption/merge risk; prefer patch-capable editing.
+- `RichText/Document Property` has broad exhaustive-switch and UI/query impact.
 - User-facing Relation writes must use `RelationMutationService`; picker loading must not silently rewrite legacy/corrupt state; Relation display should use canonical resolved Objects rather than persisted ids.
-- Board Relation-group creation must stay on the safe mutation facade.
-- Rich Body documents must not be flattened by the paragraph-safe editor.
+- Rich Body documents must never be flattened by the paragraph-safe editor.
