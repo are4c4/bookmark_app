@@ -25,18 +25,21 @@ Do not keep expanding parallel foundations merely because hotspot integration is
 - #91: reversible URL -> reusable Weblink promotion in Object inspector.
 - #93/#95/#97/#99/#100: shared Object inspector/detail editing, typed mutation/input contracts, and shared Property presentation.
 - #96: `GenericDatabasePageServices` composition root.
-- #101/#103/#105/#106/#107: safe Body block mutation/persistence, rich/reference block contracts, presentation metadata, reusable Flutter rendering/editing, insert/remove/move/insert-after action chrome.
+- #101/#103/#105/#106/#107/#108: safe Body block mutation/persistence, rich/reference block contracts, presentation metadata, reusable Flutter rendering/editing, insert/remove/move/insert-after actions, typed Object/Database/View/Image/File reference insertion, deterministic block-id allocation, payload-preserving duplication, and shared reference action chrome.
 - #102/#104/#106: Daily Note previous/today/next navigation services plus shared navigation widget.
 
 PR #83 remains closed/unmerged and is not active.
 
-### Active Object PR
-- #108 `Add typed Object Body reference insertion` is open and mergeable.
-- Latest head `07d4e7d34de9b5024e813c4f674f19f93cc38663` has green Flutter CI #590.
-- It adds typed Object/Database/View/Image/File reference insertion, safe block-id allocation, payload-preserving duplication, and shared reference-insert chrome without persisting unresolved placeholders.
+PR #110 was closed unmerged after the latest Issue/handoff refresh showed that its loader replay duplicated already-integrated #86/#87/#96 functionality.
+
+### Latest Object integration
+- PR #108 passed Flutter CI #590 on its functional head and was squash-merged as `273578d94f272e9e37169f02afafcf1d60c60082`.
+- There is currently no active Object implementation PR; the next Object work is real-host integration rather than another foundation branch.
 
 ### Integrated Relation foundations on `main`
 #62/#66/#69/#73/#74/#75/#80/#81 provide canonical Relation validation/mutation/read/index lifecycle, integrity audit, deterministic index reconciliation, neighborhood reads, picker candidates/selection diagnostics, safe deletion, and core Image/Tag lifecycle migration.
+
+Relation PR #109 is active tests-only work around the canonical editor integration boundary and remains Relation-lane owned.
 
 ## Repository-wide design contract
 - Object is global and unique; Databases collect/show Objects rather than own duplicate records.
@@ -62,7 +65,7 @@ Core View creation/management/overflow is integrated. Remaining emphasis is end-
 Reusable Weblink/Image flows, Value promotion, shared Object detail, opening-mode persistence/settings/resolution, typed Value editing, Daily Note services/widgets are integrated. Remaining emphasis is real side/center/full-page navigation and host consumption.
 
 ### Milestone D — Document / Knowledge Layer
-Safe block persistence/editing, rich/reference contracts, shared rendering/action chrome are substantially implemented. PR #108 continues reference insertion/duplication. Remaining emphasis is real Object Body host integration, target-selection flows, `RichText/Document Property`, embedded Database/View behavior, and higher-level note compositions.
+Safe block persistence/editing, rich/reference contracts, shared rendering/action/reference chrome are substantially implemented through #108. Remaining emphasis is real Object Body host integration, target-selection flows, `RichText/Document Property`, embedded Database/View behavior, and higher-level note compositions.
 
 ## Integration-first sequencing rule
 1. Prefer wiring existing services/widgets into real user-facing hosts over creating another parallel abstraction.
@@ -72,18 +75,17 @@ Safe block persistence/editing, rich/reference contracts, shared rendering/actio
 5. Let real usage drive the next Milestone C/D expansions.
 
 ## Next repository-wide actions
-1. Validate/merge #108 while latest head remains green.
-2. In a patch-capable environment, wire `GenericDatabasePageServices` into real `GenericDatabasePage` for Database-first collection reload, collection-aware normal/Board creation, canonical Relation picker/editor, and collection settings.
-3. Add page/widget regression coverage proving Database membership resolves before View projection and new Objects target the configured ObjectType.
-4. Integrate shared `ObjectDetailPropertyView` and `ObjectBodyDocumentView` into the real Object detail host, including #107/#108 block actions/reference insertion while preserving rich/unknown payloads.
-5. Consume `ObjectOpenPresentationService` in real navigation and implement side peek / center peek / full page while preserving Database/View context.
-6. Wire `DailyNoteNavigationBar` to `DailyNoteDetailNavigationService` in shared Object navigation.
-7. Implement `RichText/Document Property` only in a patch-capable environment because of broad enum/query/group/Board/detail impact.
-8. Manual include/exclude remains deferred until dynamic collection + multi-View behavior is proven in real use.
+1. In a patch-capable environment, wire `GenericDatabasePageServices` into real `GenericDatabasePage` for Database-first collection reload, collection-aware normal/Board creation, canonical Relation picker/editor, and collection settings.
+2. Add page/widget regression coverage proving Database membership resolves before View projection and new Objects target the configured ObjectType.
+3. Integrate shared `ObjectDetailPropertyView` and `ObjectBodyDocumentView` into the real Object detail host, including #107/#108 block actions/reference insertion while preserving rich/unknown payloads.
+4. Consume `ObjectOpenPresentationService` in real navigation and implement side peek / center peek / full page while preserving Database/View context.
+5. Wire `DailyNoteNavigationBar` to `DailyNoteDetailNavigationService` in shared Object navigation.
+6. Implement `RichText/Document Property` only in a patch-capable environment because of broad enum/query/group/Board/detail impact.
+7. Manual include/exclude remains deferred until dynamic collection + multi-View behavior is proven in real use.
 
 ## Validation status
 - #107 Flutter CI #574 succeeded before squash merge as `39fdc54b276a5241eb2fd07214b868d1abb0e466`.
-- #108 latest head Flutter CI #590 succeeded; PR remains open/mergeable.
+- #108 functional head Flutter CI #590 succeeded before squash merge as `273578d94f272e9e37169f02afafcf1d60c60082`.
 - Earlier merged Object and Relation slices passed their relevant PR CI as recorded in lane history.
 
 ## Known risks / sequencing constraints
