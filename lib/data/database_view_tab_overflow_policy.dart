@@ -44,8 +44,9 @@ class DatabaseViewTabOverflowPolicy {
     }
 
     final visible = snapshot.take(maxVisibleTabs).toList(growable: true);
-    if (active != null && !visible.any((view) => view.id == active!.id)) {
-      visible[visible.length - 1] = active;
+    final activeId = active?.id;
+    if (activeId != null && !visible.any((view) => view.id == activeId)) {
+      visible[visible.length - 1] = active!;
     }
     final visibleIds = visible.map((view) => view.id).toSet();
     final overflow = snapshot
