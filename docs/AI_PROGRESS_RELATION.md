@@ -12,84 +12,109 @@ Own Relation and backlink lifecycle, bidirectional Relation integrity, relation 
 
 ## Current state
 
-- PR #66 is merged to `main` at `6770a5f1`; source/target validation, stable Relation mutation/read/index APIs, bidirectional lifecycle hardening, Relation-safe Object deletion, and Tag hierarchy cleanup are integrated.
-- Current branch: `feature/relation-integrity-audit`.
-- Current PR: #69 — `Add read-only Relation integrity audit`.
-- Latest implementation commit before this handoff update: `7f37680ff80c98ddc4abe9fb4ba41b5171da6a96`.
-- Object-owned UI surfaces remain intentionally untouched.
+- Relation lifecycle foundation PR #66 is merged.
+- Read-only integrity audit PR #69 is merged at `23fc9703`.
+- Relation neighborhood read API PR #73 is merged at `578f8361`.
+- Fail-closed Relation index reconciliation PR #74 is merged at `fd2810d0`.
+- Canonical Relation target candidate API PR #75 is merged at `b6511bf3`.
+- Latest `main` before this handoff update: `b6511bf36e37e0bea84ac99da745ee40f85e1cb1`.
+- No active Relation implementation PR remains from this sustained run.
 
-## Completed integration checkpoints
+## Stable Relation APIs now on main
 
-1. Relation writes validate source ObjectType ownership and use canonical persisted Property metadata.
-2. Relation Property creation validates source/target existence and same-workspace ownership.
-3. Target ObjectType deletion is protected while incoming Relation Properties exist.
-4. Property-filtered backlink/outgoing edge helpers are available.
-5. `RelationMutationService` provides safe set/delete/rename/Object-delete lifecycle behavior.
-6. `RelationReadService` resolves indexed edges into canonical Property/Object neighbors.
-7. `RelationIndexService` rebuilds Relation indexes from legacy persisted values.
-8. `BidirectionalRelationStore.setRelation` canonicalizes persisted pair metadata and fails closed on broken pairs.
-9. Tag hierarchy synchronization uses Relation-safe mutation/deletion paths.
-10. PR #66 latest head passed dependency install, Drift generation, `flutter analyze`, and the full test suite before merge.
+### Mutation / lifecycle
 
-## Current sustained-run checkpoints — PR #69
+- `RelationMutationService`
+  - canonical persisted Property resolution;
+  - safe unidirectional and bidirectional Relation writes;
+  - pair-aware Relation Property rename/delete;
+  - Relation-safe Object deletion that detaches surviving references first;
+  - fail-closed behavior for inconsistent bidirectional metadata.
+- `BidirectionalRelationStore`
+  - reciprocal pair integrity validation;
+  - canonical persisted pair writes;
+  - transactional pair rename/delete.
 
-1. Added `RelationIntegrityService` as a read-only workspace audit API.
-2. Audit detects:
-   - missing target ObjectType metadata;
-   - cross-workspace target ObjectTypes;
-   - persisted references to missing target Objects;
-   - single-Relation cardinality violations in legacy/corrupt values;
-   - missing normalized edge-index entries;
-   - stale normalized edge-index entries;
-   - invalid bidirectional pair metadata;
-   - bidirectional inverse-value mismatches.
-3. Bidirectional consistency audit is symmetric: it catches both source-without-inverse and inverse-only stale references.
-4. Audit caches Object lists per ObjectType and outgoing edge lists per Object during one workspace scan to avoid repeated Relation-index reads for multiple Properties.
-5. Audit is deliberately non-destructive. Repair remains an explicit separate action through existing index/lifecycle APIs.
-6. Added focused regression coverage for:
-   - healthy Relations;
-   - missing normalized edges without mutating stored values;
-   - stale normalized edges;
-   - missing target Objects;
-   - single-Relation cardinality violations;
-   - broken bidirectional pair metadata;
-   - forward inverse-value mismatch;
-   - inverse-only bidirectional mismatch;
-   - cross-workspace target metadata.
-7. PR #69 is open; latest-head Flutter CI must pass before merge.
+### Read / backlinks
+
+- `RelationReadService`
+  - resolved outgoing Relations;
+  - resolved backlinks;
+  - `RelationNeighborhood` for one Object's outgoing + incoming graph context.
+- Property-filtered edge helpers remain available for lower-level callers.
+
+### Target selection
+
+- `RelationTargetService`
+  - resolves the persisted Relation Property instead of trusting stale caller config;
+  - validates workspace and target ObjectType ownership;
+  - returns canonical target ObjectType and immutable candidate Object list for Relation pickers.
+
+### Persistence / integrity
+
+- `RelationIndexService`
+  - rebuilds normalized edge indexes from persisted Relation values.
+- `RelationIntegrityService`
+  - read-only detection of missing/cross-workspace target ObjectTypes, missing targets, cardinality violations, missing/stale index edges, invalid bidirectional metadata, and inverse-value mismatches;
+  - symmetric bidirectional validation;
+  - no automatic user-value mutation.
+- `RelationIndexReconcileService`
+  - no-op on healthy workspaces;
+  - repairs only `missingIndexEdge` / `staleIndexEdge` drift;
+  - treats persisted Relation values as source of truth;
+  - refuses reconciliation before writes when any ambiguous schema/value/bidirectional issue exists;
+  - verifies post-rebuild integrity.
+
+### Tag hierarchy
+
+- Legacy Tag -> Tag Object synchronization uses the general Relation lifecycle path.
+- Removing orphan Tag Objects cleans incoming Parent Relations rather than leaving deleted Object ids in surviving values.
+
+## Checkpoints completed in the latest sustained run
+
+1. Finished and merged PR #69 read-only Relation integrity audit.
+2. Added symmetric bidirectional mismatch detection, cardinality diagnostics, stale/missing index diagnostics, and audit read caching.
+3. Added and merged PR #73 `RelationReadService.neighborhood()` for shared Object detail / Daily Note graph consumption.
+4. Added and merged PR #74 fail-closed deterministic Relation index reconciliation.
+5. Added and merged PR #75 canonical Relation target candidate loading for safe picker UIs.
+6. Confirmed Object lane is consuming Relation-owned APIs instead of duplicating lifecycle logic:
+   - Object PR #70 uses `RelationMutationService` for Value -> Object promotion execution.
+   - Object PR #72 uses `RelationReadService` for shared Object detail Relation context.
+7. Deliberately did not edit `GenericDatabasePage`, `core_object_bridge.dart`, Object detail UI, or promotion UI from the Relation lane.
 
 ## Validation
 
-- PR #66 final latest-head Flutter CI passed Drift generation, `flutter analyze`, and full tests before merge.
-- PR #69 runs fresh Flutter CI on each latest head. Intermediate runs may be superseded as this sustained run adds checkpoints.
-- Local Flutter execution is unavailable in this connector-only session; GitHub Actions is the executable validation source.
+All latest heads were validated through GitHub Actions before merge:
 
-## Work in progress
+- PR #69: dependency install, Drift generation, `flutter analyze`, full test suite — success.
+- PR #73: dependency install, Drift generation, `flutter analyze`, full test suite — success.
+- PR #74: dependency install, Drift generation, `flutter analyze`, full test suite — success.
+- PR #75: dependency install, Drift generation, `flutter analyze`, full test suite — success.
 
-- Code for the current audit slice is intentionally frozen after `7f37680f` so one final CI can validate the complete branch state.
-- If final CI exposes a Relation-caused analyzer/test failure, fix that failure and rerun latest-head CI before merge.
+Local Flutter execution was unavailable in the connector-only session; GitHub Actions was the executable validation source.
 
 ## Exact next actions
 
-1. Validate PR #69 latest-head CI: dependency install, Drift generation, `flutter analyze`, and full tests.
-2. Re-check latest `main` and PR mergeability after CI.
-3. Merge #69 when green and conflict-free; replay only narrow Relation-owned changes if concurrent Object work creates a real conflict.
-4. After #69 integration, keep audit and repair separate. A future repair planner may only automate deterministic index reconstruction; do not silently choose between conflicting user Relation values.
-5. Coordinate Object-lane adoption of `RelationMutationService` / `RelationReadService` in `GenericDatabasePage`, `core_object_bridge.dart`, shared Object detail, promotion execution, and Daily Note composition rather than editing those surfaces concurrently here.
-6. Continue Tag hierarchy behavior only through general Relation APIs; no special Relation persistence silo.
+1. Let the Object lane adopt the stable Relation services in its owned surfaces:
+   - use `RelationTargetService` + `RelationMutationService` for real Relation editing/pickers;
+   - use `RelationNeighborhood` / `RelationReadService` for Object detail and Daily Note graph context;
+   - migrate `core_object_bridge.dart` Relation writes/deletions only from the Object lane or in a deliberately sequenced integration slice.
+2. Keep integrity audit and repair separate. Do not add automatic repair for missing targets, cardinality conflicts, broken bidirectional values, or other ambiguous user data without an explicit product/data policy decision.
+3. If a concrete Relation regression appears during Object-lane integration, resume this lane with a focused failing test and additive fix.
+4. Continue Tag hierarchy changes only through the general Relation APIs; do not create a special Relation persistence silo.
 
 ## Cross-lane boundary
 
 - ObjectType defaults, Value semantics, Body/block persistence, Object detail containers, Daily Note creation, Value-to-Object promotion UX, `GenericDatabasePage`, and `core_object_bridge.dart` integration belong to `docs/AI_PROGRESS_OBJECT.md`.
-- `lib/data/object_store.dart` is shared infrastructure; Relation changes there must stay narrow and refresh from latest main before integration.
-- `relation_queries.dart`, `relation_read_service.dart`, `relation_mutation_service.dart`, `relation_index_service.dart`, and `relation_integrity_service.dart` are additive Relation APIs intended for Object-lane consumption.
+- `lib/data/object_store.dart` is shared infrastructure; future Relation edits there must stay narrow and refresh from latest main before integration.
+- Relation services are now intentionally stable consumption boundaries for Object-owned UI and workflows.
 
 ## Known risks / blockers
 
-- Concurrent Object work can advance main during Relation CI; prefer narrow replay/rebase over force merging.
 - `ObjectStore.deleteObject` and `ObjectStore.deleteProperty` remain deliberately low-level generic operations. Relation-aware callers should use `RelationMutationService`.
-- Integrity audit must remain read-only; automatic repair of ambiguous user data would be a destructive policy decision and is outside routine Relation-lane changes.
+- Existing Object-owned UI can still call lower-level Relation APIs until the Object lane migrates it; do not create a competing Relation-lane edit of those files while Object work is active.
+- Ambiguous automatic Relation-value repair could discard user intent and remains outside routine autonomous changes.
 
-## Stop condition
+## Stop reason
 
-No product blocker is active. Continue through PR #69 validation/integration. Stop before ambiguous/destructive automatic repair or broad Object-owned UI integration, or if an unavoidable cross-lane conflict requires sequencing.
+The Relation lane has completed the currently actionable standalone work from Issue #56: source/target integrity, bidirectional lifecycle, backlinks/read APIs, target-candidate API, persistence/index handling, diagnostics, deterministic index-only reconciliation, Tag hierarchy lifecycle, and regression coverage are integrated and green. The next concrete steps are now Object-owned integration surfaces already under active Object-lane PRs, while the only deeper Relation-only repair work would require an explicit policy for ambiguous user data. This matches the AGENTS.md stopping conditions: no remaining safe independent Relation slice without crossing the active Object-lane boundary or making a material data-repair decision.
