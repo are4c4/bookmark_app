@@ -101,7 +101,20 @@ class ObjectStore {
     required int targetObjectTypeId,
     bool multiple = true,
     bool allowSystemMutation = false,
-  }) {
+  }) async {
+    final sourceType = await getObjectType(objectTypeId);
+    final targetType = await getObjectType(targetObjectTypeId);
+    if (sourceType == null || targetType == null) {
+      throw ArgumentError(
+        'Relation source and target ObjectTypes must both exist.',
+      );
+    }
+    if (sourceType.workspaceId != targetType.workspaceId) {
+      throw ArgumentError(
+        'Relation source and target ObjectTypes must belong to the same workspace.',
+      );
+    }
+
     return createProperty(
       objectTypeId: objectTypeId,
       name: name,
