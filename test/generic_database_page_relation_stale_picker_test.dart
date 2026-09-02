@@ -1,0 +1,103 @@
+import 'package:bookmark_app/data/app_database.dart';
+import 'package:bookmark_app/data/bookmark_lifecycle_store.dart';
+import 'package:bookmark_app/data/bookmark_repository.dart';
+import 'package:bookmark_app/data/database_collection_store.dart';
+import 'package:bookmark_app/data/generic_database_store.dart';
+import 'package:bookmark_app/data/object_store.dart';
+import 'package:bookmark_app/data/workspace_store.dart';
+import 'package:bookmark_app/domain/database_collection_definition.dart';
+import 'package:bookmark_app/domain/object_model.dart';
+import 'package:bookmark_app/views/generic_database_page.dart';
+import 'package:drift/native.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  testWidgets('real page stale Relation picker fails closed after target deletion',
+      (tester) async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceStore = WorkspaceStore(database);
+    final workspaceId = await workspaceStore.initialize();
+    final lifecycleStore = BookmarkLifecycleStore(database);
+    await lifecycleStore.initialize();
+    final repository = BookmarkRepository(
+      database,
+      workspaceStore: workspaceStore,
+      lifecycleStore: lifecycleStore,
+      workspaceId: workspaceId,
+    );
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final collectionStore = DatabaseCollectionStore(
+      genericStore: genericStore,
+      objectStore: objectStore,
+    );
+
+    final databaseId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: '本棚',
+    );
+    final bookTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Book',
+    );
+    final personTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Person',
+    );
+    final relationId = await objectStore.createRelationProperty(
+      objectTypeId: bookTypeId,
+      name: 'Author',
+      targetObjectTypeId: personTypeId,
+      multiple: false,
+    );
+    final bookId = await objectStore.createObject(
+      objectTypeId: bookTypeId,
+      title: '数論講義',
+    );
+    final personId = await objectStore.createObject(
+      objectTypeId: personTypeId,
+      title: 'Alice',
+    );
+    await collectionStore.write(
+      DatabaseCollectionDefinition(
+        databaseId: databaseId,
+        workspaceId: workspaceId,
+        targetObjectTypeId: bookTypeId,
+      ),
+    );
+
+    tester.view.physicalSize = const Size(1440, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GenericDatabasePage(
+          repository: repository,
+          databaseId: databaseId,
+          onDatabaseChanged: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('数論講義').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Author').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Alice'), findsOneWidget);
+
+    await objectStore.deleteObject(personId);
+    await tester.tap(find.text('Alice'));
+    await tester.pump();
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Relationを更新できませんでした:'), findsOneWidget);
+    final book = (await objectStore.listObjects(bookTypeId)).single;
+    expect(book.values[relationId], isNull);
+    expect(await objectStore.outgoingRelations(bookId), isEmpty);
+  });
+}
