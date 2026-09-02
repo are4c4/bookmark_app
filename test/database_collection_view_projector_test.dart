@@ -122,9 +122,11 @@ void main() {
 
     final result = await projector.project(databaseId: databaseId, view: view);
 
+    // Collection membership preserves ObjectStore's existing ordering. The
+    // View layer may then independently filter/sort that collection.
     expect(
       result?.collection.objects.map((object) => object.title),
-      ['札幌', '小樽'],
+      ['小樽', '札幌'],
     );
     expect(result?.view.objects.map((object) => object.title), ['札幌']);
   });
