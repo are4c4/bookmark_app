@@ -75,8 +75,7 @@ void main() {
     await objectStore.deleteObject(objectId);
 
     final rows = await database.customSelect(
-      'SELECT object_id FROM object_bodies WHERE object_id = ?',
-      variables: [],
+      'SELECT object_id FROM object_bodies',
     ).get();
     expect(rows, isEmpty);
   });
