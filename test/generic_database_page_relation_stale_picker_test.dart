@@ -6,7 +6,6 @@ import 'package:bookmark_app/data/generic_database_store.dart';
 import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/domain/database_collection_definition.dart';
-import 'package:bookmark_app/domain/object_model.dart';
 import 'package:bookmark_app/views/generic_database_page.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
