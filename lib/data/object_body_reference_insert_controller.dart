@@ -17,7 +17,7 @@ class ObjectBodyReferenceInsertController {
     required int objectId,
     required String blockId,
     required ObjectBodyReferenceInsertRequest request,
-  }) {
+  }) async {
     final block = request.toBlock(blockId: blockId);
     return editService.insert(objectId: objectId, block: block);
   }
@@ -27,7 +27,7 @@ class ObjectBodyReferenceInsertController {
     required String anchorBlockId,
     required String blockId,
     required ObjectBodyReferenceInsertRequest request,
-  }) {
+  }) async {
     final block = request.toBlock(blockId: blockId);
     return editService.insertAfter(
       objectId: objectId,
