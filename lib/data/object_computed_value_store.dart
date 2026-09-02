@@ -21,15 +21,59 @@ class ObjectComputedValueStore {
     required int objectTypeId,
     required String name,
     required String expression,
-  }) {
-    if (expression.trim().isEmpty) {
+  }) async {
+    final normalized = expression.trim();
+    if (normalized.isEmpty) {
       throw ArgumentError.value(expression, 'expression', 'Formula cannot be empty.');
     }
+
+    final referencedPropertyIds = <int>{};
+    _FormulaParser(
+      normalized,
+      propertyValue: (propertyId) {
+        referencedPropertyIds.add(propertyId);
+        return 1;
+      },
+    ).parse();
+
+    final objectType = await objectStore.getObjectType(objectTypeId);
+    if (objectType == null) {
+      throw ArgumentError.value(
+        objectTypeId,
+        'objectTypeId',
+        'ObjectType does not exist.',
+      );
+    }
+    for (final propertyId in referencedPropertyIds) {
+      ObjectPropertyDefinition? referenced;
+      for (final candidate in objectType.properties) {
+        if (candidate.id == propertyId) {
+          referenced = candidate;
+          break;
+        }
+      }
+      if (referenced == null) {
+        throw ArgumentError.value(
+          propertyId,
+          'expression',
+          'Formula references a property outside this ObjectType.',
+        );
+      }
+      if (referenced.type != ObjectPropertyType.number &&
+          referenced.type != ObjectPropertyType.rating) {
+        throw ArgumentError.value(
+          propertyId,
+          'expression',
+          'Formula references must point to numeric properties.',
+        );
+      }
+    }
+
     return objectStore.createProperty(
       objectTypeId: objectTypeId,
       name: name,
       type: ObjectPropertyType.formula,
-      config: <String, dynamic>{'expression': expression.trim()},
+      config: <String, dynamic>{'expression': normalized},
     );
   }
 
@@ -39,7 +83,7 @@ class ObjectComputedValueStore {
     required int relationPropertyId,
     int? targetPropertyId,
     required String aggregation,
-  }) {
+  }) async {
     const supported = <String>{'count', 'sum', 'average', 'min', 'max'};
     if (!supported.contains(aggregation)) {
       throw ArgumentError.value(
@@ -51,6 +95,57 @@ class ObjectComputedValueStore {
     if (aggregation != 'count' && targetPropertyId == null) {
       throw ArgumentError('targetPropertyId is required for $aggregation.');
     }
+
+    final sourceType = await objectStore.getObjectType(objectTypeId);
+    if (sourceType == null) {
+      throw ArgumentError.value(
+        objectTypeId,
+        'objectTypeId',
+        'ObjectType does not exist.',
+      );
+    }
+    ObjectPropertyDefinition? relationProperty;
+    for (final candidate in sourceType.properties) {
+      if (candidate.id == relationPropertyId) {
+        relationProperty = candidate;
+        break;
+      }
+    }
+    if (relationProperty == null || !relationProperty.isRelation) {
+      throw ArgumentError.value(
+        relationPropertyId,
+        'relationPropertyId',
+        'Rollup must reference a Relation property on this ObjectType.',
+      );
+    }
+
+    if (aggregation != 'count') {
+      final targetTypeId = relationProperty.targetObjectTypeId;
+      if (targetTypeId == null) {
+        throw StateError('Relation property has no target ObjectType.');
+      }
+      final targetType = await objectStore.getObjectType(targetTypeId);
+      if (targetType == null) {
+        throw StateError('Relation target ObjectType does not exist.');
+      }
+      ObjectPropertyDefinition? targetProperty;
+      for (final candidate in targetType.properties) {
+        if (candidate.id == targetPropertyId) {
+          targetProperty = candidate;
+          break;
+        }
+      }
+      if (targetProperty == null ||
+          (targetProperty.type != ObjectPropertyType.number &&
+              targetProperty.type != ObjectPropertyType.rating)) {
+        throw ArgumentError.value(
+          targetPropertyId,
+          'targetPropertyId',
+          'Rollup numeric aggregations require a numeric target property.',
+        );
+      }
+    }
+
     return objectStore.createProperty(
       objectTypeId: objectTypeId,
       name: name,
