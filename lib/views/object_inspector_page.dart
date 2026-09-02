@@ -18,6 +18,7 @@ import '../data/system_object_store.dart';
 import '../data/weblink_object_service.dart';
 import '../data/weblink_value_promotion_service.dart';
 import '../domain/object_body.dart';
+import '../domain/object_body_block_contracts.dart';
 import '../domain/object_detail_content.dart';
 import '../domain/object_detail_property_presentation.dart';
 import '../domain/object_model.dart';
