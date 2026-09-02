@@ -1,6 +1,7 @@
 import 'package:bookmark_app/domain/object_body.dart';
 import 'package:bookmark_app/domain/object_body_block_actions.dart';
 import 'package:bookmark_app/domain/object_body_block_contracts.dart';
+import 'package:bookmark_app/domain/object_body_reference_insert.dart';
 import 'package:bookmark_app/features/object/presentation/widgets/object_body_block_action_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -16,8 +17,10 @@ void main() {
     required ObjectBodyBlockPosition position,
     VoidCallback? onMoveUp,
     VoidCallback? onMoveDown,
+    VoidCallback? onDuplicate,
     VoidCallback? onDelete,
     ValueChanged<ObjectBodyInsertKind>? onInsertAfter,
+    ValueChanged<ObjectBodyReferenceInsertKind>? onInsertReferenceAfter,
   }) => MaterialApp(
         home: Scaffold(
           body: ObjectBodyBlockActionBar(
@@ -25,8 +28,10 @@ void main() {
             position: position,
             onMoveUp: onMoveUp,
             onMoveDown: onMoveDown,
+            onDuplicate: onDuplicate,
             onDelete: onDelete,
             onInsertAfter: onInsertAfter,
+            onInsertReferenceAfter: onInsertReferenceAfter,
           ),
         ),
       );
@@ -67,11 +72,44 @@ void main() {
     expect(inserted, ObjectBodyInsertKind.checklist);
   });
 
-  testWidgets('insert menu is omitted when host does not support insertion', (tester) async {
+  testWidgets('duplicate action is exposed only when supported', (tester) async {
+    var duplicated = 0;
+    await tester.pumpWidget(host(
+      position: const ObjectBodyBlockPosition(index: 0, count: 1),
+      onDuplicate: () => duplicated++,
+    ));
+
+    await tester.tap(find.byKey(const ValueKey('body-block-duplicate-b')));
+    expect(duplicated, 1);
+  });
+
+  testWidgets('reference insert starts explicit target-selection flow', (tester) async {
+    ObjectBodyReferenceInsertKind? selected;
+    await tester.pumpWidget(host(
+      position: const ObjectBodyBlockPosition(index: 0, count: 1),
+      onInsertReferenceAfter: (kind) => selected = kind,
+    ));
+
+    await tester.tap(
+      find.byKey(const ValueKey('body-block-insert-reference-after-b')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Objectを参照'));
+    await tester.pumpAndSettle();
+
+    expect(selected, ObjectBodyReferenceInsertKind.object);
+  });
+
+  testWidgets('optional action menus are omitted without callbacks', (tester) async {
     await tester.pumpWidget(host(
       position: const ObjectBodyBlockPosition(index: 0, count: 1),
     ));
 
     expect(find.byKey(const ValueKey('body-block-insert-after-b')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('body-block-insert-reference-after-b')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey('body-block-duplicate-b')), findsNothing);
   });
 }
