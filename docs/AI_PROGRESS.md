@@ -42,11 +42,12 @@ Implementation runs should continue through multiple safe slices. One PR/commit/
 - PR #64 merged: Value-to-Object planning, versioned Body blocks, ObjectType defaults contract, shared Object detail contracts.
 - PR #65 merged: Body/default persistence, Weblink Object service, Daily Note open-or-create, shared detail loading, paragraph-safe Body adapter.
 - PR #71 merged: shared Object detail editing/session, Daily Note detail bridge, persisted defaults resolution, reusable Image Object facade.
-- PR #68 merged: existing Object inspector uses shared detail content, Formula/Rollup, persisted Body editing, and general Object navigation for today's Daily Note.
-- PR #76 merged as `dac4a64f22d6ab63279ed3075664847f213cf992`: shared Object detail state can be composed with canonical Relation `neighborhood()` data.
-- PR #77 merged as `d952ec409fdf69b45219ae00d3c38d3c74b59619`: safe Value -> Object execution and reusable URL -> Weblink promotion are integrated; user-facing Relation writes delegate to `RelationMutationService`.
-- PR #78 merged as `521063771df658058dd625a5601a22f6ca77332e`: `ObjectInspectorPage` now renders outgoing Relations and Backlinks from the canonical Relation neighborhood instead of ad-hoc graph queries.
-- PR #79 is active: grouped Board Object creation has been replayed on current foundations. Its known stale test-constructor mismatch was fixed, and Relation-group initialization now routes through `RelationMutationService`.
+- PR #68 merged: Object inspector uses shared detail content, Formula/Rollup, persisted Body editing, and general Object navigation for today's Daily Note.
+- PR #76 merged: shared Object detail state composes with canonical Relation neighborhood data.
+- PR #77 merged: safe Value -> Object execution and reusable URL -> Weblink promotion; Relation writes use `RelationMutationService`.
+- PR #78 merged: Object inspector renders outgoing Relations and Backlinks from canonical Relation neighborhood data.
+- PR #79 merged as `6b991708f294e83b236d396a84d3841e4e43bcd4`: grouped Board Object creation is integrated. Relation presets use `RelationMutationService`; failed preset writes roll back the new Object. Flutter CI #458 passed before merge.
+- PR #82 is active on `feature/database-collection-semantics`: Phase-1 `Database = target ObjectType + collectionFilter` persistence, membership resolution, Database-before-View projection, delete integrity, and UI-facing configuration facade.
 
 ### Relation foundation
 
@@ -56,15 +57,22 @@ Implementation runs should continue through multiple safe slices. One PR/commit/
 - PR #73 merged: canonical `RelationNeighborhood` outgoing + backlink payload.
 - PR #74 merged: fail-closed deterministic Relation index reconciliation for index-only drift.
 - PR #75 merged: `RelationTargetService` canonical same-workspace Relation-picker candidates.
+- Newer Relation integration has also advanced main with canonical selection/lifecycle consumers; Object lane continues to consume stable Relation APIs rather than duplicating their rules.
 
-### Existing generic foundations
+### Database collection Phase 1
 
-Object query/filter/sort, grouping, Board view and drag/drop persistence, Formula/Rollup, bidirectional Relations, ObjectType templates/management, Body/default persistence, Daily Notes, Weblink/Image reusable Object facades, safe Value promotion, and stable Relation graph/lifecycle services are present.
+- Database collection definition is explicitly separate from View configuration.
+- Existing databases remain backward compatible as self ObjectType + empty collection filter until configured.
+- Explicit collection targets are same-workspace ObjectTypes and filter Properties must belong to the target type.
+- `DatabaseCollectionResolver` produces the broad membership set; `DatabaseCollectionViewProjector` then applies View search/filter/sort/group independently.
+- Additive persistence introduces no Object/Bookmark rewrite or destructive migration.
 
 ## Repository-wide design contract
 
 - Object is global and unique; Databases collect/show Objects rather than own duplicate records.
 - Database = which Objects; View = how to see them.
+- Phase-1 Database membership = target ObjectType + `collectionFilter`.
+- Database `collectionFilter` and View filters are separate persisted/query layers.
 - ObjectType = schema + defaults.
 - Effective defaults resolve as `View override > Database override > ObjectType default > app default`.
 - Object content = structured Properties + free Body designed for blocks.
@@ -75,24 +83,23 @@ Object query/filter/sort, grouping, Board view and drag/drop persistence, Formul
 
 ## Next repository-wide actions
 
-1. Validate and land Object PR #79, then wire grouped Board creation to the existing Board-column `新規Object` callback in `GenericDatabasePage`.
-2. Expose reversible URL Value -> reusable Weblink promotion through a narrow Object-owned UI affordance; preserve the source Value by default.
-3. Use `RelationTargetService` + `RelationMutationService` for Relation editing/pickers and `RelationReadService.neighborhood()` for Object graph context.
-4. Continue Object-centric Database/View integration and Board workflows under Issue #56 without duplicating Object or Relation records.
-5. Keep Relation lane focused on regressions found during integration rather than competing edits to Object-owned UI.
+1. Validate and land Object PR #82.
+2. Wire Database collection membership into the real `GenericDatabasePage` before View projection.
+3. Add a narrow collection settings UI for target ObjectType + collection filters while keeping View filters in the existing View toolbar.
+4. Wire merged Board grouped creation service to the Board-column `新規Object` callback in `GenericDatabasePage`.
+5. Use `RelationTargetService` + `RelationMutationService` for Relation editing/pickers and `RelationReadService.neighborhood()` for Object graph context.
+6. Continue Object-centric Database/View integration under Issue #56 without duplicating Object or Relation records.
 
 ## Validation
 
-- PR #76 Flutter CI #434: success before merge.
-- PR #77 Flutter CI #439: success after analyzer correction; Drift generation, analyze, and tests passed before merge.
-- PR #78 Flutter CI #440: success before merge.
-- PR #79 CI #441 identified one stale test-helper constructor error before tests. The exact job log was inspected and corrected; newer CI is running on the corrected Relation-safe head.
-- Latest merged Relation slices #66/#69/#73/#74/#75 each passed Flutter CI before merge.
+- PR #79 Flutter CI #458: Drift generation, analyze, and full tests passed before merge.
+- PR #82 CI #466: Drift generation and analyze passed; 266 tests passed and two new tests failed only because their expected Object order contradicted the existing `ObjectStore` ordering. Those test expectations were corrected without changing membership behavior.
+- Latest PR #82 CI is running on the newer head that also includes `DatabaseCollectionConfigService` coverage.
 
 ## Known risks
 
-- `GenericDatabasePage`, Object detail presentation, Value promotion UI and `core_object_bridge.dart` are Object-owned integration surfaces even when they consume Relation APIs.
-- Low-level generic ObjectStore operations remain available, but user-facing Relation mutations should use `RelationMutationService`.
-- Board Relation-group creation must preserve the same rule; do not bypass Relation lifecycle when wiring the UI.
+- `GenericDatabasePage`, Object detail presentation, Value promotion UI, and collection configuration are Object-owned integration surfaces even when they consume Relation APIs.
+- User-facing Relation mutations must use `RelationMutationService`; Relation pickers should use canonical target/selection APIs.
+- Database collection integration must never collapse collection filters into View filters or duplicate Objects merely because a Database targets another ObjectType.
 - Do not auto-repair ambiguous persisted Relation values; only deterministic index-only reconciliation is currently safe.
 - Rich Body documents must not be flattened by the initial paragraph-safe editor.
