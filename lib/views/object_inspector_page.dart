@@ -6,6 +6,7 @@ import '../data/generic_database_store.dart';
 import '../data/object_body_store.dart';
 import '../data/object_computed_value_store.dart';
 import '../data/object_detail_content_loader.dart';
+import '../data/object_detail_edit_service.dart';
 import '../data/object_graph_query_store.dart';
 import '../data/object_store.dart';
 import '../data/object_type_defaults_store.dart';
@@ -54,6 +55,12 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
         objectStore: widget.objectStore,
         bodyStore: _bodyStore,
         computedStore: ObjectComputedValueStore(widget.objectStore),
+      );
+
+  ObjectDetailEditService get _editService => ObjectDetailEditService(
+        objectStore: widget.objectStore,
+        bodyStore: _bodyStore,
+        loader: _contentLoader,
       );
 
   RelationMutationService get _relationMutations => RelationMutationService(
@@ -158,6 +165,128 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
     );
     await _bodyStore.write(objectId: widget.objectId, document: updated);
     await _load();
+  }
+
+  Future<void> _editTitle(
+    ObjectGraphNodeRecord node,
+    ObjectDetailContent content,
+  ) async {
+    if (node.isSystemType) return;
+    var value = content.object.title;
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Object名を変更'),
+        content: TextFormField(
+          key: const ValueKey('object-title-edit-field'),
+          initialValue: value,
+          autofocus: true,
+          onChanged: (text) => value = text,
+          onFieldSubmitted: (_) =>
+              Navigator.pop(dialogContext, value.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            key: const ValueKey('object-title-edit-save'),
+            onPressed: () => Navigator.pop(dialogContext, value.trim()),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    if (result == null || result.trim().isEmpty) return;
+    try {
+      final updated = await _editService.rename(
+        content: content,
+        title: result,
+      );
+      if (mounted) setState(() => _content = updated);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Object名を変更できませんでした: $error')),
+      );
+    }
+  }
+
+  bool _canEditSimpleValue(
+    ObjectGraphNodeRecord node,
+    ObjectPropertyDefinition property,
+  ) {
+    if (node.isSystemType || !property.isValue) return false;
+    return property.type == ObjectPropertyType.text ||
+        property.type == ObjectPropertyType.url ||
+        property.type == ObjectPropertyType.number;
+  }
+
+  Future<void> _editSimpleValue(
+    ObjectDetailContent content,
+    ObjectPropertyDefinition property,
+    dynamic current,
+  ) async {
+    var value = current == null ? '' : '$current';
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(property.name),
+        content: TextFormField(
+          key: ValueKey('object-value-edit-field-${property.id}'),
+          initialValue: value,
+          autofocus: true,
+          keyboardType: property.type == ObjectPropertyType.number
+              ? const TextInputType.numberWithOptions(decimal: true)
+              : TextInputType.text,
+          onChanged: (text) => value = text,
+          onFieldSubmitted: (_) => Navigator.pop(dialogContext, value),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            key: ValueKey('object-value-edit-save-${property.id}'),
+            onPressed: () => Navigator.pop(dialogContext, value),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    if (result == null) return;
+
+    dynamic parsed = result;
+    if (property.type == ObjectPropertyType.number) {
+      if (result.trim().isEmpty) {
+        parsed = null;
+      } else {
+        parsed = num.tryParse(result.trim());
+        if (parsed == null) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('数値として解釈できません')),
+          );
+          return;
+        }
+      }
+    }
+
+    try {
+      final updated = await _editService.setValue(
+        content: content,
+        property: property,
+        value: parsed,
+      );
+      if (mounted) setState(() => _content = updated);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${property.name}を更新できませんでした: $error')),
+      );
+    }
   }
 
   bool _canPromoteWeblink(
@@ -275,16 +404,31 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(24, 24, 24, 48),
         children: [
-          Text(
-            object.title,
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  object.title,
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                 ),
+              ),
+              if (!node.isSystemType)
+                IconButton(
+                  key: const ValueKey('object-title-edit-button'),
+                  tooltip: 'Object名を変更',
+                  onPressed: () => _editTitle(node, content),
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                ),
+            ],
           ),
           const SizedBox(height: 24),
           ...type.properties.map((property) {
             final value = content.valueFor(property);
             if (property.config['hidden'] == true) return const SizedBox.shrink();
+            final canEditValue = _canEditSimpleValue(node, property);
             final canPromoteWeblink = _canPromoteWeblink(node, property, value);
             final promoting = _promotingWeblinkPropertyIds.contains(property.id);
             return ListTile(
@@ -304,24 +448,40 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
                       child: _relationValue(property),
                     )
                   : Text(_displayValue(property, value)),
-              trailing: canPromoteWeblink
-                  ? TextButton.icon(
-                      key: ValueKey('promote-weblink-${property.id}'),
-                      onPressed: promoting
-                          ? null
-                          : () => _promoteWeblink(
-                                content,
-                                property,
-                                '$value',
-                              ),
-                      icon: promoting
-                          ? const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(strokeWidth: 1.5),
-                            )
-                          : const Icon(Icons.open_in_new, size: 16),
-                      label: const Text('Weblinkに昇格'),
+              trailing: canEditValue || canPromoteWeblink
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (canEditValue)
+                          IconButton(
+                            key: ValueKey('edit-object-value-${property.id}'),
+                            tooltip: '${property.name}を編集',
+                            onPressed: () =>
+                                _editSimpleValue(content, property, value),
+                            icon: const Icon(Icons.edit_outlined, size: 17),
+                          ),
+                        if (canPromoteWeblink)
+                          TextButton.icon(
+                            key: ValueKey('promote-weblink-${property.id}'),
+                            onPressed: promoting
+                                ? null
+                                : () => _promoteWeblink(
+                                      content,
+                                      property,
+                                      '$value',
+                                    ),
+                            icon: promoting
+                                ? const SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 1.5,
+                                    ),
+                                  )
+                                : const Icon(Icons.open_in_new, size: 16),
+                            label: const Text('Weblinkに昇格'),
+                          ),
+                      ],
                     )
                   : null,
             );
