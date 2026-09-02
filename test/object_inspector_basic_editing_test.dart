@@ -3,6 +3,7 @@ import 'package:bookmark_app/data/generic_database_store.dart';
 import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/domain/object_model.dart';
+import 'package:bookmark_app/features/object/presentation/widgets/object_detail_property_view.dart';
 import 'package:bookmark_app/views/object_inspector_page.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
@@ -61,6 +62,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+
+    expect(find.byType(ObjectDetailPropertyView), findsNWidgets(2));
 
     await tester.tap(find.byKey(const ValueKey('object-title-edit-button')));
     await tester.pumpAndSettle();
