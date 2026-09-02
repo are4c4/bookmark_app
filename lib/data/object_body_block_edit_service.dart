@@ -99,6 +99,42 @@ class ObjectBodyBlockEditService {
         ),
       );
 
+  /// Moves a block one position upward using the latest persisted ordering.
+  /// Already-first blocks are left unchanged rather than failing.
+  Future<ObjectBodyDocument> moveUp({
+    required int objectId,
+    required String blockId,
+  }) => _moveByOffset(objectId: objectId, blockId: blockId, offset: -1);
+
+  /// Moves a block one position downward using the latest persisted ordering.
+  /// Already-last blocks are left unchanged rather than failing.
+  Future<ObjectBodyDocument> moveDown({
+    required int objectId,
+    required String blockId,
+  }) => _moveByOffset(objectId: objectId, blockId: blockId, offset: 1);
+
+  Future<ObjectBodyDocument> _moveByOffset({
+    required int objectId,
+    required String blockId,
+    required int offset,
+  }) => _mutate(objectId, (document) {
+        final normalized = blockId.trim();
+        if (normalized.isEmpty) {
+          throw ArgumentError.value(blockId, 'blockId', 'Block id is empty.');
+        }
+        final index = document.blocks.indexWhere((block) => block.id == normalized);
+        if (index < 0) {
+          throw StateError('Body block not found: $normalized');
+        }
+        final target = index + offset;
+        if (target < 0 || target >= document.blocks.length) return document;
+        return editor.moveBlock(
+          document: document,
+          blockId: normalized,
+          toIndex: target,
+        );
+      });
+
   Future<ObjectBodyDocument> _mutate(
     int objectId,
     ObjectBodyDocument Function(ObjectBodyDocument document) mutation,
