@@ -146,7 +146,7 @@ class ObjectValuePromotionExecutionService {
         );
       }
 
-      final linkedRelation = relation;
+      final linkedRelation = relation!;
       final refreshedSource = (await _objectById(sourceType.id, sourceObjectId))!;
       final currentIds = ObjectRelationValue.fromJson(
         refreshedSource.values[linkedRelation.id],
@@ -168,7 +168,7 @@ class ObjectValuePromotionExecutionService {
       rethrow;
     }
 
-    final linkedRelation = relation;
+    final linkedRelation = relation!;
     var sourceValueCleared = false;
     if (plan.sourceDisposition ==
         ObjectValuePromotionSourceDisposition.clearAfterLink) {
