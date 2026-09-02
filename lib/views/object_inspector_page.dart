@@ -8,6 +8,7 @@ import '../data/object_detail_content_loader.dart';
 import '../data/object_graph_query_store.dart';
 import '../data/object_store.dart';
 import '../data/object_type_defaults_store.dart';
+import '../data/relation_read_service.dart';
 import '../data/system_object_store.dart';
 import '../domain/object_body_plain_text.dart';
 import '../domain/object_detail_content.dart';
@@ -35,8 +36,10 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
 
   ObjectGraphNodeRecord? _node;
   ObjectDetailContent? _content;
-  List<ObjectGraphBacklinkRecord> _backlinks = const [];
-  Map<int, ObjectGraphNodeRecord> _relatedNodes = const {};
+  RelationNeighborhood _relations = const RelationNeighborhood(
+    outgoing: <ResolvedOutgoingRelation>[],
+    backlinks: <ResolvedRelationBacklink>[],
+  );
   bool _loading = true;
 
   ObjectBodyStore get _bodyStore => ObjectBodyStore(widget.store);
@@ -71,24 +74,17 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
       return;
     }
 
-    final backlinks = await graph.backlinks(node.objectId);
-    final relatedNodes = <int, ObjectGraphNodeRecord>{};
-    for (final property in content.objectType.properties) {
-      if (!property.isRelation) continue;
-      for (final targetId in ObjectRelationValue.fromJson(
-        content.object.values[property.id],
-      ).objectIds) {
-        final target = await graph.getNode(targetId);
-        if (target != null) relatedNodes[targetId] = target;
-      }
-    }
+    final relations = await RelationReadService(widget.objectStore).neighborhood(
+      workspaceId: content.objectType.workspaceId,
+      objectTypeId: node.objectTypeId,
+      objectId: node.objectId,
+    );
 
     if (!mounted) return;
     setState(() {
       _node = node;
       _content = content;
-      _backlinks = backlinks;
-      _relatedNodes = relatedNodes;
+      _relations = relations;
       _loading = false;
     });
   }
@@ -141,24 +137,21 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
     return '$value';
   }
 
-  Widget _relationValue(ObjectPropertyDefinition property, dynamic value) {
-    final ids = ObjectRelationValue.fromJson(value).objectIds;
-    if (ids.isEmpty) return const Text('なし');
-    final nodes = ids
-        .map((id) => _relatedNodes[id])
-        .whereType<ObjectGraphNodeRecord>()
+  Widget _relationValue(ObjectPropertyDefinition property) {
+    final outgoing = _relations.outgoing
+        .where((relation) => relation.property.id == property.id)
         .toList(growable: false);
-    if (nodes.isEmpty) return Text('${ids.length}件のObject');
+    if (outgoing.isEmpty) return const Text('なし');
     return Wrap(
       spacing: 6,
       runSpacing: 5,
-      children: nodes
+      children: outgoing
           .map(
-            (node) => ActionChip(
+            (relation) => ActionChip(
               visualDensity: VisualDensity.compact,
-              avatar: Text(node.objectTypeIcon),
-              label: Text(node.title),
-              onPressed: () => _openObject(node.objectId),
+              avatar: const Icon(Icons.link, size: 16),
+              label: Text(relation.targetObject.title),
+              onPressed: () => _openObject(relation.targetObject.id),
             ),
           )
           .toList(),
@@ -230,7 +223,7 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
               subtitle: property.isRelation
                   ? Padding(
                       padding: const EdgeInsets.only(top: 6),
-                      child: _relationValue(property, value),
+                      child: _relationValue(property),
                     )
                   : Text(_displayValue(property, value)),
             );
@@ -239,25 +232,23 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
             document: content.body,
             onSave: (text) => _saveBody(content, text),
           ),
-          if (_backlinks.isNotEmpty) ...[
+          if (_relations.backlinks.isNotEmpty) ...[
             const SizedBox(height: 24),
             const Divider(),
             const SizedBox(height: 12),
             Text(
-              'Backlinks  ${_backlinks.length}',
+              'Backlinks  ${_relations.backlinks.length}',
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
-            ..._backlinks.map(
+            ..._relations.backlinks.map(
               (backlink) => ListTile(
                 contentPadding: EdgeInsets.zero,
-                leading: Text(backlink.sourceObjectTypeIcon),
-                title: Text(backlink.sourceTitle),
-                subtitle: Text(
-                  '${backlink.sourceObjectTypeName} · ${backlink.propertyName}',
-                ),
+                leading: const Icon(Icons.link),
+                title: Text(backlink.sourceObject.title),
+                subtitle: Text(backlink.property.name),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () => _openObject(backlink.sourceObjectId),
+                onTap: () => _openObject(backlink.sourceObject.id),
               ),
             ),
           ],
