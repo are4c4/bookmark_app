@@ -15,11 +15,13 @@ AppObject object(int id, String title) => AppObject(
 ObjectGroupBucket<AppObject> group(
   String key,
   String label,
-  List<AppObject> items,
-) =>
+  List<AppObject> items, {
+  dynamic value,
+}) =>
     ObjectGroupBucket<AppObject>(
       key: key,
       label: label,
+      value: value,
       items: items,
       isEmptyGroup: false,
     );
@@ -86,21 +88,23 @@ void main() {
     expect(target?.key, 'todo');
   });
 
-  testWidgets('long press drag reports target group', (tester) async {
+  testWidgets('long press drag reports source and target groups', (tester) async {
     final a = object(1, 'タスクA');
     AppObject? moved;
+    ObjectGroupBucket<AppObject>? source;
     ObjectGroupBucket<AppObject>? target;
     await tester.pumpWidget(
       host(
         ObjectBoardView(
           groups: [
-            group('todo', '未着手', [a]),
-            group('done', '完了', []),
+            group('todo', '未着手', [a], value: 'todo'),
+            group('done', '完了', [], value: 'done'),
           ],
           onObjectTap: (_) {},
-          onMoveObject: (object, group) async {
+          onMoveObject: (object, from, to) async {
             moved = object;
-            target = group;
+            source = from;
+            target = to;
           },
         ),
       ),
@@ -116,6 +120,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(moved?.id, 1);
+    expect(source?.key, 'todo');
+    expect(source?.value, 'todo');
     expect(target?.key, 'done');
+    expect(target?.value, 'done');
   });
 }
