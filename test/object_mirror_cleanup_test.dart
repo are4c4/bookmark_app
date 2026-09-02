@@ -9,7 +9,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('deleted legacy tags do not leave orphan Tag objects', () async {
+  test('deleted legacy tags do not leave orphan Tag objects or links', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
     final workspaceId = await WorkspaceStore(database).initialize();
@@ -38,9 +38,14 @@ void main() {
     await bridge.syncLegacyTags(workspaceId);
 
     expect(await objectStore.listObjects(tagType.id), isEmpty);
+    final links = await database.customSelect(
+      'SELECT object_id FROM tag_object_links WHERE workspace_id = ?',
+      variables: [Variable<int>(workspaceId)],
+    ).get();
+    expect(links, isEmpty);
   });
 
-  test('workspace removal and photo deletion clean mirrored objects', () async {
+  test('workspace removal and photo deletion clean mirrored objects and links', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
     final workspaceId = await WorkspaceStore(database).initialize();
@@ -99,5 +104,15 @@ void main() {
 
     expect(await objectStore.listObjects(imageType.id), isEmpty);
     expect(await objectStore.listObjects(bookmarkType.id), isEmpty);
+    final photoLinks = await database.customSelect(
+      'SELECT object_id FROM photo_object_links WHERE workspace_id = ?',
+      variables: [Variable<int>(workspaceId)],
+    ).get();
+    final bookmarkLinks = await database.customSelect(
+      'SELECT object_id FROM bookmark_object_links WHERE workspace_id = ?',
+      variables: [Variable<int>(workspaceId)],
+    ).get();
+    expect(photoLinks, isEmpty);
+    expect(bookmarkLinks, isEmpty);
   });
 }
