@@ -46,6 +46,40 @@ void main() {
     expect(defaults?.openMode, ObjectOpenMode.sidePeek);
   });
 
+  test('findOrCreate reuses an existing Weblink with the same URL', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final service = WeblinkObjectService(
+      systemObjects: SystemObjectStore(
+        database: database,
+        objectStore: objectStore,
+      ),
+      defaultsStore: ObjectTypeDefaultsStore(genericStore),
+    );
+
+    final first = await service.findOrCreate(
+      workspaceId: workspaceId,
+      url: 'https://example.com/article',
+    );
+    final second = await service.findOrCreate(
+      workspaceId: workspaceId,
+      url: 'https://example.com/article',
+      title: 'Different requested title',
+    );
+    final definition = await service.ensureDefinition(workspaceId);
+
+    expect(second.id, first.id);
+    expect(first.title, 'example.com');
+    expect(first.values[definition.urlProperty.id], 'https://example.com/article');
+    expect(
+      (await objectStore.listObjects(definition.objectType.id)).length,
+      1,
+    );
+  });
+
   test('URL Value can produce a non-destructive Weblink promotion plan', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
