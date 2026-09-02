@@ -3,8 +3,19 @@ import 'package:flutter/material.dart';
 import '../domain/object_group.dart';
 import '../domain/object_model.dart';
 
+class ObjectBoardDragData {
+  const ObjectBoardDragData({
+    required this.object,
+    required this.sourceGroup,
+  });
+
+  final AppObject object;
+  final ObjectGroupBucket<AppObject> sourceGroup;
+}
+
 typedef ObjectBoardMoveCallback = Future<void> Function(
   AppObject object,
+  ObjectGroupBucket<AppObject> sourceGroup,
   ObjectGroupBucket<AppObject> targetGroup,
 );
 
@@ -154,12 +165,16 @@ class _BoardColumn extends StatelessWidget {
     );
 
     if (onMoveObject == null) return column;
-    return DragTarget<AppObject>(
-      onWillAcceptWithDetails: (details) => !group.items.any(
-        (item) => item.id == details.data.id,
-      ),
+    return DragTarget<ObjectBoardDragData>(
+      onWillAcceptWithDetails: (details) =>
+          details.data.sourceGroup.key != group.key &&
+          !group.items.any((item) => item.id == details.data.object.id),
       onAcceptWithDetails: (details) {
-        onMoveObject!(details.data, group);
+        onMoveObject!(
+          details.data.object,
+          details.data.sourceGroup,
+          group,
+        );
       },
       builder: (context, candidates, rejected) {
         if (candidates.isEmpty) return column;
@@ -181,8 +196,8 @@ class _BoardColumn extends StatelessWidget {
       onTap: () => onObjectTap(object),
     );
     if (onMoveObject == null) return card;
-    return LongPressDraggable<AppObject>(
-      data: object,
+    return LongPressDraggable<ObjectBoardDragData>(
+      data: ObjectBoardDragData(object: object, sourceGroup: group),
       feedback: SizedBox(
         width: 260,
         child: Material(
