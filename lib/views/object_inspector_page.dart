@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart';
 import 'package:flutter/material.dart';
 
 import '../data/generic_database_store.dart';
@@ -7,10 +8,12 @@ import '../domain/object_model.dart';
 class ObjectInspectorPage extends StatefulWidget {
   const ObjectInspectorPage({
     super.key,
+    required this.store,
     required this.objectStore,
     required this.objectId,
   });
 
+  final GenericDatabaseStore store;
   final ObjectStore objectStore;
   final int objectId;
 
@@ -32,11 +35,18 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    final types = await _allTypes();
+    final workspaceId = await _workspaceIdForObject();
+    if (workspaceId == null) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
+    final types = await widget.objectStore.listObjectTypes(workspaceId);
+    final objectsByType = <int, List<AppObject>>{};
     AppObjectType? foundType;
     AppObject? foundObject;
     for (final type in types) {
       final objects = await widget.objectStore.listObjects(type.id);
+      objectsByType[type.id] = objects;
       for (final object in objects) {
         if (object.id == widget.objectId) {
           foundType = type;
@@ -44,7 +54,6 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
           break;
         }
       }
-      if (foundObject != null) break;
     }
 
     final backlinks = <_InspectorBacklink>[];
@@ -58,7 +67,7 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
           for (final candidate in type.properties) {
             if (candidate.id == edge.propertyId) property = candidate;
           }
-          final objects = await widget.objectStore.listObjects(type.id);
+          final objects = objectsByType[type.id] ?? const <AppObject>[];
           for (final candidate in objects) {
             if (candidate.id == edge.sourceObjectId) {
               source = candidate;
@@ -87,30 +96,15 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
     });
   }
 
-  Future<List<AppObjectType>> _allTypes() async {
-    final database = await _workspaceIdForObject();
-    if (database == null) return const [];
-    return widget.objectStore.listObjectTypes(database);
-  }
-
   Future<int?> _workspaceIdForObject() async {
-    final storeField = widget.objectStore;
-    // Object IDs are globally unique in generic_records. Resolve the owning
-    // workspace through the storage tables without assuming a visible DB.
-    final dynamic store = storeField;
-    try {
-      final GenericDatabaseStore genericStore = store._genericStore as GenericDatabaseStore;
-      final row = await genericStore.database.customSelect(
-        '''SELECT gd.workspace_id
-           FROM generic_records gr
-           JOIN generic_databases gd ON gd.id = gr.database_id
-           WHERE gr.id = ? LIMIT 1''',
-        variables: [],
-      ).getSingleOrNull();
-      return row?.read<int>('workspace_id');
-    } catch (_) {
-      return null;
-    }
+    final row = await widget.store.database.customSelect(
+      '''SELECT gd.workspace_id
+         FROM generic_records gr
+         JOIN generic_databases gd ON gd.id = gr.database_id
+         WHERE gr.id = ? LIMIT 1''',
+      variables: [Variable<int>(widget.objectId)],
+    ).getSingleOrNull();
+    return row?.read<int>('workspace_id');
   }
 
   String _displayValue(ObjectPropertyDefinition property, dynamic value) {
@@ -200,6 +194,7 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute<void>(
                       builder: (_) => ObjectInspectorPage(
+                        store: widget.store,
                         objectStore: widget.objectStore,
                         objectId: backlink.source.id,
                       ),
