@@ -4,7 +4,9 @@
 
 ## Current goal
 
-Integrate the generic Object/database foundations into a coherent user-facing database workflow inspired by Notion and Capacities while preserving bookmark behavior and keeping the architecture generic.
+Finish the transition from strong generic Object/Relation foundations to a coherent user-facing database workflow: **ObjectType = schema, Database = collection, View = presentation/query**.
+
+The product direction remains: **Capacities-like Object-centric data model + Notion-like Database/View UX**.
 
 ## Active Issue
 
@@ -12,13 +14,16 @@ Integrate the generic Object/database foundations into a coherent user-facing da
 
 https://github.com/are4c4/bookmark_app/issues/56
 
+Issue #56 now contains the current execution roadmap and delivery milestones A–D. Treat it as the product/design contract.
+
 ## Development lanes
 
 1. **Object lane** — `docs/AI_PROGRESS_OBJECT.md`
    - Object/ObjectType/Property architecture
    - Object-centric Database/View integration
    - reusable Object types
-   - Object detail content and Body/block model
+   - Object detail content/opening
+   - Body/block model
    - Daily Notes and Value-to-Object promotion
 
 2. **Relation lane** — `docs/AI_PROGRESS_RELATION.md`
@@ -34,72 +39,108 @@ https://github.com/are4c4/bookmark_app/issues/56
 
 Implementation runs should continue through multiple safe slices. One PR/commit/test or merely pending CI is not a stopping condition when independent safe work remains. Keep branches focused and avoid concurrent broad edits to the same core file.
 
-## Latest relevant state
+## Current implementation position
 
-### Object foundation / integration
+The repository is no longer primarily in foundational Object/Relation work. Most core primitives are present. The active phase is **Database/View integration and user-facing UX**.
 
-- PR #61 merged: explicit Value / Object Relation / Computed Property semantics.
-- PR #64 merged: Value-to-Object planning, versioned Body blocks, ObjectType defaults contract, shared Object detail contracts.
-- PR #65 merged: Body/default persistence, Weblink Object service, Daily Note open-or-create, shared detail loading, paragraph-safe Body adapter.
-- PR #71 merged: shared Object detail editing/session, Daily Note detail bridge, persisted defaults resolution, reusable Image Object facade.
-- PR #68 merged: Object inspector uses shared detail content, Formula/Rollup, persisted Body editing, and general Object navigation for today's Daily Note.
-- PR #76 merged: shared Object detail state composes with canonical Relation neighborhood data.
-- PR #77 merged: safe Value -> Object execution and reusable URL -> Weblink promotion; Relation writes use `RelationMutationService`.
-- PR #78 merged: Object inspector renders outgoing Relations and Backlinks from canonical Relation neighborhood data.
-- PR #79 merged as `6b991708f294e83b236d396a84d3841e4e43bcd4`: grouped Board Object creation is integrated. Relation presets use `RelationMutationService`; failed preset writes roll back the new Object. Flutter CI #458 passed before merge.
-- PR #82 is active on `feature/database-collection-semantics`: Phase-1 `Database = target ObjectType + collectionFilter` persistence, membership resolution, Database-before-View projection, delete integrity, and UI-facing configuration facade.
+### Integrated Object / database foundations on `main`
 
-### Relation foundation
+- PR #61: Value / Object Relation / Computed Property semantics.
+- PR #64: Value-to-Object planning, versioned Body blocks, ObjectType defaults contract, shared Object detail contracts.
+- PR #65: Body/default persistence, Weblink Object service, Daily Note open-or-create, shared detail loading, paragraph-safe Body adapter.
+- PR #71: shared Object detail editing/session, Daily Note detail bridge, persisted defaults resolution, reusable Image Object facade.
+- PR #68: Object inspector uses shared detail content, Formula/Rollup, persisted Body editing, and today's Daily Note navigation.
+- PR #76: shared Object detail state composes with canonical Relation neighborhood data.
+- PR #77: safe Value -> Object execution and reusable URL -> Weblink promotion; Relation writes delegate to `RelationMutationService`.
+- PR #78: `ObjectInspectorPage` renders outgoing Relations and Backlinks from canonical Relation neighborhood data.
+- PR #79: grouped Board Object creation planner/service merged, including Relation-safe grouped presets through `RelationMutationService`.
 
-- PR #62 merged: broken bidirectional inverse metadata fails closed.
-- PR #66 merged: canonical Relation source/target validation, mutation/read/index APIs, lifecycle hardening, Relation-safe Object deletion, Tag hierarchy cleanup.
-- PR #69 merged: read-only Relation integrity auditing.
-- PR #73 merged: canonical `RelationNeighborhood` outgoing + backlink payload.
-- PR #74 merged: fail-closed deterministic Relation index reconciliation for index-only drift.
-- PR #75 merged: `RelationTargetService` canonical same-workspace Relation-picker candidates.
-- Newer Relation integration has also advanced main with canonical selection/lifecycle consumers; Object lane continues to consume stable Relation APIs rather than duplicating their rules.
+### Integrated Relation foundations on `main`
 
-### Database collection Phase 1
+- PR #62: broken bidirectional inverse metadata fails closed.
+- PR #66: canonical Relation source/target validation, mutation/read/index APIs, lifecycle hardening, Relation-safe Object deletion, Tag hierarchy cleanup.
+- PR #69: read-only Relation integrity auditing.
+- PR #73: canonical `RelationNeighborhood` outgoing + backlink payload.
+- PR #74: fail-closed deterministic Relation index reconciliation for index-only drift.
+- PR #75: canonical same-workspace Relation picker candidates.
+- PR #80: canonical Relation selection context including missing-target diagnostics and cardinality drift without mutation.
+- PR #81: `CoreObjectBridge` Image/Tag writes and orphan mirror cleanup use the safe Relation lifecycle.
 
-- Database collection definition is explicitly separate from View configuration.
-- Existing databases remain backward compatible as self ObjectType + empty collection filter until configured.
-- Explicit collection targets are same-workspace ObjectTypes and filter Properties must belong to the target type.
-- `DatabaseCollectionResolver` produces the broad membership set; `DatabaseCollectionViewProjector` then applies View search/filter/sort/group independently.
-- Additive persistence introduces no Object/Bookmark rewrite or destructive migration.
+### Active core slice
+
+PR #82 (`feature/database-collection-semantics`) is open and mergeable. Its latest work provides the Phase-1 Database collection foundation:
+
+- `DatabaseCollectionDefinition`
+- `Database = target ObjectType + collectionFilter`
+- persistence separate from View configuration
+- legacy self-type fallback for existing databases
+- `DatabaseCollectionResolver`
+- Database-collection-then-View projection composition
+- `DatabaseCollectionConfigService`
+- same-workspace target/config validation
+- additive/non-destructive storage
+
+Do not merge until the latest-head CI is green or an explicit decision overrides that requirement.
+
+### Explicitly not active
+
+PR #83 was created accidentally after a stop request. It is closed and unmerged. Do not treat its branch as an active implementation path; reconsider any useful idea later against current `main` and Issue #56.
 
 ## Repository-wide design contract
 
 - Object is global and unique; Databases collect/show Objects rather than own duplicate records.
-- Database = which Objects; View = how to see them.
-- Phase-1 Database membership = target ObjectType + `collectionFilter`.
-- Database `collectionFilter` and View filters are separate persisted/query layers.
-- ObjectType = schema + defaults.
-- Effective defaults resolve as `View override > Database override > ObjectType default > app default`.
+- ObjectType = what the Object is: schema + defaults.
+- Database = which Objects: target ObjectType + collection semantics.
+- View = how to see/narrow/present a Database collection.
+- Database collection filtering and View filtering are separate pipeline stages and separate persistence concerns.
+- Effective defaults resolve as `View override > Database override > ObjectType default > app fallback`.
 - Object content = structured Properties + free Body designed for blocks.
 - Property semantics distinguish Value, Object Relation, and computed properties.
 - Tags are Objects; Select/MultiSelect remain for local option sets.
 - Date is a Value; Daily Note is an Object keyed by a unique date.
-- Object detail presentation should support side peek, center peek, and full page with shared content.
+- Object detail presentation should reuse shared content across side peek, center peek, and full page.
+
+## Delivery milestones
+
+### Milestone A — Usable Object Database
+Complete Database collection semantics in the real page, Board create-in-group UI, stable Relation editor/picker integration, and consistent layouts/query controls. This is the point where day-to-day use as a generic DB should begin.
+
+### Milestone B — Multi-View Database UX
+Multiple independent Views per Database, top tabs, duplicate-current/blank creation, rename/reorder/delete, independent configuration and overflow handling.
+
+### Milestone C — Object Knowledge System
+User-facing reusable Tag/Weblink/Image flows, Value -> Object affordances, richer relations/backlinks, shared contextual Object detail/opening, stronger Daily Note integration.
+
+### Milestone D — Document / Knowledge Layer
+Real block editing, RichText/Document Property, media/file blocks, embedded Objects, embedded Database/Views, and higher-level time-based note compositions.
 
 ## Next repository-wide actions
 
-1. Validate and land Object PR #82.
-2. Wire Database collection membership into the real `GenericDatabasePage` before View projection.
-3. Add a narrow collection settings UI for target ObjectType + collection filters while keeping View filters in the existing View toolbar.
-4. Wire merged Board grouped creation service to the Board-column `新規Object` callback in `GenericDatabasePage`.
-5. Use `RelationTargetService` + `RelationMutationService` for Relation editing/pickers and `RelationReadService.neighborhood()` for Object graph context.
-6. Continue Object-centric Database/View integration under Issue #56 without duplicating Object or Relation records.
+1. Validate and land PR #82 on current `main`.
+2. Integrate Database-first collection resolution into `GenericDatabasePage`, then apply View projection as a separate second layer.
+3. Connect merged `ObjectBoardCreateService` to the real `ObjectBoardView.onCreateInGroup` UI and add regression coverage.
+4. Migrate real Relation picker/editor reads to canonical selection/candidate APIs and writes to `RelationMutationService`; surface missing-target/cardinality diagnostics without silent repair.
+5. Expose reversible URL Value -> reusable Weblink promotion through a narrow Object-owned UI affordance while preserving the source URL by default.
+6. Implement multiple Views per Database with top-tab navigation.
+7. Implement View duplicate/blank creation, rename, reorder, and delete with independent mutable configs.
+8. Complete shared side-peek / center-peek / full-page Object opening behavior.
+9. Begin practical use after Milestone A/B rather than waiting for advanced block/document features.
+10. Continue Milestone C/D only after the Database/View core is coherent.
+11. Add manual include/exclude collection overrides only after dynamic collection + multi-View behavior is stable.
 
-## Validation
+## Validation status
 
-- PR #79 Flutter CI #458: Drift generation, analyze, and full tests passed before merge.
-- PR #82 CI #466: Drift generation and analyze passed; 266 tests passed and two new tests failed only because their expected Object order contradicted the existing `ObjectStore` ordering. Those test expectations were corrected without changing membership behavior.
-- Latest PR #82 CI is running on the newer head that also includes `DatabaseCollectionConfigService` coverage.
+- Merged Object slices #76/#77/#78 were CI-green before merge.
+- Merged Relation slices #66/#69/#73/#74/#75/#80/#81 were validated through Flutter CI before merge.
+- PR #79 is merged; the prior handoff entry that called it active was stale and has been corrected here.
+- PR #82 remains open; always inspect its latest head and latest Flutter CI before integration.
 
-## Known risks
+## Known risks / sequencing constraints
 
-- `GenericDatabasePage`, Object detail presentation, Value promotion UI, and collection configuration are Object-owned integration surfaces even when they consume Relation APIs.
-- User-facing Relation mutations must use `RelationMutationService`; Relation pickers should use canonical target/selection APIs.
-- Database collection integration must never collapse collection filters into View filters or duplicate Objects merely because a Database targets another ObjectType.
-- Do not auto-repair ambiguous persisted Relation values; only deterministic index-only reconciliation is currently safe.
-- Rich Body documents must not be flattened by the initial paragraph-safe editor.
+- `GenericDatabasePage` is now the main integration hotspot. Avoid parallel broad edits from Object and Relation lanes.
+- User-facing Relation mutation must not regress to low-level direct Relation writes; use `RelationMutationService`.
+- Picker opening/loading must not silently rewrite legacy/corrupt Relation state.
+- Board Relation-group creation must continue using the safe Relation mutation facade.
+- Database collection definitions must remain distinct from View config and must not duplicate Object ownership.
+- ObjectType and Database are conceptually distinct even though legacy UI/storage still overlaps them in places; migrate incrementally rather than destructively.
+- Rich Body documents must never be flattened by the initial paragraph-safe editor.
