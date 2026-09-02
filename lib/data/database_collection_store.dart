@@ -31,7 +31,8 @@ class DatabaseCollectionStore {
             database_id INTEGER PRIMARY KEY
               REFERENCES generic_databases(id) ON DELETE CASCADE,
             target_object_type_id INTEGER NOT NULL
-              REFERENCES generic_databases(id) ON DELETE RESTRICT,
+              REFERENCES generic_databases(id)
+              DEFERRABLE INITIALLY DEFERRED,
             collection_filter_json TEXT NOT NULL DEFAULT '[]',
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
           )
