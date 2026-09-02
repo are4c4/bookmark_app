@@ -36,7 +36,11 @@ Each implementation chat/run should pick one primary lane and update only its ma
 
 - `main` includes the persistent AI handoff workflow and now the two-lane development model.
 - Existing generic foundations include Object query/filter/sort, grouping, Board view, Board drag/drop persistence, Formula/Rollup, bidirectional Relations, ObjectType templates, and ObjectType management.
-- PR #54 was the previously known reusable Object view toolbar slice; current GitHub state must be inspected before continuing or superseding it.
+- PR #54 reusable Object view toolbar is merged.
+- PR #57 generic Object view coordinator is merged.
+- PR #59 integrates Object view controls/layouts into `GenericDatabasePage` and is merged.
+- PR #60 is open for grouped-property presets when creating Objects from Board columns; its next integration step belongs to the Database/View lane.
+- Object / Relation lane is implementing an explicit domain semantic split between lightweight Value properties, Object Relations, and computed properties on `feature/object-property-semantics`.
 - Issue #56 contains the current product/design decisions and remains the shared implementation contract.
 
 ## Repository-wide design contract
@@ -62,17 +66,18 @@ Each implementation chat/run should pick one primary lane and update only its ma
 
 ## Next repository-wide actions
 
-- Database / View lane resumes from `docs/AI_PROGRESS_DB_VIEW.md`.
-- Object / Relation lane resumes from `docs/AI_PROGRESS_OBJECT_RELATION.md`.
+- Database / View lane resumes from `docs/AI_PROGRESS_DB_VIEW.md`, including PR #60 and Database collection/multi-View work.
+- Object / Relation lane validates and lands `feature/object-property-semantics`, then proceeds to promotion/default/detail/body foundations without editing database-page UX.
 - Planning/design chat continues to refine Issue #56 when material product decisions are made.
 - Integrate lane PRs into `main` in small, validated slices.
 
 ## Validation
 
-The lane split itself is documentation/project-management work. Feature runs must record exact Flutter analyze/test results in their lane progress files.
+Feature runs must record exact Flutter analyze/test results in their lane progress files. GitHub Actions capacity may be limited; when executable CI is unavailable, record static/review validation explicitly and avoid claiming tests passed.
 
 ## Known risks
 
 - Parallel work is useful only when file ownership is reasonably separate; otherwise sequence the slices.
 - GitHub Actions usage limits may affect CI availability; record local/static validation when CI is unavailable.
 - Block-editor and migration work can expand quickly; keep the initial slices narrow and backward-compatible.
+- Value-to-Object promotion and Tag-as-Object migration must not destroy existing scalar/tag data before compatibility paths are proven.
