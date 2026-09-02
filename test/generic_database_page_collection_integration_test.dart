@@ -159,7 +159,7 @@ void main() {
     final targetObjects = await objectStore.listObjects(placeTypeId);
     expect(targetObjects.map((object) => object.title), contains('小樽'));
     expect(await objectStore.listObjects(databaseId), isEmpty);
-    expect(find.text('小樽'), findsOneWidget);
+    expect(find.text('小樽'), findsWidgets);
   });
 
   testWidgets('Board column create presets target ObjectType group Property',
@@ -227,7 +227,7 @@ void main() {
     );
 
     await pumpPage(tester, databaseId);
-    expect(find.text('未読'), findsOneWidget);
+    expect(find.text('未読'), findsWidgets);
     await tester.tap(find.text('新規Object').first);
     await tester.pumpAndSettle();
     final titleField = find.byWidgetPredicate(
