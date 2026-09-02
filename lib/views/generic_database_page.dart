@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/bookmark_repository.dart';
 import '../data/database_view_store.dart';
 import '../data/generic_database_store.dart';
+import '../data/object_graph_query_store.dart';
 import '../data/object_store.dart';
 import '../database/database_definition.dart';
 import '../domain/object_model.dart';
@@ -11,6 +12,7 @@ import '../widgets/database_create_tiles.dart';
 import '../widgets/database_view_tabs.dart';
 import '../widgets/notion_inline_field.dart';
 import '../widgets/resizable_detail_pane.dart';
+import 'object_inspector_page.dart';
 
 class GenericDatabasePage extends StatefulWidget {
   const GenericDatabasePage({
@@ -31,7 +33,9 @@ class GenericDatabasePage extends StatefulWidget {
 class _GenericDatabasePageState extends State<GenericDatabasePage> {
   late final GenericDatabaseStore _store;
   late final ObjectStore _objectStore;
+  late final ObjectGraphQueryStore _graphStore;
   late final DatabaseViewStore _viewStore;
+
   GenericDatabaseDefinitionRecord? _database;
   List<GenericPropertyRecord> _properties = const [];
   List<GenericRecord> _records = const [];
@@ -59,6 +63,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     super.initState();
     _store = GenericDatabaseStore(widget.repository.workspaceStore.database);
     _objectStore = ObjectStore(_store);
+    _graphStore = ObjectGraphQueryStore(_store);
     _viewStore = DatabaseViewStore(widget.repository.workspaceStore.database);
     _reload();
   }
@@ -143,24 +148,31 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     return value is int ? value : int.tryParse('$value');
   }
 
-  List<int> _relationIds(dynamic value) => ObjectRelationValue.fromJson(value).objectIds;
+  List<int> _relationIds(dynamic value) =>
+      ObjectRelationValue.fromJson(value).objectIds;
 
-  String _relationDisplay(GenericPropertyRecord property, dynamic value) {
+  List<GenericRecord> _relatedRecords(
+    GenericPropertyRecord property,
+    dynamic value,
+  ) {
     final targetTypeId = _targetTypeId(property);
-    if (targetTypeId == null) return '';
+    if (targetTypeId == null) return const [];
     final ids = _relationIds(value).toSet();
-    if (ids.isEmpty) return '';
-    final records = _recordsByType[targetTypeId] ?? const <GenericRecord>[];
-    return records
+    if (ids.isEmpty) return const [];
+    return (_recordsByType[targetTypeId] ?? const <GenericRecord>[])
         .where((record) => ids.contains(record.id))
-        .map((record) => record.title)
-        .join(', ');
+        .toList(growable: false);
   }
+
+  String _relationDisplay(GenericPropertyRecord property, dynamic value) =>
+      _relatedRecords(property, value).map((record) => record.title).join(', ');
 
   List<GenericPropertyRecord> get _orderedVisibleProperties {
     final order = _activeView?.propertyOrder ?? const <String>[];
     final visible = (_activeView?.visibleProperties ?? const <String>[]).toSet();
-    final byKey = {for (final property in _properties) 'p:${property.id}': property};
+    final byKey = {
+      for (final property in _properties) 'p:${property.id}': property,
+    };
     final result = <GenericPropertyRecord>[];
     for (final key in order) {
       final property = byKey[key];
@@ -177,11 +189,30 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     return result;
   }
 
+  GenericRecord? get _selectedRecord {
+    for (final record in _records) {
+      if (record.id == _selectedRecordId) return record;
+    }
+    return null;
+  }
+
+  List<GenericRecord> get _filteredRecords {
+    final normalized = _query.trim().toLowerCase();
+    if (normalized.isEmpty) return _records;
+    return _records.where((record) {
+      if (record.title.toLowerCase().contains(normalized)) return true;
+      for (final property in _properties) {
+        final display = _displayValue(property, record.values[property.id]);
+        if (display.toLowerCase().contains(normalized)) return true;
+      }
+      return false;
+    }).toList(growable: false);
+  }
+
   Future<void> _selectView(DatabaseViewConfig view) async {
-    final query = (view.filters['query'] as String?) ?? '';
     setState(() {
       _activeView = view;
-      _query = query;
+      _query = (view.filters['query'] as String?) ?? '';
     });
   }
 
@@ -204,7 +235,10 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
   }
 
   Future<void> _createRecord(String title) async {
-    final id = await _store.createRecord(databaseId: widget.databaseId, title: title);
+    final id = await _store.createRecord(
+      databaseId: widget.databaseId,
+      title: title,
+    );
     await _reload();
     if (mounted) setState(() => _selectedRecordId = id);
   }
@@ -235,7 +269,12 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                   initialValue: type,
                   decoration: const InputDecoration(labelText: '種類'),
                   items: _propertyTypes.entries
-                      .map((entry) => DropdownMenuItem(value: entry.key, child: Text(entry.value)))
+                      .map(
+                        (entry) => DropdownMenuItem(
+                          value: entry.key,
+                          child: Text(entry.value),
+                        ),
+                      )
                       .toList(),
                   onChanged: (value) => setLocalState(() {
                     type = value ?? 'text';
@@ -256,7 +295,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                   const SizedBox(height: 12),
                   DropdownButtonFormField<int>(
                     initialValue: targetObjectTypeId,
-                    decoration: const InputDecoration(labelText: '関連先のObject Type'),
+                    decoration: const InputDecoration(labelText: '関連先'),
                     items: _objectTypes
                         .map(
                           (objectType) => DropdownMenuItem(
@@ -265,20 +304,30 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                           ),
                         )
                         .toList(),
-                    onChanged: (value) => setLocalState(() => targetObjectTypeId = value),
+                    onChanged: (value) =>
+                        setLocalState(() => targetObjectTypeId = value),
                   ),
-                  SwitchListTile(
+                  const SizedBox(height: 4),
+                  SwitchListTile.adaptive(
                     contentPadding: EdgeInsets.zero,
-                    title: const Text('複数のObjectを選択可能'),
+                    dense: true,
+                    title: const Text('複数選択'),
+                    subtitle: Text(
+                      multipleRelations ? '複数のObjectを関連付けできます' : '1つのObjectだけ関連付けます',
+                    ),
                     value: multipleRelations,
-                    onChanged: (value) => setLocalState(() => multipleRelations = value),
+                    onChanged: (value) =>
+                        setLocalState(() => multipleRelations = value),
                   ),
                 ],
               ],
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('キャンセル')),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('キャンセル'),
+            ),
             FilledButton(
               onPressed: type == 'relation' && targetObjectTypeId == null
                   ? null
@@ -290,6 +339,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
       ),
     );
     if (ok != true || name.trim().isEmpty) return;
+
     final options = optionsText
         .split(',')
         .map((value) => value.trim())
@@ -305,14 +355,15 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     } else {
       await _store.createProperty(
         databaseId: widget.databaseId,
-        name: name,
+        name: name.trim(),
         type: type,
         config: options.isEmpty ? const {} : {'options': options},
       );
     }
     await _reload();
+
     final active = _activeView;
-    if (active != null) {
+    if (active != null && _properties.isNotEmpty) {
       final key = 'p:${_properties.last.id}';
       await _saveView(
         propertyOrder: [...active.propertyOrder, key],
@@ -322,24 +373,9 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
   }
 
   Future<void> _reorderProperties(List<GenericPropertyRecord> next) async {
-    final keys = next.map((property) => 'p:${property.id}').toList();
-    await _saveView(propertyOrder: keys);
-  }
-
-  GenericRecord? get _selectedRecord {
-    for (final record in _records) {
-      if (record.id == _selectedRecordId) return record;
-    }
-    return null;
-  }
-
-  List<GenericRecord> get _filteredRecords {
-    final normalized = _query.trim().toLowerCase();
-    if (normalized.isEmpty) return _records;
-    return _records.where((record) {
-      if (record.title.toLowerCase().contains(normalized)) return true;
-      return record.values.values.any((value) => '$value'.toLowerCase().contains(normalized));
-    }).toList();
+    await _saveView(
+      propertyOrder: next.map((property) => 'p:${property.id}').toList(),
+    );
   }
 
   String _displayValue(GenericPropertyRecord property, dynamic value) {
@@ -375,8 +411,12 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(record.title, maxLines: 2, overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w600)),
+                    Text(
+                      record.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
                     const SizedBox(height: 12),
                     ..._orderedVisibleProperties.take(4).map(
                           (property) => Padding(
@@ -385,7 +425,10 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                               '${property.name}: ${_displayValue(property, record.values[property.id])}',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: scheme.onSurfaceVariant,
+                              ),
                             ),
                           ),
                         ),
@@ -418,7 +461,10 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                 ? null
                 : Text(
                     _orderedVisibleProperties
-                        .map((property) => _displayValue(property, record.values[property.id]))
+                        .map(
+                          (property) =>
+                              _displayValue(property, record.values[property.id]),
+                        )
                         .where((value) => value.isNotEmpty)
                         .join(' · '),
                     maxLines: 1,
@@ -440,18 +486,23 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
           DataTable(
             columns: [
               const DataColumn(label: Text('名前')),
-              ...properties.map((property) => DataColumn(label: Text(property.name))),
+              ...properties.map(
+                (property) => DataColumn(label: Text(property.name)),
+              ),
             ],
             rows: records
                 .map(
                   (record) => DataRow(
                     selected: record.id == _selectedRecordId,
-                    onSelectChanged: (_) => setState(() => _selectedRecordId = record.id),
+                    onSelectChanged: (_) =>
+                        setState(() => _selectedRecordId = record.id),
                     cells: [
                       DataCell(Text(record.title)),
                       ...properties.map(
                         (property) => DataCell(
-                          Text(_displayValue(property, record.values[property.id])),
+                          Text(
+                            _displayValue(property, record.values[property.id]),
+                          ),
                         ),
                       ),
                     ],
@@ -479,68 +530,103 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
   ) async {
     final targetTypeId = _targetTypeId(property);
     if (targetTypeId == null) return;
-    final candidates = _recordsByType[targetTypeId] ?? await _store.listRecords(targetTypeId);
+    final candidates = _recordsByType[targetTypeId] ??
+        await _store.listRecords(targetTypeId);
     final multiple = property.config['multiple'] == true;
     final selectedIds = _relationIds(record.values[property.id]).toSet();
     var query = '';
+
     final result = await showDialog<Set<int>>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setLocalState) {
           final normalized = query.trim().toLowerCase();
           final visible = candidates
-              .where((candidate) =>
-                  normalized.isEmpty || candidate.title.toLowerCase().contains(normalized))
-              .toList();
+              .where(
+                (candidate) => normalized.isEmpty ||
+                    candidate.title.toLowerCase().contains(normalized),
+              )
+              .toList(growable: false);
           return AlertDialog(
-            title: Text(property.name),
+            titlePadding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
+            contentPadding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+            actionsPadding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+            title: Row(
+              children: [
+                Expanded(child: Text(property.name)),
+                Text(
+                  '${selectedIds.length}件選択',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+              ],
+            ),
             content: SizedBox(
-              width: 480,
-              height: 520,
+              width: 460,
+              height: 430,
               child: Column(
                 children: [
-                  TextField(
-                    autofocus: true,
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.search),
-                      hintText: 'Objectを検索',
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: TextField(
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.search, size: 18),
+                        hintText: 'Objectを検索',
+                      ),
+                      onChanged: (value) =>
+                          setLocalState(() => query = value),
                     ),
-                    onChanged: (value) => setLocalState(() => query = value),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   Expanded(
-                    child: ListView.builder(
-                      itemCount: visible.length,
-                      itemBuilder: (context, index) {
-                        final candidate = visible[index];
-                        final selected = selectedIds.contains(candidate.id);
-                        return CheckboxListTile(
-                          value: selected,
-                          title: Text(candidate.title),
-                          secondary: const Icon(Icons.description_outlined, size: 18),
-                          onChanged: (_) => setLocalState(() {
-                            if (selected) {
-                              selectedIds.remove(candidate.id);
-                            } else {
-                              if (!multiple) selectedIds.clear();
-                              selectedIds.add(candidate.id);
-                            }
-                          }),
-                        );
-                      },
-                    ),
+                    child: visible.isEmpty
+                        ? const Center(child: Text('該当するObjectがありません'))
+                        : ListView.builder(
+                            itemCount: visible.length,
+                            itemBuilder: (context, index) {
+                              final candidate = visible[index];
+                              final selected = selectedIds.contains(candidate.id);
+                              return ListTile(
+                                dense: true,
+                                leading: Icon(
+                                  multiple
+                                      ? (selected
+                                          ? Icons.check_box
+                                          : Icons.check_box_outline_blank)
+                                      : (selected
+                                          ? Icons.radio_button_checked
+                                          : Icons.radio_button_unchecked),
+                                  size: 19,
+                                ),
+                                title: Text(candidate.title),
+                                onTap: () => setLocalState(() {
+                                  if (selected) {
+                                    selectedIds.remove(candidate.id);
+                                  } else {
+                                    if (!multiple) selectedIds.clear();
+                                    selectedIds.add(candidate.id);
+                                  }
+                                }),
+                              );
+                            },
+                          ),
                   ),
                 ],
               ),
             ),
             actions: [
               TextButton(
+                onPressed: selectedIds.isEmpty
+                    ? null
+                    : () => setLocalState(selectedIds.clear),
+                child: const Text('クリア'),
+              ),
+              const Spacer(),
+              TextButton(
                 onPressed: () => Navigator.pop(dialogContext),
                 child: const Text('キャンセル'),
-              ),
-              TextButton(
-                onPressed: () => setLocalState(selectedIds.clear),
-                child: const Text('クリア'),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(dialogContext, selectedIds),
@@ -552,6 +638,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
       ),
     );
     if (result == null) return;
+
     final objectType = await _objectStore.getObjectType(widget.databaseId);
     if (objectType == null) return;
     final objectProperty = objectType.properties.firstWhere(
@@ -565,36 +652,58 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     await _reload();
   }
 
-  Future<void> _editValue(GenericRecord record, GenericPropertyRecord property) async {
+  Future<void> _editValue(
+    GenericRecord record,
+    GenericPropertyRecord property,
+  ) async {
     final current = record.values[property.id];
     if (property.type == 'relation') {
       await _editRelation(record, property);
       return;
     }
     if (property.type == 'checkbox') {
-      await _store.setValue(recordId: record.id, propertyId: property.id, value: current != true);
+      await _store.setValue(
+        recordId: record.id,
+        propertyId: property.id,
+        value: current != true,
+      );
       await _reload();
       return;
     }
     if (property.type == 'rating') {
       final next = ((current is num ? current.toInt() : 0) + 1) % 6;
-      await _store.setValue(recordId: record.id, propertyId: property.id, value: next);
+      await _store.setValue(
+        recordId: record.id,
+        propertyId: property.id,
+        value: next,
+      );
       await _reload();
       return;
     }
     if (property.type == 'select') {
-      final options = (property.config['options'] as List?)?.whereType<String>().toList() ?? const [];
+      final options =
+          (property.config['options'] as List?)?.whereType<String>().toList() ??
+              const <String>[];
       final selected = await showMenu<String>(
         context: context,
         position: const RelativeRect.fromLTRB(300, 220, 300, 0),
-        items: options.map((value) => PopupMenuItem(value: value, child: Text(value))).toList(),
+        items: options
+            .map(
+              (value) => PopupMenuItem(value: value, child: Text(value)),
+            )
+            .toList(),
       );
       if (selected != null) {
-        await _store.setValue(recordId: record.id, propertyId: property.id, value: selected);
+        await _store.setValue(
+          recordId: record.id,
+          propertyId: property.id,
+          value: selected,
+        );
         await _reload();
       }
       return;
     }
+
     var value = current == null ? '' : '$current';
     final result = await showDialog<String>(
       context: context,
@@ -607,53 +716,84 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
           onFieldSubmitted: (_) => Navigator.pop(dialogContext, value),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('キャンセル')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, value), child: const Text('保存')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, value),
+            child: const Text('保存'),
+          ),
         ],
       ),
     );
     if (result == null) return;
+
     dynamic parsed = result;
     if (property.type == 'number') parsed = num.tryParse(result);
     if (property.type == 'multiSelect') {
-      parsed = result.split(',').map((item) => item.trim()).where((item) => item.isNotEmpty).toList();
+      parsed = result
+          .split(',')
+          .map((item) => item.trim())
+          .where((item) => item.isNotEmpty)
+          .toList();
     }
-    await _store.setValue(recordId: record.id, propertyId: property.id, value: parsed);
+    await _store.setValue(
+      recordId: record.id,
+      propertyId: property.id,
+      value: parsed,
+    );
     await _reload();
   }
 
-  Future<List<_BacklinkItem>> _loadBacklinks(int objectId) async {
-    final edges = await _objectStore.backlinks(objectId);
-    if (edges.isEmpty) return const [];
-    final objectTypes = await _objectStore.listObjectTypes(widget.repository.workspaceId);
-    final sourceIds = edges.map((edge) => edge.sourceObjectId).toSet();
-    final sources = <int, AppObject>{};
-    final properties = <int, ObjectPropertyDefinition>{};
-    for (final type in objectTypes) {
-      for (final property in type.properties) {
-        properties[property.id] = property;
-      }
-      final objects = await _objectStore.listObjects(type.id);
-      for (final object in objects) {
-        if (sourceIds.contains(object.id)) sources[object.id] = object;
-      }
+  Future<void> _openObject(int objectId) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ObjectInspectorPage(
+          store: _store,
+          objectStore: _objectStore,
+          objectId: objectId,
+        ),
+      ),
+    );
+    if (mounted) await _reload();
+  }
+
+  Widget _relationValue(
+    GenericRecord record,
+    GenericPropertyRecord property,
+  ) {
+    final related = _relatedRecords(property, record.values[property.id]);
+    if (related.isEmpty) {
+      return Text(
+        'なし',
+        style: TextStyle(
+          fontSize: 12.5,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+      );
     }
-    return edges
-        .map(
-          (edge) => _BacklinkItem(
-            source: sources[edge.sourceObjectId],
-            property: properties[edge.propertyId],
-          ),
-        )
-        .where((item) => item.source != null)
-        .toList(growable: false);
+    return Wrap(
+      spacing: 5,
+      runSpacing: 4,
+      children: related
+          .map(
+            (item) => ActionChip(
+              visualDensity: VisualDensity.compact,
+              avatar: const Icon(Icons.link, size: 14),
+              label: Text(item.title),
+              onPressed: () => _openObject(item.id),
+            ),
+          )
+          .toList(),
+    );
   }
 
   Widget _backlinks(GenericRecord record) {
     final scheme = Theme.of(context).colorScheme;
-    return FutureBuilder<List<_BacklinkItem>>(
+    return FutureBuilder<List<ObjectGraphBacklinkRecord>>(
       key: ValueKey('backlinks:${record.id}:${record.updatedAt}'),
-      future: _loadBacklinks(record.id),
+      future: _graphStore.backlinks(record.id),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Padding(
@@ -661,7 +801,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
             child: LinearProgressIndicator(),
           );
         }
-        final items = snapshot.data ?? const <_BacklinkItem>[];
+        final items = snapshot.data ?? const <ObjectGraphBacklinkRecord>[];
         if (items.isEmpty) return const SizedBox.shrink();
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -675,18 +815,28 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                 const SizedBox(width: 7),
                 Text(
                   'Backlinks  ${items.length}',
-                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 7),
+            const SizedBox(height: 5),
             ...items.map(
               (item) => ListTile(
                 dense: true,
                 contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.description_outlined, size: 17),
-                title: Text(item.source!.title),
-                subtitle: item.property == null ? null : Text(item.property!.name),
+                leading: Text(
+                  item.sourceObjectTypeIcon,
+                  style: const TextStyle(fontSize: 17),
+                ),
+                title: Text(item.sourceTitle),
+                subtitle: Text(
+                  '${item.sourceObjectTypeName} · ${item.propertyName}',
+                ),
+                trailing: const Icon(Icons.chevron_right, size: 18),
+                onTap: () => _openObject(item.sourceObjectId),
               ),
             ),
           ],
@@ -707,7 +857,10 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
             child: Row(
               children: [
                 const SizedBox(width: 14),
-                const Text('詳細', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+                const Text(
+                  '詳細',
+                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                ),
                 const Spacer(),
                 IconButton(
                   tooltip: '削除',
@@ -734,7 +887,10 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                 NotionInlineField(
                   value: record.title,
                   hintText: '名前',
-                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                  ),
                   onSaved: (value) async {
                     await _store.renameRecord(record.id, value);
                     await _reload();
@@ -765,25 +921,57 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                         child: Padding(
                           padding: const EdgeInsets.symmetric(vertical: 7),
                           child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Icon(Icons.drag_indicator, size: 15, color: scheme.onSurfaceVariant.withValues(alpha: .55)),
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Icon(
+                                  Icons.drag_indicator,
+                                  size: 15,
+                                  color: scheme.onSurfaceVariant.withValues(alpha: .55),
+                                ),
+                              ),
                               const SizedBox(width: 6),
-                              Icon(_propertyIcon(property.type), size: 17, color: scheme.onSurfaceVariant),
+                              Padding(
+                                padding: const EdgeInsets.only(top: 1),
+                                child: Icon(
+                                  _propertyIcon(property.type),
+                                  size: 17,
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                              ),
                               const SizedBox(width: 9),
                               SizedBox(
                                 width: 120,
-                                child: Text(property.name, style: TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant)),
-                              ),
-                              Expanded(
-                                child: Text(
-                                  _displayValue(property, value).isEmpty ? 'なし' : _displayValue(property, value),
-                                  style: TextStyle(
-                                    fontSize: 12.5,
-                                    color: _displayValue(property, value).isEmpty
-                                        ? scheme.onSurfaceVariant.withValues(alpha: .55)
-                                        : scheme.onSurface,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: Text(
+                                    property.name,
+                                    style: TextStyle(
+                                      fontSize: 12.5,
+                                      color: scheme.onSurfaceVariant,
+                                    ),
                                   ),
                                 ),
+                              ),
+                              Expanded(
+                                child: property.type == 'relation'
+                                    ? _relationValue(record, property)
+                                    : Padding(
+                                        padding: const EdgeInsets.only(top: 2),
+                                        child: Text(
+                                          _displayValue(property, value).isEmpty
+                                              ? 'なし'
+                                              : _displayValue(property, value),
+                                          style: TextStyle(
+                                            fontSize: 12.5,
+                                            color: _displayValue(property, value).isEmpty
+                                                ? scheme.onSurfaceVariant
+                                                    .withValues(alpha: .55)
+                                                : scheme.onSurface,
+                                          ),
+                                        ),
+                                      ),
                               ),
                             ],
                           ),
@@ -793,10 +981,13 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                   },
                 ),
                 const SizedBox(height: 8),
-                TextButton.icon(
-                  onPressed: _createProperty,
-                  icon: const Icon(Icons.add, size: 16),
-                  label: const Text('プロパティを追加'),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: _createProperty,
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('プロパティを追加'),
+                  ),
                 ),
                 _backlinks(record),
               ],
@@ -811,7 +1002,9 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
     final database = _database;
-    if (database == null) return const Center(child: Text('データベースが見つかりません'));
+    if (database == null) {
+      return const Center(child: Text('データベースが見つかりません'));
+    }
     final records = _filteredRecords;
     final selected = _selectedRecord;
     final layout = _activeView?.layoutType ?? 'table';
@@ -831,7 +1024,10 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                     child: NotionInlineField(
                       value: database.name,
                       hintText: 'データベース名',
-                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                      ),
                       onSaved: (value) async {
                         await _store.renameDatabase(database.id, value);
                         widget.onDatabaseChanged();
@@ -862,13 +1058,24 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                 SegmentedButton<String>(
                   showSelectedIcon: false,
                   segments: const [
-                    ButtonSegment(value: 'gallery', icon: Icon(Icons.grid_view, size: 16)),
-                    ButtonSegment(value: 'list', icon: Icon(Icons.view_list, size: 16)),
-                    ButtonSegment(value: 'table', icon: Icon(Icons.table_rows, size: 16)),
+                    ButtonSegment(
+                      value: 'gallery',
+                      icon: Icon(Icons.grid_view, size: 16),
+                    ),
+                    ButtonSegment(
+                      value: 'list',
+                      icon: Icon(Icons.view_list, size: 16),
+                    ),
+                    ButtonSegment(
+                      value: 'table',
+                      icon: Icon(Icons.table_rows, size: 16),
+                    ),
                   ],
                   selected: {layout},
                   onSelectionChanged: (selection) {
-                    if (selection.isNotEmpty) _saveView(layoutType: selection.first);
+                    if (selection.isNotEmpty) {
+                      _saveView(layoutType: selection.first);
+                    }
                   },
                 ),
                 const Spacer(),
@@ -878,7 +1085,10 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                   child: TextFormField(
                     key: ValueKey('${_activeView?.id}:$_query'),
                     initialValue: _query,
-                    decoration: const InputDecoration(prefixIcon: Icon(Icons.search, size: 17), hintText: '検索'),
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.search, size: 17),
+                      hintText: '検索',
+                    ),
                     onChanged: (value) {
                       setState(() => _query = value);
                       _saveView(query: value);
@@ -912,14 +1122,4 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
       ),
     );
   }
-}
-
-class _BacklinkItem {
-  const _BacklinkItem({
-    required this.source,
-    required this.property,
-  });
-
-  final AppObject? source;
-  final ObjectPropertyDefinition? property;
 }
