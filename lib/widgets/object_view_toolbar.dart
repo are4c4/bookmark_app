@@ -48,7 +48,7 @@ class ObjectViewToolbar extends StatelessWidget {
           icon: Icons.swap_vert,
           label: sortCount == 0 ? '並び替え' : '並び替え $sortCount',
           active: sortCount > 0,
-          onPressed: () => _editQuery(context, initialTab: 1),
+          onPressed: () => _editQuery(context),
         ),
         _ToolbarButton(
           icon: Icons.account_tree_outlined,
@@ -61,10 +61,7 @@ class ObjectViewToolbar extends StatelessWidget {
     );
   }
 
-  Future<void> _editQuery(
-    BuildContext context, {
-    int initialTab = 0,
-  }) async {
+  Future<void> _editQuery(BuildContext context) async {
     final state = _queryAdapter.decode(view);
     final result = await showObjectQueryDialog(
       context,
