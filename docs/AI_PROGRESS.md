@@ -43,8 +43,9 @@ Pending/queued CI by itself is not a blocker. While CI is pending, continue with
 ## Latest relevant state
 
 - `main` includes the persistent AI handoff workflow and sustained multi-slice execution rules.
-- PR #61 is the current known Object-lane slice for Value / Object Relation / Computed property semantics.
-- PR #62 is the current known Relation-lane slice for bidirectional Relation pair integrity.
+- PR #61 is merged; Value / Object Relation / Computed property semantics are now on `main` (`b4b3845`).
+- Object lane is continuing on `feature/object-promotion-contracts` with reversible Value-to-Object planning, versioned Body blocks, and ObjectType defaults contracts.
+- PR #62 is the current Relation-lane slice for bidirectional Relation pair integrity.
 - Existing generic foundations include Object query/filter/sort, grouping, Board view, Board drag/drop persistence, Formula/Rollup, bidirectional Relations, ObjectType templates, and ObjectType management.
 - Issue #56 remains the shared product/design implementation contract.
 
@@ -78,10 +79,11 @@ Pending/queued CI by itself is not a blocker. While CI is pending, continue with
 
 ## Validation
 
-Lane-split and sustained-run changes are documentation/project-management changes. Feature runs must record exact Flutter analyze/test results in their lane progress files.
+Feature runs must record exact Flutter analyze/test results in their lane progress files. PR #61's functional head passed Flutter CI #328 before merge.
 
 ## Known risks
 
 - Parallel work is useful only when file ownership is reasonably separate; otherwise sequence the slices.
 - GitHub Actions usage limits may affect CI availability; pending CI alone should not stop independent work.
 - Block-editor and migration work can expand quickly; keep individual commits reviewable while allowing several checkpoints per run.
+- Promotion execution and Tag hierarchy work depend on stable Relation APIs; sequence those with the Relation lane rather than duplicating lifecycle logic.
