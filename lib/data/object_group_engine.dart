@@ -25,7 +25,11 @@ class ObjectGroupEngine {
         if (!rule.includeEmpty) continue;
         final bucket = buckets.putIfAbsent(
           '__empty__',
-          () => _MutableBucket(label: emptyLabel, isEmptyGroup: true),
+          () => _MutableBucket(
+            label: emptyLabel,
+            value: null,
+            isEmptyGroup: true,
+          ),
         );
         bucket.items.add(object);
         continue;
@@ -34,7 +38,11 @@ class ObjectGroupEngine {
         final key = _key(value);
         final bucket = buckets.putIfAbsent(
           key,
-          () => _MutableBucket(label: _label(value), isEmptyGroup: false),
+          () => _MutableBucket(
+            label: _label(value),
+            value: value,
+            isEmptyGroup: false,
+          ),
         );
         bucket.items.add(object);
       }
@@ -45,6 +53,7 @@ class ObjectGroupEngine {
           (entry) => ObjectGroupBucket<AppObject>(
             key: entry.key,
             label: entry.value.label,
+            value: entry.value.value,
             items: List.unmodifiable(entry.value.items),
             isEmptyGroup: entry.value.isEmptyGroup,
           ),
@@ -91,10 +100,12 @@ class ObjectGroupEngine {
 class _MutableBucket {
   _MutableBucket({
     required this.label,
+    required this.value,
     required this.isEmptyGroup,
   });
 
   final String label;
+  final dynamic value;
   final bool isEmptyGroup;
   final List<AppObject> items = [];
 }

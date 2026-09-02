@@ -28,8 +28,11 @@ void main() {
 
     expect(groups.map((group) => group.label), ['完了', '進行中', '未設定']);
     expect(groups.first.items.map((object) => object.title), ['C']);
+    expect(groups.first.value, '完了');
     expect(groups[1].items.map((object) => object.title), ['A', 'D']);
+    expect(groups[1].value, '進行中');
     expect(groups.last.isEmptyGroup, true);
+    expect(groups.last.value, isNull);
   });
 
   test('multi-value properties place an Object into each matching group', () {
@@ -44,15 +47,29 @@ void main() {
     final math = groups.firstWhere((group) => group.label == '数学');
     final book = groups.firstWhere((group) => group.label == '本');
     expect(math.items.map((object) => object.id), [1, 2]);
+    expect(math.value, '数学');
     expect(book.items.map((object) => object.id), [1]);
+    expect(book.value, '本');
   });
 
-  test('relation JSON objectIds are grouped independently', () {
+  test('relation JSON objectIds preserve numeric bucket values', () {
     final groups = engine.group(
       objects: [item(1, 'A', {'objectIds': [20, 30]})],
       rule: const ObjectGroupRule(propertyId: 10),
     );
     expect(groups.map((group) => group.label).toSet(), {'20', '30'});
+    expect(groups.map((group) => group.value).toSet(), {20, 30});
+  });
+
+  test('boolean bucket keeps the original bool rather than its label', () {
+    final groups = engine.group(
+      objects: [item(1, 'A', true), item(2, 'B', false)],
+      rule: const ObjectGroupRule(propertyId: 10),
+    );
+    final on = groups.firstWhere((group) => group.label == 'オン');
+    final off = groups.firstWhere((group) => group.label == 'オフ');
+    expect(on.value, isTrue);
+    expect(off.value, isFalse);
   });
 
   test('empty group can be excluded and computed values can be resolved', () {
@@ -64,6 +81,7 @@ void main() {
     );
     expect(groups, hasLength(1));
     expect(groups.single.label, '高');
+    expect(groups.single.value, '高');
   });
 
   test('group rule supports JSON round-trip', () {
