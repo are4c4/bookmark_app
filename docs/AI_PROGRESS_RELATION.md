@@ -11,10 +11,11 @@ Own Relation/backlink lifecycle, bidirectional integrity, relation write validat
 ## Current state
 - Relation foundation PRs #62/#66/#69/#73/#74/#75/#80/#81 are merged.
 - PR #109 editor-boundary regression coverage is merged as `d51b5023ede27bcf0c66670620e86643a1b07038`.
-- Object PR #111 has now completed the real `GenericDatabasePage` Relation picker/editor migration through `GenericDatabasePageServices.relationEditor`.
+- Object PR #111 completed the real `GenericDatabasePage` Relation picker/editor migration through `GenericDatabasePageServices.relationEditor`.
 - PR #114 `Cover Relation lifecycle in real database host` is merged as `a152c4984331789af8450bfe10ed62a4bea0cce1`.
 - `lib/views` no longer contains a user-facing direct `ObjectStore.setRelation()` call; real page writes route through the canonical Relation editor/mutation facade.
-- Object PRs #112/#113/#115 are Object inspector/Body integration and do not change Relation lifecycle.
+- Object PRs #112/#113/#115 are merged Object inspector/Body integration and do not change Relation lifecycle.
+- Object PR #116 is active Daily Note/Object inspector work; its scope explicitly contains no Relation lifecycle changes.
 - No active Relation implementation PR remains.
 
 ## Stable Relation APIs on main
@@ -62,38 +63,33 @@ Own Relation/backlink lifecycle, bidirectional integrity, relation write validat
 - `CoreObjectBridge` Images/Tags writes use `RelationMutationService`.
 - Orphan mirrored Image/Bookmark deletion uses Relation-safe Object deletion.
 
-## Checkpoints completed in this sustained run
-1. Re-read AGENTS.md, Issue #56, repository handoff, Relation handoff, latest main/PR/CI.
-2. Detected that Object PR #111 had landed the previously blocked real-host `GenericDatabasePage` integration.
-3. Reviewed the #111 Relation picker patch and confirmed load/save now use `GenericDatabasePageServices.relationEditor` and diagnostics are rendered read-only before explicit save.
-4. Re-audited `lib/views` and confirmed the old direct `ObjectStore.setRelation()` user-facing write is gone.
-5. Opened PR #114 from `feature/relation-real-host-regressions`.
-6. Added real-page widget coverage proving explicit bidirectional save synchronizes the inverse Property.
-7. Added real-page missing-target coverage proving diagnostics are visible and cancel preserves the legacy missing id unchanged.
-8. Added real-page single-cardinality coverage proving diagnostics are visible and cancel preserves the legacy multiple values unchanged.
-9. Added a stale-picker race regression: delete a candidate after picker load, then save; the real page fails closed, surfaces the update error, and leaves source Relation/index state unchanged.
-10. First latest-head CI attempt stopped at analyzer because the new stale-picker test had one unused import; removed it immediately.
-11. Corrected head `e3b357c5427e43d4ba248d2391ffe73e48253812` passed dependency install, Drift generation, `flutter analyze`, and the full test suite in Flutter CI #620.
-12. Object PR #115 advanced main with Body-only changes; confirmed non-overlap, then squash-merged PR #114 as `a152c4984331789af8450bfe10ed62a4bea0cce1`.
+## Checkpoints completed in the latest audit run
+1. Re-read `AGENTS.md`, Issue #56, repository handoff, Relation handoff, and latest PR state.
+2. Confirmed #114 remains the latest Relation implementation checkpoint and is merged after CI-green real-host lifecycle coverage.
+3. Reviewed recent Object integration sequence: #112/#113/#115 are merged; #116 is active Daily Note/Object inspector integration and explicitly has no Relation lifecycle changes.
+4. Re-audited `setRelation(` call sites. User-facing host writes remain absent from `lib/views`; remaining low-level calls are canonical service internals, bridge/services that already use `RelationMutationService`, or tests/corruption fixtures.
+5. Re-audited `relationEditor` usage and confirmed the real `GenericDatabasePage` continues to load/save through `GenericDatabasePageServices.relationEditor` rather than a new parallel lifecycle path.
+6. No new editable Relation surface was introduced in Object inspector or Daily Note work; current Object detail Relation consumption remains presentation/navigation only.
+7. No concrete failing Relation correctness case, API gap, backlink/index regression, or lifecycle defect was found that can be implemented independently without inventing speculative abstraction or ambiguous repair policy.
 
 ## Validation
 - PR #114 corrected head `e3b357c5427e43d4ba248d2391ffe73e48253812`: Drift generation — success; `flutter analyze` — success; full test suite — success (Flutter CI #620).
-- PR #114 earlier head failed only on one unused test import before tests; no Relation implementation failure was observed.
 - PR #109 head `576346d836c2ad07c3f2a590640751dd8b107741`: Drift generation, analyze, full tests — success (Flutter CI #597).
 - Previous Relation PRs #66/#69/#73/#74/#75/#80/#81 were CI-green before merge.
-- Local Flutter execution remains unavailable in this connector-only lane; GitHub Actions is the executable validation source.
+- This latest run made no code changes because the audit found no concrete Relation defect; therefore no new CI run was warranted.
 
 ## Exact next actions
 1. Treat the real `GenericDatabasePage` Relation editor acceptance path as integrated and covered; do not create another parallel picker/editor abstraction.
-2. Resume Relation implementation only when real-host usage exposes a concrete lifecycle/read/index/backlink regression; start with a focused failing test.
+2. Resume Relation implementation when real-host usage or a new Object-owned editable Relation surface exposes a concrete lifecycle/read/index/backlink regression; begin with a focused failing test.
 3. Keep integrity audit and repair separate. Do not auto-repair missing targets, cardinality conflicts, broken bidirectional values, or other ambiguous user data without explicit product/data policy.
 4. Continue Tag hierarchy and legacy mirror changes only through the general Relation APIs.
-5. If Object detail later gains Relation editing (not just canonical Relation chips/navigation), reuse the same `RelationTargetService` / `ObjectRelationEditorService` boundaries rather than introducing a second lifecycle path.
+5. If Object detail gains Relation editing, reuse `RelationTargetService` / `ObjectRelationEditorService` with non-mutating load and explicit save, then add end-to-end host regression coverage before considering the path complete.
 
 ## Cross-lane boundary
 - `GenericDatabasePage`, Object detail/navigation, Daily Note host integration, Body UI and View/Database navigation remain Object-owned host surfaces.
-- The real Database page now consumes the stable Relation boundary correctly; Relation lane should not compete with ongoing Object host work unless fixing a concrete Relation regression.
+- The real Database page consumes the stable Relation boundary correctly; Relation lane should not compete with ongoing Object host work unless fixing a concrete Relation regression.
 - `lib/data/object_store.dart` is shared infrastructure; future Relation edits there must stay narrow and refresh latest main first.
+- Active Object PR #116 does not require a Relation dependency at this time.
 
 ## Known risks / blockers
 - Low-level generic ObjectStore operations remain intentionally available for persistence internals, corruption simulation tests, and rollback paths; normal user-facing Relation mutations must continue using the canonical facade.
@@ -101,4 +97,4 @@ Own Relation/backlink lifecycle, bidirectional integrity, relation write validat
 - Object detail currently consumes canonical Relation presentation/read data; any future editable Relation UI there must preserve the same non-mutating-load / explicit-save contract.
 
 ## Stop reason
-The newly available Relation work created by PR #111 has been completed: the real Database host lifecycle was audited, four end-to-end Relation safety cases were added, CI passed, and PR #114 was merged. The old user-facing low-level Relation write is gone. No concrete independent Relation correctness gap remains from the current audits; remaining Issue #56 work is Object-owned detail/navigation/Body/Daily Note integration or ambiguous repair policy. This matches AGENTS.md: the Relation lane currently has no remaining actionable independent work until a real integration regression appears.
+The lane currently satisfies the AGENTS.md stopping criterion "no remaining actionable work in the Issue" for independent Relation work. The real Database Relation lifecycle is integrated and covered, low-level user-facing writes are gone, and the latest Object host work introduces no new Relation write path. Further work now depends on a concrete regression or a new editable Relation host surface; inventing additional abstractions or automatic repair policy would violate the integration-first and explicit-repair design rules.
