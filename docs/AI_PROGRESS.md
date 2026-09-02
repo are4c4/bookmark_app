@@ -43,8 +43,9 @@ Pending/queued CI by itself is not a blocker. While CI is pending, continue with
 ## Latest relevant state
 
 - `main` includes the persistent AI handoff workflow and sustained multi-slice execution rules.
-- PR #61 is the current known Object-lane slice for Value / Object Relation / Computed property semantics.
-- PR #62 is the current known Relation-lane slice for bidirectional Relation pair integrity.
+- Object-lane PR #61 (`Define Value vs Object Relation property semantics`) is merged to `main` as `b4b3845f0b687539c71db136649c9e0ba3727656`.
+- Relation-lane PR #62 (`Harden bidirectional Relation pair integrity`) passed Flutter CI and is merged to `main` as `ed8d417f06a5190370dffbbe62bce84b3a64ec03`.
+- Relation-lane PR #63 is active on `feature/relation-write-integrity`; it adds source/target Relation validation, canonical Relation writes, delete lifecycle protection, filtered backlink/outgoing queries, and regression coverage. Latest-head CI is running.
 - Existing generic foundations include Object query/filter/sort, grouping, Board view, Board drag/drop persistence, Formula/Rollup, bidirectional Relations, ObjectType templates, and ObjectType management.
 - Issue #56 remains the shared product/design implementation contract.
 
@@ -72,16 +73,19 @@ Pending/queued CI by itself is not a blocker. While CI is pending, continue with
 ## Next repository-wide actions
 
 - Object lane resumes from `docs/AI_PROGRESS_OBJECT.md` and should continue through multiple safe slices per run.
-- Relation lane resumes from `docs/AI_PROGRESS_RELATION.md` and should continue through multiple safe slices per run.
+- Relation lane should validate/integrate PR #63, then refresh from latest `main` before the next shared `object_store.dart` edit.
 - Planning/design chat continues to refine Issue #56 when material product decisions are made.
 - Integrate validated lane PRs into `main` in reviewable increments without treating each PR creation as the end of a chat run.
 
 ## Validation
 
-Lane-split and sustained-run changes are documentation/project-management changes. Feature runs must record exact Flutter analyze/test results in their lane progress files.
+- PR #62 Flutter CI passed before merge.
+- PR #63 Flutter CI is running on its latest head; exact status is recorded in `docs/AI_PROGRESS_RELATION.md`.
+- Feature runs must continue recording exact analyze/test results in their lane progress files.
 
 ## Known risks
 
 - Parallel work is useful only when file ownership is reasonably separate; otherwise sequence the slices.
+- `lib/data/object_store.dart` is shared foundation and should be refreshed from latest `main` before either lane makes another overlapping edit.
 - GitHub Actions usage limits may affect CI availability; pending CI alone should not stop independent work.
 - Block-editor and migration work can expand quickly; keep individual commits reviewable while allowing several checkpoints per run.
