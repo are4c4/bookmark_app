@@ -1,6 +1,10 @@
 import 'object_body.dart';
 import 'object_body_block_contracts.dart';
 
+/// Reference categories exposed by shared Body insertion chrome before a host
+/// opens the corresponding target-selection flow.
+enum ObjectBodyReferenceInsertKind { object, databaseView, image, file }
+
 /// Reference-bearing Body blocks intentionally use an explicit typed request
 /// rather than the generic text-block insert menu. This keeps target selection
 /// separate from block chrome and prevents creating half-configured references.
