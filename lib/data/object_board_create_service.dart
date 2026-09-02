@@ -2,6 +2,7 @@ import '../domain/object_group.dart';
 import '../domain/object_model.dart';
 import 'object_board_move_service.dart';
 import 'object_store.dart';
+import 'relation_mutation_service.dart';
 
 class ObjectBoardCreatePlanner {
   const ObjectBoardCreatePlanner({
@@ -50,10 +51,12 @@ class ObjectBoardCreatePlanner {
 class ObjectBoardCreateService {
   ObjectBoardCreateService(
     this._objectStore, {
+    required this.relationMutations,
     this.planner = const ObjectBoardCreatePlanner(),
   });
 
   final ObjectStore _objectStore;
+  final RelationMutationService relationMutations;
   final ObjectBoardCreatePlanner planner;
 
   Future<int> create({
@@ -72,11 +75,19 @@ class ObjectBoardCreateService {
       title: title,
     );
     if (value != null) {
-      await _objectStore.setPropertyValue(
-        objectId: objectId,
-        property: groupProperty,
-        value: value,
-      );
+      if (groupProperty.isRelation) {
+        await relationMutations.setRelation(
+          objectId: objectId,
+          property: groupProperty,
+          targetObjectIds: ObjectRelationValue.fromJson(value).objectIds,
+        );
+      } else {
+        await _objectStore.setPropertyValue(
+          objectId: objectId,
+          property: groupProperty,
+          value: value,
+        );
+      }
     }
     return objectId;
   }
