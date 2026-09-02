@@ -208,4 +208,94 @@ void main() {
 
     expect(await computed.evaluate(object: object, property: formula), isNull);
   });
+
+  test('formula creation rejects invalid syntax and non-numeric references', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final objectStore = ObjectStore(GenericDatabaseStore(database));
+    final computed = ObjectComputedValueStore(objectStore);
+    final typeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: '検証',
+    );
+    final textId = await objectStore.createProperty(
+      objectTypeId: typeId,
+      name: '文字列',
+      type: ObjectPropertyType.text,
+    );
+
+    await expectLater(
+      computed.createFormulaProperty(
+        objectTypeId: typeId,
+        name: '壊れた式',
+        expression: '(1 + 2',
+      ),
+      throwsFormatException,
+    );
+    await expectLater(
+      computed.createFormulaProperty(
+        objectTypeId: typeId,
+        name: '文字列参照',
+        expression: '{$textId} + 1',
+      ),
+      throwsArgumentError,
+    );
+  });
+
+  test('rollup creation rejects unrelated or non-numeric targets', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final objectStore = ObjectStore(GenericDatabaseStore(database));
+    final computed = ObjectComputedValueStore(objectStore);
+    final sourceType = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: '元',
+    );
+    final targetType = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: '先',
+    );
+    final otherType = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: '別',
+    );
+    final relationId = await objectStore.createRelationProperty(
+      objectTypeId: sourceType,
+      name: '関連',
+      targetObjectTypeId: targetType,
+    );
+    final textId = await objectStore.createProperty(
+      objectTypeId: targetType,
+      name: '文字列',
+      type: ObjectPropertyType.text,
+    );
+    final unrelatedNumberId = await objectStore.createProperty(
+      objectTypeId: otherType,
+      name: '数値',
+      type: ObjectPropertyType.number,
+    );
+
+    await expectLater(
+      computed.createRollupProperty(
+        objectTypeId: sourceType,
+        name: '文字列合計',
+        relationPropertyId: relationId,
+        targetPropertyId: textId,
+        aggregation: 'sum',
+      ),
+      throwsArgumentError,
+    );
+    await expectLater(
+      computed.createRollupProperty(
+        objectTypeId: sourceType,
+        name: '別DB合計',
+        relationPropertyId: relationId,
+        targetPropertyId: unrelatedNumberId,
+        aggregation: 'sum',
+      ),
+      throwsArgumentError,
+    );
+  });
 }
