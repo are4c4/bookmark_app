@@ -43,9 +43,10 @@ Pending/queued CI by itself is not a blocker. While CI is pending, continue with
 ## Latest relevant state
 
 - `main` includes the persistent AI handoff workflow and sustained multi-slice execution rules.
-- PR #61 is merged; Value / Object Relation / Computed property semantics are now on `main` (`b4b3845`).
-- Object lane is continuing on `feature/object-promotion-contracts` with reversible Value-to-Object planning, versioned Body blocks, and ObjectType defaults contracts.
-- PR #62 is the current Relation-lane slice for bidirectional Relation pair integrity.
+- PR #61 is merged; Value / Object Relation / Computed property semantics are on `main`.
+- PR #62 is merged; bidirectional Relation pair validation now rejects broken inverse metadata.
+- PR #64 is merged at `3358cb6d`; Object promotion planning, versioned Body blocks, ObjectType defaults, and shared Object detail contracts are on `main`.
+- Relation PR #63 passed Flutter CI but conflicted after #64 advanced `main`; its narrow Relation changes are being replayed from latest `main` on `feature/relation-write-integrity-v2`.
 - Existing generic foundations include Object query/filter/sort, grouping, Board view, Board drag/drop persistence, Formula/Rollup, bidirectional Relations, ObjectType templates, and ObjectType management.
 - Issue #56 remains the shared product/design implementation contract.
 
@@ -73,17 +74,20 @@ Pending/queued CI by itself is not a blocker. While CI is pending, continue with
 ## Next repository-wide actions
 
 - Object lane resumes from `docs/AI_PROGRESS_OBJECT.md` and should continue through multiple safe slices per run.
-- Relation lane resumes from `docs/AI_PROGRESS_RELATION.md` and should continue through multiple safe slices per run.
+- Relation lane resumes from `docs/AI_PROGRESS_RELATION.md`; replace conflicted #63 with the latest-main v2 branch, validate it, then continue bidirectional lifecycle hardening.
 - Planning/design chat continues to refine Issue #56 when material product decisions are made.
 - Integrate validated lane PRs into `main` in reviewable increments without treating each PR creation as the end of a chat run.
 
 ## Validation
 
-Feature runs must record exact Flutter analyze/test results in their lane progress files. PR #61's functional head passed Flutter CI #328 before merge.
+- PR #61 functional head passed Flutter CI before merge.
+- PR #62 passed Flutter CI before merge.
+- PR #63 head `b6cb3888` passed Flutter CI run #349: Drift generation, analyze, and tests all succeeded; merge was blocked only by concurrent `main` advancement.
+- Replacement Relation v2 branch requires fresh CI after replaying onto #64.
 
 ## Known risks
 
-- Parallel work is useful only when file ownership is reasonably separate; otherwise sequence the slices.
+- Parallel work is useful only when file ownership is reasonably separate; otherwise replay narrow lane changes on latest `main` rather than force-merging stale handoff files.
 - GitHub Actions usage limits may affect CI availability; pending CI alone should not stop independent work.
 - Block-editor and migration work can expand quickly; keep individual commits reviewable while allowing several checkpoints per run.
 - Promotion execution and Tag hierarchy work depend on stable Relation APIs; sequence those with the Relation lane rather than duplicating lifecycle logic.
