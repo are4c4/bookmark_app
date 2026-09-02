@@ -2,10 +2,13 @@ import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/bookmark_lifecycle_store.dart';
 import 'package:bookmark_app/data/bookmark_repository.dart';
 import 'package:bookmark_app/data/database_collection_store.dart';
+import 'package:bookmark_app/data/database_view_store.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
 import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
+import 'package:bookmark_app/database/database_definition.dart';
 import 'package:bookmark_app/domain/database_collection_definition.dart';
+import 'package:bookmark_app/domain/object_group.dart';
 import 'package:bookmark_app/domain/object_model.dart';
 import 'package:bookmark_app/domain/object_query.dart';
 import 'package:bookmark_app/views/generic_database_page.dart';
@@ -157,5 +160,88 @@ void main() {
     expect(targetObjects.map((object) => object.title), contains('小樽'));
     expect(await objectStore.listObjects(databaseId), isEmpty);
     expect(find.text('小樽'), findsOneWidget);
+  });
+
+  testWidgets('Board column create presets target ObjectType group Property',
+      (tester) async {
+    final databaseId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: '読書管理',
+    );
+    final bookTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Book',
+    );
+    final statusId = await objectStore.createProperty(
+      objectTypeId: bookTypeId,
+      name: 'Status',
+      type: ObjectPropertyType.select,
+      config: const <String, dynamic>{
+        'options': <String>['未読', '読了'],
+      },
+    );
+    final bookType = (await objectStore.getObjectType(bookTypeId))!;
+    final status = bookType.properties.singleWhere(
+      (property) => property.id == statusId,
+    );
+    final existingId = await objectStore.createObject(
+      objectTypeId: bookTypeId,
+      title: '既存の本',
+    );
+    await objectStore.setPropertyValue(
+      objectId: existingId,
+      property: status,
+      value: '未読',
+    );
+    await collectionStore.write(
+      DatabaseCollectionDefinition(
+        databaseId: databaseId,
+        workspaceId: workspaceId,
+        targetObjectTypeId: bookTypeId,
+      ),
+    );
+
+    final definition = DatabaseDefinition(
+      key: 'custom:$databaseId',
+      label: '読書管理',
+      icon: Icons.table_chart_outlined,
+      properties: <DatabasePropertyDefinition>[
+        DatabasePropertyDefinition(
+          key: 'p:$statusId',
+          label: 'Status',
+          type: DatabasePropertyType.select,
+          icon: Icons.flag_outlined,
+        ),
+      ],
+      defaultLayout: 'table',
+      supportedLayouts: const <String>['gallery', 'list', 'table', 'board'],
+    );
+    await DatabaseViewStore(database).createView(
+      workspaceId: workspaceId,
+      definition: definition,
+      name: 'Board',
+      layoutType: 'board',
+      settings: <String, dynamic>{
+        'groupRule': ObjectGroupRule(propertyId: statusId).toJson(),
+      },
+    );
+
+    await pumpPage(tester, databaseId);
+    expect(find.text('未読'), findsOneWidget);
+    await tester.tap(find.text('新規Object').first);
+    await tester.pumpAndSettle();
+    final titleField = find.byWidgetPredicate(
+      (widget) =>
+          widget is TextField && widget.decoration?.labelText == '名前',
+    );
+    expect(titleField, findsOneWidget);
+    await tester.enterText(titleField, '数論講義');
+    await tester.tap(find.text('作成'));
+    await tester.pumpAndSettle();
+
+    final created = (await objectStore.listObjects(bookTypeId))
+        .singleWhere((object) => object.title == '数論講義');
+    expect(created.values[statusId], '未読');
+    expect(await objectStore.listObjects(databaseId), isEmpty);
   });
 }
