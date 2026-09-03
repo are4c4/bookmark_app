@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../data/bidirectional_relation_store.dart';
+import '../data/daily_note_detail_navigation_service.dart';
+import '../data/daily_note_navigation_service.dart';
 import '../data/daily_note_service.dart';
 import '../data/generic_database_store.dart';
 import '../data/object_body_block_action_controller.dart';
@@ -26,6 +28,7 @@ import '../domain/object_body_block_identity.dart';
 import '../domain/object_detail_content.dart';
 import '../domain/object_detail_property_presentation.dart';
 import '../domain/object_model.dart';
+import '../features/object/presentation/widgets/daily_note_navigation_bar.dart';
 import '../features/object/presentation/widgets/object_body_block_action_bar.dart';
 import '../features/object/presentation/widgets/object_body_document_view.dart';
 import '../features/object/presentation/widgets/object_body_insert_menu_button.dart';
@@ -58,9 +61,29 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
     backlinks: <ResolvedRelationBacklink>[],
   );
   final Set<int> _promotingWeblinkPropertyIds = <int>{};
+  String? _systemKey;
   bool _loading = true;
+  bool _dailyNoteNavigating = false;
 
   ObjectBodyStore get _bodyStore => ObjectBodyStore(widget.store);
+
+  SystemObjectStore get _systemObjects => SystemObjectStore(
+        database: widget.store.database,
+        objectStore: widget.objectStore,
+      );
+
+  DailyNoteService get _dailyNotes => DailyNoteService(
+        genericStore: widget.store,
+        objectStore: widget.objectStore,
+        systemObjects: _systemObjects,
+        defaultsStore: ObjectTypeDefaultsStore(widget.store),
+      );
+
+  DailyNoteDetailNavigationService get _dailyNoteNavigation =>
+      DailyNoteDetailNavigationService(
+        navigation: DailyNoteNavigationService(_dailyNotes),
+        detailLoader: _contentLoader,
+      );
 
   ObjectBodyBlockEditService get _bodyBlockEdits =>
       ObjectBodyBlockEditService(bodyStore: _bodyStore);
@@ -95,10 +118,7 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
   WeblinkValuePromotionService get _weblinkPromotions =>
       WeblinkValuePromotionService(
         weblinks: WeblinkObjectService(
-          systemObjects: SystemObjectStore(
-            database: widget.store.database,
-            objectStore: widget.objectStore,
-          ),
+          systemObjects: _systemObjects,
           defaultsStore: ObjectTypeDefaultsStore(widget.store),
         ),
         executor: ObjectValuePromotionExecutionService(
@@ -106,6 +126,8 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
           relationMutations: _relationMutations,
         ),
       );
+
+  bool get _isDailyNote => _systemKey == DailyNoteService.systemKey;
 
   @override
   void initState() {
@@ -131,6 +153,7 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
       return;
     }
 
+    final systemKey = await _systemObjects.systemKeyForObjectType(node.objectTypeId);
     final relations = await RelationReadService(widget.objectStore).neighborhood(
       workspaceId: content.objectType.workspaceId,
       objectTypeId: node.objectTypeId,
@@ -141,6 +164,7 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
     setState(() {
       _node = node;
       _content = content;
+      _systemKey = systemKey;
       _relations = relations;
       _loading = false;
     });
@@ -158,22 +182,51 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
     );
   }
 
-  Future<void> _openToday(ObjectDetailContent content) async {
-    final service = DailyNoteService(
-      genericStore: widget.store,
-      objectStore: widget.objectStore,
-      systemObjects: SystemObjectStore(
-        database: widget.store.database,
-        objectStore: widget.objectStore,
-      ),
-      defaultsStore: ObjectTypeDefaultsStore(widget.store),
-    );
-    final note = await service.openOrCreate(
-      workspaceId: content.objectType.workspaceId,
-    );
-    if (!mounted || note.id == widget.objectId) return;
-    await _openObject(note.id);
+  Future<void> _navigateDailyNote(
+    Future<ObjectDetailContent> Function(DailyNoteDetailNavigationService service)
+        open,
+  ) async {
+    if (_dailyNoteNavigating) return;
+    setState(() => _dailyNoteNavigating = true);
+    try {
+      final target = await open(_dailyNoteNavigation);
+      if (!mounted || target.object.id == widget.objectId) return;
+      await _openObject(target.object.id);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Daily Noteを開けませんでした: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _dailyNoteNavigating = false);
+    }
   }
+
+  Future<void> _openToday(ObjectDetailContent content) => _navigateDailyNote(
+        (service) => service.openToday(
+          workspaceId: content.objectType.workspaceId,
+        ),
+      );
+
+  DateTime? _dailyNoteDate(ObjectDetailContent content) {
+    for (final property in content.objectType.properties) {
+      if (property.name != 'Date' || property.type != ObjectPropertyType.date) {
+        continue;
+      }
+      final value = content.object.valueFor(property.id);
+      if (value is DateTime) {
+        return DateTime(value.year, value.month, value.day);
+      }
+      final parsed = DateTime.tryParse('${value ?? ''}');
+      if (parsed != null) {
+        return DateTime(parsed.year, parsed.month, parsed.day);
+      }
+    }
+    return null;
+  }
+
+  bool _canEditBody(ObjectGraphNodeRecord node) =>
+      !node.isSystemType || _isDailyNote;
 
   void _applyBodyDocument(ObjectBodyDocument document) {
     final current = _content;
@@ -475,6 +528,8 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
     }
     final object = content.object;
     final type = content.objectType;
+    final dailyNoteDate = _isDailyNote ? _dailyNoteDate(content) : null;
+    final canEditBody = _canEditBody(node);
 
     return Scaffold(
       appBar: AppBar(
@@ -493,7 +548,7 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
         actions: [
           IconButton(
             tooltip: '今日のノート',
-            onPressed: () => _openToday(content),
+            onPressed: _dailyNoteNavigating ? null : () => _openToday(content),
             icon: const Icon(Icons.today_outlined),
           ),
         ],
@@ -521,6 +576,26 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
                 ),
             ],
           ),
+          if (dailyNoteDate != null) ...[
+            const SizedBox(height: 12),
+            DailyNoteNavigationBar(
+              currentDate: dailyNoteDate,
+              enabled: !_dailyNoteNavigating,
+              onPrevious: () => _navigateDailyNote(
+                (service) => service.openPrevious(
+                  workspaceId: content.objectType.workspaceId,
+                  currentDate: dailyNoteDate,
+                ),
+              ),
+              onToday: () => _openToday(content),
+              onNext: () => _navigateDailyNote(
+                (service) => service.openNext(
+                  workspaceId: content.objectType.workspaceId,
+                  currentDate: dailyNoteDate,
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 24),
           ...type.properties.map((property) {
             final presentation = _propertyPresenter.present(
@@ -581,19 +656,18 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
           const SizedBox(height: 8),
           ObjectBodyDocumentView(
             document: content.body,
-            onTextChanged: node.isSystemType
-                ? null
-                : (block, text) => _editBodyText(block, text),
-            onChecklistChanged: node.isSystemType
-                ? null
-                : (block, checked) => _toggleChecklist(block, checked),
+            onTextChanged: canEditBody
+                ? (block, text) => _editBodyText(block, text)
+                : null,
+            onChecklistChanged: canEditBody
+                ? (block, checked) => _toggleChecklist(block, checked)
+                : null,
             onObjectReferenceTap: (block) {
               final targetId = block.referencedObjectId;
               if (targetId != null) _openObject(targetId);
             },
-            blockActionsBuilder: node.isSystemType
-                ? null
-                : (context, block, position) => ObjectBodyBlockActionBar(
+            blockActionsBuilder: canEditBody
+                ? (context, block, position) => ObjectBodyBlockActionBar(
                       block: block,
                       position: position,
                       onMoveUp: () => _moveBodyBlockUp(block),
@@ -604,8 +678,9 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
                         kind,
                         afterBlockId: block.id,
                       ),
-                    ),
-            emptyBuilder: (context) => node.isSystemType
+                    )
+                : null,
+            emptyBuilder: (context) => !canEditBody
                 ? Text(
                     'Bodyは空です',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
