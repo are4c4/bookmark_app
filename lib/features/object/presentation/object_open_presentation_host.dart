@@ -19,6 +19,7 @@ class ObjectOpenPresentationHost {
     switch (mode) {
       case ObjectOpenMode.sidePeek:
         onSidePeek();
+        return;
       case ObjectOpenMode.centerPeek:
         await showDialog<void>(
           context: context,
@@ -37,10 +38,12 @@ class ObjectOpenPresentationHost {
             ),
           ),
         );
+        return;
       case ObjectOpenMode.fullPage:
         await Navigator.of(context).push<void>(
           MaterialPageRoute<void>(builder: detailBuilder),
         );
+        return;
     }
   }
 }
