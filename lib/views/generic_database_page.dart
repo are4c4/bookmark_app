@@ -1475,6 +1475,12 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                 ),
                 const Spacer(),
                 IconButton(
+                  key: ValueKey('side-peek-open-full-page-${record.id}'),
+                  tooltip: 'フルページで開く',
+                  icon: const Icon(Icons.open_in_full, size: 18),
+                  onPressed: () => _openObject(record.id),
+                ),
+                IconButton(
                   tooltip: '削除',
                   icon: const Icon(Icons.delete_outline, size: 18),
                   onPressed: () async {
