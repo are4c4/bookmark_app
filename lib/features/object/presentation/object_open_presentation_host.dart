@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../data/database_view_store.dart';
+import '../../../data/object_open_presentation_service.dart';
 import '../../../domain/object_type_defaults.dart';
 
 /// Presents shared Object detail content according to the resolved opening mode.
@@ -9,6 +11,37 @@ import '../../../domain/object_type_defaults.dart';
 /// modal/page routing logic.
 class ObjectOpenPresentationHost {
   const ObjectOpenPresentationHost();
+
+  /// Resolves the canonical opening mode and immediately presents the Object.
+  ///
+  /// Real Database/View hosts can call this entry point without reimplementing
+  /// the `View > Database > ObjectType > app` precedence before delegating to
+  /// [open]. The resolved mode is returned to make host-level regression tests
+  /// and telemetry straightforward without coupling them to navigation internals.
+  Future<ObjectOpenMode> openResolved({
+    required BuildContext context,
+    required ObjectOpenPresentationService resolver,
+    required DatabaseViewConfig view,
+    required int objectTypeId,
+    required VoidCallback onSidePeek,
+    required WidgetBuilder detailBuilder,
+    ObjectOpenMode? databaseOverride,
+    ObjectOpenMode appFallback = ObjectOpenMode.sidePeek,
+  }) async {
+    final mode = await resolver.resolve(
+      view: view,
+      objectTypeId: objectTypeId,
+      databaseOverride: databaseOverride,
+      appFallback: appFallback,
+    );
+    await open(
+      context: context,
+      mode: mode,
+      onSidePeek: onSidePeek,
+      detailBuilder: detailBuilder,
+    );
+    return mode;
+  }
 
   Future<void> open({
     required BuildContext context,
