@@ -88,8 +88,14 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('北海道'), findsOneWidget);
-    expect(find.text('読書中'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('body-database-view-reference-20-view-201')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('body-database-view-reference-10-view-101')),
+      findsNothing,
+    );
     await tester.tap(find.text('キャンセル'));
     await tester.pumpAndSettle();
     expect(selected, isNull);
