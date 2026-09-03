@@ -112,8 +112,15 @@ void main() {
 
     expect(find.byType(ObjectDetailPropertyView), findsOneWidget);
     expect(find.text('Author'), findsWidgets);
-    expect(find.text('Canonical Author'), findsOneWidget);
-    expect(find.byType(ActionChip), findsOneWidget);
+    final relationChip = find.byType(ActionChip);
+    expect(relationChip, findsOneWidget);
+    expect(
+      find.descendant(
+        of: relationChip,
+        matching: find.text('Canonical Author'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('$authorId'), findsNothing);
   });
 }
