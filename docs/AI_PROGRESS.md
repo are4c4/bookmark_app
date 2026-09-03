@@ -13,7 +13,7 @@ Product direction: **Capacities-like Object-centric data model + Notion-like Dat
 ## Current implementation position
 The generic Object/Relation foundations are substantially wired into real user-facing hosts. `GenericDatabasePage` consumes collection-aware services and canonical Relation editing; `ObjectInspectorPage` consumes shared Property presentation, rich Body editing/actions, Daily Note navigation, and explicit Object plus Database/View Body references.
 
-Milestone A/B real-host behavior is broadly integrated and regression-covered. Contextual Object opening is now also wired end-to-end: Gallery/List/Table/Board record selection resolves persisted opening behavior through the canonical `View > Database > ObjectType > app` precedence and presents side peek / center peek / full page through the shared opening host. Full-page return preserves the originating active View and its override.
+Milestone A/B real-host behavior is broadly integrated and regression-covered. Contextual Object opening is wired end-to-end: Gallery/List/Table/Board record selection resolves persisted opening behavior through canonical `View > Database > ObjectType > app` precedence and presents side peek / center peek / full page. Full-page return preserves the originating active View and its override. PR #138 now also provides explicit side-peek → full-page promotion while preserving the same Database/View context.
 
 ## Integrated Object / database foundations on `main`
 - Object/ObjectType/Property semantics, defaults, Formula/Rollup, canonical Relations, Database collection semantics, Gallery/List/Table/Board, and Multi-View management are integrated.
@@ -26,6 +26,7 @@ Milestone A/B real-host behavior is broadly integrated and regression-covered. C
 - #134 locks existing real side-peek behavior before routing changes.
 - #135 passed Flutter CI #676 and squash-merged as `ae974e2cb962a346971ecd062488e23a044ae3dd`, routing Gallery/List/Table/Board Object selection through canonical side/center/full opening behavior.
 - #136 passed Flutter CI #678 and squash-merged as `fe177885dd1ac7b759029d3786790322c4d22eea`, proving full-page navigation returns to the originating active View and retains its View-specific opening override.
+- #138 passed Flutter CI #684 and squash-merged as `9b67b5deca256e45de136b7bc0568a6165dcf6d2`, adding explicit side-peek → full-page promotion through the shared `ObjectInspectorPage` route while preserving contextual Database/View state.
 
 ## Integrated Relation foundations on `main`
 Canonical Relation validation/mutation/read/index lifecycle, backlinks, bidirectional integrity, target/source validation, integrity audit/reconciliation, safe deletion, picker diagnostics, and real-host Relation regression coverage are integrated through #109/#114. `GenericDatabasePage` Relation writes go through the canonical Object-owned editor/mutation facade.
@@ -52,21 +53,23 @@ Core real-host collection loading, creation, Board grouped creation, collection 
 Duplicate-current, blank creation, rename/delete/reorder/overflow, creation behavior, and View-context preservation through Object navigation are verified in the real Database host. Remaining work is active-use polish.
 
 ### Milestone C — Object Knowledge System
-Shared detail, Weblink/Image flows, Value promotion, Daily Notes, Relation context, opening-mode persistence/resolution, and real side/center/full Object opening are integrated. Remaining opening work is explicit side-peek → full-page promotion and incremental convergence of the legacy side-pane detail content with the shared inspector.
+Shared detail, Weblink/Image flows, Value promotion, Daily Notes, Relation context, opening-mode persistence/resolution, real side/center/full Object opening, and explicit side-peek → full-page promotion are integrated. The primary remaining opening/detail work is incremental convergence of the legacy side-pane detail content with the shared inspector implementation.
 
 ### Milestone D — Document / Knowledge Layer
 Rich Body persistence/editing/actions and explicit Object/Database/View reference insertion are integrated in the real inspector. Later work includes asset selectors, richer embedded content, RichText/Document Property, and higher-level time-based compositions driven by real usage.
 
 ## Next repository-wide actions
-1. Add explicit side-peek → full-page promotion using the existing opening host and shared `ObjectInspectorPage` while preserving Database/View context.
-2. Add real-host regression coverage for that promotion and return path.
-3. Incrementally converge the legacy side-pane `_detail(...)` content toward shared Object detail content without a broad `GenericDatabasePage` rewrite.
+1. Merge PR #139 after green CI to lock that promoted full-page edits refresh the same global Object back into the originating side pane.
+2. Incrementally converge the legacy side-pane `_detail(...)` content toward shared Object detail content without a broad `GenericDatabasePage` rewrite.
+3. Preserve contextual pane sizing/close/delete behavior and canonical Relation/rich Body safety while converging shared title/Property/detail behavior.
 4. Begin active use of Milestone A/B flows and prioritize concrete regressions/polish.
 5. Add Image/File Body selectors only when concrete reusable asset pickers exist.
 6. Implement `RichText/Document Property` only after navigation/detail convergence stabilizes because of broad enum/query/group/Board/detail impact.
 7. Keep manual include/exclude deferred until dynamic collection + Multi-View behavior is proven in active use.
 
 ## Validation status
+- #138 Flutter CI #684: success; squash merge `9b67b5deca256e45de136b7bc0568a6165dcf6d2`.
+- #139 Flutter CI #686: queued at latest handoff update on head `8dc78f8a4d367519e6b5209ac6cade6892cc988f`.
 - #135 Flutter CI #676: success; squash merge `ae974e2cb962a346971ecd062488e23a044ae3dd`.
 - #136 Flutter CI #678: success; squash merge `fe177885dd1ac7b759029d3786790322c4d22eea`.
 - Earlier merged Object and Relation slices passed their relevant CI as recorded in lane handoffs.
