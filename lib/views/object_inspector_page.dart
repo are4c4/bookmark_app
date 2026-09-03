@@ -167,7 +167,7 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
     final relations = await RelationReadService(widget.objectStore).neighborhood(
       workspaceId: content.objectType.workspaceId,
       objectTypeId: node.objectTypeId,
-      objectId: node.objectId,
+      objectId: node.object.id,
     );
 
     if (!mounted) return;
@@ -803,7 +803,7 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
                       ),
                       ObjectBodyReferenceInsertMenuButton(
                         key: const ValueKey('body-empty-reference-insert'),
-                        kinds: _supportedReferenceKinds,
+                        allowedKinds: _supportedReferenceKinds,
                         onSelected: _insertBodyReference,
                       ),
                     ],
