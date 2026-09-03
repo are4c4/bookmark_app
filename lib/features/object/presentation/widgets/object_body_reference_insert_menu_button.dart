@@ -9,10 +9,12 @@ class ObjectBodyReferenceInsertMenuButton extends StatelessWidget {
     super.key,
     required this.onSelected,
     this.tooltip = '参照を追加',
+    this.allowedKinds = ObjectBodyReferenceInsertKind.values,
   });
 
   final ValueChanged<ObjectBodyReferenceInsertKind> onSelected;
   final String tooltip;
+  final List<ObjectBodyReferenceInsertKind> allowedKinds;
 
   @override
   Widget build(BuildContext context) {
@@ -20,7 +22,7 @@ class ObjectBodyReferenceInsertMenuButton extends StatelessWidget {
       tooltip: tooltip,
       onSelected: onSelected,
       itemBuilder: (context) => [
-        for (final kind in ObjectBodyReferenceInsertKind.values)
+        for (final kind in allowedKinds)
           PopupMenuItem(
             value: kind,
             child: Text(labelFor(kind)),
