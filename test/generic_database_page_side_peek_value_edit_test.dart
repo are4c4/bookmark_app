@@ -7,6 +7,7 @@ import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/database/database_definition.dart';
 import 'package:bookmark_app/domain/object_model.dart';
+import 'package:bookmark_app/features/object/presentation/widgets/object_detail_property_view.dart';
 import 'package:bookmark_app/views/generic_database_page.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
@@ -93,6 +94,7 @@ void main() {
     await tester.tap(find.text('Side edit target').first);
     await tester.pumpAndSettle();
     expect(find.text('詳細'), findsOneWidget);
+    expect(find.byType(ObjectDetailPropertyView), findsOneWidget);
     expect(find.text('old note'), findsWidgets);
 
     await tester.tap(find.text('old note').last);
