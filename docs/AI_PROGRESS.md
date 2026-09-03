@@ -13,7 +13,7 @@ Product direction: **Capacities-like Object-centric data model + Notion-like Dat
 ## Current implementation position
 The generic Object/Relation foundations are substantially wired into real user-facing hosts. `GenericDatabasePage` consumes collection-aware services and the canonical Relation editor. `ObjectInspectorPage` consumes shared Property presentation, rich Body rendering/editing/actions, Daily Note navigation, and explicit Object plus Database/View Body-reference insertion.
 
-Milestone A/B real-host behavior is broadly integrated and regression-covered. The highest-value remaining work is contextual Object opening: consume persisted `View > Database > ObjectType > app` opening-mode resolution in real Database/View navigation for side peek / center peek / full page while reusing shared detail content.
+Milestone A/B real-host behavior is broadly integrated and regression-covered. Milestone C opening-mode persistence/resolution plus the concrete side/center/full-page presentation host are now on `main` through #131. The remaining high-value navigation step is making real Database/View record/card selection call that canonical opening path.
 
 ## Integrated Object / database foundations on `main`
 - Object/ObjectType/Property semantics, defaults, Formula/Rollup, canonical Relations, Database collection semantics, Gallery/List/Table/Board, and Multi-View management are integrated.
@@ -21,17 +21,17 @@ Milestone A/B real-host behavior is broadly integrated and regression-covered. T
 - #112/#113/#115 integrate shared Property/Body rendering and Body actions in the real Object inspector.
 - #117 integrates real Daily Note navigation and editable Daily Note Body.
 - #120/#121/#124/#125/#126/#128 establish explicit Object and Database/View Body-reference target selection and candidate loading.
-- #127 verifies real View rename/delete/reorder/overflow without Object duplication/deletion.
-- #130 passed Flutter CI #657 and squash-merged as `0e0ea6e628d238f7861adc06a3ff730ed001f396`, completing real Database/View Body-reference insertion after an anchor and into an empty Body.
+- #127/#122 verify real Multi-View management and creation behavior without Object duplication/deletion.
+- #130 completes real Database/View Body-reference insertion after an anchor and into an empty Body.
+- #131 passed Flutter CI #663 and squash-merged as `da8c2906b6eda363db5906a8f1d61c93fd567f1b`, adding the shared Object opening presentation host and canonical opening resolver composition.
 
 PR #83 remains closed/unmerged. PR #110 was closed redundant. PR #129 was closed as a stacked ancestry artifact and superseded by #130.
 
 ## Active Object integration
-- PR #131 — `Add shared Object opening presentation host`.
-- Adds concrete Flutter presentation behavior for already-resolved opening modes: side peek delegates to contextual pane state, center peek uses a modal, and full page uses Navigator routing while center/full-page share one detail builder.
-- `GenericDatabasePageServices` now assembles and exposes canonical `ObjectOpenPresentationService`, reducing the upcoming large-page patch to mode resolution plus presentation delegation.
-- Widget/in-memory regressions cover presentation behavior and View-override/ObjectType-default resolution.
-- Latest functional head before handoff: `df93163ac1570521efe97612fc68d979be8f5524`; Flutter CI #661 pending at the recorded checkpoint.
+- PR #132 — `Resolve and present Object opening in one host call`.
+- Adds `ObjectOpenPresentationHost.openResolved(...)`, which delegates `View > Database > ObjectType > app` precedence to `ObjectOpenPresentationService` and immediately presents side/center/full behavior through the existing host.
+- The goal is to keep the eventual large `GenericDatabasePage` patch to one canonical opening call instead of duplicating precedence/routing logic.
+- Functional head before the handoff update: `95f7d6851a8191d1698938e23bfb245e31afb6ec`; Flutter CI #665 running at that checkpoint.
 
 ## Integrated Relation foundations on `main`
 Canonical Relation validation/mutation/read/index lifecycle, backlinks, bidirectional integrity, target/source validation, integrity audit/reconciliation, safe deletion, picker diagnostics, and real-host Relation regression coverage are integrated through #109/#114. `GenericDatabasePage` Relation writes go through the canonical Object-owned editor/mutation facade.
@@ -55,26 +55,29 @@ Canonical Relation validation/mutation/read/index lifecycle, backlinks, bidirect
 Core real-host collection loading, creation, Board grouped creation, collection settings, canonical Relation editing, and lifecycle safety are integrated. Remaining work is active-use polish.
 
 ### Milestone B — Multi-View Database UX
-Duplicate-current, blank creation, rename/delete/reorder/overflow are verified through the real Database host. Remaining work is active-use polish.
+Duplicate-current, blank creation, rename/delete/reorder/overflow, and creation behavior are verified through the real Database host. Remaining work is active-use polish.
 
 ### Milestone C — Object Knowledge System
-Shared detail, Weblink/Image flows, Value promotion, Daily Notes, Relation context, and opening-mode persistence/resolution exist. Remaining priority is real side/center/full-page opening behavior.
+Shared detail, Weblink/Image flows, Value promotion, Daily Notes, Relation context, opening-mode persistence/resolution, and concrete side/center/full presentation exist. Remaining priority is wiring real Database/View selection to that host.
 
 ### Milestone D — Document / Knowledge Layer
 Rich Body persistence/editing/actions and explicit Object/Database/View reference insertion are integrated in the real inspector. Later work includes asset selectors, richer embedded content, RichText/Document Property, and higher-level time-based compositions driven by real usage.
 
 ## Next repository-wide actions
-1. Finish PR #131 CI/merge, repairing any branch-caused failure.
-2. Make a focused `GenericDatabasePage` patch that resolves opening mode through `services.openPresentation` and delegates to the new presentation host.
-3. Add real-host tests for side/center/full-page selection and View override precedence while preserving Database/View context.
-4. Begin active use of Milestone A/B flows and prioritize concrete regressions/polish.
-5. Add Image/File Body selectors only when concrete reusable asset pickers exist.
-6. Implement `RichText/Document Property` only after navigation stabilizes because of broad enum/query/group/Board/detail impact.
-7. Keep manual include/exclude deferred until dynamic collection + Multi-View behavior is proven in active use.
+1. Finish PR #132 CI/merge, repairing any branch-caused failure.
+2. Make a tightly controlled `GenericDatabasePage` patch that sends Gallery/List/Table/Board Object selection through one canonical opening method using `ObjectOpenPresentationHost.openResolved(...)`.
+3. Preserve current right-hand `ResizableDetailPane` for side peek and reuse `ObjectInspectorPage` for center/full page.
+4. Add real-host tests for side/center/full-page selection and View override precedence while preserving Database/View context.
+5. Begin active use of Milestone A/B flows and prioritize concrete regressions/polish.
+6. Add Image/File Body selectors only when concrete reusable asset pickers exist.
+7. Implement `RichText/Document Property` only after navigation stabilizes because of broad enum/query/group/Board/detail impact.
+8. Keep manual include/exclude deferred until dynamic collection + Multi-View behavior is proven in active use.
 
 ## Validation status
-- #130 latest head passed Flutter CI #657 before squash merge `0e0ea6e628d238f7861adc06a3ff730ed001f396`.
-- #131 functional head `df93163ac1570521efe97612fc68d979be8f5524`: Flutter CI #661 pending at the recorded checkpoint.
+- #124 Flutter CI #640: success; merged.
+- #130 Flutter CI #657: success; squash merge `0e0ea6e628d238f7861adc06a3ff730ed001f396`.
+- #131 Flutter CI #663: success; squash merge `da8c2906b6eda363db5906a8f1d61c93fd567f1b`.
+- #132 functional head `95f7d6851a8191d1698938e23bfb245e31afb6ec`: Flutter CI #665 running at the recorded checkpoint.
 - Earlier merged Object and Relation slices passed their relevant CI as recorded in lane handoffs.
 
 ## Known risks / sequencing constraints
