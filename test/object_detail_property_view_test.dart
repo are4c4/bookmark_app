@@ -54,6 +54,27 @@ void main() {
     expect(find.text('secret'), findsNothing);
   });
 
+  testWidgets('hidden Properties suppress host chrome and interaction',
+      (tester) async {
+    var taps = 0;
+    await tester.pumpWidget(host(
+      const ObjectDetailPropertyPresentation(
+        property: textProperty,
+        value: 'secret',
+        displayText: 'secret',
+        isHidden: true,
+      ),
+      leading: const Icon(Icons.drag_indicator),
+      trailing: const Icon(Icons.edit_outlined),
+      onTap: () => taps += 1,
+    ));
+
+    expect(find.byIcon(Icons.drag_indicator), findsNothing);
+    expect(find.byIcon(Icons.edit_outlined), findsNothing);
+    expect(find.byType(InkWell), findsNothing);
+    expect(taps, 0);
+  });
+
   testWidgets('uses caller supplied canonical Relation renderer', (tester) async {
     const relationProperty = ObjectPropertyDefinition(
       id: 2,
