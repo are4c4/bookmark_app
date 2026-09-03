@@ -9,70 +9,63 @@ Object/ObjectType architecture, Property value semantics, Object-centric Databas
 `#56` — Integrate generic Object database UX toward Notion/Capacities workflow.
 
 ## Current integration state
-The Object lane is in real-host completion. `main` includes the major Database/Object-detail/Body/Daily Note integrations, real Multi-View management verification, real Object + Database/View Body-reference insertion, and the shared contextual Object opening presentation host through PR #131.
+The Object lane is now past the main real-host Database/View opening integration. `main` contains collection-aware `GenericDatabasePage`, canonical Relation editing, shared Object Property/Body inspector content, Body actions and Object/Database/View references, Daily Note navigation, Multi-View management, and persisted Object opening modes.
 
-Key real-host milestones on `main` include #111 GenericDatabasePage collection-aware integration, #112/#113 shared Object Property/Body inspector integration, #115 Body actions, #117 Daily Note navigation, #120/#121/#124 Object Body references, #127 Multi-View management verification, #128/#130 Database/View Body references, and #131 the side/center/full-page presentation host plus canonical opening resolver composition.
+PR #135 completes the key navigation path: Gallery/List/Table/Board Object selection in the real `GenericDatabasePage` now routes through `ObjectOpenPresentationHost.openResolved(...)`, so `View > Database > ObjectType > app` opening precedence is canonical. `sidePeek` preserves the contextual right-hand pane; `centerPeek` and `fullPage` reuse `ObjectInspectorPage` and reload the Database after returning.
 
-The current production priority remains contextual Object opening: make real `GenericDatabasePage` record/card selection consume persisted opening-mode resolution for side peek / center peek / full page while reusing `ObjectInspectorPage` detail content.
+PR #136 adds real-host coverage proving a View-specific `fullPage` mode survives navigation away and back: the originating active View remains selected and its opening override still applies when the Object is reopened.
 
 ## Active branch / PR
-- Branch: `feature/object-open-presentation-resolved-host`
-- PR: #132 — `Resolve and present Object opening in one host call`
-- Latest functional head before this handoff update: `95f7d6851a8191d1698938e23bfb245e31afb6ec`
-- Flutter CI #665 is running on that functional head at this checkpoint.
+- No active implementation PR after #135 and #136 were merged.
+- Latest integrated main checkpoint: `fe177885dd1ac7b759029d3786790322c4d22eea` (#136 squash merge).
 
-## Checkpoints completed in this run
-1. **Confirmed and integrated Object-reference host work**
-   - PR #124 had already completed Flutter CI #640 successfully and was merged before this run resumed.
-   - Real `ObjectInspectorPage` now persists explicit Object Body references through the typed latest-read controller path.
-   - Subsequent #130 is also merged, so the real inspector supports Database/View Body references as well.
+## Checkpoints completed in the latest run
+1. **Completed real Database/View opening integration**
+   - PR #135 routed Gallery/List/Table/Board Object selection through one `_openDatabaseObject(...)` method.
+   - The method delegates persisted opening-mode resolution to `ObjectOpenPresentationHost.openResolved(...)`.
+   - Side peek remains contextual; center/full use the shared `ObjectInspectorPage` detail implementation.
+   - Production diff was limited to opening imports/host/method plus the four layout selection callbacks; no Relation/schema/migration changes.
 
-2. **Validated and merged shared Object opening presentation host**
-   - PR #131 latest head `19e8c838e02310500a68d74743d7c1ad0920c9ce` passed Flutter CI #663.
-   - Squash-merged as `da8c2906b6eda363db5906a8f1d61c93fd567f1b`.
-   - `ObjectOpenPresentationHost` maps resolved `sidePeek` to contextual pane state, `centerPeek` to a modal dialog, and `fullPage` to Navigator routing while sharing one detail builder.
-   - `GenericDatabasePageServices` exposes canonical `ObjectOpenPresentationService` resolution.
+2. **Expanded real-host opening regressions across layouts**
+   - ObjectType `centerPeek` default is exercised from the real page.
+   - View `fullPage` override winning over ObjectType `centerPeek` is exercised from the real page.
+   - Table and Board Object entry points are explicitly covered in addition to Gallery/List behavior.
+   - PR #135 head `76000b31cad1f4b7b1f566f9b05dbb069919f1f6` passed Flutter CI #676 and squash-merged as `ae974e2cb962a346971ecd062488e23a044ae3dd`.
 
-3. **Reduced the remaining real-host patch surface**
-   - PR #132 adds `ObjectOpenPresentationHost.openResolved(...)`.
-   - The method delegates mode resolution to `ObjectOpenPresentationService`, then immediately presents the result through the existing host.
-   - It returns the resolved `ObjectOpenMode` for host-level regressions/diagnostics.
-   - This prevents the large real Database page from reimplementing `View > Database > ObjectType > app` precedence.
-
-4. **Added resolved-presentation regression coverage**
-   - Existing side/center/full presentation tests remain.
-   - New coverage proves a View `fullPage` override wins over an ObjectType `centerPeek` default and routes shared detail as a full page.
+3. **Locked originating View context across full-page navigation**
+   - PR #136 uses two real Views so accidental fallback to the first View is observable.
+   - After opening an Object through a `fullPage` View override, returning, and reopening the Object, the same View override still wins.
+   - PR #136 head `4a692829473be486c9871cbe9a0be63e110d747e` passed Flutter CI #678 and squash-merged as `fe177885dd1ac7b759029d3786790322c4d22eea`.
 
 ## Exact next actions
-1. Inspect PR #132 latest-head CI; fix branch-caused failures and merge when green/mergeable.
-2. On latest `main`, make a tightly controlled `GenericDatabasePage` patch that calls `ObjectOpenPresentationHost.openResolved(...)` from real record/card selection.
-3. Preserve current `_selectedRecordId` + `ResizableDetailPane` behavior for `sidePeek`; use shared `ObjectInspectorPage` for center/full page.
-4. Route Gallery/List/Table/Board selection through one page method so all layouts obey the same persisted open mode.
-5. Add real-host tests covering at least side peek, a View full-page override, and center peek/ObjectType fallback; extend across layouts where practical without duplicating test setup.
-6. After contextual opening lands, prioritize active-use regressions/polish before broader model expansion.
-7. Keep Image/File Body reference actions hidden until concrete selectors exist; keep manual include/exclude deferred.
-8. Implement `RichText/Document Property` only after navigation is stable because of its broad enum/query/group/Board/detail impact.
+1. Add an explicit **side peek → full page** promotion action, as required by Issue #56, reusing the existing `ObjectOpenPresentationHost` and `ObjectInspectorPage` rather than inventing another navigation path.
+2. Add a real-host regression proving promotion opens the same global Object and returning preserves the active Database/View context.
+3. Incrementally converge the legacy side-pane `_detail(...)` implementation toward the shared Object detail content. Avoid a broad rewrite: preserve contextual pane sizing/close behavior while removing duplicated Property/detail logic in reviewable slices.
+4. Begin active-use polish on Milestone A/B flows once contextual opening is complete; prioritize observed regressions over new abstractions.
+5. Keep Image/File Body-reference actions hidden until concrete reusable asset selectors exist.
+6. Implement `RichText/Document Property` only after navigation/detail convergence is stable because it affects exhaustive Property/query/group/Board/detail paths.
+7. Keep manual include/exclude membership deferred until dynamic collection + Multi-View behavior is proven in real use.
 
 ## Cross-lane boundaries
 - Relation lifecycle, bidirectional integrity, source/target validation, backlink/index repair, stale metadata handling, and Tag hierarchy mutation remain Relation-owned.
 - User-facing Relation Property writes must continue through canonical Relation mutation/editor APIs.
 - Body Object/Database/View references remain document references, not Relation Property writes.
-- GenericDatabasePage, Object detail/navigation, Body editing/reference insertion, Daily Notes, and multi-View UX remain Object-owned.
-- No active Relation dependency blocks the current opening-mode work.
+- `GenericDatabasePage`, Object detail/navigation, Body editing/reference insertion, Daily Notes, and Multi-View UX remain Object-owned.
+- No active Relation dependency blocks the current opening/detail work.
 
 ## Risks / blockers
 - No product/design blocker is active.
-- `GenericDatabasePage` remains a large hotspot. This connector replaces existing files as whole files; the actual host wiring must therefore be a narrowly controlled edit against the exact current blob SHA with diff verification. PR #131/#132 intentionally shrink the required page logic.
+- `GenericDatabasePage` remains a large hotspot and the connector replaces existing files as whole files. Any next production edit there must use the exact current blob and verify a narrowly scoped diff; do not broadly rewrite the file merely to progress.
+- The right-side pane still uses legacy `_detail(...)` content while center/full use `ObjectInspectorPage`; this is the remaining shared-detail convergence gap.
 - Rich Body documents must never be flattened through paragraph-only adapters.
-- Opening modes must reuse shared detail content rather than creating separate editors.
-- Avoid duplicate work if another Object run opens a real-host navigation PR; inspect current branches/PRs before editing the hotspot.
+- Opening modes and explicit promotion must reuse the same global Object/detail data rather than fork editors.
 
 ## Validation
-- #124 Flutter CI #640: success; merged.
-- #130 Flutter CI #657: success; squash merge `0e0ea6e628d238f7861adc06a3ff730ed001f396`.
-- #131 Flutter CI #663: success; squash merge `da8c2906b6eda363db5906a8f1d61c93fd567f1b`.
-- #132 functional head `95f7d6851a8191d1698938e23bfb245e31afb6ec`: Flutter CI #665 running at this handoff checkpoint.
-- Connector runtime has no local Flutter SDK; executable validation relies on GitHub Actions for connector-only changes.
+- #135 Flutter CI #676: success; squash merge `ae974e2cb962a346971ecd062488e23a044ae3dd`.
+- #136 Flutter CI #678: success; squash merge `fe177885dd1ac7b759029d3786790322c4d22eea`.
+- #134 locks default real side-peek behavior on latest pre-#135 main.
+- Earlier merged Object/Relation slices passed their relevant CI as recorded in prior handoffs.
+- Connector runtime has no local Flutter SDK; executable validation for connector-only changes relies on GitHub Actions.
 
 ## Stop reason
-No architectural/product blocker is active. The remaining production step is the focused real `GenericDatabasePage` opening-mode patch. Continue after #132 CI resolves; pending CI itself is not a stop reason, but avoid unsafe broad whole-file replacement or overlapping a parallel run on the same hotspot.
+No architectural or product blocker is active. The next production task is the small side-peek-to-full-page promotion slice. This run stopped after integrating #135/#136 and refreshing durable handoff state; the next run should first inspect current PRs/main to avoid overlapping another Object agent before editing the `GenericDatabasePage` hotspot.
