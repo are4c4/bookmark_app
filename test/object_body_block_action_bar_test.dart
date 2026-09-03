@@ -21,6 +21,8 @@ void main() {
     VoidCallback? onDelete,
     ValueChanged<ObjectBodyInsertKind>? onInsertAfter,
     ValueChanged<ObjectBodyReferenceInsertKind>? onInsertReferenceAfter,
+    List<ObjectBodyReferenceInsertKind> referenceInsertKinds =
+        ObjectBodyReferenceInsertKind.values,
   }) => MaterialApp(
         home: Scaffold(
           body: ObjectBodyBlockActionBar(
@@ -32,6 +34,7 @@ void main() {
             onDelete: onDelete,
             onInsertAfter: onInsertAfter,
             onInsertReferenceAfter: onInsertReferenceAfter,
+            referenceInsertKinds: referenceInsertKinds,
           ),
         ),
       );
@@ -98,6 +101,24 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(selected, ObjectBodyReferenceInsertKind.object);
+  });
+
+  testWidgets('reference insert can expose only host-supported kinds', (tester) async {
+    await tester.pumpWidget(host(
+      position: const ObjectBodyBlockPosition(index: 0, count: 1),
+      onInsertReferenceAfter: (_) {},
+      referenceInsertKinds: const [ObjectBodyReferenceInsertKind.object],
+    ));
+
+    await tester.tap(
+      find.byKey(const ValueKey('body-block-insert-reference-after-b')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Object を参照'), findsOneWidget);
+    expect(find.text('Database / View を埋め込む'), findsNothing);
+    expect(find.text('画像を埋め込む'), findsNothing);
+    expect(find.text('ファイルを埋め込む'), findsNothing);
   });
 
   testWidgets('optional action menus are omitted without callbacks', (tester) async {

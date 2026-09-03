@@ -31,6 +31,32 @@ void main() {
     expect(selected, ObjectBodyReferenceInsertKind.object);
   });
 
+  testWidgets('reference insert menu can expose only host-supported kinds', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ObjectBodyReferenceInsertMenuButton(
+            allowedKinds: const [
+              ObjectBodyReferenceInsertKind.object,
+              ObjectBodyReferenceInsertKind.databaseView,
+            ],
+            onSelected: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byIcon(Icons.add_link));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Object を参照'), findsOneWidget);
+    expect(find.text('Database / View を埋め込む'), findsOneWidget);
+    expect(find.text('画像を埋め込む'), findsNothing);
+    expect(find.text('ファイルを埋め込む'), findsNothing);
+  });
+
   test('labels remain explicit about selection rather than persistence', () {
     expect(
       ObjectBodyReferenceInsertMenuButton.labelFor(
