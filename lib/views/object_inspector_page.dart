@@ -35,6 +35,7 @@ import '../features/object/presentation/widgets/object_body_block_action_bar.dar
 import '../features/object/presentation/widgets/object_body_document_view.dart';
 import '../features/object/presentation/widgets/object_body_insert_menu_button.dart';
 import '../features/object/presentation/widgets/object_body_object_reference_picker.dart';
+import '../features/object/presentation/widgets/object_body_reference_insert_menu_button.dart';
 import '../features/object/presentation/widgets/object_detail_property_view.dart';
 
 class ObjectInspectorPage extends StatefulWidget {
@@ -323,7 +324,7 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
 
   Future<void> _insertObjectReference(
     ObjectDetailContent content, {
-    required String afterBlockId,
+    String? afterBlockId,
   }) async {
     try {
       final candidates = await _objectReferenceCandidates(content);
@@ -336,14 +337,20 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
       final target = candidates.firstWhere(
         (candidate) => candidate.objectId == targetId,
       );
-      final result = await _bodyReferenceInserts.insertAfterAllocated(
-        objectId: widget.objectId,
-        anchorBlockId: afterBlockId,
-        request: ObjectBodyObjectReferenceInsert(
-          objectId: target.objectId,
-          label: target.title,
-        ),
+      final request = ObjectBodyObjectReferenceInsert(
+        objectId: target.objectId,
+        label: target.title,
       );
+      final result = afterBlockId == null
+          ? await _bodyReferenceInserts.insertAllocated(
+              objectId: widget.objectId,
+              request: request,
+            )
+          : await _bodyReferenceInserts.insertAfterAllocated(
+              objectId: widget.objectId,
+              anchorBlockId: afterBlockId,
+              request: request,
+            );
       _applyBodyDocument(result.document);
     } catch (error) {
       if (!mounted) return;
@@ -776,6 +783,18 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
                       ObjectBodyInsertMenuButton(
                         key: const ValueKey('body-empty-insert'),
                         onSelected: _insertBodyBlock,
+                      ),
+                      const SizedBox(width: 4),
+                      ObjectBodyReferenceInsertMenuButton(
+                        key: const ValueKey('body-empty-reference-insert'),
+                        allowedKinds: const [
+                          ObjectBodyReferenceInsertKind.object,
+                        ],
+                        onSelected: (kind) {
+                          if (kind == ObjectBodyReferenceInsertKind.object) {
+                            _insertObjectReference(content);
+                          }
+                        },
                       ),
                     ],
                   ),
