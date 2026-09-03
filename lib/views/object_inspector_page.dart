@@ -8,6 +8,7 @@ import '../data/generic_database_store.dart';
 import '../data/object_body_block_action_controller.dart';
 import '../data/object_body_block_duplicate_service.dart';
 import '../data/object_body_block_edit_service.dart';
+import '../data/object_body_reference_insert_controller.dart';
 import '../data/object_body_store.dart';
 import '../data/object_computed_value_store.dart';
 import '../data/object_detail_content_loader.dart';
@@ -25,6 +26,7 @@ import '../domain/object_body.dart';
 import '../domain/object_body_block_actions.dart';
 import '../domain/object_body_block_contracts.dart';
 import '../domain/object_body_block_identity.dart';
+import '../domain/object_body_reference_insert.dart';
 import '../domain/object_detail_content.dart';
 import '../domain/object_detail_property_presentation.dart';
 import '../domain/object_model.dart';
@@ -32,6 +34,8 @@ import '../features/object/presentation/widgets/daily_note_navigation_bar.dart';
 import '../features/object/presentation/widgets/object_body_block_action_bar.dart';
 import '../features/object/presentation/widgets/object_body_document_view.dart';
 import '../features/object/presentation/widgets/object_body_insert_menu_button.dart';
+import '../features/object/presentation/widgets/object_body_object_reference_picker.dart';
+import '../features/object/presentation/widgets/object_body_reference_insert_menu_button.dart';
 import '../features/object/presentation/widgets/object_detail_property_view.dart';
 
 class ObjectInspectorPage extends StatefulWidget {
@@ -53,6 +57,9 @@ class ObjectInspectorPage extends StatefulWidget {
 class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
   static const _propertyPresenter = ObjectDetailPropertyPresenter();
   static const _bodyBlockIds = ObjectBodyBlockIdAllocator();
+  static const _supportedReferenceKinds = <ObjectBodyReferenceInsertKind>[
+    ObjectBodyReferenceInsertKind.object,
+  ];
 
   ObjectGraphNodeRecord? _node;
   ObjectDetailContent? _content;
@@ -93,6 +100,9 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
 
   ObjectBodyBlockDuplicateService get _bodyDuplicates =>
       ObjectBodyBlockDuplicateService(editService: _bodyBlockEdits);
+
+  ObjectBodyReferenceInsertController get _bodyReferenceInserts =>
+      ObjectBodyReferenceInsertController(editService: _bodyBlockEdits);
 
   ObjectDetailContentLoader get _contentLoader => ObjectDetailContentLoader(
         objectStore: widget.objectStore,
@@ -286,6 +296,90 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
               kind: kind,
             ),
     );
+  }
+
+  Future<List<ObjectBodyObjectReferenceCandidate>> _objectReferenceCandidates()
+      async {
+    final content = _content;
+    if (content == null) return const <ObjectBodyObjectReferenceCandidate>[];
+    final candidates = <ObjectBodyObjectReferenceCandidate>[];
+    final objectTypes =
+        await widget.objectStore.listObjectTypes(content.objectType.workspaceId);
+    for (final objectType in objectTypes) {
+      final objects = await widget.objectStore.listObjects(objectType.id);
+      for (final object in objects) {
+        if (object.id == widget.objectId) continue;
+        candidates.add(
+          ObjectBodyObjectReferenceCandidate(
+            objectId: object.id,
+            title: object.title,
+            objectTypeName: objectType.name,
+            objectTypeIcon: objectType.icon,
+          ),
+        );
+      }
+    }
+    candidates.sort((left, right) {
+      final typeOrder = left.objectTypeName
+          .toLowerCase()
+          .compareTo(right.objectTypeName.toLowerCase());
+      if (typeOrder != 0) return typeOrder;
+      return left.title.toLowerCase().compareTo(right.title.toLowerCase());
+    });
+    return candidates;
+  }
+
+  Future<void> _insertObjectReference({String? afterBlockId}) async {
+    try {
+      final candidates = await _objectReferenceCandidates();
+      if (!mounted) return;
+      final targetId = await showObjectBodyObjectReferencePicker(
+        context,
+        candidates: candidates,
+      );
+      if (targetId == null) return;
+      ObjectBodyObjectReferenceCandidate? selected;
+      for (final candidate in candidates) {
+        if (candidate.objectId == targetId) {
+          selected = candidate;
+          break;
+        }
+      }
+      if (selected == null) {
+        throw StateError('Selected Object disappeared from reference candidates.');
+      }
+      final request = ObjectBodyObjectReferenceInsert(
+        objectId: selected.objectId,
+        label: selected.title,
+      );
+      final result = afterBlockId == null
+          ? await _bodyReferenceInserts.insertAllocated(
+              objectId: widget.objectId,
+              request: request,
+            )
+          : await _bodyReferenceInserts.insertAfterAllocated(
+              objectId: widget.objectId,
+              anchorBlockId: afterBlockId,
+              request: request,
+            );
+      _applyBodyDocument(result.document);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Object参照を追加できませんでした: $error')),
+      );
+    }
+  }
+
+  Future<void> _insertBodyReference(
+    ObjectBodyReferenceInsertKind kind, {
+    String? afterBlockId,
+  }) {
+    return switch (kind) {
+      ObjectBodyReferenceInsertKind.object =>
+        _insertObjectReference(afterBlockId: afterBlockId),
+      _ => Future<void>.value(),
+    };
   }
 
   Future<void> _moveBodyBlockUp(ObjectBodyBlock block) => _runBodyMutation(
@@ -678,6 +772,11 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
                         kind,
                         afterBlockId: block.id,
                       ),
+                      referenceInsertKinds: _supportedReferenceKinds,
+                      onInsertReferenceAfter: (kind) => _insertBodyReference(
+                        kind,
+                        afterBlockId: block.id,
+                      ),
                     )
                 : null,
             emptyBuilder: (context) => !canEditBody
@@ -687,7 +786,9 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                   )
-                : Row(
+                : Wrap(
+                    spacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Text(
                         'Bodyは空です',
@@ -696,10 +797,14 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
                                   Theme.of(context).colorScheme.onSurfaceVariant,
                             ),
                       ),
-                      const SizedBox(width: 8),
                       ObjectBodyInsertMenuButton(
                         key: const ValueKey('body-empty-insert'),
                         onSelected: _insertBodyBlock,
+                      ),
+                      ObjectBodyReferenceInsertMenuButton(
+                        key: const ValueKey('body-empty-reference-insert'),
+                        kinds: _supportedReferenceKinds,
+                        onSelected: _insertBodyReference,
                       ),
                     ],
                   ),
