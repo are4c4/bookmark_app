@@ -1,5 +1,5 @@
-import '../../..//data/database_view_store.dart';
-import '../../..//data/generic_database_store.dart';
+import '../../../data/database_view_store.dart';
+import '../../../data/generic_database_store.dart';
 import 'widgets/object_body_database_view_reference_picker.dart';
 
 /// Loads explicit Database/View Body-reference candidates from the active
