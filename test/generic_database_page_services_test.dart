@@ -1,10 +1,15 @@
 import 'package:bookmark_app/data/app_database.dart';
+import 'package:bookmark_app/data/database_view_store.dart';
 import 'package:bookmark_app/data/generic_database_page_services.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
 import 'package:bookmark_app/data/object_store.dart';
+import 'package:bookmark_app/data/object_type_defaults_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
+import 'package:bookmark_app/database/database_definition.dart';
 import 'package:bookmark_app/domain/object_model.dart';
+import 'package:bookmark_app/domain/object_type_defaults.dart';
 import 'package:drift/native.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -76,6 +81,62 @@ void main() {
     expect(
       ObjectRelationValue.fromJson(updated.valueFor(relationId)).objectIds,
       <int>[existingId],
+    );
+  });
+
+  test('page services expose canonical Object open-mode resolution', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final services = GenericDatabasePageServices.fromStores(
+      genericStore: genericStore,
+      objectStore: objectStore,
+    );
+    final objectTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Note',
+    );
+    await ObjectTypeDefaultsStore(genericStore).write(
+      objectTypeId: objectTypeId,
+      defaults: const ObjectTypeDefaults(openMode: ObjectOpenMode.centerPeek),
+    );
+
+    const definition = DatabaseDefinition(
+      key: 'custom:notes',
+      label: 'Notes',
+      icon: Icons.note_outlined,
+      properties: <DatabasePropertyDefinition>[],
+      defaultLayout: 'list',
+      supportedLayouts: <String>['list'],
+    );
+    final viewStore = DatabaseViewStore(database);
+    final viewId = await viewStore.createView(
+      workspaceId: workspaceId,
+      definition: definition,
+      name: 'All',
+      settings: const <String, dynamic>{'openMode': 'fullPage'},
+    );
+    final view = (await viewStore.listViews(
+      workspaceId: workspaceId,
+      databaseKey: definition.key,
+    ))
+        .singleWhere((candidate) => candidate.id == viewId);
+
+    expect(
+      await services.openPresentation.resolve(
+        view: view,
+        objectTypeId: objectTypeId,
+      ),
+      ObjectOpenMode.fullPage,
+    );
+    expect(
+      await services.openPresentation.resolve(
+        view: view.copyWith(settings: const <String, dynamic>{}),
+        objectTypeId: objectTypeId,
+      ),
+      ObjectOpenMode.centerPeek,
     );
   });
 }

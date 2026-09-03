@@ -2,27 +2,33 @@ import 'bidirectional_relation_store.dart';
 import 'database_collection_config_service.dart';
 import 'database_collection_resolver.dart';
 import 'database_collection_store.dart';
+import 'database_view_open_mode_service.dart';
+import 'database_view_store.dart';
 import 'generic_database_collection_page_data.dart';
 import 'generic_database_object_create_service.dart';
 import 'generic_database_store.dart';
 import 'object_board_create_service.dart';
+import 'object_open_presentation_service.dart';
 import 'object_relation_editor_service.dart';
 import 'object_store.dart';
+import 'object_type_defaults_store.dart';
 import 'relation_mutation_service.dart';
 import 'relation_target_service.dart';
 
 /// Composition root for Object-owned services consumed by GenericDatabasePage.
 ///
-/// Keeping the canonical collection, creation and Relation adapters assembled in
-/// one place reduces the amount of dependency wiring that the large page must
-/// own during the ObjectType != Database migration. Behavior remains delegated
-/// to the focused services rather than being reimplemented here.
+/// Keeping the canonical collection, creation, Relation and Object-opening
+/// adapters assembled in one place reduces the amount of dependency wiring that
+/// the large page must own during the ObjectType != Database migration. Behavior
+/// remains delegated to the focused services rather than being reimplemented
+/// here.
 class GenericDatabasePageServices {
   const GenericDatabasePageServices({
     required this.loader,
     required this.creator,
     required this.relationEditor,
     required this.collectionConfig,
+    required this.openPresentation,
   });
 
   factory GenericDatabasePageServices.fromStores({
@@ -49,6 +55,7 @@ class GenericDatabasePageServices {
       ),
       genericStore: genericStore,
     );
+    final viewStore = DatabaseViewStore(genericStore.database);
 
     return GenericDatabasePageServices(
       loader: loader,
@@ -68,6 +75,10 @@ class GenericDatabasePageServices {
         collectionStore: collectionStore,
         objectStore: objectStore,
       ),
+      openPresentation: ObjectOpenPresentationService(
+        viewOpenModes: DatabaseViewOpenModeService(viewStore),
+        objectTypeDefaults: ObjectTypeDefaultsStore(genericStore),
+      ),
     );
   }
 
@@ -75,4 +86,5 @@ class GenericDatabasePageServices {
   final GenericDatabaseObjectCreateService creator;
   final ObjectRelationEditorService relationEditor;
   final DatabaseCollectionConfigService collectionConfig;
+  final ObjectOpenPresentationService openPresentation;
 }
