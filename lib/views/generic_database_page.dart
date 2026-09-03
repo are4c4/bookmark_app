@@ -11,10 +11,13 @@ import '../data/object_graph_query_store.dart';
 import '../data/object_store.dart';
 import '../data/object_type_management_store.dart';
 import '../database/database_definition.dart';
+import '../domain/object_detail_content.dart';
+import '../domain/object_detail_property_presentation.dart';
 import '../domain/object_model.dart';
 import '../domain/object_type_defaults.dart';
 import '../features/database/presentation/database_property_presenter.dart';
 import '../features/object/presentation/object_open_presentation_host.dart';
+import '../features/object/presentation/widgets/object_detail_property_view.dart';
 import '../widgets/database_collection_settings_dialog.dart';
 import '../widgets/database_create_tiles.dart';
 import '../widgets/database_view_tabs.dart';
@@ -52,6 +55,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
 
   static const _viewCoordinator = GenericObjectViewCoordinator();
   static const _openPresentationHost = ObjectOpenPresentationHost();
+  static const _detailPropertyPresenter = ObjectDetailPropertyPresenter();
 
   GenericDatabaseDefinitionRecord? _database;
   AppObjectType? _objectType;
@@ -1460,6 +1464,15 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
   Widget _detail(GenericRecord record) {
     final scheme = Theme.of(context).colorScheme;
     final properties = _orderedVisibleProperties;
+    final objectType = _objectType;
+    final object = _objects.where((candidate) => candidate.id == record.id).firstOrNull;
+    final content = objectType == null || object == null
+        ? null
+        : ObjectDetailContent(
+            object: object,
+            objectType: objectType,
+            computedValues: _computedValues[record.id] ?? const <int, dynamic>{},
+          );
     return Material(
       color: scheme.surface,
       child: Column(
@@ -1529,86 +1542,42 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                   },
                   itemBuilder: (context, index) {
                     final property = properties[index];
-                    final value = _valueFor(record, property);
-                    final computed =
-                        property.type == 'formula' || property.type == 'rollup';
-                    return ReorderableDragStartListener(
+                    ObjectPropertyDefinition? objectProperty;
+                    if (objectType != null) {
+                      for (final candidate in objectType.properties) {
+                        if (candidate.id == property.id) {
+                          objectProperty = candidate;
+                          break;
+                        }
+                      }
+                    }
+                    if (content == null || objectProperty == null) {
+                      return SizedBox(
+                        key: ValueKey(property.id),
+                        height: 0,
+                      );
+                    }
+                    final presentation = _detailPropertyPresenter.present(
+                      content: content,
+                      property: objectProperty,
+                    );
+                    return ObjectDetailPropertyView(
                       key: ValueKey(property.id),
-                      index: index,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(5),
-                        onTap: computed ? null : () => _editValue(record, property),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 7),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.only(top: 2),
-                                child: Icon(
-                                  Icons.drag_indicator,
-                                  size: 15,
-                                  color: scheme.onSurfaceVariant.withValues(alpha: .55),
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Padding(
-                                padding: const EdgeInsets.only(top: 1),
-                                child: Icon(
-                                  _propertyIcon(property.type),
-                                  size: 17,
-                                  color: scheme.onSurfaceVariant,
-                                ),
-                              ),
-                              const SizedBox(width: 9),
-                              SizedBox(
-                                width: 120,
-                                child: Padding(
-                                  padding: const EdgeInsets.only(top: 2),
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          property.name,
-                                          style: TextStyle(
-                                            fontSize: 12.5,
-                                            color: scheme.onSurfaceVariant,
-                                          ),
-                                        ),
-                                      ),
-                                      if (computed)
-                                        Icon(
-                                          Icons.lock_outline,
-                                          size: 12,
-                                          color: scheme.onSurfaceVariant,
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              Expanded(
-                                child: property.type == 'relation'
-                                    ? _relationValue(record, property)
-                                    : Padding(
-                                        padding: const EdgeInsets.only(top: 2),
-                                        child: Text(
-                                          _displayValue(property, value).isEmpty
-                                              ? 'なし'
-                                              : _displayValue(property, value),
-                                          style: TextStyle(
-                                            fontSize: 12.5,
-                                            color: _displayValue(property, value).isEmpty
-                                                ? scheme.onSurfaceVariant
-                                                    .withValues(alpha: .55)
-                                                : scheme.onSurface,
-                                          ),
-                                        ),
-                                      ),
-                              ),
-                            ],
-                          ),
+                      presentation: presentation,
+                      leading: ReorderableDragStartListener(
+                        index: index,
+                        child: Icon(
+                          Icons.drag_indicator,
+                          size: 15,
+                          color: scheme.onSurfaceVariant.withValues(alpha: .55),
                         ),
                       ),
+                      relationChild: property.type == 'relation'
+                          ? _relationValue(record, property)
+                          : null,
+                      onTap: presentation.isComputed
+                          ? null
+                          : () => _editValue(record, property),
                     );
                   },
                 ),
