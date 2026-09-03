@@ -75,7 +75,7 @@ void main() {
       await tester.tap(referenceAction);
       await tester.pumpAndSettle();
       expect(find.text('Object を参照'), findsOneWidget);
-      expect(find.text('Database / View を埋め込む'), findsNothing);
+      expect(find.text('Database / View を埋め込む'), findsOneWidget);
       expect(find.text('画像を埋め込む'), findsNothing);
       expect(find.text('ファイルを埋め込む'), findsNothing);
       await tester.tap(find.text('Object を参照'));
