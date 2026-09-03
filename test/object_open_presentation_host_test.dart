@@ -167,7 +167,7 @@ void main() {
     expect(find.text('resolved-detail'), findsOneWidget);
     expect(find.text('open-resolved'), findsNothing);
 
-    await tester.pageBack();
+    tester.state<NavigatorState>(find.byType(Navigator)).pop();
     await tester.pumpAndSettle();
 
     expect(resolved, ObjectOpenMode.fullPage);
