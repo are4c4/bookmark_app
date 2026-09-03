@@ -27,6 +27,7 @@ class GenericDatabasePageServices {
     required this.loader,
     required this.creator,
     required this.relationEditor,
+    required this.relationMutations,
     required this.collectionConfig,
     required this.openPresentation,
   });
@@ -71,6 +72,7 @@ class GenericDatabasePageServices {
         targets: RelationTargetService(objectStore),
         mutations: relationMutations,
       ),
+      relationMutations: relationMutations,
       collectionConfig: DatabaseCollectionConfigService(
         collectionStore: collectionStore,
         objectStore: objectStore,
@@ -85,6 +87,7 @@ class GenericDatabasePageServices {
   final GenericDatabaseCollectionPageLoader loader;
   final GenericDatabaseObjectCreateService creator;
   final ObjectRelationEditorService relationEditor;
+  final RelationMutationService relationMutations;
   final DatabaseCollectionConfigService collectionConfig;
   final ObjectOpenPresentationService openPresentation;
 }
