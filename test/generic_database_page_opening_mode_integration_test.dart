@@ -7,6 +7,8 @@ import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/object_type_defaults_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/database/database_definition.dart';
+import 'package:bookmark_app/domain/object_group.dart';
+import 'package:bookmark_app/domain/object_model.dart';
 import 'package:bookmark_app/domain/object_type_defaults.dart';
 import 'package:bookmark_app/views/generic_database_page.dart';
 import 'package:bookmark_app/views/object_inspector_page.dart';
@@ -60,11 +62,16 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  DatabaseDefinition definitionFor(int databaseId) => DatabaseDefinition(
+  DatabaseDefinition definitionFor(
+    int databaseId, {
+    List<DatabasePropertyDefinition> properties =
+        const <DatabasePropertyDefinition>[],
+  }) =>
+      DatabaseDefinition(
         key: 'custom:$databaseId',
         label: 'Notes',
         icon: Icons.note_outlined,
-        properties: const <DatabasePropertyDefinition>[],
+        properties: properties,
         defaultLayout: 'list',
         supportedLayouts: const <String>['gallery', 'list', 'table', 'board'],
       );
@@ -137,5 +144,99 @@ void main() {
     Navigator.of(tester.element(find.byType(ObjectInspectorPage))).pop();
     await tester.pumpAndSettle();
     expect(find.text('Full target'), findsWidgets);
+  });
+
+  testWidgets('Table Object selection uses the shared opening path',
+      (tester) async {
+    final databaseId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Table Notes',
+      icon: '🧾',
+    );
+    await objectStore.createObject(
+      objectTypeId: databaseId,
+      title: 'Table target',
+    );
+    await defaultsStore.write(
+      objectTypeId: databaseId,
+      defaults: const ObjectTypeDefaults(openMode: ObjectOpenMode.centerPeek),
+    );
+    await DatabaseViewStore(database).createView(
+      workspaceId: workspaceId,
+      definition: definitionFor(databaseId),
+      name: 'Table',
+      layoutType: 'table',
+    );
+
+    await pumpPage(tester, databaseId);
+    await tester.tap(find.text('Table target').first);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(Dialog), findsOneWidget);
+    expect(find.byType(ObjectInspectorPage), findsOneWidget);
+
+    Navigator.of(tester.element(find.byType(ObjectInspectorPage))).pop();
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('Board card selection uses the shared opening path',
+      (tester) async {
+    final databaseId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Board Notes',
+      icon: '📋',
+    );
+    final statusId = await objectStore.createProperty(
+      objectTypeId: databaseId,
+      name: 'Status',
+      type: ObjectPropertyType.select,
+      config: const <String, dynamic>{
+        'options': <String>['Todo', 'Done'],
+      },
+    );
+    final type = (await objectStore.getObjectType(databaseId))!;
+    final status = type.properties.singleWhere((property) => property.id == statusId);
+    final objectId = await objectStore.createObject(
+      objectTypeId: databaseId,
+      title: 'Board target',
+    );
+    await objectStore.setPropertyValue(
+      objectId: objectId,
+      property: status,
+      value: 'Todo',
+    );
+    await defaultsStore.write(
+      objectTypeId: databaseId,
+      defaults: const ObjectTypeDefaults(openMode: ObjectOpenMode.centerPeek),
+    );
+    await DatabaseViewStore(database).createView(
+      workspaceId: workspaceId,
+      definition: definitionFor(
+        databaseId,
+        properties: <DatabasePropertyDefinition>[
+          DatabasePropertyDefinition(
+            key: 'p:$statusId',
+            label: 'Status',
+            type: DatabasePropertyType.select,
+            icon: Icons.flag_outlined,
+          ),
+        ],
+      ),
+      name: 'Board',
+      layoutType: 'board',
+      settings: <String, dynamic>{
+        'groupRule': ObjectGroupRule(propertyId: statusId).toJson(),
+      },
+    );
+
+    await pumpPage(tester, databaseId);
+    await tester.tap(find.text('Board target').first);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(Dialog), findsOneWidget);
+    expect(find.byType(ObjectInspectorPage), findsOneWidget);
+
+    Navigator.of(tester.element(find.byType(ObjectInspectorPage))).pop();
+    await tester.pumpAndSettle();
   });
 }
