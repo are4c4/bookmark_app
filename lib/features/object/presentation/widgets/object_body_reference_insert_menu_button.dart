@@ -9,10 +9,18 @@ class ObjectBodyReferenceInsertMenuButton extends StatelessWidget {
     super.key,
     required this.onSelected,
     this.tooltip = '参照を追加',
+    this.kinds = ObjectBodyReferenceInsertKind.values,
   });
 
   final ValueChanged<ObjectBodyReferenceInsertKind> onSelected;
   final String tooltip;
+
+  /// Reference kinds the current host can complete with an explicit target.
+  ///
+  /// Defaults to every known kind so existing hosts keep their current
+  /// behavior. A partially integrated host can expose only the flows it can
+  /// actually complete instead of offering placeholder-producing actions.
+  final List<ObjectBodyReferenceInsertKind> kinds;
 
   @override
   Widget build(BuildContext context) {
@@ -20,7 +28,7 @@ class ObjectBodyReferenceInsertMenuButton extends StatelessWidget {
       tooltip: tooltip,
       onSelected: onSelected,
       itemBuilder: (context) => [
-        for (final kind in ObjectBodyReferenceInsertKind.values)
+        for (final kind in kinds)
           PopupMenuItem(
             value: kind,
             child: Text(labelFor(kind)),
