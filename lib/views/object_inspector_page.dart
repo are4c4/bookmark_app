@@ -4,6 +4,7 @@ import '../data/bidirectional_relation_store.dart';
 import '../data/daily_note_detail_navigation_service.dart';
 import '../data/daily_note_navigation_service.dart';
 import '../data/daily_note_service.dart';
+import '../data/database_view_store.dart';
 import '../data/generic_database_store.dart';
 import '../data/object_body_block_action_controller.dart';
 import '../data/object_body_block_duplicate_service.dart';
@@ -30,8 +31,10 @@ import '../domain/object_body_reference_insert.dart';
 import '../domain/object_detail_content.dart';
 import '../domain/object_detail_property_presentation.dart';
 import '../domain/object_model.dart';
+import '../features/object/presentation/object_body_database_view_reference_catalog.dart';
 import '../features/object/presentation/widgets/daily_note_navigation_bar.dart';
 import '../features/object/presentation/widgets/object_body_block_action_bar.dart';
+import '../features/object/presentation/widgets/object_body_database_view_reference_picker.dart';
 import '../features/object/presentation/widgets/object_body_document_view.dart';
 import '../features/object/presentation/widgets/object_body_insert_menu_button.dart';
 import '../features/object/presentation/widgets/object_body_object_reference_picker.dart';
@@ -70,6 +73,12 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
   bool _dailyNoteNavigating = false;
 
   ObjectBodyStore get _bodyStore => ObjectBodyStore(widget.store);
+
+  ObjectBodyDatabaseViewReferenceCatalog get _databaseViewReferenceCatalog =>
+      ObjectBodyDatabaseViewReferenceCatalog(
+        databaseStore: widget.store,
+        viewStore: DatabaseViewStore(widget.store.database),
+      );
 
   SystemObjectStore get _systemObjects => SystemObjectStore(
         database: widget.store.database,
@@ -356,6 +365,43 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Object参照を追加できませんでした: $error')),
+      );
+    }
+  }
+
+  Future<void> _insertDatabaseViewReference(
+    ObjectDetailContent content, {
+    String? afterBlockId,
+  }) async {
+    try {
+      final candidates = await _databaseViewReferenceCatalog.load(
+        workspaceId: content.objectType.workspaceId,
+      );
+      if (!mounted) return;
+      final target = await showObjectBodyDatabaseViewReferencePicker(
+        context,
+        candidates: candidates,
+      );
+      if (target == null) return;
+      final request = ObjectBodyDatabaseViewInsert(
+        databaseId: target.databaseId,
+        viewId: target.viewId,
+      );
+      final result = afterBlockId == null
+          ? await _bodyReferenceInserts.insertAllocated(
+              objectId: widget.objectId,
+              request: request,
+            )
+          : await _bodyReferenceInserts.insertAfterAllocated(
+              objectId: widget.objectId,
+              anchorBlockId: afterBlockId,
+              request: request,
+            );
+      _applyBodyDocument(result.document);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Database / View参照を追加できませんでした: $error')),
       );
     }
   }
@@ -751,15 +797,25 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
                         afterBlockId: block.id,
                       ),
                       onInsertReferenceAfter: (kind) {
-                        if (kind == ObjectBodyReferenceInsertKind.object) {
-                          _insertObjectReference(
-                            content,
-                            afterBlockId: block.id,
-                          );
+                        switch (kind) {
+                          case ObjectBodyReferenceInsertKind.object:
+                            _insertObjectReference(
+                              content,
+                              afterBlockId: block.id,
+                            );
+                          case ObjectBodyReferenceInsertKind.databaseView:
+                            _insertDatabaseViewReference(
+                              content,
+                              afterBlockId: block.id,
+                            );
+                          case ObjectBodyReferenceInsertKind.image:
+                          case ObjectBodyReferenceInsertKind.file:
+                            break;
                         }
                       },
                       referenceInsertKinds: const [
                         ObjectBodyReferenceInsertKind.object,
+                        ObjectBodyReferenceInsertKind.databaseView,
                       ],
                     )
                 : null,
@@ -789,10 +845,17 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
                         key: const ValueKey('body-empty-reference-insert'),
                         allowedKinds: const [
                           ObjectBodyReferenceInsertKind.object,
+                          ObjectBodyReferenceInsertKind.databaseView,
                         ],
                         onSelected: (kind) {
-                          if (kind == ObjectBodyReferenceInsertKind.object) {
-                            _insertObjectReference(content);
+                          switch (kind) {
+                            case ObjectBodyReferenceInsertKind.object:
+                              _insertObjectReference(content);
+                            case ObjectBodyReferenceInsertKind.databaseView:
+                              _insertDatabaseViewReference(content);
+                            case ObjectBodyReferenceInsertKind.image:
+                            case ObjectBodyReferenceInsertKind.file:
+                              break;
                           }
                         },
                       ),
