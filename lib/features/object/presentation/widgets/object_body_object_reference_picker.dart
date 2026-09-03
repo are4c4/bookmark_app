@@ -85,7 +85,7 @@ class _ObjectBodyObjectReferencePickerDialogState
                           title: Text(candidate.title),
                           subtitle: Text(candidate.objectTypeName),
                           onTap: () => Navigator.pop(
-                            dialogContext,
+                            context,
                             candidate.objectId,
                           ),
                         );
@@ -97,7 +97,7 @@ class _ObjectBodyObjectReferencePickerDialogState
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(dialogContext),
+          onPressed: () => Navigator.pop(context),
           child: const Text('キャンセル'),
         ),
       ],
