@@ -12,7 +12,9 @@ import '../data/object_store.dart';
 import '../data/object_type_management_store.dart';
 import '../database/database_definition.dart';
 import '../domain/object_model.dart';
+import '../domain/object_type_defaults.dart';
 import '../features/database/presentation/database_property_presenter.dart';
+import '../features/object/presentation/object_open_presentation_host.dart';
 import '../widgets/database_collection_settings_dialog.dart';
 import '../widgets/database_create_tiles.dart';
 import '../widgets/database_view_tabs.dart';
@@ -49,6 +51,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
   late final ObjectBoardMoveService _boardMoveService;
 
   static const _viewCoordinator = GenericObjectViewCoordinator();
+  static const _openPresentationHost = ObjectOpenPresentationHost();
 
   GenericDatabaseDefinitionRecord? _database;
   AppObjectType? _objectType;
@@ -438,6 +441,38 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
       if (record.id == _selectedRecordId) return record;
     }
     return null;
+  }
+
+  Future<void> _openDatabaseObject(int objectId) async {
+    final activeView = _activeView;
+    final objectTypeId = _objectType?.id;
+    if (activeView == null || objectTypeId == null) {
+      if (mounted) setState(() => _selectedRecordId = objectId);
+      return;
+    }
+
+    if (_selectedRecordId != null && mounted) {
+      setState(() => _selectedRecordId = null);
+    }
+
+    final mode = await _openPresentationHost.openResolved(
+      context: context,
+      resolver: _pageServices.openPresentation,
+      view: activeView,
+      objectTypeId: objectTypeId,
+      onSidePeek: () {
+        if (mounted) setState(() => _selectedRecordId = objectId);
+      },
+      detailBuilder: (_) => ObjectInspectorPage(
+        store: _store,
+        objectStore: _objectStore,
+        objectId: objectId,
+      ),
+    );
+
+    if (mounted && mode != ObjectOpenMode.sidePeek) {
+      await _reload();
+    }
   }
 
   Future<void> _selectView(DatabaseViewConfig view) async {
@@ -858,7 +893,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
             borderRadius: BorderRadius.circular(6),
             clipBehavior: Clip.antiAlias,
             child: InkWell(
-              onTap: () => setState(() => _selectedRecordId = record.id),
+              onTap: () => _openDatabaseObject(record.id),
               child: Padding(
                 padding: const EdgeInsets.all(14),
                 child: Column(
@@ -923,7 +958,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-            onTap: () => setState(() => _selectedRecordId = record.id),
+            onTap: () => _openDatabaseObject(record.id),
           );
         },
       );
@@ -947,8 +982,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                 .map(
                   (record) => DataRow(
                     selected: record.id == _selectedRecordId,
-                    onSelectChanged: (_) =>
-                        setState(() => _selectedRecordId = record.id),
+                    onSelectChanged: (_) => _openDatabaseObject(record.id),
                     cells: [
                       DataCell(Text(record.title)),
                       ...properties.map(
@@ -996,8 +1030,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
 
     return ObjectBoardView(
       groups: projection.objectProjection.groups,
-      onObjectTap: (object) =>
-          setState(() => _selectedRecordId = object.id),
+      onObjectTap: (object) => _openDatabaseObject(object.id),
       onMoveObject: !movable
           ? null
           : (object, sourceGroup, targetGroup) async {
