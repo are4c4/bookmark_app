@@ -11,13 +11,13 @@ Product direction: **Capacities-like Object-centric data model + Notion-like Dat
 `#56` — Integrate generic Object database UX toward Notion/Capacities workflow. Issue #56 is the product/design contract and contains Milestones A–D.
 
 ## Current implementation position
-The generic Object/Relation foundations are substantially wired into real user-facing hosts. `GenericDatabasePage` consumes collection-aware services and the canonical Relation editor. `ObjectInspectorPage` consumes shared Property presentation, rich Body rendering/editing, block actions, and real Daily Note navigation. Multi-View duplicate/blank behavior is now verified in the real Database host.
+The generic Object/Relation foundations are substantially wired into real user-facing hosts. `GenericDatabasePage` consumes collection-aware services and the canonical Relation editor. `ObjectInspectorPage` consumes shared Property presentation, rich Body rendering/editing, block actions, real Daily Note navigation, explicit Object-reference insertion after an anchor, and Object-reference insertion into an empty Body.
 
-The highest-value remaining work is **real navigation/detail completion and reference/content polish**: Object Body reference target-selection/insertion beyond the first Object flow, side/center/full-page Object opening, and active-use regression/polish.
+The highest-value remaining work is **real navigation/detail completion and reference/content polish**: Database/View Body reference insertion in the real inspector, side/center/full-page Object opening, and active-use regression/polish.
 
-Do not add parallel abstractions for already-integrated flows. New foundation work is justified only when it unblocks a concrete host integration or closes a correctness gap.
+Do not add parallel abstractions for already-integrated flows. New foundation work is justified only when it directly unblocks a concrete host integration or closes a correctness gap.
 
-### Integrated Object / database foundations on `main`
+## Integrated Object / database foundations on `main`
 - #61/#64/#65/#68/#71/#76/#77/#78: Property semantics, Body/defaults, Daily Notes, reusable Weblink/Image, shared detail, canonical Relation neighborhood consumption, safe Value promotion.
 - #79: grouped Board Object creation with Relation-safe presets.
 - #82: Database = target ObjectType + collectionFilter foundation and Database-first/View-second projection contract.
@@ -35,15 +35,19 @@ Do not add parallel abstractions for already-integrated flows. New foundation wo
 - #115: real Object inspector wires move/duplicate/insert-after/delete actions plus empty-Body insertion.
 - #117: real Object inspector identifies Daily Notes via the system registry, renders previous/today/next navigation, opens/creates dates through canonical Daily Note services, and allows Daily Note Body editing while preserving system schema/title protections.
 - #120: explicit existing-Object Body reference picker with search/filter and cancel-without-persistence semantics.
-- #121: shared reference action chrome can be limited to the kinds a concrete host can actually resolve.
+- #121: shared reference action chrome can be limited to the kinds a concrete host can resolve.
 - #122: real `GenericDatabasePage` verifies duplicate-current View, blank View creation, independent identities/config, and no underlying Object duplication.
+- #124: real Object inspector inserts an explicitly selected existing Object reference after a Body anchor through the typed latest-read controller.
+- #125: explicit Database/View Body reference target picker supporting Database-only and specific-View choices.
+- #126: real Object inspector can insert an explicitly selected Object reference as the first block of an empty Body.
 
 PR #83 remains closed/unmerged and is not active. PR #110 was closed unmerged as redundant.
 
-### Active Object integration
-- PR #124 — `Insert Object references from real Object inspector` — wires explicit Object selection into the real Body host through the typed latest-read reference controller. It is currently under CI validation.
+## Active Object integration
+- PR #127 — real `GenericDatabasePage` regression coverage for View rename/delete, overflow selection, and reorder. Latest functional head `8a618622099744a10cd4d3e123b5fdce407c2d90`; Flutter CI #648 running at the latest recorded checkpoint.
+- PR #128 — Database/View Body-reference candidate catalog over the active workspace. Latest functional head before handoff updates `801f16825e04f6b5d63c4b2c5f81f49141c97a08`; Flutter CI #649 running at the latest recorded checkpoint. Handoff commits follow that functional head and require latest-head CI before merge.
 
-### Integrated Relation foundations on `main`
+## Integrated Relation foundations on `main`
 - #62/#66/#69/#73/#74/#75/#80/#81 provide canonical Relation validation/mutation/read/index lifecycle, integrity audit, deterministic index reconciliation, neighborhood reads, picker candidates/selection diagnostics, safe deletion, and core Image/Tag lifecycle migration.
 - #109 adds regression coverage around the canonical editor boundary: bidirectional inverse synchronization, stale picker fail-closed behavior, missing-target/cardinality non-mutation on load, explicit repair boundaries, page-composition behavior, and stale bidirectional rename/delete callers.
 - #114 adds real `GenericDatabasePage` widget coverage proving inverse synchronization, visible missing-target/cardinality diagnostics without mutation on cancel, and stale-target fail-closed behavior after picker load.
@@ -62,23 +66,23 @@ PR #83 remains closed/unmerged and is not active. PR #110 was closed unmerged as
 - Date is a Value; Daily Note is an Object keyed by date.
 - Object detail content, Property rendering/editing, Body rendering/editing, and Daily Note navigation should be shared across side peek, center peek and full page rather than forked per presentation.
 - User-facing Relation writes must use canonical Relation mutation/editor APIs. Opening Relation UI must remain read-only until explicit save.
-- Body Object/Database/asset references are document references and must not be conflated with Relation Property writes.
+- Body Object/Database/View/asset references are document references and must not be conflated with Relation Property writes.
 
 ## Delivery milestones
 ### Milestone A — Usable Object Database
 The core real-host path is integrated and regression-covered: Database-first collection loading, collection-aware normal/Board creation, collection settings, canonical Relation picker/editor, and Relation lifecycle safety. Remaining emphasis is active-use polish rather than basic architecture wiring.
 
 ### Milestone B — Multi-View Database UX
-Core duplicate/blank/rename/reorder/delete/overflow foundations exist. Duplicate-current and blank View creation are now verified through the real `GenericDatabasePage`, including the invariant that Views never duplicate underlying Objects. Remaining emphasis is final rename/reorder/delete/overflow host coverage and UI polish where gaps emerge.
+Core duplicate/blank/rename/reorder/delete/overflow foundations exist. Duplicate-current and blank creation are verified through the real `GenericDatabasePage`; PR #127 is adding real-host rename/delete/reorder/overflow verification. Remaining emphasis is active-use UI polish after that coverage lands.
 
 ### Milestone C — Object Knowledge System
-Reusable Weblink/Image flows, Value promotion, shared Object detail, opening-mode persistence/settings/resolution, typed Value editing, canonical Relation context, and Daily Note services/widgets are integrated. Real Daily Note navigation is now in the shared Object inspector. Remaining emphasis is side peek / center peek / full-page navigation while preserving context.
+Reusable Weblink/Image flows, Value promotion, shared Object detail, opening-mode persistence/settings/resolution, typed Value editing, canonical Relation context, and Daily Note services/widgets are integrated. Real Daily Note navigation is in the shared Object inspector. Remaining emphasis is side peek / center peek / full-page navigation while preserving context.
 
 ### Milestone D — Document / Knowledge Layer
-Safe block persistence/editing, rich/reference contracts, shared rendering/action/reference chrome, typed reference insertion, deterministic identities, and payload-preserving duplication are integrated. The real Object inspector consumes rich Body rendering and generic block actions, and explicit Object reference selection is now available as a reusable picker.
+Safe block persistence/editing, rich/reference contracts, shared rendering/action/reference chrome, typed reference insertion, deterministic identities, and payload-preserving duplication are integrated. The real Object inspector consumes rich Body rendering/actions and explicit Object-reference insertion, including empty-Body insertion. Database/View selection UI is merged and candidate loading is active in PR #128.
 
 Remaining emphasis:
-- complete real-host Object reference insertion validation, then Database/View reference selection/insertion;
+- land Database/View candidate loading and wire `ObjectBodyDatabaseViewInsert` into the real inspector;
 - add Image/File target selection only when concrete reusable selectors are available;
 - embedded Database/View rendering/interaction beyond stored references;
 - `RichText/Document Property`;
@@ -93,22 +97,19 @@ Remaining emphasis:
 6. Let real usage drive later Milestone C/D expansions.
 
 ## Next repository-wide actions
-1. Finish PR #124 and land real Object-reference insertion in `ObjectInspectorPage` after CI passes.
-2. Add Database/View reference target selection and consume `ObjectBodyDatabaseViewInsert` in the same real Body host; keep Image/File hidden until selectors exist.
-3. Consume `ObjectOpenPresentationService` in real View navigation and implement side peek / center peek / full page while preserving originating Database/View context.
-4. Extend real Multi-View verification to rename/reorder/delete/overflow only where current widget/host coverage is insufficient.
+1. Finish CI/merge for PR #127 and PR #128, repairing branch-caused failures if any.
+2. Wire Database/View reference target selection into the real `ObjectInspectorPage`: load #128 candidates, use the #125 picker, persist `ObjectBodyDatabaseViewInsert` through the typed latest-read controller, and expose Object + Database/View kinds while keeping Image/File hidden.
+3. Add real-host Database/View reference insertion regressions for cancel, Database-only/View choice, insert-after-anchor, and empty-Body insertion.
+4. Consume `ObjectOpenPresentationService` in real View navigation and implement side peek / center peek / full page while preserving originating Database/View context.
 5. Exercise the generic Object Database in daily use and address concrete regressions before expanding data-model complexity.
 6. Implement `RichText/Document Property` only when ready for its broad enum/query/group/Board/detail impact.
 7. Keep manual include/exclude deferred until dynamic collection + multi-View behavior is proven in active use.
 
 ## Validation status
-- #114 corrected head passed Drift generation, `flutter analyze`, and the full test suite in Flutter CI #620 before merge.
-- #115 passed its real Object Body action regression coverage before merge.
-- #117 head `d096a16715ce6aea952ad24c128edb9c832b27f3` passed Flutter CI #627; squash merge `565670238d72cd91acf6de7e4c4ebeff8375d18d`.
-- #121 passed Flutter CI #631; squash merge `e650e8666c1f19316e4e45ee76e63e71d31209a1`.
-- #120 initial CI #630 failed only on two picker context scope errors; corrected head `09285578ba0cf5236a0ef39ad941ee6709b5936c` passed Flutter CI #632; squash merge `987b05b576879140f514bf188099f71c08c30c77`.
-- #122 passed Flutter CI #633; squash merge `0c7561ca1bc61baf80628e8e66b6575598f2a79e`.
-- #124 is under current CI validation.
+- #126 head `d73f2841294fde48b85a2dd9e04e3b7b42966be1` passed Flutter CI #644; squash merge `49ede2013bd78b0e53718b9f87a0fb71e0913234`.
+- #127 functional head `8a618622099744a10cd4d3e123b5fdce407c2d90`: Flutter CI #648 running at the latest handoff checkpoint.
+- #128 functional head `801f16825e04f6b5d63c4b2c5f81f49141c97a08`: Flutter CI #649 running at the latest handoff checkpoint; latest handoff commits require rerun before merge.
+- Earlier merged Object and Relation slices passed their relevant PR CI as recorded in lane handoffs.
 
 ## Known risks / sequencing constraints
 - `ObjectInspectorPage` and navigation surfaces remain integration hotspots; keep edits focused and validate full diff/CI.
