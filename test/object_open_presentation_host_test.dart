@@ -164,8 +164,13 @@ void main() {
     await tester.tap(find.text('open-resolved'));
     await tester.pumpAndSettle();
 
-    expect(resolved, ObjectOpenMode.fullPage);
     expect(find.text('resolved-detail'), findsOneWidget);
     expect(find.text('open-resolved'), findsNothing);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    expect(resolved, ObjectOpenMode.fullPage);
+    expect(find.text('open-resolved'), findsOneWidget);
   });
 }
