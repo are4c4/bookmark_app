@@ -13,13 +13,21 @@ void main() {
     sortOrder: 0,
   );
 
-  Widget host(ObjectDetailPropertyPresentation presentation, {
+  Widget host(
+    ObjectDetailPropertyPresentation presentation, {
     Widget? relationChild,
-  }) => MaterialApp(
+    Widget? leading,
+    Widget? trailing,
+    VoidCallback? onTap,
+  }) =>
+      MaterialApp(
         home: Scaffold(
           body: ObjectDetailPropertyView(
             presentation: presentation,
             relationChild: relationChild,
+            leading: leading,
+            trailing: trailing,
+            onTap: onTap,
           ),
         ),
       );
@@ -68,5 +76,39 @@ void main() {
     expect(find.text('Author'), findsOneWidget);
     expect(find.text('夏目漱石'), findsOneWidget);
     expect(find.text('99'), findsNothing);
+  });
+
+  testWidgets('renders host-owned leading and trailing chrome', (tester) async {
+    await tester.pumpWidget(host(
+      const ObjectDetailPropertyPresentation(
+        property: textProperty,
+        value: 'hello',
+        displayText: 'hello',
+        isHidden: false,
+      ),
+      leading: const Icon(Icons.drag_indicator),
+      trailing: const Icon(Icons.edit_outlined),
+    ));
+
+    expect(find.byIcon(Icons.drag_indicator), findsOneWidget);
+    expect(find.byIcon(Icons.edit_outlined), findsOneWidget);
+  });
+
+  testWidgets('delegates optional host edit tap without making it mandatory',
+      (tester) async {
+    var taps = 0;
+    await tester.pumpWidget(host(
+      const ObjectDetailPropertyPresentation(
+        property: textProperty,
+        value: 'hello',
+        displayText: 'hello',
+        isHidden: false,
+      ),
+      onTap: () => taps += 1,
+    ));
+
+    await tester.tap(find.text('hello'));
+    await tester.pump();
+    expect(taps, 1);
   });
 }
