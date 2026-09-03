@@ -12,12 +12,22 @@ class ObjectDetailPropertyView extends StatelessWidget {
     super.key,
     required this.presentation,
     this.relationChild,
+    this.leading,
     this.trailing,
+    this.onTap,
   });
 
   final ObjectDetailPropertyPresentation presentation;
   final Widget? relationChild;
+
+  /// Optional presentation chrome owned by the surrounding host, such as the
+  /// drag handle used by the contextual Database side peek.
+  final Widget? leading;
   final Widget? trailing;
+
+  /// Optional host-owned edit affordance. The shared row remains read-only by
+  /// default so existing full-page/center detail behavior is unchanged.
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -39,11 +49,15 @@ class ObjectDetailPropertyView extends StatelessWidget {
             textAlign: TextAlign.end,
           );
 
-    return Padding(
+    final row = Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (leading != null) ...[
+            leading!,
+            const SizedBox(width: 6),
+          ],
           SizedBox(
             width: 120,
             child: Row(
@@ -71,6 +85,13 @@ class ObjectDetailPropertyView extends StatelessWidget {
           ],
         ],
       ),
+    );
+
+    if (onTap == null) return row;
+    return InkWell(
+      borderRadius: BorderRadius.circular(5),
+      onTap: onTap,
+      child: row,
     );
   }
 }
