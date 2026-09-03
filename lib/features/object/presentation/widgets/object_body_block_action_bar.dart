@@ -21,6 +21,7 @@ class ObjectBodyBlockActionBar extends StatelessWidget {
     this.onDelete,
     this.onInsertAfter,
     this.onInsertReferenceAfter,
+    this.referenceInsertKinds = ObjectBodyReferenceInsertKind.values,
   });
 
   final ObjectBodyBlock block;
@@ -31,6 +32,7 @@ class ObjectBodyBlockActionBar extends StatelessWidget {
   final VoidCallback? onDelete;
   final ValueChanged<ObjectBodyInsertKind>? onInsertAfter;
   final ValueChanged<ObjectBodyReferenceInsertKind>? onInsertReferenceAfter;
+  final List<ObjectBodyReferenceInsertKind> referenceInsertKinds;
 
   @override
   Widget build(BuildContext context) {
@@ -66,6 +68,7 @@ class ObjectBodyBlockActionBar extends StatelessWidget {
           ObjectBodyReferenceInsertMenuButton(
             key: ValueKey('body-block-insert-reference-after-${block.id}'),
             tooltip: '下に参照を追加',
+            allowedKinds: referenceInsertKinds,
             onSelected: onInsertReferenceAfter!,
           ),
         IconButton(
