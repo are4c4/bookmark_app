@@ -7,7 +7,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('database navigation exposes Weblinks and Images but keeps other system types hidden', () async {
+  test('database navigation exposes reusable system collections but hides internal types', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
     final workspaceId = await WorkspaceStore(database).initialize();
@@ -40,6 +40,12 @@ void main() {
       name: 'Weblink',
       icon: '🔗',
     );
+    final dailyNoteType = await systemStore.ensureSystemObjectType(
+      workspaceId: workspaceId,
+      systemKey: 'dailyNote',
+      name: 'Daily Note',
+      icon: '📅',
+    );
 
     final navigation = await genericStore.listDatabases(workspaceId);
     final relationTargetTypes = await genericStore.listAllDatabases(workspaceId);
@@ -47,20 +53,34 @@ void main() {
 
     expect(
       navigation.map((item) => item.id),
-      [weblinkType.id, imageType.id, customId],
+      [weblinkType.id, imageType.id, dailyNoteType.id, customId],
     );
     expect(navigation[0].name, 'Weblinks');
     expect(navigation[0].icon, '🔗');
     expect(navigation[1].name, 'Images');
     expect(navigation[1].icon, '🖼️');
+    expect(navigation[2].name, 'Daily Notes');
+    expect(navigation[2].icon, '📅');
     expect(navigation.map((item) => item.id), isNot(contains(tagType.id)));
     expect(
       relationTargetTypes.map((item) => item.id),
-      containsAll([customId, tagType.id, imageType.id, weblinkType.id]),
+      containsAll([
+        customId,
+        tagType.id,
+        imageType.id,
+        weblinkType.id,
+        dailyNoteType.id,
+      ]),
     );
     expect(
       objectTypes.map((item) => item.id),
-      containsAll([customId, tagType.id, imageType.id, weblinkType.id]),
+      containsAll([
+        customId,
+        tagType.id,
+        imageType.id,
+        weblinkType.id,
+        dailyNoteType.id,
+      ]),
     );
   });
 }
