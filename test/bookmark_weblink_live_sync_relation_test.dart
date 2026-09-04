@@ -8,6 +8,7 @@ import 'package:bookmark_app/data/weblink_object_service.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/domain/object_model.dart';
 import 'package:bookmark_app/services/object_sync_service.dart';
+import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -29,7 +30,7 @@ void main() {
       );
       final legacyBookmarkId = (await database.customSelect(
         'SELECT id FROM bookmarks WHERE url = ? LIMIT 1',
-        variables: <Variable<Object>>[Variable<String>(firstUrl)],
+        variables: <Variable>[Variable<String>(firstUrl)],
       ).getSingle())
           .read<int>('id');
       await database.customStatement(
