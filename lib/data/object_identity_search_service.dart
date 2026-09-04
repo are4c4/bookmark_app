@@ -47,34 +47,44 @@ class ObjectIdentitySearchService {
         }
 
         final normalizedTitle = normalizeObjectAlias(object.title);
-        if (normalizedTitle.contains(normalizedQuery)) {
-          results.add(
-            ObjectIdentitySearchResult(
-              object: object,
-              objectType: type,
-              aliases: aliases,
-            ),
-          );
-          continue;
+        String? exactAlias;
+        String? partialAlias;
+        for (final alias in aliases) {
+          final normalizedAlias = normalizeObjectAlias(alias);
+          if (normalizedAlias == normalizedQuery) {
+            exactAlias ??= alias;
+          } else if (partialAlias == null &&
+              normalizedAlias.contains(normalizedQuery)) {
+            partialAlias = alias;
+          }
         }
 
         String? matchedAlias;
-        for (final alias in aliases) {
-          if (normalizeObjectAlias(alias).contains(normalizedQuery)) {
-            matchedAlias = alias;
-            break;
+        final matches = switch ((normalizedTitle, exactAlias, partialAlias)) {
+          (final title, _, _) when title == normalizedQuery => true,
+          (_, final alias?, _) => true,
+          (final title, _, _) when title.contains(normalizedQuery) => true,
+          (_, _, final alias?) => true,
+          _ => false,
+        };
+        if (!matches) continue;
+
+        if (normalizedTitle != normalizedQuery) {
+          if (exactAlias != null) {
+            matchedAlias = exactAlias;
+          } else if (!normalizedTitle.contains(normalizedQuery)) {
+            matchedAlias = partialAlias;
           }
         }
-        if (matchedAlias != null) {
-          results.add(
-            ObjectIdentitySearchResult(
-              object: object,
-              objectType: type,
-              aliases: aliases,
-              matchedAlias: matchedAlias,
-            ),
-          );
-        }
+
+        results.add(
+          ObjectIdentitySearchResult(
+            object: object,
+            objectType: type,
+            aliases: aliases,
+            matchedAlias: matchedAlias,
+          ),
+        );
       }
     }
 
