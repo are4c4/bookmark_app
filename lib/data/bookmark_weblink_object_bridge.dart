@@ -10,12 +10,33 @@ import 'relation_mutation_service.dart';
 import 'system_object_store.dart';
 import 'weblink_object_service.dart';
 
+class BookmarkWeblinkSyncReport {
+  const BookmarkWeblinkSyncReport({
+    required this.processedCount,
+    required this.linkedCount,
+    required this.invalidUrlCount,
+    required this.retiredLegacyUrlCount,
+  });
+
+  static const empty = BookmarkWeblinkSyncReport(
+    processedCount: 0,
+    linkedCount: 0,
+    invalidUrlCount: 0,
+    retiredLegacyUrlCount: 0,
+  );
+
+  final int processedCount;
+  final int linkedCount;
+  final int invalidUrlCount;
+  final int retiredLegacyUrlCount;
+}
+
 /// Adds the canonical reusable Weblink relation to mirrored Bookmark Objects.
 ///
-/// This bridge is intentionally additive during the migration phase: the
-/// legacy Bookmark URL Value remains untouched until relation-first migration
-/// has been proven safe. Relation writes always go through
-/// [RelationMutationService].
+/// The legacy `bookmarks.url` column remains the compatibility source for the
+/// old bookmark UI. The mirrored Bookmark Object's direct URL Value is retired
+/// only after the canonical Relation value and normalized index both confirm
+/// the expected Weblink target.
 class BookmarkWeblinkObjectBridge {
   BookmarkWeblinkObjectBridge({
     required this.database,
@@ -25,6 +46,7 @@ class BookmarkWeblinkObjectBridge {
 
   static const String bookmarkSystemKey = 'bookmark';
   static const String relationName = 'Weblink';
+  static const String legacyUrlPropertyName = 'URL';
 
   final AppDatabase database;
   final ObjectStore objectStore;
@@ -45,13 +67,16 @@ class BookmarkWeblinkObjectBridge {
         ),
       );
 
-  Future<void> syncWorkspace(int workspaceId) async {
+  Future<BookmarkWeblinkSyncReport> syncWorkspace(int workspaceId) async {
     final bookmarkType = await systemObjectStore.getSystemObjectType(
       workspaceId: workspaceId,
       systemKey: bookmarkSystemKey,
     );
-    if (bookmarkType == null) return;
+    if (bookmarkType == null) return BookmarkWeblinkSyncReport.empty;
 
+    final legacyUrlProperty = bookmarkType.properties.firstWhere(
+      (property) => property.name == legacyUrlPropertyName,
+    );
     final weblinkDefinition = await _weblinks.ensureDefinition(workspaceId);
     final relation = await systemObjectStore.ensureRelationProperty(
       objectTypeId: bookmarkType.id,
@@ -70,26 +95,86 @@ class BookmarkWeblinkObjectBridge {
       variables: [Variable<int>(workspaceId)],
     ).get();
 
+    var linkedCount = 0;
+    var invalidUrlCount = 0;
+    var retiredLegacyUrlCount = 0;
     for (final row in rows) {
       final objectId = row.read<int>('object_id');
       final rawUrl = row.read<String>('url');
-      final targetIds = <int>[];
+      int? targetId;
       try {
         final weblink = await _weblinks.findOrCreate(
           workspaceId: workspaceId,
           url: rawUrl,
         );
-        targetIds.add(weblink.id);
+        targetId = weblink.id;
       } on ArgumentError {
-        // Keep invalid legacy URL data intact and leave the canonical Relation
-        // empty. A later user-facing migration can surface/repair the URL.
+        invalidUrlCount += 1;
       }
+
+      final targetIds = targetId == null ? const <int>[] : <int>[targetId];
       await _relationMutations.setRelation(
         objectId: objectId,
         property: relation,
         targetObjectIds: targetIds,
       );
+
+      if (targetId == null) continue;
+      linkedCount += 1;
+      final verified = await _isCanonicalRelationPersisted(
+        bookmarkObjectTypeId: bookmarkType.id,
+        bookmarkObjectId: objectId,
+        relationPropertyId: relation.id,
+        targetObjectId: targetId,
+      );
+      if (!verified) {
+        throw StateError(
+          'Bookmark.Weblink verification failed after canonical Relation write.',
+        );
+      }
+
+      await objectStore.setPropertyValue(
+        objectId: objectId,
+        property: legacyUrlProperty,
+        value: null,
+      );
+      retiredLegacyUrlCount += 1;
     }
+
+    return BookmarkWeblinkSyncReport(
+      processedCount: rows.length,
+      linkedCount: linkedCount,
+      invalidUrlCount: invalidUrlCount,
+      retiredLegacyUrlCount: retiredLegacyUrlCount,
+    );
+  }
+
+  Future<bool> _isCanonicalRelationPersisted({
+    required int bookmarkObjectTypeId,
+    required int bookmarkObjectId,
+    required int relationPropertyId,
+    required int targetObjectId,
+  }) async {
+    AppObject? bookmark;
+    for (final object in await objectStore.listObjects(bookmarkObjectTypeId)) {
+      if (object.id == bookmarkObjectId) {
+        bookmark = object;
+        break;
+      }
+    }
+    if (bookmark == null) return false;
+
+    final persisted = ObjectRelationValue.fromJson(
+      bookmark.values[relationPropertyId],
+    ).objectIds;
+    if (persisted.length != 1 || persisted.single != targetObjectId) {
+      return false;
+    }
+
+    final indexed = (await objectStore.outgoingRelations(bookmarkObjectId))
+        .where((edge) => edge.propertyId == relationPropertyId)
+        .toList(growable: false);
+    return indexed.length == 1 && indexed.single.targetObjectId == targetObjectId;
   }
 
   void _validateRelation(

@@ -29,7 +29,8 @@ void main() {
     expect(objects.map((object) => object.title), contains('後から追加'));
   });
 
-  test('live Bookmark mirror links repeated URLs to one reusable Weblink', () async {
+  test('live Bookmark mirror links repeated URLs and retires direct Object URLs',
+      () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
     final workspaceId = await WorkspaceStore(database).initialize();
@@ -90,12 +91,18 @@ void main() {
       );
     }
 
-    final legacyUrl = bookmarkType.properties.singleWhere(
+    final directUrl = bookmarkType.properties.singleWhere(
       (property) => property.name == 'URL',
     );
+    for (final bookmark in bookmarks) {
+      expect(bookmark.values[directUrl.id], isNull);
+    }
+    final preservedLegacyUrls = await database.customSelect(
+      'SELECT url FROM bookmarks ORDER BY id',
+    ).get();
     expect(
-      bookmarks.map((bookmark) => bookmark.values[legacyUrl.id]).toSet(),
-      <String>{'https://example.com/article'},
+      preservedLegacyUrls.map((row) => row.read<String>('url')).toList(),
+      <String>['https://example.com/article', 'https://example.com/article'],
     );
 
     await sync.syncWorkspace(workspaceId);
@@ -103,9 +110,68 @@ void main() {
     expect(await sync.objectStore.listObjects(weblinkType.id), hasLength(1));
     final refreshedBookmarks = await sync.objectStore.listObjects(bookmarkType.id);
     for (final bookmark in refreshedBookmarks) {
+      expect(bookmark.values[directUrl.id], isNull);
       final edges = await sync.objectStore.outgoingRelations(bookmark.id);
       expect(edges.where((edge) => edge.propertyId == relation.id), hasLength(1));
     }
+
+    final report = await sync.bookmarkWeblinkBridge.syncWorkspace(workspaceId);
+    expect(report.processedCount, 2);
+    expect(report.linkedCount, 2);
+    expect(report.invalidUrlCount, 0);
+    expect(report.retiredLegacyUrlCount, 2);
+  });
+
+  test('invalid legacy URL is preserved and does not get a Weblink Relation',
+      () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final sync = ObjectSyncService(database);
+    addTearDown(sync.dispose);
+
+    await database.customStatement(
+      "INSERT INTO bookmarks(url, title) VALUES ('not a URL', 'Broken')",
+    );
+    final legacyId = (await database.customSelect(
+      "SELECT id FROM bookmarks WHERE title = 'Broken'",
+    ).getSingle())
+        .read<int>('id');
+    await database.customStatement(
+      'INSERT INTO bookmark_workspace(bookmark_id, workspace_id) VALUES (?, ?)',
+      [legacyId, workspaceId],
+    );
+
+    await sync.syncWorkspace(workspaceId);
+
+    final bookmarkType = (await sync.systemObjectStore.getSystemObjectType(
+      workspaceId: workspaceId,
+      systemKey: CoreObjectBridge.bookmarkSystemKey,
+    ))!;
+    final relation = bookmarkType.properties.singleWhere(
+      (property) => property.name == 'Weblink',
+    );
+    final directUrl = bookmarkType.properties.singleWhere(
+      (property) => property.name == 'URL',
+    );
+    final bookmark = (await sync.objectStore.listObjects(bookmarkType.id)).single;
+    expect(
+      ObjectRelationValue.fromJson(bookmark.values[relation.id]).objectIds,
+      isEmpty,
+    );
+    expect(bookmark.values[directUrl.id], 'not a URL');
+
+    final weblinkType = (await sync.systemObjectStore.getSystemObjectType(
+      workspaceId: workspaceId,
+      systemKey: WeblinkObjectService.systemKey,
+    ))!;
+    expect(await sync.objectStore.listObjects(weblinkType.id), isEmpty);
+
+    final report = await sync.bookmarkWeblinkBridge.syncWorkspace(workspaceId);
+    expect(report.processedCount, 1);
+    expect(report.linkedCount, 0);
+    expect(report.invalidUrlCount, 1);
+    expect(report.retiredLegacyUrlCount, 0);
   });
 
   test('activating another workspace replaces the previous live mirror', () async {
