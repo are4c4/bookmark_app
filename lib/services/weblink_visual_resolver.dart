@@ -73,7 +73,7 @@ class WeblinkVisualResolver {
 
   Future<bool> _existingFile(String path) async {
     try {
-      return File(path).exists();
+      return await File(path).exists();
     } catch (_) {
       return false;
     }
