@@ -32,6 +32,7 @@ class NotionBookmarkCard extends StatefulWidget {
     this.onOpen,
     required this.onToggleFavorite,
     required this.menu,
+    this.cover,
     this.personRoleGroups = const {},
     this.propertyOrder = const [
       'url',
@@ -62,6 +63,7 @@ class NotionBookmarkCard extends StatefulWidget {
   final VoidCallback? onOpen;
   final VoidCallback onToggleFavorite;
   final Widget menu;
+  final Widget? cover;
   final Map<String, List<Person>> personRoleGroups;
   final List<String> propertyOrder;
 
@@ -93,6 +95,7 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
   }
 
   Widget _cover() {
+    if (widget.cover != null) return widget.cover!;
     final bookmark = widget.bookmark;
     if (bookmark.coverPhoto != null) {
       return Image.file(
