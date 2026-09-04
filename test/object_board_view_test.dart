@@ -71,6 +71,22 @@ void main() {
     expect(selected?.id, 1);
   });
 
+  testWidgets('renders host-provided semantic card content', (tester) async {
+    final a = object(1, 'タスクA');
+    await tester.pumpWidget(
+      host(
+        ObjectBoardView(
+          groups: [group('todo', '未着手', [a])],
+          onObjectTap: (_) {},
+          cardContentBuilder: (_) => const Chip(label: Text('重要')),
+        ),
+      ),
+    );
+
+    expect(find.byType(Chip), findsOneWidget);
+    expect(find.text('重要'), findsOneWidget);
+  });
+
   testWidgets('create action identifies the target group', (tester) async {
     ObjectGroupBucket<AppObject>? target;
     await tester.pumpWidget(
