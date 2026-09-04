@@ -168,7 +168,11 @@ class TagTreeModel {
           )
           .map((tag) => tag.id)
           .toSet();
-      if (groupTagIds.isEmpty) continue;
+      // Real persisted groups stay visible in the normal management tree even
+      // when empty. During search/usage filtering, retain the previous behavior
+      // of showing only groups that contain an allowed Tag. The synthetic
+      // "その他タグ" row also remains hidden when it has no children.
+      if (groupTagIds.isEmpty && (entry.id == null || filtering)) continue;
       final expanded =
           filtering || expandedGroupIds.contains(entry.id ?? -1);
       rows.add(

@@ -65,6 +65,58 @@ void main() {
     expect(requestedGroup, isNull);
   });
 
+  testWidgets('persisted group menu exposes rename and delete callbacks',
+      (tester) async {
+    final actions = <String>[];
+    await _pumpTagTree(
+      tester,
+      brightness: Brightness.light,
+      textColor: Colors.black,
+      includeGroup: true,
+      persistedGroupId: 7,
+      focusedKey: 'group:7',
+      onGroupMenuAction: (groupId, action) {
+        actions.add('$groupId:$action');
+      },
+    );
+
+    final menu = find.byKey(const ValueKey('tag-group-menu:7'));
+    expect(menu, findsOneWidget);
+    final button = tester.widget<PopupMenuButton<String>>(menu);
+    expect(button.onSelected, isNotNull);
+
+    // Verify the real popup contents separately from callback dispatch so this
+    // regression does not depend on overlay hit-testing coordinates.
+    await tester.tap(menu);
+    await tester.pump();
+    expect(find.text('名前変更'), findsOneWidget);
+    expect(find.text('削除'), findsOneWidget);
+    Navigator.of(tester.element(menu)).pop();
+    await tester.pump();
+
+    button.onSelected!.call('rename');
+    button.onSelected!.call('delete');
+    expect(actions, ['7:rename', '7:delete']);
+  });
+
+  testWidgets('synthetic other group omits rename and delete actions',
+      (tester) async {
+    await _pumpTagTree(
+      tester,
+      brightness: Brightness.light,
+      textColor: Colors.black,
+      includeGroup: true,
+      focusedKey: 'group:other',
+    );
+
+    await tester.tap(find.byKey(const ValueKey('tag-group-menu:-1')));
+    await tester.pump();
+
+    expect(find.text('タグを追加'), findsOneWidget);
+    expect(find.text('名前変更'), findsNothing);
+    expect(find.text('削除'), findsNothing);
+  });
+
   testWidgets('inline create row renders below requested parent', (tester) async {
     final controller = TextEditingController();
     addTearDown(controller.dispose);
@@ -89,8 +141,10 @@ Future<void> _pumpTagTree(
   int? selectedTagId,
   String? focusedKey,
   bool includeGroup = false,
+  int? persistedGroupId,
   ValueChanged<Tag>? onAddChild,
   ValueChanged<int?>? onAddToGroup,
+  void Function(int? groupId, String action)? onGroupMenuAction,
   String? creatingUnderKey,
   TextEditingController? createController,
 }) async {
@@ -108,9 +162,9 @@ Future<void> _pumpTagTree(
   final model = TagTreeModel(
     rows: [
       if (includeGroup)
-        const TagTreeRow.group(
-          groupId: null,
-          label: 'その他タグ',
+        TagTreeRow.group(
+          groupId: persistedGroupId,
+          label: persistedGroupId == null ? 'その他タグ' : '属性',
           expanded: true,
           hasChildren: true,
         ),
@@ -143,6 +197,7 @@ Future<void> _pumpTagTree(
           createController: createController,
           onAddChild: onAddChild,
           onAddToGroup: onAddToGroup,
+          onGroupMenuAction: onGroupMenuAction,
           onSubmitCreate: () {},
           onCancelCreate: () {},
           onSelectTag: (_) {},
