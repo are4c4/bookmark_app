@@ -267,10 +267,33 @@ class _DatabaseViewTabsState extends State<DatabaseViewTabs> {
 
   Widget _controls(DatabaseViewTabPartition partition) {
     return Padding(
+      key: const ValueKey('database-view-trailing-controls'),
       padding: const EdgeInsets.only(left: 2, right: 8),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          IconButton(
+            key: const ValueKey('database-view-add-button'),
+            tooltip: '現在のビューを複製',
+            visualDensity: VisualDensity.compact,
+            onPressed: _activeView == null ? null : _createView,
+            icon: const Icon(Icons.add, size: 18),
+          ),
+          PopupMenuButton<String>(
+            key: const ValueKey('database-view-create-menu'),
+            tooltip: 'ビュー作成メニュー',
+            iconSize: 16,
+            padding: EdgeInsets.zero,
+            onSelected: (value) {
+              if (value == 'blank') _createBlankView();
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: 'blank',
+                child: Text('空のViewを作成'),
+              ),
+            ],
+          ),
           if (partition.hasOverflow)
             PopupMenuButton<int>(
               key: const ValueKey('database-view-overflow-menu'),
@@ -301,28 +324,6 @@ class _DatabaseViewTabsState extends State<DatabaseViewTabs> {
                 ),
               ),
             ),
-          IconButton(
-            key: const ValueKey('database-view-add-button'),
-            tooltip: '現在のビューを複製',
-            visualDensity: VisualDensity.compact,
-            onPressed: _activeView == null ? null : _createView,
-            icon: const Icon(Icons.add, size: 18),
-          ),
-          PopupMenuButton<String>(
-            key: const ValueKey('database-view-create-menu'),
-            tooltip: 'ビュー作成メニュー',
-            iconSize: 16,
-            padding: EdgeInsets.zero,
-            onSelected: (value) {
-              if (value == 'blank') _createBlankView();
-            },
-            itemBuilder: (_) => const [
-              PopupMenuItem(
-                value: 'blank',
-                child: Text('空のViewを作成'),
-              ),
-            ],
-          ),
         ],
       ),
     );
@@ -355,8 +356,10 @@ class _DatabaseViewTabsState extends State<DatabaseViewTabs> {
       height: 38,
       child: Row(
         children: [
-          Expanded(
+          Flexible(
+            fit: FlexFit.loose,
             child: ReorderableListView.builder(
+              shrinkWrap: true,
               scrollDirection: Axis.horizontal,
               buildDefaultDragHandles: false,
               itemCount: visibleViews.length,

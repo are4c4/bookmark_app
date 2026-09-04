@@ -429,7 +429,7 @@ class _TagTreeViewState extends State<TagTreeView> {
                   child: Container(
                     height: 38,
                     padding: EdgeInsets.only(
-                      left: UiTokens.space8 + row.depth * 20,
+                      left: UiTokens.space8 + (row.depth + 1) * 20,
                       right: UiTokens.space4,
                     ),
                     decoration: BoxDecoration(

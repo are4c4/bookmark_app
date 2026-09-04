@@ -55,16 +55,20 @@ class ObjectDetailPropertyView extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (leading != null) ...[
-            leading!,
+            Padding(
+              padding: const EdgeInsets.only(top: 1),
+              child: leading!,
+            ),
             const SizedBox(width: 6),
           ],
           SizedBox(
             width: 120,
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (presentation.isComputed)
                   const Padding(
-                    padding: EdgeInsets.only(right: 4),
+                    padding: EdgeInsets.only(top: 1, right: 4),
                     child: Icon(Icons.functions, size: 16),
                   ),
                 Expanded(
