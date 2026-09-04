@@ -1496,11 +1496,28 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                 IconButton(
                   tooltip: '削除',
                   icon: const Icon(Icons.delete_outline, size: 18),
-                  onPressed: () async {
-                    await _store.deleteRecord(record.id);
-                    if (mounted) setState(() => _selectedRecordId = null);
-                    await _reload();
-                  },
+                  onPressed: objectType == null
+                      ? null
+                      : () async {
+                          try {
+                            await _pageServices.relationMutations.deleteObject(
+                              workspaceId: widget.repository.workspaceId,
+                              objectTypeId: objectType.id,
+                              objectId: record.id,
+                            );
+                            if (mounted) {
+                              setState(() => _selectedRecordId = null);
+                            }
+                            await _reload();
+                          } catch (error) {
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Objectを削除できませんでした: $error'),
+                              ),
+                            );
+                          }
+                        },
                 ),
                 IconButton(
                   tooltip: '閉じる',
