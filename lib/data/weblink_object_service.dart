@@ -68,21 +68,25 @@ class WeblinkObjectService {
   /// Returns an existing Weblink for the normalized URL when possible.
   ///
   /// This is intentionally separate from creating a Relation from a source
-  /// Object; the Relation lane owns write-integrity rules for that later step.
+  /// Object; Relation writes remain owned by the canonical Relation boundary.
   Future<AppObject> findOrCreate({
     required int workspaceId,
     required String url,
     String? title,
   }) async {
-    final normalizedUrl = _normalizeUrl(url);
+    final normalizedUrl = normalizeUrl(url);
     final definition = await ensureDefinition(workspaceId);
     final objects = await systemObjects.objectStore.listObjects(
       definition.objectType.id,
     );
     for (final object in objects) {
-      if ('${object.values[definition.urlProperty.id] ?? ''}'.trim() ==
-          normalizedUrl) {
-        return object;
+      final stored = '${object.values[definition.urlProperty.id] ?? ''}'.trim();
+      if (stored.isEmpty) continue;
+      try {
+        if (normalizeUrl(stored) == normalizedUrl) return object;
+      } on ArgumentError {
+        // Ignore malformed pre-existing values instead of making valid Weblink
+        // creation depend on unrelated legacy corruption.
       }
     }
 
@@ -117,7 +121,7 @@ class WeblinkObjectService {
         'Weblink promotion requires a URL Value property.',
       );
     }
-    final normalizedUrl = _normalizeUrl('$sourceValue');
+    final normalizedUrl = normalizeUrl('$sourceValue');
     final uri = Uri.parse(normalizedUrl);
     final derivedTitle = title?.trim().isNotEmpty == true
         ? title!.trim()
@@ -132,16 +136,57 @@ class WeblinkObjectService {
     );
   }
 
-  String _normalizeUrl(String value) {
+  /// Canonicalizes only URI components whose equivalence is well-defined.
+  ///
+  /// Query and fragment content are deliberately preserved because changing
+  /// either can change the user-visible resource. HTTP(S) host/scheme casing,
+  /// default ports, dot path segments, and an empty root path are normalized.
+  String normalizeUrl(String value) {
     final rawUrl = value.trim();
-    final uri = Uri.tryParse(rawUrl);
-    if (rawUrl.isEmpty || uri == null || !uri.hasScheme) {
+    final parsed = Uri.tryParse(rawUrl);
+    if (rawUrl.isEmpty || parsed == null || !parsed.hasScheme) {
       throw ArgumentError.value(
         value,
         'url',
         'Weblink requires an absolute URL.',
       );
     }
-    return uri.toString();
+
+    final uri = parsed.normalizePath();
+    final scheme = uri.scheme.toLowerCase();
+    if (!uri.hasAuthority || uri.host.isEmpty) {
+      return uri.replace(scheme: scheme).toString();
+    }
+
+    final host = uri.host.toLowerCase();
+    final defaultPort = uri.hasPort &&
+        ((scheme == 'http' && uri.port == 80) ||
+            (scheme == 'https' && uri.port == 443));
+    final authority = StringBuffer();
+    if (uri.userInfo.isNotEmpty) {
+      authority
+        ..write(uri.userInfo)
+        ..write('@');
+    }
+    if (host.contains(':')) {
+      authority
+        ..write('[')
+        ..write(host)
+        ..write(']');
+    } else {
+      authority.write(host);
+    }
+    if (uri.hasPort && !defaultPort) {
+      authority
+        ..write(':')
+        ..write(uri.port);
+    }
+
+    final path = uri.path.isEmpty && (scheme == 'http' || scheme == 'https')
+        ? '/'
+        : uri.path;
+    final query = uri.hasQuery ? '?${uri.query}' : '';
+    final fragment = uri.hasFragment ? '#${uri.fragment}' : '';
+    return '$scheme://${authority.toString()}$path$query$fragment';
   }
 }
