@@ -10,6 +10,7 @@ import 'package:bookmark_app/data/weblink_image_schema_service.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/services/bookmark_visual_resolver.dart';
 import 'package:bookmark_app/services/object_sync_service.dart';
+import 'package:bookmark_app/services/weblink_visual_resolver.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -46,7 +47,7 @@ void main() {
     );
   });
 
-  test('resolver follows canonical Bookmark Weblink Representative Image edges',
+  test('Bookmark and Weblink presentation share canonical Representative Image',
       () async {
     final directory = await Directory.systemTemp.createTemp('visual_resolver_');
     addTearDown(() => directory.delete(recursive: true));
@@ -111,12 +112,20 @@ void main() {
       targetObjectIds: <int>[image.id],
     );
 
-    final resolver = BookmarkVisualResolver(
+    final weblinkResolver = WeblinkVisualResolver(sync.objectStore);
+    final weblinkVisual = await weblinkResolver.resolveManagedRepresentative(
+      weblinkObjectTypeId: schema.weblinkObjectTypeId,
+      weblinkObjectId: weblink.id,
+    );
+    expect(weblinkVisual?.imageObjectId, image.id);
+    expect(weblinkVisual?.filePath, managedFile.path);
+
+    final bookmarkResolver = BookmarkVisualResolver(
       database: database,
       workspaceId: workspaceId,
     );
     expect(
-      await resolver.resolveManagedRepresentativePath(legacyBookmarkId),
+      await bookmarkResolver.resolveManagedRepresentativePath(legacyBookmarkId),
       managedFile.path,
     );
 
@@ -125,7 +134,14 @@ void main() {
       <Object>[weblink.id, schema.representativeImageProperty.id],
     );
     expect(
-      await resolver.resolveManagedRepresentativePath(legacyBookmarkId),
+      await weblinkResolver.resolveManagedRepresentative(
+        weblinkObjectTypeId: schema.weblinkObjectTypeId,
+        weblinkObjectId: weblink.id,
+      ),
+      isNull,
+    );
+    expect(
+      await bookmarkResolver.resolveManagedRepresentativePath(legacyBookmarkId),
       isNull,
     );
   });

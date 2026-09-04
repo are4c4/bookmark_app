@@ -9,7 +9,7 @@ import '../data/generic_database_store.dart';
 import '../data/object_store.dart';
 import '../data/relation_read_service.dart';
 import '../data/system_object_store.dart';
-import '../data/weblink_image_schema_service.dart';
+import 'weblink_visual_resolver.dart';
 
 enum BookmarkVisualSourceKind {
   userCover,
@@ -43,6 +43,7 @@ class BookmarkVisualResolver {
       objectStore: _objectStore,
     );
     _relationReads = RelationReadService(_objectStore);
+    _weblinkVisuals = WeblinkVisualResolver(_objectStore);
   }
 
   final AppDatabase database;
@@ -51,6 +52,7 @@ class BookmarkVisualResolver {
   late final ObjectStore _objectStore;
   late final SystemObjectStore _systemObjects;
   late final RelationReadService _relationReads;
+  late final WeblinkVisualResolver _weblinkVisuals;
 
   BookmarkVisualSource? choosePreferred({
     String? userCoverPath,
@@ -93,7 +95,8 @@ class BookmarkVisualResolver {
     );
   }
 
-  /// Reads the canonical Relation graph and returns the managed Image File path.
+  /// Reads the canonical Bookmark -> Weblink edge, then delegates Weblink media
+  /// resolution to the shared presentation resolver used by Object-first hosts.
   ///
   /// No Relation value is decoded directly and no schema is mutated here. If an
   /// expected edge/type/file is missing, presentation falls back rather than
@@ -126,33 +129,11 @@ class BookmarkVisualResolver {
     final weblinkTypeId = weblinkEdge.property.targetObjectTypeId;
     if (weblinkTypeId == null) return null;
 
-    final weblinkOutgoing = await _relationReads.outgoing(
-      sourceObjectTypeId: weblinkTypeId,
-      sourceObjectId: weblinkEdge.targetObject.id,
+    final visual = await _weblinkVisuals.resolveManagedRepresentative(
+      weblinkObjectTypeId: weblinkTypeId,
+      weblinkObjectId: weblinkEdge.targetObject.id,
     );
-    final representativeEdges = weblinkOutgoing
-        .where(
-          (entry) =>
-              entry.property.name ==
-              WeblinkImageSchemaService.representativeImageName,
-        )
-        .toList(growable: false);
-    if (representativeEdges.length != 1) return null;
-
-    final imageEdge = representativeEdges.single;
-    final imageTypeId = imageEdge.property.targetObjectTypeId;
-    if (imageTypeId == null) return null;
-    final imageType = await _objectStore.getObjectType(imageTypeId);
-    if (imageType == null) return null;
-
-    final fileProperties = imageType.properties
-        .where((property) => property.name == 'File')
-        .toList(growable: false);
-    if (fileProperties.length != 1) return null;
-    final path = _nonEmpty(
-      imageEdge.targetObject.values[fileProperties.single.id]?.toString(),
-    );
-    return _existingFile(path);
+    return visual?.filePath;
   }
 
   Future<int?> _bookmarkObjectId(int legacyBookmarkId) async {
