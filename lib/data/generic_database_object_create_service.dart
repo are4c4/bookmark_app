@@ -2,9 +2,11 @@ import '../domain/object_group.dart';
 import '../domain/object_model.dart';
 import 'daily_note_service.dart';
 import 'generic_database_collection_page_data.dart';
+import 'image_object_service.dart';
 import 'object_board_create_service.dart';
 import 'object_store.dart';
 import 'system_object_store.dart';
+import 'weblink_object_service.dart';
 
 /// Object creation facade for collection-backed Database pages.
 ///
@@ -32,7 +34,8 @@ class GenericDatabaseObjectCreateService {
     required String title,
   }) async {
     final page = await _load(databaseId);
-    if (await _isDailyNote(page)) {
+    final systemKey = await _systemKey(page);
+    if (systemKey == DailyNoteService.systemKey) {
       final service = dailyNotes;
       if (service == null) {
         throw StateError('Daily Note creation requires DailyNoteService.');
@@ -42,6 +45,7 @@ class GenericDatabaseObjectCreateService {
       ))
           .id;
     }
+    _rejectIdentitySensitiveGenericCreate(systemKey);
     return objectStore.createObject(
       objectTypeId: page.objectType.id,
       title: title,
@@ -55,11 +59,13 @@ class GenericDatabaseObjectCreateService {
     required ObjectGroupBucket<AppObject> targetGroup,
   }) async {
     final page = await _load(databaseId);
-    if (await _isDailyNote(page)) {
+    final systemKey = await _systemKey(page);
+    if (systemKey == DailyNoteService.systemKey) {
       throw UnsupportedError(
         'Daily Notes are date-keyed and cannot be created through a generic Board group.',
       );
     }
+    _rejectIdentitySensitiveGenericCreate(systemKey);
     ObjectPropertyDefinition? canonicalProperty;
     for (final property in page.objectType.properties) {
       if (property.id == groupProperty.id) {
@@ -83,11 +89,23 @@ class GenericDatabaseObjectCreateService {
     );
   }
 
-  Future<bool> _isDailyNote(GenericDatabaseCollectionPageData page) async {
+  void _rejectIdentitySensitiveGenericCreate(String? systemKey) {
+    if (systemKey == WeblinkObjectService.systemKey) {
+      throw UnsupportedError(
+        'Weblinks must be created from a URL so canonical URL normalization and reuse are preserved.',
+      );
+    }
+    if (systemKey == ImageObjectService.systemKey) {
+      throw UnsupportedError(
+        'Images must be created from managed image/file input so canonical file identity is preserved.',
+      );
+    }
+  }
+
+  Future<String?> _systemKey(GenericDatabaseCollectionPageData page) async {
     final registry = systemObjects;
-    if (registry == null) return false;
-    return await registry.systemKeyForObjectType(page.objectType.id) ==
-        DailyNoteService.systemKey;
+    if (registry == null) return null;
+    return registry.systemKeyForObjectType(page.objectType.id);
   }
 
   Future<GenericDatabaseCollectionPageData> _load(int databaseId) async {
