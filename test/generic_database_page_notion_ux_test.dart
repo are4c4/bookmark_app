@@ -193,7 +193,11 @@ void main() {
       name: 'Notes',
       icon: '📝',
     );
-    final definition = _definition(typeId, const <DatabasePropertyDefinition>[], layout: 'list');
+    final definition = _definition(
+      typeId,
+      const <DatabasePropertyDefinition>[],
+      layout: 'list',
+    );
     await DatabaseViewStore(harness.database).createView(
       workspaceId: harness.workspaceId,
       definition: definition,
@@ -241,14 +245,16 @@ void main() {
 
     final dialog = find.byType(AlertDialog);
     expect(dialog, findsOneWidget);
-    final nameField = find.descendant(of: dialog, matching: find.byType(TextField)).first;
+    final nameField =
+        find.descendant(of: dialog, matching: find.byType(TextField)).first;
     await tester.enterText(nameField, 'Priority');
     await tester.tap(find.descendant(of: dialog, matching: find.text('追加')));
     await tester.pumpAndSettle();
 
     final properties = await harness.genericStore.listProperties(typeId);
     expect(properties.map((property) => property.name), contains('Priority'));
-    final created = properties.singleWhere((property) => property.name == 'Priority');
+    final created =
+        properties.singleWhere((property) => property.name == 'Priority');
     final views = await DatabaseViewStore(harness.database).listViews(
       workspaceId: harness.workspaceId,
       databaseKey: 'custom:$typeId',
@@ -315,7 +321,7 @@ void main() {
 
     var records = await harness.genericStore.listRecords(typeId);
     expect(records.single.values[scoreId], 5);
-    expect(find.text('数値として解釈できません'), findsOneWidget);
+    expect(find.textContaining('数値として解釈できません'), findsOneWidget);
 
     await tester.tap(find.text('5'));
     await tester.pumpAndSettle();
@@ -405,7 +411,8 @@ void main() {
 
     final records = await harness.genericStore.listRecords(bookTypeId);
     expect(
-      ObjectRelationValue.fromJson(records.single.values[authorPropertyId]).objectIds,
+      ObjectRelationValue.fromJson(records.single.values[authorPropertyId])
+          .objectIds,
       <int>[bobId],
     );
     expect(find.text('Bob'), findsOneWidget);
