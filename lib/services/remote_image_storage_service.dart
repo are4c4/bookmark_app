@@ -80,11 +80,17 @@ class RemoteImageStorageService {
       final extension = _extensionFor(contentType);
       if (extension == null || response.bodyBytes.isEmpty) return null;
 
-      // Probe dimensions once while bytes are already in memory. Gallery hosts
-      // can then use persisted Image metadata instead of decoding every image
-      // merely to determine masonry geometry. Unsupported/corrupt bytes remain
-      // optional metadata and preserve the existing import behavior.
-      final decoded = img.decodeImage(response.bodyBytes);
+      // Probe dimensions once while bytes are already in memory. Some decoders
+      // throw on truncated/fixture bytes instead of returning null; geometry is
+      // optional, so such failures must never suppress the existing managed
+      // import or the canonical Weblink -> Image workflow.
+      img.Image? decoded;
+      try {
+        decoded = img.decodeImage(response.bodyBytes);
+      } catch (_) {
+        decoded = null;
+      }
+
       final originalName = _originalName(uri, extension);
       final imported = await _storage.importBytes(
         bytes: response.bodyBytes,
