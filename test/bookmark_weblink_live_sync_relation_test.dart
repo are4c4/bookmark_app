@@ -30,7 +30,7 @@ void main() {
       );
       final legacyBookmarkId = (await database.customSelect(
         'SELECT id FROM bookmarks WHERE url = ? LIMIT 1',
-        variables: <Variable>[Variable<String>(firstUrl)],
+        variables: [Variable<String>(firstUrl)],
       ).getSingle())
           .read<int>('id');
       await database.customStatement(
