@@ -6,11 +6,13 @@ import 'package:bookmark_app/data/database_collection_store.dart';
 import 'package:bookmark_app/data/generic_database_collection_page_data.dart';
 import 'package:bookmark_app/data/generic_database_object_create_service.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
+import 'package:bookmark_app/data/image_object_service.dart';
 import 'package:bookmark_app/data/object_board_create_service.dart';
 import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/object_type_defaults_store.dart';
 import 'package:bookmark_app/data/relation_mutation_service.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
+import 'package:bookmark_app/data/weblink_object_service.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/domain/database_collection_definition.dart';
 import 'package:bookmark_app/domain/object_group.dart';
@@ -25,6 +27,8 @@ void main() {
   late DatabaseCollectionStore collectionStore;
   late GenericDatabaseObjectCreateService service;
   late DailyNoteService dailyNotes;
+  late SystemObjectStore systemObjects;
+  late ObjectTypeDefaultsStore defaultsStore;
   late int workspaceId;
 
   setUp(() async {
@@ -44,15 +48,16 @@ void main() {
         objectStore: objectStore,
       ),
     );
-    final systemObjects = SystemObjectStore(
+    systemObjects = SystemObjectStore(
       database: database,
       objectStore: objectStore,
     );
+    defaultsStore = ObjectTypeDefaultsStore(genericStore);
     dailyNotes = DailyNoteService(
       genericStore: genericStore,
       objectStore: objectStore,
       systemObjects: systemObjects,
-      defaultsStore: ObjectTypeDefaultsStore(genericStore),
+      defaultsStore: defaultsStore,
     );
     service = GenericDatabaseObjectCreateService(
       pageLoader: GenericDatabaseCollectionPageLoader(
@@ -120,6 +125,38 @@ void main() {
         '${today.year.toString().padLeft(4, '0')}-${two(today.month)}-${two(today.day)}';
     expect(created.title, dateKey);
     expect(created.values[definition.dateProperty.id], dateKey);
+  });
+
+  test('Weblinks reject generic creation that bypasses URL identity', () async {
+    final definition = await WeblinkObjectService(
+      systemObjects: systemObjects,
+      defaultsStore: defaultsStore,
+    ).ensureDefinition(workspaceId);
+
+    await expectLater(
+      service.create(
+        databaseId: definition.objectType.id,
+        title: '新規ページ',
+      ),
+      throwsA(isA<UnsupportedError>()),
+    );
+    expect(await objectStore.listObjects(definition.objectType.id), isEmpty);
+  });
+
+  test('Images reject generic creation that bypasses managed file identity', () async {
+    final definition = await ImageObjectService(
+      systemObjects: systemObjects,
+      defaultsStore: defaultsStore,
+    ).ensureDefinition(workspaceId);
+
+    await expectLater(
+      service.create(
+        databaseId: definition.objectType.id,
+        title: '新規ページ',
+      ),
+      throwsA(isA<UnsupportedError>()),
+    );
+    expect(await objectStore.listObjects(definition.objectType.id), isEmpty);
   });
 
   test('createInGroup presets canonical target ObjectType Property', () async {
