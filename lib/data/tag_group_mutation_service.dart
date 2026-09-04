@@ -61,11 +61,9 @@ class TagGroupMutationService {
     if (duplicate) throw const TagGroupNameConflictException();
   }
 
-  Never _translateConstraint(Object error) {
-    final message = '$error';
-    if (message.contains('UNIQUE constraint failed: tag_groups.name')) {
+  void _translateConstraint(Object error) {
+    if ('$error'.contains('UNIQUE constraint failed: tag_groups.name')) {
       throw const TagGroupNameConflictException();
     }
-    throw error;
   }
 }
