@@ -3,6 +3,7 @@ import 'package:bookmark_app/data/generic_database_store.dart';
 import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
+import 'package:bookmark_app/services/object_sync_service.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -82,5 +83,19 @@ void main() {
         dailyNoteType.id,
       ]),
     );
+  });
+
+  test('workspace Object sync makes Daily Notes available before first note is opened', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final sync = ObjectSyncService(database);
+    addTearDown(sync.dispose);
+
+    await sync.syncWorkspace(workspaceId);
+
+    final navigation = await GenericDatabaseStore(database).listDatabases(workspaceId);
+    final dailyNotes = navigation.singleWhere((item) => item.name == 'Daily Notes');
+    expect(dailyNotes.icon, '📅');
   });
 }
