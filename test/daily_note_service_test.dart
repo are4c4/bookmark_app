@@ -94,8 +94,13 @@ void main() {
 
     final definition = await service.ensureDefinition(workspaceId);
     final defaults = await defaultsStore.read(definition.objectType.id);
+    final navigation = await genericStore.listDatabases(workspaceId);
 
     expect(defaults?.openMode, ObjectOpenMode.fullPage);
-    expect(await genericStore.listDatabases(workspaceId), isEmpty);
+    final dailyNotes = navigation.singleWhere(
+      (item) => item.id == definition.objectType.id,
+    );
+    expect(dailyNotes.name, 'Daily Notes');
+    expect(dailyNotes.icon, '📅');
   });
 }
