@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
+import '../data/tag_group_mutation_service.dart';
 import '../data/tag_group_store.dart';
 import '../ui/ui_tokens.dart';
 import '../widgets/app_toast.dart';
@@ -55,6 +56,7 @@ class _TagManagementPageState extends State<TagManagementPage> {
   );
 
   BookmarkRepository get repository => widget.repository;
+  TagGroupMutationService get _groupMutations => TagGroupMutationService(_store);
 
   @override
   void initState() {
@@ -467,13 +469,35 @@ class _TagManagementPageState extends State<TagManagementPage> {
     final name = await _askName('タググループを追加');
     if (name?.isNotEmpty != true) return;
     try {
-      await _store.createGroup(name!);
+      final id = await _groupMutations.createGroup(name!);
+      if (!mounted) return;
+      setState(() {
+        _expandedGroupIds.add(id);
+        _focusedKey = 'group:$id';
+      });
+      await _saveExpansion();
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('グループを追加できませんでした: $error')),
         );
       }
+    }
+  }
+
+  Future<void> _renameGroup(TagGroupInfo group) async {
+    final name = await _askName(
+      'グループ名を変更',
+      initial: group.name,
+    );
+    if (name?.isNotEmpty != true || name == group.name) return;
+    try {
+      await _groupMutations.renameGroup(group.id, name!);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('グループ名を変更できませんでした: $error')),
+      );
     }
   }
 
@@ -497,7 +521,23 @@ class _TagManagementPageState extends State<TagManagementPage> {
         ],
       ),
     );
-    if (confirmed == true) await _store.deleteGroup(group.id);
+    if (confirmed != true) return;
+    try {
+      await _groupMutations.deleteGroup(group.id);
+      if (!mounted) return;
+      setState(() {
+        _expandedGroupIds.remove(group.id);
+        if (_focusedKey == 'group:${group.id}') {
+          _focusedKey = null;
+        }
+      });
+      await _saveExpansion();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('グループを削除できませんでした: $error')),
+      );
+    }
   }
 
   Future<void> _manageGroups() async {
@@ -528,15 +568,7 @@ class _TagManagementPageState extends State<TagManagementPage> {
                         children: [
                           IconButton(
                             tooltip: '名前変更',
-                            onPressed: () async {
-                              final name = await _askName(
-                                'グループ名を変更',
-                                initial: group.name,
-                              );
-                              if (name?.isNotEmpty == true) {
-                                await _store.renameGroup(group.id, name!);
-                              }
-                            },
+                            onPressed: () => _renameGroup(group),
                             icon: const Icon(Icons.edit_outlined),
                           ),
                           IconButton(
@@ -971,9 +1003,18 @@ class _TagManagementPageState extends State<TagManagementPage> {
   }
 
   void _groupMenuAction(int? groupId, String action) {
+    if (action == 'add') {
+      _beginInlineCreate(groupId: groupId);
+      return;
+    }
+    if (groupId == null) return;
+    final group = _groupById(groupId);
+    if (group == null) return;
     switch (action) {
-      case 'add':
-        _beginInlineCreate(groupId: groupId);
+      case 'rename':
+        _renameGroup(group);
+      case 'delete':
+        _deleteGroup(group);
     }
   }
 
