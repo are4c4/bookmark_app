@@ -151,21 +151,24 @@ class GenericDatabaseStore {
         sortOrder: row.read<int>('sort_order'),
       );
 
-  /// User-created databases only. System ObjectTypes are intentionally hidden
-  /// from the normal DATABASES section in the sidebar.
+  /// User-facing Database destinations. Custom Databases remain visible while
+  /// selected system ObjectTypes may deliberately opt into the same generic
+  /// Database/View navigation surface. Weblink is the first such system type.
   Future<List<GenericDatabaseDefinitionRecord>> listDatabases(int workspaceId) async {
     await ensureSchema();
     final hasSystemRegistry = await _hasSystemObjectRegistry();
     final rows = await database.customSelect(
       hasSystemRegistry
-          ? '''SELECT d.id, d.workspace_id, d.name, d.icon, d.sort_order
+          ? '''SELECT d.id, d.workspace_id,
+                      CASE WHEN s.system_key = 'weblink'
+                           THEN 'Weblinks' ELSE d.name END AS name,
+                      d.icon, d.sort_order
                FROM generic_databases d
+               LEFT JOIN system_object_types s ON s.object_type_id = d.id
                WHERE d.workspace_id = ?
-                 AND NOT EXISTS (
-                   SELECT 1 FROM system_object_types s
-                   WHERE s.object_type_id = d.id
-                 )
-               ORDER BY d.sort_order, d.id'''
+                 AND (s.object_type_id IS NULL OR s.system_key = 'weblink')
+               ORDER BY CASE WHEN s.system_key = 'weblink' THEN 0 ELSE 1 END,
+                        d.sort_order, d.id'''
           : '''SELECT id, workspace_id, name, icon, sort_order
                FROM generic_databases
                WHERE workspace_id = ?
