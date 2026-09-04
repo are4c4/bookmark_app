@@ -5,96 +5,118 @@
 ## Lane scope
 Own Relation/backlink lifecycle, bidirectional integrity, relation write validation, rename/delete propagation, target constraints, stale/inconsistent metadata handling, Tag hierarchy through Relations, and reusable Relation APIs consumed by Object-owned hosts.
 
-## Active Issue
-`#56` — Integrate generic Object database UX toward Notion/Capacities workflow
+## Active Issues
+- `#155` — Architecture: make Weblink a reusable Object and relate Bookmarks to it
+- `#56` — Integrate generic Object database UX toward Notion/Capacities workflow
+
+## Current goal
+Complete the Relation-owned boundary for Weblink Objectization without creating a Weblink-specific Relation persistence path. Object-owned workflows provide existing Bookmark/Weblink/Image Object ids and the semantic Relation Properties; Relation writes, reads, indexes, audit/reconcile, detach, and deletion must use the existing canonical Relation APIs.
 
 ## Current state
 - Relation foundation PRs #62/#66/#69/#73/#74/#75/#80/#81 are merged.
-- PR #109 editor-boundary regression coverage is merged as `d51b5023ede27bcf0c66670620e86643a1b07038`.
-- Object PR #111 completed the real `GenericDatabasePage` Relation picker/editor migration through `GenericDatabasePageServices.relationEditor`.
-- PR #114 `Cover Relation lifecycle in real database host` is merged as `a152c4984331789af8450bfe10ed62a4bea0cce1`.
-- `lib/views` no longer contains a user-facing direct `ObjectStore.setRelation()` call; real page writes route through the canonical Relation editor/mutation facade.
-- Object PRs #112/#113/#115 are merged Object inspector/Body integration and do not change Relation lifecycle.
-- Object PR #116 is active Daily Note/Object inspector work; its scope explicitly contains no Relation lifecycle changes.
-- No active Relation implementation PR remains.
+- #109 and #114 lock the canonical editor and real Database-host Relation lifecycle.
+- Issue #155 Relation-lane semantic coverage is merged through:
+  - #174 `Cover canonical Bookmark to Weblink Relation boundary` -> `2b50b2465521a7426baec37b9a4594f7d3b80327`.
+  - #175 `Cover Weblink Image Relation integrity` -> `9e0565e228284d71c119c4b68836eb20036811ed`.
+  - #176 `Cover Weblink Image Relation deletion lifecycle` -> `668af896556372b9ec55d57a98e24174a4010179`.
+  - #177 `Cover Bookmark Weblink Relation guardrails` -> `78ba4f824e1edb4ea28ac7de81528844afd14355`.
+- Issue #155 Relation-lane acceptance is now fully checked for the boundary where existing source/target Object ids and persisted Relation Properties are supplied.
+- No Weblink-specific Relation service, index, serialization format, or repair path was introduced.
+- No production schema or destructive migration was added by the Relation lane.
+- No active Relation implementation PR remains from this run.
 
-## Stable Relation APIs on main
+## Stable canonical Relation APIs used by #155
 
 ### Mutation / lifecycle
-- `RelationMutationService`
-  - canonical persisted Property resolution;
-  - safe unidirectional and bidirectional writes;
-  - pair-aware rename/delete;
-  - Relation-safe Object deletion that detaches surviving references first;
-  - fail-closed behavior for inconsistent bidirectional metadata.
-- `BidirectionalRelationStore`
-  - reciprocal pair validation;
-  - canonical pair writes;
-  - transactional pair rename/delete.
+- `RelationMutationService.setRelation(...)`
+  - re-resolves persisted Property metadata instead of trusting stale caller config;
+  - validates source Object ownership, target ObjectType, target Object existence, and cardinality through the canonical ObjectStore boundary;
+  - replaces normalized edges atomically with the persisted Relation value;
+  - remains the only write boundary used by the #155 semantic regressions.
+- `RelationMutationService.deleteObject(...)`
+  - rebuilds the index before deletion;
+  - discovers all incoming references;
+  - validates detach plans before writes;
+  - detaches surviving sources through canonical `setRelation(...)`;
+  - deletes the target only after surviving Relation values/indexes are safe.
 
 ### Read / backlinks
-- `RelationReadService`
-  - resolved outgoing Relations;
-  - resolved backlinks;
-  - `RelationNeighborhood` for shared Object graph context.
+- `RelationReadService.backlinks(...)` resolves normalized backlinks to canonical source Objects/Properties.
+- Existing `ObjectStore.outgoingRelations(...)` / `backlinks(...)` are used only as normalized-index observations in tests, not as a parallel write API.
 
-### Picker / editor
-- `RelationTargetService.selectionFor()` returns canonical source Object, valid candidates, selected ids/Objects, missing target ids, and single-cardinality diagnostics without mutation.
-- `ObjectRelationEditorService`
-  - load delegates to canonical selection;
-  - explicit save accepts only canonical candidates and enforces cardinality;
-  - writes delegate to `RelationMutationService`.
-- `GenericDatabasePageServices.relationEditor` composes the canonical path used by the real `GenericDatabasePage`.
-- Real picker behavior on main:
-  - opening is read-only;
-  - missing-target/cardinality diagnostics are shown;
-  - save occurs only after explicit user action;
-  - stale target deletion after load fails closed and surfaces an error;
-  - bidirectional saves synchronize the inverse side.
+### Integrity / reconciliation
+- `RelationIntegrityService` remains read-only and reports semantic Relation corruption such as missing targets and index drift.
+- `RelationIndexReconcileService` repairs only deterministic index-only drift from persisted Relation values and refuses ambiguous missing-target/value repair.
 
-### Persistence / integrity
-- `RelationIndexService` rebuilds normalized edges from persisted Relation values.
-- `RelationIntegrityService` audits missing/cross-workspace targets, cardinality, index drift, bidirectional metadata and inverse mismatches without mutating user values.
-- `RelationIndexReconcileService` repairs only deterministic index-only drift and refuses ambiguous repair.
-
-### Tag / legacy mirror lifecycle
-- Legacy Tag -> Tag Object synchronization uses general Relation lifecycle APIs.
-- Removing orphan Tag Objects cleans incoming Parent Relations.
-- `CoreObjectBridge` Images/Tags writes use `RelationMutationService`.
-- Orphan mirrored Image/Bookmark deletion uses Relation-safe Object deletion.
-
-## Checkpoints completed in the latest audit run
-1. Re-read `AGENTS.md`, Issue #56, repository handoff, Relation handoff, and latest PR state.
-2. Confirmed #114 remains the latest Relation implementation checkpoint and is merged after CI-green real-host lifecycle coverage.
-3. Reviewed recent Object integration sequence: #112/#113/#115 are merged; #116 is active Daily Note/Object inspector integration and explicitly has no Relation lifecycle changes.
-4. Re-audited `setRelation(` call sites. User-facing host writes remain absent from `lib/views`; remaining low-level calls are canonical service internals, bridge/services that already use `RelationMutationService`, or tests/corruption fixtures.
-5. Re-audited `relationEditor` usage and confirmed the real `GenericDatabasePage` continues to load/save through `GenericDatabasePageServices.relationEditor` rather than a new parallel lifecycle path.
-6. No new editable Relation surface was introduced in Object inspector or Daily Note work; current Object detail Relation consumption remains presentation/navigation only.
-7. No concrete failing Relation correctness case, API gap, backlink/index regression, or lifecycle defect was found that can be implemented independently without inventing speculative abstraction or ambiguous repair policy.
+## Issue #155 checkpoints completed in this sustained run
+1. Re-read latest `AGENTS.md`, Issues #155/#56, repository handoff, Relation handoff, current main/open PRs, and canonical Relation implementation.
+2. Audited `RelationMutationService`, `ObjectStore` validation/index replacement, `RelationReadService`, integrity audit, reconcile, `WeblinkObjectService`, and `CoreObjectBridge` schema ownership.
+3. PR #174 added Bookmark -> Weblink semantic boundary coverage:
+   - existing Bookmark/Weblink ids attach through `RelationMutationService` only;
+   - setting the same single target twice is idempotent and leaves exactly one normalized edge;
+   - multiple Bookmarks safely reference one Weblink;
+   - raw and resolved backlinks contain both Bookmark sources;
+   - explicit canonical detach removes only that Bookmark reference;
+   - Relation-safe Weblink deletion empties surviving Bookmark Relation values and removes backlinks/index edges.
+4. PR #175 added Weblink -> Image semantic integrity coverage:
+   - `Representative image` is enforced as single Relation(Image);
+   - `Related images` supports multi Relation(Image);
+   - wrong target ObjectType and single-cardinality violations fail closed;
+   - forged/stale caller target/cardinality metadata is ignored in favor of persisted canonical Property metadata;
+   - a healthy Bookmark -> Weblink + Weblink -> Image graph audits healthy;
+   - manually introduced missing index drift is detected and repaired by `RelationIndexReconcileService` without changing persisted Relation values.
+5. PR #176 added Image deletion lifecycle coverage:
+   - the same Image may be representative/related and referenced by multiple Weblinks;
+   - canonical Image deletion detaches every incoming Weblink Relation;
+   - unrelated Related-images targets are preserved;
+   - deleted target backlinks and stale normalized edges disappear.
+6. PR #177 added Bookmark -> Weblink guardrails:
+   - stale caller metadata cannot redirect the canonical target ObjectType;
+   - stale `multiple=true` cannot bypass the persisted single cardinality;
+   - wrong target ids fail closed;
+   - a deliberately corrupted missing Weblink target is reported by the audit;
+   - reconciliation refuses that ambiguous repair and preserves the user's persisted Relation value.
+7. Updated Issue #155 to mark all six Relation-lane acceptance items complete and recorded the remaining Object-owned integration dependency.
 
 ## Validation
-- PR #114 corrected head `e3b357c5427e43d4ba248d2391ffe73e48253812`: Drift generation — success; `flutter analyze` — success; full test suite — success (Flutter CI #620).
-- PR #109 head `576346d836c2ad07c3f2a590640751dd8b107741`: Drift generation, analyze, full tests — success (Flutter CI #597).
-- Previous Relation PRs #66/#69/#73/#74/#75/#80/#81 were CI-green before merge.
-- This latest run made no code changes because the audit found no concrete Relation defect; therefore no new CI run was warranted.
+All four Issue #155 Relation PRs passed fresh GitHub Actions before merge:
+- #174 head `b7130dfd3798015d1e7dacd2a91d7740c93e76bf` — Flutter CI #746: dependency install, Drift generation, `flutter analyze`, full test suite — success.
+- #175 head `4b4483b095438b5d294fe685a047a2aed72d18b3` — Flutter CI #747: dependency install, Drift generation, `flutter analyze`, full test suite — success.
+- #176 head `0f727c7c6218896b02f4eeca548f01b92829caf8` — Flutter CI #748: dependency install, Drift generation, `flutter analyze`, full test suite — success.
+- #177 head `44bc716f2053293af7e1b42af5b3b104a163625b` — Flutter CI #750: dependency install, Drift generation, `flutter analyze`, full test suite — success.
 
-## Exact next actions
-1. Treat the real `GenericDatabasePage` Relation editor acceptance path as integrated and covered; do not create another parallel picker/editor abstraction.
-2. Resume Relation implementation when real-host usage or a new Object-owned editable Relation surface exposes a concrete lifecycle/read/index/backlink regression; begin with a focused failing test.
-3. Keep integrity audit and repair separate. Do not auto-repair missing targets, cardinality conflicts, broken bidirectional values, or other ambiguous user data without explicit product/data policy.
-4. Continue Tag hierarchy and legacy mirror changes only through the general Relation APIs.
-5. If Object detail gains Relation editing, reuse `RelationTargetService` / `ObjectRelationEditorService` with non-mutating load and explicit save, then add end-to-end host regression coverage before considering the path complete.
+GitHub Actions is the executable validation source in this connector-only session.
+
+## Object-lane schema audit / cross-lane dependency
+Current production schema intentionally remains Object-owned:
+- `CoreObjectBridge` Bookmark system schema currently has direct `URL`, plus existing `Images` and `Tags` Relations, but does **not** yet define the new `Bookmark -> Weblink` single Relation.
+- `WeblinkObjectService.ensureDefinition(...)` currently ensures the Weblink ObjectType and `URL` Value Property only; it does **not** yet define `Representative image` or `Related images` Relations.
+- Per Issue #155 ownership, Relation lane did not add these schema Properties or alter URL migration/creation behavior.
+
+The next end-to-end #155 work therefore belongs to Object lane:
+1. add/ensure the semantic Relation Properties in the system schemas using the agreed types/cardinality;
+2. make new Bookmark URL entry find-or-create the Weblink, then call the existing canonical Relation mutation boundary;
+3. orchestrate non-destructive legacy Bookmark URL migration (attach first, verify, then retire legacy Value when safe);
+4. when Image Object ids exist, call canonical mutation for representative/related image Relations;
+5. add real workflow/host integration regressions that consume these already-covered Relation boundaries.
+
+## Exact next Relation actions
+1. Do not create another Weblink-specific Relation facade merely to rename `RelationMutationService`; the generic canonical boundary already satisfies #155.
+2. When Object lane lands the actual `Bookmark -> Weblink`, `Representative image`, or `Related images` schema/workflow, audit the diff for direct serialized-id writes or low-level Relation mutation and replace only concrete violations.
+3. Add focused end-to-end Relation regressions if the Object-owned URL-entry/migration/thumbnail workflows expose a lifecycle, backlink, index, stale-metadata, or deletion failure.
+4. Keep audit and repair separate: deterministic index drift may reconcile; missing targets/cardinality/bidirectional ambiguity must not be silently repaired.
+5. Continue to use low-level direct deletion/value writes only in explicit corruption fixtures, never in normal user-facing #155 flows.
 
 ## Cross-lane boundary
-- `GenericDatabasePage`, Object detail/navigation, Daily Note host integration, Body UI and View/Database navigation remain Object-owned host surfaces.
-- The real Database page consumes the stable Relation boundary correctly; Relation lane should not compete with ongoing Object host work unless fixing a concrete Relation regression.
-- `lib/data/object_store.dart` is shared infrastructure; future Relation edits there must stay narrow and refresh latest main first.
-- Active Object PR #116 does not require a Relation dependency at this time.
+- URL normalization, `WeblinkObjectService.findOrCreate(...)`, Bookmark creation UX, legacy URL migration orchestration, Weblink/Image system schema evolution, metadata fetching, thumbnail storage, Image Object creation, and presentation remain Object-lane owned under #155.
+- Relation lane owns correctness after the source id, target id, and persisted Relation Property exist.
+- `lib/data/object_store.dart` and other shared core files need no #155 Relation changes at this point; avoid speculative edits while Object work continues.
+- Object PR #178 is Body alias-reference work and explicitly has no Relation lifecycle changes; it does not block the completed #155 Relation boundary.
 
 ## Known risks / blockers
-- Low-level generic ObjectStore operations remain intentionally available for persistence internals, corruption simulation tests, and rollback paths; normal user-facing Relation mutations must continue using the canonical facade.
-- Missing-target/cardinality/bidirectional-value automatic repair remains intentionally explicit-only because choosing a repair policy can discard user intent.
-- Object detail currently consumes canonical Relation presentation/read data; any future editable Relation UI there must preserve the same non-mutating-load / explicit-save contract.
+- Production end-to-end Bookmark -> Weblink use cannot occur until Object lane adds the persisted semantic Relation Property and wires the URL-entry/migration flows.
+- Production Weblink -> Image relations likewise depend on Object-owned Weblink/Image schema and Image creation/enrichment pipeline.
+- Automatic repair of missing Weblink/Image targets could discard user intent and remains intentionally prohibited.
 
 ## Stop reason
-The lane currently satisfies the AGENTS.md stopping criterion "no remaining actionable work in the Issue" for independent Relation work. The real Database Relation lifecycle is integrated and covered, low-level user-facing writes are gone, and the latest Object host work introduces no new Relation write path. Further work now depends on a concrete regression or a new editable Relation host surface; inventing additional abstractions or automatic repair policy would violate the integration-first and explicit-repair design rules.
+Issue #155 has no remaining independent actionable Relation-lane work under the agreed ownership split: all six Relation-lane acceptance items are covered by canonical API regressions and are CI-green/merged. The remaining path requires Object-owned schema evolution and workflow orchestration to provide the actual semantic Relation Properties and Object ids. Continuing independently would either duplicate the generic Relation APIs or cross the explicit Object-lane schema/workflow boundary. This matches the AGENTS.md stopping condition: the next safe step is blocked by an unavoidable cross-lane dependency, not by pending CI or completion of one PR.
