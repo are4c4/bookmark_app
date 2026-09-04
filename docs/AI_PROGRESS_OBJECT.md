@@ -3,63 +3,78 @@
 > Durable handoff for the Object implementation lane. Update this file before every Object-lane run ends.
 
 ## Lane scope
-Object/ObjectType architecture, Property value semantics, Object-centric Database/View integration, Object detail presentation, Body/block model, reusable Object types, Daily Notes, and Value-to-Object promotion contracts.
+Object/ObjectType architecture, Property value semantics, Object-centric Database/View integration, Object detail presentation, Body/block model, reusable Object types, Daily Notes, Value-to-Object promotion, system-collection exposure, and Object-owned presentation.
 
-## Active Issue
-`#56` — Integrate generic Object database UX toward Notion/Capacities workflow.
+## Active issues
+- `#56` — generic Object/Database/View product integration.
+- `#155` — reusable Weblink Object + managed Image presentation/navigation.
+- `#156` — fixed/masonry Gallery View modes.
+- `#149` — Property-row visual polish; implementation landed, pending real-host visual validation.
 
 ## Current integration state
-The main real-host Database/View opening path is integrated. `main` contains collection-aware `GenericDatabasePage`, canonical Relation editing, shared Object Property/Body inspector content, Body actions and Object/Database/View references, Daily Note navigation, Multi-View management, persisted Object opening modes, contextual side/center/full Object opening, explicit side-peek → full-page promotion, and regression coverage that promotion/editing continues to operate on the same global Object.
+The generic Object/Database/View foundation is already integrated into real hosts. Current work is product exposure and presentation rather than new parallel abstractions.
 
-PR #146 passed Flutter CI #710 and squash-merged as `60ed7a273e513e8494d5e5cfbc4b296b88578563`. The real Database side peek now consumes the same `ObjectDetailPropertyPresenter` + `ObjectDetailPropertyView` used by shared Object detail presentation while preserving reorder, Value editing, computed read-only behavior, canonical Relation chips, title edit, backlinks, pane sizing, full-page promotion, and active View context. The same PR also exposes the existing canonical `RelationMutationService` through `GenericDatabasePageServices` for Object-owned host lifecycle consumption.
+Important current `main` state:
+- canonical Bookmark -> Weblink and Weblink -> Image production flows are live;
+- managed remote previews become Image Objects and Representative-image Relations in the real app host;
+- Bookmark detail consumes the managed visual resolver (#199);
+- Weblinks are exposed through the existing generic sidebar/Database navigation list (#203);
+- Gallery View mode persistence is on `main` (#204);
+- the deterministic shared six-dot Property handle/grid is on `main` (#205);
+- shared fixed/masonry Gallery renderer + toolbar control is on `main` (#206).
 
-The active slice closes the concrete correctness gap left after #146: the side-peek delete button still used low-level `_store.deleteRecord(record.id)`, which could leave surviving incoming Relation values stale. PR #147 moves only that host callback to `RelationMutationService.deleteObject(...)` and adds real-host regression coverage.
-
-## Active branch / PR
-- Branch: `feature/object-side-peek-relation-safe-delete`
-- PR: #147 — `Use Relation-safe deletion from Database side peek`
-- Base main: `60ed7a273e513e8494d5e5cfbc4b296b88578563` (#146 squash).
-- Latest implementation/test head before this handoff refresh: `8e50771d5a3ce09a5fa439e6aee2f602e1e6ea21`.
-- Latest Flutter CI #712 is in progress at this handoff update.
-
-## Checkpoints completed in the latest sustained run
-1. Confirmed #146 latest head `05bc1e91b176b867e4df8d1d4a9a8e78347d581a` passed Flutter CI #710 and squash-merged it as `60ed7a273e513e8494d5e5cfbc4b296b88578563`.
-2. Created fresh branch `feature/object-side-peek-relation-safe-delete` from the #146 merge.
-3. Added `test/generic_database_page_side_peek_delete_relation_test.dart` with a real-host scenario: a surviving Book Object has an incoming Author Relation to the Person Object selected in the real Database side peek; deletion must remove the selected Person and detach the surviving Relation value.
-4. Re-read the exact latest-main `GenericDatabasePage` hotspot and retained the existing Object/Relation ownership boundary rather than changing low-level `GenericDatabaseStore.deleteRecord` semantics or duplicating Relation lifecycle logic.
-5. Replaced only the side-peek delete callback with `_pageServices.relationMutations.deleteObject(...)`, passing the active workspace, loaded target ObjectType, and selected Object id.
-6. Preserved pane close/reload behavior and added a host-level error SnackBar if canonical deletion fails. The delete action is disabled only if the loaded ObjectType is unavailable.
-7. Because the connector requires whole-file replacement, reconstructed `GenericDatabasePage` from exact blob `fadeb16aa0331ecacf2f745689989e85d378d58c`, then compare-audited `main...branch` after the write.
-8. Compare audit confirms only two changed files: `lib/views/generic_database_page.dart` (`+22/-5`) and the new real-host test (`+118`). No schema, migration, Relation implementation, Body, navigation, View, or other host behavior changed.
-9. Opened PR #147 and started Flutter CI #712.
-10. Re-read the Relation handoff. No active Relation implementation PR exists; `RelationMutationService.deleteObject(...)` remains the stable Relation-owned boundary intended for Object-detail consumers.
+## Latest sustained-run checkpoints
+1. Read `AGENTS.md`, Issue #56, repository-wide progress, this Object handoff, recent PRs/commits and CI before changing state.
+2. Inspected open PR #203 (`feature/object-weblink-sidebar-collection-155`). Flutter CI #845 was green. Squash-merged as `1f1b749f7191846f7e5b925f20112c23a1bfc5a5`.
+   - Weblink is now the first selected system ObjectType exposed by `GenericDatabaseStore.listDatabases(...)`.
+   - Sidebar label is `Weblinks`, icon remains the canonical `🔗`, and routing reuses the existing generic Database tile / `GenericDatabasePage` path.
+   - No Weblink-specific persistence or navigation model was introduced.
+3. Refreshed Issue #155 after #199/#203 so its remaining work is explicitly presentation/consolidation: remaining Bookmark Gallery/Table managed visual migration, polished generic Weblink collection presentation, rich Weblink/Image presentation, then legacy compatibility retirement.
+4. Inspected open PR #206 (`feature/object-gallery-renderer-156`) and its diff. It adds shared `ObjectGalleryView` plus Gallery-only fixed/masonry toolbar control while reusing one item builder and `DatabaseViewGalleryAdapter`.
+5. Verified Flutter CI #846 for #206:
+   - Drift generation: success
+   - `flutter analyze`: success
+   - full tests: success
+6. Squash-merged #206 as `0b9026ba860560bdfee6fb670a488325078c9f3d`.
+7. Refreshed Issue #156 to record:
+   - #204 persisted `settings.galleryMode = fixed | masonry` is merged;
+   - #206 shared renderer/control is merged;
+   - real `GenericDatabasePage` still uses its legacy fixed `GridView.builder`, so end-to-end mode switching in the actual Gallery host is the next priority.
+8. Re-audited current `GenericDatabasePage`: its `_gallery(...)` host still owns the existing card builder/opening/property/create-card behavior. The safest next integration is to replace only Gallery geometry with `ObjectGalleryView` and decode mode from the active View, without changing card semantics.
 
 ## Exact next actions
-1. Inspect PR #147 Flutter CI #712. Fix only branch-caused analyze/test failures.
-2. If latest-head CI is green and main has not advanced incompatibly, squash-merge #147 with expected head SHA.
-3. After #147 merge, refresh repository-wide `docs/AI_PROGRESS.md` to record #146/#147 real-host convergence and remove stale #139-era priorities.
-4. Continue Issue #56 with the next smallest duplicated side-pane detail element rather than broad `GenericDatabasePage` rewrite. Prefer a focused regression before each host convergence change.
-5. Candidate next convergence work: shared title/detail session consumption or reusable Relation context in side/center/full presentation, but only after re-auditing current main and existing Inspector behavior to avoid duplicating already-integrated functionality.
-6. Keep Image/File Body selectors deferred until concrete reusable asset pickers exist. Keep RichText/Document Property and manual collection membership deferred until their recorded prerequisites are met.
+1. **#156 real-host Gallery integration — highest priority**
+   - patch `GenericDatabasePage` rather than whole-file replacement;
+   - import/use `DatabaseViewGalleryAdapter` and `ObjectGalleryView`;
+   - keep the existing `_gallery` item builder, Object opening, semantic Property rendering and create-card flow unchanged;
+   - decode `GalleryViewMode` from `_activeView` only; do not create another state model;
+   - add a focused real-host widget regression: toolbar fixed/masonry change -> persisted View setting -> real Gallery renderer geometry changes while Object identity/opening remains unchanged.
+2. **#155 remaining managed visual migration**
+   - identify remaining Bookmark Gallery/Table/card thumbnail hosts still reading legacy thumbnail paths directly;
+   - switch them to the merged `BookmarkVisualResolver`/shared visual component in small read-only slices;
+   - do not retire legacy remote fallback until all old hosts are migrated and validated.
+3. **#155 Weblink generic collection polish**
+   - verify `Weblinks` sidebar routing in the real app;
+   - improve default generic Weblink Table/Gallery/List presentation using existing ObjectType defaults/View contracts rather than a Weblink-specific page.
+4. **#149**
+   - #205 implementation is merged; close only after a real-host screenshot/visual validation confirms the deterministic handle is aligned. Do not resume pixel-tuning of `Icons.drag_indicator`.
 
 ## Cross-lane boundaries
-- Relation lifecycle, bidirectional integrity, source/target validation, backlink/index repair, stale metadata handling, and Tag hierarchy mutation remain Relation-owned.
-- User-facing Relation Property writes and Object deletion that can affect incoming Relations must consume canonical Relation mutation APIs.
-- PR #147 does not modify Relation lifecycle implementation; it consumes the already-integrated facade from the Object-owned real Database host.
-- Body Object/Database/View references remain document references, not Relation Property writes.
-- `GenericDatabasePage`, Object detail/navigation, Body editing/reference insertion, Daily Notes, and Multi-View UX remain Object-owned.
+- Relation lane has no independent open work. #166 alias-aware picker and #155 managed-preview Relation lifecycle are already covered through real hosts.
+- New Object-owned presentation/navigation work must remain read-only with respect to Relations unless it introduces a genuinely new Relation-producing workflow.
+- Any Relation mutation/deletion continues through canonical Relation services only.
+- #156 Gallery geometry and #149 visual alignment are Object-only presentation work.
 
 ## Validation
-- #146 head `05bc1e91b176b867e4df8d1d4a9a8e78347d581a`: Flutter CI #710 — success; Drift generation — success; `flutter analyze` — success; full tests — success; squash merge `60ed7a273e513e8494d5e5cfbc4b296b88578563`.
-- #147 compare audit from `60ed7a273e513e8494d5e5cfbc4b296b88578563` to `8e50771d5a3ce09a5fa439e6aee2f602e1e6ea21`: exactly two files changed; production hotspot `+22/-5`, one new real-host test.
-- #147 Flutter CI #712: in progress at this handoff refresh.
-- Local Flutter commands are unavailable in this connector-only runtime; executable validation is GitHub Actions.
+- #203 head `d81c1fcbd1b92c78583b17c93735eb64d360a54b`: Flutter CI #845 — success; squash merge `1f1b749f7191846f7e5b925f20112c23a1bfc5a5`.
+- #206 head `9ac63ebf55f006e49bc84299a3d74493a92f0e54`: Flutter CI #846 — success; Analyze — success; full Test — success; squash merge `0b9026ba860560bdfee6fb670a488325078c9f3d`.
+- #205 deterministic Property handle is already merged as `dbc30cd054f86bcc2db5dbd207aac4265cdb3150`.
+- This connector-only runtime cannot run local Flutter commands; GitHub Actions is the executable validation source.
 
 ## Risks / blockers
-- No product/design blocker or Relation implementation blocker is active.
-- `GenericDatabasePage` remains a large hotspot; every whole-file replacement must use the exact current blob and be diff-audited before merge.
-- User-facing Object deletion must not regress to low-level record deletion when Relations may reference the Object.
-- Do not regress canonical Relation writes, rich Body preservation, opening context, or side-pane Value editing while converging detail UI.
+- `GenericDatabasePage` is a large hotspot. The available connector writes existing files by whole-file replacement, while the next #156 step should be a small patch. Reconstructing the entire page merely to replace Gallery geometry is unnecessarily risky and contrary to the repository guidance to avoid broad hotspot replacement.
+- The next safe high-priority implementation therefore needs a patch-capable code-editing runtime (or an equivalent small-diff file patch action) to modify `GenericDatabasePage` safely.
+- No product/design blocker and no Relation blocker is active.
 
 ## Stop reason
-No stop condition has been reached yet. PR #147 is in executable CI validation, and the lane should continue by fixing/merging it when green, then taking the next safe Object-owned integration slice if runtime remains available.
+This run completed multiple safe checkpoints (#203 merge, #206 CI validation/merge, Issue #155/#156 synchronization). The next highest-priority Object slice is the real `GenericDatabasePage` Gallery integration, but the current connector exposes only whole-file replacement for that large hotspot. A safe small patch requires a patch-capable runtime; broad reconstruction would create avoidable regression risk. This matches the runtime/tool-limit stopping condition. The next Object run should resume with the exact #156 host patch above.
