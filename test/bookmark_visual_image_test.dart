@@ -45,7 +45,6 @@ void main() {
       people: const [],
       photos: const [],
       collections: const [],
-      thumbnail: 'https://example.com/legacy.jpg',
     );
 
     await tester.pumpWidget(
@@ -65,15 +64,17 @@ void main() {
         ),
       ),
     );
-    // The FutureBuilder only needs a bounded microtask/frame turn. Avoid
-    // pumpAndSettle here because image decoding can keep scheduler activity
-    // alive and stall the repository-wide test run.
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 1));
 
     final image = tester.widget<Image>(find.byType(Image));
     expect(image.image, isA<FileImage>());
     expect(find.text('placeholder'), findsNothing);
+
+    // Dispose FileImage listeners before test teardown. The test intentionally
+    // has no legacy remote thumbnail, so decode failure cannot start HTTP I/O.
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
   });
 
   testWidgets('shows the supplied placeholder when no visual resolves',
@@ -118,5 +119,8 @@ void main() {
 
     expect(find.text('placeholder'), findsOneWidget);
     expect(find.byType(Image), findsNothing);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
   });
 }
