@@ -1,4 +1,5 @@
 import 'package:http/http.dart' as http;
+import 'package:image/image.dart' as img;
 
 import 'photo_storage_service.dart';
 
@@ -8,12 +9,25 @@ class ManagedRemoteImage {
     required this.sourceUrl,
     required this.originalName,
     required this.contentType,
+    this.pixelWidth,
+    this.pixelHeight,
   });
 
   final String path;
   final String sourceUrl;
   final String originalName;
   final String contentType;
+  final int? pixelWidth;
+  final int? pixelHeight;
+
+  double? get aspectRatio {
+    final width = pixelWidth;
+    final height = pixelHeight;
+    if (width == null || height == null || width <= 0 || height <= 0) {
+      return null;
+    }
+    return width / height;
+  }
 }
 
 /// Downloads optional Weblink preview images into app-managed photo storage.
@@ -66,6 +80,11 @@ class RemoteImageStorageService {
       final extension = _extensionFor(contentType);
       if (extension == null || response.bodyBytes.isEmpty) return null;
 
+      // Probe dimensions once while bytes are already in memory. Gallery hosts
+      // can then use persisted Image metadata instead of decoding every image
+      // merely to determine masonry geometry. Unsupported/corrupt bytes remain
+      // optional metadata and preserve the existing import behavior.
+      final decoded = img.decodeImage(response.bodyBytes);
       final originalName = _originalName(uri, extension);
       final imported = await _storage.importBytes(
         bytes: response.bodyBytes,
@@ -76,6 +95,8 @@ class RemoteImageStorageService {
         sourceUrl: uri.toString(),
         originalName: imported.originalName,
         contentType: contentType,
+        pixelWidth: decoded?.width,
+        pixelHeight: decoded?.height,
       );
     } on ArgumentError {
       rethrow;

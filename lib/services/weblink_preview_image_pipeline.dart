@@ -133,6 +133,8 @@ class WeblinkPreviewImagePipeline {
       sourceUrl: managed.sourceUrl,
       originalFilename: managed.originalName,
       contentType: managed.contentType,
+      pixelWidth: managed.pixelWidth,
+      pixelHeight: managed.pixelHeight,
     );
     await _attachRepresentative(
       weblinkObjectId: weblinkObjectId,
