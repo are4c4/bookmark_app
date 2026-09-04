@@ -7,13 +7,21 @@ import '../data/bookmark_weblink_object_bridge.dart';
 import '../data/core_object_bridge.dart';
 import '../data/generic_database_store.dart';
 import '../data/object_store.dart';
+import '../data/object_type_defaults_store.dart';
 import '../data/system_object_store.dart';
 import '../data/tag_object_bridge.dart';
+import '../data/weblink_object_service.dart';
 import '../data/workspace_store.dart';
+import 'remote_image_storage_service.dart';
+import 'weblink_preview_image_pipeline.dart';
 
 class ObjectSyncService {
-  ObjectSyncService(this.database)
-      : objectStore = ObjectStore(GenericDatabaseStore(database)) {
+  ObjectSyncService(
+    this.database, {
+    this.enableRemotePreviewImages = false,
+    RemoteImageStorageService? remoteImageStorage,
+  })  : objectStore = ObjectStore(GenericDatabaseStore(database)),
+        _remoteImageStorage = remoteImageStorage {
     systemObjectStore = SystemObjectStore(
       database: database,
       objectStore: objectStore,
@@ -43,12 +51,24 @@ class ObjectSyncService {
 
   final AppDatabase database;
   final ObjectStore objectStore;
+  final bool enableRemotePreviewImages;
+  final RemoteImageStorageService? _remoteImageStorage;
   late final SystemObjectStore systemObjectStore;
   late final TagObjectBridge tagBridge;
   late final CoreObjectBridge coreBridge;
   late final BookmarkWeblinkObjectBridge bookmarkWeblinkBridge;
+  late final WeblinkPreviewImagePipeline _previewImagePipeline =
+      WeblinkPreviewImagePipeline(
+        database: database,
+        objectStore: objectStore,
+        systemObjectStore: systemObjectStore,
+        remoteStorage: _remoteImageStorage,
+      );
 
+  final Map<String, String> _attemptedPreviewUrls = <String, String>{};
   StreamSubscription<Object?>? _subscription;
+  Future<void>? _previewSyncFuture;
+  int? _queuedPreviewWorkspaceId;
   int? _watchedWorkspaceId;
   bool _syncing = false;
   bool _syncQueued = false;
@@ -58,7 +78,8 @@ class ObjectSyncService {
   ///
   /// Calling this from startup or Workspace switching automatically disposes
   /// the previous active mirror and then performs an immediate sync.
-  Future<void> syncWorkspace(int workspaceId) => startWatchingWorkspace(workspaceId);
+  Future<void> syncWorkspace(int workspaceId) =>
+      startWatchingWorkspace(workspaceId);
 
   Future<void> syncActiveWorkspace() async {
     final workspaceId = await WorkspaceStore(database).activeWorkspaceId();
@@ -101,6 +122,81 @@ class ObjectSyncService {
   Future<void> _syncNow(int workspaceId) async {
     await coreBridge.syncAll(workspaceId);
     await bookmarkWeblinkBridge.syncWorkspace(workspaceId);
+    if (enableRemotePreviewImages) {
+      // Remote enrichment must never hold up the canonical Object mirror or app
+      // startup. The queue below coalesces later syncs and contains failures.
+      unawaited(syncRemotePreviewImages(workspaceId));
+    }
+  }
+
+  /// Runs the optional Weblink preview ingestion queue and can be awaited by
+  /// focused callers/tests that need to observe managed-image completion.
+  Future<void> syncRemotePreviewImages(int workspaceId) {
+    if (!enableRemotePreviewImages || _disposed) return Future<void>.value();
+    _queuedPreviewWorkspaceId = workspaceId;
+    final running = _previewSyncFuture;
+    if (running != null) return running;
+    final future = _runQueuedPreviewSync();
+    _previewSyncFuture = future;
+    return future;
+  }
+
+  Future<void> _runQueuedPreviewSync() async {
+    try {
+      while (!_disposed) {
+        final workspaceId = _queuedPreviewWorkspaceId;
+        if (workspaceId == null) return;
+        _queuedPreviewWorkspaceId = null;
+        await _performPreviewSync(workspaceId);
+      }
+    } finally {
+      _previewSyncFuture = null;
+    }
+  }
+
+  Future<void> _performPreviewSync(int workspaceId) async {
+    if (_disposed || _watchedWorkspaceId != workspaceId) return;
+    try {
+      final genericStore = GenericDatabaseStore(database);
+      final weblinks = WeblinkObjectService(
+        systemObjects: systemObjectStore,
+        defaultsStore: ObjectTypeDefaultsStore(genericStore),
+      );
+      final definition = await weblinks.ensureDefinition(workspaceId);
+      final objects = await objectStore.listObjects(definition.objectType.id);
+
+      for (final weblink in objects) {
+        if (_disposed || _watchedWorkspaceId != workspaceId) return;
+        final rawPreview =
+            '${weblink.values[definition.previewImageUrlProperty.id] ?? ''}'
+                .trim();
+        if (rawPreview.isEmpty) continue;
+
+        String normalizedPreview;
+        try {
+          normalizedPreview = weblinks.normalizeUrl(rawPreview);
+        } on ArgumentError {
+          continue;
+        }
+        final attemptKey = '$workspaceId:${weblink.id}';
+        if (_attemptedPreviewUrls[attemptKey] == normalizedPreview) continue;
+        // Record before I/O so a failing remote URL cannot be retried on every
+        // tag/photo/bookmark watcher tick. A changed URL or app restart retries.
+        _attemptedPreviewUrls[attemptKey] = normalizedPreview;
+
+        try {
+          await _previewImagePipeline.ingestIfMissing(
+            workspaceId: workspaceId,
+            weblinkObjectId: weblink.id,
+          );
+        } catch (_) {
+          // Thumbnail ingestion is optional. Canonical Bookmark -> Weblink sync
+          // remains successful even if remote I/O or Image enrichment fails.
+        }
+      }
+    } catch (_) {
+      // Schema/setup enrichment failures are contained for the same reason.
+    }
   }
 
   void _queueSync(int workspaceId) {
@@ -127,6 +223,7 @@ class ObjectSyncService {
   Future<void> stopWatching() async {
     _watchedWorkspaceId = null;
     _syncQueued = false;
+    _queuedPreviewWorkspaceId = null;
     final subscription = _subscription;
     _subscription = null;
     await subscription?.cancel();

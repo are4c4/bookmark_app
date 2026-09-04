@@ -67,10 +67,13 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
     final workspaceId = await workspaceStore.initialize();
     final lifecycleStore = BookmarkLifecycleStore(database);
     await lifecycleStore.initialize();
-    await ObjectSyncService(database).syncWorkspace(workspaceId);
+    PhotoStorageService.activePhotoDirectoryPath = profile.photoDirectoryPath;
+    await ObjectSyncService(
+      database,
+      enableRemotePreviewImages: true,
+    ).syncWorkspace(workspaceId);
     _workspaceStore = workspaceStore;
     _lifecycleStore = lifecycleStore;
-    PhotoStorageService.activePhotoDirectoryPath = profile.photoDirectoryPath;
     return BookmarkRepository(
       database,
       workspaceStore: workspaceStore,
@@ -185,7 +188,10 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
       return;
     }
     await store.setActiveWorkspace(workspace.id);
-    await ObjectSyncService(database).syncWorkspace(workspace.id);
+    await ObjectSyncService(
+      database,
+      enableRemotePreviewImages: true,
+    ).syncWorkspace(workspace.id);
     if (!mounted) return;
     setState(() {
       _repository = BookmarkRepository(
@@ -328,7 +334,9 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
       chipTheme: ChipThemeData(
         backgroundColor: notionRaised,
         side: BorderSide.none,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(UiTokens.radiusSm)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(UiTokens.radiusSm),
+        ),
         labelStyle: TextStyle(fontSize: 12.5, color: notionText),
         padding: const EdgeInsets.symmetric(horizontal: UiTokens.space4),
       ),
@@ -338,7 +346,10 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
           minimumSize: const WidgetStatePropertyAll(Size(32, 32)),
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           padding: const WidgetStatePropertyAll(
-            EdgeInsets.symmetric(horizontal: UiTokens.space8, vertical: UiTokens.space4),
+            EdgeInsets.symmetric(
+              horizontal: UiTokens.space8,
+              vertical: UiTokens.space4,
+            ),
           ),
         ),
       ),
@@ -391,7 +402,9 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
       home = GlobalFileDropLayer(
         repository: repository,
         child: BookmarkAppShell(
-          key: ValueKey('${manager.state.activeProfile.id}:${repository.workspaceId}'),
+          key: ValueKey(
+            '${manager.state.activeProfile.id}:${repository.workspaceId}',
+          ),
           repository: repository,
           profileState: manager.state,
           themeMode: _themeMode,
