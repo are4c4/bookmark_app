@@ -369,6 +369,7 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
             title: object.title,
             objectTypeName: objectType.name,
             objectTypeIcon: objectType.icon,
+            aliases: await _aliasStore.listAliases(object.id),
           ),
         );
       }
