@@ -65,7 +65,11 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    // The FutureBuilder only needs a bounded microtask/frame turn. Avoid
+    // pumpAndSettle here because image decoding can keep scheduler activity
+    // alive and stall the repository-wide test run.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1));
 
     final image = tester.widget<Image>(find.byType(Image));
     expect(image.image, isA<FileImage>());
@@ -109,7 +113,8 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1));
 
     expect(find.text('placeholder'), findsOneWidget);
     expect(find.byType(Image), findsNothing);
