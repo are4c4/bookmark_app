@@ -39,12 +39,17 @@ class ObjectPropertyValueView extends StatelessWidget {
     return switch (property.type) {
       ObjectPropertyType.select => _chips(
           context,
-          value == null || '$value'.isEmpty ? const <String>[] : <String>['$value'],
+          value == null || '$value'.isEmpty
+              ? const <String>[]
+              : <String>['$value'],
         ),
       ObjectPropertyType.multiSelect => _chips(
           context,
           value is Iterable
-              ? value.map((item) => '$item').where((item) => item.isNotEmpty).toList()
+              ? value
+                  .map((item) => '$item')
+                  .where((item) => item.isNotEmpty)
+                  .toList()
               : value == null || '$value'.isEmpty
                   ? const <String>[]
                   : <String>['$value'],
@@ -64,7 +69,8 @@ class ObjectPropertyValueView extends StatelessWidget {
                 : TextDecoration.underline,
           ),
         ),
-      ObjectPropertyType.image => _assetChip(context, value, Icons.image_outlined),
+      ObjectPropertyType.image =>
+        _assetChip(context, value, Icons.image_outlined),
       ObjectPropertyType.file => _assetChip(context, value, Icons.attach_file),
       _ => _text(context, presentation.displayText),
     };
@@ -73,7 +79,9 @@ class ObjectPropertyValueView extends StatelessWidget {
   Widget _chips(BuildContext context, List<String> labels) {
     final normalized = labels.where((label) => label.trim().isNotEmpty).toList();
     if (normalized.isEmpty) return _empty(context);
-    final limit = maxItems == null ? normalized.length : maxItems!.clamp(0, normalized.length);
+    final limit = maxItems == null
+        ? normalized.length
+        : maxItems!.clamp(0, normalized.length).toInt();
     final visible = normalized.take(limit).toList(growable: false);
     final overflow = normalized.length - visible.length;
     return Wrap(
@@ -82,7 +90,8 @@ class ObjectPropertyValueView extends StatelessWidget {
       children: [
         ...visible.map(
           (label) => Chip(
-            visualDensity: _compact ? VisualDensity.compact : VisualDensity.standard,
+            visualDensity:
+                _compact ? VisualDensity.compact : VisualDensity.standard,
             materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
             labelPadding: EdgeInsets.symmetric(horizontal: _compact ? 2 : 4),
             label: Text(
@@ -103,7 +112,9 @@ class ObjectPropertyValueView extends StatelessWidget {
   }
 
   Widget _rating(dynamic value) {
-    final count = (value is num ? value.toInt() : int.tryParse('$value') ?? 0).clamp(0, 5);
+    final count = (value is num ? value.toInt() : int.tryParse('$value') ?? 0)
+        .clamp(0, 5)
+        .toInt();
     if (count == 0) return const SizedBox.shrink();
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -117,7 +128,8 @@ class ObjectPropertyValueView extends StatelessWidget {
   Widget _assetChip(BuildContext context, dynamic value, IconData icon) {
     if (value == null || '$value'.isEmpty) return _empty(context);
     return Chip(
-      visualDensity: _compact ? VisualDensity.compact : VisualDensity.standard,
+      visualDensity:
+          _compact ? VisualDensity.compact : VisualDensity.standard,
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
       avatar: Icon(icon, size: _compact ? 14 : 16),
       label: Text('$value', overflow: TextOverflow.ellipsis),
@@ -125,7 +137,9 @@ class ObjectPropertyValueView extends StatelessWidget {
   }
 
   Widget _text(BuildContext context, dynamic value, {TextStyle? style}) {
-    if (value == null || '$value'.isEmpty || '$value' == 'なし') return _empty(context);
+    if (value == null || '$value'.isEmpty || '$value' == 'なし') {
+      return _empty(context);
+    }
     return Text(
       '$value',
       maxLines: _compact ? 1 : null,
