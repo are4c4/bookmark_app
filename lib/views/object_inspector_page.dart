@@ -6,6 +6,7 @@ import '../data/daily_note_navigation_service.dart';
 import '../data/daily_note_service.dart';
 import '../data/database_view_store.dart';
 import '../data/generic_database_store.dart';
+import '../data/object_alias_store.dart';
 import '../data/object_body_block_action_controller.dart';
 import '../data/object_body_block_duplicate_service.dart';
 import '../data/object_body_block_edit_service.dart';
@@ -33,6 +34,7 @@ import '../domain/object_detail_property_presentation.dart';
 import '../domain/object_model.dart';
 import '../features/object/presentation/object_body_database_view_reference_catalog.dart';
 import '../features/object/presentation/widgets/daily_note_navigation_bar.dart';
+import '../features/object/presentation/widgets/object_alias_editor.dart';
 import '../features/object/presentation/widgets/object_body_block_action_bar.dart';
 import '../features/object/presentation/widgets/object_body_database_view_reference_picker.dart';
 import '../features/object/presentation/widgets/object_body_document_view.dart';
@@ -67,10 +69,13 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
     outgoing: <ResolvedOutgoingRelation>[],
     backlinks: <ResolvedRelationBacklink>[],
   );
+  List<String> _aliases = const <String>[];
   final Set<int> _promotingWeblinkPropertyIds = <int>{};
   String? _systemKey;
   bool _loading = true;
   bool _dailyNoteNavigating = false;
+
+  ObjectAliasStore get _aliasStore => ObjectAliasStore(widget.store);
 
   ObjectBodyStore get _bodyStore => ObjectBodyStore(widget.store);
 
@@ -175,6 +180,7 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
       objectTypeId: node.objectTypeId,
       objectId: node.objectId,
     );
+    final aliases = await _aliasStore.listAliases(node.objectId);
 
     if (!mounted) return;
     setState(() {
@@ -182,8 +188,51 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
       _content = content;
       _systemKey = systemKey;
       _relations = relations;
+      _aliases = aliases;
       _loading = false;
     });
+  }
+
+  Future<void> _refreshAliases() async {
+    final aliases = await _aliasStore.listAliases(widget.objectId);
+    if (mounted) setState(() => _aliases = aliases);
+  }
+
+  Future<void> _addAlias(String alias) async {
+    try {
+      final added = await _aliasStore.addAlias(
+        objectId: widget.objectId,
+        alias: alias,
+      );
+      if (!added) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('同じ別名が既に登録されています')),
+        );
+        return;
+      }
+      await _refreshAliases();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('別名を追加できませんでした: $error')),
+      );
+    }
+  }
+
+  Future<void> _removeAlias(String alias) async {
+    try {
+      await _aliasStore.removeAlias(
+        objectId: widget.objectId,
+        alias: alias,
+      );
+      await _refreshAliases();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('別名を削除できませんでした: $error')),
+      );
+    }
   }
 
   Future<void> _openObject(int objectId) {
@@ -694,6 +743,14 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
                 ),
             ],
           ),
+          if (!node.isSystemType || _aliases.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            ObjectAliasEditor(
+              aliases: _aliases,
+              onAdd: node.isSystemType ? null : _addAlias,
+              onRemove: node.isSystemType ? null : _removeAlias,
+            ),
+          ],
           if (dailyNoteDate != null) ...[
             const SizedBox(height: 12),
             DailyNoteNavigationBar(
