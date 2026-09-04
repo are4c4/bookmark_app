@@ -6,12 +6,28 @@ class ObjectBodyObjectReferenceCandidate {
     required this.title,
     required this.objectTypeName,
     required this.objectTypeIcon,
+    this.aliases = const <String>[],
   });
 
   final int objectId;
   final String title;
   final String objectTypeName;
   final String objectTypeIcon;
+  final List<String> aliases;
+
+  String? matchingAlias(String normalizedQuery) {
+    if (normalizedQuery.isEmpty) return null;
+    for (final alias in aliases) {
+      if (alias.toLowerCase().contains(normalizedQuery)) return alias;
+    }
+    return null;
+  }
+
+  bool matches(String normalizedQuery) =>
+      normalizedQuery.isEmpty ||
+      title.toLowerCase().contains(normalizedQuery) ||
+      objectTypeName.toLowerCase().contains(normalizedQuery) ||
+      matchingAlias(normalizedQuery) != null;
 }
 
 Future<int?> showObjectBodyObjectReferencePicker(
@@ -43,15 +59,9 @@ class _ObjectBodyObjectReferencePickerDialogState
   @override
   Widget build(BuildContext context) {
     final query = _query.trim().toLowerCase();
-    final visible = query.isEmpty
-        ? widget.candidates
-        : widget.candidates
-            .where(
-              (candidate) =>
-                  candidate.title.toLowerCase().contains(query) ||
-                  candidate.objectTypeName.toLowerCase().contains(query),
-            )
-            .toList(growable: false);
+    final visible = widget.candidates
+        .where((candidate) => candidate.matches(query))
+        .toList(growable: false);
 
     return AlertDialog(
       title: const Text('Objectを参照'),
@@ -65,7 +75,7 @@ class _ObjectBodyObjectReferencePickerDialogState
               autofocus: true,
               decoration: const InputDecoration(
                 prefixIcon: Icon(Icons.search),
-                hintText: 'Object名またはObjectTypeで検索',
+                hintText: 'Object名・別名・ObjectTypeで検索',
               ),
               onChanged: (value) => setState(() => _query = value),
             ),
@@ -77,13 +87,18 @@ class _ObjectBodyObjectReferencePickerDialogState
                       itemCount: visible.length,
                       itemBuilder: (context, index) {
                         final candidate = visible[index];
+                        final matchedAlias = candidate.matchingAlias(query);
                         return ListTile(
                           key: ValueKey(
                             'body-object-reference-candidate-${candidate.objectId}',
                           ),
                           leading: Text(candidate.objectTypeIcon),
                           title: Text(candidate.title),
-                          subtitle: Text(candidate.objectTypeName),
+                          subtitle: Text(
+                            matchedAlias == null
+                                ? candidate.objectTypeName
+                                : '${candidate.objectTypeName} · 別名: $matchedAlias',
+                          ),
                           onTap: () => Navigator.pop(
                             context,
                             candidate.objectId,
