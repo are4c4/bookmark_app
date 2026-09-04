@@ -3,79 +3,70 @@
 > Repository-wide integration checkpoint for AI development. Lane-specific implementation details live in the lane handoff files.
 
 ## Current goal
-Finish the transition from strong generic Object/Relation foundations to a coherent daily-use database workflow: **ObjectType = schema, Database = collection, View = presentation/query**.
+Finish the transition from strong generic Object/Relation foundations to a coherent daily-use workflow: **ObjectType = schema, Database = collection, View = presentation/query**.
 
 Product direction: **Capacities-like Object-centric data model + Notion-like Database/View UX**.
 
-Active architecture issues:
+Active architecture/product issues:
 - `#56` — generic Object/Database/View integration.
-- `#155` — make Weblink a reusable Object and relate Bookmarks to it.
+- `#155` — reusable Weblink Object + managed Image presentation/navigation.
+- `#156` — fixed/masonry Gallery presentation.
+- `#149` — Property handle alignment; implementation merged, real-host visual validation remains.
 
 `#166` (Object aliases) is closed as completed.
 
 ## Current implementation position
-The generic Object/Relation architecture is integrated into real Database/Object hosts. Relation work is mature and no independent Relation slice is currently pending. The dominant remaining work is Object-owned product exposure: managed Weblink/Image presentation, first-class system collection navigation, Gallery/Property polish, and eventual legacy compatibility retirement.
+The generic Object/Relation architecture is integrated into real Database/Object hosts. Relation work is mature and no independent Relation implementation slice is currently pending. The dominant remaining work is Object-owned product exposure and presentation.
+
+Recent Object progress on `main`:
+- #199 — Bookmark detail cover consumes managed Weblink/Image visual resolution.
+- #203 — system Weblink collection is exposed as `Weblinks` through the existing generic sidebar/Database navigation list.
+- #204 — persisted per-View `GalleryViewMode.fixed | masonry` in `settings['galleryMode']` while keeping one `layoutType = gallery` semantic.
+- #205 — deterministic shared 2x3 Property drag handle + explicit first-line layout grid.
+- #206 — shared `ObjectGalleryView` fixed/masonry renderer plus Gallery-only toolbar selector; Flutter CI #846 green and merged.
+
+The next highest-value gap is real `GenericDatabasePage` consumption of #206: the production Gallery host still uses its legacy fixed `GridView.builder`, so persisted mode switching is not yet end-to-end in the real host.
 
 ## Issue #155 production state
 ### Bookmark -> Weblink
 Live on `main`:
-- #179 `BookmarkWeblinkObjectBridge` in `ObjectSyncService` writes the single `Bookmark -> Weblink` Relation only through `RelationMutationService`.
-- #180 conservative URL normalization/reuse.
-- #181 verification-first direct Object URL retirement while legacy `bookmarks.url` remains compatibility data.
-- #183/#186 Weblink-owned shared metadata.
-- Relation #182/#184/#188 cover retarget, invalid detach, single/shared deletion and deterministic index-only reconcile.
+- canonical `Bookmark -> Weblink` through `ObjectSyncService` / `RelationMutationService`;
+- conservative URL normalization/reuse;
+- verification-first direct Object URL retirement while legacy `bookmarks.url` remains compatibility data;
+- Weblink-owned core metadata.
 
 ### Managed Image / Weblink -> Image
 Live on `main`:
-- #185 native Image/Bookmark survival during legacy mirror cleanup.
-- #187 app-managed remote image storage.
-- #189 managed Image Object identity/provenance/reuse.
-- #191 production `Representative image` single Relation(Image) and `Related images` multi Relation(Image) schema.
-- #192 production-schema canonical mutation/backlink/index/audit/delete lifecycle coverage.
-- #193 real `WeblinkPreviewImagePipeline`: preview metadata -> managed storage -> Image Object -> canonical Representative Relation.
-- #194 real app-host background preview ingestion without blocking canonical Object sync.
-- #196 read-only `BookmarkVisualResolver` using canonical `RelationReadService` with precedence: user cover -> managed Representative Image -> legacy remote fallback.
-- Relation #198 covers the real preview pipeline for retry idempotency, Representative replacement, deterministic reconcile and managed Image delete/detach.
-- Relation #201 covers the real `ObjectSyncService(enableRemotePreviewImages: true)` host for normalized edge/backlink/audit plus canonical Image deletion detach.
+- app-managed remote image storage;
+- managed Image Object identity/provenance/reuse;
+- production `Representative image` single Relation(Image) and `Related images` multi Relation(Image);
+- real preview pipeline and real app-host background ingestion;
+- canonical `BookmarkVisualResolver` through `RelationReadService`;
+- Bookmark detail cover wired to managed visual resolution (#199);
+- Relation lifecycle coverage through real pipeline/host boundaries.
 
-Active Object presentation work:
-- #199 — real Bookmark detail cover rendering from managed Images; read-only, no Relation mutation changes.
+### First-class navigation
+- #203 exposes `Weblinks` through the same generic sidebar/Database path used by user-created Databases.
+- No Weblink-specific page or persistence model was introduced.
 
 Remaining #155 work is primarily:
-- managed visual host migration across remaining Bookmark/Table/Gallery surfaces;
-- first-class Weblink collection/sidebar exposure;
-- rich Weblink/Image presentation;
-- provider metadata expansion only where useful;
-- legacy URL/remote-thumbnail compatibility retirement after Object-first hosts are proven.
+- remaining Bookmark Gallery/Table/card managed visual migration;
+- polished generic Weblink Table/Gallery/List presentation and real-app verification;
+- rich Weblink/Image presentation, ideally converging with #156 Gallery work;
+- eventual legacy URL/remote-thumbnail compatibility retirement after equivalent Object-first hosts are proven.
 
 ## Object identity / aliases — completed (#166)
-Merged:
-- #171 alias persistence.
-- #172 shared canonical-title + alias identity search.
-- #173 shared detail alias editing.
-- #178 Body Object-reference alias resolution to canonical Object ids.
-- #195 Relation candidate search reuses the shared identity service, scopes to persisted target ObjectType and preserves the canonical picker candidate set.
-- #200 real `GenericDatabasePage` Relation picker resolves aliases, shows `別名: ...`, guards stale async search responses and saves canonical Object ids only.
-- #202 real-host ambiguity/target-type regression: two same-alias valid targets remain visible while a same-alias wrong-ObjectType Object is excluded.
-
-Issue #166 is closed. Future Object merge/deduplication is a separate deferred product workflow.
+Alias persistence, shared identity search, detail editing, Body reference resolution, alias-aware Relation candidate search, real Relation picker consumption and ambiguity/target-type regressions are merged. References persist canonical Object ids only.
 
 ## Integrated Relation foundations
-Canonical Relation validation/mutation/read/index lifecycle, backlinks, bidirectional integrity, target/source validation, integrity audit/reconciliation, Relation-safe Object deletion, picker diagnostics and real-host regressions are all on `main`.
+Canonical Relation mutation/read/index lifecycle, backlinks, target/cardinality validation, safe deletion/detach, integrity audit/reconcile, stale metadata guardrails, alias-aware picker integration and real managed-preview workflow regressions are on `main`.
 
-Recent Relation sequence:
-- #174/#175/#176/#177 — core #155 attach/detach/idempotency/target/cardinality/stale-metadata/delete/reconcile contracts.
-- #182/#184/#188 — production Bookmark/Weblink retarget/detach/delete/reconcile.
-- #190/#192 — native/production Weblink/Image survival and lifecycle.
-- #195/#200/#202 — alias-aware Relation search/picker/canonical-id/ambiguity/target-scope behavior.
-- #198/#201 — real managed-preview pipeline and real ObjectSync host Relation lifecycle.
+No Weblink-specific Relation service, alternate index, or direct serialized-id persistence path exists.
 
-No Weblink-specific Relation service, alternate index, or direct serialized-id persistence path has been introduced.
-
-A final Relation audit found no new view-level direct `ObjectStore.setRelation(...)` path. Production Relation writers continue through canonical Relation-layer services/adapters.
+Relation lane should resume only when Object lane introduces a new Relation-producing workflow or a concrete Relation correctness regression appears.
 
 ## Repository-wide design contract
-- Object is global and unique; Databases collect/show Objects rather than own duplicate records.
+- Object is global and unique; Databases collect/show Objects rather than own duplicates.
 - ObjectType = schema + reusable defaults.
 - Database = target ObjectType + collection semantics.
 - View = presentation/query over a Database collection.
@@ -85,37 +76,32 @@ A final Relation audit found no new view-level direct `ObjectStore.setRelation(.
 - Value, Object Relation and Computed remain distinct.
 - Tags are Objects; Select/MultiSelect remain lightweight local options.
 - Date is a Value; Daily Note is an Object keyed by date.
-- Weblink stores resource-derived identity/facts; Bookmark stores user-specific organization/evaluation and relates to Weblink.
-- User-facing Relation writes and Relation-affecting deletion must use canonical Relation APIs.
+- Weblink stores resource-derived facts; Bookmark stores user-specific organization/evaluation and relates to Weblink.
+- User-facing Relation writes and Relation-affecting deletion use canonical Relation APIs.
 - Aliases are search/presentation metadata; references and Relations persist canonical Object ids.
 
 ## Delivery priorities
-1. Object lane: finish #155 managed Weblink/Image presentation across real hosts and first-class Weblink navigation/collection exposure.
-2. Object lane: implement #156 persisted fixed/masonry Gallery modes while reusing the same Object projection/cover/opening behavior.
-3. Object lane: finish #149 deterministic six-dot Property handle/layout alignment.
-4. Continue retiring legacy Bookmark-specific paths only after equivalent Object-first hosts are proven.
-5. Relation lane: resume only for new Relation-producing workflows or concrete Relation correctness regressions; add focused real-host coverage rather than new abstractions.
-6. Use the app actively and derive further Object/Database/Body work from real friction.
+1. Object lane: wire #206 into the real `GenericDatabasePage` Gallery host with a small patch, reusing its existing card builder/opening/Property behavior.
+2. Object lane: add real-host #156 regression for persisted fixed/masonry switching and mixed media geometry.
+3. Object lane: finish #155 managed visual migration across remaining Bookmark/Table/Gallery/card surfaces and polish generic Weblink collection presentation.
+4. Object lane: validate #205 in a real-host screenshot; close #149 only after visible alignment is confirmed.
+5. Continue retiring legacy Bookmark-specific paths only after equivalent Object-first hosts are proven.
+6. Relation lane: resume only for new Relation-producing workflows or concrete regressions.
+7. Use the app actively and derive further Object/Database/Body work from real friction.
 
 ## Validation status
-Recent green CI:
-- #192 CI #798.
-- #195 CI #811.
-- #198 CI #819.
-- #200 CI #823.
-- #201 CI #825.
-- #202 CI #828.
-
-Earlier relevant #155 Relation/Object CI includes #179 #760, #181 #765, #182 #766, #184 #771, #185 #782, #190 #787, #188 corrected #790 and #191 corrected/rebased #796.
+Recent relevant green CI:
+- #203 Flutter CI #845 — success.
+- #206 Flutter CI #846 — Drift generation, analyze and full tests success.
+- Earlier recent Relation/Object validation includes #192 #798, #195 #811, #198 #819, #200 #823, #201 #825, #202 #828.
 
 ## Known risks / sequencing constraints
-- Do not introduce feature-specific Relation persistence; reuse `RelationMutationService` and Relation read/index/audit/reconcile services.
-- Do not silently repair missing targets or cardinality conflicts; only deterministic index-only drift is automatically reconcilable.
-- Alias-aware Relation search must never broaden beyond canonical picker candidates or persist alias strings as identity.
-- Legacy Bookmark URL retirement remains verification-first and compatibility data remains non-destructive.
-- Native Image cleanup must continue distinguishing first-class no-Legacy-ID Objects from stale mirrored Objects.
-- Managed media Relations must only be written after a valid managed Image Object id exists.
-- Current #155 presentation/navigation work is read-only/Object-owned unless it introduces a new Relation-producing workflow.
+- `GenericDatabasePage` is a large hotspot. Prefer a patch-capable edit for #156 host integration rather than reconstructing/replacing the entire file through a connector-only contents write.
+- Do not introduce feature-specific Relation persistence; reuse canonical Relation services.
+- Do not silently repair ambiguous Relation damage; only deterministic index-only drift is automatically reconcilable.
+- Legacy Bookmark URL/thumbnail retirement remains verification-first and non-destructive.
+- Managed media Relations are written only after valid managed Image Object ids exist.
+- #156 Gallery geometry is presentation/View-setting work and must not duplicate Object identity or Relation state.
 
 ## Current lane status
-Relation lane has completed its currently available work through #202. Issue #166 is closed and #155's existing managed-preview Relation workflow is covered through the real host. Remaining open work is Object-owned presentation/navigation/legacy retirement, so Relation should stop until a new production Relation surface or concrete regression appears.
+Object lane completed the latest safe integration checkpoints: #203 sidebar Weblinks merged and #206 shared Gallery renderer/control merged. The next exact step is the small real-host `GenericDatabasePage` Gallery patch. Relation lane has no independent pending work.
