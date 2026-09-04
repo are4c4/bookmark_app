@@ -47,6 +47,8 @@ class ObjectIdentitySearchService {
         }
 
         final normalizedTitle = normalizeObjectAlias(object.title);
+        final exactTitle = normalizedTitle == normalizedQuery;
+        final partialTitle = normalizedTitle.contains(normalizedQuery);
         String? exactAlias;
         String? partialAlias;
         for (final alias in aliases) {
@@ -59,20 +61,18 @@ class ObjectIdentitySearchService {
           }
         }
 
-        String? matchedAlias;
-        final matches = switch ((normalizedTitle, exactAlias, partialAlias)) {
-          (final title, _, _) when title == normalizedQuery => true,
-          (_, final alias?, _) => true,
-          (final title, _, _) when title.contains(normalizedQuery) => true,
-          (_, _, final alias?) => true,
-          _ => false,
-        };
-        if (!matches) continue;
+        if (!exactTitle &&
+            exactAlias == null &&
+            !partialTitle &&
+            partialAlias == null) {
+          continue;
+        }
 
-        if (normalizedTitle != normalizedQuery) {
+        String? matchedAlias;
+        if (!exactTitle) {
           if (exactAlias != null) {
             matchedAlias = exactAlias;
-          } else if (!normalizedTitle.contains(normalizedQuery)) {
+          } else if (!partialTitle) {
             matchedAlias = partialAlias;
           }
         }
