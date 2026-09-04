@@ -56,9 +56,16 @@ class ObjectDetailPropertyView extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (leading != null) ...[
-            Padding(
-              padding: const EdgeInsets.only(top: 1),
-              child: leading!,
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: Align(
+                // Material's drag-indicator glyph is optically top-heavy.
+                // Keep a stable label-row-sized slot and lower the glyph by
+                // roughly one pixel without changing the host-owned handle.
+                alignment: const Alignment(0, 0.2),
+                child: leading!,
+              ),
             ),
             const SizedBox(width: 6),
           ],
