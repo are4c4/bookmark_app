@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../domain/object_detail_property_presentation.dart';
 import 'object_property_value_view.dart';
+import 'property_drag_handle.dart';
 
 /// Shared read-oriented Property row for full-page/side/center Object detail.
 ///
@@ -18,17 +19,41 @@ class ObjectDetailPropertyView extends StatelessWidget {
     this.onTap,
   });
 
+  static const double firstLineHeight = 20;
+  static const double handleSlotWidth = 20;
+  static const double propertyIconSlotWidth = 18;
+  static const double propertyLabelWidth = 120;
+
   final ObjectDetailPropertyPresentation presentation;
   final Widget? relationChild;
 
-  /// Optional presentation chrome owned by the surrounding host, such as the
-  /// drag handle used by the contextual Database side peek.
+  /// Optional presentation chrome owned by the surrounding host. When the host
+  /// supplies a standard [ReorderableDragStartListener], this shared row keeps
+  /// the host-owned reorder index/gesture while replacing its icon-font child
+  /// with the deterministic [PropertyDragHandle] visual.
   final Widget? leading;
   final Widget? trailing;
 
   /// Optional host-owned edit affordance. The shared row remains read-only by
   /// default so existing full-page/center detail behavior is unchanged.
   final VoidCallback? onTap;
+
+  Widget? _normalizedLeading() {
+    final value = leading;
+    if (value is ReorderableDragStartListener) {
+      return ReorderableDragStartListener(
+        key: value.key,
+        index: value.index,
+        enabled: value.enabled,
+        child: const SizedBox(
+          width: handleSlotWidth,
+          height: firstLineHeight,
+          child: Center(child: PropertyDragHandle()),
+        ),
+      );
+    }
+    return value;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -37,6 +62,7 @@ class ObjectDetailPropertyView extends StatelessWidget {
     }
 
     final property = presentation.property;
+    final normalizedLeading = _normalizedLeading();
     final valueWidget = presentation.usesRelationRenderer
         ? relationChild ??
             Text(
@@ -55,33 +81,35 @@ class ObjectDetailPropertyView extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (leading != null) ...[
+          if (normalizedLeading != null) ...[
             SizedBox(
-              width: 20,
-              height: 20,
-              child: Align(
-                // Material's drag-indicator glyph is optically top-heavy.
-                // Keep a stable label-row-sized slot and lower the glyph by
-                // roughly one pixel without changing the host-owned handle.
-                alignment: const Alignment(0, 0.2),
-                child: leading!,
-              ),
+              key: const ValueKey('object-property-handle-slot'),
+              width: handleSlotWidth,
+              height: firstLineHeight,
+              child: Center(child: normalizedLeading),
             ),
             const SizedBox(width: 6),
           ],
           SizedBox(
-            width: 120,
+            key: const ValueKey('object-property-label-grid'),
+            width: propertyLabelWidth,
+            height: firstLineHeight,
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                if (presentation.isComputed)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 1, right: 4),
-                    child: Icon(Icons.functions, size: 16),
-                  ),
+                SizedBox(
+                  key: const ValueKey('object-property-icon-slot'),
+                  width: propertyIconSlotWidth,
+                  height: firstLineHeight,
+                  child: presentation.isComputed
+                      ? const Center(child: Icon(Icons.functions, size: 16))
+                      : const SizedBox.shrink(),
+                ),
+                const SizedBox(width: 4),
                 Expanded(
                   child: Text(
                     property.name,
+                    maxLines: 1,
                     style: Theme.of(context).textTheme.labelLarge,
                     overflow: TextOverflow.ellipsis,
                   ),
