@@ -15,6 +15,7 @@ void main() {
       title: 'Serre',
       objectTypeName: 'Person',
       objectTypeIcon: '👤',
+      aliases: <String>['ジャン＝ピエール・セール'],
     ),
   ];
 
@@ -81,5 +82,45 @@ void main() {
     await tester.tap(find.text('キャンセル'));
     await tester.pumpAndSettle();
     expect(selected, isNull);
+  });
+
+  testWidgets('picker resolves alias matches to the canonical Object id',
+      (tester) async {
+    int? selected;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () async {
+                selected = await showObjectBodyObjectReferencePicker(
+                  context,
+                  candidates: candidates,
+                );
+              },
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('body-object-reference-search')),
+      'セール',
+    );
+    await tester.pump();
+
+    expect(find.text('Serre'), findsOneWidget);
+    expect(find.text('数論講義'), findsNothing);
+    expect(find.text('Person · 別名: ジャン＝ピエール・セール'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('body-object-reference-candidate-2')),
+    );
+    await tester.pumpAndSettle();
+    expect(selected, 2);
   });
 }

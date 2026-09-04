@@ -16,6 +16,7 @@ import '../data/object_computed_value_store.dart';
 import '../data/object_detail_content_loader.dart';
 import '../data/object_detail_edit_service.dart';
 import '../data/object_graph_query_store.dart';
+import '../data/object_identity_search_service.dart';
 import '../data/object_store.dart';
 import '../data/object_type_defaults_store.dart';
 import '../data/object_value_promotion_execution_service.dart';
@@ -33,6 +34,7 @@ import '../domain/object_detail_content.dart';
 import '../domain/object_detail_property_presentation.dart';
 import '../domain/object_model.dart';
 import '../features/object/presentation/object_body_database_view_reference_catalog.dart';
+import '../features/object/presentation/object_body_object_reference_catalog.dart';
 import '../features/object/presentation/widgets/daily_note_navigation_bar.dart';
 import '../features/object/presentation/widgets/object_alias_editor.dart';
 import '../features/object/presentation/widgets/object_body_block_action_bar.dart';
@@ -83,6 +85,14 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
       ObjectBodyDatabaseViewReferenceCatalog(
         databaseStore: widget.store,
         viewStore: DatabaseViewStore(widget.store.database),
+      );
+
+  ObjectBodyObjectReferenceCatalog get _objectReferenceCatalog =>
+      ObjectBodyObjectReferenceCatalog(
+        identitySearch: ObjectIdentitySearchService(
+          objectStore: widget.objectStore,
+          aliasStore: _aliasStore,
+        ),
       );
 
   SystemObjectStore get _systemObjects => SystemObjectStore(
@@ -355,30 +365,10 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
 
   Future<List<ObjectBodyObjectReferenceCandidate>> _objectReferenceCandidates(
     ObjectDetailContent content,
-  ) async {
-    final candidates = <ObjectBodyObjectReferenceCandidate>[];
-    final objectTypes = await widget.objectStore.listObjectTypes(
-      content.objectType.workspaceId,
-    );
-    for (final objectType in objectTypes) {
-      final objects = await widget.objectStore.listObjects(objectType.id);
-      for (final object in objects) {
-        candidates.add(
-          ObjectBodyObjectReferenceCandidate(
-            objectId: object.id,
-            title: object.title,
-            objectTypeName: objectType.name,
-            objectTypeIcon: objectType.icon,
-          ),
-        );
-      }
-    }
-    candidates.sort((a, b) {
-      final typeOrder = a.objectTypeName.compareTo(b.objectTypeName);
-      return typeOrder != 0 ? typeOrder : a.title.compareTo(b.title);
-    });
-    return candidates;
-  }
+  ) =>
+      _objectReferenceCatalog.load(
+        workspaceId: content.objectType.workspaceId,
+      );
 
   Future<void> _insertObjectReference(
     ObjectDetailContent content, {

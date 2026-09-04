@@ -1,5 +1,6 @@
 import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
+import 'package:bookmark_app/data/object_alias_store.dart';
 import 'package:bookmark_app/data/object_body_store.dart';
 import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
@@ -17,6 +18,7 @@ void main() {
     final workspaceId = await WorkspaceStore(database).initialize();
     final genericStore = GenericDatabaseStore(database);
     final objectStore = ObjectStore(genericStore);
+    final aliasStore = ObjectAliasStore(genericStore);
     final bodyStore = ObjectBodyStore(genericStore);
 
     final noteTypeId = await objectStore.createObjectType(
@@ -36,6 +38,10 @@ void main() {
     final targetId = await objectStore.createObject(
       objectTypeId: personTypeId,
       title: 'Serre',
+    );
+    await aliasStore.addAlias(
+      objectId: targetId,
+      alias: 'ジャン＝ピエール・セール',
     );
 
     tester.view.physicalSize = const Size(1440, 1000);
@@ -57,6 +63,12 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Object を参照'));
     await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('body-object-reference-search')),
+      'セール',
+    );
+    await tester.pump();
+    expect(find.text('Person · 別名: ジャン＝ピエール・セール'), findsOneWidget);
     await tester.tap(
       find.byKey(ValueKey('body-object-reference-candidate-$targetId')),
     );
