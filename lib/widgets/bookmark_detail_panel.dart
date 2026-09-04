@@ -8,6 +8,7 @@ import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
 import 'bookmark_relation_section.dart';
 import 'bookmark_reorderable_properties.dart';
+import 'bookmark_visual_image.dart';
 import 'photo_database_picker.dart';
 
 
@@ -210,22 +211,14 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
     }
   }
 
-  Widget _cover() {
-    final bookmark = widget.bookmark;
-    if (bookmark.coverPhoto != null) {
-      return Image.file(File(bookmark.coverPhoto!.path), width: double.infinity, height: double.infinity, fit: BoxFit.cover);
-    }
-    if (bookmark.thumbnail?.trim().isNotEmpty == true) {
-      return Image.network(
-        bookmark.thumbnail!,
+  Widget _cover() => BookmarkVisualImage(
+        repository: widget.repository,
+        bookmark: widget.bookmark,
         width: double.infinity,
         height: double.infinity,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => _coverPlaceholder(),
+        placeholder: _coverPlaceholder(),
       );
-    }
-    return _coverPlaceholder();
-  }
 
   Widget _coverPlaceholder() {
     final scheme = Theme.of(context).colorScheme;
@@ -553,4 +546,3 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
 class _CancelIntent extends Intent {
   const _CancelIntent();
 }
-
