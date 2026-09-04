@@ -110,4 +110,119 @@ void main() {
       <int>[serreId],
     );
   });
+
+  testWidgets(
+      'real Relation picker keeps ambiguous aliases inside target ObjectType',
+      (tester) async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceStore = WorkspaceStore(database);
+    final workspaceId = await workspaceStore.initialize();
+    final lifecycleStore = BookmarkLifecycleStore(database);
+    await lifecycleStore.initialize();
+    final repository = BookmarkRepository(
+      database,
+      workspaceStore: workspaceStore,
+      lifecycleStore: lifecycleStore,
+      workspaceId: workspaceId,
+    );
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final aliasStore = ObjectAliasStore(genericStore);
+    final collectionStore = DatabaseCollectionStore(
+      genericStore: genericStore,
+      objectStore: objectStore,
+    );
+
+    final databaseId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: '本棚',
+    );
+    final bookTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Book',
+    );
+    final personTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Person',
+    );
+    final topicTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Topic',
+    );
+    final relationId = await objectStore.createRelationProperty(
+      objectTypeId: bookTypeId,
+      name: 'Author',
+      targetObjectTypeId: personTypeId,
+      multiple: false,
+    );
+    final bookId = await objectStore.createObject(
+      objectTypeId: bookTypeId,
+      title: '局所体',
+    );
+    final firstPersonId = await objectStore.createObject(
+      objectTypeId: personTypeId,
+      title: 'Jean-Pierre Serre',
+    );
+    final secondPersonId = await objectStore.createObject(
+      objectTypeId: personTypeId,
+      title: 'Serre Archive',
+    );
+    final wrongTypeId = await objectStore.createObject(
+      objectTypeId: topicTypeId,
+      title: 'Wrong Type Match',
+    );
+    await aliasStore.addAlias(objectId: firstPersonId, alias: 'セール');
+    await aliasStore.addAlias(objectId: secondPersonId, alias: 'セール');
+    await aliasStore.addAlias(objectId: wrongTypeId, alias: 'セール');
+    await collectionStore.write(
+      DatabaseCollectionDefinition(
+        databaseId: databaseId,
+        workspaceId: workspaceId,
+        targetObjectTypeId: bookTypeId,
+      ),
+    );
+
+    tester.view.physicalSize = const Size(1440, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GenericDatabasePage(
+          repository: repository,
+          databaseId: databaseId,
+          onDatabaseChanged: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('局所体').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Author').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Objectを検索'),
+      'セール',
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Jean-Pierre Serre'), findsOneWidget);
+    expect(find.text('Serre Archive'), findsOneWidget);
+    expect(find.text('別名: セール'), findsNWidgets(2));
+    expect(find.text('Wrong Type Match'), findsNothing);
+
+    await tester.tap(find.text('Serre Archive'));
+    await tester.pump();
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+
+    final book = (await objectStore.listObjects(bookTypeId))
+        .singleWhere((object) => object.id == bookId);
+    expect(
+      ObjectRelationValue.fromJson(book.values[relationId]).objectIds,
+      <int>[secondPersonId],
+    );
+  });
 }
