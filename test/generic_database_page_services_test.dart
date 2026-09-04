@@ -84,6 +84,65 @@ void main() {
     );
   });
 
+  test('page services expose Relation-safe Object deletion for real hosts',
+      () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final services = GenericDatabasePageServices.fromStores(
+      genericStore: genericStore,
+      objectStore: objectStore,
+    );
+
+    final personTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Person',
+    );
+    final bookTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Book',
+    );
+    final authorPropertyId = await objectStore.createRelationProperty(
+      objectTypeId: bookTypeId,
+      name: 'Author',
+      targetObjectTypeId: personTypeId,
+      multiple: false,
+    );
+    final personId = await objectStore.createObject(
+      objectTypeId: personTypeId,
+      title: 'Author',
+    );
+    final bookId = await objectStore.createObject(
+      objectTypeId: bookTypeId,
+      title: 'Book',
+    );
+    final bookType = (await objectStore.getObjectType(bookTypeId))!;
+    final authorProperty = bookType.properties
+        .singleWhere((property) => property.id == authorPropertyId);
+    await services.relationMutations.setRelation(
+      objectId: bookId,
+      property: authorProperty,
+      targetObjectIds: <int>[personId],
+    );
+
+    await services.relationMutations.deleteObject(
+      workspaceId: workspaceId,
+      objectTypeId: personTypeId,
+      objectId: personId,
+    );
+
+    expect(await objectStore.listObjects(personTypeId), isEmpty);
+    final survivingBook = (await objectStore.listObjects(bookTypeId)).single;
+    expect(
+      ObjectRelationValue.fromJson(
+        survivingBook.valueFor(authorPropertyId),
+      ).objectIds,
+      isEmpty,
+    );
+  });
+
   test('page services expose canonical Object open-mode resolution', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);

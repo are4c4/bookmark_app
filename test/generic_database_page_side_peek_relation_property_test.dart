@@ -2,11 +2,11 @@ import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/bookmark_lifecycle_store.dart';
 import 'package:bookmark_app/data/bookmark_repository.dart';
 import 'package:bookmark_app/data/database_view_store.dart';
+import 'package:bookmark_app/data/generic_database_page_services.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
 import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/database/database_definition.dart';
-import 'package:bookmark_app/domain/object_model.dart';
 import 'package:bookmark_app/features/object/presentation/widgets/object_detail_property_view.dart';
 import 'package:bookmark_app/views/generic_database_page.dart';
 import 'package:drift/native.dart';
@@ -14,7 +14,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('side peek edits a simple Value and persists it on the same Object',
+  testWidgets(
+      'side peek shared Relation row renders canonical target Object chip',
       (tester) async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
@@ -30,39 +31,54 @@ void main() {
     );
     final genericStore = GenericDatabaseStore(database);
     final objectStore = ObjectStore(genericStore);
-    final databaseId = await objectStore.createObjectType(
+    final services = GenericDatabasePageServices.fromStores(
+      genericStore: genericStore,
+      objectStore: objectStore,
+    );
+
+    final personTypeId = await objectStore.createObjectType(
       workspaceId: workspaceId,
-      name: 'Notes',
-      icon: '📝',
+      name: 'Person',
+      icon: '👤',
     );
-    final notePropertyId = await objectStore.createProperty(
-      objectTypeId: databaseId,
-      name: 'Note',
-      type: ObjectPropertyType.text,
+    final bookTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Book',
+      icon: '📚',
     );
-    final objectType = (await objectStore.getObjectType(databaseId))!;
-    final noteProperty = objectType.properties
-        .singleWhere((property) => property.id == notePropertyId);
-    final objectId = await objectStore.createObject(
-      objectTypeId: databaseId,
-      title: 'Side edit target',
+    final authorPropertyId = await objectStore.createRelationProperty(
+      objectTypeId: bookTypeId,
+      name: 'Author',
+      targetObjectTypeId: personTypeId,
+      multiple: false,
     );
-    await objectStore.setPropertyValue(
-      objectId: objectId,
-      property: noteProperty,
-      value: 'old note',
+    final authorId = await objectStore.createObject(
+      objectTypeId: personTypeId,
+      title: 'Canonical Author',
+    );
+    final bookId = await objectStore.createObject(
+      objectTypeId: bookTypeId,
+      title: 'Relation target',
+    );
+    final bookType = (await objectStore.getObjectType(bookTypeId))!;
+    final authorProperty = bookType.properties
+        .singleWhere((property) => property.id == authorPropertyId);
+    await services.relationMutations.setRelation(
+      objectId: bookId,
+      property: authorProperty,
+      targetObjectIds: <int>[authorId],
     );
 
     final definition = DatabaseDefinition(
-      key: 'custom:$databaseId',
-      label: 'Notes',
-      icon: Icons.note_outlined,
-      properties: [
+      key: 'custom:$bookTypeId',
+      label: 'Books',
+      icon: Icons.book_outlined,
+      properties: <DatabasePropertyDefinition>[
         DatabasePropertyDefinition(
-          key: 'p:$notePropertyId',
-          label: 'Note',
+          key: 'p:$authorPropertyId',
+          label: 'Author',
           type: DatabasePropertyType.text,
-          icon: Icons.text_fields,
+          icon: Icons.link,
         ),
       ],
       defaultLayout: 'list',
@@ -84,30 +100,27 @@ void main() {
       MaterialApp(
         home: GenericDatabasePage(
           repository: repository,
-          databaseId: databaseId,
+          databaseId: bookTypeId,
           onDatabaseChanged: () {},
         ),
       ),
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Side edit target').first);
+    await tester.tap(find.text('Relation target').first);
     await tester.pumpAndSettle();
-    expect(find.text('詳細'), findsOneWidget);
+
     expect(find.byType(ObjectDetailPropertyView), findsOneWidget);
-    expect(find.text('old note'), findsWidgets);
-
-    await tester.tap(find.text('old note').last);
-    await tester.pumpAndSettle();
-    expect(find.text('Note'), findsWidgets);
-
-    await tester.enterText(find.byType(TextFormField).last, 'new note');
-    await tester.tap(find.widgetWithText(FilledButton, '保存'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('new note'), findsWidgets);
-    final persisted = (await objectStore.listObjects(databaseId)).single;
-    expect(persisted.id, objectId);
-    expect(persisted.values[notePropertyId], 'new note');
+    expect(find.text('Author'), findsWidgets);
+    final relationChip = find.byType(ActionChip);
+    expect(relationChip, findsOneWidget);
+    expect(
+      find.descendant(
+        of: relationChip,
+        matching: find.text('Canonical Author'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('$authorId'), findsNothing);
   });
 }

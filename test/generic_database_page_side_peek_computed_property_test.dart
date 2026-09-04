@@ -3,6 +3,7 @@ import 'package:bookmark_app/data/bookmark_lifecycle_store.dart';
 import 'package:bookmark_app/data/bookmark_repository.dart';
 import 'package:bookmark_app/data/database_view_store.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
+import 'package:bookmark_app/data/object_computed_value_store.dart';
 import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/database/database_definition.dart';
@@ -14,7 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('side peek edits a simple Value and persists it on the same Object',
+  testWidgets('side peek shared Property row keeps computed values read-only',
       (tester) async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
@@ -30,39 +31,51 @@ void main() {
     );
     final genericStore = GenericDatabaseStore(database);
     final objectStore = ObjectStore(genericStore);
+    final computedStore = ObjectComputedValueStore(objectStore);
     final databaseId = await objectStore.createObjectType(
       workspaceId: workspaceId,
-      name: 'Notes',
-      icon: '📝',
+      name: 'Scores',
+      icon: '🧮',
     );
-    final notePropertyId = await objectStore.createProperty(
+    final valuePropertyId = await objectStore.createProperty(
       objectTypeId: databaseId,
-      name: 'Note',
-      type: ObjectPropertyType.text,
+      name: 'Score',
+      type: ObjectPropertyType.number,
+    );
+    final formulaPropertyId = await computedStore.createFormulaProperty(
+      objectTypeId: databaseId,
+      name: 'Double',
+      expression: '{$valuePropertyId} * 2',
     );
     final objectType = (await objectStore.getObjectType(databaseId))!;
-    final noteProperty = objectType.properties
-        .singleWhere((property) => property.id == notePropertyId);
+    final valueProperty = objectType.properties
+        .singleWhere((property) => property.id == valuePropertyId);
     final objectId = await objectStore.createObject(
       objectTypeId: databaseId,
-      title: 'Side edit target',
+      title: 'Computed target',
     );
     await objectStore.setPropertyValue(
       objectId: objectId,
-      property: noteProperty,
-      value: 'old note',
+      property: valueProperty,
+      value: 3,
     );
 
     final definition = DatabaseDefinition(
       key: 'custom:$databaseId',
-      label: 'Notes',
-      icon: Icons.note_outlined,
+      label: 'Scores',
+      icon: Icons.calculate_outlined,
       properties: [
         DatabasePropertyDefinition(
-          key: 'p:$notePropertyId',
-          label: 'Note',
-          type: DatabasePropertyType.text,
-          icon: Icons.text_fields,
+          key: 'p:$valuePropertyId',
+          label: 'Score',
+          type: DatabasePropertyType.number,
+          icon: Icons.numbers,
+        ),
+        DatabasePropertyDefinition(
+          key: 'p:$formulaPropertyId',
+          label: 'Double',
+          type: DatabasePropertyType.number,
+          icon: Icons.functions,
         ),
       ],
       defaultLayout: 'list',
@@ -91,23 +104,15 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Side edit target').first);
-    await tester.pumpAndSettle();
-    expect(find.text('詳細'), findsOneWidget);
-    expect(find.byType(ObjectDetailPropertyView), findsOneWidget);
-    expect(find.text('old note'), findsWidgets);
-
-    await tester.tap(find.text('old note').last);
-    await tester.pumpAndSettle();
-    expect(find.text('Note'), findsWidgets);
-
-    await tester.enterText(find.byType(TextFormField).last, 'new note');
-    await tester.tap(find.widgetWithText(FilledButton, '保存'));
+    await tester.tap(find.text('Computed target').first);
     await tester.pumpAndSettle();
 
-    expect(find.text('new note'), findsWidgets);
-    final persisted = (await objectStore.listObjects(databaseId)).single;
-    expect(persisted.id, objectId);
-    expect(persisted.values[notePropertyId], 'new note');
+    expect(find.byType(ObjectDetailPropertyView), findsNWidgets(2));
+    expect(find.text('Double'), findsWidgets);
+    expect(find.text('6'), findsWidgets);
+
+    await tester.tap(find.text('6').last);
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
   });
 }
