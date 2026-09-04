@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../domain/object_detail_property_presentation.dart';
+import 'object_property_value_view.dart';
 
 /// Shared read-oriented Property row for full-page/side/center Object detail.
 ///
@@ -44,9 +45,9 @@ class ObjectDetailPropertyView extends StatelessWidget {
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
             )
-        : Text(
-            presentation.displayText ?? 'なし',
-            textAlign: TextAlign.end,
+        : Align(
+            alignment: Alignment.centerRight,
+            child: ObjectPropertyValueView(presentation: presentation),
           );
 
     final row = Padding(
