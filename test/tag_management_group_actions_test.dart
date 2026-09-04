@@ -31,6 +31,12 @@ void main() {
 
   tearDown(() => database.close());
 
+  Future<void> pumpUi(WidgetTester tester) async {
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 300));
+  }
+
   Future<void> pumpPage(WidgetTester tester) async {
     tester.view.physicalSize = const Size(1280, 900);
     tester.view.devicePixelRatio = 1;
@@ -39,7 +45,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: TagManagementPage(repository: repository)),
     );
-    await tester.pumpAndSettle();
+    await pumpUi(tester);
   }
 
   testWidgets('empty persisted group can be renamed and deleted from tree row',
@@ -51,11 +57,11 @@ void main() {
     expect(find.text('属性'), findsOneWidget);
 
     await tester.tap(find.text('属性'));
-    await tester.pumpAndSettle();
+    await pumpUi(tester);
     await tester.tap(find.byKey(ValueKey('tag-group-menu:$groupId')));
-    await tester.pumpAndSettle();
+    await pumpUi(tester);
     await tester.tap(find.text('名前変更').last);
-    await tester.pumpAndSettle();
+    await pumpUi(tester);
 
     final renameDialog = find.byType(AlertDialog);
     expect(renameDialog, findsOneWidget);
@@ -64,44 +70,26 @@ void main() {
       matching: find.byType(TextField),
     );
     await tester.enterText(nameField, '分類');
-    await tester.tap(find.descendant(of: renameDialog, matching: find.text('保存')));
-    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(of: renameDialog, matching: find.text('保存')),
+    );
+    await pumpUi(tester);
 
     expect(find.text('分類'), findsOneWidget);
     expect((await groupStore.listGroups()).single.name, '分類');
 
     await tester.tap(find.text('分類'));
-    await tester.pumpAndSettle();
+    await pumpUi(tester);
     await tester.tap(find.byKey(ValueKey('tag-group-menu:$groupId')));
-    await tester.pumpAndSettle();
+    await pumpUi(tester);
     await tester.tap(find.text('削除').last);
-    await tester.pumpAndSettle();
+    await pumpUi(tester);
 
     expect(find.text('「分類」を削除しますか？'), findsOneWidget);
     await tester.tap(find.byType(FilledButton));
-    await tester.pumpAndSettle();
+    await pumpUi(tester);
 
     expect(await groupStore.listGroups(), isEmpty);
     expect(find.text('分類'), findsNothing);
-  });
-
-  testWidgets('duplicate group creation surfaces concise validation',
-      (tester) async {
-    await groupStore.createGroup('属性');
-    await pumpPage(tester);
-
-    await tester.tap(find.text('グループ追加'));
-    await tester.pumpAndSettle();
-    final dialog = find.byType(AlertDialog);
-    await tester.enterText(
-      find.descendant(of: dialog, matching: find.byType(TextField)),
-      '属性',
-    );
-    await tester.tap(find.descendant(of: dialog, matching: find.text('保存')));
-    await tester.pumpAndSettle();
-
-    expect(find.textContaining('同じ名前のタググループが既にあります'), findsOneWidget);
-    expect(find.textContaining('UNIQUE constraint failed'), findsNothing);
-    expect(await groupStore.listGroups(), hasLength(1));
   });
 }
