@@ -87,7 +87,11 @@ class BookmarkWeblinkObjectBridge {
     _validateRelation(relation, weblinkDefinition.objectType.id);
 
     final rows = await database.customSelect(
-      '''SELECT links.object_id AS object_id, bookmarks.url AS url
+      '''SELECT links.object_id AS object_id,
+                bookmarks.url AS url,
+                bookmarks.title AS title,
+                bookmarks.description AS description,
+                bookmarks.thumbnail AS thumbnail
          FROM bookmark_object_links AS links
          JOIN bookmarks ON bookmarks.id = links.bookmark_id
          WHERE links.workspace_id = ?
@@ -139,6 +143,22 @@ class BookmarkWeblinkObjectBridge {
         value: null,
       );
       retiredLegacyUrlCount += 1;
+
+      // Metadata is best-effort and must never block the canonical Bookmark ->
+      // Weblink path. The first Bookmark encountered for a reusable Weblink can
+      // seed missing resource metadata; later Bookmarks cannot overwrite it.
+      try {
+        await _weblinks.enrichIfMissing(
+          workspaceId: workspaceId,
+          objectId: targetId,
+          pageTitle: row.read<String>('title'),
+          description: row.readNullable<String>('description'),
+          previewImageUrl: row.readNullable<String>('thumbnail'),
+        );
+      } catch (_) {
+        // Keep the verified Relation and legacy Bookmark data intact when
+        // optional resource metadata cannot be migrated.
+      }
     }
 
     return BookmarkWeblinkSyncReport(
