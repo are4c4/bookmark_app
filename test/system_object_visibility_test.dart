@@ -7,7 +7,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('custom database list hides system object types but all-types list keeps them', () async {
+  test('database navigation exposes Weblinks and Images but keeps other system types hidden', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
     final workspaceId = await WorkspaceStore(database).initialize();
@@ -34,19 +34,33 @@ void main() {
       name: '画像',
       icon: '🖼️',
     );
+    final weblinkType = await systemStore.ensureSystemObjectType(
+      workspaceId: workspaceId,
+      systemKey: 'weblink',
+      name: 'Weblink',
+      icon: '🔗',
+    );
 
-    final customDatabases = await genericStore.listDatabases(workspaceId);
+    final navigation = await genericStore.listDatabases(workspaceId);
     final relationTargetTypes = await genericStore.listAllDatabases(workspaceId);
     final objectTypes = await objectStore.listObjectTypes(workspaceId);
 
-    expect(customDatabases.map((item) => item.id), [customId]);
+    expect(
+      navigation.map((item) => item.id),
+      [weblinkType.id, imageType.id, customId],
+    );
+    expect(navigation[0].name, 'Weblinks');
+    expect(navigation[0].icon, '🔗');
+    expect(navigation[1].name, 'Images');
+    expect(navigation[1].icon, '🖼️');
+    expect(navigation.map((item) => item.id), isNot(contains(tagType.id)));
     expect(
       relationTargetTypes.map((item) => item.id),
-      containsAll([customId, tagType.id, imageType.id]),
+      containsAll([customId, tagType.id, imageType.id, weblinkType.id]),
     );
     expect(
       objectTypes.map((item) => item.id),
-      containsAll([customId, tagType.id, imageType.id]),
+      containsAll([customId, tagType.id, imageType.id, weblinkType.id]),
     );
   });
 }
