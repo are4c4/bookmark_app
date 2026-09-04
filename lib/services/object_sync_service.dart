@@ -5,6 +5,7 @@ import 'package:rxdart/rxdart.dart';
 import '../data/app_database.dart';
 import '../data/bookmark_weblink_object_bridge.dart';
 import '../data/core_object_bridge.dart';
+import '../data/daily_note_service.dart';
 import '../data/generic_database_store.dart';
 import '../data/object_store.dart';
 import '../data/object_type_defaults_store.dart';
@@ -122,6 +123,17 @@ class ObjectSyncService {
   Future<void> _syncNow(int workspaceId) async {
     await coreBridge.syncAll(workspaceId);
     await bookmarkWeblinkBridge.syncWorkspace(workspaceId);
+
+    // Daily Notes are a normal system ObjectType and should be available to the
+    // generic sidebar/Database host even before the user opens the first note.
+    final genericStore = GenericDatabaseStore(database);
+    await DailyNoteService(
+      genericStore: genericStore,
+      objectStore: objectStore,
+      systemObjects: systemObjectStore,
+      defaultsStore: ObjectTypeDefaultsStore(genericStore),
+    ).ensureDefinition(workspaceId);
+
     if (enableRemotePreviewImages) {
       // Remote enrichment must never hold up the canonical Object mirror or app
       // startup. The queue below coalesces later syncs and contains failures.
