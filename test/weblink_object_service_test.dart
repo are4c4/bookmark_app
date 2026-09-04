@@ -11,7 +11,8 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('Weblink definition is idempotent and hidden from custom databases', () async {
+  test('Weblink definition is idempotent and exposed as navigation database',
+      () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
     final workspaceId = await WorkspaceStore(database).initialize();
@@ -49,7 +50,11 @@ void main() {
         hasLength(1),
       );
     }
-    expect(await genericStore.listDatabases(workspaceId), isEmpty);
+    final navigation = await genericStore.listDatabases(workspaceId);
+    expect(navigation, hasLength(1));
+    expect(navigation.single.id, first.objectType.id);
+    expect(navigation.single.name, 'Weblinks');
+    expect(navigation.single.icon, '🔗');
 
     final defaults = await defaultsStore.read(first.objectType.id);
     expect(
