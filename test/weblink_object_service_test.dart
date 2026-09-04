@@ -46,7 +46,39 @@ void main() {
     expect(defaults?.openMode, ObjectOpenMode.sidePeek);
   });
 
-  test('findOrCreate reuses an existing Weblink with the same URL', () async {
+  test('normalization canonicalizes safe URL components only', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final genericStore = GenericDatabaseStore(database);
+    final service = WeblinkObjectService(
+      systemObjects: SystemObjectStore(
+        database: database,
+        objectStore: ObjectStore(genericStore),
+      ),
+      defaultsStore: ObjectTypeDefaultsStore(genericStore),
+    );
+
+    expect(
+      service.normalizeUrl(' HTTPS://Example.COM:443 '),
+      'https://example.com/',
+    );
+    expect(
+      service.normalizeUrl(
+        'https://Example.com/a/../article?b=2&a=1#section',
+      ),
+      'https://example.com/article?b=2&a=1#section',
+    );
+    expect(
+      service.normalizeUrl('http://Example.com:8080/path'),
+      'http://example.com:8080/path',
+    );
+    expect(
+      () => service.normalizeUrl('example.com/no-scheme'),
+      throwsArgumentError,
+    );
+  });
+
+  test('findOrCreate reuses Weblinks across normalized URL variants', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
     final workspaceId = await WorkspaceStore(database).initialize();
@@ -62,22 +94,56 @@ void main() {
 
     final first = await service.findOrCreate(
       workspaceId: workspaceId,
-      url: 'https://example.com/article',
+      url: 'HTTPS://Example.COM:443/a/../article?x=1#part',
     );
     final second = await service.findOrCreate(
       workspaceId: workspaceId,
-      url: 'https://example.com/article',
+      url: 'https://example.com/article?x=1#part',
       title: 'Different requested title',
     );
     final definition = await service.ensureDefinition(workspaceId);
 
     expect(second.id, first.id);
     expect(first.title, 'example.com');
-    expect(first.values[definition.urlProperty.id], 'https://example.com/article');
+    expect(
+      first.values[definition.urlProperty.id],
+      'https://example.com/article?x=1#part',
+    );
     expect(
       (await objectStore.listObjects(definition.objectType.id)).length,
       1,
     );
+  });
+
+  test('normalization preserves query and fragment distinctions', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final service = WeblinkObjectService(
+      systemObjects: SystemObjectStore(
+        database: database,
+        objectStore: objectStore,
+      ),
+      defaultsStore: ObjectTypeDefaultsStore(genericStore),
+    );
+
+    await service.findOrCreate(
+      workspaceId: workspaceId,
+      url: 'https://example.com/article?a=1#first',
+    );
+    await service.findOrCreate(
+      workspaceId: workspaceId,
+      url: 'https://example.com/article?a=2#first',
+    );
+    await service.findOrCreate(
+      workspaceId: workspaceId,
+      url: 'https://example.com/article?a=1#second',
+    );
+    final definition = await service.ensureDefinition(workspaceId);
+
+    expect(await objectStore.listObjects(definition.objectType.id), hasLength(3));
   });
 
   test('URL Value can produce a non-destructive Weblink promotion plan', () async {
