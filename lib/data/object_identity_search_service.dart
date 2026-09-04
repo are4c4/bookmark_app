@@ -1,6 +1,5 @@
 import '../domain/object_alias.dart';
 import '../domain/object_identity_search.dart';
-import '../domain/object_model.dart';
 import 'object_alias_store.dart';
 import 'object_store.dart';
 
