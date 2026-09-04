@@ -1148,19 +1148,18 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
       );
       if (!mounted) return;
       final selectedIds = selection.selectedObjectIds.toSet();
-      var query = '';
+      var visible = await _pageServices.relationEditor.searchCandidates(
+        context: selection,
+        query: '',
+      );
+      if (!mounted) return;
+      var searchRequestId = 0;
+      String? searchError;
 
       final result = await showDialog<Set<int>>(
         context: context,
         builder: (dialogContext) => StatefulBuilder(
           builder: (context, setLocalState) {
-            final normalized = query.trim().toLowerCase();
-            final visible = selection.candidates
-                .where(
-                  (candidate) => normalized.isEmpty ||
-                      candidate.title.toLowerCase().contains(normalized),
-                )
-                .toList(growable: false);
             return AlertDialog(
               titlePadding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
               contentPadding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
@@ -1212,10 +1211,45 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                           prefixIcon: Icon(Icons.search, size: 18),
                           hintText: 'Objectを検索',
                         ),
-                        onChanged: (value) =>
-                            setLocalState(() => query = value),
+                        onChanged: (value) async {
+                          final requestId = ++searchRequestId;
+                          try {
+                            final next = await _pageServices.relationEditor
+                                .searchCandidates(
+                              context: selection,
+                              query: value,
+                            );
+                            if (!dialogContext.mounted ||
+                                requestId != searchRequestId) {
+                              return;
+                            }
+                            setLocalState(() {
+                              visible = next;
+                              searchError = null;
+                            });
+                          } catch (error) {
+                            if (!dialogContext.mounted ||
+                                requestId != searchRequestId) {
+                              return;
+                            }
+                            setLocalState(() {
+                              visible = const [];
+                              searchError = '$error';
+                            });
+                          }
+                        },
                       ),
                     ),
+                    if (searchError != null)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+                        child: Text(
+                          'Objectを検索できませんでした: $searchError',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                        ),
+                      ),
                     const SizedBox(height: 6),
                     Expanded(
                       child: visible.isEmpty
@@ -1224,7 +1258,8 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                               itemCount: visible.length,
                               itemBuilder: (context, index) {
                                 final candidate = visible[index];
-                                final selected = selectedIds.contains(candidate.id);
+                                final selected =
+                                    selectedIds.contains(candidate.objectId);
                                 return ListTile(
                                   dense: true,
                                   leading: Icon(
@@ -1237,16 +1272,19 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                                             : Icons.radio_button_unchecked),
                                     size: 19,
                                   ),
-                                  title: Text(candidate.title),
+                                  title: Text(candidate.canonicalTitle),
+                                  subtitle: candidate.aliasContext == null
+                                      ? null
+                                      : Text(candidate.aliasContext!),
                                   onTap: () => setLocalState(() {
                                     if (selected) {
-                                      selectedIds.remove(candidate.id);
+                                      selectedIds.remove(candidate.objectId);
                                     } else {
                                       if (!selection
                                           .property.allowsMultipleRelations) {
                                         selectedIds.clear();
                                       }
-                                      selectedIds.add(candidate.id);
+                                      selectedIds.add(candidate.objectId);
                                     }
                                   }),
                                 );
