@@ -11,6 +11,8 @@ class ImageObjectDefinition {
     required this.sourceUrlProperty,
     required this.originalFilenameProperty,
     required this.contentTypeProperty,
+    required this.pixelWidthProperty,
+    required this.pixelHeightProperty,
   });
 
   final AppObjectType objectType;
@@ -19,6 +21,17 @@ class ImageObjectDefinition {
   final ObjectPropertyDefinition sourceUrlProperty;
   final ObjectPropertyDefinition originalFilenameProperty;
   final ObjectPropertyDefinition contentTypeProperty;
+  final ObjectPropertyDefinition pixelWidthProperty;
+  final ObjectPropertyDefinition pixelHeightProperty;
+
+  double? aspectRatioFor(AppObject object) {
+    final width = object.values[pixelWidthProperty.id];
+    final height = object.values[pixelHeightProperty.id];
+    if (width is! num || height is! num || width <= 0 || height <= 0) {
+      return null;
+    }
+    return width / height;
+  }
 }
 
 /// Stable Object-lane facade for the existing system Image ObjectType.
@@ -71,11 +84,25 @@ class ImageObjectService {
       name: 'Content type',
       type: ObjectPropertyType.text,
     );
+    final pixelWidth = await systemObjects.ensureProperty(
+      objectTypeId: type.id,
+      name: 'Pixel width',
+      type: ObjectPropertyType.number,
+      config: const <String, dynamic>{'system': true},
+    );
+    final pixelHeight = await systemObjects.ensureProperty(
+      objectTypeId: type.id,
+      name: 'Pixel height',
+      type: ObjectPropertyType.number,
+      config: const <String, dynamic>{'system': true},
+    );
     type = (await systemObjects.getSystemObjectType(
       workspaceId: workspaceId,
       systemKey: systemKey,
     ))!;
 
+    // Pixel dimensions are hidden system metadata for presentation geometry;
+    // adding them must not rewrite a user's visible Image Property defaults.
     await _ensureDefaults(
       objectTypeId: type.id,
       fileProperty: file,
@@ -92,6 +119,8 @@ class ImageObjectService {
       sourceUrlProperty: sourceUrl,
       originalFilenameProperty: originalFilename,
       contentTypeProperty: contentType,
+      pixelWidthProperty: pixelWidth,
+      pixelHeightProperty: pixelHeight,
     );
   }
 
@@ -107,6 +136,8 @@ class ImageObjectService {
     String? title,
     String? originalFilename,
     String? contentType,
+    int? pixelWidth,
+    int? pixelHeight,
   }) async {
     final path = filePath.trim();
     if (path.isEmpty) {
@@ -117,6 +148,8 @@ class ImageObjectService {
       );
     }
     final source = _validatedSourceUrl(sourceUrl);
+    final width = _validatedDimension(pixelWidth, 'pixelWidth');
+    final height = _validatedDimension(pixelHeight, 'pixelHeight');
     final definition = await ensureDefinition(workspaceId);
     final objects = await systemObjects.objectStore.listObjects(
       definition.objectType.id,
@@ -138,6 +171,8 @@ class ImageObjectService {
         originalFilename,
       );
       await _setIfMissing(object, definition.contentTypeProperty, contentType);
+      await _setNumberIfMissing(object, definition.pixelWidthProperty, width);
+      await _setNumberIfMissing(object, definition.pixelHeightProperty, height);
       return _reload(definition.objectType.id, object.id);
     }
 
@@ -159,6 +194,8 @@ class ImageObjectService {
       originalFilename,
     );
     await _setIfMissing(created, definition.contentTypeProperty, contentType);
+    await _setNumberIfMissing(created, definition.pixelWidthProperty, width);
+    await _setNumberIfMissing(created, definition.pixelHeightProperty, height);
     return _reload(definition.objectType.id, objectId);
   }
 
@@ -229,6 +266,14 @@ class ImageObjectService {
     return uri.toString();
   }
 
+  int? _validatedDimension(int? value, String name) {
+    if (value == null) return null;
+    if (value <= 0) {
+      throw ArgumentError.value(value, name, 'Image dimensions must be positive.');
+    }
+    return value;
+  }
+
   Future<void> _setIfMissing(
     AppObject object,
     ObjectPropertyDefinition property,
@@ -242,6 +287,19 @@ class ImageObjectService {
       objectId: object.id,
       property: property,
       value: candidate,
+    );
+  }
+
+  Future<void> _setNumberIfMissing(
+    AppObject object,
+    ObjectPropertyDefinition property,
+    int? value,
+  ) async {
+    if (value == null || object.values[property.id] != null) return;
+    await systemObjects.objectStore.setPropertyValue(
+      objectId: object.id,
+      property: property,
+      value: value,
     );
   }
 

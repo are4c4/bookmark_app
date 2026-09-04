@@ -1,4 +1,5 @@
 import 'package:http/http.dart' as http;
+import 'package:image/image.dart' as img;
 
 import 'photo_storage_service.dart';
 
@@ -8,12 +9,25 @@ class ManagedRemoteImage {
     required this.sourceUrl,
     required this.originalName,
     required this.contentType,
+    this.pixelWidth,
+    this.pixelHeight,
   });
 
   final String path;
   final String sourceUrl;
   final String originalName;
   final String contentType;
+  final int? pixelWidth;
+  final int? pixelHeight;
+
+  double? get aspectRatio {
+    final width = pixelWidth;
+    final height = pixelHeight;
+    if (width == null || height == null || width <= 0 || height <= 0) {
+      return null;
+    }
+    return width / height;
+  }
 }
 
 /// Downloads optional Weblink preview images into app-managed photo storage.
@@ -66,6 +80,17 @@ class RemoteImageStorageService {
       final extension = _extensionFor(contentType);
       if (extension == null || response.bodyBytes.isEmpty) return null;
 
+      // Probe dimensions once while bytes are already in memory. Some decoders
+      // throw on truncated/fixture bytes instead of returning null; geometry is
+      // optional, so such failures must never suppress the existing managed
+      // import or the canonical Weblink -> Image workflow.
+      img.Image? decoded;
+      try {
+        decoded = img.decodeImage(response.bodyBytes);
+      } catch (_) {
+        decoded = null;
+      }
+
       final originalName = _originalName(uri, extension);
       final imported = await _storage.importBytes(
         bytes: response.bodyBytes,
@@ -76,6 +101,8 @@ class RemoteImageStorageService {
         sourceUrl: uri.toString(),
         originalName: imported.originalName,
         contentType: contentType,
+        pixelWidth: decoded?.width,
+        pixelHeight: decoded?.height,
       );
     } on ArgumentError {
       rethrow;
