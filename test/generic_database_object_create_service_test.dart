@@ -159,6 +159,54 @@ void main() {
     expect(await objectStore.listObjects(definition.objectType.id), isEmpty);
   });
 
+  test('Weblinks reject generic Board creation before any group preset', () async {
+    final definition = await WeblinkObjectService(
+      systemObjects: systemObjects,
+      defaultsStore: defaultsStore,
+    ).ensureDefinition(workspaceId);
+
+    await expectLater(
+      service.createInGroup(
+        databaseId: definition.objectType.id,
+        title: '新規ページ',
+        groupProperty: definition.urlProperty,
+        targetGroup: const ObjectGroupBucket<AppObject>(
+          key: 'invalid',
+          label: 'invalid',
+          value: 'invalid',
+          items: <AppObject>[],
+          isEmptyGroup: false,
+        ),
+      ),
+      throwsA(isA<UnsupportedError>()),
+    );
+    expect(await objectStore.listObjects(definition.objectType.id), isEmpty);
+  });
+
+  test('Images reject generic Board creation before any group preset', () async {
+    final definition = await ImageObjectService(
+      systemObjects: systemObjects,
+      defaultsStore: defaultsStore,
+    ).ensureDefinition(workspaceId);
+
+    await expectLater(
+      service.createInGroup(
+        databaseId: definition.objectType.id,
+        title: '新規ページ',
+        groupProperty: definition.noteProperty,
+        targetGroup: const ObjectGroupBucket<AppObject>(
+          key: 'invalid',
+          label: 'invalid',
+          value: 'invalid',
+          items: <AppObject>[],
+          isEmptyGroup: false,
+        ),
+      ),
+      throwsA(isA<UnsupportedError>()),
+    );
+    expect(await objectStore.listObjects(definition.objectType.id), isEmpty);
+  });
+
   test('createInGroup presets canonical target ObjectType Property', () async {
     final databaseId = await objectStore.createObjectType(
       workspaceId: workspaceId,
