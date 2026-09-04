@@ -33,17 +33,117 @@ void main() {
     expect(second.objectType.id, first.objectType.id);
     expect(first.objectType.kind, ObjectTypeKind.system);
     expect(first.urlProperty.type, ObjectPropertyType.url);
-    expect(
-      second.objectType.properties
-          .where((property) => property.name == 'URL')
-          .length,
-      1,
-    );
+    expect(first.domainProperty.type, ObjectPropertyType.text);
+    expect(first.pageTitleProperty.type, ObjectPropertyType.text);
+    expect(first.descriptionProperty.type, ObjectPropertyType.text);
+    expect(first.previewImageUrlProperty.type, ObjectPropertyType.url);
+    for (final name in <String>[
+      'URL',
+      'Domain',
+      'Page title',
+      'Description',
+      'Preview image URL',
+    ]) {
+      expect(
+        second.objectType.properties.where((property) => property.name == name),
+        hasLength(1),
+      );
+    }
     expect(await genericStore.listDatabases(workspaceId), isEmpty);
 
     final defaults = await defaultsStore.read(first.objectType.id);
-    expect(defaults?.visiblePropertyIds, <int>[first.urlProperty.id]);
+    expect(
+      defaults?.visiblePropertyIds,
+      <int>[
+        first.urlProperty.id,
+        first.domainProperty.id,
+        first.pageTitleProperty.id,
+        first.descriptionProperty.id,
+      ],
+    );
     expect(defaults?.openMode, ObjectOpenMode.sidePeek);
+  });
+
+  test('definition upgrades URL-only defaults but preserves customized lists',
+      () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final defaultsStore = ObjectTypeDefaultsStore(genericStore);
+    final systemObjects = SystemObjectStore(
+      database: database,
+      objectStore: objectStore,
+    );
+    final type = await systemObjects.ensureSystemObjectType(
+      workspaceId: workspaceId,
+      systemKey: WeblinkObjectService.systemKey,
+      name: 'Weblink',
+      icon: '🔗',
+    );
+    final legacyUrl = await systemObjects.ensureProperty(
+      objectTypeId: type.id,
+      name: 'URL',
+      type: ObjectPropertyType.url,
+    );
+    await defaultsStore.write(
+      objectTypeId: type.id,
+      defaults: ObjectTypeDefaults(
+        visiblePropertyIds: <int>[legacyUrl.id],
+        propertyOrder: <int>[legacyUrl.id],
+        openMode: ObjectOpenMode.sidePeek,
+      ),
+    );
+
+    final service = WeblinkObjectService(
+      systemObjects: systemObjects,
+      defaultsStore: defaultsStore,
+    );
+    final definition = await service.ensureDefinition(workspaceId);
+    final upgraded = await defaultsStore.read(type.id);
+    expect(
+      upgraded?.visiblePropertyIds,
+      <int>[
+        definition.urlProperty.id,
+        definition.domainProperty.id,
+        definition.pageTitleProperty.id,
+        definition.descriptionProperty.id,
+      ],
+    );
+    expect(
+      upgraded?.propertyOrder,
+      <int>[
+        definition.urlProperty.id,
+        definition.domainProperty.id,
+        definition.pageTitleProperty.id,
+        definition.descriptionProperty.id,
+        definition.previewImageUrlProperty.id,
+      ],
+    );
+
+    final customVisible = <int>[
+      definition.urlProperty.id,
+      definition.previewImageUrlProperty.id,
+    ];
+    final customOrder = <int>[
+      definition.previewImageUrlProperty.id,
+      definition.urlProperty.id,
+    ];
+    await defaultsStore.write(
+      objectTypeId: type.id,
+      defaults: ObjectTypeDefaults(
+        visiblePropertyIds: customVisible,
+        propertyOrder: customOrder,
+        openMode: ObjectOpenMode.fullPage,
+      ),
+    );
+
+    await service.ensureDefinition(workspaceId);
+    final preserved = await defaultsStore.read(type.id);
+    expect(preserved?.visiblePropertyIds, customVisible);
+    expect(preserved?.propertyOrder, customOrder);
+    expect(preserved?.openMode, ObjectOpenMode.fullPage);
   });
 
   test('normalization canonicalizes safe URL components only', () async {
@@ -109,10 +209,99 @@ void main() {
       first.values[definition.urlProperty.id],
       'https://example.com/article?x=1#part',
     );
+    expect(first.values[definition.domainProperty.id], 'example.com');
     expect(
       (await objectStore.listObjects(definition.objectType.id)).length,
       1,
     );
+  });
+
+  test('enrichment seeds Weblink metadata once without later overwrite', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final service = WeblinkObjectService(
+      systemObjects: SystemObjectStore(
+        database: database,
+        objectStore: objectStore,
+      ),
+      defaultsStore: ObjectTypeDefaultsStore(genericStore),
+    );
+    final weblink = await service.findOrCreate(
+      workspaceId: workspaceId,
+      url: 'https://Example.com/article',
+    );
+    final definition = await service.ensureDefinition(workspaceId);
+
+    final enriched = await service.enrichIfMissing(
+      workspaceId: workspaceId,
+      objectId: weblink.id,
+      pageTitle: '  Resource title  ',
+      description: '  Resource description  ',
+      previewImageUrl: 'HTTPS://CDN.Example.com:443/a/../preview.jpg?sig=1',
+    );
+
+    expect(enriched.title, 'example.com');
+    expect(enriched.values[definition.domainProperty.id], 'example.com');
+    expect(enriched.values[definition.pageTitleProperty.id], 'Resource title');
+    expect(
+      enriched.values[definition.descriptionProperty.id],
+      'Resource description',
+    );
+    expect(
+      enriched.values[definition.previewImageUrlProperty.id],
+      'https://cdn.example.com/preview.jpg?sig=1',
+    );
+
+    final preserved = await service.enrichIfMissing(
+      workspaceId: workspaceId,
+      objectId: weblink.id,
+      pageTitle: 'Bookmark-specific later title',
+      description: 'Bookmark-specific later description',
+      previewImageUrl: 'https://cdn.example.com/other.jpg',
+    );
+    expect(preserved.values[definition.pageTitleProperty.id], 'Resource title');
+    expect(
+      preserved.values[definition.descriptionProperty.id],
+      'Resource description',
+    );
+    expect(
+      preserved.values[definition.previewImageUrlProperty.id],
+      'https://cdn.example.com/preview.jpg?sig=1',
+    );
+  });
+
+  test('invalid preview metadata is ignored without blocking Weblink enrichment',
+      () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final service = WeblinkObjectService(
+      systemObjects: SystemObjectStore(
+        database: database,
+        objectStore: objectStore,
+      ),
+      defaultsStore: ObjectTypeDefaultsStore(genericStore),
+    );
+    final weblink = await service.findOrCreate(
+      workspaceId: workspaceId,
+      url: 'https://example.org/article',
+    );
+    final definition = await service.ensureDefinition(workspaceId);
+
+    final enriched = await service.enrichIfMissing(
+      workspaceId: workspaceId,
+      objectId: weblink.id,
+      pageTitle: 'Valid title',
+      previewImageUrl: 'not an absolute URL',
+    );
+
+    expect(enriched.values[definition.pageTitleProperty.id], 'Valid title');
+    expect(enriched.values[definition.previewImageUrlProperty.id], isNull);
   });
 
   test('normalization preserves query and fragment distinctions', () async {

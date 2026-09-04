@@ -8,10 +8,18 @@ class WeblinkObjectDefinition {
   const WeblinkObjectDefinition({
     required this.objectType,
     required this.urlProperty,
+    required this.domainProperty,
+    required this.pageTitleProperty,
+    required this.descriptionProperty,
+    required this.previewImageUrlProperty,
   });
 
   final AppObjectType objectType;
   final ObjectPropertyDefinition urlProperty;
+  final ObjectPropertyDefinition domainProperty;
+  final ObjectPropertyDefinition pageTitleProperty;
+  final ObjectPropertyDefinition descriptionProperty;
+  final ObjectPropertyDefinition previewImageUrlProperty;
 }
 
 /// Defines Weblink as a reusable first-class Object without replacing legacy
@@ -42,26 +50,47 @@ class WeblinkObjectService {
       name: 'URL',
       type: ObjectPropertyType.url,
     );
+    final domainProperty = await systemObjects.ensureProperty(
+      objectTypeId: type.id,
+      name: 'Domain',
+      type: ObjectPropertyType.text,
+    );
+    final pageTitleProperty = await systemObjects.ensureProperty(
+      objectTypeId: type.id,
+      name: 'Page title',
+      type: ObjectPropertyType.text,
+    );
+    final descriptionProperty = await systemObjects.ensureProperty(
+      objectTypeId: type.id,
+      name: 'Description',
+      type: ObjectPropertyType.text,
+    );
+    final previewImageUrlProperty = await systemObjects.ensureProperty(
+      objectTypeId: type.id,
+      name: 'Preview image URL',
+      type: ObjectPropertyType.url,
+    );
     type = (await systemObjects.getSystemObjectType(
       workspaceId: workspaceId,
       systemKey: systemKey,
     ))!;
 
-    final currentDefaults = await defaultsStore.read(type.id);
-    if (currentDefaults == null) {
-      await defaultsStore.write(
-        objectTypeId: type.id,
-        defaults: ObjectTypeDefaults(
-          visiblePropertyIds: <int>[urlProperty.id],
-          propertyOrder: <int>[urlProperty.id],
-          openMode: ObjectOpenMode.sidePeek,
-        ),
-      );
-    }
+    await _ensureDefaults(
+      objectTypeId: type.id,
+      urlProperty: urlProperty,
+      domainProperty: domainProperty,
+      pageTitleProperty: pageTitleProperty,
+      descriptionProperty: descriptionProperty,
+      previewImageUrlProperty: previewImageUrlProperty,
+    );
 
     return WeblinkObjectDefinition(
       objectType: type,
       urlProperty: urlProperty,
+      domainProperty: domainProperty,
+      pageTitleProperty: pageTitleProperty,
+      descriptionProperty: descriptionProperty,
+      previewImageUrlProperty: previewImageUrlProperty,
     );
   }
 
@@ -83,7 +112,14 @@ class WeblinkObjectService {
       final stored = '${object.values[definition.urlProperty.id] ?? ''}'.trim();
       if (stored.isEmpty) continue;
       try {
-        if (normalizeUrl(stored) == normalizedUrl) return object;
+        if (normalizeUrl(stored) == normalizedUrl) {
+          await _setDomainIfMissing(
+            object: object,
+            definition: definition,
+            normalizedUrl: normalizedUrl,
+          );
+          return await _reload(definition.objectType.id, object.id);
+        }
       } on ArgumentError {
         // Ignore malformed pre-existing values instead of making valid Weblink
         // creation depend on unrelated legacy corruption.
@@ -103,8 +139,65 @@ class WeblinkObjectService {
       property: definition.urlProperty,
       value: normalizedUrl,
     );
-    return (await systemObjects.objectStore.listObjects(definition.objectType.id))
-        .singleWhere((object) => object.id == objectId);
+    final created = await _reload(definition.objectType.id, objectId);
+    await _setDomainIfMissing(
+      object: created,
+      definition: definition,
+      normalizedUrl: normalizedUrl,
+    );
+    return _reload(definition.objectType.id, objectId);
+  }
+
+  /// Adds resource-derived metadata without overwriting metadata already owned
+  /// by the reusable Weblink Object.
+  ///
+  /// This lets legacy Bookmark metadata seed a Weblink once while keeping later
+  /// Bookmark-specific edits independent.
+  Future<AppObject> enrichIfMissing({
+    required int workspaceId,
+    required int objectId,
+    String? pageTitle,
+    String? description,
+    String? previewImageUrl,
+  }) async {
+    final definition = await ensureDefinition(workspaceId);
+    final object = await _reload(definition.objectType.id, objectId);
+    final rawUrl = '${object.values[definition.urlProperty.id] ?? ''}'.trim();
+    if (rawUrl.isEmpty) {
+      throw StateError('Weblink metadata enrichment requires a URL Value.');
+    }
+    final normalizedUrl = normalizeUrl(rawUrl);
+
+    await _setDomainIfMissing(
+      object: object,
+      definition: definition,
+      normalizedUrl: normalizedUrl,
+    );
+    await _setIfMissing(
+      object: object,
+      property: definition.pageTitleProperty,
+      value: pageTitle,
+    );
+    await _setIfMissing(
+      object: object,
+      property: definition.descriptionProperty,
+      value: description,
+    );
+
+    String? normalizedPreview;
+    if (previewImageUrl?.trim().isNotEmpty == true) {
+      try {
+        normalizedPreview = normalizeUrl(previewImageUrl!);
+      } on ArgumentError {
+        normalizedPreview = null;
+      }
+    }
+    await _setIfMissing(
+      object: object,
+      property: definition.previewImageUrlProperty,
+      value: normalizedPreview,
+    );
+    return _reload(definition.objectType.id, objectId);
   }
 
   ObjectValuePromotionPlan planUrlPromotion({
@@ -188,5 +281,106 @@ class WeblinkObjectService {
     final query = uri.hasQuery ? '?${uri.query}' : '';
     final fragment = uri.hasFragment ? '#${uri.fragment}' : '';
     return '$scheme://${authority.toString()}$path$query$fragment';
+  }
+
+  Future<void> _ensureDefaults({
+    required int objectTypeId,
+    required ObjectPropertyDefinition urlProperty,
+    required ObjectPropertyDefinition domainProperty,
+    required ObjectPropertyDefinition pageTitleProperty,
+    required ObjectPropertyDefinition descriptionProperty,
+    required ObjectPropertyDefinition previewImageUrlProperty,
+  }) async {
+    final desiredVisible = <int>[
+      urlProperty.id,
+      domainProperty.id,
+      pageTitleProperty.id,
+      descriptionProperty.id,
+    ];
+    final desiredOrder = <int>[
+      urlProperty.id,
+      domainProperty.id,
+      pageTitleProperty.id,
+      descriptionProperty.id,
+      previewImageUrlProperty.id,
+    ];
+    final current = await defaultsStore.read(objectTypeId);
+    if (current == null) {
+      await defaultsStore.write(
+        objectTypeId: objectTypeId,
+        defaults: ObjectTypeDefaults(
+          visiblePropertyIds: desiredVisible,
+          propertyOrder: desiredOrder,
+          openMode: ObjectOpenMode.sidePeek,
+        ),
+      );
+      return;
+    }
+
+    // Upgrade only the exact URL-only defaults written by the older Weblink
+    // definition. Any customized list is preserved rather than silently reset.
+    final upgradeVisible = current.visiblePropertyIds == null ||
+        _sameIds(current.visiblePropertyIds!, <int>[urlProperty.id]);
+    final upgradeOrder = current.propertyOrder == null ||
+        _sameIds(current.propertyOrder!, <int>[urlProperty.id]);
+    final needsWrite =
+        upgradeVisible || upgradeOrder || current.openMode == null;
+    if (!needsWrite) return;
+
+    await defaultsStore.write(
+      objectTypeId: objectTypeId,
+      defaults: ObjectTypeDefaults(
+        visiblePropertyIds:
+            upgradeVisible ? desiredVisible : current.visiblePropertyIds,
+        propertyOrder: upgradeOrder ? desiredOrder : current.propertyOrder,
+        openMode: current.openMode ?? ObjectOpenMode.sidePeek,
+      ),
+    );
+  }
+
+  bool _sameIds(List<int> left, List<int> right) {
+    if (left.length != right.length) return false;
+    for (var index = 0; index < left.length; index++) {
+      if (left[index] != right[index]) return false;
+    }
+    return true;
+  }
+
+  Future<void> _setDomainIfMissing({
+    required AppObject object,
+    required WeblinkObjectDefinition definition,
+    required String normalizedUrl,
+  }) async {
+    final host = Uri.parse(normalizedUrl).host.trim();
+    if (host.isEmpty) return;
+    await _setIfMissing(
+      object: object,
+      property: definition.domainProperty,
+      value: host,
+    );
+  }
+
+  Future<void> _setIfMissing({
+    required AppObject object,
+    required ObjectPropertyDefinition property,
+    required String? value,
+  }) async {
+    final candidate = value?.trim();
+    if (candidate == null || candidate.isEmpty) return;
+    final current = '${object.values[property.id] ?? ''}'.trim();
+    if (current.isNotEmpty) return;
+    await systemObjects.objectStore.setPropertyValue(
+      objectId: object.id,
+      property: property,
+      value: candidate,
+    );
+  }
+
+  Future<AppObject> _reload(int objectTypeId, int objectId) async {
+    final objects = await systemObjects.objectStore.listObjects(objectTypeId);
+    for (final object in objects) {
+      if (object.id == objectId) return object;
+    }
+    throw StateError('Weblink Object $objectId does not exist.');
   }
 }
