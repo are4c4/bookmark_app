@@ -314,6 +314,10 @@ class CoreObjectBridge {
     final objects = await objectStore.listObjects(objectType.id);
     for (final object in objects) {
       final rawId = object.values[legacyIdProperty.id];
+      // Objects without a Legacy ID are native first-class Objects, not stale
+      // mirror rows. Keep them alive across compatibility syncs so new Image /
+      // Bookmark workflows can coexist with the legacy tables during migration.
+      if (rawId == null) continue;
       final legacyId = rawId is int ? rawId : int.tryParse('$rawId');
       if (legacyId != null && validLegacyIds.contains(legacyId)) continue;
       await _relationMutations.deleteObject(
