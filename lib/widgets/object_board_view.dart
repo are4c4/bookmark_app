@@ -23,6 +23,8 @@ typedef ObjectBoardCreateCallback = Future<void> Function(
   ObjectGroupBucket<AppObject> group,
 );
 
+typedef ObjectBoardCardContentBuilder = Widget? Function(AppObject object);
+
 class ObjectBoardView extends StatelessWidget {
   const ObjectBoardView({
     super.key,
@@ -31,6 +33,7 @@ class ObjectBoardView extends StatelessWidget {
     this.onMoveObject,
     this.onCreateInGroup,
     this.cardSubtitleBuilder,
+    this.cardContentBuilder,
     this.columnWidth = 286,
   });
 
@@ -39,6 +42,7 @@ class ObjectBoardView extends StatelessWidget {
   final ObjectBoardMoveCallback? onMoveObject;
   final ObjectBoardCreateCallback? onCreateInGroup;
   final String? Function(AppObject object)? cardSubtitleBuilder;
+  final ObjectBoardCardContentBuilder? cardContentBuilder;
   final double columnWidth;
 
   @override
@@ -61,6 +65,7 @@ class ObjectBoardView extends StatelessWidget {
             onMoveObject: onMoveObject,
             onCreateInGroup: onCreateInGroup,
             cardSubtitleBuilder: cardSubtitleBuilder,
+            cardContentBuilder: cardContentBuilder,
           ),
         ),
       ),
@@ -75,6 +80,7 @@ class _BoardColumn extends StatelessWidget {
     required this.onMoveObject,
     required this.onCreateInGroup,
     required this.cardSubtitleBuilder,
+    required this.cardContentBuilder,
   });
 
   final ObjectGroupBucket<AppObject> group;
@@ -82,6 +88,7 @@ class _BoardColumn extends StatelessWidget {
   final ObjectBoardMoveCallback? onMoveObject;
   final ObjectBoardCreateCallback? onCreateInGroup;
   final String? Function(AppObject object)? cardSubtitleBuilder;
+  final ObjectBoardCardContentBuilder? cardContentBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -193,6 +200,7 @@ class _BoardColumn extends StatelessWidget {
     final card = _ObjectBoardCard(
       object: object,
       subtitle: cardSubtitleBuilder?.call(object),
+      content: cardContentBuilder?.call(object),
       onTap: () => onObjectTap(object),
     );
     if (onMoveObject == null) return card;
@@ -206,6 +214,7 @@ class _BoardColumn extends StatelessWidget {
           child: _ObjectBoardCard(
             object: object,
             subtitle: cardSubtitleBuilder?.call(object),
+            content: cardContentBuilder?.call(object),
           ),
         ),
       ),
@@ -219,11 +228,13 @@ class _ObjectBoardCard extends StatelessWidget {
   const _ObjectBoardCard({
     required this.object,
     this.subtitle,
+    this.content,
     this.onTap,
   });
 
   final AppObject object;
   final String? subtitle;
+  final Widget? content;
   final VoidCallback? onTap;
 
   @override
@@ -264,6 +275,10 @@ class _ObjectBoardCard extends StatelessWidget {
                     color: scheme.onSurfaceVariant,
                   ),
                 ),
+              ],
+              if (content != null) ...[
+                const SizedBox(height: 6),
+                content!,
               ],
             ],
           ),
