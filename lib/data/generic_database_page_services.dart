@@ -1,4 +1,5 @@
 import 'bidirectional_relation_store.dart';
+import 'daily_note_service.dart';
 import 'database_collection_config_service.dart';
 import 'database_collection_resolver.dart';
 import 'database_collection_store.dart';
@@ -16,6 +17,7 @@ import 'object_store.dart';
 import 'object_type_defaults_store.dart';
 import 'relation_mutation_service.dart';
 import 'relation_target_service.dart';
+import 'system_object_store.dart';
 
 /// Composition root for Object-owned services consumed by GenericDatabasePage.
 ///
@@ -63,6 +65,17 @@ class GenericDatabasePageServices {
       objectStore: objectStore,
       aliasStore: ObjectAliasStore(genericStore),
     );
+    final systemObjects = SystemObjectStore(
+      database: genericStore.database,
+      objectStore: objectStore,
+    );
+    final defaultsStore = ObjectTypeDefaultsStore(genericStore);
+    final dailyNotes = DailyNoteService(
+      genericStore: genericStore,
+      objectStore: objectStore,
+      systemObjects: systemObjects,
+      defaultsStore: defaultsStore,
+    );
 
     return GenericDatabasePageServices(
       loader: loader,
@@ -73,6 +86,8 @@ class GenericDatabasePageServices {
           objectStore,
           relationMutations: relationMutations,
         ),
+        systemObjects: systemObjects,
+        dailyNotes: dailyNotes,
       ),
       relationEditor: ObjectRelationEditorService(
         targets: RelationTargetService(objectStore),
@@ -86,7 +101,7 @@ class GenericDatabasePageServices {
       ),
       openPresentation: ObjectOpenPresentationService(
         viewOpenModes: DatabaseViewOpenModeService(viewStore),
-        objectTypeDefaults: ObjectTypeDefaultsStore(genericStore),
+        objectTypeDefaults: defaultsStore,
       ),
     );
   }
