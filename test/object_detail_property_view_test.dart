@@ -115,6 +115,29 @@ void main() {
     expect(find.byIcon(Icons.edit_outlined), findsOneWidget);
   });
 
+  testWidgets('aligns host drag handle with Property label row', (tester) async {
+    await tester.pumpWidget(host(
+      const ObjectDetailPropertyPresentation(
+        property: textProperty,
+        value: 'hello',
+        displayText: 'hello',
+        isHidden: false,
+      ),
+      leading: const Icon(
+        Icons.drag_indicator,
+        key: ValueKey('property-handle'),
+        size: 15,
+      ),
+    ));
+
+    final handleCenter = tester.getCenter(
+      find.byKey(const ValueKey('property-handle')),
+    );
+    final labelCenter = tester.getCenter(find.text('Summary'));
+
+    expect((handleCenter.dy - labelCenter.dy).abs(), lessThanOrEqualTo(2.0));
+  });
+
   testWidgets('delegates optional host edit tap without making it mandatory',
       (tester) async {
     var taps = 0;
