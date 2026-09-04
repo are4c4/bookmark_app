@@ -1,5 +1,6 @@
 import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/bidirectional_relation_store.dart';
+import 'package:bookmark_app/data/daily_note_service.dart';
 import 'package:bookmark_app/data/database_collection_resolver.dart';
 import 'package:bookmark_app/data/database_collection_store.dart';
 import 'package:bookmark_app/data/generic_database_collection_page_data.dart';
@@ -7,7 +8,9 @@ import 'package:bookmark_app/data/generic_database_object_create_service.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
 import 'package:bookmark_app/data/object_board_create_service.dart';
 import 'package:bookmark_app/data/object_store.dart';
+import 'package:bookmark_app/data/object_type_defaults_store.dart';
 import 'package:bookmark_app/data/relation_mutation_service.dart';
+import 'package:bookmark_app/data/system_object_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/domain/database_collection_definition.dart';
 import 'package:bookmark_app/domain/object_group.dart';
@@ -21,6 +24,7 @@ void main() {
   late ObjectStore objectStore;
   late DatabaseCollectionStore collectionStore;
   late GenericDatabaseObjectCreateService service;
+  late DailyNoteService dailyNotes;
   late int workspaceId;
 
   setUp(() async {
@@ -40,6 +44,16 @@ void main() {
         objectStore: objectStore,
       ),
     );
+    final systemObjects = SystemObjectStore(
+      database: database,
+      objectStore: objectStore,
+    );
+    dailyNotes = DailyNoteService(
+      genericStore: genericStore,
+      objectStore: objectStore,
+      systemObjects: systemObjects,
+      defaultsStore: ObjectTypeDefaultsStore(genericStore),
+    );
     service = GenericDatabaseObjectCreateService(
       pageLoader: GenericDatabaseCollectionPageLoader(
         genericStore: genericStore,
@@ -53,6 +67,8 @@ void main() {
         objectStore,
         relationMutations: relationMutations,
       ),
+      systemObjects: systemObjects,
+      dailyNotes: dailyNotes,
     );
   });
 
@@ -82,6 +98,28 @@ void main() {
 
     expect((await objectStore.listObjects(placeTypeId)).single.id, objectId);
     expect(await objectStore.listObjects(databaseId), isEmpty);
+  });
+
+  test('Daily Notes collection create reuses the date-keyed today Object', () async {
+    final definition = await dailyNotes.ensureDefinition(workspaceId);
+
+    final firstId = await service.create(
+      databaseId: definition.objectType.id,
+      title: '新規ページ',
+    );
+    final secondId = await service.create(
+      databaseId: definition.objectType.id,
+      title: '別のタイトル',
+    );
+
+    expect(secondId, firstId);
+    final created = (await objectStore.listObjects(definition.objectType.id)).single;
+    final today = DateTime.now().toLocal();
+    String two(int value) => value.toString().padLeft(2, '0');
+    final dateKey =
+        '${today.year.toString().padLeft(4, '0')}-${two(today.month)}-${two(today.day)}';
+    expect(created.title, dateKey);
+    expect(created.values[definition.dateProperty.id], dateKey);
   });
 
   test('createInGroup presets canonical target ObjectType Property', () async {
@@ -126,5 +164,26 @@ void main() {
     final created = (await objectStore.listObjects(bookTypeId))
         .singleWhere((object) => object.id == objectId);
     expect(created.values[property.id], '読了');
+  });
+
+  test('Daily Notes reject generic Board group creation', () async {
+    final definition = await dailyNotes.ensureDefinition(workspaceId);
+
+    await expectLater(
+      service.createInGroup(
+        databaseId: definition.objectType.id,
+        title: '新規ページ',
+        groupProperty: definition.dateProperty,
+        targetGroup: const ObjectGroupBucket<AppObject>(
+          key: 'today',
+          label: 'today',
+          value: 'today',
+          items: <AppObject>[],
+          isEmptyGroup: false,
+        ),
+      ),
+      throwsA(isA<UnsupportedError>()),
+    );
+    expect(await objectStore.listObjects(definition.objectType.id), isEmpty);
   });
 }
