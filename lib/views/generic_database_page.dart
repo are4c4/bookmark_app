@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/bookmark_repository.dart';
+import '../data/database_view_gallery_adapter.dart';
 import '../data/database_view_store.dart';
 import '../data/generic_database_page_services.dart';
 import '../data/generic_database_store.dart';
@@ -16,6 +17,7 @@ import '../domain/object_detail_property_presentation.dart';
 import '../domain/object_model.dart';
 import '../domain/object_type_defaults.dart';
 import '../features/database/presentation/widgets/database_property_value_view.dart';
+import '../features/database/presentation/widgets/object_gallery_view.dart';
 import '../features/object/presentation/object_open_presentation_host.dart';
 import '../features/object/presentation/widgets/object_detail_property_view.dart';
 import '../widgets/database_collection_settings_dialog.dart';
@@ -54,6 +56,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
   late final ObjectBoardMoveService _boardMoveService;
 
   static const _viewCoordinator = GenericObjectViewCoordinator();
+  static const _galleryAdapter = DatabaseViewGalleryAdapter();
   static const _openPresentationHost = ObjectOpenPresentationHost();
   static const _detailPropertyPresenter = ObjectDetailPropertyPresenter();
 
@@ -855,14 +858,9 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     );
   }
 
-  Widget _gallery(List<GenericRecord> records) => GridView.builder(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
-        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: 280,
-          mainAxisExtent: 180,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-        ),
+  Widget _gallery(List<GenericRecord> records, GalleryViewMode mode) =>
+      ObjectGalleryView(
+        mode: mode,
         itemCount: records.length + 1,
         itemBuilder: (context, index) {
           if (index == records.length) {
@@ -1797,6 +1795,9 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     final selected = _selectedRecord;
     final activeView = _activeView;
     final layout = activeView?.layoutType ?? 'table';
+    final galleryMode = activeView == null
+        ? GalleryViewMode.fixed
+        : _galleryAdapter.decode(activeView);
 
     return Scaffold(
       body: Column(
@@ -1933,7 +1934,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
               children: [
                 Expanded(
                   child: switch (layout) {
-                    'gallery' => _gallery(records),
+                    'gallery' => _gallery(records, galleryMode),
                     'list' => _list(records),
                     'board' when projection != null => _board(projection),
                     _ => _table(records),
