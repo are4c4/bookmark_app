@@ -47,12 +47,35 @@ class PhotoStorageService {
       if (!await source.exists()) continue;
 
       final originalName = _fileName(source.path);
-      final safeName = originalName.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
-      final targetPath = '${photoDir.path}/${DateTime.now().microsecondsSinceEpoch}_${index++}_$safeName';
+      final targetPath = _nextManagedPath(photoDir, originalName, index++);
       final target = await source.copy(targetPath);
       imported.add(ImportedPhoto(path: target.path, originalName: originalName));
     }
     return imported;
+  }
+
+  /// Persists already-downloaded image bytes into the same app-managed photo
+  /// directory used by local imports.
+  Future<ImportedPhoto> importBytes({
+    required List<int> bytes,
+    required String originalName,
+  }) async {
+    if (bytes.isEmpty) {
+      throw ArgumentError.value(bytes, 'bytes', 'Image bytes must not be empty.');
+    }
+    final name = _fileName(originalName.trim());
+    if (name.isEmpty || !_isSupportedImage(name)) {
+      throw ArgumentError.value(
+        originalName,
+        'originalName',
+        'Managed image name must have a supported image extension.',
+      );
+    }
+    final photoDir = await _resolvePhotoDirectory();
+    await photoDir.create(recursive: true);
+    final target = File(_nextManagedPath(photoDir, name, 0));
+    await target.writeAsBytes(bytes, flush: true);
+    return ImportedPhoto(path: target.path, originalName: name);
   }
 
   Future<void> deleteManagedPhoto(String path) async {
@@ -70,6 +93,11 @@ class PhotoStorageService {
     if (active != null && active.isNotEmpty) return Directory(active);
     final support = await getApplicationSupportDirectory();
     return Directory('${support.path}/photos');
+  }
+
+  String _nextManagedPath(Directory directory, String originalName, int index) {
+    final safeName = originalName.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+    return '${directory.path}/${DateTime.now().microsecondsSinceEpoch}_${index}_$safeName';
   }
 
   Future<List<String>> _pickImagesWithFileSelector() async {
@@ -92,12 +120,22 @@ end repeat
 return output
 ''';
 
-    final result = await Process.run('/usr/bin/osascript', const ['-e', script], runInShell: false);
+    final result = await Process.run(
+      '/usr/bin/osascript',
+      const ['-e', script],
+      runInShell: false,
+    );
 
     if (result.exitCode != 0) {
       final error = result.stderr.toString().trim();
-      if (error.contains('User canceled') || error.contains('(-128)')) return const [];
-      throw StateError(error.isEmpty ? 'macOSのファイル選択画面を開けませんでした (exit ${result.exitCode})' : error);
+      if (error.contains('User canceled') || error.contains('(-128)')) {
+        return const [];
+      }
+      throw StateError(
+        error.isEmpty
+            ? 'macOSのファイル選択画面を開けませんでした (exit ${result.exitCode})'
+            : error,
+      );
     }
 
     return result.stdout
