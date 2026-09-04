@@ -15,7 +15,7 @@ import '../domain/object_detail_content.dart';
 import '../domain/object_detail_property_presentation.dart';
 import '../domain/object_model.dart';
 import '../domain/object_type_defaults.dart';
-import '../features/database/presentation/database_property_presenter.dart';
+import '../features/database/presentation/widgets/database_property_value_view.dart';
 import '../features/object/presentation/object_open_presentation_host.dart';
 import '../features/object/presentation/widgets/object_detail_property_view.dart';
 import '../widgets/database_collection_settings_dialog.dart';
@@ -127,8 +127,6 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
         await _store.listAllDatabases(widget.repository.workspaceId);
     final recordsByType = <int, List<GenericRecord>>{};
     for (final relatedType in objectTypes) {
-      // Relation display must resolve all target Objects, not just members of
-      // the active collection when its target ObjectType matches this type.
       recordsByType[relatedType.id] = await _store.listRecords(relatedType.id);
     }
 
@@ -388,14 +386,29 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
         .toList(growable: false);
   }
 
-  String _relationDisplay(GenericPropertyRecord property, dynamic value) =>
-      _relatedRecords(property, value).map((record) => record.title).join(', ');
-
   dynamic _valueFor(GenericRecord record, GenericPropertyRecord property) {
     if (property.type == 'formula' || property.type == 'rollup') {
       return _computedValues[record.id]?[property.id];
     }
     return record.values[property.id];
+  }
+
+  Widget _propertyValueWidget(
+    GenericRecord record,
+    GenericPropertyRecord property, {
+    int? maxItems,
+  }) {
+    final value = _valueFor(record, property);
+    return DatabasePropertyValueView(
+      property: property,
+      value: value,
+      relationLabels: property.type == 'relation'
+          ? _relatedRecords(property, value)
+              .map((related) => related.title)
+              .toList(growable: false)
+          : const <String>[],
+      maxItems: maxItems,
+    );
   }
 
   dynamic _projectedValueFor(AppObject object, int? propertyId) {
@@ -512,34 +525,6 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     await _persistView(next);
   }
 
-  Future<String?> _askObjectTitle() async {
-    var title = '';
-    final result = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('新規Object'),
-        content: TextField(
-          autofocus: true,
-          decoration: const InputDecoration(labelText: '名前'),
-          onChanged: (value) => title = value,
-          onSubmitted: (value) => Navigator.pop(dialogContext, value.trim()),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('キャンセル'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, title.trim()),
-            child: const Text('作成'),
-          ),
-        ],
-      ),
-    );
-    final normalized = result?.trim() ?? '';
-    return normalized.isEmpty ? null : normalized;
-  }
-
   Future<void> _createRecord(String title) async {
     try {
       final id = await _pageServices.creator.create(
@@ -549,7 +534,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
       await _reload();
       if (!mounted) return;
       if (_records.any((record) => record.id == id)) {
-        setState(() => _selectedRecordId = id);
+        await _openDatabaseObject(id);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -870,11 +855,6 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     );
   }
 
-  String _displayValue(GenericPropertyRecord property, dynamic value) {
-    if (property.type == 'relation') return _relationDisplay(property, value);
-    return formatDatabasePropertyValue(_databasePropertyType(property.type), value);
-  }
-
   Widget _gallery(List<GenericRecord> records) => GridView.builder(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
         gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
@@ -886,7 +866,11 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
         itemCount: records.length + 1,
         itemBuilder: (context, index) {
           if (index == records.length) {
-            return DatabaseCreateCard(label: '新規ページ', onCreate: _createRecord);
+            return DatabaseCreateCard(
+              label: '新規ページ',
+              onCreate: _createRecord,
+              createImmediately: true,
+            );
           }
           final record = records[index];
           final scheme = Theme.of(context).colorScheme;
@@ -910,17 +894,33 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 12),
-                    ..._orderedVisibleProperties.take(4).map(
+                    ..._orderedVisibleProperties.take(3).map(
                           (property) => Padding(
                             padding: const EdgeInsets.only(bottom: 5),
-                            child: Text(
-                              '${property.name}: ${_displayValue(property, _valueFor(record, property))}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: scheme.onSurfaceVariant,
-                              ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                SizedBox(
+                                  width: 72,
+                                  child: Text(
+                                    property.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: scheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: _propertyValueWidget(
+                                    record,
+                                    property,
+                                    maxItems: 2,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
@@ -940,8 +940,8 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
             return DatabaseCreateRow(
               label: '新規ページ',
               icon: Icons.add,
-              hintText: '名前を入力して Enter',
               onCreate: _createRecord,
+              createImmediately: true,
             );
           }
           final record = records[index];
@@ -951,16 +951,22 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
             title: Text(record.title),
             subtitle: _orderedVisibleProperties.isEmpty
                 ? null
-                : Text(
-                    _orderedVisibleProperties
-                        .map(
-                          (property) =>
-                              _displayValue(property, _valueFor(record, property)),
-                        )
-                        .where((value) => value.isNotEmpty)
-                        .join(' · '),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                : Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: _orderedVisibleProperties
+                          .take(3)
+                          .map(
+                            (property) => _propertyValueWidget(
+                              record,
+                              property,
+                              maxItems: 2,
+                            ),
+                          )
+                          .toList(growable: false),
+                    ),
                   ),
             onTap: () => _openDatabaseObject(record.id),
           );
@@ -981,6 +987,15 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
               ...properties.map(
                 (property) => DataColumn(label: Text(property.name)),
               ),
+              DataColumn(
+                label: IconButton(
+                  key: const ValueKey('table-add-property'),
+                  tooltip: 'プロパティを追加',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: _createProperty,
+                  icon: const Icon(Icons.add, size: 18),
+                ),
+              ),
             ],
             rows: records
                 .map(
@@ -991,11 +1006,14 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                       DataCell(Text(record.title)),
                       ...properties.map(
                         (property) => DataCell(
-                          Text(
-                            _displayValue(property, _valueFor(record, property)),
-                          ),
+                          _propertyValueWidget(record, property),
+                          onTap: property.type == 'formula' ||
+                                  property.type == 'rollup'
+                              ? null
+                              : () => _editValue(record, property),
                         ),
                       ),
+                      const DataCell(SizedBox.shrink()),
                     ],
                   ),
                 )
@@ -1006,8 +1024,8 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
             child: DatabaseCreateRow(
               label: '新規ページ',
               icon: Icons.add,
-              hintText: '名前を入力して Enter',
               onCreate: _createRecord,
+              createImmediately: true,
             ),
           ),
         ],
@@ -1056,19 +1074,17 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
       onCreateInGroup: !creatable
           ? null
           : (targetGroup) async {
-              final title = await _askObjectTitle();
-              if (title == null) return;
               try {
                 final id = await _pageServices.creator.createInGroup(
                   databaseId: widget.databaseId,
-                  title: title,
+                  title: '',
                   groupProperty: groupProperty!,
                   targetGroup: targetGroup,
                 );
                 await _reload();
                 if (!mounted) return;
                 if (_records.any((record) => record.id == id)) {
-                  setState(() => _selectedRecordId = id);
+                  await _openDatabaseObject(id);
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
@@ -1085,18 +1101,26 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                 );
               }
             },
-      cardSubtitleBuilder: (object) {
+      cardContentBuilder: (object) {
         final record = _records
             .where((candidate) => candidate.id == object.id)
             .firstOrNull;
         if (record == null) return null;
-        final values = _orderedVisibleProperties
-            .map((property) =>
-                _displayValue(property, _valueFor(record, property)))
-            .where((value) => value.isNotEmpty)
-            .take(2)
-            .toList(growable: false);
-        return values.isEmpty ? null : values.join(' · ');
+        final properties = _orderedVisibleProperties.take(2).toList(growable: false);
+        if (properties.isEmpty) return null;
+        return Wrap(
+          spacing: 6,
+          runSpacing: 4,
+          children: properties
+              .map(
+                (property) => _propertyValueWidget(
+                  record,
+                  property,
+                  maxItems: 2,
+                ),
+              )
+              .toList(growable: false),
+        );
       },
     );
   }
@@ -1267,6 +1291,92 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     }
   }
 
+  Future<void> _editMultiSelect(
+    GenericRecord record,
+    GenericPropertyRecord property,
+  ) async {
+    final options =
+        (property.config['options'] as List?)?.whereType<String>().toList() ??
+            const <String>[];
+    if (options.isEmpty) return;
+    final current = record.values[property.id];
+    final selected = current is Iterable
+        ? current.map((item) => '$item').toSet()
+        : <String>{};
+    final result = await showDialog<Set<String>>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setLocalState) => AlertDialog(
+          title: Text(property.name),
+          content: SizedBox(
+            width: 360,
+            child: ListView(
+              shrinkWrap: true,
+              children: options
+                  .map(
+                    (option) => CheckboxListTile(
+                      dense: true,
+                      value: selected.contains(option),
+                      title: Text(option),
+                      onChanged: (checked) => setLocalState(() {
+                        if (checked == true) {
+                          selected.add(option);
+                        } else {
+                          selected.remove(option);
+                        }
+                      }),
+                    ),
+                  )
+                  .toList(growable: false),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('キャンセル'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, selected),
+              child: const Text('保存'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (result == null) return;
+    await _store.setValue(
+      recordId: record.id,
+      propertyId: property.id,
+      value: result.toList(growable: false),
+    );
+    await _reload();
+  }
+
+  Future<void> _editDate(
+    GenericRecord record,
+    GenericPropertyRecord property,
+  ) async {
+    final raw = record.values[property.id];
+    final parsed = raw is DateTime ? raw : DateTime.tryParse('${raw ?? ''}');
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: parsed ?? now,
+      firstDate: DateTime(1900),
+      lastDate: DateTime(now.year + 100),
+    );
+    if (picked == null) return;
+    final dateKey = '${picked.year.toString().padLeft(4, '0')}-'
+        '${picked.month.toString().padLeft(2, '0')}-'
+        '${picked.day.toString().padLeft(2, '0')}';
+    await _store.setValue(
+      recordId: record.id,
+      propertyId: property.id,
+      value: dateKey,
+    );
+    await _reload();
+  }
+
   Future<void> _editValue(
     GenericRecord record,
     GenericPropertyRecord property,
@@ -1319,6 +1429,14 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
       }
       return;
     }
+    if (property.type == 'multiSelect') {
+      await _editMultiSelect(record, property);
+      return;
+    }
+    if (property.type == 'date') {
+      await _editDate(record, property);
+      return;
+    }
 
     var value = current == null ? '' : '$current';
     final result = await showDialog<String>(
@@ -1328,6 +1446,11 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
         content: TextFormField(
           initialValue: value,
           autofocus: true,
+          keyboardType: property.type == 'number'
+              ? const TextInputType.numberWithOptions(decimal: true, signed: true)
+              : property.type == 'url'
+                  ? TextInputType.url
+                  : TextInputType.text,
           onChanged: (text) => value = text,
           onFieldSubmitted: (_) => Navigator.pop(dialogContext, value),
         ),
@@ -1346,13 +1469,21 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     if (result == null) return;
 
     dynamic parsed = result;
-    if (property.type == 'number') parsed = num.tryParse(result);
-    if (property.type == 'multiSelect') {
-      parsed = result
-          .split(',')
-          .map((item) => item.trim())
-          .where((item) => item.isNotEmpty)
-          .toList();
+    if (property.type == 'number') {
+      final normalized = result.trim();
+      if (normalized.isEmpty) {
+        parsed = null;
+      } else {
+        final number = num.tryParse(normalized);
+        if (number == null) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('数値として解釈できません。元の値は変更していません。')),
+          );
+          return;
+        }
+        parsed = number;
+      }
     }
     await _store.setValue(
       recordId: record.id,
