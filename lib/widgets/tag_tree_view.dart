@@ -334,16 +334,30 @@ class _TagTreeViewState extends State<TagTreeView> {
                         SizedBox(
                           width: 30,
                           child: PopupMenuButton<String>(
+                            key: ValueKey(
+                              'tag-group-menu:${row.groupId ?? -1}',
+                            ),
                             tooltip: 'グループ操作',
                             padding: EdgeInsets.zero,
                             iconSize: UiTokens.iconNormal,
                             onSelected: (action) => widget.onGroupMenuAction
                                 ?.call(row.groupId, action),
-                            itemBuilder: (_) => const [
-                              PopupMenuItem(
+                            itemBuilder: (_) => [
+                              const PopupMenuItem(
                                 value: 'add',
                                 child: Text('タグを追加'),
                               ),
+                              if (row.groupId != null) ...const [
+                                PopupMenuDivider(),
+                                PopupMenuItem(
+                                  value: 'rename',
+                                  child: Text('名前変更'),
+                                ),
+                                PopupMenuItem(
+                                  value: 'delete',
+                                  child: Text('削除'),
+                                ),
+                              ],
                             ],
                           ),
                         ),
