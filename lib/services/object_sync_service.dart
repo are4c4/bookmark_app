@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:rxdart/rxdart.dart';
 
 import '../data/app_database.dart';
+import '../data/bookmark_weblink_object_bridge.dart';
 import '../data/core_object_bridge.dart';
 import '../data/generic_database_store.dart';
 import '../data/object_store.dart';
@@ -28,6 +29,11 @@ class ObjectSyncService {
       systemObjectStore: systemObjectStore,
       tagBridge: tagBridge,
     );
+    bookmarkWeblinkBridge = BookmarkWeblinkObjectBridge(
+      database: database,
+      objectStore: objectStore,
+      systemObjectStore: systemObjectStore,
+    );
   }
 
   /// Only one profile/workspace is active in the app at a time. Keeping the
@@ -40,6 +46,7 @@ class ObjectSyncService {
   late final SystemObjectStore systemObjectStore;
   late final TagObjectBridge tagBridge;
   late final CoreObjectBridge coreBridge;
+  late final BookmarkWeblinkObjectBridge bookmarkWeblinkBridge;
 
   StreamSubscription<Object?>? _subscription;
   int? _watchedWorkspaceId;
@@ -91,7 +98,10 @@ class ObjectSyncService {
     });
   }
 
-  Future<void> _syncNow(int workspaceId) => coreBridge.syncAll(workspaceId);
+  Future<void> _syncNow(int workspaceId) async {
+    await coreBridge.syncAll(workspaceId);
+    await bookmarkWeblinkBridge.syncWorkspace(workspaceId);
+  }
 
   void _queueSync(int workspaceId) {
     if (_syncing) {
