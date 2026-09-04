@@ -7,7 +7,9 @@ import 'database_view_store.dart';
 import 'generic_database_collection_page_data.dart';
 import 'generic_database_object_create_service.dart';
 import 'generic_database_store.dart';
+import 'object_alias_store.dart';
 import 'object_board_create_service.dart';
+import 'object_identity_search_service.dart';
 import 'object_open_presentation_service.dart';
 import 'object_relation_editor_service.dart';
 import 'object_store.dart';
@@ -57,6 +59,10 @@ class GenericDatabasePageServices {
       genericStore: genericStore,
     );
     final viewStore = DatabaseViewStore(genericStore.database);
+    final identitySearch = ObjectIdentitySearchService(
+      objectStore: objectStore,
+      aliasStore: ObjectAliasStore(genericStore),
+    );
 
     return GenericDatabasePageServices(
       loader: loader,
@@ -71,6 +77,7 @@ class GenericDatabasePageServices {
       relationEditor: ObjectRelationEditorService(
         targets: RelationTargetService(objectStore),
         mutations: relationMutations,
+        identitySearch: identitySearch,
       ),
       relationMutations: relationMutations,
       collectionConfig: DatabaseCollectionConfigService(

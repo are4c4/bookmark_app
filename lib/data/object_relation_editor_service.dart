@@ -1,21 +1,27 @@
+import '../domain/object_identity_search.dart';
 import '../domain/object_model.dart';
+import 'object_identity_search_service.dart';
 import 'relation_mutation_service.dart';
 import 'relation_target_service.dart';
 
 /// Object-owned adapter for Relation picker/editor surfaces.
 ///
 /// Reads always come from [RelationTargetService] so callers see canonical
-/// persisted metadata plus diagnostics. Writes always go through
+/// persisted metadata plus diagnostics. Alias-aware candidate search delegates
+/// to [ObjectIdentitySearchService] and is intersected back with the canonical
+/// candidates loaded for the picker. Writes always go through
 /// [RelationMutationService] so bidirectional lifecycle/index rules are not
 /// reimplemented in UI code.
 class ObjectRelationEditorService {
   const ObjectRelationEditorService({
     required this.targets,
     required this.mutations,
+    this.identitySearch,
   });
 
   final RelationTargetService targets;
   final RelationMutationService mutations;
+  final ObjectIdentitySearchService? identitySearch;
 
   Future<RelationSelectionContext> load({
     required int workspaceId,
@@ -27,6 +33,32 @@ class ObjectRelationEditorService {
         sourceObjectId: sourceObjectId,
         property: property,
       );
+
+  /// Searches the canonical target candidates by title or Object alias.
+  ///
+  /// Search results always carry canonical Object ids. Alias text is display
+  /// context only. Results are intersected with [context.candidates] so a stale
+  /// picker cannot expand beyond the candidate set that was canonically loaded
+  /// for this editing session.
+  Future<List<ObjectIdentitySearchResult>> searchCandidates({
+    required RelationSelectionContext context,
+    required String query,
+  }) async {
+    final search = identitySearch;
+    if (search == null) {
+      throw StateError('Alias-aware Relation candidate search is not configured.');
+    }
+
+    final results = await search.search(
+      workspaceId: context.targetObjectType.workspaceId,
+      query: query,
+      objectTypeId: context.targetObjectType.id,
+    );
+    final candidateIds = context.candidates.map((object) => object.id).toSet();
+    return List.unmodifiable(
+      results.where((result) => candidateIds.contains(result.objectId)),
+    );
+  }
 
   /// Persists an explicit user selection resolved from [load].
   ///
