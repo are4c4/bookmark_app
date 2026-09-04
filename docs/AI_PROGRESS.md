@@ -28,6 +28,7 @@ Recent Object progress on `main`:
 - #209 — shared read-only `WeblinkVisualResolver`; `BookmarkVisualResolver` reuses the same canonical Weblink -> Representative image lookup path. Flutter CI #857 green; merged as `881f65cfd5af78f42fe5be24705163f9cda30900`.
 - #212 — real `GenericDatabasePage` Gallery consumes persisted fixed/masonry mode through `ObjectGalleryView` while preserving the existing card builder/opening/Property behavior. Flutter CI #862 green; merged as `232b55bc5677c5415dd49db361a902a2f2f454b6`.
 - #213 — reusable system `Image` and `Daily Note` collections are exposed as `Images` / `Daily Notes` through the same generic sidebar/Database navigation path as Weblinks. Normal Object sync ensures the Daily Note ObjectType/defaults before the first note is opened. Flutter CI #874 green after correcting the now-stale Daily Note navigation expectation; merged as `1e18884d02bc54454a696fda5d88b54432cdf23d`.
+- #214 — the real generic Daily Notes `新規ページ` path now reuses `DailyNoteService.openOrCreate(...)`, preserving one Object per local date, Date Property/registry identity and full-page semantics. Generic Board grouped creation fails closed instead of creating invalid date-less Daily Notes. Focused service + real `GenericDatabasePage` regressions are included. Flutter CI #878 green; merged as `bc99383b29aa1b436ae2bde0c80c7eb81b4575fb`.
 
 The former highest-value #156 gap — real GenericDatabasePage consumption of the shared Gallery renderer — is closed. Remaining #156 work is actual managed media aspect-ratio sizing and mixed portrait/landscape real-host coverage.
 
@@ -54,16 +55,18 @@ Live on `main`:
 - #203 exposes `Weblinks` through the same generic sidebar/Database path used by user-created Databases.
 - #213 extends that same path to `Images` and `Daily Notes`; Tag and other internal system ObjectTypes remain out of the generic navigation list.
 - Daily Note definition/defaults are ensured during normal Object sync so `Daily Notes` exists before the first note is opened.
+- #214 ensures the generic Daily Notes create affordance does not bypass the canonical unique-date service.
 - No Weblink/Image/Daily-Note-specific parallel page or persistence model was introduced.
 
 Remaining #155 work is primarily:
 - migrate remaining legacy Bookmark Gallery/card/reverse-lookup thumbnail hosts to `BookmarkVisualImage` / canonical resolver;
 - polished generic Weblink/Image Table/Gallery/List presentation;
 - rich Weblink/Image presentation converging with #156 media-driven masonry work;
+- audit the visible generic create affordance for Weblink/Image collections so canonical URL/file identity is never bypassed;
 - eventual legacy URL/remote-thumbnail compatibility retirement after equivalent Object-first hosts are proven.
 
 ## Daily Note generic-host state
-Daily Notes now use the normal generic collection/navigation host, but creation must continue to respect the existing one-Object-per-local-date identity contract. Object PR #214 is the focused follow-up: normal generic `新規ページ` creation is routed through `DailyNoteService.openOrCreate(...)`, while generic Board grouped creation fails closed rather than creating an invalid date-less Daily Note.
+Daily Notes now use the normal generic collection/navigation host end-to-end. Normal Object sync ensures the system ObjectType/defaults, opening uses the shared full-page Object host/navigation, and generic `新規ページ` creation routes through the existing date-keyed `DailyNoteService.openOrCreate(...)` contract. Repeated create requests for the same local date reuse the same canonical Daily Note; generic Board group creation is intentionally rejected until a date-aware grouped-create UX exists.
 
 ## Object identity / aliases — completed (#166)
 Alias persistence, shared identity search, detail editing, Body reference resolution, alias-aware Relation candidate search, real Relation picker consumption and ambiguity/target-type regressions are merged. References persist canonical Object ids only.
@@ -89,10 +92,10 @@ Relation PR #211 is currently active tests-only coverage for Bookmark backlinks 
 - Aliases are search/presentation metadata; references and Relations persist canonical Object ids.
 
 ## Delivery priorities
-1. Object lane: finish #214 so the newly exposed Daily Notes generic host cannot bypass date-keyed Daily Note identity.
-2. Object lane: migrate remaining real Bookmark visual hosts (especially `NotionBookmarkCard` / Stage1 and reverse-lookup dialog) to existing `BookmarkVisualImage` / resolver without changing card semantics.
-3. Object lane: feed #207 persisted Image dimensions + #209 shared Weblink visual resolution into real masonry Gallery media geometry; add portrait/landscape real-host regression and stable no-media fallback.
-4. Object lane: polish generic Weblink/Image Table/Gallery/List presentation using existing ObjectType/View/default contracts rather than a feature-specific page.
+1. Object lane: migrate remaining real Bookmark visual hosts (especially `NotionBookmarkCard` / Stage1 and reverse-lookup dialog) to existing `BookmarkVisualImage` / resolver without changing card semantics.
+2. Object lane: feed #207 persisted Image dimensions + #209 shared Weblink visual resolution into real masonry Gallery media geometry; add portrait/landscape real-host regression and stable no-media fallback.
+3. Object lane: polish generic Weblink/Image Table/Gallery/List presentation using existing ObjectType/View/default contracts rather than a feature-specific page.
+4. Object lane: explicitly resolve generic create UX for exposed Weblink/Image system collections. Weblink creation must use canonical URL normalization/reuse rather than silently creating invalid identity state; do not guess a product flow inside the persistence layer.
 5. Object lane: validate #205 in a real-host screenshot; close #149 only after visible alignment is confirmed.
 6. Continue retiring legacy Bookmark-specific paths only after equivalent Object-first hosts are proven.
 7. Relation lane: complete/merge its current tests-only exposed-Weblink backlink regression, then resume only for new Relation-producing workflows or concrete regressions.
@@ -100,6 +103,7 @@ Relation PR #211 is currently active tests-only coverage for Bookmark backlinks 
 
 ## Validation status
 Recent relevant green CI:
+- #214 Flutter CI #878 — Drift generation, `flutter analyze`, full tests success; merged as `bc99383b29aa1b436ae2bde0c80c7eb81b4575fb`.
 - #213 Flutter CI #874 — Drift generation, analyze and full tests success; merged after fixing one intentionally stale Daily Note navigation expectation.
 - #209 Flutter CI #857 — success.
 - #212 Flutter CI #862 — success.
@@ -109,12 +113,13 @@ Recent relevant green CI:
 
 ## Known risks / sequencing constraints
 - Remaining Stage1 Bookmark visual migration touches a large hotspot. Prefer a patch-capable edit rather than reconstructing/replacing the entire file through connector-only contents writes.
+- Reverse-lookup visual migration requires threading the existing `BookmarkRepository` through several larger management-page callers; keep that as a small patch rather than broad rewrites.
 - Do not introduce feature-specific Relation persistence; reuse canonical Relation services.
 - Do not silently repair ambiguous Relation damage; only deterministic index-only drift is automatically reconcilable.
 - Legacy Bookmark URL/thumbnail retirement remains verification-first and non-destructive.
 - Managed media Relations are written only after valid managed Image Object ids exist.
 - #156 media geometry must reuse managed Image metadata/visual resolution and must not duplicate Object identity or Relation state.
-- Exposing a system ObjectType through the generic Database host also exposes generic creation affordances; system types with identity rules (such as Daily Note) must route those affordances through their existing canonical Object service rather than bypassing invariants.
+- Exposing a system ObjectType through the generic Database host also exposes generic creation affordances; system types with identity rules must route those affordances through their existing canonical Object service or a deliberate user-facing create flow rather than bypassing invariants.
 
 ## Current lane status
-Object lane merged #213 generic Images/Daily Notes navigation after green CI and immediately started #214 to preserve Daily Note date-keyed identity in the newly exposed generic creation path. After that, the next exact work is remaining Bookmark visual-host migration, followed by media-driven masonry sizing. Relation lane still owns active tests-only PR #211.
+Object lane merged #213 generic Images/Daily Notes navigation and #214 canonical Daily Note creation with green full CI. The next exact implementation is remaining Bookmark visual-host migration, followed by media-driven masonry sizing and generic Weblink/Image presentation/create-UX hardening. Relation lane still owns active tests-only PR #211.
