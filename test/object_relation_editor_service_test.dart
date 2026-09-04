@@ -1,6 +1,8 @@
 import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/bidirectional_relation_store.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
+import 'package:bookmark_app/data/object_alias_store.dart';
+import 'package:bookmark_app/data/object_identity_search_service.dart';
 import 'package:bookmark_app/data/object_relation_editor_service.dart';
 import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/relation_mutation_service.dart';
@@ -13,6 +15,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   late AppDatabase database;
   late ObjectStore objectStore;
+  late ObjectAliasStore aliasStore;
   late ObjectRelationEditorService service;
   late int workspaceId;
 
@@ -21,6 +24,7 @@ void main() {
     workspaceId = await WorkspaceStore(database).initialize();
     final genericStore = GenericDatabaseStore(database);
     objectStore = ObjectStore(genericStore);
+    aliasStore = ObjectAliasStore(genericStore);
     service = ObjectRelationEditorService(
       targets: RelationTargetService(objectStore),
       mutations: RelationMutationService(
@@ -30,6 +34,10 @@ void main() {
           genericStore: genericStore,
           objectStore: objectStore,
         ),
+      ),
+      identitySearch: ObjectIdentitySearchService(
+        objectStore: objectStore,
+        aliasStore: aliasStore,
       ),
     );
   });
@@ -114,5 +122,127 @@ void main() {
       service.save(context: context, selectedObjectIds: [invalidId]),
       throwsArgumentError,
     );
+  });
+
+  test(
+    'alias search stays target-scoped and returns canonical ids for ambiguous aliases',
+    () async {
+      final sourceTypeId = await objectStore.createObjectType(
+        workspaceId: workspaceId,
+        name: 'Book',
+      );
+      final personTypeId = await objectStore.createObjectType(
+        workspaceId: workspaceId,
+        name: 'Person',
+      );
+      final placeTypeId = await objectStore.createObjectType(
+        workspaceId: workspaceId,
+        name: 'Place',
+      );
+      await objectStore.createRelationProperty(
+        objectTypeId: sourceTypeId,
+        name: 'Author',
+        targetObjectTypeId: personTypeId,
+        multiple: false,
+      );
+      final property =
+          (await objectStore.getObjectType(sourceTypeId))!.properties.single;
+      final sourceId = await objectStore.createObject(
+        objectTypeId: sourceTypeId,
+        title: '数論講義',
+      );
+      final serreId = await objectStore.createObject(
+        objectTypeId: personTypeId,
+        title: 'Jean-Pierre Serre',
+      );
+      final tateId = await objectStore.createObject(
+        objectTypeId: personTypeId,
+        title: 'John Tate',
+      );
+      final parisId = await objectStore.createObject(
+        objectTypeId: placeTypeId,
+        title: 'Paris',
+      );
+      await aliasStore.addAlias(objectId: serreId, alias: 'JP');
+      await aliasStore.addAlias(objectId: tateId, alias: 'JP');
+      await aliasStore.addAlias(objectId: parisId, alias: 'JP');
+
+      final context = await service.load(
+        workspaceId: workspaceId,
+        sourceObjectId: sourceId,
+        property: property,
+      );
+      final results = await service.searchCandidates(
+        context: context,
+        query: 'jp',
+      );
+
+      expect(
+        results.map((result) => result.objectId),
+        unorderedEquals(<int>[serreId, tateId]),
+      );
+      expect(results.every((result) => result.matchedAlias == 'JP'), isTrue);
+      expect(results.map((result) => result.objectId), isNot(contains(parisId)));
+
+      await service.save(
+        context: context,
+        selectedObjectIds: <int>[serreId],
+      );
+      final updated = (await objectStore.listObjects(sourceTypeId)).single;
+      expect(
+        ObjectRelationValue.fromJson(updated.values[property.id]).objectIds,
+        <int>[serreId],
+      );
+    },
+  );
+
+  test('alias search cannot expand a stale picker candidate set', () async {
+    final sourceTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Book',
+    );
+    final personTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Person',
+    );
+    await objectStore.createRelationProperty(
+      objectTypeId: sourceTypeId,
+      name: 'Author',
+      targetObjectTypeId: personTypeId,
+    );
+    final property =
+        (await objectStore.getObjectType(sourceTypeId))!.properties.single;
+    final sourceId = await objectStore.createObject(
+      objectTypeId: sourceTypeId,
+      title: 'Book',
+    );
+    final originalId = await objectStore.createObject(
+      objectTypeId: personTypeId,
+      title: 'Original',
+    );
+    await aliasStore.addAlias(objectId: originalId, alias: 'Known');
+    final context = await service.load(
+      workspaceId: workspaceId,
+      sourceObjectId: sourceId,
+      property: property,
+    );
+
+    final lateId = await objectStore.createObject(
+      objectTypeId: personTypeId,
+      title: 'Late target',
+    );
+    await aliasStore.addAlias(objectId: lateId, alias: 'Late alias');
+
+    final lateResults = await service.searchCandidates(
+      context: context,
+      query: 'Late alias',
+    );
+    expect(lateResults, isEmpty);
+
+    final knownResults = await service.searchCandidates(
+      context: context,
+      query: 'Known',
+    );
+    expect(knownResults.map((result) => result.objectId), <int>[originalId]);
   });
 }
