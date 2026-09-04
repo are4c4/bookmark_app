@@ -144,22 +144,15 @@ void main() {
     );
 
     await pumpPage(tester, databaseId);
+    expect(await objectStore.listObjects(placeTypeId), isEmpty);
+
     await tester.tap(find.text('新規ページ').last);
-    await tester.pumpAndSettle();
-    final createField = find.byWidgetPredicate(
-      (widget) =>
-          widget is TextField &&
-          widget.decoration?.hintText == '名前を入力して Enter',
-    );
-    expect(createField, findsOneWidget);
-    await tester.enterText(createField, '小樽');
-    await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
 
     final targetObjects = await objectStore.listObjects(placeTypeId);
-    expect(targetObjects.map((object) => object.title), contains('小樽'));
+    expect(targetObjects, hasLength(1));
+    expect(targetObjects.single.title, '新規ページ');
     expect(await objectStore.listObjects(databaseId), isEmpty);
-    expect(find.text('小樽'), findsWidgets);
   });
 
   testWidgets('Board column create presets target ObjectType group Property',
@@ -228,19 +221,13 @@ void main() {
 
     await pumpPage(tester, databaseId);
     expect(find.text('未読'), findsWidgets);
+
     await tester.tap(find.text('新規Object').first);
     await tester.pumpAndSettle();
-    final titleField = find.byWidgetPredicate(
-      (widget) =>
-          widget is TextField && widget.decoration?.labelText == '名前',
-    );
-    expect(titleField, findsOneWidget);
-    await tester.enterText(titleField, '数論講義');
-    await tester.tap(find.text('作成'));
-    await tester.pumpAndSettle();
 
-    final created = (await objectStore.listObjects(bookTypeId))
-        .singleWhere((object) => object.title == '数論講義');
+    final objects = await objectStore.listObjects(bookTypeId);
+    final created = objects.singleWhere((object) => object.id != existingId);
+    expect(created.title, '新規ページ');
     expect(created.values[statusId], '未読');
     expect(await objectStore.listObjects(databaseId), isEmpty);
   });
