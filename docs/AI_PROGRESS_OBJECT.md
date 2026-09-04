@@ -27,27 +27,33 @@ Important current `main` state:
 - real `GenericDatabasePage` Gallery consumes persisted fixed/masonry mode through `ObjectGalleryView` (#212).
 
 ## Latest run checkpoints
-1. Re-read `AGENTS.md`, Issue #56, `docs/AI_PROGRESS.md`, this handoff, current open PRs and CI state before changing repository state.
-2. Confirmed the only open PR is Relation-owned #211 (`test/relation-weblink-sidebar-backlink-host-155`). It is tests-only, currently not mergeable against the advanced `main`, and its head has no combined status entries. Object lane did not touch Relation lifecycle or the PR.
-3. Re-read Issue #156. Contrary to the stale summary still embedded in Issue #56, #156 is already integrated through #212: persisted `fixed | masonry`, shared renderer/toolbar, Image dimensions, and real `GenericDatabasePage` consumption are all merged. Remaining work is only media-driven masonry sizing + mixed portrait/landscape real-host coverage.
-4. Re-audited the remaining direct legacy Bookmark thumbnail hosts. `bookmark_reverse_lookup_dialog.dart`, `notion_bookmark_card.dart`, and `bookmark_unified_stage1_page.dart` still render legacy cover/remote thumbnail paths directly instead of `BookmarkVisualImage`.
-5. Verified `bookmark_reverse_lookup_dialog.dart` is a small host but its canonical migration requires threading `BookmarkRepository` from the Photo/People/Tag callers. Those caller files are large and this connector only supports whole-file replacement, so changing them here would create an avoidable broad-hotspot rewrite.
-6. Re-inspected the shared Gallery implementation. `ObjectGalleryView` already provides masonry geometry and the real host consumes it; the next #156 slice must feed persisted managed Image aspect ratio into the existing card/media path, not add another Gallery-specific media identity abstraction.
+1. Re-read `AGENTS.md`, Issue #56, `docs/AI_PROGRESS.md`, this handoff, latest PRs and current CI before editing.
+2. Confirmed Relation PR #211 remains open/tests-only and avoided Relation lifecycle/index/backlink implementation changes.
+3. Opened Object PR #213 (`feature/object-image-sidebar-collection-56`) to extend the already-proven generic system-collection navigation path rather than creating new pages.
+4. Exposed the canonical system `image` ObjectType as `Images` through `GenericDatabaseStore.listDatabases(...)`, keeping Tag and other internal system ObjectTypes hidden and preserving generic AppShell/`GenericDatabasePage` routing.
+5. Exposed the canonical `dailyNote` ObjectType as `Daily Notes` through the same path and added `DailyNoteService.ensureDefinition(...)` to normal `ObjectSyncService` workspace sync so the destination exists before the first Daily Note is opened.
+6. Extended `system_object_visibility_test.dart` to lock deterministic navigation ordering (`Weblinks`, `Images`, `Daily Notes`, custom Databases), labels/icons, hidden Tag behavior, and Daily Notes availability after real workspace Object sync.
+7. Compare-audited PR #213 against `main`: only `generic_database_store.dart`, `object_sync_service.dart`, and `system_object_visibility_test.dart` changed; no Relation implementation files changed. Latest compare is `+81/-11` across those three files.
+8. PR #213 is open and mergeable. Flutter CI #872 was pending/in progress at the last check; do not merge until its relevant checks succeed.
 
 ## Exact next actions
-1. **#155 remaining Bookmark visual host migration — highest priority**
+1. **Finish PR #213**
+   - inspect Flutter CI #872 for head `cb6c513f1070d13a113195ac2075c2adc5996dbf`;
+   - fix any Object-lane regression caused by the slice;
+   - when green, squash-merge #213 and update `docs/AI_PROGRESS.md` because repository-wide navigation state changed.
+2. **#155 remaining Bookmark visual host migration**
    - in a patch-capable runtime, thread the existing `BookmarkRepository` into `showBookmarkReverseLookupDialog(...)` and replace `_BookmarkLookupThumbnail` with `BookmarkVisualImage`, preserving cover-photo precedence and legacy remote fallback through the canonical resolver;
    - migrate `NotionBookmarkCard` + the real Stage1 caller to `BookmarkVisualImage` without changing hover controls/card semantics;
    - remove direct `Image.network(bookmark.thumbnail)` presentation only after each real host is migrated and covered.
-2. **#156 media-driven masonry sizing**
+3. **#156 media-driven masonry sizing**
    - reuse #207 persisted Image `Pixel width` / `Pixel height` and #209 `WeblinkVisualResolver`;
    - feed actual managed cover/media aspect ratio into real Gallery cards without eager full-resolution decode;
    - add a real-host portrait + landscape regression and stable no-media fallback height;
    - converge with #155 rich Weblink/Image presentation rather than adding parallel media lookup plumbing.
-3. **#155 generic Weblink collection polish**
+4. **#155 generic Weblink/Image collection polish**
    - improve default Table/Gallery/List presentation through existing ObjectType/View/default contracts only;
-   - keep the existing `Weblinks` sidebar destination and shared Object detail/opening-mode host.
-4. **#149**
+   - keep the shared generic destinations and Object detail/opening-mode host.
+5. **#149**
    - #205 implementation is merged; close only after a real-host screenshot/visual validation confirms alignment.
 
 ## Cross-lane boundaries
@@ -56,16 +62,17 @@ Important current `main` state:
 - Any Relation mutation/deletion continues through canonical Relation services only.
 
 ## Validation
+- PR #213 compare audit: only 3 expected Object-owned files changed, `+81/-11`.
+- PR #213 Flutter CI #872 is the executable validation source for the current branch; status was pending/in progress at handoff.
 - #209 Flutter CI #857 — success; merged as `881f65cfd5af78f42fe5be24705163f9cda30900`.
 - #212 Flutter CI #862 — success; merged as `232b55bc5677c5415dd49db361a902a2f2f454b6`.
 - #206 Flutter CI #846 — success.
-- #211 head `84790612a97a1651f789f2647620cabe741fa4da`: no combined status entries were returned during this run; PR is currently not mergeable against latest main.
-- This runtime cannot clone GitHub over the container network, so local Flutter validation is unavailable; GitHub Actions remains the executable validation source for pushed implementation branches.
+- This runtime cannot run local Flutter from a checked-out repository, so GitHub Actions remains the executable validation source for pushed implementation branches.
 
 ## Risks / blockers
-- The highest-value remaining #155 host migrations require small edits inside large real-host files. The GitHub connector exposes whole-file replacement rather than a patch operation, and the container cannot reach github.com to clone the repository.
-- Reconstructing those large hosts only to thread an existing visual dependency would violate the repository guidance against broad hotspot replacement and create unnecessary regression risk.
+- Remaining Stage1 Bookmark visual migration still needs a small patch inside large real-host files. Avoid broad whole-file reconstruction merely to thread an existing visual dependency.
+- Daily Notes sidebar exposure in #213 intentionally ensures only the existing generic Daily Note ObjectType/defaults during Object sync; it does not introduce a second note model or create a note automatically.
 - No product/design blocker and no Relation semantic blocker is active.
 
 ## Stop reason
-This run completed repository/Issue/PR/CI revalidation, corrected the durable handoff around the now-integrated #156 real host, and re-audited the exact remaining legacy visual hosts. The next safe implementation requires a small patch to large real-host files, but the available runtime has neither patch-capable repository access nor container network access to clone the repo. Broad whole-file reconstruction is intentionally avoided under the AGENTS.md runtime/tool-limit stopping criterion.
+This run completed multiple safe Object-lane checkpoints: Images generic navigation exposure, Daily Notes generic navigation exposure plus real workspace definition availability, and regression/compare validation in PR #213. The PR is awaiting its current Flutter CI result; independent high-value work after this point returns to the known large-host Bookmark visual patches or masonry media integration, which should be performed in a patch-capable runtime rather than broad connector-only whole-file reconstruction.
