@@ -86,7 +86,7 @@ void main() {
         ),
       ),
     );
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.text('Canonical lifecycle article'), findsOneWidget);
     expect(find.text('https://example.com/canonical?x=1'), findsOneWidget);
