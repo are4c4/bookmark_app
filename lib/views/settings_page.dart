@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/material.dart';
 
 import '../data/bookmark_repository.dart';
@@ -12,29 +14,52 @@ class SettingsPage extends StatelessWidget {
     required this.themeMode,
     required this.onThemeModeChanged,
     required this.repository,
+    this.exportBackupFile,
+    this.chooseBackupFile,
+    this.restoreBackupFile,
   });
 
   final ThemeMode themeMode;
   final ValueChanged<ThemeMode> onThemeModeChanged;
   final BookmarkRepository repository;
+  final Future<String?> Function()? exportBackupFile;
+  final Future<String?> Function()? chooseBackupFile;
+  final Future<void> Function(String path)? restoreBackupFile;
+
+  static void _debugBackupFailure(String message, StackTrace stackTrace) {
+    assert(() {
+      developer.log(
+        message,
+        name: 'bookmark_app.settings_backup',
+        stackTrace: stackTrace,
+      );
+      return true;
+    }());
+  }
 
   Future<void> _exportBackup(BuildContext context) async {
     try {
-      final path = await DatabaseBackupService(
-        repository.workspaceStore.database,
-      ).exportToFile();
+      final path = await (exportBackupFile?.call() ??
+          DatabaseBackupService(
+            repository.workspaceStore.database,
+          ).exportToFile());
       if (!context.mounted || path == null) return;
       showAppToast(context, 'バックアップを書き出しました');
-    } catch (error) {
+    } catch (_, stackTrace) {
+      _debugBackupFailure('Database backup export failed.', stackTrace);
       if (context.mounted) {
-        showAppToast(context, 'バックアップを作成できませんでした: $error', error: true);
+        showAppToast(
+          context,
+          'バックアップを作成できませんでした。もう一度お試しください。',
+          error: true,
+        );
       }
     }
   }
 
   Future<void> _restoreBackup(BuildContext context) async {
     final service = DatabaseBackupService(repository.workspaceStore.database);
-    final path = await service.chooseBackupFile();
+    final path = await (chooseBackupFile?.call() ?? service.chooseBackupFile());
     if (path == null || !context.mounted) return;
     final confirmed = await showDialog<bool>(
       context: context,
@@ -57,13 +82,22 @@ class SettingsPage extends StatelessWidget {
     );
     if (confirmed != true) return;
     try {
-      await service.restoreFromFile(path);
+      if (restoreBackupFile != null) {
+        await restoreBackupFile!(path);
+      } else {
+        await service.restoreFromFile(path);
+      }
       if (context.mounted) {
         showAppToast(context, 'バックアップを復元しました。画面を開き直すと反映されます。');
       }
-    } catch (error) {
+    } catch (_, stackTrace) {
+      _debugBackupFailure('Database backup restore failed.', stackTrace);
       if (context.mounted) {
-        showAppToast(context, '復元できませんでした: $error', error: true);
+        showAppToast(
+          context,
+          'バックアップを復元できませんでした。ファイルを確認して、もう一度お試しください。',
+          error: true,
+        );
       }
     }
   }
