@@ -51,15 +51,17 @@ void main() {
     }
     final defaults = await defaultsStore.read(first.objectType.id);
     expect(defaults?.visiblePropertyIds, <int>[
-      first.fileProperty.id,
+      first.originalFilenameProperty.id,
       first.noteProperty.id,
+      first.contentTypeProperty.id,
+      first.sourceUrlProperty.id,
     ]);
     expect(defaults?.propertyOrder, <int>[
-      first.fileProperty.id,
-      first.noteProperty.id,
-      first.sourceUrlProperty.id,
       first.originalFilenameProperty.id,
+      first.noteProperty.id,
       first.contentTypeProperty.id,
+      first.sourceUrlProperty.id,
+      first.fileProperty.id,
     ]);
     expect(defaults?.openMode, ObjectOpenMode.sidePeek);
   });
