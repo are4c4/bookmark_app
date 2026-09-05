@@ -292,12 +292,25 @@ class WeblinkObjectService {
     required ObjectPropertyDefinition previewImageUrlProperty,
   }) async {
     final desiredVisible = <int>[
+      pageTitleProperty.id,
+      domainProperty.id,
+      descriptionProperty.id,
+      urlProperty.id,
+    ];
+    final desiredOrder = <int>[
+      pageTitleProperty.id,
+      domainProperty.id,
+      descriptionProperty.id,
+      urlProperty.id,
+      previewImageUrlProperty.id,
+    ];
+    final previousVisible = <int>[
       urlProperty.id,
       domainProperty.id,
       pageTitleProperty.id,
       descriptionProperty.id,
     ];
-    final desiredOrder = <int>[
+    final previousOrder = <int>[
       urlProperty.id,
       domainProperty.id,
       pageTitleProperty.id,
@@ -317,12 +330,14 @@ class WeblinkObjectService {
       return;
     }
 
-    // Upgrade only the exact URL-only defaults written by the older Weblink
-    // definition. Any customized list is preserved rather than silently reset.
+    // Upgrade only exact defaults written by earlier Weblink definitions.
+    // Any user-customized visibility or ordering is preserved as-is.
     final upgradeVisible = current.visiblePropertyIds == null ||
-        _sameIds(current.visiblePropertyIds!, <int>[urlProperty.id]);
+        _sameIds(current.visiblePropertyIds!, <int>[urlProperty.id]) ||
+        _sameIds(current.visiblePropertyIds!, previousVisible);
     final upgradeOrder = current.propertyOrder == null ||
-        _sameIds(current.propertyOrder!, <int>[urlProperty.id]);
+        _sameIds(current.propertyOrder!, <int>[urlProperty.id]) ||
+        _sameIds(current.propertyOrder!, previousOrder);
     final needsWrite =
         upgradeVisible || upgradeOrder || current.openMode == null;
     if (!needsWrite) return;
