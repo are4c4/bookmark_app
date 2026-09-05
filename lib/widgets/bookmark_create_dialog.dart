@@ -31,6 +31,16 @@ String _fileTitle(String path) {
   return dot > 0 ? name.substring(0, dot) : name;
 }
 
+void _debugAuthorCreationFailure(StackTrace stackTrace) {
+  assert(() {
+    debugPrint(
+      'BookmarkCreateDialog: best-effort PDF author creation failed.',
+    );
+    debugPrintStack(stackTrace: stackTrace);
+    return true;
+  }());
+}
+
 Future<void> showBookmarkCreateDialog({
   required BuildContext context,
   required BookmarkRepository repository,
@@ -141,7 +151,12 @@ Future<void> showBookmarkCreateDialog({
                 for (final author in metadata.authors) {
                   try {
                     await repository.createPerson(author);
-                  } catch (_) {}
+                  } catch (_, stackTrace) {
+                    // Author enrichment is optional: preserve the imported
+                    // bookmark while making unexpected failures observable in
+                    // debug/test builds without logging user-provided names.
+                    _debugAuthorCreationFailure(stackTrace);
+                  }
                 }
                 final allPeople = await repository.watchPeople().first;
                 final names = metadata.authors.map((e) => e.trim().toLowerCase()).toSet();
