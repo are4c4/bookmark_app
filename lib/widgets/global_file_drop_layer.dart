@@ -39,11 +39,9 @@ class _GlobalFileDropLayerState extends State<GlobalFileDropLayer> {
     return dot > 0 ? name.substring(0, dot) : name;
   }
 
-  void _debugAuthorCreationFailure(StackTrace stackTrace) {
+  void _debugFailure(String operation, StackTrace stackTrace) {
     assert(() {
-      debugPrint(
-        'GlobalFileDropLayer: best-effort PDF author creation failed.',
-      );
+      debugPrint('GlobalFileDropLayer: $operation failed.');
       debugPrintStack(stackTrace: stackTrace);
       return true;
     }());
@@ -95,7 +93,7 @@ class _GlobalFileDropLayerState extends State<GlobalFileDropLayer> {
               // already valid, so keep the import successful but expose
               // unexpected failures during development without logging
               // user-provided names or exception text.
-              _debugAuthorCreationFailure(stackTrace);
+              _debugFailure('best-effort PDF author creation', stackTrace);
             }
           }
           final allPeople = await widget.repository.watchPeople().first;
@@ -116,10 +114,13 @@ class _GlobalFileDropLayerState extends State<GlobalFileDropLayer> {
           SnackBar(content: Text('$createdCount件をInboxへ追加しました')),
         );
       }
-    } catch (error) {
+    } catch (_, stackTrace) {
+      _debugFailure('file drop import', stackTrace);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('PDF / 動画を取り込めませんでした: $error')),
+          const SnackBar(
+            content: Text('PDF / 動画を取り込めませんでした。もう一度お試しください。'),
+          ),
         );
       }
     } finally {
