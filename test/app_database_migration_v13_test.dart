@@ -1,5 +1,4 @@
 import 'package:bookmark_app/data/app_database.dart';
-import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -28,14 +27,24 @@ void main() {
           )
         ''');
         sqlite.execute(
-          "INSERT INTO saved_views (name, search_query) VALUES ('Legacy view', 'needle')",
+          "INSERT INTO saved_views (name, search_query) "
+          "VALUES ('Legacy view', 'needle')",
         );
 
         // Foreign-key targets referenced by columns/tables created in v14-v16.
         // Only identity is needed for this migration regression.
-        sqlite.execute('CREATE TABLE people (id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT)');
-        sqlite.execute('CREATE TABLE photos (id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT)');
-        sqlite.execute('CREATE TABLE workspaces (id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT)');
+        sqlite.execute(
+          'CREATE TABLE people '
+          '(id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT)',
+        );
+        sqlite.execute(
+          'CREATE TABLE photos '
+          '(id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT)',
+        );
+        sqlite.execute(
+          'CREATE TABLE workspaces '
+          '(id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT)',
+        );
 
         sqlite.execute('PRAGMA user_version = 13');
       },
@@ -49,7 +58,8 @@ void main() {
     final version = await database.customSelect('PRAGMA user_version').getSingle();
     expect(version.read<int>('user_version'), 16);
 
-    final columns = await database.customSelect('PRAGMA table_info(saved_views)').get();
+    final columns =
+        await database.customSelect('PRAGMA table_info(saved_views)').get();
     final names = columns.map((row) => row.read<String>('name')).toSet();
     expect(
       names,
@@ -61,9 +71,8 @@ void main() {
     );
 
     final saved = await database.customSelect(
-      'SELECT name, search_query, include_descendants, person_filter_id, photo_filter_id '
-      'FROM saved_views WHERE name = ?',
-      variables: [const Variable<String>('Legacy view')],
+      "SELECT name, search_query, include_descendants, person_filter_id, "
+      "photo_filter_id FROM saved_views WHERE name = 'Legacy view'",
     ).getSingle();
     expect(saved.read<String>('name'), 'Legacy view');
     expect(saved.read<String>('search_query'), 'needle');
