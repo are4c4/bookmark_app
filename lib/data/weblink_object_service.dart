@@ -12,6 +12,8 @@ class WeblinkObjectDefinition {
     required this.pageTitleProperty,
     required this.siteNameProperty,
     required this.descriptionProperty,
+    required this.contentTypeProperty,
+    required this.publishedDateProperty,
     required this.faviconUrlProperty,
     required this.previewImageUrlProperty,
   });
@@ -22,6 +24,8 @@ class WeblinkObjectDefinition {
   final ObjectPropertyDefinition pageTitleProperty;
   final ObjectPropertyDefinition siteNameProperty;
   final ObjectPropertyDefinition descriptionProperty;
+  final ObjectPropertyDefinition contentTypeProperty;
+  final ObjectPropertyDefinition publishedDateProperty;
   final ObjectPropertyDefinition faviconUrlProperty;
   final ObjectPropertyDefinition previewImageUrlProperty;
 }
@@ -74,6 +78,16 @@ class WeblinkObjectService {
       name: 'Description',
       type: ObjectPropertyType.text,
     );
+    final contentTypeProperty = await systemObjects.ensureProperty(
+      objectTypeId: type.id,
+      name: 'Content type',
+      type: ObjectPropertyType.text,
+    );
+    final publishedDateProperty = await systemObjects.ensureProperty(
+      objectTypeId: type.id,
+      name: 'Published date',
+      type: ObjectPropertyType.date,
+    );
     final faviconUrlProperty = await systemObjects.ensureProperty(
       objectTypeId: type.id,
       name: 'Favicon URL',
@@ -107,6 +121,8 @@ class WeblinkObjectService {
       pageTitleProperty: pageTitleProperty,
       siteNameProperty: siteNameProperty,
       descriptionProperty: descriptionProperty,
+      contentTypeProperty: contentTypeProperty,
+      publishedDateProperty: publishedDateProperty,
       faviconUrlProperty: faviconUrlProperty,
       previewImageUrlProperty: previewImageUrlProperty,
     );
@@ -182,6 +198,8 @@ class WeblinkObjectService {
     String? description,
     String? faviconUrl,
     String? previewImageUrl,
+    String? contentType,
+    String? publishedDate,
   }) async {
     final definition = await ensureDefinition(workspaceId);
     final object = await _reload(definition.objectType.id, objectId);
@@ -227,6 +245,16 @@ class WeblinkObjectService {
       object: object,
       property: definition.descriptionProperty,
       value: description,
+    );
+    await _setIfMissing(
+      object: object,
+      property: definition.contentTypeProperty,
+      value: _normalizedContentType(contentType),
+    );
+    await _setIfMissing(
+      object: object,
+      property: definition.publishedDateProperty,
+      value: _normalizedOptionalDate(publishedDate),
     );
     await _setIfMissing(
       object: object,
@@ -453,6 +481,17 @@ class WeblinkObjectService {
     } on ArgumentError {
       return null;
     }
+  }
+
+  String? _normalizedContentType(String? value) {
+    final candidate = value?.split(';').first.trim().toLowerCase();
+    return candidate == null || candidate.isEmpty ? null : candidate;
+  }
+
+  String? _normalizedOptionalDate(String? value) {
+    final candidate = value?.trim();
+    if (candidate == null || candidate.isEmpty) return null;
+    return DateTime.tryParse(candidate) == null ? null : candidate;
   }
 
   Future<void> _setIfMissing({
