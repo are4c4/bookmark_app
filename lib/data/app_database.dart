@@ -145,13 +145,6 @@ class AppDatabase extends _$AppDatabase {
     return query.map((row) => row.readTable(people)).get();
   }
 
-  Future<List<Tag>> _tagsForSavedView(int savedViewId) {
-    final query = select(tags).join([innerJoin(savedViewTags, savedViewTags.tagId.equalsExp(tags.id))])
-      ..where(savedViewTags.savedViewId.equals(savedViewId))
-      ..orderBy([OrderingTerm.asc(tags.name)]);
-    return query.map((row) => row.readTable(tags)).get();
-  }
-
   Stream<List<Tag>> watchAllTags() => (select(tags)..orderBy([(t) => OrderingTerm.asc(t.name)])).watch();
   Stream<List<Person>> watchAllPeople() => (select(people)..orderBy([(p) => OrderingTerm.asc(p.name)])).watch();
   Stream<List<PhotoRecord>> watchAllPhotos() =>
@@ -164,17 +157,6 @@ class AppDatabase extends _$AppDatabase {
       (select(bookmarkRelations)
             ..where((r) => r.sourceBookmarkId.equals(bookmarkId) | r.targetBookmarkId.equals(bookmarkId)))
           .watch();
-
-  Stream<List<SavedViewConfig>> watchSavedViewConfigs() {
-    final trigger = customSelect(
-      'SELECT sv.id FROM saved_views sv LEFT JOIN saved_view_tags svt ON svt.saved_view_id = sv.id GROUP BY sv.id',
-      readsFrom: {savedViews, savedViewTags, tags},
-    ).watch();
-    return trigger.asyncMap((_) async {
-      final rows = await (select(savedViews)..orderBy([(v) => OrderingTerm.asc(v.createdAt)])).get();
-      return Future.wait(rows.map((view) async => SavedViewConfig(view: view, tags: await _tagsForSavedView(view.id))));
-    });
-  }
 
   Future<int> addBookmark({
     required String url,

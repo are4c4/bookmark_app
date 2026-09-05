@@ -1,4 +1,5 @@
 import 'package:bookmark_app/data/app_database.dart';
+import 'package:bookmark_app/data/saved_view_read_store.dart';
 import 'package:bookmark_app/data/tag_group_store.dart';
 import 'package:bookmark_app/services/auto_organize_service.dart';
 import 'package:drift/native.dart';
@@ -169,7 +170,7 @@ void main() {
           ..where((row) => row.bookmarkId.equals(bookmarkId)))
         .get();
     expect(relations.map((row) => row.tagId), [targetId]);
-    final views = await database.watchSavedViewConfigs().first;
+    final views = await SavedViewReadStore(database).watchConfigs().first;
     expect(views.single.tags.map((item) => item.id), [targetId]);
     expect((await auto.listRules()).single.tagName, 'Target');
   });

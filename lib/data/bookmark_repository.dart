@@ -10,6 +10,7 @@ import 'bookmark_attachment_store.dart';
 import 'bookmark_read_store.dart';
 import 'bookmark_lifecycle_store.dart';
 import 'person_roles.dart';
+import 'saved_view_read_store.dart';
 import 'tag_group_store.dart';
 import 'workspace_store.dart';
 
@@ -22,10 +23,12 @@ class BookmarkRepository {
     this.profileDirectoryPath,
     AutoOrganizeService? autoOrganizeService,
   })  : _bookmarkReads = BookmarkReadStore(_database),
+        _savedViewReads = SavedViewReadStore(_database),
         autoOrganize = autoOrganizeService ?? AutoOrganizeService(_database);
 
   final AppDatabase _database;
   final BookmarkReadStore _bookmarkReads;
+  final SavedViewReadStore _savedViewReads;
   final WorkspaceStore workspaceStore;
   final BookmarkLifecycleStore lifecycleStore;
   final int workspaceId;
@@ -88,7 +91,7 @@ class BookmarkRepository {
 
   Stream<List<SavedViewConfig>> watchSavedViews() =>
       Rx.combineLatest2<List<SavedViewConfig>, Set<int>, List<SavedViewConfig>>(
-        _database.watchSavedViewConfigs(),
+        _savedViewReads.watchConfigs(),
         workspaceStore.watchSavedViewIds(workspaceId),
         (views, ids) => views.where((config) => ids.contains(config.view.id)).toList(),
       );
