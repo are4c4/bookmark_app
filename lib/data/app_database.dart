@@ -123,16 +123,7 @@ class AppDatabase extends _$AppDatabase {
           if (from < 7) await m.addColumn(photos, photos.tags);
           if (from < 8) await m.addColumn(savedViews, savedViews.visibleProperties);
           if (from < 9) {
-            await m.addColumn(bookmarks, bookmarks.status);
-            await m.addColumn(bookmarks, bookmarks.rating);
-            await m.addColumn(bookmarks, bookmarks.lastOpenedAt);
-            await m.addColumn(bookmarks, bookmarks.openCount);
-            await m.addColumn(people, people.profilePhotoId);
-            await m.addColumn(savedViews, savedViews.statusFilter);
-            await m.addColumn(savedViews, savedViews.minRating);
-            await m.createTable(collections);
-            await m.createTable(bookmarkCollections);
-            await m.createTable(bookmarkRelations);
+            await migrateToV9(m);
           }
           if (from < 10) {
             await migrateToV10(m);
