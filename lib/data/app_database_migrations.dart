@@ -1,6 +1,19 @@
 part of 'app_database.dart';
 
 extension AppDatabaseMigrationSteps on AppDatabase {
+  Future<void> migrateToV9(Migrator migrator) async {
+    await migrator.addColumn(bookmarks, bookmarks.status);
+    await migrator.addColumn(bookmarks, bookmarks.rating);
+    await migrator.addColumn(bookmarks, bookmarks.lastOpenedAt);
+    await migrator.addColumn(bookmarks, bookmarks.openCount);
+    await migrator.addColumn(people, people.profilePhotoId);
+    await migrator.addColumn(savedViews, savedViews.statusFilter);
+    await migrator.addColumn(savedViews, savedViews.minRating);
+    await migrator.createTable(collections);
+    await migrator.createTable(bookmarkCollections);
+    await migrator.createTable(bookmarkRelations);
+  }
+
   Future<void> migrateToV10(Migrator migrator) async {
     await customStatement('ALTER TABLE bookmark_people RENAME TO bookmark_people_old');
     await customStatement(
