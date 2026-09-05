@@ -3,130 +3,76 @@
 > Repository-wide integration checkpoint for AI development. Lane-specific implementation details live in the lane handoff files.
 
 ## Current goal
-Finish the transition from strong generic Object/Relation foundations to a coherent daily-use workflow while reducing the maintenance cost of the migration period: **ObjectType = schema, Database = collection, View = presentation/query**.
+Finish the transition from strong generic Object/Relation foundations to a coherent daily-use workflow while reducing migration-era maintenance cost: **ObjectType = schema, Database = collection, View = presentation/query**.
 
 Product direction: **Capacities-like Object-centric data model + Notion-like Database/View UX**.
 
 Active architecture/product issues:
-- `#56` — generic Object/Database/View integration
-- `#155` — reusable Weblink Object + managed Image presentation/navigation
-- `#156` — fixed/masonry Gallery presentation
-- `#149` — Property handle visual validation
-- `#218` — installable macOS delivery; implementation merged in #220, local install validation remains
+- `#56` — generic Object/Database/View daily-use integration
+- `#155` — reusable Weblink Object + managed Image presentation/navigation and legacy compatibility retirement
+- `#149` — Property-row visual validation
+- `#218` — installable macOS delivery; repository/CI implementation merged, local install/data-preservation validation remains
 - `#225` — maintainability, hotspot reduction and legacy-path retirement
 
-`#166` alias-aware Object identity / Relation picker work is complete and closed.
+`#156` fixed/masonry Gallery and `#166` alias-aware Object identity are complete/closed.
 
 ## Development lanes
-The repository now has three parallel lanes. Each run owns one primary lane and its handoff:
 - **Object** — `docs/AI_PROGRESS_OBJECT.md`
 - **Relation** — `docs/AI_PROGRESS_RELATION.md`
 - **Refactor** — `docs/AI_PROGRESS_REFACTOR.md`
 
-Before editing shared hotspots, inspect open PR ownership. In particular, broad concurrent edits to `generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, `bookmark_unified_stage1_page.dart`, and `app_database.dart` must be sequenced rather than independently rewritten.
+Before editing shared hotspots, inspect open PR ownership. In particular, sequence non-trivial edits to `generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, `bookmark_unified_stage1_page.dart`, and `app_database.dart`.
 
 ## Current implementation position
-The generic Object/Relation architecture is integrated into real Database/Object hosts. The project is now mainly in product exposure, rich media presentation, identity-aware Weblink/Image creation UX, local macOS delivery validation, and behavior-preserving consolidation of legacy/maintenance debt.
+The generic Object/Relation architecture is live in real Database/Object hosts. Work is now mostly Object-first daily-use parity plus targeted retirement of legacy Bookmark presentation/read responsibilities.
 
-Recent integration on `main`:
-- #199 Bookmark detail uses managed Weblink/Image visual resolution.
-- #203/#213 expose Weblinks / Images / Daily Notes through generic sidebar navigation.
-- #204/#206/#212 provide persisted fixed/masonry Gallery modes and real-host renderer switching.
-- #205 provides the deterministic six-dot Property handle/grid.
-- #207 persists managed Image pixel dimensions.
-- #209/#217 provide canonical managed Weblink visual resolution + geometry.
-- #214 preserves date-keyed Daily Note creation in the generic host.
-- #215 fails closed for invalid title-only Weblink/Image generic creation.
-- #220 packages Bookmark as an installable macOS app/DMG using a safe local/CI workflow; main macOS CI subsequently built and uploaded the release package successfully.
-- Relation real-host coverage expanded through #208/#210/#211/#216/#222 for exposed Weblinks/Images editing, backlinks and deletion lifecycle.
-- #225 P0 guardrails landed through #228, including maintainability reporting, no-new-legacy-dependency policy, architecture boundaries, legacy Bookmark inventory, error-policy audit, and a dedicated Refactor handoff.
-- #227/#229/#234/#237 improve debug observability for intentional best-effort fallbacks without changing user-visible behavior.
-- #230/#232/#235/#236 establish migration regressions and begin extracting historical `AppDatabase` migration bodies safely.
+Important `main` state through 2026-09-06:
+- canonical Bookmark -> Weblink and Weblink -> Image production flows are live;
+- managed previews become Image Objects and canonical Representative-image Relations;
+- Weblinks / Images / Daily Notes are exposed through generic sidebar/Database hosts;
+- canonical Weblink URL-entry and managed Image import are live in the generic host (#286/#291);
+- fixed/masonry Gallery modes and managed Weblink/Image media are integrated (#223/#284/#288);
+- Weblink/Image defaults, generated titles and site/favicon metadata are daily-use oriented (#293/#298/#302/#309);
+- direct Weblink creation performs best-effort metadata/preview enrichment (#303), with Relation lifecycle coverage in #307;
+- managed Image source URL identity is normalized (#308);
+- shared URL Properties are safely clickable on current main;
+- canonical Bookmark visual rendering covers lifecycle rows (#296), Notion cards (#294), and reverse lookup (#299); Stage1 List/Table is the final original duplicate under Refactor #304;
+- AppDatabase historical migration bodies v2-v16 are extracted and historical migration regressions extend to v1;
+- Bookmark/SavedView/Photo composite reads and profile-path concerns moved out of AppDatabase (#281/#282/#283/#289);
+- GenericDatabasePage P1 decomposition has started: #310 moves read/projection loading into `GenericDatabasePageStateLoader`;
+- canonical Relation mutation/read/index/backlink/audit/reconcile remains mature;
+- macOS app/DMG packaging from #220 is integrated and CI-built successfully.
 
-## Object lane — current work
-Open presentation stack:
-- **#221** adds read-only `WeblinkGalleryMedia` using canonical Weblink visual resolution and persisted Image geometry.
-- **#223** is stacked on #221 and inserts that widget into the real `GenericDatabasePage` masonry Gallery with a deliberately tiny host diff and real-host regression coverage.
+## Object lane — current state
+Object owns #56/#155 product replacement surfaces and daily-use presentation.
 
-#223 currently owns `generic_database_page.dart`; broad Refactor extraction of that file is deferred until this stack is integrated/rebased and ownership is clear.
+Recent merged work includes canonical URL-entry, managed Image import/media, Weblink/Image defaults, direct enrichment, source identity normalization, Site name/Favicon metadata and clickable URL values. See `docs/AI_PROGRESS_OBJECT.md` for exact current details.
 
-Remaining Object priorities:
-- finish #156 media-driven masonry;
-- finish #155 managed visual migration/rich Weblink/Image presentation;
-- add canonical Weblink URL-entry and Image-import affordances;
-- validate #149 in the real host;
-- perform the final local #218 install/data-preservation check.
+Current open Object work includes **#312 `Prefer canonical Weblink URLs in Bookmark lifecycle`**:
+- read-only resolver prefers one healthy canonical Bookmark -> Weblink Relation and Weblink URL Property;
+- legacy Bookmark URL remains compatibility fallback;
+- ambiguous/malformed/cross-type Relation state fails closed rather than repairing data;
+- #312 explicitly avoids Stage1 while Refactor #304 owns that host.
+
+Object-first replacement must precede deletion of legacy URL/thumbnail storage or import/export compatibility.
 
 ## Relation lane — current state
-Canonical mutation/read/index/backlink/audit/reconcile is mature. Real-host Relation coverage includes exposed Weblink and Image collections through #222. Repository audit found no new view-level direct Relation write path requiring a parallel Relation implementation.
+Canonical Relation behavior is mature. Latest focused composition coverage includes #307 for direct generic Weblink creation/enrichment -> managed Representative Image Relation.
 
-Relation should resume only when:
-- Object lane introduces a genuinely new Relation-producing workflow;
-- a concrete lifecycle/backlink/index correctness regression appears; or
-- an active Issue explicitly assigns Relation semantics.
+Relation resumes for a genuinely new Relation-producing workflow, canonical Relation storage/index change, or concrete correctness regression. Presentation-only Object/Refactor work should not create parallel Relation implementations.
 
-Presentation-only #155/#156 media work is not independent Relation work.
+## Refactor lane — #225 current state
+Major completed work:
+- P0 maintainability/no-new-legacy-dependency/error-policy/architecture guardrails;
+- behavior-preserving diagnostics for several intentional fail-soft paths;
+- complete v2-v16 migration-body extraction plus historical compatibility fixes/regressions;
+- `BookmarkReadStore`, `ProfilePathResolver`, `SavedViewReadStore`, `PhotoReadStore` responsibility moves (#281/#282/#283/#289);
+- legacy visual consolidation for Notion and reverse lookup (#294/#299), coordinated with Object lifecycle visual #296;
+- first GenericDatabasePage P1 decomposition slice #310, full Analyze/Test green and merged.
 
-## Refactor lane — #225
-The Refactor lane is active and must remain behavior-preserving.
+Current Refactor PR **#304** removes Stage1 List/Table direct cover/thumbnail rendering in favor of `BookmarkVisualImage`. Production change is small. Its focused full-page widget regression has been hanging a `flutter_tester` worker under the full suite and hitting the CI Test step timeout; latest branch work explicitly unmounts the Stage1 widget before database close. Treat this as a test-lifecycle issue until evidence shows a production defect.
 
-Merged foundations:
-- maintainability/LOC/hotspot report;
-- no-new-legacy-dependency policy;
-- production `BookmarkItem` / `BookmarkRepository` inventory;
-- failure-policy audit;
-- architecture dependency-boundary documentation;
-- multiple fail-soft observability fixes;
-- v13/v14 migration safety regressions and v14 extraction;
-- v12/v11 migration regression coverage.
-
-Current open Refactor PR:
-- **#238 `Extract AppDatabase v13 migration step`** — moves only the v13 migration body behind `migrateToV13(Migrator)` after #235 regression protection; no product/Object/Relation behavior change.
-
-Refactor priorities remain:
-1. continue test-before-extraction historical migration cleanup;
-2. continue explicit best-effort failure observability;
-3. avoid broad `GenericDatabasePage` work while #223 owns it;
-4. reduce legacy Bookmark production references only after Object-first parity exists;
-5. prefer deletion and narrow responsibility extraction over adding abstraction for its own sake.
-
-## Issue #155 production state
-### Bookmark -> Weblink
-Live on `main`:
-- canonical `Bookmark -> Weblink` through `ObjectSyncService` / `RelationMutationService`;
-- normalized Weblink identity/reuse;
-- verification-first mirrored direct-URL retirement while legacy `bookmarks.url` remains compatibility data;
-- Weblink-owned shared metadata.
-
-### Managed Image / Weblink -> Image
-Live on `main`:
-- app-managed remote image storage;
-- managed Image Object identity/provenance/reuse;
-- production `Representative image` single and `Related images` multi Relations;
-- real preview pipeline/background ingestion;
-- canonical read-only visual resolution and managed Image dimensions;
-- Bookmark detail cover rendering.
-
-### First-class system collection UX
-Weblinks, Images and Daily Notes use the generic sidebar/Database path. Relation safety for newly exposed collection surfaces is covered in real hosts through #208/#210/#211/#216/#222.
-
-Weblink/Image generic title-only creation still fails closed until dedicated canonical URL/file affordances exist.
-
-Remaining #155 work is primarily presentation and migration:
-- remaining Bookmark visual hosts use managed visual resolver;
-- rich generic Weblink/Image Table/Gallery/detail presentation;
-- canonical user-facing Weblink URL-entry / Image-import creation UX;
-- legacy URL/remote-thumbnail compatibility retirement only after Object-first hosts are proven.
-
-## #156 current state
-Fixed/masonry View persistence, toolbar, shared renderer, Image dimensions and real-host renderer switching are merged. #221/#223 are the active presentation-only work consuming canonical `RelationReadService`/Weblink visual data to drive real media geometry; they introduce no Relation mutation/index/backlink path.
-
-## macOS release delivery — #218/#220
-Merged #220 provides release `Bookmark.app` + DMG packaging, product/bundle identity safety, icon input, install/open helpers, CI artifacts and documentation.
-
-Main workflow run `33940306321` completed successfully: `analyze-test` and `build-macos-release` were both green, including release build/DMG creation and artifact upload. Remaining validation is the user's local install/launch and confirmation that existing profile data remains visible.
-
-Developer ID signing/notarization and App Store distribution remain out of scope for the current personal-use delivery path.
+Next Refactor priority after #304 is another small GenericDatabasePage responsibility extraction, not a monolithic rewrite.
 
 ## Repository-wide design contract
 - Object is global and unique; Databases collect/show Objects rather than own duplicates.
@@ -141,31 +87,33 @@ Developer ID signing/notarization and App Store distribution remain out of scope
 - Relation writes/deletions use canonical Relation APIs.
 - Aliases are search/presentation metadata; references persist canonical Object ids.
 - Identity-sensitive system collections must not fall back to raw title-only Object creation.
-- New Object-first feature work should not deepen legacy `BookmarkItem`/legacy-table dependencies unless explicitly required for compatibility/migration.
+- New Object-first feature work must not deepen legacy `BookmarkItem`/legacy-table dependencies unless explicitly required for compatibility/migration.
 
 ## Delivery priorities
-1. Object: integrate #221/#223 and finish #156/#155 managed media presentation.
-2. Refactor: continue #225 migration extraction/error-policy work while avoiding Object-owned hotspots.
-3. Object: add canonical URL-entry / managed Image-import affordances.
-4. User/product: validate #220 `Bookmark.app` locally and validate #205 visual alignment.
-5. Object + Refactor in sequence: retire legacy Bookmark URL/thumbnail presentation after Object-first replacements are proven.
+1. Object: continue #155/#56 daily-use parity and canonical legacy replacement surfaces, including #312.
+2. Refactor: finish #304 test lifecycle and merge the final original Stage1 visual duplicate migration if green.
+3. Refactor: continue GenericDatabasePage P1 decomposition as focused behavior-preserving responsibility moves.
+4. Object + Refactor in sequence: narrow legacy Bookmark URL/thumbnail reads only after each Object-first replacement is proven.
+5. User/product: validate #220 `Bookmark.app` locally and #205 visual alignment in the actual app/theme.
 6. Prefer usage-discovered friction and measurable maintenance reduction over speculative abstraction.
 
 ## Validation status
-Recent Relation CI through #222 is green.
-Main macOS release workflow `33940306321` is green, including artifact packaging.
-Recent #225 refactor PRs #227/#228/#229/#230/#232/#234/#235/#236/#237 have been integrated through focused analyze/test or migration-regression slices; #238 is currently open and should be judged on its own CI before merge.
+- Relation #307 is full-CI green and merged.
+- Refactor #310 is full Analyze/Test green and merged.
+- migration/read-store/path-resolver refactor slices listed above were integrated with focused regressions and full/focused CI as appropriate.
+- #304 production Analyze is green; current unresolved validation is the hanging focused widget-test worker under full-suite execution.
+- macOS release workflow for #220 previously built and uploaded the release package successfully.
 
 ## Known risks / sequencing constraints
-- Do not introduce direct serialized-id Relation writes from new system-collection/import UX.
-- Ambiguous Relation damage is not automatically repaired.
-- Future Object merge/dedup requires explicit Relation policy before edge/value rewrites.
-- Bundle Identifier changes can change macOS sandbox location; keep #220 data-preservation guard intact.
-- Rich Gallery media must reuse existing managed Image/Weblink identity and geometry rather than create parallel media state.
-- Historical migration extraction must preserve exact semantics/order and remain protected by regressions.
-- Object and Refactor lanes must not concurrently perform broad edits to the same hotspot.
+- do not introduce direct serialized-id Relation writes from new system-collection/import UX;
+- ambiguous Relation damage is not automatically repaired;
+- future Object merge/dedup requires explicit Relation policy before edge/value rewrites;
+- legacy Bookmark URL/thumbnail remains compatibility data while old production/import paths need it;
+- rich media must reuse managed Image/Weblink identity, canonical Relation reads and persisted geometry;
+- large shared hosts must be edited in sequenced, patch-sized slices; rebuild intended diffs on latest main rather than force-merging stale branches;
+- test-only lifecycle/hang failures must not be “fixed” by changing production semantics or simply raising global timeouts without evidence.
 
 ## Current lane status
-- **Object:** active on #155/#156 presentation via #221/#223.
+- **Object:** active on #155/#56 daily-use parity; #312 currently owns Bookmark lifecycle URL presentation/opening.
 - **Relation:** stable/idle until a new Relation-producing workflow or concrete regression appears.
-- **Refactor:** active on #225, currently AppDatabase historical migration extraction/error-policy cleanup; broad GenericDatabasePage refactor deferred while #223 owns the host.
+- **Refactor:** active on #225; #310 P1 state-loader is merged, #304 Stage1 visual test lifecycle is being resolved, then GenericDatabasePage decomposition continues.
