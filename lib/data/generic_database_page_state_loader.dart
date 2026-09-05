@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import '../domain/object_model.dart';
 import 'generic_database_collection_page_data.dart';
 import 'generic_database_object_create_service.dart';
@@ -55,6 +57,16 @@ class GenericDatabasePageStateLoader {
   final ObjectComputedValueStore computedStore;
   final GenericDatabaseCreateModeResolver createModeForObjectType;
 
+  static void _debugComputedProjectionFallback(StackTrace stackTrace) {
+    assert(() {
+      stderr.writeln(
+        'GenericDatabasePageStateLoader: computed projection failed; using null.',
+      );
+      stderr.writeln(stackTrace);
+      return true;
+    }());
+  }
+
   Future<GenericDatabasePageState> load({
     required int databaseId,
     required int workspaceId,
@@ -91,7 +103,12 @@ class GenericDatabasePageStateLoader {
             );
             (computedValues[object.id] ??= <int, dynamic>{})[property.id] =
                 value;
-          } catch (_) {
+          } catch (_, stackTrace) {
+            // One malformed computed Property must not prevent the Database page
+            // from loading. Preserve the existing null projection while exposing
+            // unexpected evaluation failures during development without logging
+            // Object titles, Property expressions, or other user content.
+            _debugComputedProjectionFallback(stackTrace);
             (computedValues[object.id] ??= <int, dynamic>{})[property.id] =
                 null;
           }
