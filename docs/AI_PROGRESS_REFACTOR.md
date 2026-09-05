@@ -3,143 +3,128 @@
 > Durable handoff for behavior-preserving maintainability work. Update this file before every Refactor-lane run ends.
 
 ## Current goal
-Issue #225 — reduce maintenance hotspots and retire duplicate legacy paths while preserving behavior.
+Issue #225 — reduce maintenance hotspots and retire duplicate legacy paths while preserving product behavior.
 
-Primary lane: **Refactor**. This lane owns technical-debt reduction rather than product semantics and coordinates with Object / Relation work before touching shared hotspots.
+Primary lane: **Refactor**. Object owns replacement product semantics and Relation owns canonical Relation semantics; this lane deletes duplication, narrows responsibilities, improves failure observability, and decomposes hotspots only after checking parallel PR ownership.
 
-## Current active branch / PR
-- `refactor/issue-225-bookmark-read-store` — PR #281 `Move Bookmark aggregation behind read store`.
+## Current checkpoint
+Latest merged Refactor architecture slice:
+- **#310 `Extract GenericDatabasePage read projection state loader`** — merged as `4c4a3c09059f6e763ef7353ec2bf2eee7b4e6eda`.
 
-PR #281 is the first post-migration AppDatabase responsibility-reduction slice:
-- adds `BookmarkReadStore.watchItems()` as the owner of screen-ready `BookmarkItem` aggregation;
-- moves the former `AppDatabase.watchBookmarkItems()` joins, ordering, cover-photo selection and profile-relative photo path resolution without semantic changes;
-- routes `BookmarkRepository` and `ObjectSyncService` through the new read store;
-- deletes `AppDatabase.watchBookmarkItems()` after its two production consumers move;
-- adds `test/bookmark_read_store_test.dart` covering aggregate ordering, collection data, cover photo and path resolution;
-- does not change schema, migration ordering, Object semantics or Relation semantics.
+#310 adds `GenericDatabasePageStateLoader` and moves the following out of `GenericDatabasePage._reload()` without changing mutation/UI semantics:
+- Database/collection snapshot loading;
+- all-ObjectType record aggregation;
+- create-mode resolution;
+- formula/rollup evaluation and existing fail-soft `null` projection.
+
+The Widget now consumes one immutable state snapshot. Focused regression `test/generic_database_page_state_loader_test.dart` covers page/record aggregation, related records, computed values, create-mode resolution and malformed-formula fallback. Full Analyze/Test was green before merge.
+
+### Active Refactor PR
+- **#304 `Route Stage1 list and table visuals through canonical resolver`** — `BookmarkUnifiedStage1Page` List/Table direct cover/thumbnail helper is replaced with `BookmarkVisualImage`, preserving List `60x44` and Table `58x38` geometry.
+- Production diff is small; the current blocker is the newly added full-page widget regression leaving a `flutter_tester` worker alive under the full suite. Analyze passes and hundreds of unrelated tests pass, but the CI Test step reaches its 12-minute action timeout. `pumpAndSettle()` was already removed; latest branch work explicitly unmounts the Stage1 widget before closing the in-memory database. Do not change production behavior to solve this test-only lifecycle problem.
 
 ## Completed checkpoints
 ### P0 guardrails / architecture
 Merged through #228:
-- `tool/maintainability_report.sh` for non-blocking Dart LOC / largest-file reporting;
-- `docs/MAINTAINABILITY.md` with hotspot baseline and no-new-legacy-dependency policy;
-- `docs/LEGACY_BOOKMARK_INVENTORY.md` classifying production Bookmark-era consumers;
-- `docs/ERROR_POLICY_AUDIT.md` classifying broad catch / fallback behavior;
+- `tool/maintainability_report.sh`;
+- `docs/MAINTAINABILITY.md` no-new-legacy-dependency policy and hotspot baseline;
+- `docs/LEGACY_BOOKMARK_INVENTORY.md`;
+- `docs/ERROR_POLICY_AUDIT.md`;
 - `docs/architecture.md` dependency-boundary guidance;
-- dedicated Refactor-lane handoff.
+- dedicated Refactor handoff.
 
-The no-new-legacy-dependency rule remains repository policy: new Object/Database/View work should not add new `BookmarkItem` / legacy-table dependencies unless explicitly required for compatibility or migration.
+New Object/Database/View code must not deepen `BookmarkItem` / legacy-table coupling unless it is an explicit compatibility or migration boundary.
 
 ### Failure-policy / observability
-Merged behavior-preserving slices:
-- #227 — optional PDF author enrichment in `GlobalFileDropLayer` remains non-blocking; debug diagnostics replace an empty catch.
-- #229 — profile state / backup metadata fallbacks retain default/best-effort behavior with debug/assert diagnostics.
-- #234 — corrupt Database View JSON still fails soft to empty values; unexpected decode failures are debug-visible without logging raw JSON.
-- #237 — remote image geometry decode remains best-effort; decode failures are debug-visible while managed import still succeeds.
-- #274 — PDF metadata filename fallback remains best-effort; debug diagnostics log exception type + stack only, not path/content.
-- #279 — Bookmark metadata URL/host fallback remains best-effort; debug diagnostics log exception type + stack only, not URL/response/exception text.
+Behavior-preserving merged slices include:
+- #227 optional PDF author enrichment diagnostics;
+- #229 profile state / backup metadata fallback diagnostics;
+- #234 corrupt Database View JSON fail-soft diagnostics;
+- #237 remote image geometry decode diagnostics;
+- #274 PDF metadata filename fallback diagnostics without path/content logging;
+- #279 Bookmark metadata fallback diagnostics without URL/response/exception-text logging.
 
-Do not convert intentional fail-soft product behavior into user-visible failure merely to remove broad catches.
+Intentional fail-soft product behavior must not be converted into user-visible failure merely to remove a broad catch.
 
-### AppDatabase migration safety / extraction — complete
-Issue #225's v2–v14 migration-body extraction target is complete; the resulting helper sequence now covers **v2 through v16**.
+### AppDatabase migration extraction — complete
+All historical migration bodies **v2 through v16** now live behind migration helpers. `AppDatabase.migration` is sequencing/wiring rather than the home of historical bodies.
 
-Merged extraction PRs include:
-- #278 v2
-- #276 v3
-- #275 v4
-- #267 v5
-- #262 v6
-- #261 v7
-- #260 v8
-- #258 v9
-- #248 v10
-- #246 v11
-- #241 v12
-- #239 v13
-- #232 v14
-- pre-existing v15 / v16 helpers
+Historical fixtures cover real schemaVersion checkpoints down to v1 and exposed installed-user defects that were fixed before extraction:
+- #257 guarded duplicate `photos.tags` addition;
+- #259 guarded duplicate `people.profile_photo_id` addition;
+- #269 replaced current-row-mapper use against historical SavedView schema with historical/raw SQL;
+- #270 replaced current Bookmark mapper/table assumptions in v2->v3 normalization with historical DDL/raw reads.
 
-`AppDatabase.migration` is now sequencing/wiring rather than the home of historical migration bodies.
+Canonical Relation bootstrap regressions also replay old migration boundaries; Refactor must not redesign Relation storage while maintaining them.
 
-Historical regression coverage was added before risky extractions, including real schemaVersion 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 and 13-era upgrade paths where appropriate. Relation-lane regressions also replay canonical Relation bootstrap across old Bookmark-era migrations (#264, #266, #271, #273, #280).
+### AppDatabase responsibility reduction — complete slices
+Merged responsibility-moving slices:
+- **#281 `BookmarkReadStore`** — removed `AppDatabase.watchBookmarkItems()` and moved screen-ready Bookmark aggregation behind a dedicated read store; BookmarkRepository/ObjectSync use it.
+- **#282 `ProfilePathResolver`** — removed AppDatabase profile-path conversion methods and centralized relative/absolute path semantics.
+- **#283 `SavedViewReadStore`** — removed `AppDatabase.watchSavedViewConfigs()` and saved-view tag aggregation from the database root.
+- **#289 `PhotoReadStore`** — removed `AppDatabase.watchAllPhotos()` and centralized Photo path resolution, including the duplicate BookmarkReadStore resolver path.
 
-### Historical migration compatibility bugs found and fixed
-The historical fixtures exposed real installed-user upgrade defects rather than test-only problems:
-- #257 — v5 -> current could create `photos.tags` early and then v7 attempted to add the column again. v7 now adds it only when absent.
-- #259 — v4 -> current could create `people.profile_photo_id` early and then v9 attempted to add it again. v9 now guards the column addition.
-- #269 — v3 SavedView migration used the current Drift row mapper against a historical physical table missing later required columns. Legacy `tag_id` migration now uses historical/raw SQL instead.
-- #270 — v2 Bookmark/tag normalization used current table definitions/mappers against historical physical schema. v3 now recreates its historical DDL and reads only historical Bookmark columns through raw SQL.
+Continue shrinking AppDatabase only when a slice removes a real responsibility; do not add wrapper-only indirection.
 
-These fixes preserve old migration intent while removing dependence on today's generated row shape.
+### Legacy Bookmark visual duplication
+Canonical `BookmarkVisualImage` migration is now merged for:
+- lifecycle Bookmark rows — Object #296;
+- Notion card — Refactor #294;
+- reverse lookup dialog — Refactor #299, including Tag/Photo/People host wiring.
 
-### AppDatabase responsibility reduction
-- v2–v16 migration bodies are extracted.
-- PR #281 moves `watchBookmarkItems()` composite loading out of the database root into `BookmarkReadStore` and removes the old database-root aggregation API once both production consumers move.
+The last duplicate identified in the original inventory is the Stage1 List/Table helper in active #304. Whole legacy hosts are not automatically deletable; only the duplicated presentation slices are superseded until Object-first product parity is complete.
 
-Continue narrowing AppDatabase only when the move deletes a real responsibility rather than adding wrapper-only indirection.
+### GenericDatabasePage P1 decomposition
+The broad #223 ownership blocker is gone. P1 decomposition has started as small behavior-preserving slices:
+- #310 moves read/projection state loading out of the Widget.
+
+Keep following the same pattern: focused regression first/with the move, patch-sized host diff, no monolithic rewrite, and no Object/Relation semantic changes.
 
 ## Cross-lane coordination
 ### Object lane
-Current open Object PR:
-- #223 — real `GenericDatabasePage` masonry Gallery integration.
+Current Object work is #155/#56 daily-use parity. Recent main includes canonical Weblink URL creation, managed Image import/media, richer Weblink/Image defaults, site metadata, clickable shared URL properties, and Object-first visual replacements. Open Object PR #312 moves Bookmark lifecycle URL presentation/opening toward canonical Weblink URL resolution; it explicitly avoids Stage1 while #304 owns that host.
 
-#223 directly owns `generic_database_page.dart`. Therefore:
-- do not begin broad GenericDatabasePage controller/state/layout extraction while #223 is open;
-- do not reconstruct that file for unrelated refactors;
-- re-check ownership after #223 merges/closes before starting P1 page decomposition.
-
-Recent Object work has moved canonical Weblink/Image creation and managed-media behavior forward (#250/#263/#265/#272 and related work). Legacy presentation retirement should follow proven Object-first replacements rather than creating parallel adapters.
+Before touching `generic_database_page.dart`, `bookmark_unified_stage1_page.dart`, `object_inspector_page.dart` or `app_shell.dart`, re-check open PR ownership. GenericDatabasePage is now a sequenced shared hotspot: Refactor may decompose it, but Object product changes there should remain patch-sized and coordinated.
 
 ### Relation lane
-Canonical Relation mutation/read/index/backlink/audit/reconcile is mature. Relation has added cross-lane migration/composition regressions through #280. Refactor must preserve canonical Relation APIs and must not redesign Relation storage/index semantics.
-
-Do not add Relation regressions mechanically for every refactor; add them only when a changed boundary can affect canonical Relation persistence, bootstrap, lifecycle or composition.
-
-## Hotspot ownership / edit policy
-Before non-trivial edits, inspect open PRs for:
-- `generic_database_page.dart`
-- `app_shell.dart`
-- `object_inspector_page.dart`
-- `bookmark_unified_stage1_page.dart`
-- `app_database.dart`
-
-Prefer patch-sized extractions and compare-audited diffs. Do not use whole-file reconstruction merely to change a small responsibility.
+Canonical Relation mutation/read/index/backlink/audit/reconcile is mature. Latest focused Relation composition coverage includes #307 for direct Weblink enrichment -> Representative Image Relation. Refactor must preserve canonical Relation APIs and must not create alternate serialized-id/index paths.
 
 ## Exact next actions
-1. Finish PR #281 validation and merge only if focused read-store regression + full Analyze/Test remain green.
-2. Re-run `tool/maintainability_report.sh` / hotspot inventory after #281 to record the actual AppDatabase reduction.
-3. Audit remaining AppDatabase responsibilities. Next candidates must remove a real persistence-root responsibility (for example reusable profile/path concerns or coherent legacy read operations) and keep behavior covered; avoid abstraction for its own sake.
-4. Re-run `docs/LEGACY_BOOKMARK_INVENTORY.md` after Object #223 and subsequent #155 work. Track production references removed and deleted LOC, not adapters added.
-5. Once #223 releases `generic_database_page.dart`, start P1 decomposition as small focused slices with pre-existing/focused regressions; no monolithic rewrite.
-6. Continue failure-policy work only for genuinely silent broad catches where behavior-preserving diagnostics/tests add value.
-7. Update repository-wide `docs/AI_PROGRESS.md` only when sequencing/ownership materially changes and after checking concurrent lane ownership.
+1. Finish #304 by proving the focused Stage1 visual regression exits cleanly; latest attempt explicitly unmounts the Widget before database close. If the test still hangs, replace the heavyweight regression with a smaller deterministic host seam rather than raising CI timeouts or changing production semantics.
+2. Once #304 is green, normalize its two intended files onto latest `main`, rerun fresh CI, and merge.
+3. Re-run production searches for direct Bookmark `coverPhoto` / `thumbnail` rendering. Delete only genuinely superseded presentation logic; do not remove compatibility storage prematurely.
+4. Continue `GenericDatabasePage` P1 decomposition. The next candidate should remove a coherent responsibility from the Widget (for example composition/mutation-flow construction using existing services) and must be coordinated against active Object PRs.
+5. Re-run `tool/maintainability_report.sh` after another meaningful hotspot slice and record actual file/LOC reduction.
+6. Continue failure-policy work only where a truly silent broad catch remains and behavior-preserving diagnostics/tests add value.
+7. Keep `docs/LEGACY_BOOKMARK_INVENTORY.md` and repository-wide `docs/AI_PROGRESS.md` synchronized when sequencing/ownership materially changes.
 
 ## Validation expectations
 For responsibility-moving refactors:
-- preserve public behavior and ordering/path semantics;
-- add focused regression coverage for the moved responsibility when practical;
+- preserve ordering/path/public behavior;
+- add focused regression coverage when practical;
 - run `flutter analyze` and full tests before merge;
-- verify production callers no longer use the old responsibility before deleting it.
+- verify old production callers are gone before deleting the old responsibility.
 
-For migration refactors/fixes:
-- historical migration regression must pass;
-- schema version, statement order/defaults and intended compatibility behavior must remain unchanged unless the regression proves the old implementation was broken.
+For migration work:
+- historical regression must pass;
+- schema version/order/defaults remain unchanged unless a regression proves the old implementation was broken.
 
-For failure-policy refactors:
+For failure-policy work:
 - fail-soft/user-visible behavior remains unchanged unless a separate product issue says otherwise;
-- debug diagnostics must not log raw user content, file paths, URLs, image bytes, credentials or secrets when avoidable.
+- avoid logging raw user content, paths, URLs, bytes, credentials or secrets.
 
 ## Risks / blockers
-- broad GenericDatabasePage refactor remains blocked by active Object PR #223 ownership.
-- legacy Bookmark storage/UI cannot be deleted before Object-first read/write/presentation parity is proven.
-- parallel lanes can make PR bases and shared docs stale quickly; rebase by reconstructing the intended small diff on latest main rather than force-merging stale state.
-- refactors that only add wrappers without deleting duplication or reducing responsibility should be reconsidered.
+- parallel lanes move `main` quickly; rebuild intended small diffs on latest main instead of force-merging stale branches.
+- legacy Bookmark storage/UI cannot be deleted until Object-first read/write/presentation parity is proven.
+- #304 currently has a **test lifecycle/hang blocker**, not a known production failure.
+- large shared hosts should not be reconstructed wholesale to make a small edit.
+- abstraction that adds wrappers without deleting responsibility/duplication should be rejected.
 
 ## Current validation / stop state
-- v2–v16 migration extraction: complete and merged.
-- v1→current historical migration regression: green and merged (#277), with canonical Relation v1 bootstrap coverage merged in #280.
-- Bookmark/PDF metadata observability: merged (#279/#274).
-- PR #281: active; code Analyze passed on the focused-read-store head and full Test is being validated after adding `bookmark_read_store_test.dart`.
+- v2-v16 migration extraction: complete and merged.
+- AppDatabase read/path responsibility slices #281/#282/#283/#289: merged with focused regressions.
+- visual consolidation #294/#299 and Object #296: merged.
+- GenericDatabasePage state-loader #310: full Analyze/Test green and merged.
+- #304: Analyze green; full-suite Test currently blocked by a hanging focused widget-test worker. Latest branch change explicitly disposes the Stage1 host before closing DB and requires fresh CI.
 
-Refactor work remains actionable. The current execution should continue through #281; the only major blocked P1 item is broad `GenericDatabasePage` decomposition while #223 owns that hotspot.
+Refactor work remains actionable; do not stop on #304 CI alone because GenericDatabasePage decomposition and documentation/inventory maintenance remain safe independent work.
