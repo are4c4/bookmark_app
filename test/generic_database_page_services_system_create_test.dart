@@ -9,6 +9,7 @@ import 'package:bookmark_app/data/object_type_defaults_store.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
 import 'package:bookmark_app/data/weblink_object_service.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
+import 'package:bookmark_app/services/bookmark_metadata_service.dart';
 import 'package:bookmark_app/services/photo_storage_service.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -76,6 +77,63 @@ void main() {
       'example.png',
     );
     expect(imageDefinition.aspectRatioFor(createdImage), 1.5);
+  });
+
+  test('page services enrich direct Weblink creation through focused callbacks',
+      () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final systemObjects = SystemObjectStore(
+      database: database,
+      objectStore: objectStore,
+    );
+    final definition = await WeblinkObjectService(
+      systemObjects: systemObjects,
+      defaultsStore: ObjectTypeDefaultsStore(genericStore),
+    ).ensureDefinition(workspaceId);
+    var previewObjectId = 0;
+    final services = GenericDatabasePageServices.fromStores(
+      genericStore: genericStore,
+      objectStore: objectStore,
+      weblinkMetadataFetch: (_) async => const BookmarkMetadata(
+        url: 'https://resource.test/article',
+        title: 'Resource page title',
+        description: 'Resource description',
+        thumbnail: 'https://resource.test/preview.jpg',
+      ),
+      weblinkPreviewImageIngest: ({
+        required workspaceId,
+        required weblinkObjectId,
+      }) async {
+        previewObjectId = weblinkObjectId;
+        return null;
+      },
+    );
+
+    final weblinkId = await services.creator.createWeblinkFromUrl(
+      databaseId: definition.objectType.id,
+      url: 'https://resource.test/article',
+    );
+
+    final created = (await objectStore.listObjects(definition.objectType.id))
+        .singleWhere((object) => object.id == weblinkId);
+    expect(created.title, 'Resource page title');
+    expect(
+      created.values[definition.pageTitleProperty.id],
+      'Resource page title',
+    );
+    expect(
+      created.values[definition.descriptionProperty.id],
+      'Resource description',
+    );
+    expect(
+      created.values[definition.previewImageUrlProperty.id],
+      'https://resource.test/preview.jpg',
+    );
+    expect(previewObjectId, weblinkId);
   });
 
   test('page services expose managed file import through the canonical creator',
