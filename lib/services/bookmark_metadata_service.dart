@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:html/dom.dart';
 import 'package:html/parser.dart' as html_parser;
 import 'package:http/http.dart' as http;
@@ -67,9 +69,21 @@ class BookmarkMetadataService {
         ]),
         thumbnail: rawImage == null ? null : uri.resolve(rawImage).toString(),
       );
-    } catch (_) {
+    } catch (error, stackTrace) {
+      _debugFallbackFailure(error, stackTrace);
       return _fallback(uri);
     }
+  }
+
+  static void _debugFallbackFailure(Object error, StackTrace stackTrace) {
+    assert(() {
+      developer.log(
+        'fetch failed; using fallback (${error.runtimeType})',
+        name: 'BookmarkMetadataService',
+        stackTrace: stackTrace,
+      );
+      return true;
+    }());
   }
 
   String _normalizeUrl(String input) {
