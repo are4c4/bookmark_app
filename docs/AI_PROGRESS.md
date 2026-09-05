@@ -24,7 +24,7 @@ Active architecture/product issues:
 Before editing shared hotspots, inspect open PR ownership. In particular, sequence non-trivial edits to `generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, `bookmark_unified_stage1_page.dart`, and `app_database.dart`.
 
 ## Current implementation position
-The generic Object/Relation architecture is live in real Database/Object hosts. Work is now mostly Object-first daily-use parity plus targeted retirement of legacy Bookmark presentation/read responsibilities.
+The generic Object/Relation architecture is live in real Database/Object hosts. Work is now mostly Object-first daily-use parity plus targeted retirement of legacy Bookmark presentation/read responsibilities and measurable hotspot reduction.
 
 Important `main` state through 2026-09-06:
 - canonical Bookmark -> Weblink and Weblink -> Image production flows are live;
@@ -35,44 +35,46 @@ Important `main` state through 2026-09-06:
 - Weblink/Image defaults, generated titles and site/favicon metadata are daily-use oriented (#293/#298/#302/#309);
 - direct Weblink creation performs best-effort metadata/preview enrichment (#303), with Relation lifecycle coverage in #307;
 - managed Image source URL identity is normalized (#308);
-- shared URL Properties are safely clickable on current main;
-- canonical Bookmark visual rendering covers lifecycle rows (#296), Notion cards (#294), and reverse lookup (#299); Stage1 List/Table is the final original duplicate under Refactor #304;
+- shared URL Properties are safely clickable;
+- all four direct Bookmark visual duplicates from the original #225 inventory now route through canonical `BookmarkVisualImage`: Notion card #294, reverse lookup #299, lifecycle rows Object #296, and Stage1 List/Table #324;
+- canonical Bookmark URL presentation is moving host by host through `BookmarkUrlResolver`: lifecycle #317 and reverse lookup #320 are merged; Notion card #322 is the current open Object slice;
 - AppDatabase historical migration bodies v2-v16 are extracted and historical migration regressions extend to v1;
 - Bookmark/SavedView/Photo composite reads and profile-path concerns moved out of AppDatabase (#281/#282/#283/#289);
-- GenericDatabasePage P1 decomposition has started: #310 moves read/projection loading into `GenericDatabasePageStateLoader`;
+- GenericDatabasePage decomposition now includes read/projection loading #310 and low-level dependency composition #323;
+- recent #225 diagnostics/privacy work #321/#325/#326/#327/#328/#329 preserves fail-soft behavior while reducing silent failures and user-content leakage in debug logs;
 - canonical Relation mutation/read/index/backlink/audit/reconcile remains mature;
 - macOS app/DMG packaging from #220 is integrated and CI-built successfully.
 
 ## Object lane — current state
 Object owns #56/#155 product replacement surfaces and daily-use presentation.
 
-Recent merged work includes canonical URL-entry, managed Image import/media, Weblink/Image defaults, direct enrichment, source identity normalization, Site name/Favicon metadata and clickable URL values. See `docs/AI_PROGRESS_OBJECT.md` for exact current details.
+Recent Object-first legacy URL migration:
+- **#317 merged** — Bookmark lifecycle prefers one healthy canonical Bookmark -> Weblink URL and retains legacy Bookmark URL fallback;
+- **#320 merged** — reverse lookup uses the same canonical URL preference;
+- **#322 open** — Notion bookmark-card URL display/open behavior is the current focused Object PR.
 
-Current open Object work includes **#312 `Prefer canonical Weblink URLs in Bookmark lifecycle`**:
-- read-only resolver prefers one healthy canonical Bookmark -> Weblink Relation and Weblink URL Property;
-- legacy Bookmark URL remains compatibility fallback;
-- ambiguous/malformed/cross-type Relation state fails closed rather than repairing data;
-- #312 explicitly avoids Stage1 while Refactor #304 owns that host.
+The canonical URL resolver is read-only and fails closed on missing/ambiguous/malformed Relation state; presentation must not repair Relation data. Legacy Bookmark URL storage remains compatibility/import/export data until all production dependencies and migration policy are proven replaceable.
 
-Object-first replacement must precede deletion of legacy URL/thumbnail storage or import/export compatibility.
+See `docs/AI_PROGRESS_OBJECT.md` for lane details, but verify actual GitHub PR state before relying on older active-PR numbers in that handoff.
 
 ## Relation lane — current state
-Canonical Relation behavior is mature. Latest focused composition coverage includes #307 for direct generic Weblink creation/enrichment -> managed Representative Image Relation.
+Canonical Relation behavior is mature. Focused composition coverage includes #307 for direct generic Weblink creation/enrichment -> managed Representative Image Relation.
 
 Relation resumes for a genuinely new Relation-producing workflow, canonical Relation storage/index change, or concrete correctness regression. Presentation-only Object/Refactor work should not create parallel Relation implementations.
 
 ## Refactor lane — #225 current state
 Major completed work:
 - P0 maintainability/no-new-legacy-dependency/error-policy/architecture guardrails;
-- behavior-preserving diagnostics for several intentional fail-soft paths;
 - complete v2-v16 migration-body extraction plus historical compatibility fixes/regressions;
 - `BookmarkReadStore`, `ProfilePathResolver`, `SavedViewReadStore`, `PhotoReadStore` responsibility moves (#281/#282/#283/#289);
-- legacy visual consolidation for Notion and reverse lookup (#294/#299), coordinated with Object lifecycle visual #296;
-- first GenericDatabasePage P1 decomposition slice #310, full Analyze/Test green and merged.
+- original direct legacy Bookmark visual duplication fully retired through #294/#299/Object #296/#324;
+- GenericDatabasePage read/projection extraction #310;
+- GenericDatabasePage low-level dependency composition extraction #323;
+- privacy-safe failure observability for PDF enrichment, tag-tree state, computed projection, optional remote preview ingestion, Database View JSON and generic Object/Property JSON through #321/#325/#326/#327/#328/#329.
 
-Current Refactor PR **#304** removes Stage1 List/Table direct cover/thumbnail rendering in favor of `BookmarkVisualImage`. Production change is small. Its focused full-page widget regression has been hanging a `flutter_tester` worker under the full suite and hitting the CI Test step timeout; latest branch work explicitly unmounts the Stage1 widget before database close. Treat this as a test-lifecycle issue until evidence shows a production defect.
+The former Stage1 blocker is resolved. The heavyweight full-page regression, not production code, caused the ~12-minute CI Test hang. #324 replaced it with a deterministic source-level architecture guard and full Test returned to the normal ~3-minute range before merge.
 
-Next Refactor priority after #304 is another small GenericDatabasePage responsibility extraction, not a monolithic rewrite.
+There is no open Refactor PR at this checkpoint. The next Refactor priority is another **safe, patch-sized responsibility extraction** from a real hotspot—especially GenericDatabasePage schema/property/layout responsibilities—or a focused stable-error boundary. Do not create wrapper-only abstractions or hand-reconstruct huge shared files to work around tooling.
 
 ## Repository-wide design contract
 - Object is global and unique; Databases collect/show Objects rather than own duplicates.
@@ -88,32 +90,36 @@ Next Refactor priority after #304 is another small GenericDatabasePage responsib
 - Aliases are search/presentation metadata; references persist canonical Object ids.
 - Identity-sensitive system collections must not fall back to raw title-only Object creation.
 - New Object-first feature work must not deepen legacy `BookmarkItem`/legacy-table dependencies unless explicitly required for compatibility/migration.
+- Presentation should not reach through application dependencies to construct low-level Store/Service graphs when a focused boundary already exists.
 
 ## Delivery priorities
-1. Object: continue #155/#56 daily-use parity and canonical legacy replacement surfaces, including #312.
-2. Refactor: finish #304 test lifecycle and merge the final original Stage1 visual duplicate migration if green.
-3. Refactor: continue GenericDatabasePage P1 decomposition as focused behavior-preserving responsibility moves.
-4. Object + Refactor in sequence: narrow legacy Bookmark URL/thumbnail reads only after each Object-first replacement is proven.
-5. User/product: validate #220 `Bookmark.app` locally and #205 visual alignment in the actual app/theme.
+1. **Object:** continue #155/#56 daily-use parity and canonical legacy replacement surfaces; finish #322 or its latest replacement branch if main moves.
+2. **Refactor:** continue GenericDatabasePage P1 decomposition through a safe, behavior-preserving responsibility move with focused coverage; prioritize real responsibility/LOC reduction.
+3. **Object + Refactor in sequence:** narrow legacy Bookmark URL reads only after each Object-first replacement is proven; do not delete compatibility storage/import/export early.
+4. **Refactor:** replace raw user-visible implementation exceptions with focused stable error states where retry/failure behavior can be tested; `GlobalSearchPage` is a known candidate.
+5. **User/product:** validate #220 `Bookmark.app` locally and #205 visual alignment in the actual app/theme.
 6. Prefer usage-discovered friction and measurable maintenance reduction over speculative abstraction.
 
 ## Validation status
 - Relation #307 is full-CI green and merged.
-- Refactor #310 is full Analyze/Test green and merged.
+- Refactor #310 and #323 responsibility/composition slices are full Analyze/Test green and merged.
+- Stage1 canonical visual #324 is full Analyze/Test green and merged with the deterministic guard; Test completed in the normal range.
+- Refactor failure/privacy #321/#325/#326/#327/#328/#329 are merged after green Analyze/Test; #329 includes focused persisted-JSON corruption coverage.
 - migration/read-store/path-resolver refactor slices listed above were integrated with focused regressions and full/focused CI as appropriate.
-- #304 production Analyze is green; current unresolved validation is the hanging focused widget-test worker under full-suite execution.
 - macOS release workflow for #220 previously built and uploaded the release package successfully.
 
 ## Known risks / sequencing constraints
 - do not introduce direct serialized-id Relation writes from new system-collection/import UX;
 - ambiguous Relation damage is not automatically repaired;
 - future Object merge/dedup requires explicit Relation policy before edge/value rewrites;
-- legacy Bookmark URL/thumbnail remains compatibility data while old production/import paths need it;
+- legacy Bookmark URL/thumbnail remains compatibility data while old production/import/export paths need it;
 - rich media must reuse managed Image/Weblink identity, canonical Relation reads and persisted geometry;
 - large shared hosts must be edited in sequenced, patch-sized slices; rebuild intended diffs on latest main rather than force-merging stale branches;
-- test-only lifecycle/hang failures must not be “fixed” by changing production semantics or simply raising global timeouts without evidence.
+- test-only lifecycle/hang failures must not be “fixed” by changing production semantics or merely raising global timeouts without evidence;
+- `ProfileManager` corrupt-registry fallback affects data-location recovery and requires explicit policy before behavior changes;
+- debug diagnostics must not leak raw persisted/request user content merely to improve observability.
 
 ## Current lane status
-- **Object:** active on #155/#56 daily-use parity; #312 currently owns Bookmark lifecycle URL presentation/opening.
+- **Object:** active on #155/#56; #317/#320 URL host migrations merged and #322 is open at this checkpoint.
 - **Relation:** stable/idle until a new Relation-producing workflow or concrete regression appears.
-- **Refactor:** active on #225; #310 P1 state-loader is merged, #304 Stage1 visual test lifecycle is being resolved, then GenericDatabasePage decomposition continues.
+- **Refactor:** active on #225; #310/#323 hotspot decomposition and #324 visual consolidation are merged; #321/#325–#329 failure/privacy sequence is merged. Next work should be a safe measurable hotspot extraction or focused stable-error boundary.
