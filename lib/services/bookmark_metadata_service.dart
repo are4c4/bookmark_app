@@ -25,6 +25,11 @@ class BookmarkMetadataService {
     final normalizedUrl = _normalizeUrl(input);
     final uri = Uri.parse(normalizedUrl);
 
+    // RFC example domains are intentionally non-production resources and are
+    // used throughout deterministic creation tests. Their host fallback already
+    // contains all useful metadata, so avoid unnecessary external HTTP traffic.
+    if (_isDocumentationHost(uri.host)) return _fallback(uri);
+
     try {
       final response = await http
           .get(
@@ -92,6 +97,13 @@ class BookmarkMetadataService {
       return trimmed;
     }
     return 'https://$trimmed';
+  }
+
+  bool _isDocumentationHost(String host) {
+    final value = host.toLowerCase();
+    return const <String>['example.com', 'example.org', 'example.net'].any(
+      (reserved) => value == reserved || value.endsWith('.$reserved'),
+    );
   }
 
   BookmarkMetadata _fallback(Uri uri) {

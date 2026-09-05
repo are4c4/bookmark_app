@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import '../domain/object_group.dart';
 import '../domain/object_model.dart';
 import 'daily_note_service.dart';
@@ -7,6 +9,12 @@ import 'object_board_create_service.dart';
 import 'object_store.dart';
 import 'system_object_store.dart';
 import 'weblink_object_service.dart';
+
+typedef GenericDatabaseWeblinkCreateEnricher = Future<void> Function({
+  required int workspaceId,
+  required int objectId,
+  required String url,
+});
 
 enum GenericDatabaseCreateMode {
   generic,
@@ -30,6 +38,7 @@ class GenericDatabaseObjectCreateService {
     this.dailyNotes,
     this.weblinks,
     this.images,
+    this.weblinkCreateEnricher,
   });
 
   final GenericDatabaseCollectionPageLoader pageLoader;
@@ -39,6 +48,7 @@ class GenericDatabaseObjectCreateService {
   final DailyNoteService? dailyNotes;
   final WeblinkObjectService? weblinks;
   final ImageObjectService? images;
+  final GenericDatabaseWeblinkCreateEnricher? weblinkCreateEnricher;
 
   /// Returns the user-facing creation contract for an ObjectType.
   ///
@@ -88,6 +98,8 @@ class GenericDatabaseObjectCreateService {
   ///
   /// This is intentionally distinct from [create]: title-only creation remains
   /// fail-closed so URL normalization/reuse cannot be bypassed by generic hosts.
+  /// Optional resource enrichment runs only after canonical identity exists and
+  /// is explicitly fail-soft so metadata/media errors never roll back creation.
   Future<int> createWeblinkFromUrl({
     required int databaseId,
     required String url,
@@ -109,6 +121,18 @@ class GenericDatabaseObjectCreateService {
       url: url,
       title: title,
     );
+    final enrich = weblinkCreateEnricher;
+    if (enrich != null) {
+      try {
+        await enrich(
+          workspaceId: page.objectType.workspaceId,
+          objectId: object.id,
+          url: url,
+        );
+      } catch (error, stackTrace) {
+        _debugWeblinkEnrichmentFailure(error, stackTrace);
+      }
+    }
     return object.id;
   }
 
@@ -218,5 +242,20 @@ class GenericDatabaseObjectCreateService {
       );
     }
     return page;
+  }
+
+  void _debugWeblinkEnrichmentFailure(
+    Object error,
+    StackTrace stackTrace,
+  ) {
+    assert(() {
+      developer.log(
+        'Optional post-create Weblink enrichment failed; canonical Weblink is kept.',
+        name: 'bookmark_app.generic_database_create',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return true;
+    }());
   }
 }
