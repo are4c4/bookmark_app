@@ -3,11 +3,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../../../../data/app_database.dart';
+import '../../../../data/database_view_gallery_adapter.dart';
 import '../../../../data/image_object_service.dart';
 import '../../../../data/object_store.dart';
 import '../../../../data/system_object_store.dart';
 import '../../../../services/image_visual_resolver.dart';
-import 'object_gallery_view.dart';
 
 /// Read-only managed media presentation for the canonical system Image type.
 ///
