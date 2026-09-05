@@ -69,7 +69,7 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('real Weblinks page refuses title-only generic creation',
+  testWidgets('real Weblinks page exposes URL entry instead of title-only create',
       (tester) async {
     final fixture = await buildFixture();
     addTearDown(fixture.database.close);
@@ -84,15 +84,22 @@ void main() {
       databaseId: definition.objectType.id,
     );
     expect(await fixture.objectStore.listObjects(definition.objectType.id), isEmpty);
+    expect(find.text('新規ページ'), findsNothing);
 
-    await tester.tap(find.text('新規ページ').last);
+    await tester.tap(find.text('URLを追加').last);
     await tester.pumpAndSettle();
 
+    expect(
+      find.byKey(const ValueKey('weblink-url-create-input')),
+      findsOneWidget,
+    );
     expect(await fixture.objectStore.listObjects(definition.objectType.id), isEmpty);
-    expect(find.textContaining('Weblinks must be created from a URL'), findsOneWidget);
+
+    await tester.tap(find.text('キャンセル'));
+    await tester.pumpAndSettle();
   });
 
-  testWidgets('real Images page refuses title-only generic creation',
+  testWidgets('real Images page keeps managed-file creation fail-closed',
       (tester) async {
     final fixture = await buildFixture();
     addTearDown(fixture.database.close);
@@ -107,13 +114,14 @@ void main() {
       databaseId: definition.objectType.id,
     );
     expect(await fixture.objectStore.listObjects(definition.objectType.id), isEmpty);
+    expect(find.text('新規ページ'), findsNothing);
 
-    await tester.tap(find.text('新規ページ').last);
+    await tester.tap(find.text('画像をインポート').last);
     await tester.pumpAndSettle();
 
     expect(await fixture.objectStore.listObjects(definition.objectType.id), isEmpty);
     expect(
-      find.textContaining('Images must be created from managed image/file input'),
+      find.textContaining('Images must be imported from managed image/file input'),
       findsOneWidget,
     );
   });
