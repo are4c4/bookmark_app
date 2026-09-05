@@ -105,6 +105,51 @@ void main() {
     expect(await objectStore.listObjects(databaseId), isEmpty);
   });
 
+  test('reports the canonical creation boundary for each collection target',
+      () async {
+    final databaseId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Places',
+    );
+    final placeTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Place',
+    );
+    await collectionStore.write(
+      DatabaseCollectionDefinition(
+        databaseId: databaseId,
+        workspaceId: workspaceId,
+        targetObjectTypeId: placeTypeId,
+      ),
+    );
+    final dailyNote = await dailyNotes.ensureDefinition(workspaceId);
+    final weblink = await WeblinkObjectService(
+      systemObjects: systemObjects,
+      defaultsStore: defaultsStore,
+    ).ensureDefinition(workspaceId);
+    final image = await ImageObjectService(
+      systemObjects: systemObjects,
+      defaultsStore: defaultsStore,
+    ).ensureDefinition(workspaceId);
+
+    expect(
+      await service.creationModeFor(databaseId: databaseId),
+      GenericDatabaseCreateMode.generic,
+    );
+    expect(
+      await service.creationModeFor(databaseId: dailyNote.objectType.id),
+      GenericDatabaseCreateMode.dailyNote,
+    );
+    expect(
+      await service.creationModeFor(databaseId: weblink.objectType.id),
+      GenericDatabaseCreateMode.weblink,
+    );
+    expect(
+      await service.creationModeFor(databaseId: image.objectType.id),
+      GenericDatabaseCreateMode.image,
+    );
+  });
+
   test('Daily Notes collection create reuses the date-keyed today Object', () async {
     final definition = await dailyNotes.ensureDefinition(workspaceId);
 
