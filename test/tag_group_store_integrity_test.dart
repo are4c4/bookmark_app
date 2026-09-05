@@ -208,6 +208,21 @@ void main() {
     expect(state.groupIds, {groupId, -1});
   });
 
+  test('malformed expansion state remains fail-soft', () async {
+    await database.into(database.workspaceSettings).insert(
+          WorkspaceSettingsCompanion.insert(
+            key: 'tag_tree_expansion_v1',
+            value: '{not-json',
+          ),
+        );
+
+    final state = await store.loadExpansionState();
+
+    expect(state.hasPersistedValue, isFalse);
+    expect(state.tagIds, isEmpty);
+    expect(state.groupIds, isEmpty);
+  });
+
   test('unused parent with a used descendant is protected', () async {
     final parentId = await database.createTag('Parent');
     final childId =

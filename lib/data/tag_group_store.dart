@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:drift/drift.dart';
 
@@ -68,6 +69,16 @@ class TagGroupStore {
   static const _expansionKey = 'tag_tree_expansion_v1';
 
   final AppDatabase database;
+
+  static void _debugExpansionStateFallback(StackTrace stackTrace) {
+    assert(() {
+      stderr.writeln(
+        'TagGroupStore: invalid expansion state; using default collapsed state.',
+      );
+      stderr.writeln(stackTrace);
+      return true;
+    }());
+  }
 
   TagGroupInfo _toInfo(TagGroupRecord row) => TagGroupInfo(
         id: row.id,
@@ -152,6 +163,7 @@ class TagGroupStore {
     try {
       final decoded = jsonDecode(row.value);
       if (decoded is! Map<String, dynamic>) {
+        _debugExpansionStateFallback(StackTrace.current);
         return const TagTreeExpansionState();
       }
       final tagIds = (decoded['tags'] as List<dynamic>? ?? const [])
@@ -169,7 +181,8 @@ class TagGroupStore {
         groupIds: groupIds,
         hasPersistedValue: true,
       );
-    } catch (_) {
+    } catch (_, stackTrace) {
+      _debugExpansionStateFallback(stackTrace);
       return const TagTreeExpansionState();
     }
   }
