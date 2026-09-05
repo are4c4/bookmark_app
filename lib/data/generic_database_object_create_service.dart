@@ -21,6 +21,7 @@ class GenericDatabaseObjectCreateService {
     required this.boardCreate,
     this.systemObjects,
     this.dailyNotes,
+    this.weblinks,
   });
 
   final GenericDatabaseCollectionPageLoader pageLoader;
@@ -28,6 +29,7 @@ class GenericDatabaseObjectCreateService {
   final ObjectBoardCreateService boardCreate;
   final SystemObjectStore? systemObjects;
   final DailyNoteService? dailyNotes;
+  final WeblinkObjectService? weblinks;
 
   Future<int> create({
     required int databaseId,
@@ -50,6 +52,35 @@ class GenericDatabaseObjectCreateService {
       objectTypeId: page.objectType.id,
       title: title,
     );
+  }
+
+  /// Creates or reuses a canonical Weblink from URL input for a collection
+  /// whose target ObjectType is the system Weblink type.
+  ///
+  /// This is intentionally distinct from [create]: title-only creation remains
+  /// fail-closed so URL normalization/reuse cannot be bypassed by generic hosts.
+  Future<int> createWeblinkFromUrl({
+    required int databaseId,
+    required String url,
+    String? title,
+  }) async {
+    final page = await _load(databaseId);
+    final systemKey = await _systemKey(page);
+    if (systemKey != WeblinkObjectService.systemKey) {
+      throw UnsupportedError(
+        'URL-based Weblink creation requires a Database collection targeting the system Weblink ObjectType.',
+      );
+    }
+    final service = weblinks;
+    if (service == null) {
+      throw StateError('Weblink URL creation requires WeblinkObjectService.');
+    }
+    final object = await service.findOrCreate(
+      workspaceId: page.objectType.workspaceId,
+      url: url,
+      title: title,
+    );
+    return object.id;
   }
 
   Future<int> createInGroup({
