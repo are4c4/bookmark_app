@@ -69,7 +69,7 @@ Repository search after #222 found no new view-level direct `ObjectStore.setRela
 Refactoring lane audit:
 - Issue #225 explicitly treats the Relation subsystem as mature and out of redesign scope.
 - Refactor PR #226 changes docs/tooling only and records that broad `GenericDatabasePage` extraction is deferred while Object #223 owns that hotspot.
-- Refactor PR #227 only replaces an empty file-drop enrichment catch with debug/assert visibility; it does not change Person creation, Relation mutation, schema, or import success semantics.
+- Refactor PR #227 merged as `20ba50674823190337561c7a97ac16e928b4b009`; it only replaces an empty file-drop enrichment catch with debug/assert visibility and does not change Person creation, Relation mutation, schema, or import success semantics.
 - no new Relation-producing workflow was introduced by the current Refactor work.
 
 ## Validation
@@ -94,7 +94,7 @@ Earlier important green runs remain #811/#819/#823/#825/#828 for alias and manag
 ## Cross-lane dependency
 Object lane currently owns #155/#156 presentation work. Open #221/#223 consume canonical Relation reads for Weblink managed media but do not create or mutate Relations. Relation lane should not modify their presentation/core files unless a concrete Relation defect appears.
 
-Refactoring lane is active under #225. Open #226/#227 establish behavior-preserving maintainability/error-policy work. Relation lane must not compete with broad refactors of shared hotspots. In particular:
+Refactoring lane is active under #225. PR #227 is merged; #226 remains open for behavior-preserving maintainability/inventory/docs work. Relation lane must not compete with broad refactors of shared hotspots. In particular:
 - `generic_database_page.dart` is currently owned by Object #223 and explicitly deferred by Refactor #226;
 - `app_shell.dart` and `object_inspector_page.dart` must be re-checked immediately before any non-trivial Relation edit;
 - do not edit `docs/AI_PROGRESS.md` while Refactor #226 is open because that PR currently owns repository-wide handoff changes; use `docs/AI_PROGRESS_RELATION.md` and Issue comments for Relation-specific coordination until #226 lands.
@@ -106,4 +106,4 @@ Refactoring lane is active under #225. Open #226/#227 establish behavior-preserv
 - Refactor extraction must preserve canonical Relation API ownership; do not move Relation semantics into presentation facades or duplicate mutation/index logic during composition cleanup.
 
 ## Stop reason
-After #208/#210/#211/#216/#222, the currently exposed Weblink/Image generic hosts are covered for canonical edit/read/backlink/delete lifecycle, and no new production Relation-producing workflow or correctness regression remains. Open Object #221/#223 are presentation-only; Refactor #226/#227 are behavior-preserving and do not add Relation semantics. With shared hotspots actively owned by other lanes, starting speculative UI/refactor work here would create avoidable conflict. This matches the `AGENTS.md` stopping criteria: no independent actionable Relation work remains until another lane introduces a new Relation-producing surface or a concrete Relation defect appears.
+After #208/#210/#211/#216/#222, the currently exposed Weblink/Image generic hosts are covered for canonical edit/read/backlink/delete lifecycle, and no new production Relation-producing workflow or correctness regression remains. Open Object #221/#223 are presentation-only; open Refactor #226 is docs/tooling/inventory work and merged #227 preserves Relation semantics. With shared hotspots actively owned by other lanes, starting speculative UI/refactor work here would create avoidable conflict. This matches the `AGENTS.md` stopping criteria: no independent actionable Relation work remains until another lane introduces a new Relation-producing surface or a concrete Relation defect appears.
