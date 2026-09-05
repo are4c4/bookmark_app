@@ -3,86 +3,86 @@
 > Durable handoff for the Object implementation lane. Update this file before every Object-lane run ends.
 
 ## Lane scope
-Object/ObjectType architecture, Property value semantics, Object-centric Database/View integration, Object detail presentation, Body/block model, reusable Object types, Daily Notes, Value-to-Object promotion, system-collection exposure, and Object-owned presentation.
+Object/ObjectType architecture, Property value semantics, Object-centric Database/View integration, Object detail presentation, Body/block model, reusable Object types, Daily Notes, Value-to-Object promotion, system-collection exposure, Object-owned presentation, and app-shell/product delivery work that does not belong to Relation semantics.
 
 ## Active issues
 - `#56` — generic Object/Database/View product integration.
 - `#155` — reusable Weblink Object + managed Image presentation/navigation.
 - `#156` — fixed/masonry Gallery View modes; real host integrated, media-driven sizing remains.
 - `#149` — Property-row visual polish; implementation landed, pending real-host visual validation.
+- `#218` — installable macOS `Bookmark.app` / DMG packaging and safe release identity.
 
 ## Current integration state
-The generic Object/Database/View foundation is integrated into real hosts. Current work is product exposure, rich presentation, identity-safe system-Object creation UX, and legacy consolidation rather than new parallel abstractions.
+The generic Object/Database/View foundation is integrated into real hosts. Current work is product exposure, rich presentation, identity-safe system-Object creation UX, release packaging, and legacy consolidation rather than new parallel abstractions.
 
-Important `main` state:
+Important `main` state before #218:
 - canonical Bookmark -> Weblink and Weblink -> Image production flows are live;
 - managed remote previews become Image Objects and Representative-image Relations in the real app host;
 - Bookmark detail consumes the managed visual resolver (#199);
 - Weblinks / Images / Daily Notes are exposed through the existing generic sidebar/Database path (#203/#213);
-- generic Daily Notes creation uses `DailyNoteService.openOrCreate(...)` and preserves one Object per local date (#214);
+- generic Daily Notes creation preserves one Object per local date (#214);
 - generic Weblink/Image title-only and Board creation fail closed instead of bypassing canonical URL/file identity (#215);
 - Gallery fixed/masonry persistence, renderer, toolbar and real `GenericDatabasePage` integration are merged (#204/#206/#212);
-- managed Image pixel dimensions are persisted for future media geometry (#207);
+- managed Image pixel dimensions are persisted (#207);
 - shared `WeblinkVisualResolver` is merged and reused by `BookmarkVisualResolver` (#209);
-- deterministic shared six-dot Property handle/grid is merged (#205).
+- deterministic shared six-dot Property handle/grid is merged (#205);
+- Relation backlink coverage for exposed Weblink hosts is merged (#211);
+- #217 exposes managed Weblink image width/height/aspect-ratio metadata to presentation for the remaining masonry slice.
 
-## Latest integrated checkpoint
-- PR #215 `Guard generic Weblink and Image creation invariants` was squash-merged as `5816a9a521f0b510e0665a460d25d2a49e85f4a6`.
-- Flutter CI #885 passed Drift generation, `flutter analyze` and all 546 tests.
-- Latest main handoff commit before this run: `5e66f2af01f1d7ecff2677f040a7f00d1c977ae4`.
+## Active #218 macOS release packaging branch
+Branch: `feature/object-macos-release-packaging`
 
-## Latest run checkpoints
-1. Re-read `AGENTS.md`, Issue #56, `docs/AI_PROGRESS.md`, this handoff, latest PRs/commits and CI before editing.
-2. Confirmed main remains at the post-#215 integration state; no newer Object PR is open.
-3. Rechecked Relation PR #211. It remains Relation-owned, tests-only, and open. Flutter CI #859 completed with Drift generation and `flutter analyze` successful; only the test step failed. No Relation implementation was changed from Object lane.
-4. Re-audited the highest-priority #155 legacy visual paths. `bookmark_reverse_lookup_dialog.dart` still directly renders cover files / legacy remote thumbnails; its real callers are Tag/Photo/People management pages. `NotionBookmarkCard` still directly renders legacy thumbnail state and has a single production caller in `bookmark_unified_stage1_page.dart`.
-5. Re-read `BookmarkVisualImage`: it already provides the correct user-cover -> managed Representative Image -> legacy remote fallback semantics. No new resolver/abstraction is needed.
-6. Reconfirmed the safe migration shape is therefore small dependency-threading patches in the existing real hosts, not another presentation service or duplicate card path.
-7. Re-audited #156. `ObjectGalleryView` is already the real GenericDatabasePage renderer; the remaining work is to feed managed Image geometry into the existing card path, which again requires a focused patch in the large GenericDatabasePage/card host rather than a disconnected renderer.
-8. Verified the current connector only supports whole-file replacement for existing files. The required next edits are a few lines inside large hotspot files (`bookmark_unified_stage1_page.dart`, Tag/Photo/People management pages, and later `generic_database_page.dart`). Reconstructing those whole files for tiny dependency-threading changes would create avoidable regression risk and violate the AGENTS.md hotspot/sequencing guidance.
-9. No repository-wide integration state changed in this run, so `docs/AI_PROGRESS.md` was intentionally not modified.
+Implemented checkpoints:
+1. Created Issue #218 with release identity/data-safety acceptance.
+2. Added `tool/package_macos.sh`:
+   - stable release product name defaults to `Bookmark`;
+   - preferred Bundle Identifier defaults to `com.are4c4.bookmark`;
+   - reads build name/number from `pubspec.yaml`;
+   - generates a standard Flutter macOS runner locally when the repository clone does not contain `macos/`;
+   - rewrites only local runner `AppInfo.xcconfig` identity values;
+   - detects existing profile data under the current macOS container and preserves the current Bundle Identifier instead of silently making that data appear missing;
+   - supports a single 1024x1024 PNG source and regenerates all standard AppIcon sizes through macOS `sips`;
+   - runs `flutter build macos --release`;
+   - creates `dist/macos/Bookmark-<version>.dmg` with `Bookmark.app` and an `/Applications` shortcut;
+   - optional `--install`, `--open-dmg`, and `--configure-only` modes;
+   - refuses to overwrite an existing `/Applications/Bookmark.app` automatically.
+3. Added `docs/MACOS_RELEASE.md` with release identity, local-data safety, icon, DMG, install and Gatekeeper guidance.
+4. Updated README with the installable macOS release command.
+5. Added `dist/` to `.gitignore` so packaged DMGs remain untracked.
+6. Updated existing Flutter CI macOS job so main pushes / manual dispatch build the release app + DMG and upload a `Bookmark-macOS` artifact instead of only producing an unexported debug app.
+7. Refreshed the branch onto latest main including merged #211 and #217 before opening the release PR.
 
-## Exact next actions
-1. **#155 remaining Bookmark visual host migration — highest priority**
-   - in a patch-capable runtime, thread existing `BookmarkRepository` into `showBookmarkReverseLookupDialog(...)` and replace `_BookmarkLookupThumbnail` with `BookmarkVisualImage`;
-   - update the real Tag/Photo/People management callers with only the repository argument;
-   - migrate `NotionBookmarkCard` + its single real Stage1 caller to `BookmarkVisualImage` without changing hover/card/menu semantics;
-   - add focused widget/real-host regressions and remove direct legacy thumbnail rendering only after each real host is covered.
-2. **#156 media-driven masonry sizing**
-   - reuse #207 Image `Pixel width` / `Pixel height` and #209 shared Weblink visual resolution;
-   - feed actual managed media aspect ratio into the existing real GenericDatabasePage Gallery card path without eager full-resolution decoding;
-   - add mixed portrait/landscape real-host regression and stable no-media fallback height.
-3. **#155 Weblink/Image daily-use create UX**
-   - #215 deliberately fails closed rather than inventing a parallel creation model;
-   - add dedicated real URL-entry and managed Image-import affordances that call existing canonical Object services;
-   - only then replace the generic create error with useful identity-aware creation UI.
-4. **#155 generic Weblink/Image collection presentation**
-   - improve default Table/Gallery/List presentation through existing ObjectType/View/default contracts only;
-   - keep the shared generic destinations and Object detail/opening-mode host.
-5. **#149**
-   - #205 implementation is merged; close only after real-host screenshot/visual validation confirms alignment.
+## Validation performed
+- `bash -n` syntax validation passed for the exact `tool/package_macos.sh` content before it was pushed.
+- No local macOS/Flutter workspace is attached to this chat runtime, so actual `flutter build macos --release` and `hdiutil` execution must be validated by the macOS GitHub Actions job after integration (or by the user's Mac after pulling).
+- Existing normal Flutter analyze/test CI remains unchanged for pull requests; the macOS release job intentionally still runs only on main push or manual workflow dispatch, matching the repository's previous macOS-job cost policy.
+
+## #218 remaining / next exact actions
+1. Open a focused PR for `feature/object-macos-release-packaging` against latest `main`.
+2. Let normal pull-request analyze/test CI validate repository changes.
+3. Merge after green CI; the resulting main push should execute the macOS release job, producing `Bookmark.app` + `Bookmark-0.1.0.dmg` artifact from a clean runner.
+4. Verify the macOS release job output path and artifact; fix any Flutter-template/product-name path mismatch if one appears.
+5. Update #218 after that real build validation.
+6. On the user's Mac, pull main and run `bash tool/package_macos.sh --install` (or `--open-dmg`) to install locally. If the local debug runner uses a different Bundle Identifier and has existing data, the script should preserve that identifier and print it.
+7. A branded custom artwork file is intentionally not invented in this engineering slice. The AppIcon pipeline is complete; when a 1024x1024 source artwork is chosen, pass it through `BOOKMARK_ICON_SOURCE=...` and rebuild.
+
+## Other Object-lane next actions after #218
+1. **#155 remaining Bookmark visual host migration** — move Stage1/reverse-lookup legacy thumbnail hosts to the existing canonical managed visual component in a patch-capable runtime.
+2. **#156 media-driven masonry sizing** — use #217 visual geometry in the real Gallery card path, add portrait/landscape real-host regression, preserve no-media fallback.
+3. **#155 Weblink/Image daily-use create UX** — replace current fail-closed generic creation with dedicated canonical URL/file affordances.
+4. **#155 generic Weblink/Image presentation** — polish Table/Gallery/List/detail through existing ObjectType/View/default contracts.
+5. **#149** — close only after the merged #205 handle looks aligned in an actual user screenshot.
 
 ## Cross-lane boundaries
-- Relation lane owns #211. Avoid broad Relation lifecycle/index/backlink edits while it is active.
-- Object presentation/navigation remains read-only with respect to Relations unless a genuinely new Relation-producing workflow is introduced.
-- Any Relation mutation/deletion continues through canonical Relation services only.
-
-## Validation
-- #215 Flutter CI #885 — Drift generation success, `flutter analyze` success, 546 tests passed; merged as `5816a9a521f0b510e0665a460d25d2a49e85f4a6`.
-- #214 Flutter CI #878 — Drift generation, `flutter analyze`, full tests success; merged as `bc99383b29aa1b436ae2bde0c80c7eb81b4575fb`.
-- #213 Flutter CI #874 — Drift generation, analyze and full tests success; merged as `1e18884d02bc54454a696fda5d88b54432cdf23d`.
-- #212 Flutter CI #862 — success.
-- #209 Flutter CI #857 — success.
-- #206 Flutter CI #846 — success.
-- Relation-owned #211 Flutter CI #859 — Drift generation/analyze success, test step failure; left untouched by Object lane.
-- This runtime does not have a checked-out Flutter workspace, so GitHub Actions remains the executable validation source for pushed implementation branches.
+- Relation work for aliases, managed preview lifecycle, exposed Weblink delete/edit/backlinks is already integrated through #211.
+- #218 changes no Object/Relation persistence semantics.
+- Any future Relation mutation/deletion continues through canonical Relation services only.
 
 ## Risks / blockers
-- Remaining Stage1 Bookmark visual migration needs small edits inside a large real-host file. The current connector replaces whole files rather than applying patch hunks; do not reconstruct the hotspot for a small dependency thread.
-- Reverse-lookup migration likewise requires small changes in several larger management-page callers.
-- #156 media-driven masonry must be wired into the existing real Gallery/card path, not another disconnected resolver/renderer; that real host is also a large hotspot requiring a small patch.
-- Weblink/Image real creation affordances still need explicit URL/file input UX; #215 intentionally protects identity until that user-facing flow exists.
-- No Relation semantic blocker is active.
+- Changing Bundle Identifier can change the macOS sandbox container and make existing data appear absent. #218 therefore preserves an existing identifier when it detects profile data; do not remove that guard casually.
+- The repository still does not track the generated `macos/` runner. Release identity is therefore applied reproducibly by the packaging script rather than by committing generated Xcode files.
+- Developer ID signing/notarization is deliberately out of scope for #218; no signing secrets belong in the repository.
+- A custom branded icon artwork is a separate visual-design input; the engineering pipeline to install it is already present.
 
 ## Stop reason
-A genuine tooling blocker now prevents the next safe Object-lane implementation: every highest-priority remaining slice requires small patch edits in large real-host files, while this runtime exposes only whole-file replacement for repository writes and has no checked-out patch-capable workspace. Reconstructing those hotspots would be materially riskier than the requested scoped changes and conflicts with `AGENTS.md`. Resume in a patch-capable implementation environment from the exact actions above.
+The repository-side #218 implementation is ready for PR/CI. Actual release-build validation requires a macOS runner, which will run after merge under the existing main-push macOS CI policy; no destructive or speculative local-data migration should be attempted from this runtime.

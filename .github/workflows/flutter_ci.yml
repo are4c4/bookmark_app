@@ -42,10 +42,10 @@ jobs:
         run: flutter test --timeout 2m
 
   build-macos:
-    name: build-macos
+    name: build-macos-release
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: macos-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -62,11 +62,14 @@ jobs:
       - name: Generate Drift code
         run: dart run build_runner build --delete-conflicting-outputs
 
-      - name: Prepare macOS host project
-        run: |
-          if [ ! -d macos ]; then
-            flutter create --platforms=macos .
-          fi
+      - name: Build macOS release app and DMG
+        run: bash tool/package_macos.sh
 
-      - name: Build macOS debug app
-        run: flutter build macos --debug
+      - name: Upload macOS release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Bookmark-macOS
+          if-no-files-found: error
+          path: |
+            build/macos/Build/Products/Release/Bookmark.app
+            dist/macos/Bookmark-*.dmg
