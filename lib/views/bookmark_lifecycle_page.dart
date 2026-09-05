@@ -3,6 +3,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
+import '../services/bookmark_url_resolver.dart';
 import '../widgets/bookmark_create_dialog.dart';
 import '../widgets/bookmark_visual_image.dart';
 
@@ -10,20 +11,24 @@ class BookmarkLifecyclePage extends StatelessWidget {
   const BookmarkLifecyclePage.inbox({
     super.key,
     required this.repository,
+    this.resolveUrl,
   }) : mode = BookmarkLifecycleMode.inbox;
 
   const BookmarkLifecyclePage.archive({
     super.key,
     required this.repository,
+    this.resolveUrl,
   }) : mode = BookmarkLifecycleMode.archive;
 
   const BookmarkLifecyclePage.trash({
     super.key,
     required this.repository,
+    this.resolveUrl,
   }) : mode = BookmarkLifecycleMode.trash;
 
   final BookmarkRepository repository;
   final BookmarkLifecycleMode mode;
+  final BookmarkUrlResolve? resolveUrl;
 
   String get _title => switch (mode) {
         BookmarkLifecycleMode.inbox => '未整理',
@@ -37,6 +42,15 @@ class BookmarkLifecyclePage extends StatelessWidget {
         BookmarkLifecycleMode.trash => Icons.delete_outline,
       };
 
+  Future<BookmarkUrlSource?> _resolveUrl(BookmarkItem bookmark) {
+    final injected = resolveUrl;
+    if (injected != null) return injected(bookmark);
+    return BookmarkUrlResolver(
+      database: repository.workspaceStore.database,
+      workspaceId: repository.workspaceId,
+    ).resolve(bookmark);
+  }
+
   Stream<List<BookmarkItem>> _stream() => switch (mode) {
         BookmarkLifecycleMode.inbox => repository.watchInbox(),
         BookmarkLifecycleMode.archive => repository.watchArchive(),
@@ -44,7 +58,8 @@ class BookmarkLifecyclePage extends StatelessWidget {
       };
 
   Future<void> _open(BookmarkItem bookmark) async {
-    final uri = Uri.tryParse(bookmark.url);
+    final resolved = await _resolveUrl(bookmark);
+    final uri = resolved == null ? null : Uri.tryParse(resolved.value);
     if (uri == null) return;
     await repository.recordOpen(bookmark);
     await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -84,10 +99,9 @@ class BookmarkLifecyclePage extends StatelessWidget {
                         return RadioListTile<int>(
                           value: item.id,
                           title: Text(item.title),
-                          subtitle: Text(
-                            item.url,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                          subtitle: _BookmarkLifecycleUrlText(
+                            resolveUrl: _resolveUrl,
+                            bookmark: item,
                           ),
                         );
                       },
@@ -186,14 +200,10 @@ class BookmarkLifecyclePage extends StatelessWidget {
                   ),
                 ),
                 title: Text(bookmark.title),
-                subtitle: Text(
-                  [
-                    bookmark.url,
-                    if (bookmark.tags.isNotEmpty)
-                      bookmark.tags.map((e) => e.name).join(', '),
-                  ].join('  ·  '),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                subtitle: _BookmarkLifecycleUrlText(
+                  resolveUrl: _resolveUrl,
+                  bookmark: bookmark,
+                  includeTags: true,
                 ),
                 onTap: mode == BookmarkLifecycleMode.trash ? null : () => _open(bookmark),
                 trailing: PopupMenuButton<String>(
@@ -255,6 +265,62 @@ class BookmarkLifecyclePage extends StatelessWidget {
           );
         },
       ),
+    );
+  }
+}
+
+class _BookmarkLifecycleUrlText extends StatefulWidget {
+  const _BookmarkLifecycleUrlText({
+    required this.resolveUrl,
+    required this.bookmark,
+    this.includeTags = false,
+  });
+
+  final BookmarkUrlResolve resolveUrl;
+  final BookmarkItem bookmark;
+  final bool includeTags;
+
+  @override
+  State<_BookmarkLifecycleUrlText> createState() =>
+      _BookmarkLifecycleUrlTextState();
+}
+
+class _BookmarkLifecycleUrlTextState extends State<_BookmarkLifecycleUrlText> {
+  late Future<BookmarkUrlSource?> _resolved;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolved = widget.resolveUrl(widget.bookmark);
+  }
+
+  @override
+  void didUpdateWidget(covariant _BookmarkLifecycleUrlText oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.bookmark.id != widget.bookmark.id ||
+        oldWidget.bookmark.url != widget.bookmark.url ||
+        oldWidget.resolveUrl != widget.resolveUrl) {
+      _resolved = widget.resolveUrl(widget.bookmark);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<BookmarkUrlSource?>(
+      future: _resolved,
+      builder: (context, snapshot) {
+        final url = snapshot.data?.value ?? widget.bookmark.url;
+        final values = <String>[
+          url,
+          if (widget.includeTags && widget.bookmark.tags.isNotEmpty)
+            widget.bookmark.tags.map((tag) => tag.name).join(', '),
+        ];
+        return Text(
+          values.join('  ·  '),
+          maxLines: widget.includeTags ? 2 : 1,
+          overflow: TextOverflow.ellipsis,
+        );
+      },
     );
   }
 }
