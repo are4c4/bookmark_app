@@ -1,6 +1,19 @@
 part of 'app_database.dart';
 
 extension AppDatabaseMigrationSteps on AppDatabase {
+  Future<void> migrateToV4(Migrator migrator) async {
+    await migrator.addColumn(savedViews, savedViews.tagMatchMode);
+    await migrator.addColumn(savedViews, savedViews.sortField);
+    await migrator.addColumn(savedViews, savedViews.sortDirection);
+    await migrator.createTable(savedViewTags);
+    await customStatement('''
+      INSERT OR IGNORE INTO saved_view_tags (saved_view_id, tag_id)
+      SELECT id, tag_id
+      FROM saved_views
+      WHERE tag_id IS NOT NULL
+    ''');
+  }
+
   Future<void> migrateToV5(Migrator migrator) async {
     await migrator.createTable(people);
     await migrator.createTable(bookmarkPeople);

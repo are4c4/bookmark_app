@@ -139,18 +139,7 @@ class AppDatabase extends _$AppDatabase {
               }
             }
           }
-          if (from < 4) {
-            await m.addColumn(savedViews, savedViews.tagMatchMode);
-            await m.addColumn(savedViews, savedViews.sortField);
-            await m.addColumn(savedViews, savedViews.sortDirection);
-            await m.createTable(savedViewTags);
-            await customStatement('''
-              INSERT OR IGNORE INTO saved_view_tags (saved_view_id, tag_id)
-              SELECT id, tag_id
-              FROM saved_views
-              WHERE tag_id IS NOT NULL
-            ''');
-          }
+          if (from < 4) await migrateToV4(m);
           if (from < 5) await migrateToV5(m);
           if (from < 6) await migrateToV6(m);
           if (from < 7) await migrateToV7(m);
