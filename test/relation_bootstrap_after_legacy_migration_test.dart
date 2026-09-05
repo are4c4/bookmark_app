@@ -1,6 +1,10 @@
 import 'package:bookmark_app/data/app_database.dart';
+import 'package:bookmark_app/data/bidirectional_relation_store.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
 import 'package:bookmark_app/data/object_store.dart';
+import 'package:bookmark_app/data/relation_integrity_service.dart';
+import 'package:bookmark_app/data/relation_mutation_service.dart';
+import 'package:bookmark_app/data/relation_read_service.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -91,7 +95,22 @@ void main() {
     ).getSingle();
     final workspaceId = workspaceRow.read<int>('id');
 
-    final store = ObjectStore(GenericDatabaseStore(database));
+    final genericStore = GenericDatabaseStore(database);
+    final store = ObjectStore(genericStore);
+    final bidirectionalStore = BidirectionalRelationStore(
+      genericStore: genericStore,
+      objectStore: store,
+    );
+    final mutations = RelationMutationService(
+      objectStore: store,
+      bidirectionalStore: bidirectionalStore,
+      genericStore: genericStore,
+    );
+    final reads = RelationReadService(store);
+    final integrity = RelationIntegrityService(
+      objectStore: store,
+      bidirectionalStore: bidirectionalStore,
+    );
 
     final targetTypeId = await store.createObjectType(
       workspaceId: workspaceId,
@@ -120,7 +139,7 @@ void main() {
       title: 'Source A',
     );
 
-    await store.setRelation(
+    await mutations.setRelation(
       objectId: sourceId,
       property: relationProperty,
       targetObjectIds: [targetId],
@@ -140,6 +159,22 @@ void main() {
     expect(outgoing.single.propertyId, relationPropertyId);
     expect(backlinks, hasLength(1));
     expect(backlinks.single.sourceObjectId, sourceId);
+
+    final resolvedOutgoing = await reads.outgoing(
+      sourceObjectTypeId: sourceTypeId,
+      sourceObjectId: sourceId,
+    );
+    final resolvedBacklinks = await reads.backlinks(
+      workspaceId: workspaceId,
+      targetObjectId: targetId,
+    );
+    expect(resolvedOutgoing, hasLength(1));
+    expect(resolvedOutgoing.single.targetObject.id, targetId);
+    expect(resolvedOutgoing.single.property.id, relationPropertyId);
+    expect(resolvedBacklinks, hasLength(1));
+    expect(resolvedBacklinks.single.sourceObject.id, sourceId);
+    expect(resolvedBacklinks.single.property.id, relationPropertyId);
+    expect((await integrity.auditWorkspace(workspaceId)).isHealthy, isTrue);
 
     final legacyPeopleAfterRelationWrite = await database.customSelect(
       'SELECT bookmark_id, person_id, role FROM bookmark_people',
