@@ -1,9 +1,9 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../data/app_database.dart';
+import '../data/bookmark_repository.dart';
+import 'bookmark_visual_image.dart';
 
 const _statusLabels = <String, String>{
   'unread': '未読',
@@ -16,6 +16,7 @@ const _statusLabels = <String, String>{
 class NotionBookmarkCard extends StatefulWidget {
   const NotionBookmarkCard({
     super.key,
+    required this.repository,
     required this.bookmark,
     required this.selected,
     required this.showImage,
@@ -46,6 +47,7 @@ class NotionBookmarkCard extends StatefulWidget {
     ],
   });
 
+  final BookmarkRepository repository;
   final BookmarkItem bookmark;
   final bool selected;
   final bool showImage;
@@ -92,31 +94,13 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
     return '${local.year}/${local.month.toString().padLeft(2, '0')}/${local.day.toString().padLeft(2, '0')}';
   }
 
-  Widget _cover() {
-    final bookmark = widget.bookmark;
-    if (bookmark.coverPhoto != null) {
-      return Image.file(
-        File(bookmark.coverPhoto!.path),
+  Widget _cover() => BookmarkVisualImage(
+        repository: widget.repository,
+        bookmark: widget.bookmark,
         width: double.infinity,
         fit: BoxFit.fitWidth,
-        errorBuilder: (_, __, ___) => _networkCover(),
+        placeholder: _placeholder(),
       );
-    }
-    return _networkCover();
-  }
-
-  Widget _networkCover() {
-    final bookmark = widget.bookmark;
-    if (bookmark.thumbnail?.trim().isNotEmpty == true) {
-      return Image.network(
-        bookmark.thumbnail!,
-        width: double.infinity,
-        fit: BoxFit.fitWidth,
-        errorBuilder: (_, __, ___) => _placeholder(),
-      );
-    }
-    return _placeholder();
-  }
 
   Widget _placeholder() {
     final scheme = Theme.of(context).colorScheme;
