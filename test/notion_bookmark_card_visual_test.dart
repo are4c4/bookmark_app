@@ -87,7 +87,6 @@ void main() {
       title: 'URL migration card',
     );
     final sync = ObjectSyncService(database);
-    addTearDown(sync.dispose);
     await sync.syncWorkspace(workspaceId);
 
     await database.customStatement(
@@ -131,6 +130,7 @@ void main() {
     expect(find.text('legacy.example'), findsNothing);
 
     await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
+    await sync.dispose();
+    await tester.pump(const Duration(milliseconds: 300));
   });
 }
