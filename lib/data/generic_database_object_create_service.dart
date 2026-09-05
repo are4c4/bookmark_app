@@ -8,6 +8,13 @@ import 'object_store.dart';
 import 'system_object_store.dart';
 import 'weblink_object_service.dart';
 
+enum GenericDatabaseCreateMode {
+  generic,
+  dailyNote,
+  weblinkUrl,
+  managedImage,
+}
+
 /// Object creation facade for collection-backed Database pages.
 ///
 /// Database identity and ObjectType identity may differ. This service always
@@ -32,6 +39,26 @@ class GenericDatabaseObjectCreateService {
   final DailyNoteService? dailyNotes;
   final WeblinkObjectService? weblinks;
   final ImageObjectService? images;
+
+  /// Returns the user-facing creation contract for an ObjectType.
+  ///
+  /// Generic hosts can use this to choose the correct affordance without
+  /// duplicating system-key knowledge. Identity-sensitive system collections
+  /// stay explicit: Weblinks require URL input and Images require managed file
+  /// input, while Daily Notes keep their date-keyed open-or-create behavior.
+  Future<GenericDatabaseCreateMode> createModeForObjectType(
+    int objectTypeId,
+  ) async {
+    final registry = systemObjects;
+    if (registry == null) return GenericDatabaseCreateMode.generic;
+    final systemKey = await registry.systemKeyForObjectType(objectTypeId);
+    return switch (systemKey) {
+      DailyNoteService.systemKey => GenericDatabaseCreateMode.dailyNote,
+      WeblinkObjectService.systemKey => GenericDatabaseCreateMode.weblinkUrl,
+      ImageObjectService.systemKey => GenericDatabaseCreateMode.managedImage,
+      _ => GenericDatabaseCreateMode.generic,
+    };
+  }
 
   Future<int> create({
     required int databaseId,

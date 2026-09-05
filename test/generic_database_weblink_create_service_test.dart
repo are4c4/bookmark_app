@@ -2,9 +2,11 @@ import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/bidirectional_relation_store.dart';
 import 'package:bookmark_app/data/database_collection_resolver.dart';
 import 'package:bookmark_app/data/database_collection_store.dart';
+import 'package:bookmark_app/data/daily_note_service.dart';
 import 'package:bookmark_app/data/generic_database_collection_page_data.dart';
 import 'package:bookmark_app/data/generic_database_object_create_service.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
+import 'package:bookmark_app/data/image_object_service.dart';
 import 'package:bookmark_app/data/object_board_create_service.dart';
 import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/object_type_defaults_store.dart';
@@ -20,6 +22,7 @@ void main() {
   late GenericDatabaseStore genericStore;
   late ObjectStore objectStore;
   late SystemObjectStore systemObjects;
+  late ObjectTypeDefaultsStore defaultsStore;
   late WeblinkObjectService weblinks;
   late GenericDatabaseObjectCreateService service;
   late int workspaceId;
@@ -33,7 +36,7 @@ void main() {
       database: database,
       objectStore: objectStore,
     );
-    final defaultsStore = ObjectTypeDefaultsStore(genericStore);
+    defaultsStore = ObjectTypeDefaultsStore(genericStore);
     weblinks = WeblinkObjectService(
       systemObjects: systemObjects,
       defaultsStore: defaultsStore,
@@ -64,11 +67,56 @@ void main() {
         relationMutations: mutations,
       ),
       systemObjects: systemObjects,
+      dailyNotes: DailyNoteService(
+        genericStore: genericStore,
+        objectStore: objectStore,
+        systemObjects: systemObjects,
+        defaultsStore: defaultsStore,
+      ),
       weblinks: weblinks,
+      images: ImageObjectService(
+        systemObjects: systemObjects,
+        defaultsStore: defaultsStore,
+      ),
     );
   });
 
   tearDown(() => database.close());
+
+  test('create mode keeps system collection identity contracts explicit', () async {
+    final weblinkDefinition = await weblinks.ensureDefinition(workspaceId);
+    final imageDefinition = await ImageObjectService(
+      systemObjects: systemObjects,
+      defaultsStore: defaultsStore,
+    ).ensureDefinition(workspaceId);
+    final dailyDefinition = await DailyNoteService(
+      genericStore: genericStore,
+      objectStore: objectStore,
+      systemObjects: systemObjects,
+      defaultsStore: defaultsStore,
+    ).ensureDefinition(workspaceId);
+    final customTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Book',
+    );
+
+    expect(
+      await service.createModeForObjectType(weblinkDefinition.objectType.id),
+      GenericDatabaseCreateMode.weblinkUrl,
+    );
+    expect(
+      await service.createModeForObjectType(imageDefinition.objectType.id),
+      GenericDatabaseCreateMode.managedImage,
+    );
+    expect(
+      await service.createModeForObjectType(dailyDefinition.objectType.id),
+      GenericDatabaseCreateMode.dailyNote,
+    );
+    expect(
+      await service.createModeForObjectType(customTypeId),
+      GenericDatabaseCreateMode.generic,
+    );
+  });
 
   test('URL collection creation normalizes and reuses canonical Weblink', () async {
     final definition = await weblinks.ensureDefinition(workspaceId);
