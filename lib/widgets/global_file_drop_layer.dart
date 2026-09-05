@@ -39,6 +39,21 @@ class _GlobalFileDropLayerState extends State<GlobalFileDropLayer> {
     return dot > 0 ? name.substring(0, dot) : name;
   }
 
+  void _debugAuthorCreationFailure(
+    String author,
+    Object error,
+    StackTrace stackTrace,
+  ) {
+    assert(() {
+      debugPrint(
+        'GlobalFileDropLayer: best-effort author creation failed for '
+        '"$author": $error',
+      );
+      debugPrintStack(stackTrace: stackTrace);
+      return true;
+    }());
+  }
+
   Future<void> _handleDrop(DropDoneDetails details) async {
     if (_importing) return;
     final paths = details.files.map((file) => file.path).where(_supported).toList();
@@ -80,7 +95,13 @@ class _GlobalFileDropLayerState extends State<GlobalFileDropLayer> {
           for (final author in metadata.authors) {
             try {
               await widget.repository.createPerson(author);
-            } catch (_) {}
+            } catch (error, stackTrace) {
+              // Author enrichment is best-effort: the imported file/bookmark is
+              // already valid, so keep the import successful but expose
+              // unexpected failures during development instead of swallowing
+              // them completely.
+              _debugAuthorCreationFailure(author, error, stackTrace);
+            }
           }
           final allPeople = await widget.repository.watchPeople().first;
           final names = metadata.authors.map((e) => e.trim().toLowerCase()).toSet();
