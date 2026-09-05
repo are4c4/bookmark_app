@@ -13,19 +13,25 @@ import 'database_view_open_mode_service.dart';
 import 'database_view_store.dart';
 import 'generic_database_collection_page_data.dart';
 import 'generic_database_object_create_service.dart';
+import 'generic_database_page_state_loader.dart';
 import 'generic_database_store.dart';
 import 'image_object_service.dart';
 import 'object_alias_store.dart';
 import 'object_board_create_service.dart';
+import 'object_board_move_service.dart';
+import 'object_computed_value_store.dart';
+import 'object_graph_query_store.dart';
 import 'object_identity_search_service.dart';
 import 'object_open_presentation_service.dart';
 import 'object_relation_editor_service.dart';
 import 'object_store.dart';
 import 'object_type_defaults_store.dart';
+import 'object_type_management_store.dart';
 import 'relation_mutation_service.dart';
 import 'relation_target_service.dart';
 import 'system_object_store.dart';
 import 'weblink_object_service.dart';
+import 'workspace_store.dart';
 
 /// Composition root for Object-owned services consumed by GenericDatabasePage.
 ///
@@ -36,6 +42,8 @@ import 'weblink_object_service.dart';
 /// here.
 class GenericDatabasePageServices {
   const GenericDatabasePageServices({
+    required this.genericStore,
+    required this.objectStore,
     required this.loader,
     required this.creator,
     required this.imageImport,
@@ -43,8 +51,36 @@ class GenericDatabasePageServices {
     required this.relationMutations,
     required this.collectionConfig,
     required this.openPresentation,
+    required this.stateLoader,
+    required this.computedStore,
+    required this.managementStore,
+    required this.graphStore,
+    required this.viewStore,
+    required this.boardMoveService,
   });
 
+  /// Production composition boundary used by `GenericDatabasePage`.
+  ///
+  /// The Widget provides its workspace boundary instead of reaching through it
+  /// to the database or adding a new dependency on the legacy Bookmark layer.
+  factory GenericDatabasePageServices.fromWorkspaceStore({
+    required WorkspaceStore workspaceStore,
+    PhotoStorageService photoStorage = const PhotoStorageService(),
+    WeblinkMetadataFetch? weblinkMetadataFetch,
+    WeblinkPreviewImageIngest? weblinkPreviewImageIngest,
+  }) {
+    final genericStore = GenericDatabaseStore(workspaceStore.database);
+    final objectStore = ObjectStore(genericStore);
+    return GenericDatabasePageServices.fromStores(
+      genericStore: genericStore,
+      objectStore: objectStore,
+      photoStorage: photoStorage,
+      weblinkMetadataFetch: weblinkMetadataFetch,
+      weblinkPreviewImageIngest: weblinkPreviewImageIngest,
+    );
+  }
+
+  /// Lower-level factory retained for focused Store/Service integration tests.
   factory GenericDatabasePageServices.fromStores({
     required GenericDatabaseStore genericStore,
     required ObjectStore objectStore,
@@ -124,8 +160,11 @@ class GenericDatabasePageServices {
       images: images,
       weblinkCreateEnricher: weblinkEnrichment.enrich,
     );
+    final computedStore = ObjectComputedValueStore(objectStore);
 
     return GenericDatabasePageServices(
+      genericStore: genericStore,
+      objectStore: objectStore,
       loader: loader,
       creator: creator,
       imageImport: GenericDatabaseImageImportService(
@@ -146,9 +185,25 @@ class GenericDatabasePageServices {
         viewOpenModes: DatabaseViewOpenModeService(viewStore),
         objectTypeDefaults: defaultsStore,
       ),
+      stateLoader: GenericDatabasePageStateLoader(
+        pageLoader: loader,
+        genericStore: genericStore,
+        computedStore: computedStore,
+        createModeForObjectType: creator.createModeForObjectType,
+      ),
+      computedStore: computedStore,
+      managementStore: ObjectTypeManagementStore(
+        genericStore: genericStore,
+        objectStore: objectStore,
+      ),
+      graphStore: ObjectGraphQueryStore(genericStore),
+      viewStore: viewStore,
+      boardMoveService: ObjectBoardMoveService(objectStore),
     );
   }
 
+  final GenericDatabaseStore genericStore;
+  final ObjectStore objectStore;
   final GenericDatabaseCollectionPageLoader loader;
   final GenericDatabaseObjectCreateService creator;
   final GenericDatabaseImageImportService imageImport;
@@ -156,4 +211,10 @@ class GenericDatabasePageServices {
   final RelationMutationService relationMutations;
   final DatabaseCollectionConfigService collectionConfig;
   final ObjectOpenPresentationService openPresentation;
+  final GenericDatabasePageStateLoader stateLoader;
+  final ObjectComputedValueStore computedStore;
+  final ObjectTypeManagementStore managementStore;
+  final ObjectGraphQueryStore graphStore;
+  final DatabaseViewStore viewStore;
+  final ObjectBoardMoveService boardMoveService;
 }

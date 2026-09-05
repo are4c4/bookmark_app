@@ -95,26 +95,17 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
   @override
   void initState() {
     super.initState();
-    _store = GenericDatabaseStore(widget.repository.workspaceStore.database);
-    _objectStore = ObjectStore(_store);
-    _pageServices = GenericDatabasePageServices.fromStores(
-      genericStore: _store,
-      objectStore: _objectStore,
+    _pageServices = GenericDatabasePageServices.fromWorkspaceStore(
+      workspaceStore: widget.repository.workspaceStore,
     );
-    _boardMoveService = ObjectBoardMoveService(_objectStore);
-    _computedStore = ObjectComputedValueStore(_objectStore);
-    _stateLoader = GenericDatabasePageStateLoader(
-      pageLoader: _pageServices.loader,
-      genericStore: _store,
-      computedStore: _computedStore,
-      createModeForObjectType: _pageServices.creator.createModeForObjectType,
-    );
-    _managementStore = ObjectTypeManagementStore(
-      genericStore: _store,
-      objectStore: _objectStore,
-    );
-    _graphStore = ObjectGraphQueryStore(_store);
-    _viewStore = DatabaseViewStore(widget.repository.workspaceStore.database);
+    _store = _pageServices.genericStore;
+    _objectStore = _pageServices.objectStore;
+    _boardMoveService = _pageServices.boardMoveService;
+    _computedStore = _pageServices.computedStore;
+    _stateLoader = _pageServices.stateLoader;
+    _managementStore = _pageServices.managementStore;
+    _graphStore = _pageServices.graphStore;
+    _viewStore = _pageServices.viewStore;
     _reload();
   }
 
