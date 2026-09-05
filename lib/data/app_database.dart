@@ -151,67 +151,7 @@ class AppDatabase extends _$AppDatabase {
             await customStatement('DROP TABLE bookmark_people_old');
           }
           if (from < 11) {
-            final info = await customSelect('PRAGMA table_info(bookmarks)').get();
-            final names = info.map((row) => row.read<String>('name')).toSet();
-
-            if (!names.contains('reading_status')) {
-              await m.addColumn(bookmarks, bookmarks.readingStatus);
-            }
-            if (!names.contains('storage_state')) {
-              await m.addColumn(bookmarks, bookmarks.storageState);
-            }
-            if (!names.contains('genre')) {
-              await m.addColumn(bookmarks, bookmarks.genre);
-            }
-            if (!names.contains('deleted_at')) {
-              await m.addColumn(bookmarks, bookmarks.deletedAt);
-            }
-
-            await customStatement('''
-              UPDATE bookmarks
-              SET reading_status = CASE
-                    WHEN status IN ('unread', 'later', 'in_progress', 'done') THEN status
-                    ELSE 'unread'
-                  END,
-                  storage_state = CASE
-                    WHEN status = 'archived' THEN 'archived'
-                    ELSE storage_state
-                  END
-            ''');
-
-            if (names.contains('inbox_state')) {
-              await customStatement('''
-                UPDATE bookmarks
-                SET storage_state = 'inbox'
-                WHERE inbox_state = 1 AND storage_state != 'trash'
-              ''');
-            }
-
-            if (names.contains('genre_state')) {
-              await customStatement('''
-                UPDATE bookmarks
-                SET genre = genre_state
-                WHERE genre_state IS NOT NULL AND genre_state != ''
-              ''');
-            }
-
-            if (names.contains('deleted_at_state')) {
-              final deletedRows = await customSelect('''
-                SELECT id, deleted_at_state
-                FROM bookmarks
-                WHERE deleted_at_state IS NOT NULL
-              ''').get();
-              for (final row in deletedRows) {
-                final raw = row.readNullable<String>('deleted_at_state');
-                final parsed = raw == null ? null : DateTime.tryParse(raw);
-                await (update(bookmarks)..where((b) => b.id.equals(row.read<int>('id')))).write(
-                  BookmarksCompanion(
-                    storageState: const Value('trash'),
-                    deletedAt: Value(parsed),
-                  ),
-                );
-              }
-            }
+            await migrateToV11(m);
           }
           if (from < 12) {
             await migrateToV12(m);
