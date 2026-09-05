@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/material.dart';
 
 import '../data/bookmark_repository.dart';
@@ -5,13 +7,29 @@ import '../services/auto_organize_service.dart';
 import '../ui/ui_tokens.dart';
 import '../widgets/app_empty_state.dart';
 
+typedef AutoOrganizeRuleLoader = Future<List<AutoOrganizeRule>> Function();
+typedef AutoOrganizeRuleCreator = Future<int> Function({
+  required String name,
+  required AutoOrganizeMatchField matchField,
+  required String keyword,
+  required String tagName,
+  required String genre,
+});
+typedef AutoOrganizeRunner = Future<AutoOrganizeResult> Function();
+
 class AutoOrganizeSettingsSection extends StatefulWidget {
   const AutoOrganizeSettingsSection({
     super.key,
     required this.repository,
+    this.loadRules,
+    this.createRule,
+    this.runAll,
   });
 
   final BookmarkRepository repository;
+  final AutoOrganizeRuleLoader? loadRules;
+  final AutoOrganizeRuleCreator? createRule;
+  final AutoOrganizeRunner? runAll;
 
   @override
   State<AutoOrganizeSettingsSection> createState() =>
@@ -30,8 +48,20 @@ class _AutoOrganizeSettingsSectionState
     _reload();
   }
 
+  void _debugFailure(String message, StackTrace stackTrace) {
+    assert(() {
+      developer.log(
+        message,
+        name: 'bookmark_app.auto_organize',
+        stackTrace: stackTrace,
+      );
+      return true;
+    }());
+  }
+
   Future<void> _reload() async {
-    final rules = await widget.repository.listAutoOrganizeRules();
+    final rules = await (widget.loadRules?.call() ??
+        widget.repository.listAutoOrganizeRules());
     if (!mounted) return;
     setState(() {
       _rules = rules;
@@ -46,18 +76,31 @@ class _AutoOrganizeSettingsSectionState
     );
     if (draft == null) return;
     try {
-      await widget.repository.createAutoOrganizeRule(
-        name: draft.name,
-        matchField: draft.matchField,
-        keyword: draft.keyword,
-        tagName: draft.tagName,
-        genre: draft.genre,
-      );
+      if (widget.createRule != null) {
+        await widget.createRule!(
+          name: draft.name,
+          matchField: draft.matchField,
+          keyword: draft.keyword,
+          tagName: draft.tagName,
+          genre: draft.genre,
+        );
+      } else {
+        await widget.repository.createAutoOrganizeRule(
+          name: draft.name,
+          matchField: draft.matchField,
+          keyword: draft.keyword,
+          tagName: draft.tagName,
+          genre: draft.genre,
+        );
+      }
       await _reload();
-    } catch (error) {
+    } catch (_, stackTrace) {
+      _debugFailure('Auto-organize rule creation failed.', stackTrace);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('ルールを保存できませんでした: $error')),
+        const SnackBar(
+          content: Text('ルールを保存できませんでした。入力内容を確認して、もう一度お試しください。'),
+        ),
       );
     }
   }
@@ -65,7 +108,8 @@ class _AutoOrganizeSettingsSectionState
   Future<void> _runAll() async {
     setState(() => _running = true);
     try {
-      final result = await widget.repository.applyAutoOrganizeToAll();
+      final result = await (widget.runAll?.call() ??
+          widget.repository.applyAutoOrganizeToAll());
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -75,10 +119,13 @@ class _AutoOrganizeSettingsSectionState
           ),
         ),
       );
-    } catch (error) {
+    } catch (_, stackTrace) {
+      _debugFailure('Auto-organize bulk application failed.', stackTrace);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('自動整理を実行できませんでした: $error')),
+        const SnackBar(
+          content: Text('自動整理を実行できませんでした。もう一度お試しください。'),
+        ),
       );
     } finally {
       if (mounted) setState(() => _running = false);
