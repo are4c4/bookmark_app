@@ -102,15 +102,12 @@ class AppDatabase extends _$AppDatabase {
             await m.addColumn(savedViews, savedViews.sortField);
             await m.addColumn(savedViews, savedViews.sortDirection);
             await m.createTable(savedViewTags);
-            final oldViews = await select(savedViews).get();
-            for (final view in oldViews) {
-              if (view.tagId != null) {
-                await into(savedViewTags).insert(
-                  SavedViewTagsCompanion.insert(savedViewId: view.id, tagId: view.tagId!),
-                  mode: InsertMode.insertOrIgnore,
-                );
-              }
-            }
+            await customStatement('''
+              INSERT OR IGNORE INTO saved_view_tags (saved_view_id, tag_id)
+              SELECT id, tag_id
+              FROM saved_views
+              WHERE tag_id IS NOT NULL
+            ''');
           }
           if (from < 5) await migrateToV5(m);
           if (from < 6) await migrateToV6(m);
