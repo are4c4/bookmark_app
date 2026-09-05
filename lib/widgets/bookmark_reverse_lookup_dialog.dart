@@ -3,14 +3,25 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
+import '../services/bookmark_url_resolver.dart';
 import 'bookmark_visual_image.dart';
+
+typedef BookmarkUrlResolve = Future<BookmarkUrlSource?> Function(
+  BookmarkItem bookmark,
+);
 
 Future<void> showBookmarkReverseLookupDialog({
   required BuildContext context,
   required BookmarkRepository repository,
   required String title,
   required Stream<List<BookmarkItem>> bookmarks,
+  BookmarkUrlResolve? resolveUrl,
 }) {
+  final resolver = resolveUrl ??
+      BookmarkUrlResolver(
+        database: repository.workspaceStore.database,
+        workspaceId: repository.workspaceId,
+      ).resolve;
   return showDialog<void>(
     context: context,
     builder: (dialogContext) => AlertDialog(
@@ -54,18 +65,26 @@ Future<void> showBookmarkReverseLookupDialog({
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  subtitle: Text(
-                    bookmark.url,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  subtitle: FutureBuilder<BookmarkUrlSource?>(
+                    future: resolver(bookmark),
+                    builder: (context, snapshot) => Text(
+                      snapshot.data?.value ?? bookmark.url,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                   trailing: IconButton(
                     tooltip: 'ブラウザで開く',
                     icon: const Icon(Icons.open_in_new),
                     onPressed: () async {
-                      final uri = Uri.tryParse(bookmark.url);
+                      final source = await resolver(bookmark);
+                      if (source == null) return;
+                      final uri = Uri.tryParse(source.value);
                       if (uri != null) {
-                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        await launchUrl(
+                          uri,
+                          mode: LaunchMode.externalApplication,
+                        );
                       }
                     },
                   ),
