@@ -207,14 +207,27 @@ class ImageObjectService {
     required ObjectPropertyDefinition originalFilenameProperty,
     required ObjectPropertyDefinition contentTypeProperty,
   }) async {
-    final desiredVisible = <int>[fileProperty.id, noteProperty.id];
+    final desiredVisible = <int>[
+      originalFilenameProperty.id,
+      noteProperty.id,
+      contentTypeProperty.id,
+      sourceUrlProperty.id,
+    ];
+    final legacyVisible = <int>[fileProperty.id, noteProperty.id];
     final legacyOrder = <int>[fileProperty.id, noteProperty.id];
-    final desiredOrder = <int>[
+    final previousOrder = <int>[
       fileProperty.id,
       noteProperty.id,
       sourceUrlProperty.id,
       originalFilenameProperty.id,
       contentTypeProperty.id,
+    ];
+    final desiredOrder = <int>[
+      originalFilenameProperty.id,
+      noteProperty.id,
+      contentTypeProperty.id,
+      sourceUrlProperty.id,
+      fileProperty.id,
     ];
     final current = await defaultsStore.read(objectTypeId);
     if (current == null) {
@@ -229,15 +242,22 @@ class ImageObjectService {
       return;
     }
 
-    // Upgrade only the exact old Image order. Visibility is intentionally kept
-    // at File/Note and customized settings are never replaced implicitly.
+    // Upgrade only defaults written by earlier Image definitions. Any user
+    // customization is preserved, while the internal managed File path stops
+    // being part of the default daily-use presentation.
+    final upgradeVisible = current.visiblePropertyIds == null ||
+        _sameIds(current.visiblePropertyIds!, legacyVisible);
     final upgradeOrder = current.propertyOrder == null ||
-        _sameIds(current.propertyOrder!, legacyOrder);
-    if (!upgradeOrder && current.openMode != null) return;
+        _sameIds(current.propertyOrder!, legacyOrder) ||
+        _sameIds(current.propertyOrder!, previousOrder);
+    final needsWrite =
+        upgradeVisible || upgradeOrder || current.openMode == null;
+    if (!needsWrite) return;
     await defaultsStore.write(
       objectTypeId: objectTypeId,
       defaults: ObjectTypeDefaults(
-        visiblePropertyIds: current.visiblePropertyIds ?? desiredVisible,
+        visiblePropertyIds:
+            upgradeVisible ? desiredVisible : current.visiblePropertyIds,
         propertyOrder: upgradeOrder ? desiredOrder : current.propertyOrder,
         openMode: current.openMode ?? ObjectOpenMode.sidePeek,
       ),

@@ -11,7 +11,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('Image definition upgrades legacy order but preserves custom defaults',
+  test('Image definition upgrades legacy defaults but preserves customization',
       () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
@@ -55,13 +55,18 @@ void main() {
     );
     final definition = await service.ensureDefinition(workspaceId);
     final upgraded = await defaultsStore.read(type.id);
-    expect(upgraded?.visiblePropertyIds, <int>[file.id, note.id]);
-    expect(upgraded?.propertyOrder, <int>[
-      definition.fileProperty.id,
-      definition.noteProperty.id,
-      definition.sourceUrlProperty.id,
+    expect(upgraded?.visiblePropertyIds, <int>[
       definition.originalFilenameProperty.id,
+      definition.noteProperty.id,
       definition.contentTypeProperty.id,
+      definition.sourceUrlProperty.id,
+    ]);
+    expect(upgraded?.propertyOrder, <int>[
+      definition.originalFilenameProperty.id,
+      definition.noteProperty.id,
+      definition.contentTypeProperty.id,
+      definition.sourceUrlProperty.id,
+      definition.fileProperty.id,
     ]);
 
     final customOrder = <int>[
@@ -84,5 +89,57 @@ void main() {
     );
     expect(preserved?.propertyOrder, customOrder);
     expect(preserved?.openMode, ObjectOpenMode.fullPage);
+  });
+
+  test('Image definition upgrades the previous expanded default order', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final defaultsStore = ObjectTypeDefaultsStore(genericStore);
+    final systemObjects = SystemObjectStore(
+      database: database,
+      objectStore: objectStore,
+    );
+    final service = ImageObjectService(
+      systemObjects: systemObjects,
+      defaultsStore: defaultsStore,
+    );
+    final definition = await service.ensureDefinition(workspaceId);
+
+    await defaultsStore.write(
+      objectTypeId: definition.objectType.id,
+      defaults: ObjectTypeDefaults(
+        visiblePropertyIds: <int>[
+          definition.fileProperty.id,
+          definition.noteProperty.id,
+        ],
+        propertyOrder: <int>[
+          definition.fileProperty.id,
+          definition.noteProperty.id,
+          definition.sourceUrlProperty.id,
+          definition.originalFilenameProperty.id,
+          definition.contentTypeProperty.id,
+        ],
+        openMode: ObjectOpenMode.sidePeek,
+      ),
+    );
+
+    await service.ensureDefinition(workspaceId);
+    final upgraded = await defaultsStore.read(definition.objectType.id);
+    expect(upgraded?.visiblePropertyIds, <int>[
+      definition.originalFilenameProperty.id,
+      definition.noteProperty.id,
+      definition.contentTypeProperty.id,
+      definition.sourceUrlProperty.id,
+    ]);
+    expect(upgraded?.propertyOrder, <int>[
+      definition.originalFilenameProperty.id,
+      definition.noteProperty.id,
+      definition.contentTypeProperty.id,
+      definition.sourceUrlProperty.id,
+      definition.fileProperty.id,
+    ]);
   });
 }
