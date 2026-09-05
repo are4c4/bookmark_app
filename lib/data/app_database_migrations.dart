@@ -1,6 +1,15 @@
 part of 'app_database.dart';
 
 extension AppDatabaseMigrationSteps on AppDatabase {
+  Future<void> migrateToV7(Migrator migrator) async {
+    final photoColumns = await customSelect('PRAGMA table_info(photos)').get();
+    final photoColumnNames =
+        photoColumns.map((row) => row.read<String>('name')).toSet();
+    if (!photoColumnNames.contains('tags')) {
+      await migrator.addColumn(photos, photos.tags);
+    }
+  }
+
   Future<void> migrateToV8(Migrator migrator) async {
     await migrator.addColumn(savedViews, savedViews.visibleProperties);
   }
