@@ -38,7 +38,7 @@ void main() {
     final table = _between(
       source,
       '  Widget _table(',
-      '\n  String _compactUrl(',
+      '\n  String _formatDate(',
     );
     expect(table, contains('width: 58'));
     expect(table, contains('height: 38'));

@@ -14,11 +14,13 @@ import '../data/person_roles.dart';
 import '../data/workspace_store.dart';
 import '../features/database/presentation/widgets/database_page_toolbar.dart';
 import '../services/bookmark_metadata_service.dart';
+import '../services/bookmark_url_resolver.dart';
 import '../services/photo_storage_service.dart';
 import '../widgets/app_toast.dart';
 import '../widgets/bookmark_create_dialog.dart';
 import '../widgets/bookmark_detail_panel.dart';
 import '../widgets/bookmark_list_metadata.dart';
+import '../widgets/bookmark_resolved_url_text.dart';
 import '../widgets/bookmark_visual_image.dart';
 import '../widgets/database_create_tiles.dart';
 import '../widgets/database_view_tabs.dart';
@@ -75,6 +77,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
   double _detailWidth = 430;
   Timer? _databaseViewSaveTimer;
   late final DatabaseViewStore _databaseViewStore;
+  late final BookmarkUrlResolver _bookmarkUrlResolver;
   int? _activeDatabaseViewId;
   DatabaseViewConfig? _activeDatabaseView;
 
@@ -94,6 +97,10 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
   void initState() {
     super.initState();
     _databaseViewStore = DatabaseViewStore(widget.repository.workspaceStore.database);
+    _bookmarkUrlResolver = BookmarkUrlResolver(
+      database: widget.repository.workspaceStore.database,
+      workspaceId: widget.repository.workspaceId,
+    );
   }
 
   @override
@@ -239,7 +246,6 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
 
   void _markViewChanged() => _scheduleDatabaseViewSave();
 
-
   void _filterByTag(Tag tag) {
     _searchController.clear();
     setState(() {
@@ -304,8 +310,12 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
     }
   }
 
+  Future<BookmarkUrlSource?> _resolveBookmarkUrl(BookmarkItem bookmark) =>
+      _bookmarkUrlResolver.resolve(bookmark);
+
   Future<void> _openBookmark(BookmarkItem bookmark) async {
-    final uri = Uri.tryParse(bookmark.url);
+    final resolved = await _resolveBookmarkUrl(bookmark);
+    final uri = resolved == null ? null : Uri.tryParse(resolved.value);
     if (uri == null) return;
     await widget.repository.recordOpen(bookmark);
     final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -478,6 +488,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
           propertyOrder: _visiblePropertyTokens,
           personRoleGroups: _roleGroups(snapshot.data ?? const []),
           onTap: () => _selectBookmark(bookmark),
+          resolveUrl: _resolveBookmarkUrl,
           onToggleFavorite: () => widget.repository.toggleFavorite(bookmark),
           menu: _bookmarkMenu(bookmark),
         );
@@ -628,6 +639,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
                       bookmark: bookmark,
                       assignments: assignments,
                       propertyTokens: _visiblePropertyTokens,
+                      resolveUrl: _resolveBookmarkUrl,
                     ),
                   ),
                   trailing: _selectionMode
@@ -711,8 +723,13 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
                     ),
                   ),
                 ),
-              BookmarkStage1Property.url =>
-                DataCell(Text(_compactUrl(bookmark.url))),
+              BookmarkStage1Property.url => DataCell(
+                  BookmarkResolvedUrlText(
+                    bookmark: bookmark,
+                    resolveUrl: _resolveBookmarkUrl,
+                    compact: true,
+                  ),
+                ),
               BookmarkStage1Property.tags => DataCell(
                   Text(bookmark.tags.map((tag) => tag.name).join(', ')),
                 ),
@@ -772,12 +789,6 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
     );
   }
 
-  String _compactUrl(String value) {
-    final uri = Uri.tryParse(value);
-    if (uri == null || uri.host.isEmpty) return value;
-    return uri.host.startsWith('www.') ? uri.host.substring(4) : uri.host;
-  }
-
   String _formatDate(DateTime value) {
     final local = value.toLocal();
     return '${local.year}/${local.month.toString().padLeft(2, '0')}/${local.day.toString().padLeft(2, '0')}';
@@ -791,7 +802,6 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
   String _historyText(BookmarkItem bookmark) => bookmark.lastOpenedAt == null
       ? '${bookmark.openCount}回 · 未閲覧'
       : '${bookmark.openCount}回 · ${_formatDateTime(bookmark.lastOpenedAt!)}';
-
 
   Future<void> _showPropertiesDialog() async {
     final result = await showBookmarkPropertyOrderDialog(
