@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:bookmark_app/data/app_database.dart';
@@ -38,11 +37,12 @@ void main() {
     addTearDown(() => directory.delete(recursive: true));
     final portraitFile = File('${directory.path}/portrait.png');
     final landscapeFile = File('${directory.path}/landscape.png');
-    final pngBytes = base64Decode(
-      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-    );
-    await portraitFile.writeAsBytes(pngBytes);
-    await landscapeFile.writeAsBytes(pngBytes);
+    // The Gallery must size cards from persisted Image metadata, not from an
+    // image codec. Existing but deliberately undecodable files keep this
+    // real-host regression focused on that contract while production rendering
+    // safely falls back through Image.file's errorBuilder.
+    await portraitFile.writeAsBytes(const <int>[0]);
+    await landscapeFile.writeAsBytes(const <int>[0]);
 
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
