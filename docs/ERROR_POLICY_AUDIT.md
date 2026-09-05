@@ -7,35 +7,46 @@ Issue #225 requires reducing silent failure without breaking intentional best-ef
 - **fallback is the contract** — failure intentionally produces a deterministic fallback value. Keep broad catch only when the boundary is genuinely untrusted; add tests/comments where useful.
 - **best-effort enrichment** — the primary operation is already valid and optional enrichment may fail. Keep non-blocking behavior, but avoid a completely silent catch.
 - **rollback / fail-closed** — catch exists to restore invariants and then rethrow/translate. Preserve rollback semantics.
-- **user-visible failure** — catch already surfaces a stable error to UI. Prefer domain errors over raw implementation exceptions when practical.
+- **user-visible failure** — catch already surfaces an error to UI. Prefer a stable domain message over raw implementation exceptions.
 
-## Initial production audit — 2026-09-05
+## Production audit — refreshed 2026-09-06
 
 | Path | Current pattern | Classification | Refactor action |
 | --- | --- | --- | --- |
-| `lib/widgets/global_file_drop_layer.dart` | PDF author creation is best-effort after the bookmark/file import is already valid | best-effort enrichment | PR #227 made unexpected author-creation failure debug-visible; PR #321 keeps that visibility while removing author names and exception text from diagnostics. |
-| `lib/widgets/bookmark_create_dialog.dart` | empty `catch (_) {}` while creating PDF authors | best-effort enrichment | PR #321 preserves successful import and adds debug/test-only stack diagnostics without logging author names, exception text, URLs or paths. |
-| `lib/services/pdf_metadata_service.dart` | broad catch returns filename/title fallback | fallback is the contract | Keep non-blocking metadata fallback; add focused malformed/tool-failure test if coverage is missing. |
-| `lib/services/bookmark_metadata_service.dart` | broad catch returns metadata fallback | fallback is the contract | Keep; metadata fetch/parse is untrusted external input. Prefer test proving fallback fields remain stable. |
-| `lib/services/remote_image_storage_service.dart` | image decode catch sets decoded image to null | best-effort enrichment | Keep storage flow independent of dimension decode; document/test that missing geometry is safe. |
-| `lib/services/object_sync_service.dart` | thumbnail ingestion catch does not block canonical Bookmark→Weblink sync | best-effort enrichment | Correct high-level policy; retain comment and add debug/test visibility only if failures are otherwise opaque. Do not turn preview ingestion into sync failure. |
-| `lib/services/bookmark_visual_resolver.dart` | compatibility read catch falls back when Object mirroring is unavailable | fallback is the contract / compatibility bridge | Keep while old installations may lack mirrored Object state; remove with compatibility path, not earlier. |
-| `lib/services/weblink_visual_resolver.dart` | compatibility/read fallback catches | fallback is the contract | Keep read-only visual resolution fail-soft; tests should cover no-media/missing-relation cases. |
-| `lib/data/database_view_store.dart` | settings decode catch returns empty map | fallback is the contract | Keep only for corrupt/old settings tolerance; consider debug visibility if malformed persisted JSON can indicate a regression. |
-| `lib/data/tag_group_store.dart` | malformed persisted tag-tree expansion JSON returns the default collapsed state | fallback is the contract | #225 follow-up keeps the same fail-soft state while making malformed/non-map persisted values debug-visible without logging stored JSON or exception text. |
+| `lib/widgets/global_file_drop_layer.dart` | PDF author creation is best-effort after bookmark/file import is already valid | best-effort enrichment | #227 made unexpected author-creation failure debug-visible; #321 aligned create/drop diagnostics and removed author names / exception text / URLs / paths. |
+| `lib/widgets/bookmark_create_dialog.dart` | PDF author creation is optional enrichment | best-effort enrichment | #321 preserves successful import and emits fixed debug/test stack diagnostics without user content. |
+| `lib/services/pdf_metadata_service.dart` | broad catch returns filename/title fallback | fallback is the contract | #274 keeps fallback and removes path/content from diagnostics. Keep non-blocking metadata behavior. |
+| `lib/services/bookmark_metadata_service.dart` | broad catch returns metadata fallback | fallback is the contract | #279 keeps external-input fallback while avoiding URL/response/exception-text logging. |
+| `lib/services/remote_image_storage_service.dart` | image geometry/decode failure does not invalidate stored media | best-effort enrichment | #237 makes geometry failure observable while preserving storage success. |
+| `lib/services/object_sync_service.dart` | optional remote preview ingestion/schema setup must not block canonical Bookmark→Weblink sync | best-effort enrichment | #327 keeps canonical sync/startup and no-repeat retry policy unchanged while adding privacy-safe debug stack diagnostics for ingestion/setup failures. |
+| `lib/services/bookmark_visual_resolver.dart` | compatibility read/file checks fall back when Object mirroring/media is unavailable | fallback is the contract / compatibility bridge | Keep while Bookmark compatibility hosts remain; do not turn missing legacy/canonical media into user-visible failure. |
+| `lib/services/weblink_visual_resolver.dart` | missing/unreadable managed media returns no visual | fallback is the contract | Keep read-only visual resolution fail-soft; file-existence failure is a normal fallback, not a logging target. |
+| `lib/data/database_view_store.dart` | malformed persisted filters/sorts/settings JSON returns empty map/list | fallback is the contract | #234 added debug visibility; #328 removes attached `FormatException` so malformed persisted user JSON cannot be echoed into diagnostics. Fixed message + stack only. |
+| `lib/data/tag_group_store.dart` | malformed persisted tag-tree expansion JSON returns default collapsed state | fallback is the contract | #325 keeps the same state while making malformed/non-map values debug-visible without stored JSON or exception text. |
+| `lib/data/generic_database_page_state_loader.dart` | formula/rollup evaluation failure projects `null` and page loading continues | fallback is the contract | #326 preserves the null projection and adds fixed debug stack visibility without Object titles, Property names/expressions or exception text. |
+| `lib/data/generic_database_store.dart` | malformed Property config JSON -> `{}`; malformed Record value JSON -> `null` | fallback is the contract | #329 adds privacy-safe debug visibility and focused persisted-corruption coverage without logging raw config/value/exception text. |
 | `lib/data/object_board_create_service.dart` | catch rolls back newly-created Object | rollback / fail-closed | Preserve exactly; this protects invariants. Ensure original failure is rethrown/translated after rollback. |
 | `lib/services/profile_backup_service.dart` | catch cleans partial target | rollback / fail-closed | Preserve cleanup semantics; avoid swallowing the original failure after cleanup. |
-| `lib/services/profile_manager.dart` | broad catch falls back to default profile state | fallback is the contract, higher risk | Audit separately because profile-state corruption can hide data-location problems; fallback must not silently point users at a different profile. |
-| `lib/views/settings_page.dart` | catches backup/settings operation and shows UI error | user-visible failure | Lower priority; move toward stable domain messages when touching the service boundary. |
-| `lib/views/global_search_page.dart` | catches search error and handles mounted UI state | user-visible failure | Lower priority than empty catches; avoid raw implementation exception text if currently surfaced. |
-| `lib/main.dart` | initialization catch stores `_error` | user-visible/fail-closed initialization | Keep; app initialization must not silently continue with partial state. |
+| `lib/services/profile_manager.dart` | decode failure can fall back to default profile state | fallback is the contract, **higher risk** | Debug visibility exists, but behavior changes are deferred. This path can affect data-location recovery and requires an explicit recovery/product policy before changing fallback selection or persistence. |
+| `lib/views/global_search_page.dart` | search/index catch stores the caught Object and renders it via `message: '$_error'` | user-visible failure | **Known next candidate.** Replace with a focused, testable stable-error state while preserving indexing/search retry behavior; do not make an untested one-line cosmetic substitution. |
+| `lib/views/settings_page.dart` | backup/settings operation catches may surface implementation errors | user-visible failure | Lower priority than silent persistence corruption; move toward stable domain messages when the service/error boundary is touched. |
+| `lib/main.dart` | initialization catch stores `_error` and fails visibly rather than continuing partially | user-visible/fail-closed initialization | Keep fail-closed startup. Audit message exposure separately if raw exception details are rendered. |
 
 ## Refactor order
 
-1. Empty catches in production where the primary operation can safely continue.
-2. Broad catches that may hide profile/data-location corruption.
-3. Repeated parsing of database constraint exceptions in Widgets; translate at Store/Service boundaries.
-4. Stable fallback boundaries (metadata/image decode/settings JSON) only when a test or debug signal is missing.
+1. Silent best-effort/persisted-data failures where the primary operation can safely continue — most known high-value cases now have privacy-safe debug visibility.
+2. Broad catches that may hide profile/data-location corruption — **do not change recovery behavior without explicit policy**.
+3. Raw user-visible implementation exceptions — introduce stable domain/error-state boundaries with tests preserving retry/failure behavior.
+4. Repeated parsing of database constraint exceptions in Widgets — translate at Store/Service boundaries when a real repeated caller is simplified.
+5. Stable normal fallbacks such as file-existence checks should remain quiet unless evidence shows a debugging gap; reducing `catch` counts is not itself a goal.
+
+## Diagnostic privacy rule
+
+Debug/test observability must not create a secondary user-data leak. Prefer:
+- fixed operation/stage message;
+- stack trace when useful;
+- no raw exception object when it can echo persisted/request content;
+- no names, URLs, file paths, raw JSON, response bodies, bytes, credentials or secrets unless a separate diagnostic design explicitly sanitizes them.
 
 ## Guardrails
 
@@ -44,3 +55,4 @@ Issue #225 requires reducing silent failure without breaking intentional best-ef
 - Prefer debug-only visibility for expected best-effort failure when user action does not need to fail.
 - Prefer typed/domain errors for actionable user failures.
 - Do not display raw database/HTTP exception strings when a stable domain message exists.
+- Do not add noisy logs to ordinary file-not-found / no-media compatibility fallbacks simply to make every catch observable.
