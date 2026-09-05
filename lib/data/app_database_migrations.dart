@@ -1,6 +1,10 @@
 part of 'app_database.dart';
 
 extension AppDatabaseMigrationSteps on AppDatabase {
+  Future<void> migrateToV8(Migrator migrator) async {
+    await migrator.addColumn(savedViews, savedViews.visibleProperties);
+  }
+
   Future<void> migrateToV9(Migrator migrator) async {
     await migrator.addColumn(bookmarks, bookmarks.status);
     await migrator.addColumn(bookmarks, bookmarks.rating);
