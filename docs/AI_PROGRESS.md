@@ -12,26 +12,43 @@ Active architecture/product issues:
 - `#155` — reusable Weblink Object + managed Image presentation/navigation.
 - `#156` — fixed/masonry Gallery presentation.
 - `#149` — Property handle alignment; implementation merged, real-host visual validation remains.
+- `#218` — installable macOS `Bookmark.app` / DMG packaging and safe release identity.
 
 `#166` (Object aliases) is closed as completed.
 
 ## Current implementation position
-The generic Object/Relation architecture is integrated into real Database/Object hosts. Relation work is mature; the dominant remaining work is Object-owned product exposure, rich media presentation, identity-aware system-Object creation UX, and legacy consolidation.
+The generic Object/Relation architecture is integrated into real Database/Object hosts. Relation work is mature; the dominant remaining work is Object-owned product exposure, rich media presentation, identity-aware system-Object creation UX, release packaging, and legacy consolidation.
 
-Recent Object progress on `main`:
-- #199 — Bookmark detail cover consumes managed Weblink/Image visual resolution.
-- #203 — system Weblink collection is exposed as `Weblinks` through the existing generic sidebar/Database navigation list.
-- #204 — persisted per-View `GalleryViewMode.fixed | masonry` in `settings['galleryMode']` while keeping one `layoutType = gallery` semantic.
-- #205 — deterministic shared 2x3 Property drag handle + explicit first-line layout grid.
-- #206 — shared `ObjectGalleryView` fixed/masonry renderer plus Gallery-only toolbar selector.
-- #207 — managed Image pixel width/height metadata for presentation geometry.
-- #209 — shared read-only `WeblinkVisualResolver`; `BookmarkVisualResolver` reuses the same canonical Weblink -> Representative image lookup path.
-- #212 — real `GenericDatabasePage` Gallery consumes persisted fixed/masonry mode through `ObjectGalleryView` while preserving the existing card builder/opening/Property behavior.
-- #213 — reusable system `Image` and `Daily Note` collections are exposed as `Images` / `Daily Notes` through the same generic sidebar/Database navigation path as Weblinks.
-- #214 — generic Daily Notes `新規ページ` reuses `DailyNoteService.openOrCreate(...)`, preserving one Object per local date; generic Board grouped creation fails closed.
-- #215 — generic Weblink/Image title-only creation and Board grouped creation now fail closed before they can bypass canonical URL normalization/reuse or managed file identity. Flutter CI #885 passed Drift generation, `flutter analyze`, and all 546 tests; merged as `5816a9a521f0b510e0665a460d25d2a49e85f4a6`.
+Recent main integration:
+- #199 Bookmark detail uses managed Weblink/Image visual resolution.
+- #203/#213 expose Weblinks / Images / Daily Notes through generic sidebar navigation.
+- #204/#206/#212 provide persisted fixed/masonry Gallery modes and real-host renderer switching.
+- #205 provides the deterministic six-dot Property handle/grid.
+- #207 persists managed Image pixel dimensions.
+- #209 shares canonical Weblink visual resolution with Bookmark presentation.
+- #214 preserves date-keyed Daily Note creation in the generic host.
+- #215 protects identity-sensitive Weblink/Image collections from invalid title-only generic creation.
+- #211 adds exposed-Weblink backlink real-host Relation coverage.
+- #217 exposes managed Weblink image dimensions/aspect ratio for the remaining media-driven masonry slice.
 
-The former highest-value #156 gap — real GenericDatabasePage consumption of the shared Gallery renderer — is closed. Remaining #156 work is actual managed media aspect-ratio sizing and mixed portrait/landscape real-host coverage.
+## macOS release delivery — Issue #218
+A focused Object-lane release branch now adds a reproducible local/CI packaging path without committing generated macOS Xcode runner files.
+
+Implemented on `feature/object-macos-release-packaging`:
+- `tool/package_macos.sh` builds a release `Bookmark.app` and compressed DMG;
+- default product name `Bookmark`;
+- preferred Bundle Identifier `com.are4c4.bookmark`;
+- version/build number are read from `pubspec.yaml` (`0.1.0+1` currently);
+- missing `macos/` runner is generated locally from the Flutter template;
+- if an existing local runner uses another Bundle Identifier and its sandbox contains Bookmark profile data, the script preserves that identifier instead of silently hiding the existing data;
+- optional one-source 1024x1024 AppIcon pipeline via macOS `sips`;
+- optional first-install copy to `/Applications`, with fail-closed behavior if `Bookmark.app` already exists;
+- DMG output `dist/macos/Bookmark-<version>.dmg` with an `/Applications` shortcut;
+- release artifacts are gitignored;
+- README + `docs/MACOS_RELEASE.md` document installation, icon input, Gatekeeper, data identity and update behavior;
+- the existing main-push/manual macOS GitHub Actions job is changed from a debug-only build to a release app + DMG build and uploads a `Bookmark-macOS` artifact.
+
+Release packaging intentionally does not include Developer ID signing/notarization, Apple credentials, Mac App Store distribution, or destructive Bundle Identifier/data migration.
 
 ## Issue #155 production state
 ### Bookmark -> Weblink
@@ -45,83 +62,61 @@ Live on `main`:
 Live on `main`:
 - app-managed remote image storage;
 - managed Image Object identity/provenance/reuse;
-- production `Representative image` single Relation(Image) and `Related images` multi Relation(Image);
-- real preview pipeline and real app-host background ingestion;
-- canonical read-only Weblink visual resolution through `RelationReadService` (#209);
-- Bookmark visual resolution reuses the same Weblink visual path;
-- Bookmark detail cover wired to managed visual resolution (#199);
-- Relation lifecycle coverage through real pipeline/host boundaries.
+- production `Representative image` and `Related images` Relations;
+- real preview pipeline and background app-host ingestion;
+- canonical read-only Weblink visual resolution;
+- Bookmark detail managed cover rendering;
+- Relation lifecycle/backlink/delete/reconcile real-host coverage.
 
-### First-class navigation and creation safety
-- #203 exposes `Weblinks` through the same generic sidebar/Database path used by user-created Databases.
-- #213 extends that path to `Images` and `Daily Notes`; Tag and other internal system ObjectTypes remain hidden there.
-- #214 keeps Daily Note creation date-keyed through the canonical Daily Note service.
-- #215 prevents generic `新規ページ` / Board creation from silently creating invalid title-only Weblink/Image Objects. These collections remain browse/edit surfaces until dedicated URL/file input affordances are wired to their canonical Object services.
-- No Weblink/Image/Daily-Note-specific parallel page or persistence model was introduced.
+### First-class navigation / creation safety
+- Weblinks, Images and Daily Notes reuse the generic sidebar/Database path.
+- Daily Note generic creation remains canonical/date-keyed.
+- Weblink/Image generic title-only creation fails closed until dedicated URL/file affordances are implemented.
 
-Remaining #155 work is primarily:
-- migrate remaining legacy Bookmark Gallery/card/reverse-lookup thumbnail hosts to `BookmarkVisualImage` / canonical resolver;
-- polished generic Weblink/Image Table/Gallery/List presentation;
-- rich Weblink/Image presentation converging with #156 media-driven masonry work;
-- dedicated identity-aware Weblink URL-entry and Image-import affordances for the exposed collections;
-- eventual legacy URL/remote-thumbnail compatibility retirement after equivalent Object-first hosts are proven.
+Remaining #155 work is primarily remaining Bookmark visual-host migration, polished generic Weblink/Image presentation, identity-aware URL/file creation UX and eventual legacy URL/thumbnail retirement.
 
-## Daily Note generic-host state
-Daily Notes use the normal generic collection/navigation host end-to-end. Normal Object sync ensures the system ObjectType/defaults, opening uses the shared Object host/navigation, and generic `新規ページ` routes through `DailyNoteService.openOrCreate(...)`. Repeated creates for the same local date reuse the same canonical Daily Note; generic Board group creation is intentionally rejected until a date-aware grouped-create UX exists.
+## #156 current state
+Fixed/masonry View persistence, toolbar, shared renderer and real `GenericDatabasePage` host switching are merged. Managed Image dimensions are persisted, and #217 now surfaces managed Weblink visual geometry. Remaining work is feeding that real media aspect ratio into masonry card height, mixed portrait/landscape host coverage and a stable no-media fallback.
 
-## Object identity / aliases — completed (#166)
-Alias persistence, shared identity search, detail editing, Body reference resolution, alias-aware Relation candidate search, real Relation picker consumption and ambiguity/target-type regressions are merged. References persist canonical Object ids only.
-
-## Integrated Relation foundations
-Canonical Relation mutation/read/index lifecycle, backlinks, target/cardinality validation, safe deletion/detach, integrity audit/reconcile, stale metadata guardrails, alias-aware picker integration and real managed-preview workflow regressions are on `main`.
-
-Relation PR #211 remains active tests-only coverage for Bookmark backlinks in the exposed Weblink generic host. Object lane should avoid broad Relation lifecycle edits while it is active.
+## Relation status
+Canonical Relation mutation/read/index/backlink/audit/reconcile is mature. Alias-aware picker integration and Weblink/Image live-host lifecycle/backlink coverage are merged through #211. No independent Relation implementation slice is currently required unless a new Relation-producing Object workflow or concrete regression appears.
 
 ## Repository-wide design contract
 - Object is global and unique; Databases collect/show Objects rather than own duplicates.
 - ObjectType = schema + reusable defaults.
 - Database = target ObjectType + collection semantics.
 - View = presentation/query over a Database collection.
-- Database collection filtering and View filtering are separate stages.
 - Defaults resolve `View > Database > ObjectType > app`.
 - Object content = typed Properties + block-oriented Body.
-- Value, Object Relation and Computed remain distinct.
-- Tags are Objects; Select/MultiSelect remain lightweight local options.
-- Date is a Value; Daily Note is an Object keyed by a unique local date.
-- Weblink stores resource-derived facts; Bookmark stores user-specific organization/evaluation and relates to Weblink.
-- User-facing Relation writes and Relation-affecting deletion use canonical Relation APIs.
-- Aliases are search/presentation metadata; references and Relations persist canonical Object ids.
-- Exposed system collections with identity rules must never fall back to raw title-only Object creation.
+- Tags are Objects; lightweight choices remain Select/MultiSelect Values.
+- Daily Note is an Object keyed by unique local date.
+- Weblink stores resource-derived facts; Bookmark stores user-specific context and relates to Weblink.
+- Relation writes/deletions use canonical Relation APIs.
+- Aliases are search/presentation metadata; references persist canonical Object ids.
+- Identity-sensitive system collections must not fall back to raw title-only Object creation.
 
 ## Delivery priorities
-1. Object lane: migrate remaining real Bookmark visual hosts (`NotionBookmarkCard` / Stage1 and reverse-lookup dialog) to existing `BookmarkVisualImage` / resolver without changing card semantics.
-2. Object lane: feed #207 persisted Image dimensions + #209 shared Weblink visual resolution into real masonry Gallery media geometry; add portrait/landscape real-host regression and stable no-media fallback.
-3. Object lane: add dedicated URL-entry / managed Image-import affordances for Weblinks/Images using existing canonical Object services; #215 keeps unsafe generic creation fail-closed in the meantime.
-4. Object lane: polish generic Weblink/Image Table/Gallery/List presentation through existing ObjectType/View/default contracts rather than feature-specific pages.
-5. Object lane: validate #205 in a real-host screenshot; close #149 only after visible alignment is confirmed.
-6. Continue retiring legacy Bookmark-specific paths only after equivalent Object-first hosts are proven.
-7. Relation lane: complete/merge its current tests-only exposed-Weblink backlink regression, then resume only for new Relation-producing workflows or concrete regressions.
-8. Use the app actively and derive further Object/Database/Body work from real friction.
+1. Integrate/validate #218 release packaging, then use `Bookmark.app` as the normal daily-use build path.
+2. Finish remaining Bookmark visual hosts on the canonical managed visual resolver.
+3. Finish #156 media-driven masonry using #217 geometry.
+4. Add canonical URL-entry / managed Image-import affordances for exposed Weblink/Image collections.
+5. Polish generic Weblink/Image Table/Gallery/List/detail presentation.
+6. Validate #205 visually in the real app and close #149 if alignment is correct.
+7. Continue retiring legacy Bookmark-specific paths only after Object-first replacements are proven in daily use.
+8. Prefer usage-discovered friction over speculative new abstractions.
 
 ## Validation status
-Recent relevant green CI:
-- #215 Flutter CI #885 — Drift generation success, `flutter analyze` success, 546 tests passed; merged as `5816a9a521f0b510e0665a460d25d2a49e85f4a6`.
-- #214 Flutter CI #878 — Drift generation, `flutter analyze`, full tests success.
-- #213 Flutter CI #874 — Drift generation, analyze and full tests success.
-- #212 Flutter CI #862 — success.
-- #209 Flutter CI #857 — success.
-- #203 Flutter CI #845 — success.
-- #206 Flutter CI #846 — Drift generation, analyze and full tests success.
+- Existing pull-request analyze/test CI remains unchanged.
+- `tool/package_macos.sh` passed `bash -n` syntax validation before push.
+- Actual release build/DMG validation requires the macOS GitHub Actions job after #218 is merged or a local macOS run.
+- Recent green product CI remains represented by #215 and preceding merged Object/Relation PRs.
 
 ## Known risks / sequencing constraints
-- Remaining Stage1 Bookmark visual migration touches a large hotspot. Prefer a patch-capable edit rather than reconstructing/replacing the entire file through connector-only contents writes.
-- Reverse-lookup visual migration requires threading the existing `BookmarkRepository` through several larger management-page callers; keep that as a small patch rather than broad rewrites.
-- Do not introduce feature-specific Relation persistence; reuse canonical Relation services.
-- Do not silently repair ambiguous Relation damage; only deterministic index-only drift is automatically reconcilable.
-- Legacy Bookmark URL/thumbnail retirement remains verification-first and non-destructive.
-- Managed media Relations are written only after valid managed Image Object ids exist.
-- #156 media geometry must reuse managed Image metadata/visual resolution and must not duplicate Object identity or Relation state.
-- Weblink/Image real create UX must call canonical URL/file identity services; #215 deliberately fails closed until those affordances exist.
+- Bundle Identifier changes can change the sandbox container path; do not bypass #218's data-preservation guard without an explicit migration/backup plan.
+- Generated macOS runner files are not currently tracked; release identity is applied by repository-owned packaging tooling.
+- Developer ID signing/notarization is not part of the current personal-use packaging scope.
+- Large remaining Stage1/reverse-lookup visual-host changes should still be made with patch-capable edits rather than whole-file reconstruction.
+- #156 media geometry must reuse existing managed Image/Weblink visual metadata and must not create a parallel media identity path.
 
 ## Current lane status
-Object lane merged #215 identity-safe system-collection creation guards with green full CI. The next exact implementation is remaining Bookmark visual-host migration, followed by media-driven masonry sizing and canonical URL/file creation affordances for Weblinks/Images. Relation lane still owns active tests-only PR #211.
+Object lane has an active focused #218 packaging branch ready for PR/CI. After that, resume the remaining #155 visual-host migration and #156 real media-driven masonry work. Relation lane has no independent implementation requirement at this checkpoint.
