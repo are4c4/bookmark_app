@@ -116,10 +116,7 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(people);
             await m.createTable(bookmarkPeople);
           }
-          if (from < 6) {
-            await m.createTable(photos);
-            await m.createTable(bookmarkPhotos);
-          }
+          if (from < 6) await migrateToV6(m);
           if (from < 7) await migrateToV7(m);
           if (from < 8) await migrateToV8(m);
           if (from < 9) {
