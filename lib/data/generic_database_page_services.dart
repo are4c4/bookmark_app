@@ -5,7 +5,6 @@ import '../services/remote_image_storage_service.dart';
 import '../services/weblink_create_enrichment_service.dart';
 import '../services/weblink_preview_image_pipeline.dart';
 import 'bidirectional_relation_store.dart';
-import 'bookmark_repository.dart';
 import 'daily_note_service.dart';
 import 'database_collection_config_service.dart';
 import 'database_collection_resolver.dart';
@@ -32,6 +31,7 @@ import 'relation_mutation_service.dart';
 import 'relation_target_service.dart';
 import 'system_object_store.dart';
 import 'weblink_object_service.dart';
+import 'workspace_store.dart';
 
 /// Composition root for Object-owned services consumed by GenericDatabasePage.
 ///
@@ -61,16 +61,15 @@ class GenericDatabasePageServices {
 
   /// Production composition boundary used by `GenericDatabasePage`.
   ///
-  /// The Widget only provides its application-level repository; low-level
-  /// Store/Service construction stays outside presentation code.
-  factory GenericDatabasePageServices.fromRepository({
-    required BookmarkRepository repository,
+  /// The Widget provides its workspace boundary instead of reaching through it
+  /// to the database or adding a new dependency on the legacy Bookmark layer.
+  factory GenericDatabasePageServices.fromWorkspaceStore({
+    required WorkspaceStore workspaceStore,
     PhotoStorageService photoStorage = const PhotoStorageService(),
     WeblinkMetadataFetch? weblinkMetadataFetch,
     WeblinkPreviewImageIngest? weblinkPreviewImageIngest,
   }) {
-    final genericStore =
-        GenericDatabaseStore(repository.workspaceStore.database);
+    final genericStore = GenericDatabaseStore(workspaceStore.database);
     final objectStore = ObjectStore(genericStore);
     return GenericDatabasePageServices.fromStores(
       genericStore: genericStore,
