@@ -101,6 +101,35 @@ void main() {
     expect(views.map((view) => view.id), [duplicate.id, configured.id, defaultView.id]);
   });
 
+  test('corrupt persisted view JSON falls back without blocking view loading', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final store = DatabaseViewStore(database);
+
+    final id = await store.createView(
+      workspaceId: workspaceId,
+      definition: BuiltInDatabases.photos,
+      name: 'Corrupt JSON',
+    );
+    await database.customStatement(
+      "UPDATE database_views "
+      "SET filters_json = '{', sorts_json = '[', settings_json = '{oops' "
+      "WHERE id = ?",
+      [id],
+    );
+
+    final view = (await store.listViews(
+      workspaceId: workspaceId,
+      databaseKey: 'photos',
+    ))
+        .single;
+
+    expect(view.filters, isEmpty);
+    expect(view.sorts, isEmpty);
+    expect(view.settings, isEmpty);
+  });
+
   test('collections share the generic database view model', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
