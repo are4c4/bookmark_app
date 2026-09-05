@@ -70,8 +70,7 @@ void main() {
     expect(urlField, findsOneWidget);
     await tester.enterText(urlField, 'https://example.com');
     await tester.tap(find.widgetWithText(FilledButton, 'URLから追加'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
 
     expect(fetchCalls, 1);
     expect(
