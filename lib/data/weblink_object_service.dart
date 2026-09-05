@@ -10,7 +10,9 @@ class WeblinkObjectDefinition {
     required this.urlProperty,
     required this.domainProperty,
     required this.pageTitleProperty,
+    required this.siteNameProperty,
     required this.descriptionProperty,
+    required this.faviconUrlProperty,
     required this.previewImageUrlProperty,
   });
 
@@ -18,7 +20,9 @@ class WeblinkObjectDefinition {
   final ObjectPropertyDefinition urlProperty;
   final ObjectPropertyDefinition domainProperty;
   final ObjectPropertyDefinition pageTitleProperty;
+  final ObjectPropertyDefinition siteNameProperty;
   final ObjectPropertyDefinition descriptionProperty;
+  final ObjectPropertyDefinition faviconUrlProperty;
   final ObjectPropertyDefinition previewImageUrlProperty;
 }
 
@@ -60,10 +64,20 @@ class WeblinkObjectService {
       name: 'Page title',
       type: ObjectPropertyType.text,
     );
+    final siteNameProperty = await systemObjects.ensureProperty(
+      objectTypeId: type.id,
+      name: 'Site name',
+      type: ObjectPropertyType.text,
+    );
     final descriptionProperty = await systemObjects.ensureProperty(
       objectTypeId: type.id,
       name: 'Description',
       type: ObjectPropertyType.text,
+    );
+    final faviconUrlProperty = await systemObjects.ensureProperty(
+      objectTypeId: type.id,
+      name: 'Favicon URL',
+      type: ObjectPropertyType.url,
     );
     final previewImageUrlProperty = await systemObjects.ensureProperty(
       objectTypeId: type.id,
@@ -80,7 +94,9 @@ class WeblinkObjectService {
       urlProperty: urlProperty,
       domainProperty: domainProperty,
       pageTitleProperty: pageTitleProperty,
+      siteNameProperty: siteNameProperty,
       descriptionProperty: descriptionProperty,
+      faviconUrlProperty: faviconUrlProperty,
       previewImageUrlProperty: previewImageUrlProperty,
     );
 
@@ -89,7 +105,9 @@ class WeblinkObjectService {
       urlProperty: urlProperty,
       domainProperty: domainProperty,
       pageTitleProperty: pageTitleProperty,
+      siteNameProperty: siteNameProperty,
       descriptionProperty: descriptionProperty,
+      faviconUrlProperty: faviconUrlProperty,
       previewImageUrlProperty: previewImageUrlProperty,
     );
   }
@@ -160,7 +178,9 @@ class WeblinkObjectService {
     required int workspaceId,
     required int objectId,
     String? pageTitle,
+    String? siteName,
     String? description,
+    String? faviconUrl,
     String? previewImageUrl,
   }) async {
     final definition = await ensureDefinition(workspaceId);
@@ -200,22 +220,23 @@ class WeblinkObjectService {
     }
     await _setIfMissing(
       object: object,
+      property: definition.siteNameProperty,
+      value: siteName,
+    );
+    await _setIfMissing(
+      object: object,
       property: definition.descriptionProperty,
       value: description,
     );
-
-    String? normalizedPreview;
-    if (previewImageUrl?.trim().isNotEmpty == true) {
-      try {
-        normalizedPreview = normalizeUrl(previewImageUrl!);
-      } on ArgumentError {
-        normalizedPreview = null;
-      }
-    }
+    await _setIfMissing(
+      object: object,
+      property: definition.faviconUrlProperty,
+      value: _normalizedOptionalUrl(faviconUrl),
+    );
     await _setIfMissing(
       object: object,
       property: definition.previewImageUrlProperty,
-      value: normalizedPreview,
+      value: _normalizedOptionalUrl(previewImageUrl),
     );
     return _reload(definition.objectType.id, objectId);
   }
@@ -308,29 +329,47 @@ class WeblinkObjectService {
     required ObjectPropertyDefinition urlProperty,
     required ObjectPropertyDefinition domainProperty,
     required ObjectPropertyDefinition pageTitleProperty,
+    required ObjectPropertyDefinition siteNameProperty,
     required ObjectPropertyDefinition descriptionProperty,
+    required ObjectPropertyDefinition faviconUrlProperty,
     required ObjectPropertyDefinition previewImageUrlProperty,
   }) async {
     final desiredVisible = <int>[
       pageTitleProperty.id,
+      siteNameProperty.id,
       domainProperty.id,
       descriptionProperty.id,
       urlProperty.id,
     ];
     final desiredOrder = <int>[
       pageTitleProperty.id,
+      siteNameProperty.id,
       domainProperty.id,
       descriptionProperty.id,
       urlProperty.id,
+      faviconUrlProperty.id,
       previewImageUrlProperty.id,
     ];
     final previousVisible = <int>[
+      pageTitleProperty.id,
+      domainProperty.id,
+      descriptionProperty.id,
+      urlProperty.id,
+    ];
+    final legacyVisible = <int>[
       urlProperty.id,
       domainProperty.id,
       pageTitleProperty.id,
       descriptionProperty.id,
     ];
     final previousOrder = <int>[
+      pageTitleProperty.id,
+      domainProperty.id,
+      descriptionProperty.id,
+      urlProperty.id,
+      previewImageUrlProperty.id,
+    ];
+    final legacyOrder = <int>[
       urlProperty.id,
       domainProperty.id,
       pageTitleProperty.id,
@@ -354,10 +393,12 @@ class WeblinkObjectService {
     // Any user-customized visibility or ordering is preserved as-is.
     final upgradeVisible = current.visiblePropertyIds == null ||
         _sameIds(current.visiblePropertyIds!, <int>[urlProperty.id]) ||
-        _sameIds(current.visiblePropertyIds!, previousVisible);
+        _sameIds(current.visiblePropertyIds!, previousVisible) ||
+        _sameIds(current.visiblePropertyIds!, legacyVisible);
     final upgradeOrder = current.propertyOrder == null ||
         _sameIds(current.propertyOrder!, <int>[urlProperty.id]) ||
-        _sameIds(current.propertyOrder!, previousOrder);
+        _sameIds(current.propertyOrder!, previousOrder) ||
+        _sameIds(current.propertyOrder!, legacyOrder);
     final needsWrite =
         upgradeVisible || upgradeOrder || current.openMode == null;
     if (!needsWrite) return;
@@ -402,6 +443,16 @@ class WeblinkObjectService {
     final uri = Uri.parse(normalizedUrl);
     final generated = uri.host.isNotEmpty ? uri.host : normalizedUrl;
     return objectTitle.trim() == generated;
+  }
+
+  String? _normalizedOptionalUrl(String? value) {
+    final candidate = value?.trim();
+    if (candidate == null || candidate.isEmpty) return null;
+    try {
+      return normalizeUrl(candidate);
+    } on ArgumentError {
+      return null;
+    }
   }
 
   Future<void> _setIfMissing({

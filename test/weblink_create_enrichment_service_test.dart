@@ -36,7 +36,9 @@ void main() {
       metadataFetch: (_) async => const BookmarkMetadata(
         url: 'https://example.com/article',
         title: 'Readable article title',
+        siteName: 'Resource Site',
         description: 'Resource description',
+        faviconUrl: 'https://example.com/favicon.ico',
         thumbnail: 'https://cdn.example.com/preview.jpg',
       ),
       previewImageIngest: ({
@@ -49,6 +51,11 @@ void main() {
         ))
             .singleWhere((object) => object.id == weblinkObjectId);
         expect(current.title, 'Readable article title');
+        expect(current.values[definition.siteNameProperty.id], 'Resource Site');
+        expect(
+          current.values[definition.faviconUrlProperty.id],
+          'https://example.com/favicon.ico',
+        );
         expect(
           current.values[definition.previewImageUrlProperty.id],
           'https://cdn.example.com/preview.jpg',
@@ -70,14 +77,19 @@ void main() {
       enriched.values[definition.pageTitleProperty.id],
       'Readable article title',
     );
+    expect(enriched.values[definition.siteNameProperty.id], 'Resource Site');
     expect(
       enriched.values[definition.descriptionProperty.id],
       'Resource description',
     );
+    expect(
+      enriched.values[definition.faviconUrlProperty.id],
+      'https://example.com/favicon.ico',
+    );
     expect(previewCalled, isTrue);
   });
 
-  test('host fallback title is not claimed when preview metadata is useful',
+  test('host fallback title is not claimed when site or preview metadata is useful',
       () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
@@ -102,6 +114,7 @@ void main() {
       metadataFetch: (_) async => const BookmarkMetadata(
         url: 'https://example.org/fallback',
         title: 'example.org',
+        siteName: 'Fallback Site',
         thumbnail: 'https://cdn.example.org/preview.jpg',
       ),
       previewImageIngest: ({
@@ -123,6 +136,7 @@ void main() {
         .singleWhere((object) => object.id == weblink.id);
     expect(preserved.title, 'example.org');
     expect(preserved.values[definition.pageTitleProperty.id], isNull);
+    expect(preserved.values[definition.siteNameProperty.id], 'Fallback Site');
     expect(
       preserved.values[definition.previewImageUrlProperty.id],
       'https://cdn.example.org/preview.jpg',
