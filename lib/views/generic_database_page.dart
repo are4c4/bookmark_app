@@ -95,8 +95,8 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
   @override
   void initState() {
     super.initState();
-    _pageServices = GenericDatabasePageServices.fromRepository(
-      repository: widget.repository,
+    _pageServices = GenericDatabasePageServices.fromWorkspaceStore(
+      workspaceStore: widget.repository.workspaceStore,
     );
     _store = _pageServices.genericStore;
     _objectStore = _pageServices.objectStore;
