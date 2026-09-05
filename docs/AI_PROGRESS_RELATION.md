@@ -71,6 +71,8 @@ Refactoring lane audit:
 - Refactor #227 merged as `20ba50674823190337561c7a97ac16e928b4b009`; it only replaces an empty file-drop enrichment catch with debug/assert visibility and does not change Person creation, Relation mutation, schema, or import success semantics.
 - Original guardrail PR #226 was closed rather than force-resolving shared handoff conflicts.
 - Replacement #228 was rebuilt on current main and merged as `310ec2c5e11edbf97a7f56e13c32120c6cbb51c0`, preserving newer Relation/repository handoff state while adding maintainability/inventory/docs guardrails.
+- Refactor #229 merged as `3bf2d895175bcd53381a0feb285b7743d12edd58`; it only makes profile fallback failures visible in debug/assert builds and does not change profile/database/Relation semantics.
+- Refactor #230 is active and changes only `test/app_database_migration_v13_test.dart` plus `docs/AI_PROGRESS_REFACTOR.md`; its latest CI #923 succeeded. It exercises v13 -> current migration sequencing but does not change production migration or Relation schema/index state.
 - no new Relation-producing workflow was introduced by the current Refactor work.
 
 ## Validation
@@ -84,6 +86,10 @@ Latest Relation CI:
 
 Earlier important green runs remain #811/#819/#823/#825/#828 for alias and managed-preview host coverage.
 
+Cross-lane validation observed this run:
+- Refactor #229 — Analyze/Test success before merge.
+- Refactor #230 latest head `faa00f34bbb8280e3da40f3d53346a91cd0e7567` — Flutter CI #923 success; production diff remains zero.
+
 ## Exact next Relation actions
 1. Monitor Object-lane work for a genuinely new Relation-producing workflow: explicit `Related images` population, user-facing URL/Image import that also creates Relations, Object merge/dedup, new first-class Object migration, or new retarget/detach path.
 2. Audit every such workflow first for direct serialized ids / low-level `ObjectStore.setRelation` bypass.
@@ -91,20 +97,24 @@ Earlier important green runs remain #811/#819/#823/#825/#828 for alias and manag
 4. Keep deterministic index reconcile separate from ambiguous user-data repair.
 5. Do not invent automatic Object merge/dedup Relation rewrites without an explicit product policy.
 6. Before touching `generic_database_page.dart`, `app_shell.dart`, or `object_inspector_page.dart`, re-check open Object/Refactor PR ownership; while another lane owns one of these hotspots, prefer tests-only or Relation-internal/service work and sequence any necessary UI patch after that PR merges.
+7. When Refactor begins extracting historical migrations, verify only that Relation schema/index migrations are not reordered or semantically changed; do not co-own the extraction unless a concrete Relation migration regression is discovered.
 
 ## Cross-lane dependency
 Object lane currently owns #155/#156 presentation work. Open #221/#223 consume canonical Relation reads for Weblink managed media but do not create or mutate Relations. Relation lane should not modify their presentation/core files unless a concrete Relation defect appears.
 
-Refactoring lane is active under #225. #227 and replacement guardrail PR #228 are merged. Relation lane must not compete with broad refactors of shared hotspots. In particular:
+Refactoring lane is active under #225. Relation lane must not compete with broad refactors of shared hotspots. In particular:
 - `generic_database_page.dart` is currently owned by Object #223 and was explicitly deferred by the Refactor lane;
 - `app_shell.dart` and `object_inspector_page.dart` must be re-checked immediately before any non-trivial Relation edit;
-- repository-wide handoff edits are allowed again after #228 merged, but re-check active Refactor PRs before changing `docs/AI_PROGRESS.md` because Refactor uses it for cross-lane ownership changes.
+- Refactor #230 currently owns migration-regression work only, not production migration code yet;
+- if Refactor starts `app_database.dart` / `app_database_migrations.dart` extraction, Relation lane should audit sequencing but avoid parallel edits unless Relation-specific migration behavior is actually affected;
+- re-check active Refactor PRs before changing `docs/AI_PROGRESS.md`, because Refactor uses it when repository-wide ownership materially changes.
 
 ## Notes / risks
 - During the #219 clean-replay operation, a transient note file was accidentally created and immediately deleted on `main`; commits `7c656300...` and `0135bdd7...` have net-zero tree effect and contain no product/data change. Do not rewrite main history to remove them.
 - Automatic repair of missing targets/cardinality conflicts remains intentionally prohibited.
 - Future Object merge/deduplication requires a new explicit Relation policy.
 - Refactor extraction must preserve canonical Relation API ownership; do not move Relation semantics into presentation facades or duplicate mutation/index logic during composition cleanup.
+- Current `main` observed in this run: `3bf2d895175bcd53381a0feb285b7743d12edd58` before this handoff update.
 
 ## Stop reason
-After #208/#210/#211/#216/#222, the currently exposed Weblink/Image generic hosts are covered for canonical edit/read/backlink/delete lifecycle, and no new production Relation-producing workflow or correctness regression remains. Open Object #221/#223 are presentation-only; merged Refactor #227/#228 preserve Relation semantics and establish conflict-avoidance guardrails. With `generic_database_page.dart` actively owned by Object #223 and no new Relation workflow available, speculative UI/refactor work here would create avoidable conflict. This matches the `AGENTS.md` stopping criteria: no independent actionable Relation work remains until another lane introduces a new Relation-producing surface or a concrete Relation defect appears.
+After #208/#210/#211/#216/#222, the currently exposed Weblink/Image generic hosts are covered for canonical edit/read/backlink/delete lifecycle, and no new production Relation-producing workflow or correctness regression remains. Open Object #221/#223 are presentation-only. Refactor #229 preserves Relation semantics, and #230 is tests-only with latest CI green. With `generic_database_page.dart` actively owned by Object #223 and no new Relation workflow available, speculative UI/refactor work here would create avoidable conflict. This matches the `AGENTS.md` stopping criteria: no independent actionable Relation work remains until another lane introduces a new Relation-producing surface or a concrete Relation defect appears.
