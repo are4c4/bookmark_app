@@ -46,6 +46,16 @@ Examples:
 
 A Service may be coordinated by a Repository when a single user action requires both file and database work.
 
+## Dependency boundary
+
+Presentation should depend on the narrowest application-facing Repository, Service, controller, or facade that already owns the operation. A Widget/Page should not reach through another dependency to obtain `AppDatabase` and construct a graph of low-level Stores/Services when an application operation already exists.
+
+Constructor injection remains the default. Do not introduce a DI framework solely to satisfy this rule; extract a focused application boundary only when a real host needs it.
+
+For new Object / ObjectType / Database / View work, do not add new `BookmarkItem`, `BookmarkRepository`, or legacy Bookmark-table dependencies merely for convenience. Legacy dependencies are permitted only for an explicitly required compatibility bridge, migration/import/export path, or staged replacement with a clear retirement condition. See `docs/MAINTAINABILITY.md`.
+
+Relation behavior remains behind the canonical Relation APIs. Presentation/application refactors must not create parallel serialized-id, index, backlink, or repair paths.
+
 ## Presentation structure
 
 New shared database presentation code belongs under:
