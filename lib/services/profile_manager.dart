@@ -294,7 +294,7 @@ class ProfileManager {
       );
       await _copyDirectoryContents(
         Directory('${source.directoryPath}/attachments'),
-        Directory(copy.directoryPath + '/attachments'),
+        Directory('${copy.directoryPath}/attachments'),
       );
 
       if (await File(copy.databasePath).exists()) {
