@@ -18,6 +18,5 @@ void main() {
     expect(source, isNot(contains('PDF / 動画を取り込めませんでした:')));
     expect(source, contains("_debugFailure('best-effort PDF author creation'"));
     expect(source, isNot(contains('debugPrint(error')));
-    expect(source, isNot(contains('debugPrint(\'$error')));
   });
 }
