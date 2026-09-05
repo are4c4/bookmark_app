@@ -13,6 +13,7 @@ Active architecture/product issues:
 - `#156` — fixed/masonry Gallery presentation.
 - `#149` — Property handle alignment; implementation merged, real-host visual validation remains.
 - `#218` — installable macOS `Bookmark.app` / DMG packaging and safe release identity.
+- `#225` — behavior-preserving maintainability work, legacy consolidation and hotspot reduction.
 
 `#166` (Object aliases) is closed as completed.
 
@@ -30,6 +31,17 @@ Recent main integration:
 - #215 protects identity-sensitive Weblink/Image collections from invalid title-only generic creation.
 - #211 adds exposed-Weblink backlink real-host Relation coverage.
 - #217 exposes managed Weblink image dimensions/aspect ratio for the remaining media-driven masonry slice.
+
+## Refactor lane — Issue #225
+A dedicated behavior-preserving Refactor lane now owns maintainability guardrails, legacy inventory/consolidation, `AppDatabase` responsibility reduction and explicit failure-policy cleanup. Its handoff is `docs/AI_PROGRESS_REFACTOR.md`.
+
+Current P0 work on `refactor/issue-225-p0-guardrails` adds:
+- a no-new-legacy-dependency rule for new Object/Database/View work;
+- an explicit presentation/application dependency boundary;
+- `tool/maintainability_report.sh` for Dart LOC / largest-file visibility;
+- a documented hotspot baseline and reduction metrics in `docs/MAINTAINABILITY.md`.
+
+The Refactor lane must not perform a broad `GenericDatabasePage` split while Object PR #223 owns that file. Large edits to `app_shell.dart` / `object_inspector_page.dart` also require a fresh open-PR conflict check immediately before editing.
 
 ## macOS release delivery — Issue #218
 A focused Object-lane release branch now adds a reproducible local/CI packaging path without committing generated macOS Xcode runner files.
@@ -94,6 +106,7 @@ Canonical Relation mutation/read/index/backlink/audit/reconcile is mature. Alias
 - Relation writes/deletions use canonical Relation APIs.
 - Aliases are search/presentation metadata; references persist canonical Object ids.
 - Identity-sensitive system collections must not fall back to raw title-only Object creation.
+- New Object/Database/View work must not deepen Bookmark-era dependencies unless explicitly required for compatibility/migration.
 
 ## Delivery priorities
 1. Integrate/validate #218 release packaging, then use `Bookmark.app` as the normal daily-use build path.
@@ -103,13 +116,15 @@ Canonical Relation mutation/read/index/backlink/audit/reconcile is mature. Alias
 5. Polish generic Weblink/Image Table/Gallery/List/detail presentation.
 6. Validate #205 visually in the real app and close #149 if alignment is correct.
 7. Continue retiring legacy Bookmark-specific paths only after Object-first replacements are proven in daily use.
-8. Prefer usage-discovered friction over speculative new abstractions.
+8. Run #225 Refactor work in parallel where it does not conflict with active Object-owned files: legacy inventory, migration extraction, failure-policy audit and duplicate deletion.
+9. Prefer usage-discovered friction over speculative new abstractions.
 
 ## Validation status
 - Existing pull-request analyze/test CI remains unchanged.
 - `tool/package_macos.sh` passed `bash -n` syntax validation before push.
 - Actual release build/DMG validation requires the macOS GitHub Actions job after #218 is merged or a local macOS run.
 - Recent green product CI remains represented by #215 and preceding merged Object/Relation PRs.
+- Refactor P0 tooling is report-only and does not change application behavior; its PR CI remains the validation gate.
 
 ## Known risks / sequencing constraints
 - Bundle Identifier changes can change the sandbox container path; do not bypass #218's data-preservation guard without an explicit migration/backup plan.
@@ -117,6 +132,7 @@ Canonical Relation mutation/read/index/backlink/audit/reconcile is mature. Alias
 - Developer ID signing/notarization is not part of the current personal-use packaging scope.
 - Large remaining Stage1/reverse-lookup visual-host changes should still be made with patch-capable edits rather than whole-file reconstruction.
 - #156 media geometry must reuse existing managed Image/Weblink visual metadata and must not create a parallel media identity path.
+- `generic_database_page.dart` currently has an active Object-lane PR (#223); defer large Refactor-lane extraction until ownership clears.
 
 ## Current lane status
-Object lane has an active focused #218 packaging branch ready for PR/CI. After that, resume the remaining #155 visual-host migration and #156 real media-driven masonry work. Relation lane has no independent implementation requirement at this checkpoint.
+Object lane has active #155/#156 presentation work. Relation lane has no independent implementation requirement at this checkpoint. Refactor lane is active on #225 P0 guardrails and should continue with production legacy inventory and low-conflict consolidation after its first guardrail PR.
