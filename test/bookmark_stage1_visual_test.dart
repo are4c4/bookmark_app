@@ -37,13 +37,24 @@ void main() {
         home: BookmarkUnifiedStage1Page(repository: repository),
       ),
     );
-    await tester.pumpAndSettle();
+
+    Future<void> pumpUntil(Finder finder) async {
+      for (var attempt = 0; attempt < 40; attempt++) {
+        await tester.pump(const Duration(milliseconds: 50));
+        if (finder.evaluate().isNotEmpty) return;
+      }
+      expect(finder, findsWidgets);
+    }
+
+    await pumpUntil(find.text('Example'));
 
     Future<void> selectLayout(String label) async {
       await tester.tap(find.byKey(const ValueKey('database-layout-menu')));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
       await tester.tap(find.text(label).last);
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
     }
 
     await selectLayout('リスト');
