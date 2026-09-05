@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../domain/object_detail_property_presentation.dart';
 import '../../../../domain/object_model.dart';
+
+typedef ObjectPropertyUrlOpener = Future<bool> Function(Uri uri);
 
 enum ObjectPropertyValueDensity { compact, normal }
 
@@ -17,12 +20,14 @@ class ObjectPropertyValueView extends StatelessWidget {
     this.relationLabels = const <String>[],
     this.density = ObjectPropertyValueDensity.normal,
     this.maxItems,
+    this.urlOpener,
   });
 
   final ObjectDetailPropertyPresentation presentation;
   final List<String> relationLabels;
   final ObjectPropertyValueDensity density;
   final int? maxItems;
+  final ObjectPropertyUrlOpener? urlOpener;
 
   bool get _compact => density == ObjectPropertyValueDensity.compact;
 
@@ -59,22 +64,55 @@ class ObjectPropertyValueView extends StatelessWidget {
           size: _compact ? 17 : 19,
         ),
       ObjectPropertyType.rating => _rating(value),
-      ObjectPropertyType.url => _text(
-          context,
-          value,
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.primary,
-            decoration: value == null || '$value'.isEmpty
-                ? null
-                : TextDecoration.underline,
-          ),
-        ),
+      ObjectPropertyType.url => _url(context, value),
       ObjectPropertyType.image =>
         _assetChip(context, value, Icons.image_outlined),
       ObjectPropertyType.file => _assetChip(context, value, Icons.attach_file),
       _ => _text(context, presentation.displayText),
     };
   }
+
+  Widget _url(BuildContext context, dynamic value) {
+    if (value == null || '$value'.trim().isEmpty || '$value' == 'なし') {
+      return _empty(context);
+    }
+    final text = '$value'.trim();
+    final uri = Uri.tryParse(text);
+    final scheme = uri?.scheme.toLowerCase();
+    final canOpen = uri != null &&
+        uri.hasScheme &&
+        (scheme == 'http' || scheme == 'https') &&
+        uri.host.isNotEmpty;
+    final style = TextStyle(
+      color: Theme.of(context).colorScheme.primary,
+      decoration: canOpen ? TextDecoration.underline : null,
+    );
+    final label = Text(
+      text,
+      maxLines: _compact ? 1 : null,
+      overflow: _compact ? TextOverflow.ellipsis : null,
+      style: style,
+    );
+    if (!canOpen) return label;
+
+    return Semantics(
+      link: true,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () async {
+            final open = urlOpener ?? _launchExternalUrl;
+            await open(uri);
+          },
+          child: label,
+        ),
+      ),
+    );
+  }
+
+  Future<bool> _launchExternalUrl(Uri uri) =>
+      launchUrl(uri, mode: LaunchMode.externalApplication);
 
   Widget _chips(BuildContext context, List<String> labels) {
     final normalized = labels.where((label) => label.trim().isNotEmpty).toList();
