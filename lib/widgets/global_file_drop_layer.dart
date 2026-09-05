@@ -39,15 +39,10 @@ class _GlobalFileDropLayerState extends State<GlobalFileDropLayer> {
     return dot > 0 ? name.substring(0, dot) : name;
   }
 
-  void _debugAuthorCreationFailure(
-    String author,
-    Object error,
-    StackTrace stackTrace,
-  ) {
+  void _debugAuthorCreationFailure(StackTrace stackTrace) {
     assert(() {
       debugPrint(
-        'GlobalFileDropLayer: best-effort author creation failed for '
-        '"$author": $error',
+        'GlobalFileDropLayer: best-effort PDF author creation failed.',
       );
       debugPrintStack(stackTrace: stackTrace);
       return true;
@@ -95,12 +90,12 @@ class _GlobalFileDropLayerState extends State<GlobalFileDropLayer> {
           for (final author in metadata.authors) {
             try {
               await widget.repository.createPerson(author);
-            } catch (error, stackTrace) {
+            } catch (_, stackTrace) {
               // Author enrichment is best-effort: the imported file/bookmark is
               // already valid, so keep the import successful but expose
-              // unexpected failures during development instead of swallowing
-              // them completely.
-              _debugAuthorCreationFailure(author, error, stackTrace);
+              // unexpected failures during development without logging
+              // user-provided names or exception text.
+              _debugAuthorCreationFailure(stackTrace);
             }
           }
           final allPeople = await widget.repository.watchPeople().first;
