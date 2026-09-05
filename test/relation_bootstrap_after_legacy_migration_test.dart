@@ -13,6 +13,7 @@ void main() {
           "(id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, status TEXT NOT NULL DEFAULT 'unread')",
         );
         sqlite.execute("INSERT INTO bookmarks(id, status) VALUES (1, 'unread')");
+        sqlite.execute("INSERT INTO bookmarks(id, status) VALUES (2, 'unread')");
 
         sqlite.execute(
           'CREATE TABLE people '
@@ -31,6 +32,19 @@ void main() {
         sqlite.execute(
           "INSERT INTO bookmark_people(bookmark_id, person_id, role) "
           "VALUES (1, 1, '出演')",
+        );
+
+        sqlite.execute('''
+          CREATE TABLE bookmark_relations (
+            source_bookmark_id INTEGER NOT NULL,
+            target_bookmark_id INTEGER NOT NULL,
+            relation_type TEXT NOT NULL DEFAULT 'related',
+            PRIMARY KEY (source_bookmark_id, target_bookmark_id, relation_type)
+          )
+        ''');
+        sqlite.execute(
+          "INSERT INTO bookmark_relations(source_bookmark_id, target_bookmark_id, relation_type) "
+          "VALUES (1, 2, 'related')",
         );
 
         sqlite.execute(
@@ -54,11 +68,20 @@ void main() {
 
     await database.customSelect('SELECT 1').get();
 
-    final migratedLegacyRows = await database.customSelect(
+    final migratedPeopleRows = await database.customSelect(
       'SELECT bookmark_id, person_id, role FROM bookmark_people',
     ).get();
-    expect(migratedLegacyRows, hasLength(1));
-    expect(migratedLegacyRows.single.read<String>('role'), '出演者');
+    expect(migratedPeopleRows, hasLength(1));
+    expect(migratedPeopleRows.single.read<String>('role'), '出演者');
+
+    final legacyBookmarkRelations = await database.customSelect(
+      'SELECT source_bookmark_id, target_bookmark_id, relation_type '
+      'FROM bookmark_relations',
+    ).get();
+    expect(legacyBookmarkRelations, hasLength(1));
+    expect(legacyBookmarkRelations.single.read<int>('source_bookmark_id'), 1);
+    expect(legacyBookmarkRelations.single.read<int>('target_bookmark_id'), 2);
+    expect(legacyBookmarkRelations.single.read<String>('relation_type'), 'related');
 
     await database.customStatement(
       "INSERT INTO workspaces(name) VALUES ('Relation migration test')",
@@ -118,10 +141,22 @@ void main() {
     expect(backlinks, hasLength(1));
     expect(backlinks.single.sourceObjectId, sourceId);
 
-    final legacyRowsAfterRelationWrite = await database.customSelect(
+    final legacyPeopleAfterRelationWrite = await database.customSelect(
       'SELECT bookmark_id, person_id, role FROM bookmark_people',
     ).get();
-    expect(legacyRowsAfterRelationWrite, hasLength(1));
-    expect(legacyRowsAfterRelationWrite.single.read<String>('role'), '出演者');
+    expect(legacyPeopleAfterRelationWrite, hasLength(1));
+    expect(legacyPeopleAfterRelationWrite.single.read<String>('role'), '出演者');
+
+    final legacyRelationsAfterRelationWrite = await database.customSelect(
+      'SELECT source_bookmark_id, target_bookmark_id, relation_type '
+      'FROM bookmark_relations',
+    ).get();
+    expect(legacyRelationsAfterRelationWrite, hasLength(1));
+    expect(legacyRelationsAfterRelationWrite.single.read<int>('source_bookmark_id'), 1);
+    expect(legacyRelationsAfterRelationWrite.single.read<int>('target_bookmark_id'), 2);
+    expect(
+      legacyRelationsAfterRelationWrite.single.read<String>('relation_type'),
+      'related',
+    );
   });
 }
