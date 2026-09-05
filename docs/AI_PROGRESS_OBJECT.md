@@ -8,14 +8,16 @@ Object/ObjectType architecture, Property value semantics, Object-centric Databas
 ## Active issues
 - `#56` — generic Object/Database/View product integration.
 - `#155` — reusable Weblink Object + managed Image presentation/navigation.
-- `#156` — fixed/masonry Gallery View modes; real host integrated, media-driven sizing remains.
-- `#149` — Property-row visual polish; implementation landed, pending real-host visual validation.
-- `#218` — installable macOS `Bookmark.app` / DMG packaging and safe release identity.
+- `#156` — fixed/masonry Gallery View modes; media-driven Weblink sizing is the active presentation slice.
+- `#149` — Property-row visual polish; deterministic implementation is merged, pending real-host visual validation.
+- `#218` — installable macOS `Bookmark.app` / DMG packaging; repository/CI implementation is merged and validated, local user install remains.
+
+Maintainability/legacy-consolidation work is now owned by the separate Refactor lane under `#225` and `docs/AI_PROGRESS_REFACTOR.md`.
 
 ## Current integration state
-The generic Object/Database/View foundation is integrated into real hosts. Current work is product exposure, rich presentation, identity-safe system-Object creation UX, release packaging, and legacy consolidation rather than new parallel abstractions.
+The generic Object/Database/View foundation is integrated into real hosts. Object work is now primarily daily-use presentation, identity-safe system-Object creation/import UX, and completing the Object-first replacement surfaces needed before legacy Bookmark paths can retire.
 
-Important `main` state before #218:
+Important `main` state:
 - canonical Bookmark -> Weblink and Weblink -> Image production flows are live;
 - managed remote previews become Image Objects and Representative-image Relations in the real app host;
 - Bookmark detail consumes the managed visual resolver (#199);
@@ -23,66 +25,87 @@ Important `main` state before #218:
 - generic Daily Notes creation preserves one Object per local date (#214);
 - generic Weblink/Image title-only and Board creation fail closed instead of bypassing canonical URL/file identity (#215);
 - Gallery fixed/masonry persistence, renderer, toolbar and real `GenericDatabasePage` integration are merged (#204/#206/#212);
-- managed Image pixel dimensions are persisted (#207);
-- shared `WeblinkVisualResolver` is merged and reused by `BookmarkVisualResolver` (#209);
+- managed Image dimensions and canonical Weblink visual geometry are available (#207/#209/#217);
 - deterministic shared six-dot Property handle/grid is merged (#205);
-- Relation backlink coverage for exposed Weblink hosts is merged (#211);
-- #217 exposes managed Weblink image width/height/aspect-ratio metadata to presentation for the remaining masonry slice.
+- exposed Weblink/Image Relation editing/backlink/delete lifecycle is covered through #208/#210/#211/#216/#222;
+- macOS packaging from #220 is merged and the main-push macOS workflow successfully built/uploaded both the release app and DMG.
 
-## Active #218 macOS release packaging branch
-Branch: `feature/object-macos-release-packaging`
+## Active Object PR stack — #156 / #155
+### PR #221 — `Add managed Weblink media geometry widget`
+Branch: `feature/object-weblink-gallery-media-156`
+Status: open.
 
-Implemented checkpoints:
-1. Created Issue #218 with release identity/data-safety acceptance.
-2. Added `tool/package_macos.sh`:
-   - stable release product name defaults to `Bookmark`;
-   - preferred Bundle Identifier defaults to `com.are4c4.bookmark`;
-   - reads build name/number from `pubspec.yaml`;
-   - generates a standard Flutter macOS runner locally when the repository clone does not contain `macos/`;
-   - rewrites only local runner `AppInfo.xcconfig` identity values;
-   - detects existing profile data under the current macOS container and preserves the current Bundle Identifier instead of silently making that data appear missing;
-   - supports a single 1024x1024 PNG source and regenerates all standard AppIcon sizes through macOS `sips`;
-   - runs `flutter build macos --release`;
-   - creates `dist/macos/Bookmark-<version>.dmg` with `Bookmark.app` and an `/Applications` shortcut;
-   - optional `--install`, `--open-dmg`, and `--configure-only` modes;
-   - refuses to overwrite an existing `/Applications/Bookmark.app` automatically.
-3. Added `docs/MACOS_RELEASE.md` with release identity, local-data safety, icon, DMG, install and Gatekeeper guidance.
-4. Updated README with the installable macOS release command.
-5. Added `dist/` to `.gitignore` so packaged DMGs remain untracked.
-6. Updated existing Flutter CI macOS job so main pushes / manual dispatch build the release app + DMG and upload a `Bookmark-macOS` artifact instead of only producing an unexported debug app.
-7. Refreshed the branch onto latest main including merged #211 and #217 before opening the release PR.
+Implements a read-only `WeblinkGalleryMedia` presentation widget that:
+- consumes canonical `WeblinkVisualResolver` data;
+- verifies the active ObjectType is the system Weblink type;
+- uses persisted managed Image aspect ratio for masonry geometry without decoding image bytes for layout;
+- keeps fixed-mode media geometry stable;
+- provides a deterministic fallback when media/geometry is absent;
+- adds in-memory Object/Relation coverage for portrait, landscape, no-media and fixed geometry.
 
-## Validation performed
-- `bash -n` syntax validation passed for the exact `tool/package_macos.sh` content before it was pushed.
-- No local macOS/Flutter workspace is attached to this chat runtime, so actual `flutter build macos --release` and `hdiutil` execution must be validated by the macOS GitHub Actions job after integration (or by the user's Mac after pulling).
-- Existing normal Flutter analyze/test CI remains unchanged for pull requests; the macOS release job intentionally still runs only on main push or manual workflow dispatch, matching the repository's previous macOS-job cost policy.
+No Object mutation or Relation mutation/index/backlink behavior is introduced.
 
-## #218 remaining / next exact actions
-1. Open a focused PR for `feature/object-macos-release-packaging` against latest `main`.
-2. Let normal pull-request analyze/test CI validate repository changes.
-3. Merge after green CI; the resulting main push should execute the macOS release job, producing `Bookmark.app` + `Bookmark-0.1.0.dmg` artifact from a clean runner.
-4. Verify the macOS release job output path and artifact; fix any Flutter-template/product-name path mismatch if one appears.
-5. Update #218 after that real build validation.
-6. On the user's Mac, pull main and run `bash tool/package_macos.sh --install` (or `--open-dmg`) to install locally. If the local debug runner uses a different Bundle Identifier and has existing data, the script should preserve that identifier and print it.
-7. A branded custom artwork file is intentionally not invented in this engineering slice. The AppIcon pipeline is complete; when a 1024x1024 source artwork is chosen, pass it through `BOOKMARK_ICON_SOURCE=...` and rebuild.
+### PR #223 — `Render managed Weblink media in real masonry Gallery`
+Branch: `feature/object-weblink-gallery-real-host-156`
+Status: open and stacked on #221.
 
-## Other Object-lane next actions after #218
-1. **#155 remaining Bookmark visual host migration** — move Stage1/reverse-lookup legacy thumbnail hosts to the existing canonical managed visual component in a patch-capable runtime.
-2. **#156 media-driven masonry sizing** — use #217 visual geometry in the real Gallery card path, add portrait/landscape real-host regression, preserve no-media fallback.
-3. **#155 Weblink/Image daily-use create UX** — replace current fail-closed generic creation with dedicated canonical URL/file affordances.
-4. **#155 generic Weblink/Image presentation** — polish Table/Gallery/List/detail through existing ObjectType/View/default contracts.
-5. **#149** — close only after the merged #205 handle looks aligned in an actual user screenshot.
+Real-host insertion is intentionally tiny:
+- inserts `WeblinkGalleryMedia` into the existing `GenericDatabasePage` Gallery card builder only for masonry mode;
+- keeps fixed Gallery geometry, title/Property rendering, selection and opening behavior unchanged;
+- includes a real system-Weblink host regression proving portrait/landscape managed dimensions produce different masonry heights and tapping still opens the same canonical Object.
+
+Because #223 currently owns `generic_database_page.dart`, the Refactor lane must defer broad extraction of that hotspot until this Object stack is merged/rebased and ownership is clear.
+
+## #218 macOS release delivery
+PR #220 is merged to `main`.
+
+Merged behavior:
+- `tool/package_macos.sh` builds release `Bookmark.app` + `Bookmark-<version>.dmg`;
+- default product name `Bookmark`, preferred bundle id `com.are4c4.bookmark`;
+- version/build number from `pubspec.yaml`;
+- generated local macOS runner when missing;
+- existing Bundle Identifier preserved when changing it would hide detected profile data;
+- optional one-source AppIcon generation via `sips`;
+- optional `--install`, `--open-dmg`, `--configure-only`;
+- existing `/Applications/Bookmark.app` is never overwritten automatically;
+- main-push/manual CI uploads a `Bookmark-macOS` release artifact.
+
+Validation:
+- PR analyze/test succeeded before merge;
+- main workflow run `33940306321` completed successfully;
+- both `analyze-test` and `build-macos-release` jobs were green;
+- release app/DMG build step and artifact upload step both succeeded.
+
+Remaining #218 acceptance is local product validation on the user's Mac: pull current main, run `bash tool/package_macos.sh --install` (or `--open-dmg`), launch `Bookmark.app`, and confirm existing profile data remains visible. Branded artwork remains optional product/design input; the engineering icon pipeline is complete.
+
+## Exact next Object actions
+1. Finish #221 CI/integration, then retarget/rebase #223 onto latest main and integrate the real-host masonry slice.
+2. Update #156 after #221/#223 land; verify media-driven portrait/landscape geometry and no-media fallback in the actual host.
+3. Continue #155 remaining Bookmark visual host migration only in small patches that do not conflict with the Refactor lane; prefer existing `BookmarkVisualImage` / canonical resolver and remove direct legacy thumbnail reads after coverage exists.
+4. Add canonical user-facing Weblink URL-entry and managed Image-import affordances for exposed system collections, keeping canonical identity/reuse rules.
+5. Polish generic Weblink/Image Table/Gallery/List/detail defaults through existing ObjectType/View contracts rather than feature-specific pages.
+6. Validate #205 six-dot alignment in the user's actual app/theme and close #149 only after visible confirmation.
+7. Complete #218 local install/data-preservation check when the user is ready.
 
 ## Cross-lane boundaries
-- Relation work for aliases, managed preview lifecycle, exposed Weblink delete/edit/backlinks is already integrated through #211.
-- #218 changes no Object/Relation persistence semantics.
-- Any future Relation mutation/deletion continues through canonical Relation services only.
+### Relation lane
+- Canonical Relation mutation/read/index/backlink/audit/reconcile is mature.
+- Exposed Weblink/Image Relation host coverage is integrated through #222.
+- #221/#223 are presentation-only and must not introduce direct Relation writes.
+- Resume Relation implementation only for a new Relation-producing workflow or concrete correctness regression.
+
+### Refactor lane — #225
+- Refactor owns maintainability guardrails, migration extraction, failure-policy cleanup, legacy inventory and behavior-preserving technical-debt reduction.
+- Refactor must avoid broad edits to `generic_database_page.dart` while #223 owns it.
+- Before either lane touches `app_shell.dart`, `object_inspector_page.dart`, `bookmark_unified_stage1_page.dart`, or another hotspot, inspect active PR ownership.
+- Object lane owns product-semantic replacement surfaces; Refactor may delete/relocate legacy paths only after Object-first parity is proven.
 
 ## Risks / blockers
-- Changing Bundle Identifier can change the macOS sandbox container and make existing data appear absent. #218 therefore preserves an existing identifier when it detects profile data; do not remove that guard casually.
-- The repository still does not track the generated `macos/` runner. Release identity is therefore applied reproducibly by the packaging script rather than by committing generated Xcode files.
-- Developer ID signing/notarization is deliberately out of scope for #218; no signing secrets belong in the repository.
-- A custom branded icon artwork is a separate visual-design input; the engineering pipeline to install it is already present.
+- Large shared hosts create merge-conflict risk under parallel Object/Refactor work; prefer patch-sized changes and explicit ownership sequencing.
+- Legacy Bookmark URL/thumbnail storage remains compatibility data while old production hosts still use it; do not delete it early.
+- Identity-sensitive Weblink/Image creation must not fall back to raw generic title-only creation.
+- Rich media presentation must reuse managed Image/Weblink identity and persisted geometry rather than create parallel state.
+- Changing macOS Bundle Identifier can change sandbox location; preserve #220 data-safety behavior.
 
 ## Stop reason
-The repository-side #218 implementation is ready for PR/CI. Actual release-build validation requires a macOS runner, which will run after merge under the existing main-push macOS CI policy; no destructive or speculative local-data migration should be attempted from this runtime.
+This handoff was refreshed from current GitHub state. Object implementation remains actionable through the #221/#223 presentation stack and subsequent #155/#156 product work; no Object-lane stop condition is implied by this documentation update.
