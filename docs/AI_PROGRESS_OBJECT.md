@@ -8,10 +8,10 @@ Object/ObjectType architecture, Property value semantics, Object-centric Databas
 ## Active issues
 - `#56` — generic Object/Database/View daily-use product integration.
 - `#155` — reusable Weblink Object + managed Image presentation/navigation and legacy compatibility retirement.
-- `#247` — Bookmark View opening-mode parity, especially center peek.
+- `#247` — Bookmark View opening-mode parity, especially center peek; implementation is open in #344.
 - `#249` — Bookmark Gallery/List presentation parity; one-Person-per-chip is merged, List density and Bookmark fixed/masonry remain.
-- `#252` — direct Notion-like Property-add UX.
-- `#149` — deterministic shared Property handle is merged; Bookmark real-host visual parity still needs confirmation/follow-up.
+- `#252` — direct Notion-like Property-add UX; shared anchored popover foundation is open in #346.
+- `#149` — deterministic shared Property handle is merged; Bookmark detail still bypasses the shared handle slot and remains a focused follow-up.
 - `#245` — legacy Photos -> canonical Image Objects; managed Image import is already live, broader legacy migration remains.
 - `#242` — user-selectable Vault folders; designed but lower priority while presentation parity is actionable.
 
@@ -28,59 +28,89 @@ Important merged state:
 - Weblink/Image generated defaults, generated titles, site name/favicon metadata and safe clickable URL Properties are integrated (#293/#298/#302/#309/#311);
 - direct generic Weblink creation performs fail-soft metadata/preview enrichment (#303), with canonical Relation lifecycle coverage (#307);
 - canonical Bookmark visual presentation is shared across Notion card, reverse lookup, lifecycle rows and Stage1 List/Table (#294/#299/#296/#324);
-- canonical Bookmark URL presentation now covers lifecycle, reverse lookup, Notion cards and Stage1 Gallery/List/Table/browser-open (#317/#320/#322/#341);
+- canonical Bookmark URL presentation covers lifecycle, reverse lookup, Notion cards and Stage1 Gallery/List/Table/browser-open (#317/#320/#322/#341);
 - one semantic chip per Bookmark Person role assignment is merged (#301);
 - GenericDatabasePage read/projection and dependency-composition responsibilities moved out through Refactor #310/#323.
 
-## Completed in this run — #341
-`#341 Prefer canonical Weblink URLs in Bookmark Stage1` is merged to `main` as `d62f5d60e5fe768db8ca8b56fec20b52c7660bd9`.
+## Current Object PR — #344 / #247
+Branch: `feature/object-bookmark-opening-mode-247`
+Head at handoff: `b70e85c7a06bf8feb41ea05a67e36b401217bbf5`
+PR: `#344 Honor Bookmark View opening mode`
 
-The final PR head `379f8a0fd69a9257c9873554d237272b18428a05` passed Flutter CI run #1305 before merge.
+Implemented:
+- Stage1 Gallery/List/Table normal item selection now delegates to `_presentBookmark(...)` instead of directly forcing `_selectedBookmarkId`;
+- the active Bookmark View opening mode is resolved through `DatabaseViewOpenModeService`;
+- presentation delegates to the shared `ObjectOpenPresentationHost`;
+- side peek preserves the existing right-side `BookmarkDetailPanel` branch;
+- center peek and full page reuse the same `BookmarkDetailPanel` content through the shared host;
+- stale side-panel selection is cleared before center/full presentation;
+- the Bookmark overflow `詳細を表示` action uses the same opening-mode dispatch;
+- selection-mode behavior is unchanged;
+- deterministic Stage1 guard coverage verifies the shared dispatch boundary without reintroducing the heavyweight Stage1 WidgetTester lifecycle that previously stalled CI.
 
-Product result:
-- Stage1 browser-open resolves canonical Bookmark -> Weblink URL first, retaining legacy `bookmark.url` only as compatibility fallback;
-- Stage1 Gallery/Notion-card, List metadata and Table URL cells share the read-only canonical resolver path;
-- compact Stage1 URL presentation remains domain-oriented where appropriate;
-- presentation never repairs or writes Relation state.
+Validation at this handoff:
+- #344 Flutter CI run #1311: Generate + Analyze succeeded; full Test is still running.
+- no Relation writes, schema changes, URL/Image identity changes or Refactor-owned extraction were introduced.
 
-The prior CI failure was test-only: a source guard still used removed `_compactUrl` as an end marker. It was corrected to use `_formatDate`; no production behavior changed.
+Do not merge #344 until the full Test job is green. If CI fails, inspect and fix the exact failure before any #249 edit to `bookmark_unified_stage1_page.dart`.
 
-## Next highest-priority Object work — #247
-`#247` is now unblocked because #341 released `bookmark_unified_stage1_page.dart`.
+## Parallel safe foundation — #346 / #252
+Branch: `feature/object-property-add-popover-252`
+Head at handoff: `c395ef237f7605aa24b3a7da4db53c09010d0a62`
+PR: `#346 Add shared anchored Property add popover`
 
-Current evidence from `main`:
-- `_selectBookmark` still directly assigns `_selectedBookmarkId` for Gallery/List/Table clicks;
-- the build method interprets that state exclusively as the legacy right-side `BookmarkDetailPanel`;
-- `_activeDatabaseView` is loaded and View opening mode is persisted elsewhere, but the Bookmark click path does not dispatch through the shared opening presentation contract.
+Implemented without touching a shared host:
+- reusable `PropertyAddPopover` under shared Database presentation widgets;
+- anchored `MenuAnchor` interaction from a caller-owned `+` action;
+- search/filter of caller-supplied hidden Properties and one-click reveal callback;
+- same compact surface can switch to new-Property creation;
+- canonical Property type definitions stay caller-owned through supplied `PropertyAddTypeOption`s rather than a second type registry;
+- persistence, Relation/computed semantics and View visibility remain host/application-owned;
+- widget regressions cover search/reveal and typed create-new flows.
 
-Implementation direction remains the Issue contract: resolve the effective active View opening mode and route Bookmark opening through the shared presentation host/detail payload where practical, preserving side peek as the existing side panel branch and adding real Bookmark-host regressions for center peek and switching back to side peek.
+Validation at this handoff:
+- #346 Flutter CI run #1313: Generate + Analyze succeeded; full Test is still running.
+
+Next #252 slice after #346 is green/integrated: use the shared popover from generic detail/Table, wiring hidden-property reveal to current View visibility and create-new to the existing canonical `_createProperty` semantics. Keep Relation/formula/rollup persistence in existing services rather than moving it into the widget.
+
+## #149 root-cause follow-up
+Fresh inspection confirmed the remaining Bookmark-only visual mismatch is concrete, not a shared `PropertyDragHandle` failure:
+- `BookmarkReorderableProperties` still defines its own `_dragHandle()` with `Icons.drag_indicator`;
+- it places that glyph in an outer `Row(crossAxisAlignment: CrossAxisAlignment.start)` beside `DetailPropertyRow`;
+- shared `DetailPropertyRow` already provides a fixed 28x34 `dragHandle` column that centers the supplied visual on the first-line grid;
+- shared `PropertyDragHandle` already supplies deterministic 2x3-dot geometry.
+
+This evidence was recorded on Issue #149. The next safe #149 implementation should remove the Bookmark-local glyph/outer-handle geometry and feed shared `PropertyDragHandle` into `DetailPropertyRow.dragHandle` while preserving the host-owned `ReorderableDragStartListener`. Real-host visual confirmation remains required before closing #149.
 
 ## Exact next Object actions
-1. Implement `#247` as a focused Bookmark-host opening-dispatch slice now that #341 is merged. Reuse shared opening-mode semantics; do not create a Bookmark-only center-peek design.
-2. Continue `#249` in small slices: improve Bookmark List row hierarchy/spacing, then wire Bookmark Gallery to the existing persisted fixed/masonry View contract. Do not duplicate #156 settings/renderers.
-3. Implement `#252` through a reusable anchored/searchable Property-add component first, then small generic detail/Table host integrations; avoid another Bookmark-only dialog.
-4. Reassess `#149` after shared opening/detail convergence; the generic deterministic six-dot implementation itself is already merged.
-5. Continue `#155` legacy URL/thumbnail retirement only after every user-facing host has a proven canonical replacement. Keep compatibility/import/export data until caller-zero and migration policy are explicit.
-6. Continue `#245` only with safe staged Photo -> Image promotion/migration slices; no destructive table removal.
+1. Finish #344 validation; merge only after full green CI. Then validate center/side/full presentation in the real Bookmark host and update/close #247 only when acceptance is proven.
+2. Finish #346 validation; after integration, wire the shared Property add popover into generic detail/Table as a small #252 slice.
+3. Implement the focused #149 Bookmark drag-handle convergence described above; avoid another pixel-offset patch.
+4. Continue #249 after #344 releases the Stage1 hotspot: improve List row hierarchy/spacing, then reuse the existing fixed/masonry View contract in Bookmark Gallery. Do not duplicate #156 settings/renderers.
+5. Continue #155 legacy URL/thumbnail retirement only after every user-facing host has a proven canonical replacement. Keep compatibility/import/export data until caller-zero and migration policy are explicit.
+6. Continue #245 only with safe staged Photo -> Image promotion/migration slices; no destructive table removal.
 7. Defer broad Vault work (#242) while higher-value presentation parity remains actionable unless storage-path work becomes a direct dependency.
 
 ## Cross-lane boundaries
 ### Relation
-Canonical Relation mutation/read/index/backlink/audit/reconcile is mature. #341 is presentation/read-only and introduced no Relation mutation semantics. Resume Relation implementation only for a genuinely new Relation-producing workflow or concrete correctness regression.
+Canonical Relation mutation/read/index/backlink/audit/reconcile is mature. #344 and #346 are presentation/UI-contract work and introduce no new Relation mutation semantics. Resume Relation implementation only for a genuinely new Relation-producing workflow or concrete correctness regression.
 
 ### Refactor — #225
-Open Refactor PRs at this checkpoint are #336, #340 and #342; they are focused failure/privacy/recovery work and do not own `bookmark_unified_stage1_page.dart`. Inspect ownership again before every shared-host edit. Object owns product-semantic replacement surfaces; Refactor owns behavior-preserving extraction/deletion after parity is proven.
+At the start of this run open Refactor PRs were #336, #340 and #342; they own focused attachment/profile failure/privacy work and did not own the Stage1 or new Property-popover files used here. Inspect ownership again before every shared-host edit. Object owns product-semantic replacement surfaces; Refactor owns behavior-preserving extraction/deletion after parity is proven.
 
 ## Risks / blockers
-- large shared hosts remain conflict-prone; use focused patches and regressions;
+- large shared hosts remain conflict-prone; use focused patches and compare the final branch against latest main;
+- do not start #249 Stage1 edits while #344 is open;
+- #252 host integration should wait for the shared #346 component to be green/integrated and should inspect GenericDatabasePage ownership again;
 - legacy Bookmark URL/thumbnail and Photo storage remain compatibility data while production/import/export paths still need them;
 - identity-sensitive Weblink/Image creation must not regress to generic title-only creation;
 - ambiguous Relation state must fail closed in presentation; do not repair it from widgets;
-- `#149` requires visual evidence in the actual Bookmark host, not only geometry tests.
+- #149 requires visual evidence in the actual Bookmark host after the concrete Bookmark-local handle path is replaced.
 
 ## Validation
-- #341 final Flutter CI run #1305: success on head `379f8a0fd69a9257c9873554d237272b18428a05`.
-- #341 merged successfully as `d62f5d60e5fe768db8ca8b56fec20b52c7660bd9`.
+- #341 final Flutter CI run #1305: success and merged as `d62f5d60e5fe768db8ca8b56fec20b52c7660bd9`.
+- #344 run #1311: Analyze green; Test running at handoff.
+- #346 run #1313: Analyze green; Test running at handoff.
 
 ## Stop / continuation condition
-This run integrated the previously blocked Stage1 canonical URL slice and inspected the now-unblocked #247 path. The next implementation requires a focused edit to the ~1500-line shared Stage1 host plus regression coverage. The current GitHub connector only exposes whole-file replacement for repository file writes, so hand-reconstructing that large hotspot would violate the repository's safe patch-sized-edit rule. Resume #247 when a patch-capable checkout/edit path is available; no product/design input is required.
+This run produced two independent, conflict-aware Object slices (#344 for #247 and #346 foundation for #252), plus a concrete #149 root-cause finding. Continue by resolving both active CI runs first. Once #344 is integrated, the Stage1 hotspot is free for #249; once #346 is integrated, generic detail/Table can adopt the shared Notion-like Property-add flow. No product/design clarification is required.
