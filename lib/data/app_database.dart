@@ -128,7 +128,7 @@ class AppDatabase extends _$AppDatabase {
               await m.addColumn(photos, photos.tags);
             }
           }
-          if (from < 8) await m.addColumn(savedViews, savedViews.visibleProperties);
+          if (from < 8) await migrateToV8(m);
           if (from < 9) {
             await migrateToV9(m);
           }
