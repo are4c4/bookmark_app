@@ -5,121 +5,110 @@
 ## Lane scope
 Own Relation/backlink lifecycle, bidirectional integrity, Relation write validation, target/cardinality constraints, stale/inconsistent metadata handling, deterministic index reconciliation, Relation-safe deletion/detach, Relation picker candidate/selection behavior, and focused regressions for Object-owned workflows that consume the canonical Relation boundary.
 
-## Active issues
-- `#155` — reusable Weblink Object + managed Image workflow
+Primary issues:
 - `#56` — generic Object/Database/View integration
+- `#155` — reusable Weblink Object + managed Image workflow
+
+Cross-lane coordination:
+- `#225` — Refactor lane migration/hotspot work; Relation lane audits only concrete Relation boundaries and does not co-own unrelated refactors.
 
 `#166` alias-aware Relation picker is complete/closed.
 
-## Current goal
-Keep all production Relation behavior behind the canonical Relation subsystem while Object lane exposes more first-class system collections and rich media presentation. When a new user-facing surface appears, add focused real-host coverage for Relation read/write/backlink/delete behavior without creating a feature-specific persistence path.
+## Current checkpoint
+Latest audited `main`: `c010dc38966478f0a99224368c36554ac7e1ba68` (`#257` v5 photo migration compatibility fix), whose parent contains Relation PR #264.
 
-## Canonical foundation
+Latest Relation checkpoint:
+- #264 `Cover Relation bootstrap after legacy migration`
+- squash merge `04f7f7e4e368f6390bba38862e27ab8cd831c343`
+- strengthened head `6c62f6a27e77e24b571b8925e1adf62718d09378`
+- Flutter CI #1006: success
+
+## Canonical Relation contract
 - `RelationMutationService` is the user-facing mutation boundary.
 - `RelationReadService` resolves canonical outgoing/backlink state.
 - `RelationIntegrityService` is read-only.
-- `RelationIndexReconcileService` only repairs deterministic index drift from persisted Relation values.
+- `RelationIndexReconcileService` repairs only deterministic index drift from persisted Relation values.
 - `RelationMutationService.deleteObject(...)` detaches surviving sources before target deletion.
-- ambiguous missing-target/cardinality/bidirectional damage is never auto-repaired from editor paths.
+- ambiguous missing-target/cardinality/bidirectional corruption is never auto-repaired from editor paths.
 - no Weblink/Image-specific Relation persistence service or alternate index exists.
+- normal feature code must not directly serialize Object ids into persisted Relation values or maintain a parallel Relation index.
 
-## #155 production coverage
-Earlier merged Relation coverage remains valid: #174–#177, #182, #184, #188, #190, #192, #198 and #201 cover Bookmark -> Weblink and Weblink -> Image canonical writes, retry/idempotency, shared targets, retarget, detach/delete, target/cardinality/stale-metadata guardrails, audit and index-only reconcile.
+## Stable production coverage
+Earlier merged coverage remains valid:
+- #174–#177 — Bookmark/Weblink and Weblink/Image boundary integrity/guardrails.
+- #182/#184/#188 — live Bookmark -> Weblink retarget, detach/delete, shared targets, index reconcile.
+- #190/#192 — production Weblink -> Image target/cardinality/lifecycle.
+- #195/#200/#202 — alias-aware Relation candidate search and real picker, canonical ids only.
+- #198/#201 — managed preview pipeline + real ObjectSync host retry/replacement/index/backlink/delete lifecycle.
+- #208/#210/#211/#216 — exposed Weblinks host edit/backlink/delete/composite delete lifecycle.
+- #222 — exposed Images host backlink/delete lifecycle.
 
-New real-host coverage after system collections became user-facing:
-- #208 — exposed `Weblinks` `GenericDatabasePage` edits production `Representative image` single Relation and `Related images` multi Relation canonically; persisted values, edges, backlinks and audit are checked. CI #853 green.
-- #210 — deleting an exposed Weblink through the real detail host detaches the surviving Bookmark and leaves audit healthy. CI #855 green.
-- #211 (`8d71d5e4581699e51c4e3df538f6945ad4adbe12`) — exposed Weblink detail resolves canonical Bookmark backlinks. Initial CI #859 failed only because the same source title appeared in multiple UI locations; the scoped assertion fix passed CI #890 and merged.
-- #216 (`1b0b9bd5a494aecf16e63709db66633e124fe8c4`) — composite real-host Weblink deletion with incoming Bookmark -> Weblink plus outgoing Representative/Related Image Relations: Bookmark survives detached, Image Objects survive, Weblink-origin edges/backlinks disappear, audit stays healthy. CI #891 green.
-- #219 was the first Images-host branch but became stale after concurrent Object merges; it was closed without merge after its test itself passed CI #895.
-- #222 (`d126650d7fad955462ffe3bd5c540cd4e890da5a`) — clean replay on latest main of the exposed `Images` host lifecycle: the Image detail shows both Weblink backlinks, deleting the Image clears Representative, preserves the other Related Image, removes stale edges/backlinks, and leaves workspace audit healthy. CI #902 green.
+Current real generic hosts are covered for canonical values, normalized edges, backlinks, delete/detach and healthy workspace audit across the Weblink/Image surfaces introduced so far.
 
-Object-owned production pieces consumed by this Relation coverage include #179/#191/#193/#194 plus system collection exposure #203 and #213.
+## Historical migration / Refactor boundary
+The Refactor lane is extracting historical `AppDatabase` migration bodies under #225. Relation ownership remains narrow:
 
-## #166 alias-aware Relation picker — complete
-- #195: Relation editor search reuses shared Object identity search and remains canonical target-scoped.
-- #200: real `GenericDatabasePage` picker searches aliases, shows alias context and persists canonical Object ids only.
-- #202: ambiguous alias + target ObjectType real-host coverage.
+- legacy `bookmark_people` and legacy `bookmark_relations` are compatibility-era Bookmark tables, not the canonical generic Object Relation subsystem;
+- canonical normalized Relation state uses persisted Object Relation values plus lazy `object_relation_edges` ensured by `ObjectStore`;
+- `object_relation_edges` is not currently created by the historical AppDatabase migration sequence.
 
-## Current exposed Relation surfaces
-### Weblinks
-Relation-covered in the real generic host for:
-- Representative/Related Image editing;
-- canonical Bookmark backlink display;
-- Weblink deletion with incoming Bookmark Relation;
-- composite deletion with outgoing Image Relations;
-- healthy values/index/backlinks/audit after mutation.
+Relevant audited Refactor work:
+- #248 merged v10 `bookmark_people` migration-body extraction; statement order and `出演` / `performer` -> `出演者` normalization semantics were preserved.
+- #258 merged v9 workflow migration-body extraction, including legacy `bookmark_relations` table creation; no canonical generic Relation persistence was introduced there.
+- #257 merged v5->current Photo migration compatibility guard for `photos.tags`; it is Relation-neutral.
 
-### Images
-After Object #213 exposed `Images` through the generic sidebar, #222 now covers:
-- canonical Weblink backlink display for an Image targeted by both Representative and Related Relations;
-- Image deletion through the real host;
-- surviving Weblink single/multi Relation shrinkage;
-- surviving Image edge/backlink preservation;
-- healthy audit after deletion.
+### #254 -> #264 Relation safety regression
+#254 introduced a tests-only cross-lane regression but its first CI #973 failed because the minimal historical Bookmark fixture was passed through `WorkspaceStore.initialize()`, whose current Drift Bookmark mapper requires columns not present in that intentionally old fixture. This was fixture-only, not a Relation failure.
 
-A lower-level multi-source deletion regression already exists in `weblink_image_relation_delete_lifecycle_test.dart`: multiple Weblinks may reference one Image and canonical deletion detaches every source while preserving unrelated targets. Therefore no duplicate real-host multi-source test is currently needed.
+The test was corrected to create a current workspace directly after migration. Corrected #254 CI #992 passed, but Refactor work had advanced `main`, so #254 was closed as superseded and cleanly replayed as #264.
 
-### Daily Notes
-Object #213/#214 exposed and date-keyed Daily Notes, but no new Relation-producing workflow was introduced. No Relation-specific implementation is required at this checkpoint.
+#264 now proves on a real v9-era migration fixture that:
+- the legacy `bookmark_people` row survives and normalizes to `出演者`;
+- an existing legacy `bookmark_relations` row survives unchanged;
+- after the historical database reaches current schema, the generic Object layer can create ObjectTypes/Objects and a canonical Relation;
+- the lazy `object_relation_edges` table/index bootstraps successfully;
+- canonical outgoing/backlink state is correct;
+- writing the canonical Object Relation does not mutate either legacy relation-like table.
 
-## Latest audit
-Repository search after #222 found no new view-level direct `ObjectStore.setRelation(...)` use. Low-level calls remain in Relation internals and tests/corruption fixtures. Object #221/#223 are read-only Weblink Gallery/media presentation and explicitly do not mutate Relation/index/backlink state.
+This guards coexistence while Refactor continues historical migration extraction without coupling legacy Bookmark graphs to the canonical Object Relation graph.
 
-Refactoring lane audit:
-- Issue #225 explicitly treats the Relation subsystem as mature and out of redesign scope.
-- Refactor #227 merged as `20ba50674823190337561c7a97ac16e928b4b009`; it only replaces an empty file-drop enrichment catch with debug/assert visibility and does not change Person creation, Relation mutation, schema, or import success semantics.
-- Original guardrail PR #226 was closed rather than force-resolving shared handoff conflicts.
-- Replacement #228 merged as `310ec2c5e11edbf97a7f56e13c32120c6cbb51c0`, preserving newer Relation/repository handoff state while adding maintainability/inventory/docs guardrails.
-- Refactor #229 merged as `3bf2d895175bcd53381a0feb285b7743d12edd58`; it only makes profile fallback failures visible in debug/assert builds and does not change profile/database/Relation semantics.
-- Refactor #230 added the v13 -> current migration regression and its latest head passed Flutter CI #923.
-- Refactor #232 then extracted only the `from < 14` saved-view column additions into `migrateToV14(Migrator)`. Relation review confirmed the three `SavedViews` column additions and ordering are byte-for-behavior equivalent; Relation/Object schema and migration sequencing are unchanged.
-- Current Refactor #234 changes only `database_view_store.dart` fallback observability plus its test; it declares and appears to preserve Relation behavior.
-- Current Refactor #235 is tests-only v12 -> current historical migration coverage.
-- normalized Relation index `object_relation_edges` is not part of these historical AppDatabase migration bodies; `ObjectStore` ensures the table/index lazily with `CREATE TABLE/INDEX IF NOT EXISTS`. Current v14/v13 extraction therefore does not move Relation-index migration semantics.
-- no new Relation-producing workflow was introduced by the current Refactor work.
+## Current Object-lane audit
+Object creation work has advanced, but no new Relation-producing workflow exists yet:
+- #250 merged `createWeblinkFromUrl(...)`, delegating canonical URL normalization/reuse to `WeblinkObjectService`; no Relation write/index path.
+- #263 merged `createImageFromManagedFile(...)`, delegating canonical managed-file identity/reuse to `ImageObjectService.findOrCreateManaged(...)`; no Relation write/index path.
+- #253 is the focused Weblink URL-entry dialog and remains Object-owned; it does not itself persist Relations.
+- #221/#223 remain read-only Weblink Gallery/media presentation; #223 owns `generic_database_page.dart` while open.
+
+Existing Relation tests already use managed Image Objects as real targets of production Representative/Related Relations, so wrapping Image creation through #263 does not create a new Relation semantic requiring duplicate coverage by itself.
 
 ## Validation
-Latest Relation CI:
-- #208 CI #853 — success
-- #210 CI #855 — success
-- #211 corrected CI #890 — success
-- #216 CI #891 — success
-- #219 CI #895 — success before stale-base replacement; not merged
-- #222 CI #902 — success and merged
+Latest Relation-specific validation:
+- #254 initial CI #973 — failed only in historical fixture setup before Relation bootstrap.
+- #254 corrected CI #992 — success.
+- #264 strengthened CI #1006 — success; merged as `04f7f7e4e368f6390bba38862e27ab8cd831c343`.
 
-Earlier important green runs remain #811/#819/#823/#825/#828 for alias and managed-preview host coverage.
+Earlier important green Relation runs remain #811/#819/#823/#825/#828, #853/#855/#890/#891/#902.
 
-Cross-lane validation observed in the latest audits:
-- Refactor #229 — Analyze/Test success before merge.
-- Refactor #230 latest head `faa00f34bbb8280e3da40f3d53346a91cd0e7567` — Flutter CI #923 success.
-- Refactor #232 — merged after the v13 regression; production diff limited to v14 migration extraction with no Relation semantics change.
+## Cross-lane ownership / conflict policy
+Refactor lane is actively changing historical `app_database.dart` migration sequencing through small protected extractions. Relation lane must not co-own those version helpers unless canonical Relation schema/index behavior is actually moved or changed.
+
+Object lane currently owns system-collection creation/presentation and `generic_database_page.dart` through #223. Before touching shared hotspots (`generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, `bookmark_unified_stage1_page.dart`, `app_database.dart`), re-check open PR ownership and prefer tests-only or Relation-internal changes.
+
+Do not overwrite `docs/AI_PROGRESS.md` merely to record lane-local details while Refactor/Object agents are advancing repository-wide state quickly; update it only for a real repository-wide coordination change and after checking concurrent ownership.
 
 ## Exact next Relation actions
-1. Monitor Object-lane work for a genuinely new Relation-producing workflow: explicit `Related images` population, user-facing URL/Image import that also creates Relations, Object merge/dedup, new first-class Object migration, or new retarget/detach path.
-2. Audit every such workflow first for direct serialized ids / low-level `ObjectStore.setRelation` bypass.
-3. Add real-host lifecycle/idempotency/backlink/index/delete regression only when the new workflow or concrete bug exists.
-4. Keep deterministic index reconcile separate from ambiguous user-data repair.
+1. Monitor Object work for a genuinely new Relation-producing workflow: user-facing import/create that also attaches a Relation, explicit `Related images` population, Object merge/dedup, new first-class Object migration, or a new retarget/detach path.
+2. Audit each new workflow for direct serialized ids or low-level `ObjectStore.setRelation` bypass before adding tests.
+3. Add focused lifecycle/idempotency/backlink/index/delete regression only when the new workflow or a concrete defect exists.
+4. Continue auditing Refactor migration extraction only at actual Relation boundaries. If lazy `object_relation_edges` ensure logic moves out of `ObjectStore`, require Relation-owned index/backlink/reconcile regressions before integration.
 5. Do not invent automatic Object merge/dedup Relation rewrites without an explicit product policy.
-6. Before touching `generic_database_page.dart`, `app_shell.dart`, or `object_inspector_page.dart`, re-check open Object/Refactor PR ownership; while another lane owns one of these hotspots, prefer tests-only or Relation-internal/service work and sequence any necessary UI patch after that PR merges.
-7. As Refactor extracts historical `AppDatabase` migrations, audit only migration ordering and any code that actually creates/modifies Relation schema/index state. Do not co-own unrelated version extraction.
-8. If Refactor eventually moves the lazy `object_relation_edges` ensure logic out of `ObjectStore`, treat that as a new Relation-owned review point and require index/backlink/reconcile regressions before integration.
+6. Keep deterministic index reconciliation separate from ambiguous user-data repair.
 
-## Cross-lane dependency
-Object lane currently owns #155/#156 presentation work. Open #221/#223 consume canonical Relation reads for Weblink managed media but do not create or mutate Relations. Relation lane should not modify their presentation/core files unless a concrete Relation defect appears.
-
-Refactoring lane is active under #225. Relation lane must not compete with broad refactors of shared hotspots. In particular:
-- `generic_database_page.dart` is currently owned by Object #223 and was explicitly deferred by the Refactor lane;
-- `app_shell.dart` and `object_inspector_page.dart` must be re-checked immediately before any non-trivial Relation edit;
-- historical migration regression/extraction work is currently Refactor-owned; Relation lane audits sequencing without parallel edits unless Relation schema/index behavior is touched;
-- re-check active Refactor PRs before changing `docs/AI_PROGRESS.md`, because Refactor uses it when repository-wide ownership materially changes.
-
-## Notes / risks
-- During the #219 clean-replay operation, a transient note file was accidentally created and immediately deleted on `main`; commits `7c656300...` and `0135bdd7...` have net-zero tree effect and contain no product/data change. Do not rewrite main history to remove them.
+## Risks / notes
 - Automatic repair of missing targets/cardinality conflicts remains intentionally prohibited.
-- Future Object merge/deduplication requires a new explicit Relation policy.
-- Refactor extraction must preserve canonical Relation API ownership; do not move Relation semantics into presentation facades or duplicate mutation/index logic during composition cleanup.
-- `object_relation_edges` currently remains a Relation-owned lazy normalized index ensured by `ObjectStore`, outside the v12-v14 historical migration extraction path.
+- Future Object merge/deduplication needs an explicit Relation policy before edge/value rewrites.
+- Legacy `bookmark_people` / `bookmark_relations` and canonical Object Relations must remain separate until an explicit migration product contract says otherwise.
+- During the old #219 replay, a transient note file was created and immediately deleted on `main`; the two commits have net-zero tree effect. Do not rewrite main history for that.
 
 ## Stop reason
-After #208/#210/#211/#216/#222, the currently exposed Weblink/Image generic hosts are covered for canonical edit/read/backlink/delete lifecycle, and no new production Relation-producing workflow or correctness regression remains. Open Object #221/#223 are presentation-only. Current Refactor #234/#235 do not produce Relations; #232 migration extraction was audited and does not touch Relation schema/index semantics. With `generic_database_page.dart` actively owned by Object #223 and no new Relation workflow available, speculative UI/refactor work here would create avoidable conflict. This matches the `AGENTS.md` stopping criteria: no independent actionable Relation work remains until another lane introduces a new Relation-producing surface or a concrete Relation defect appears.
+#264 closed the only newly actionable Relation/Refactor boundary: historical migration can now coexist with canonical Relation lazy bootstrap without mutating legacy Bookmark relation tables. Current Object #250/#263 creation services are identity-safe but do not create Relations; #253 and #221/#223 are UI/presentation work. Current Refactor v5-v8 migration work does not modify canonical Relation schema/index state. Therefore no independent Relation implementation remains without creating duplicate/speculative coverage or competing with another lane's hotspot ownership. Resume when another lane introduces a new Relation-producing workflow, moves canonical Relation storage/index behavior, or exposes a concrete correctness regression.
