@@ -99,6 +99,7 @@ void main() {
     expect(find.textContaining('should-not-render'), findsNothing);
 
     await tester.enterText(find.byType(TextField), '');
+    await tester.pump(const Duration(milliseconds: 221));
     await tester.tap(find.text('検索インデックスを再構築'));
     await tester.pump();
     await tester.pump();
