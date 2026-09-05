@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/bookmark_repository.dart';
 import '../data/database_view_gallery_adapter.dart';
 import '../data/database_view_store.dart';
+import '../data/generic_database_object_create_service.dart';
 import '../data/generic_database_page_services.dart';
 import '../data/generic_database_store.dart';
 import '../data/generic_object_view_coordinator.dart';
@@ -73,6 +74,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
   int? _selectedRecordId;
   String _query = '';
   bool _loading = true;
+  GenericDatabaseCreateMode _createMode = GenericDatabaseCreateMode.generic;
 
   static const _propertyTypes = <String, String>{
     'text': 'テキスト',
@@ -127,6 +129,9 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     final records = page?.records ?? const <GenericRecord>[];
     final objectType = page?.objectType;
     final objects = page?.objects ?? const <AppObject>[];
+    final createMode = objectType == null
+        ? GenericDatabaseCreateMode.generic
+        : await _pageServices.creator.createModeForObjectType(objectType.id);
     final objectTypes =
         await _store.listAllDatabases(widget.repository.workspaceId);
     final recordsByType = <int, List<GenericRecord>>{};
@@ -170,6 +175,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
       _objectTypes = objectTypes;
       _recordsByType = recordsByType;
       _computedValues = computedValues;
+      _createMode = createMode;
       if (_selectedRecordId != null &&
           !records.any((record) => record.id == _selectedRecordId)) {
         _selectedRecordId = null;
@@ -464,6 +470,20 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     return null;
   }
 
+  String get _createLabel => switch (_createMode) {
+        GenericDatabaseCreateMode.weblinkUrl => 'URLを追加',
+        GenericDatabaseCreateMode.managedImage => '画像をインポート',
+        GenericDatabaseCreateMode.dailyNote => '今日のノートを開く',
+        GenericDatabaseCreateMode.generic => '新規ページ',
+      };
+
+  IconData get _createIcon => switch (_createMode) {
+        GenericDatabaseCreateMode.weblinkUrl => Icons.link,
+        GenericDatabaseCreateMode.managedImage => Icons.add_photo_alternate_outlined,
+        GenericDatabaseCreateMode.dailyNote => Icons.today_outlined,
+        GenericDatabaseCreateMode.generic => Icons.add,
+      };
+
   Future<void> _openDatabaseObject(int objectId) async {
     final activeView = _activeView;
     final objectTypeId = _objectType?.id;
@@ -529,12 +549,64 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     await _persistView(next);
   }
 
+  Future<String?> _askWeblinkUrl() async {
+    var value = '';
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Weblinkを追加'),
+        content: SizedBox(
+          width: 460,
+          child: TextFormField(
+            key: const ValueKey('weblink-url-create-input'),
+            autofocus: true,
+            keyboardType: TextInputType.url,
+            textInputAction: TextInputAction.done,
+            decoration: const InputDecoration(
+              labelText: 'URL',
+              hintText: 'https://example.com',
+            ),
+            onChanged: (text) => value = text,
+            onFieldSubmitted: (text) => Navigator.pop(dialogContext, text),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            key: const ValueKey('weblink-url-create-submit'),
+            onPressed: () => Navigator.pop(dialogContext, value),
+            child: const Text('追加'),
+          ),
+        ],
+      ),
+    );
+    final trimmed = result?.trim();
+    return trimmed == null || trimmed.isEmpty ? null : trimmed;
+  }
+
   Future<void> _createRecord(String title) async {
     try {
-      final id = await _pageServices.creator.create(
-        databaseId: widget.databaseId,
-        title: title,
-      );
+      late final int id;
+      if (_createMode == GenericDatabaseCreateMode.weblinkUrl) {
+        final url = await _askWeblinkUrl();
+        if (url == null) return;
+        id = await _pageServices.creator.createWeblinkFromUrl(
+          databaseId: widget.databaseId,
+          url: url,
+        );
+      } else if (_createMode == GenericDatabaseCreateMode.managedImage) {
+        throw UnsupportedError(
+          'Images must be imported from managed image/file input.',
+        );
+      } else {
+        id = await _pageServices.creator.create(
+          databaseId: widget.databaseId,
+          title: title,
+        );
+      }
       await _reload();
       if (!mounted) return;
       if (_records.any((record) => record.id == id)) {
@@ -866,7 +938,8 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
         itemBuilder: (context, index) {
           if (index == records.length) {
             return DatabaseCreateCard(
-              label: '新規ページ',
+              label: _createLabel,
+              icon: _createIcon,
               onCreate: _createRecord,
               createImmediately: true,
             );
@@ -946,8 +1019,8 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
         itemBuilder: (context, index) {
           if (index == records.length) {
             return DatabaseCreateRow(
-              label: '新規ページ',
-              icon: Icons.add,
+              label: _createLabel,
+              icon: _createIcon,
               onCreate: _createRecord,
               createImmediately: true,
             );
@@ -1030,8 +1103,8 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
           SizedBox(
             width: 320,
             child: DatabaseCreateRow(
-              label: '新規ページ',
-              icon: Icons.add,
+              label: _createLabel,
+              icon: _createIcon,
               onCreate: _createRecord,
               createImmediately: true,
             ),
@@ -1055,7 +1128,8 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     }
     final movable = groupProperty != null &&
         _boardMoveService.planner.canMove(groupProperty);
-    final creatable = groupProperty != null &&
+    final creatable = _createMode == GenericDatabaseCreateMode.generic &&
+        groupProperty != null &&
         _pageServices.creator.boardCreate.planner.canPreset(groupProperty);
 
     return ObjectBoardView(
