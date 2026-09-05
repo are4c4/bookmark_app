@@ -31,11 +31,9 @@ String _fileTitle(String path) {
   return dot > 0 ? name.substring(0, dot) : name;
 }
 
-void _debugAuthorCreationFailure(StackTrace stackTrace) {
+void _debugFailure(String operation, StackTrace stackTrace) {
   assert(() {
-    debugPrint(
-      'BookmarkCreateDialog: best-effort PDF author creation failed.',
-    );
+    debugPrint('BookmarkCreateDialog: $operation failed.');
     debugPrintStack(stackTrace: stackTrace);
     return true;
   }());
@@ -45,6 +43,8 @@ Future<void> showBookmarkCreateDialog({
   required BuildContext context,
   required BookmarkRepository repository,
   bool initialInbox = false,
+  Future<BookmarkItem?> Function(String input)? findDuplicate,
+  Future<BookmarkMetadata> Function(String input)? fetchMetadata,
 }) async {
   final url = TextEditingController();
   final tags = TextEditingController();
@@ -82,7 +82,9 @@ Future<void> showBookmarkCreateDialog({
             context: context,
             builder: (duplicateContext) => AlertDialog(
               title: const Text('同じURLが登録されています'),
-              content: Text('「${duplicate.title}」がすでに存在します。\nそれでも新しく追加しますか？'),
+              content: Text(
+                '「${duplicate.title}」がすでに存在します。\nそれでも新しく追加しますか？',
+              ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(duplicateContext, 'cancel'),
@@ -121,7 +123,8 @@ Future<void> showBookmarkCreateDialog({
                   ? await const PdfMetadataService().read(path)
                   : PdfFileMetadata(title: _fileTitle(path));
 
-              final provisionalUrl = 'local-file://${DateTime.now().microsecondsSinceEpoch}/$createdCount';
+              final provisionalUrl =
+                  'local-file://${DateTime.now().microsecondsSinceEpoch}/$createdCount';
               final bookmarkId = await repository.create(
                 url: provisionalUrl,
                 title: metadata.title,
@@ -155,14 +158,26 @@ Future<void> showBookmarkCreateDialog({
                     // Author enrichment is optional: preserve the imported
                     // bookmark while making unexpected failures observable in
                     // debug/test builds without logging user-provided names.
-                    _debugAuthorCreationFailure(stackTrace);
+                    _debugFailure(
+                      'best-effort PDF author creation',
+                      stackTrace,
+                    );
                   }
                 }
                 final allPeople = await repository.watchPeople().first;
-                final names = metadata.authors.map((e) => e.trim().toLowerCase()).toSet();
-                final authors = allPeople.where((person) => names.contains(person.name.trim().toLowerCase())).toList();
+                final names = metadata.authors
+                    .map((author) => author.trim().toLowerCase())
+                    .toSet();
+                final authors = allPeople
+                    .where(
+                      (person) =>
+                          names.contains(person.name.trim().toLowerCase()),
+                    )
+                    .toList();
                 final allBookmarks = await repository.watchAll().first;
-                final created = allBookmarks.where((item) => item.id == bookmarkId).firstOrNull;
+                final created = allBookmarks
+                    .where((item) => item.id == bookmarkId)
+                    .firstOrNull;
                 if (created != null && authors.isNotEmpty) {
                   await repository.setPeopleForRole(created, '著者', authors);
                 }
@@ -172,14 +187,21 @@ Future<void> showBookmarkCreateDialog({
             if (dialogContext.mounted) Navigator.pop(dialogContext);
             if (context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('$createdCount件のPDF / 動画ブックマークを作成しました')),
+                SnackBar(
+                  content: Text(
+                    '$createdCount件のPDF / 動画ブックマークを作成しました',
+                  ),
+                ),
               );
             }
-          } catch (error) {
+          } catch (_, stackTrace) {
+            _debugFailure('file bookmark creation', stackTrace);
             setLocalState(() => saving = false);
             if (context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('ファイルから作成できませんでした: $error')),
+                const SnackBar(
+                  content: Text('ファイルから作成できませんでした。もう一度お試しください。'),
+                ),
               );
             }
           } finally {
@@ -191,7 +213,10 @@ Future<void> showBookmarkCreateDialog({
           if (saving || url.text.trim().isEmpty) return;
           setLocalState(() => saving = true);
           try {
-            final duplicate = await repository.findDuplicateUrl(url.text.trim());
+            final input = url.text.trim();
+            final duplicate = findDuplicate == null
+                ? await repository.findDuplicateUrl(input)
+                : await findDuplicate(input);
             if (duplicate != null) {
               final proceed = await confirmDuplicate(duplicate);
               if (!proceed) {
@@ -200,7 +225,9 @@ Future<void> showBookmarkCreateDialog({
               }
             }
 
-            final metadata = await const BookmarkMetadataService().fetch(url.text.trim());
+            final metadata = fetchMetadata == null
+                ? await const BookmarkMetadataService().fetch(input)
+                : await fetchMetadata(input);
             final bookmarkId = await repository.create(
               url: metadata.url,
               title: metadata.title,
@@ -219,11 +246,14 @@ Future<void> showBookmarkCreateDialog({
               );
             }
             if (dialogContext.mounted) Navigator.pop(dialogContext);
-          } catch (error) {
+          } catch (_, stackTrace) {
+            _debugFailure('URL bookmark creation', stackTrace);
             setLocalState(() => saving = false);
             if (context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('ブックマークを追加できませんでした: $error')),
+                const SnackBar(
+                  content: Text('ブックマークを追加できませんでした。もう一度お試しください。'),
+                ),
               );
             }
           }
@@ -249,7 +279,12 @@ Future<void> showBookmarkCreateDialog({
                       const Expanded(child: Divider()),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 10),
-                        child: Text('またはURL', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                        child: Text(
+                          'またはURL',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
                       ),
                       const Expanded(child: Divider()),
                     ],
@@ -287,23 +322,43 @@ Future<void> showBookmarkCreateDialog({
                       Expanded(
                         child: DropdownButtonFormField<String>(
                           initialValue: status,
-                          decoration: const InputDecoration(labelText: 'ステータス', border: OutlineInputBorder()),
+                          decoration: const InputDecoration(
+                            labelText: 'ステータス',
+                            border: OutlineInputBorder(),
+                          ),
                           items: _statusLabels.entries
-                              .map((entry) => DropdownMenuItem(value: entry.key, child: Text(entry.value)))
+                              .map(
+                                (entry) => DropdownMenuItem(
+                                  value: entry.key,
+                                  child: Text(entry.value),
+                                ),
+                              )
                               .toList(),
-                          onChanged: (value) => setLocalState(() => status = value ?? 'unread'),
+                          onChanged: (value) =>
+                              setLocalState(() => status = value ?? 'unread'),
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: DropdownButtonFormField<int>(
                           initialValue: rating,
-                          decoration: const InputDecoration(labelText: '評価', border: OutlineInputBorder()),
-                          items: List.generate(6, (index) => DropdownMenuItem(
-                                value: index,
-                                child: Text(index == 0 ? '未評価' : '${'★' * index}${'☆' * (5 - index)}'),
-                              )),
-                          onChanged: (value) => setLocalState(() => rating = value ?? 0),
+                          decoration: const InputDecoration(
+                            labelText: '評価',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: List.generate(
+                            6,
+                            (index) => DropdownMenuItem(
+                              value: index,
+                              child: Text(
+                                index == 0
+                                    ? '未評価'
+                                    : '${'★' * index}${'☆' * (5 - index)}',
+                              ),
+                            ),
+                          ),
+                          onChanged: (value) =>
+                              setLocalState(() => rating = value ?? 0),
                         ),
                       ),
                     ],
@@ -322,7 +377,10 @@ Future<void> showBookmarkCreateDialog({
                   ),
                   if (coverPhoto != null) ...[
                     const SizedBox(height: 12),
-                    Text('カバー画像', style: Theme.of(context).textTheme.titleSmall),
+                    Text(
+                      'カバー画像',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
                     const SizedBox(height: 6),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(8),
@@ -332,7 +390,9 @@ Future<void> showBookmarkCreateDialog({
                         child: Image.file(
                           File(coverPhoto!.path),
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image_outlined)),
+                          errorBuilder: (_, __, ___) => const Center(
+                            child: Icon(Icons.broken_image_outlined),
+                          ),
                         ),
                       ),
                     ),
