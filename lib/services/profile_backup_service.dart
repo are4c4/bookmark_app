@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:archive/archive_io.dart';
@@ -75,8 +76,21 @@ class ProfileBackupService {
         );
       }
     } catch (_) {
-      if (await target.exists()) {
-        await target.delete(recursive: true);
+      // Cleanup is best-effort. A cleanup failure must not replace the original
+      // extraction/validation failure that explains why restore failed.
+      try {
+        if (await target.exists()) {
+          await target.delete(recursive: true);
+        }
+      } catch (_, stackTrace) {
+        assert(() {
+          developer.log(
+            'Profile restore cleanup failed.',
+            name: 'bookmark_app.profile_backup',
+            stackTrace: stackTrace,
+          );
+          return true;
+        }());
       }
       rethrow;
     }
