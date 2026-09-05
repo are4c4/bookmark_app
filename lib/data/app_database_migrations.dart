@@ -1,6 +1,10 @@
 part of 'app_database.dart';
 
 extension AppDatabaseMigrationSteps on AppDatabase {
+  Future<void> migrateToV2(Migrator migrator) async {
+    await migrator.addColumn(bookmarks, bookmarks.tags);
+  }
+
   Future<void> migrateToV3(Migrator _) async {
     // Recreate the actual v3 table shapes instead of using today's
     // Drift definitions. Later migrations add their newer columns.
