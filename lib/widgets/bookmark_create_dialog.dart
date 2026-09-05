@@ -43,6 +43,7 @@ Future<void> showBookmarkCreateDialog({
   required BuildContext context,
   required BookmarkRepository repository,
   bool initialInbox = false,
+  Future<BookmarkItem?> Function(String input)? findDuplicate,
   Future<BookmarkMetadata> Function(String input)? fetchMetadata,
 }) async {
   final url = TextEditingController();
@@ -212,7 +213,10 @@ Future<void> showBookmarkCreateDialog({
           if (saving || url.text.trim().isEmpty) return;
           setLocalState(() => saving = true);
           try {
-            final duplicate = await repository.findDuplicateUrl(url.text.trim());
+            final input = url.text.trim();
+            final duplicate = findDuplicate == null
+                ? await repository.findDuplicateUrl(input)
+                : await findDuplicate(input);
             if (duplicate != null) {
               final proceed = await confirmDuplicate(duplicate);
               if (!proceed) {
@@ -222,8 +226,8 @@ Future<void> showBookmarkCreateDialog({
             }
 
             final metadata = fetchMetadata == null
-                ? await const BookmarkMetadataService().fetch(url.text.trim())
-                : await fetchMetadata(url.text.trim());
+                ? await const BookmarkMetadataService().fetch(input)
+                : await fetchMetadata(input);
             final bookmarkId = await repository.create(
               url: metadata.url,
               title: metadata.title,
