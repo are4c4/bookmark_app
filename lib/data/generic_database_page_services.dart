@@ -8,6 +8,7 @@ import 'database_view_store.dart';
 import 'generic_database_collection_page_data.dart';
 import 'generic_database_object_create_service.dart';
 import 'generic_database_store.dart';
+import 'image_object_service.dart';
 import 'object_alias_store.dart';
 import 'object_board_create_service.dart';
 import 'object_identity_search_service.dart';
@@ -18,6 +19,7 @@ import 'object_type_defaults_store.dart';
 import 'relation_mutation_service.dart';
 import 'relation_target_service.dart';
 import 'system_object_store.dart';
+import 'weblink_object_service.dart';
 
 /// Composition root for Object-owned services consumed by GenericDatabasePage.
 ///
@@ -76,6 +78,14 @@ class GenericDatabasePageServices {
       systemObjects: systemObjects,
       defaultsStore: defaultsStore,
     );
+    final weblinks = WeblinkObjectService(
+      systemObjects: systemObjects,
+      defaultsStore: defaultsStore,
+    );
+    final images = ImageObjectService(
+      systemObjects: systemObjects,
+      defaultsStore: defaultsStore,
+    );
 
     return GenericDatabasePageServices(
       loader: loader,
@@ -88,6 +98,8 @@ class GenericDatabasePageServices {
         ),
         systemObjects: systemObjects,
         dailyNotes: dailyNotes,
+        weblinks: weblinks,
+        images: images,
       ),
       relationEditor: ObjectRelationEditorService(
         targets: RelationTargetService(objectStore),
