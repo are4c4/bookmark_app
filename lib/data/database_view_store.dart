@@ -89,14 +89,12 @@ class DatabaseViewStore {
 
   void _debugDecodeFailure(
     String valueKind,
-    Object error,
     StackTrace stackTrace,
   ) {
     assert(() {
       developer.log(
         'DatabaseViewStore: invalid persisted $valueKind JSON; using empty fallback.',
         name: 'bookmark_app.database_view_store',
-        error: error,
         stackTrace: stackTrace,
       );
       return true;
@@ -107,8 +105,11 @@ class DatabaseViewStore {
     try {
       final value = jsonDecode(raw);
       return value is Map<String, dynamic> ? value : <String, dynamic>{};
-    } catch (error, stackTrace) {
-      _debugDecodeFailure('map', error, stackTrace);
+    } catch (_, stackTrace) {
+      // Persisted filters/settings can contain user-entered values. Preserve the
+      // existing empty fallback, but do not attach FormatException text because
+      // it may echo the malformed JSON payload.
+      _debugDecodeFailure('map', stackTrace);
       return <String, dynamic>{};
     }
   }
@@ -117,8 +118,8 @@ class DatabaseViewStore {
     try {
       final value = jsonDecode(raw);
       return value is List ? value : <dynamic>[];
-    } catch (error, stackTrace) {
-      _debugDecodeFailure('list', error, stackTrace);
+    } catch (_, stackTrace) {
+      _debugDecodeFailure('list', stackTrace);
       return <dynamic>[];
     }
   }
