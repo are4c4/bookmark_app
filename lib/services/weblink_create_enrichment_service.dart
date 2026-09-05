@@ -12,9 +12,10 @@ typedef WeblinkPreviewImageIngest = Future<int?> Function({
 /// Best-effort resource enrichment after canonical Weblink identity exists.
 ///
 /// URL normalization/reuse stays in [WeblinkObjectService]. This service only
-/// adds optional page metadata and delegates managed preview ingestion through
-/// the existing canonical Weblink -> Image pipeline supplied by the composition
-/// root. Failure here must never undo or block successful Weblink creation.
+/// adds optional page/site metadata and delegates managed preview ingestion
+/// through the existing canonical Weblink -> Image pipeline supplied by the
+/// composition root. Failure here must never undo or block successful Weblink
+/// creation.
 class WeblinkCreateEnrichmentService {
   const WeblinkCreateEnrichmentService({
     required this.weblinks,
@@ -40,10 +41,14 @@ class WeblinkCreateEnrichmentService {
 
     if (metadata != null) {
       final pageTitle = _resourcePageTitle(metadata);
+      final siteName = metadata.siteName?.trim();
       final description = metadata.description?.trim();
+      final favicon = metadata.faviconUrl?.trim();
       final thumbnail = metadata.thumbnail?.trim();
       final hasUsefulMetadata = pageTitle != null ||
+          siteName?.isNotEmpty == true ||
           description?.isNotEmpty == true ||
+          favicon?.isNotEmpty == true ||
           thumbnail?.isNotEmpty == true;
       if (hasUsefulMetadata) {
         try {
@@ -51,7 +56,9 @@ class WeblinkCreateEnrichmentService {
             workspaceId: workspaceId,
             objectId: objectId,
             pageTitle: pageTitle,
+            siteName: metadata.siteName,
             description: metadata.description,
+            faviconUrl: metadata.faviconUrl,
             previewImageUrl: metadata.thumbnail,
           );
         } catch (error, stackTrace) {
