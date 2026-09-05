@@ -16,6 +16,8 @@ class BookmarkAttachmentSection extends StatefulWidget {
     this.importAttachments,
     this.readPdfMetadata,
     this.createPerson,
+    this.watchAttachments,
+    this.loadPeople,
   });
 
   final BookmarkRepository repository;
@@ -23,6 +25,8 @@ class BookmarkAttachmentSection extends StatefulWidget {
   final Future<List<BookmarkAttachment>> Function()? importAttachments;
   final Future<PdfFileMetadata> Function(String path)? readPdfMetadata;
   final Future<void> Function(String name)? createPerson;
+  final Stream<List<BookmarkAttachment>> Function(int bookmarkId)? watchAttachments;
+  final Future<List<Person>> Function()? loadPeople;
 
   @override
   State<BookmarkAttachmentSection> createState() =>
@@ -70,6 +74,18 @@ class _BookmarkAttachmentSectionState extends State<BookmarkAttachmentSection> {
   Future<void> _createPerson(String name) {
     final creator = widget.createPerson;
     return creator == null ? widget.repository.createPerson(name) : creator(name);
+  }
+
+  Stream<List<BookmarkAttachment>> _watchAttachments() {
+    final watcher = widget.watchAttachments;
+    return watcher == null
+        ? _store.watchForBookmark(widget.bookmark.id)
+        : watcher(widget.bookmark.id);
+  }
+
+  Future<List<Person>> _loadPeople() {
+    final loader = widget.loadPeople;
+    return loader == null ? widget.repository.watchPeople().first : loader();
   }
 
   String _size(int bytes) {
@@ -149,7 +165,7 @@ class _BookmarkAttachmentSectionState extends State<BookmarkAttachmentSection> {
           _debugFailure('best-effort PDF author creation', stackTrace);
         }
       }
-      final allPeople = await widget.repository.watchPeople().first;
+      final allPeople = await _loadPeople();
       final names = metadata.authors
           .map((author) => author.trim().toLowerCase())
           .toSet();
@@ -316,7 +332,7 @@ class _BookmarkAttachmentSectionState extends State<BookmarkAttachmentSection> {
   Widget build(BuildContext context) {
     if (!_ready) return const LinearProgressIndicator(minHeight: 1);
     return StreamBuilder<List<BookmarkAttachment>>(
-      stream: _store.watchForBookmark(widget.bookmark.id),
+      stream: _watchAttachments(),
       builder: (context, snapshot) {
         final attachments = snapshot.data ?? const <BookmarkAttachment>[];
         final scheme = Theme.of(context).colorScheme;
