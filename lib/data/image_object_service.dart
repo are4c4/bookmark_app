@@ -278,7 +278,7 @@ class ImageObjectService {
   String? _validatedSourceUrl(String? value) {
     final candidate = value?.trim();
     if (candidate == null || candidate.isEmpty) return null;
-    return _normalizeSourceUrl(candidate, originalValue: value);
+    return _normalizeSourceUrl(candidate, originalValue: candidate);
   }
 
   bool _sourceUrlsMatch(String stored, String normalizedCandidate) {
