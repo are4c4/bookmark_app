@@ -44,4 +44,38 @@ void main() {
     expect(table, contains('height: 38'));
     expect(table, contains('child: _image(bookmark, width: 58, height: 38)'));
   });
+
+  test('Stage1 bookmark opening delegates to shared View opening contract', () {
+    final source = File('lib/views/bookmark_unified_stage1_page.dart')
+        .readAsStringSync();
+
+    final selectBookmark = _between(
+      source,
+      '  void _selectBookmark(',
+      '\n  Future<void> _presentBookmark(',
+    );
+    expect(selectBookmark, contains('unawaited(_presentBookmark(bookmark))'));
+    expect(selectBookmark, isNot(contains('_selectedBookmarkId = bookmark.id')));
+
+    final presentBookmark = _between(
+      source,
+      '  Future<void> _presentBookmark(',
+      '\n  Future<BookmarkUrlSource?> _resolveBookmarkUrl(',
+    );
+    expect(
+      presentBookmark,
+      contains('_databaseViewOpenModeService.resolve(view: activeView)'),
+    );
+    expect(presentBookmark, contains('_openPresentationHost.open('));
+    expect(presentBookmark, contains('onSidePeek: ()'));
+    expect(presentBookmark, contains('detailBuilder: (presentationContext)'));
+    expect(presentBookmark, contains('BookmarkDetailPanel('));
+
+    final menu = _between(
+      source,
+      '  Widget _bookmarkMenu(',
+      '\n  Map<String, List<Person>> _roleGroups(',
+    );
+    expect(menu, contains("if (value == 'detail') {\n            _selectBookmark(bookmark);"));
+  });
 }

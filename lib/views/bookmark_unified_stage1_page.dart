@@ -8,11 +8,13 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
+import '../data/database_view_open_mode_service.dart';
 import '../data/database_view_store.dart';
 import '../database/database_definition.dart';
 import '../data/person_roles.dart';
 import '../data/workspace_store.dart';
 import '../features/database/presentation/widgets/database_page_toolbar.dart';
+import '../features/object/presentation/object_open_presentation_host.dart';
 import '../services/bookmark_metadata_service.dart';
 import '../services/bookmark_url_resolver.dart';
 import '../services/photo_storage_service.dart';
@@ -47,6 +49,8 @@ class BookmarkUnifiedStage1Page extends StatefulWidget {
 }
 
 class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
+  static const _openPresentationHost = ObjectOpenPresentationHost();
+
   final _searchController = TextEditingController();
   final Set<int> _selectedTagIds = {};
   final Set<int> _batchSelectedIds = {};
@@ -77,6 +81,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
   double _detailWidth = 430;
   Timer? _databaseViewSaveTimer;
   late final DatabaseViewStore _databaseViewStore;
+  late final DatabaseViewOpenModeService _databaseViewOpenModeService;
   late final BookmarkUrlResolver _bookmarkUrlResolver;
   int? _activeDatabaseViewId;
   DatabaseViewConfig? _activeDatabaseView;
@@ -97,6 +102,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
   void initState() {
     super.initState();
     _databaseViewStore = DatabaseViewStore(widget.repository.workspaceStore.database);
+    _databaseViewOpenModeService = DatabaseViewOpenModeService(_databaseViewStore);
     _bookmarkUrlResolver = BookmarkUrlResolver(
       database: widget.repository.workspaceStore.database,
       workspaceId: widget.repository.workspaceId,
@@ -306,8 +312,56 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
             : _batchSelectedIds.add(bookmark.id);
       });
     } else {
-      setState(() => _selectedBookmarkId = bookmark.id);
+      unawaited(_presentBookmark(bookmark));
     }
+  }
+
+  Future<void> _presentBookmark(BookmarkItem bookmark) async {
+    final activeView = _activeDatabaseView;
+    if (activeView == null) {
+      if (mounted) setState(() => _selectedBookmarkId = bookmark.id);
+      return;
+    }
+
+    final mode = _databaseViewOpenModeService.resolve(view: activeView);
+    if (mounted && _selectedBookmarkId != null) {
+      setState(() => _selectedBookmarkId = null);
+    }
+    if (!mounted) return;
+
+    await _openPresentationHost.open(
+      context: context,
+      mode: mode,
+      onSidePeek: () {
+        if (mounted) setState(() => _selectedBookmarkId = bookmark.id);
+      },
+      detailBuilder: (presentationContext) => BookmarkDetailPanel(
+        key: ValueKey('bookmark-presentation-${bookmark.id}'),
+        repository: widget.repository,
+        bookmark: bookmark,
+        propertyOrder: _propertyOrder,
+        onPropertyOrderChanged: (order) {
+          if (!mounted) return;
+          setState(() {
+            _propertyOrder = normalizeBookmarkPropertyOrder(order);
+            _markViewChanged();
+          });
+        },
+        onClose: () => Navigator.of(presentationContext).maybePop(),
+        onFilterByTag: (tag) {
+          Navigator.of(presentationContext).pop();
+          _filterByTag(tag);
+        },
+        onFilterByPerson: (person) {
+          Navigator.of(presentationContext).pop();
+          _filterByPerson(person);
+        },
+        onFilterByPhoto: (photo) {
+          Navigator.of(presentationContext).pop();
+          _filterByPhoto(photo);
+        },
+      ),
+    );
   }
 
   Future<BookmarkUrlSource?> _resolveBookmarkUrl(BookmarkItem bookmark) =>
@@ -423,7 +477,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
         iconSize: 18,
         onSelected: (value) {
           if (value == 'detail') {
-            setState(() => _selectedBookmarkId = bookmark.id);
+            _selectBookmark(bookmark);
           }
           if (value == 'open') _openBookmark(bookmark);
           if (value == 'move') _moveBookmark(bookmark);
