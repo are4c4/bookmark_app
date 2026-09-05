@@ -46,6 +46,7 @@ void main() {
                 showBookmarkCreateDialog(
                   context: context,
                   repository: repository,
+                  findDuplicate: (_) async => null,
                   fetchMetadata: (_) async {
                     fetchCalls++;
                     throw StateError(
