@@ -45,11 +45,15 @@ class WeblinkCreateEnrichmentService {
       final description = metadata.description?.trim();
       final favicon = metadata.faviconUrl?.trim();
       final thumbnail = metadata.thumbnail?.trim();
+      final contentType = metadata.contentType?.trim();
+      final publishedDate = metadata.publishedDate?.trim();
       final hasUsefulMetadata = pageTitle != null ||
           siteName?.isNotEmpty == true ||
           description?.isNotEmpty == true ||
           favicon?.isNotEmpty == true ||
-          thumbnail?.isNotEmpty == true;
+          thumbnail?.isNotEmpty == true ||
+          contentType?.isNotEmpty == true ||
+          publishedDate?.isNotEmpty == true;
       if (hasUsefulMetadata) {
         try {
           await weblinks.enrichIfMissing(
@@ -60,6 +64,8 @@ class WeblinkCreateEnrichmentService {
             description: metadata.description,
             faviconUrl: metadata.faviconUrl,
             previewImageUrl: metadata.thumbnail,
+            contentType: metadata.contentType,
+            publishedDate: metadata.publishedDate,
           );
         } catch (error, stackTrace) {
           _debugFailure('metadata persistence', error, stackTrace);

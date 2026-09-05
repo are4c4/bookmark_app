@@ -12,6 +12,8 @@ class BookmarkMetadata {
     this.thumbnail,
     this.siteName,
     this.faviconUrl,
+    this.contentType,
+    this.publishedDate,
   });
 
   final String url;
@@ -20,6 +22,8 @@ class BookmarkMetadata {
   final String? thumbnail;
   final String? siteName;
   final String? faviconUrl;
+  final String? contentType;
+  final String? publishedDate;
 }
 
 class BookmarkMetadataService {
@@ -71,6 +75,19 @@ class BookmarkMetadataService {
       final rawImage = ogImage ?? twitterImage;
       final siteName = _metaContent(document, property: 'og:site_name');
       final faviconHref = _faviconHref(document);
+      final publishedDate = _parseableDate(
+        _firstNonEmpty([
+          _metaContent(document, property: 'article:published_time'),
+          _metaContent(document, property: 'og:published_time'),
+          _metaContent(document, name: 'date'),
+          _metaContent(document, name: 'pubdate'),
+          _metaAttributeContent(
+            document,
+            attribute: 'itemprop',
+            value: 'datePublished',
+          ),
+        ]),
+      );
 
       return BookmarkMetadata(
         url: uri.toString(),
@@ -88,6 +105,8 @@ class BookmarkMetadataService {
         siteName: siteName,
         faviconUrl:
             faviconHref == null ? null : uri.resolve(faviconHref).toString(),
+        contentType: _contentType(response.headers['content-type']),
+        publishedDate: publishedDate,
       );
     } catch (error, stackTrace) {
       _debugFallbackFailure(error, stackTrace);
@@ -148,6 +167,29 @@ class BookmarkMetadataService {
         : 'meta[name="$name"]';
     final value = document.querySelector(selector)?.attributes['content']?.trim();
     return value == null || value.isEmpty ? null : value;
+  }
+
+  String? _metaAttributeContent(
+    Document document, {
+    required String attribute,
+    required String value,
+  }) {
+    final content = document
+        .querySelector('meta[$attribute="$value"]')
+        ?.attributes['content']
+        ?.trim();
+    return content == null || content.isEmpty ? null : content;
+  }
+
+  String? _contentType(String? raw) {
+    final value = raw?.split(';').first.trim().toLowerCase();
+    return value == null || value.isEmpty ? null : value;
+  }
+
+  String? _parseableDate(String? raw) {
+    final value = raw?.trim();
+    if (value == null || value.isEmpty) return null;
+    return DateTime.tryParse(value) == null ? null : value;
   }
 
   String? _faviconHref(Document document) {
