@@ -7,16 +7,22 @@ Issue #225 — reduce maintenance hotspots and retire duplicate legacy paths whi
 
 Primary lane: **Refactor**. Object owns replacement product semantics and Relation owns canonical Relation semantics; this lane deletes duplication, narrows responsibilities, improves failure observability/privacy, and decomposes hotspots only after checking parallel PR ownership.
 
-## Current checkpoint
-The previous Stage1 blocker is resolved. The latest sustained Refactor sequence has now merged:
+## Current checkpoint — 2026-09-06
+The Refactor lane has moved beyond the earlier #325–#329 persistence/fallback audit and is now systematically removing raw implementation exceptions from live UI boundaries without changing domain behavior.
 
-- **#323 `Centralize GenericDatabasePage dependency composition`** — `GenericDatabasePageServices.fromWorkspaceStore(...)` owns the low-level Object/Database/View Store/Service graph used by the page. The Widget no longer reaches through `BookmarkRepository` to `AppDatabase` to construct that graph, and no new Bookmark-layer dependency was added to the composition service.
-- **#324 `Route Stage1 list and table visuals through canonical resolver`** — the final original direct Bookmark cover/thumbnail rendering duplicate now uses `BookmarkVisualImage`. List `60x44` and Table `58x38` geometry are preserved.
-- **#325–#329 failure-policy/privacy slices** — malformed persisted UI/Object JSON and optional enrichment/evaluation failures retain their established fail-soft contracts while becoming debug-visible without logging raw user content or exception text.
+Latest merged sequence:
+- **#330** — Global Search index/query failures share a stable retryable error state; raw caught Objects are no longer rendered.
+- **#331** — Settings backup export/restore failures use stable messages; restore confirmation and backup semantics are unchanged.
+- **#332** — Auto-organize rule creation/bulk-apply failures use stable messages.
+- **#335** — malformed Database View open-mode state fails closed without exposing raw parsing details.
+- **#338** — global file-drop import failure uses a stable message and privacy-safe debug diagnostics.
+- **#337** — Bookmark URL/file creation failures use stable retry messages; production duplicate detection and metadata semantics remain unchanged. Merged as `186d8cd` after full Analyze/Test green.
 
-The old heavyweight Stage1 full-page Widget regression was the cause of the ~12-minute Test step/hang. #324 replaced it with a deterministic architecture guard that checks canonical visual routing and geometry directly; fresh full CI returned to the normal ~3-minute Test range. This was a test-lifecycle problem, not a production behavior defect.
+Current Refactor PRs at this checkpoint:
+- **#336 `Stabilize attachment failure handling`** — attachment import failure + best-effort PDF author enrichment. Analyze is green; the latest Test run is validating a test-lifecycle-only fix that explicitly unmounts Drift-backed StreamBuilders and avoids `pumpAndSettle` while an intentional indeterminate progress indicator is active.
+- **#340 `Sanitize ProfileManager fallback diagnostics`** — privacy-only diagnostic change. It removes raw exception text from profile-registry/imported-metadata debug output while preserving the exact fail-soft recovery behavior, persistence and data-location policy. Full CI is running.
 
-There is currently **no open Refactor PR** after #329. Object PR **#322** owns Notion-card canonical Weblink URL presentation and must be allowed to finish independently.
+Object #322/#333/#334 are merged. In particular, #334 no longer owns `generic_database_page.dart`, so the shared hotspot is not currently cross-lane locked; however the current GitHub connector still lacks a safe patch-write primitive, so the 70+ KB host must not be reconstructed wholesale.
 
 ## Completed checkpoints
 ### P0 guardrails / architecture
@@ -31,7 +37,7 @@ Merged guardrails include:
 New Object/Database/View code must not deepen `BookmarkItem` / legacy-table coupling unless it is an explicit compatibility or migration boundary.
 
 ### Failure-policy / observability / diagnostic privacy
-Behavior-preserving merged slices include:
+Merged behavior-preserving slices include:
 - #227 optional PDF author enrichment diagnostics;
 - #229 profile state / backup metadata fallback diagnostics;
 - #234 corrupt Database View JSON fail-soft diagnostics;
@@ -42,15 +48,21 @@ Behavior-preserving merged slices include:
 - #325 malformed tag-tree expansion JSON remains fail-soft to collapsed state but is debug-visible;
 - #326 malformed formula/rollup projection remains `null` but is debug-visible;
 - #327 optional ObjectSync remote-preview failures remain non-blocking/no-repeat but are debug-visible;
-- #328 Database View malformed-JSON diagnostics no longer attach `FormatException`, avoiding persisted user JSON echo;
-- #329 malformed generic Property config / Record value JSON remains `{}` / `null` respectively, with privacy-safe debug visibility and focused coverage.
+- #328 Database View malformed-JSON diagnostics no longer attach `FormatException`;
+- #329 malformed generic Property config / Record value JSON remains `{}` / `null` with privacy-safe debug visibility;
+- #330 Global Search stable retryable error state;
+- #331 Settings backup stable error boundaries;
+- #332 Auto-organize stable error boundaries;
+- #335 View open-mode stable/fail-closed error boundary;
+- #338 global file-drop stable error boundary;
+- #337 Bookmark creation stable error boundaries.
 
 Intentional fail-soft product behavior must not be converted into user-visible failure merely to eliminate a broad catch. Debug diagnostics should use fixed messages plus stack traces and should not include raw names, URLs, paths, JSON, bytes, response bodies or exception text when those may echo user content.
 
 ### AppDatabase migration extraction — complete
 All historical migration bodies **v2 through v16** live behind migration helpers. `AppDatabase.migration` is sequencing/wiring rather than the home of historical bodies.
 
-Historical fixtures cover real schemaVersion checkpoints down to v1 and exposed installed-user defects that were fixed before extraction:
+Historical fixtures cover real schemaVersion checkpoints down to v1 and exposed installed-user defects fixed before extraction:
 - #257 guarded duplicate `photos.tags` addition;
 - #259 guarded duplicate `people.profile_photo_id` addition;
 - #269 replaced current-row-mapper use against historical SavedView schema with historical/raw SQL;
@@ -60,60 +72,58 @@ Canonical Relation bootstrap regressions replay old migration boundaries; Refact
 
 ### AppDatabase responsibility reduction — complete slices
 Merged responsibility-moving slices:
-- **#281 `BookmarkReadStore`** — removed `AppDatabase.watchBookmarkItems()` and moved screen-ready Bookmark aggregation behind a dedicated read store;
-- **#282 `ProfilePathResolver`** — removed AppDatabase profile-path conversion methods and centralized relative/absolute path semantics;
-- **#283 `SavedViewReadStore`** — removed `AppDatabase.watchSavedViewConfigs()` and saved-view tag aggregation from the database root;
-- **#289 `PhotoReadStore`** — removed `AppDatabase.watchAllPhotos()` and centralized Photo path resolution.
+- **#281 `BookmarkReadStore`** — removed `AppDatabase.watchBookmarkItems()`;
+- **#282 `ProfilePathResolver`** — removed AppDatabase profile-path conversion methods;
+- **#283 `SavedViewReadStore`** — removed `AppDatabase.watchSavedViewConfigs()` / saved-view tag aggregation;
+- **#289 `PhotoReadStore`** — removed `AppDatabase.watchAllPhotos()` and duplicate path reconstruction.
 
 Continue shrinking AppDatabase only when a slice removes a real responsibility; do not add wrapper-only indirection.
 
-### Legacy Bookmark visual duplication — original inventory complete
-Canonical `BookmarkVisualImage` migration is merged for all four direct visual duplicates identified by the original inventory:
-- lifecycle Bookmark rows — Object #296;
+### Legacy Bookmark visual / URL duplication
+All four direct Bookmark visual duplicates from the original inventory route through canonical `BookmarkVisualImage`:
+- lifecycle rows — Object #296;
 - Notion card — Refactor #294;
-- reverse lookup dialog — Refactor #299;
-- Stage1 List/Table helper — Refactor #324.
+- reverse lookup — Refactor #299;
+- Stage1 List/Table — Refactor #324.
 
-The latest `main` Stage1 source directly delegates `_image(...)` to `BookmarkVisualImage`; List/Table retain their old dimensions. Whole Bookmark hosts are **not** automatically deletable: only the duplicated visual-resolution logic is retired. `BookmarkVisualImage` and `BookmarkVisualResolver` intentionally retain legacy thumbnail fallback while compatibility hosts remain.
+Canonical Bookmark -> Weblink URL presentation is also live in:
+- lifecycle — #317;
+- reverse lookup — #320;
+- Notion bookmark card — #322.
+
+Legacy `bookmarks.url` and thumbnail fields remain compatibility/import/export data until all production dependencies and migration requirements have proven replacements.
 
 ### GenericDatabasePage P1 / composition decomposition
 Merged focused slices:
-- **#310** moves read/projection loading, all-ObjectType record aggregation, create-mode resolution and computed evaluation out of `_reload()` into `GenericDatabasePageStateLoader`;
-- **#323** moves low-level Store/Service graph construction out of the Widget into `GenericDatabasePageServices.fromWorkspaceStore(...)`.
+- **#310** — read/projection loading, all-ObjectType aggregation, create-mode resolution and computed evaluation -> `GenericDatabasePageStateLoader`;
+- **#323** — low-level Store/Service graph construction -> `GenericDatabasePageServices.fromWorkspaceStore(...)`.
 
-Keep following the same pattern: focused regression first/with the move, patch-sized host diff, no monolithic controller rewrite, and no Object/Relation semantic changes.
-
-The next high-value candidates from Issue #225 remain:
+Current source is about 74 KB. The next high-value responsibilities remain:
 - schema/database actions behind an application service/facade;
 - Property creation/edit dialog workflow extraction;
-- layout-specific host extraction where it actually removes responsibility/LOC.
+- layout-specific host extraction where it removes real responsibility/LOC.
 
-Do **not** reconstruct the 70+ KB `generic_database_page.dart` wholesale merely because the current connector lacks a safe patch-write primitive. Wait for a safe patch-sized edit path or a sequenced change where the exact file can be changed without hand-rebuilding unrelated content.
+The Property creation workflow is a concrete high-value next candidate, but **do not reconstruct the whole file** to perform it. Wait for a safe patch-sized editing path or a sequenced local change.
 
 ## Cross-lane coordination
 ### Object lane
-Current Object work is #155/#56 daily-use parity and host-by-host canonical URL replacement.
+Object owns #155/#56 daily-use parity. Recent relevant Object work is merged:
+- #317/#320/#322 canonical URL adoption;
+- #333/#334 generic Gallery managed-media follow-ons.
 
-Verified current URL migration state:
-- **#317 merged** — Bookmark lifecycle display/open behavior prefers canonical Bookmark -> Weblink URL with legacy Bookmark URL fallback;
-- **#320 merged** — reverse-lookup URL display/open behavior uses the same canonical resolver;
-- **#322 open** — Notion bookmark cards are the current Object-owned URL presentation slice.
-
-Legacy `bookmarks.url` remains compatibility/import/export data. Do not delete it merely because several presentation hosts now prefer canonical Weblink URL state.
-
-Before touching `generic_database_page.dart`, `bookmark_unified_stage1_page.dart`, `object_inspector_page.dart` or `app_shell.dart`, re-check open PR ownership.
+Before touching `generic_database_page.dart`, `bookmark_unified_stage1_page.dart`, `object_inspector_page.dart` or `app_shell.dart`, re-check actual open PR ownership; do not trust stale handoff PR numbers.
 
 ### Relation lane
-Canonical Relation mutation/read/index/backlink/audit/reconcile is mature. Focused composition coverage includes #307 for direct Weblink enrichment -> Representative Image Relation. Refactor must preserve canonical Relation APIs and must not create alternate serialized-id/index/repair paths.
+Canonical Relation mutation/read/index/backlink/audit/reconcile is mature. Refactor must preserve canonical Relation APIs and must not create alternate serialized-id/index/repair paths.
 
 ## Exact next actions
-1. **Update/maintain the repository handoff docs** when #322 or later Object work changes legacy retirement sequencing.
-2. **Continue GenericDatabasePage P1 decomposition** only through a safe patch-sized responsibility move. Prefer actual responsibility/LOC removal over alias-field or wrapper-only cleanup.
-3. **Audit remaining user-visible raw exceptions**. `GlobalSearchPage` currently stores the caught Object and renders `message: '$_error'`; fix only with a focused testable error-state boundary rather than an untested cosmetic one-line replacement. Similar UI paths should move toward stable domain messages.
-4. **Keep ProfileManager recovery policy deferred**. Corrupt profile registry metadata currently can fail soft to a default profile; changing that behavior requires an explicit data-recovery/product policy, not a routine behavior-preserving refactor.
-5. **Follow Object-first URL parity host by host** (#317/#320 merged, #322 open) and narrow legacy URL reads only after the canonical replacement is proven for each live host.
-6. Re-run `tool/maintainability_report.sh` when a runtime with repository/network access is available and after another meaningful hotspot slice; record actual file/LOC movement rather than adapter count.
-7. Continue failure-policy work only where a truly silent/unsafe boundary remains; file-existence checks and deliberate compatibility fallbacks should not gain noisy logging just to reduce broad-catch counts.
+1. **Finish #336**: if the bounded-pump/unmount test lifecycle fix returns full green, merge. If Test still stalls/fails, inspect only the focused Widget regression before changing production semantics.
+2. **Finish #340**: merge only after full Analyze/Test green. This PR authorizes diagnostic sanitization only, not ProfileManager recovery behavior changes.
+3. **Finalize repository handoff docs** (`AI_PROGRESS_REFACTOR.md`, `AI_PROGRESS.md`, `LEGACY_BOOKMARK_INVENTORY.md`, `ERROR_POLICY_AUDIT.md`) on `docs/refactor-handoff-20260906` after #336/#340 settle.
+4. **Continue raw user-visible error cleanup** in a small independently testable host. Current candidates include Image editor, Photo management, Bookmark detail, Object inspector, AppShell, Tag management, Stage1 compatibility URL-add and GenericDatabasePage. Prefer the smallest deterministic boundary first.
+5. **Continue GenericDatabasePage P1 decomposition** only through a safe patch-sized responsibility move. Property create/edit workflow is high value; avoid a monolithic controller rewrite or whole-file reconstruction.
+6. **Keep ProfileManager recovery policy deferred**. Corrupt registry fallback can affect data-location selection; changing fallback selection/persistence requires explicit product/data-recovery policy.
+7. Re-run `tool/maintainability_report.sh` when a runtime with repository/network access is available after another meaningful hotspot slice; record actual file/LOC movement.
 
 ## Validation expectations
 For responsibility-moving refactors:
@@ -129,22 +139,26 @@ For migration work:
 For failure-policy work:
 - fail-soft/user-visible behavior remains unchanged unless a separate product issue says otherwise;
 - avoid logging raw user content, paths, URLs, JSON, bytes, credentials or secrets;
-- do not attach exception text when it may contain persisted/request user data.
+- do not attach exception text when it may contain persisted/request user data;
+- test an actual failure/retry boundary where possible; use source guards only for native/platform boundaries that are not reliably injectable.
 
 ## Risks / blockers
-- parallel lanes move `main` quickly; rebuild intended small diffs on latest main instead of force-merging stale branches;
+- parallel lanes move `main` quickly; refresh intended small diffs instead of force-merging stale branches;
 - legacy Bookmark storage/UI cannot be deleted until Object-first read/write/presentation parity is proven;
 - large shared hosts should not be reconstructed wholesale to make a small edit;
 - abstraction that adds wrappers without deleting responsibility/duplication should be rejected;
-- ProfileManager fallback/recovery behavior is a data-safety decision, not a silent-catch cleanup;
-- local/container git currently cannot reach GitHub DNS, so maintainability report execution must use another environment rather than being guessed.
+- ProfileManager fallback/recovery behavior is a data-safety decision even though its debug output can be sanitized independently;
+- test-only lifecycle/hang failures must not be fixed by changing production behavior or merely increasing global timeouts;
+- GitHub code search can lag fresh merges; verify branch/main files directly before acting on search hits.
 
 ## Current validation / stop state
 - v2-v16 migration extraction: complete and merged;
 - AppDatabase read/path responsibility slices #281/#282/#283/#289: merged;
-- original direct Bookmark visual duplication #294/#299/Object #296/#324: complete;
-- GenericDatabasePage state-loader #310 and composition-root #323: full Analyze/Test green and merged;
-- failure/privacy #321/#325/#326/#327/#328/#329: full Analyze/Test green and merged;
-- Object #317/#320 canonical URL host slices are merged; #322 is the only currently open PR observed at this checkpoint.
+- direct Bookmark visual duplication #294/#299/Object #296/#324: complete;
+- GenericDatabasePage state-loader #310 and composition-root #323: merged after green Analyze/Test;
+- failure/privacy #321/#325–#332/#335/#337/#338: merged after relevant green validation;
+- #336: Analyze green; latest Test run in progress after test-lifecycle-only correction;
+- #340: open, focused diff confirmed, full CI in progress;
+- Object #322/#333/#334: merged.
 
-Refactor work remains actionable. The next useful work is a safe, measurable hotspot responsibility extraction or a focused stable-error boundary—not another speculative abstraction layer.
+Refactor work remains actionable. Continue through safe stable-error slices and measured responsibility extraction; do not stop merely because one PR finishes or CI is pending.
