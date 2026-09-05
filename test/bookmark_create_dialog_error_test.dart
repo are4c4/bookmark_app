@@ -63,8 +63,13 @@ void main() {
 
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField).first, 'https://example.com');
-    await tester.tap(find.text('URLから追加'));
+    final urlField = find.byWidgetPredicate(
+      (widget) =>
+          widget is TextField && widget.decoration?.labelText == 'URL',
+    );
+    expect(urlField, findsOneWidget);
+    await tester.enterText(urlField, 'https://example.com');
+    await tester.tap(find.widgetWithText(FilledButton, 'URLから追加'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
