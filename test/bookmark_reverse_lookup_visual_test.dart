@@ -2,6 +2,7 @@ import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/bookmark_lifecycle_store.dart';
 import 'package:bookmark_app/data/bookmark_repository.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
+import 'package:bookmark_app/services/bookmark_url_resolver.dart';
 import 'package:bookmark_app/widgets/bookmark_reverse_lookup_dialog.dart';
 import 'package:bookmark_app/widgets/bookmark_visual_image.dart';
 import 'package:drift/native.dart';
@@ -10,7 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   testWidgets(
-    'reverse lookup dialog routes bookmark thumbnails through canonical visual widget',
+    'reverse lookup dialog routes visual and URL through canonical presentation',
     (tester) async {
       final database = AppDatabase.forTesting(NativeDatabase.memory());
       addTearDown(database.close);
@@ -27,7 +28,7 @@ void main() {
 
       final bookmark = BookmarkItem(
         id: 1,
-        url: 'https://example.com',
+        url: 'https://legacy.example/stale',
         title: 'Example',
         createdAt: DateTime(2026, 9, 5),
         favorite: false,
@@ -50,6 +51,10 @@ void main() {
                   repository: repository,
                   title: 'Related bookmarks',
                   bookmarks: Stream.value([bookmark]),
+                  resolveUrl: (_) async => const BookmarkUrlSource(
+                    kind: BookmarkUrlSourceKind.canonicalWeblink,
+                    value: 'https://canonical.example/article',
+                  ),
                 ),
                 child: const Text('Open'),
               ),
@@ -63,6 +68,8 @@ void main() {
 
       expect(find.byType(BookmarkVisualImage), findsOneWidget);
       expect(find.text('Example'), findsOneWidget);
+      expect(find.text('https://canonical.example/article'), findsOneWidget);
+      expect(find.text('https://legacy.example/stale'), findsNothing);
     },
   );
 }
