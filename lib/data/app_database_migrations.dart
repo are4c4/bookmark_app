@@ -1,6 +1,23 @@
 part of 'app_database.dart';
 
 extension AppDatabaseMigrationSteps on AppDatabase {
+  Future<void> migrateToV10(Migrator migrator) async {
+    await customStatement('ALTER TABLE bookmark_people RENAME TO bookmark_people_old');
+    await customStatement(
+      "CREATE TABLE bookmark_people ("
+      "bookmark_id INTEGER NOT NULL REFERENCES bookmarks(id) ON DELETE CASCADE, "
+      "person_id INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE, "
+      "role TEXT NOT NULL DEFAULT '出演者', "
+      "PRIMARY KEY (bookmark_id, person_id, role))",
+    );
+    await customStatement(
+      "INSERT OR IGNORE INTO bookmark_people (bookmark_id, person_id, role) "
+      "SELECT bookmark_id, person_id, CASE WHEN role = '出演' OR role = 'performer' THEN '出演者' ELSE role END "
+      "FROM bookmark_people_old",
+    );
+    await customStatement('DROP TABLE bookmark_people_old');
+  }
+
   Future<void> migrateToV11(Migrator migrator) async {
     final info = await customSelect('PRAGMA table_info(bookmarks)').get();
     final names = info.map((row) => row.read<String>('name')).toSet();
