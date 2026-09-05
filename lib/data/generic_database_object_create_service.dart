@@ -22,6 +22,7 @@ class GenericDatabaseObjectCreateService {
     this.systemObjects,
     this.dailyNotes,
     this.weblinks,
+    this.images,
   });
 
   final GenericDatabaseCollectionPageLoader pageLoader;
@@ -30,6 +31,7 @@ class GenericDatabaseObjectCreateService {
   final SystemObjectStore? systemObjects;
   final DailyNoteService? dailyNotes;
   final WeblinkObjectService? weblinks;
+  final ImageObjectService? images;
 
   Future<int> create({
     required int databaseId,
@@ -79,6 +81,46 @@ class GenericDatabaseObjectCreateService {
       workspaceId: page.objectType.workspaceId,
       url: url,
       title: title,
+    );
+    return object.id;
+  }
+
+  /// Creates or reuses a canonical Image from an app-managed file for a
+  /// collection whose target ObjectType is the system Image type.
+  ///
+  /// File selection/copying belongs to the import boundary. This method starts
+  /// only after a managed [filePath] exists and keeps generic title-only Image
+  /// creation fail-closed so file/source identity cannot be bypassed.
+  Future<int> createImageFromManagedFile({
+    required int databaseId,
+    required String filePath,
+    String? sourceUrl,
+    String? title,
+    String? originalFilename,
+    String? contentType,
+    int? pixelWidth,
+    int? pixelHeight,
+  }) async {
+    final page = await _load(databaseId);
+    final systemKey = await _systemKey(page);
+    if (systemKey != ImageObjectService.systemKey) {
+      throw UnsupportedError(
+        'Managed Image creation requires a Database collection targeting the system Image ObjectType.',
+      );
+    }
+    final service = images;
+    if (service == null) {
+      throw StateError('Managed Image creation requires ImageObjectService.');
+    }
+    final object = await service.findOrCreateManaged(
+      workspaceId: page.objectType.workspaceId,
+      filePath: filePath,
+      sourceUrl: sourceUrl,
+      title: title,
+      originalFilename: originalFilename,
+      contentType: contentType,
+      pixelWidth: pixelWidth,
+      pixelHeight: pixelHeight,
     );
     return object.id;
   }
