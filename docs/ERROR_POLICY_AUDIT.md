@@ -13,7 +13,8 @@ Issue #225 requires reducing silent failure without breaking intentional best-ef
 
 | Path | Current pattern | Classification | Refactor action |
 | --- | --- | --- | --- |
-| `lib/widgets/global_file_drop_layer.dart` | empty `catch (_) {}` while creating PDF authors | best-effort enrichment | PR #227 keeps import successful but logs unexpected author-creation failures in debug with stack trace. |
+| `lib/widgets/global_file_drop_layer.dart` | PDF author creation is best-effort after the bookmark/file import is already valid | best-effort enrichment | PR #227 made unexpected author-creation failure debug-visible; PR #321 keeps that visibility while removing author names and exception text from diagnostics. |
+| `lib/widgets/bookmark_create_dialog.dart` | empty `catch (_) {}` while creating PDF authors | best-effort enrichment | PR #321 preserves successful import and adds debug/test-only stack diagnostics without logging author names, exception text, URLs or paths. |
 | `lib/services/pdf_metadata_service.dart` | broad catch returns filename/title fallback | fallback is the contract | Keep non-blocking metadata fallback; add focused malformed/tool-failure test if coverage is missing. |
 | `lib/services/bookmark_metadata_service.dart` | broad catch returns metadata fallback | fallback is the contract | Keep; metadata fetch/parse is untrusted external input. Prefer test proving fallback fields remain stable. |
 | `lib/services/remote_image_storage_service.dart` | image decode catch sets decoded image to null | best-effort enrichment | Keep storage flow independent of dimension decode; document/test that missing geometry is safe. |
