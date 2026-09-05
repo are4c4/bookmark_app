@@ -7,6 +7,7 @@ import '../services/photo_storage_service.dart';
 import '../domain/bookmark_state.dart';
 import 'app_database.dart';
 import 'bookmark_attachment_store.dart';
+import 'bookmark_read_store.dart';
 import 'bookmark_lifecycle_store.dart';
 import 'person_roles.dart';
 import 'tag_group_store.dart';
@@ -20,10 +21,11 @@ class BookmarkRepository {
     required this.workspaceId,
     this.profileDirectoryPath,
     AutoOrganizeService? autoOrganizeService,
-  }) : autoOrganize =
-            autoOrganizeService ?? AutoOrganizeService(_database);
+  })  : _bookmarkReads = BookmarkReadStore(_database),
+        autoOrganize = autoOrganizeService ?? AutoOrganizeService(_database);
 
   final AppDatabase _database;
+  final BookmarkReadStore _bookmarkReads;
   final WorkspaceStore workspaceStore;
   final BookmarkLifecycleStore lifecycleStore;
   final int workspaceId;
@@ -50,7 +52,7 @@ class BookmarkRepository {
     required bool Function(BookmarkItem item) include,
   }) =>
       Rx.combineLatest2<List<BookmarkItem>, Set<int>, List<BookmarkItem>>(
-        _database.watchBookmarkItems(),
+        _bookmarkReads.watchItems(),
         workspaceStore.watchBookmarkIds(workspaceId),
         (items, workspaceIds) => items
             .where((item) => workspaceIds.contains(item.id) && include(item))

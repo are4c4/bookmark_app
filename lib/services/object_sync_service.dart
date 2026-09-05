@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:rxdart/rxdart.dart';
 
 import '../data/app_database.dart';
+import '../data/bookmark_read_store.dart';
 import '../data/bookmark_weblink_object_bridge.dart';
 import '../data/core_object_bridge.dart';
 import '../data/daily_note_service.dart';
@@ -110,7 +111,7 @@ class ObjectSyncService {
     final changes = Rx.merge<Object?>([
       database.watchAllTags().map<Object?>((_) => null),
       database.watchAllPhotos().map<Object?>((_) => null),
-      database.watchBookmarkItems().map<Object?>((_) => null),
+      BookmarkReadStore(database).watchItems().map<Object?>((_) => null),
       workspaceStore.watchBookmarkIds(workspaceId).map<Object?>((_) => null),
     ]).debounceTime(const Duration(milliseconds: 250));
 
