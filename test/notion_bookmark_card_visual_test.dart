@@ -2,6 +2,7 @@ import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/bookmark_lifecycle_store.dart';
 import 'package:bookmark_app/data/bookmark_repository.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
+import 'package:bookmark_app/services/object_sync_service.dart';
 import 'package:bookmark_app/widgets/bookmark_visual_image.dart';
 import 'package:bookmark_app/widgets/notion_bookmark_card.dart';
 import 'package:drift/native.dart';
@@ -65,5 +66,71 @@ void main() {
     );
 
     expect(find.byType(BookmarkVisualImage), findsOneWidget);
+  });
+
+  testWidgets('Notion bookmark card displays canonical Weblink URL domain',
+      (tester) async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceStore = WorkspaceStore(database);
+    final workspaceId = await workspaceStore.initialize();
+    final lifecycleStore = BookmarkLifecycleStore(database);
+    await lifecycleStore.initialize();
+    final repository = BookmarkRepository(
+      database,
+      workspaceStore: workspaceStore,
+      lifecycleStore: lifecycleStore,
+      workspaceId: workspaceId,
+    );
+    final bookmarkId = await repository.create(
+      url: 'https://Canonical.Example:443/a/../article',
+      title: 'URL migration card',
+    );
+    final sync = ObjectSyncService(database);
+    addTearDown(sync.dispose);
+    await sync.syncWorkspace(workspaceId);
+
+    await database.customStatement(
+      'UPDATE bookmarks SET url = ? WHERE id = ?',
+      <Object>['https://legacy.example/stale', bookmarkId],
+    );
+    final bookmark = (await repository.watchAll().first)
+        .singleWhere((item) => item.id == bookmarkId);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: NotionBookmarkCard(
+            repository: repository,
+            bookmark: bookmark,
+            selected: false,
+            showImage: false,
+            showUrl: true,
+            showTags: false,
+            showPeople: false,
+            showDescription: false,
+            showCreatedAt: false,
+            showFavorite: false,
+            showStatus: false,
+            showRating: false,
+            showHistory: false,
+            onTap: () {},
+            onOpen: () {},
+            onToggleFavorite: () {},
+            menu: const SizedBox.shrink(),
+          ),
+        ),
+      ),
+    );
+    for (var attempt = 0; attempt < 30; attempt += 1) {
+      await tester.pump(const Duration(milliseconds: 50));
+      if (find.text('canonical.example').evaluate().isNotEmpty) break;
+    }
+
+    expect(find.text('canonical.example'), findsOneWidget);
+    expect(find.text('legacy.example'), findsNothing);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
   });
 }
