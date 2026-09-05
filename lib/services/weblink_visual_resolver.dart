@@ -8,10 +8,23 @@ class WeblinkManagedVisual {
   const WeblinkManagedVisual({
     required this.imageObjectId,
     required this.filePath,
+    this.pixelWidth,
+    this.pixelHeight,
   });
 
   final int imageObjectId;
   final String filePath;
+  final int? pixelWidth;
+  final int? pixelHeight;
+
+  double? get aspectRatio {
+    final width = pixelWidth;
+    final height = pixelHeight;
+    if (width == null || height == null || width <= 0 || height <= 0) {
+      return null;
+    }
+    return width / height;
+  }
 }
 
 /// Resolves a Weblink's managed Representative Image for presentation only.
@@ -20,6 +33,8 @@ class WeblinkManagedVisual {
 /// [RelationReadService]. It never ensures schema, mutates Relation state, or
 /// tries to repair ambiguous/missing data. Generic Weblink detail/Gallery hosts
 /// and legacy Bookmark presentation can therefore share one fail-closed path.
+/// Persisted Image dimensions are exposed as optional presentation metadata so
+/// masonry hosts can preserve media geometry without decoding image bytes.
 class WeblinkVisualResolver {
   WeblinkVisualResolver(ObjectStore objectStore)
       : _objectStore = objectStore,
@@ -65,10 +80,38 @@ class WeblinkVisualResolver {
     );
     if (path == null || !await _existingFile(path)) return null;
 
+    final width = _dimensionValue(
+      imageType.properties
+          .where((property) => property.name == 'Pixel width')
+          .toList(growable: false),
+      representative.targetObject.values,
+    );
+    final height = _dimensionValue(
+      imageType.properties
+          .where((property) => property.name == 'Pixel height')
+          .toList(growable: false),
+      representative.targetObject.values,
+    );
+
     return WeblinkManagedVisual(
       imageObjectId: representative.targetObject.id,
       filePath: path,
+      pixelWidth: width,
+      pixelHeight: height,
     );
+  }
+
+  int? _dimensionValue(
+    List<dynamic> properties,
+    Map<int, dynamic> values,
+  ) {
+    if (properties.length != 1) return null;
+    final property = properties.single;
+    final value = values[property.id];
+    if (value is! num || !value.isFinite || value <= 0) return null;
+    final integer = value.toInt();
+    if (integer.toDouble() != value.toDouble()) return null;
+    return integer;
   }
 
   Future<bool> _existingFile(String path) async {
