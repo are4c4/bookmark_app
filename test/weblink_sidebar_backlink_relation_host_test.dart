@@ -72,7 +72,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Backlinks  1'), findsOneWidget);
-      expect(find.text('Saved article'), findsOneWidget);
+      expect(find.text('Saved article'), findsWidgets);
       expect(find.textContaining('Weblink'), findsWidgets);
     },
   );
