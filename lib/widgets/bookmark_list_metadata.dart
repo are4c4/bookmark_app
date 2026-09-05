@@ -116,36 +116,27 @@ class _RoleGroup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(5),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.person_outline, size: 13, color: scheme.onSurfaceVariant),
-          const SizedBox(width: 4),
-          if (role.isNotEmpty && role != '出演者') ...[
-            Text(
-              '$role ',
-              style: TextStyle(fontSize: 11.5, color: scheme.onSurfaceVariant),
-            ),
-          ],
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 260),
-            child: Text(
-              people.length <= 3
-                  ? people.map((person) => person.name).join('、')
-                  : '${people.first.name} ほか${people.length - 1}人',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 11.5),
+    return Wrap(
+      spacing: 5,
+      runSpacing: 5,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        if (role.isNotEmpty && role != '出演者')
+          Text(
+            '$role:',
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+              color: scheme.onSurfaceVariant,
             ),
           ),
-        ],
-      ),
+        ...people.map(
+          (person) => _MetaChip(
+            icon: Icons.person_outline,
+            label: person.name,
+          ),
+        ),
+      ],
     );
   }
 }
