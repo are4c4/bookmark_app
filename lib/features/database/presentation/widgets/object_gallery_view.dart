@@ -15,7 +15,7 @@ class ObjectGalleryView extends StatelessWidget {
     required this.itemBuilder,
     this.padding = const EdgeInsets.fromLTRB(16, 12, 16, 80),
     this.maxCrossAxisExtent = 280,
-    this.fixedMainAxisExtent = 180,
+    this.fixedMainAxisExtent = 240,
     this.crossAxisSpacing = 12,
     this.mainAxisSpacing = 12,
   });
