@@ -66,7 +66,7 @@ void main() {
     expect(defaults?.openMode, ObjectOpenMode.sidePeek);
   });
 
-  test('managed Image reuses source URL and preserves canonical file metadata',
+  test('managed Image reuses canonical source URL variants and preserves metadata',
       () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
@@ -84,14 +84,14 @@ void main() {
     final first = await service.findOrCreateManaged(
       workspaceId: workspaceId,
       filePath: '/managed/preview.jpg',
-      sourceUrl: 'https://cdn.example.com/preview.jpg?sig=1',
+      sourceUrl: 'HTTPS://CDN.Example.COM:443/a/../preview.jpg?sig=1#hero',
       originalFilename: 'preview.jpg',
       contentType: 'image/jpeg',
     );
     final second = await service.findOrCreateManaged(
       workspaceId: workspaceId,
       filePath: '/managed/later.jpg',
-      sourceUrl: 'https://cdn.example.com/preview.jpg?sig=1',
+      sourceUrl: 'https://cdn.example.com/preview.jpg?sig=1#hero',
       title: 'Later title',
       originalFilename: 'later.jpg',
       contentType: 'image/webp',
@@ -104,13 +104,84 @@ void main() {
     expect(stored.values[definition.fileProperty.id], '/managed/preview.jpg');
     expect(
       stored.values[definition.sourceUrlProperty.id],
-      'https://cdn.example.com/preview.jpg?sig=1',
+      'https://cdn.example.com/preview.jpg?sig=1#hero',
     );
     expect(
       stored.values[definition.originalFilenameProperty.id],
       'preview.jpg',
     );
     expect(stored.values[definition.contentTypeProperty.id], 'image/jpeg');
+  });
+
+  test('managed Image source identity preserves query and fragment distinctions',
+      () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final service = ImageObjectService(
+      systemObjects: SystemObjectStore(
+        database: database,
+        objectStore: objectStore,
+      ),
+      defaultsStore: ObjectTypeDefaultsStore(genericStore),
+    );
+
+    await service.findOrCreateManaged(
+      workspaceId: workspaceId,
+      filePath: '/managed/a.jpg',
+      sourceUrl: 'https://cdn.example.com/preview.jpg?sig=1#first',
+    );
+    await service.findOrCreateManaged(
+      workspaceId: workspaceId,
+      filePath: '/managed/b.jpg',
+      sourceUrl: 'https://cdn.example.com/preview.jpg?sig=2#first',
+    );
+    await service.findOrCreateManaged(
+      workspaceId: workspaceId,
+      filePath: '/managed/c.jpg',
+      sourceUrl: 'https://cdn.example.com/preview.jpg?sig=1#second',
+    );
+    final definition = await service.ensureDefinition(workspaceId);
+
+    expect(await objectStore.listObjects(definition.objectType.id), hasLength(3));
+  });
+
+  test('managed Image matches older non-canonical source metadata safely',
+      () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final service = ImageObjectService(
+      systemObjects: SystemObjectStore(
+        database: database,
+        objectStore: objectStore,
+      ),
+      defaultsStore: ObjectTypeDefaultsStore(genericStore),
+    );
+    final definition = await service.ensureDefinition(workspaceId);
+    final first = await service.findOrCreateManaged(
+      workspaceId: workspaceId,
+      filePath: '/managed/legacy.jpg',
+      sourceUrl: 'https://cdn.example.com/legacy.jpg',
+    );
+    await objectStore.setPropertyValue(
+      objectId: first.id,
+      property: definition.sourceUrlProperty,
+      value: 'HTTPS://CDN.Example.COM:443/a/../legacy.jpg',
+    );
+
+    final reused = await service.findOrCreateManaged(
+      workspaceId: workspaceId,
+      filePath: '/managed/retry.jpg',
+      sourceUrl: 'https://cdn.example.com/legacy.jpg',
+    );
+
+    expect(reused.id, first.id);
+    expect(await objectStore.listObjects(definition.objectType.id), hasLength(1));
   });
 
   test('managed Image falls back to file identity and rejects invalid inputs',
