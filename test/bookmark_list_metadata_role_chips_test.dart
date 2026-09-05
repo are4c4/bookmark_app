@@ -1,5 +1,6 @@
 import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/person_roles.dart';
+import 'package:bookmark_app/services/bookmark_url_resolver.dart';
 import 'package:bookmark_app/widgets/bookmark_list_metadata.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -47,5 +48,43 @@ void main() {
     expect(find.text('箕輪厚介'), findsOneWidget);
     expect(find.text('今野忍、箕輪厚介'), findsNothing);
     expect(find.byIcon(Icons.person_outline), findsNWidgets(2));
+  });
+
+  testWidgets('URL metadata prefers canonical Weblink domain when supplied',
+      (tester) async {
+    final bookmark = BookmarkItem(
+      id: 2,
+      url: 'https://legacy.example/stale',
+      title: 'Canonical URL',
+      createdAt: DateTime(2026, 9, 6),
+      favorite: false,
+      status: 'unread',
+      rating: 0,
+      openCount: 0,
+      tags: const [],
+      people: const [],
+      photos: const [],
+      collections: const [],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BookmarkListMetadata(
+            bookmark: bookmark,
+            assignments: const [],
+            propertyTokens: const ['url'],
+            resolveUrl: (_) async => const BookmarkUrlSource(
+              kind: BookmarkUrlSourceKind.canonicalWeblink,
+              value: 'https://www.canonical.example/article',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('canonical.example'), findsOneWidget);
+    expect(find.text('legacy.example'), findsNothing);
   });
 }
