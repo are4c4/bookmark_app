@@ -17,7 +17,7 @@ Cross-lane coordination:
 ## Current checkpoint
 Latest Relation merge on `main`: `f01597fb596e03b7f19ab56048c84d4a55f8810d` (`#280` v1 -> current Relation bootstrap guardrail).
 
-Latest repository state audited by Relation lane: `9b10d7143ad6a9d6df6c3e61772620da493adb9f` (`#282` profile path resolver extraction). No Relation persistence/index/backlink/mutation semantics changed between `#280` and this checkpoint.
+Latest repository state audited by Relation lane: `a598d4f50449da0d29fa2e6e89d6f64f1f03e0d` (`#286` canonical Weblink URL entry merged to the real generic host, after `#287` managed Image import page-service wiring). No Relation persistence/index/backlink/mutation semantics changed between `#280` and this checkpoint.
 
 Latest Relation checkpoints:
 - `#266` `Exercise canonical Relation facade after legacy migration` — merged; CI #1055 success.
@@ -25,7 +25,7 @@ Latest Relation checkpoints:
 - Object `#272` wired canonical Weblink/Image creation services into real `GenericDatabasePageServices.fromStores()` without changing Relation wiring.
 - `#273` `Cover Relation attach from real system creation services` — merged as `c69d7b067c56a5e195e15f7a4691a3a1d3b57319`; replay CI #1092 success.
 - `#280` `Cover canonical Relation bootstrap from v1 migration` — merged as `f01597fb596e03b7f19ab56048c84d4a55f8810d`; CI #1113 success.
-- 2026-09-05 post-`#280` audit through `#281/#282` found no new canonical Relation-producing workflow or low-level Relation storage/index change requiring another Relation regression.
+- 2026-09-05 post-`#280` audits through `#281/#282` and then `#283–#287` found no new canonical Relation-producing workflow or low-level Relation storage/index change requiring another Relation regression.
 
 ## Canonical Relation contract
 - `RelationMutationService` is the user-facing mutation boundary.
@@ -73,6 +73,7 @@ Relevant audited Refactor work:
 - `#276/#278` v3/v2 migration-body extraction — merged after the oldest migration guardrail existed; no canonical Relation storage/index change.
 - `#281` Bookmark aggregation moved behind `BookmarkReadStore`; this changes a Bookmark read boundary only and explicitly preserves Relation semantics.
 - `#282` profile path conversion moved behind `ProfilePathResolver`; no Relation storage/index/read/mutation behavior is touched.
+- `#283` SavedView aggregation moved behind a read store; no Object/Relation semantics changed.
 
 Do not add a Relation regression for every migration/refactor slice mechanically. `#280` spans the oldest supported migration fixture, so further Relation migration/refactor work is only warranted if a later change moves canonical Relation storage/index behavior or breaks this guardrail.
 
@@ -82,14 +83,18 @@ Object creation now has canonical system-collection boundaries:
 - `#263` canonical managed Image collection creation/reuse.
 - `#265` managed Image import workflow; no Relation write.
 - `#272` wires Weblink/Image creation services into real `GenericDatabasePageServices.fromStores()` while retaining canonical `relationEditor` wiring.
+- `#284` adds read-only managed Image Gallery presentation; no Relation writes.
+- `#285` centralizes identity-aware generic collection create modes; no Relation writes.
+- `#286` exposes real-host Weblink URL entry and routes creation through canonical `createWeblinkFromUrl()`; the reviewed host diff contains no Relation mutation call.
+- `#287` exposes managed Image import through `GenericDatabasePageServices.imageImport`; it reuses the existing canonical creator and leaves the existing `relationMutations` / `relationEditor` composition unchanged.
 
-`#273` closes the Relation follow-up to `#272`: objects created/reused through that real composition root can be attached to production Weblink -> Image Relation properties without duplicate normalized edges, and resolved backlinks/audit stay correct.
+`#273` already covers the Relation follow-up for the shared page-services composition root: objects created/reused through that root can be attached to production Weblink -> Image Relation properties without duplicate normalized edges, and resolved backlinks/audit stay correct. The new `#286/#287` creation/import affordances create identity-safe Weblink/Image Objects but do not themselves attach Relations, so they do not create a new Relation lifecycle requiring a duplicate regression.
 
-Latest default-branch `setRelation` audit after `#281/#282` found no new view-level low-level bypass. Feature paths continue to use `RelationMutationService` (Relation editor, Bookmark->Weblink bridge, preview Image pipeline, Tag bridge, promotion execution); low-level `ObjectStore.setRelation` remains storage-internal/test-facing rather than a new product mutation path.
+Latest default-branch `setRelation` audit found no new view-level low-level bypass. Feature paths continue to use `RelationMutationService` (Relation editor, Bookmark->Weblink bridge, preview Image pipeline, Tag bridge, promotion execution); low-level `ObjectStore.setRelation` remains storage-internal/test-facing rather than a new product mutation path.
 
-Open Object PR `#223` (`Render managed Weblink media in real masonry Gallery`) is presentation-only and explicitly changes no Relation mutation/index/backlink behavior. It currently owns `generic_database_page.dart`, so Relation must not create a competing host edit.
+`#223` is now merged; its Weblink masonry media work is read-only presentation. Product issue `#249` remains Object-owned Bookmark Gallery/List/Relation-chip presentation/read-model work and explicitly does not redesign Relation persistence.
 
-Open product issue `#249` asks for Bookmark Gallery/List parity and one-chip-per-Person presentation, but explicitly assigns implementation to Object lane and states that it is presentation/read-model work rather than Relation persistence redesign. Relation should not duplicate that work.
+At this audit checkpoint there are no open PRs. Relation therefore has no hotspot ownership conflict, but it also has no new Relation-producing implementation slice to justify touching shared hosts.
 
 ## Validation
 Latest Relation-specific validation:
@@ -100,15 +105,16 @@ Latest Relation-specific validation:
 - `#273` replay CI #1092 — success on top of merged `#275`; merged as `c69d7b067c56a5e195e15f7a4691a3a1d3b57319`.
 - `#280` CI #1113 — success from the real v1 migration fixture; merged as `f01597fb596e03b7f19ab56048c84d4a55f8810d`.
 - Refactor `#275` CI #1088 — success, confirming existing Relation guardrails stayed green under that extraction.
-- Main CI #1126 for `#281` — success; no Relation semantics changed by the read-store extraction.
-- Main CI #1128 for `#282` was still in progress at this audit checkpoint. Pending CI is not a Relation blocker because the diff is profile-path-only and no independent Relation work depends on it.
+- Main CI #1126 for `#281` — success.
+- Main CI #1128 for `#282` — success.
+- Main CI for latest `#286` merge (`a598d4f50449da0d29fa2e6e89d6f64f1f03e0d`, run #1156) was in progress at this audit checkpoint. Pending CI alone is not a Relation blocker, and the reviewed `#286/#287` diffs do not alter Relation semantics.
 
 Earlier important green Relation runs remain #811/#819/#823/#825/#828, #853/#855/#890/#891/#902.
 
 ## Cross-lane ownership / conflict policy
-Refactor lane continues `#225` responsibility reduction after completing historical migration extraction. Relation lane must not co-own those read/path/helper extractions unless canonical Relation schema/index/read/mutation behavior is actually moved or changed.
+Refactor lane continues `#225` responsibility reduction after completing historical migration extraction. Relation lane must not co-own read/path/helper extractions unless canonical Relation schema/index/read/mutation behavior is actually moved or changed.
 
-Before touching shared hotspots (`generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, `bookmark_unified_stage1_page.dart`, `app_database.dart`), re-check open PR ownership and prefer tests-only or Relation-internal changes. Open Object PR `#223` currently owns `generic_database_page.dart`; issue `#249` may also lead Object lane into Bookmark presentation hotspots.
+Before touching shared hotspots (`generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, `bookmark_unified_stage1_page.dart`, `app_database.dart`), re-check open PR ownership and prefer tests-only or Relation-internal changes. There were no open PRs at the latest audit, but Object issue `#249` may lead into Bookmark presentation hotspots and Object #155 work is still active.
 
 Do not overwrite `docs/AI_PROGRESS.md` merely to record lane-local details while Refactor/Object agents are advancing repository-wide state quickly; update it only for a real repository-wide coordination change and after checking concurrent ownership.
 
@@ -116,7 +122,7 @@ Do not overwrite `docs/AI_PROGRESS.md` merely to record lane-local details while
 1. Monitor Object work for a genuinely new Relation-producing workflow: user-facing import/create that also attaches a Relation, explicit `Related images` population, Object merge/dedup, new first-class Object migration, or a new retarget/detach path.
 2. Audit new workflows for direct serialized ids or low-level `ObjectStore.setRelation` bypass before adding tests.
 3. Add focused lifecycle/idempotency/backlink/index/delete regression only when the workflow or a concrete defect is new.
-4. Audit Refactor work only when it moves canonical `object_relation_edges`, persisted Object Relation values, `ObjectStore`, or the canonical Relation service boundary; ordinary Bookmark read/path responsibility extraction does not require a parallel Relation PR.
+4. Audit Refactor work only when it moves canonical `object_relation_edges`, persisted Object Relation values, `ObjectStore`, or the canonical Relation service boundary; ordinary read/path/presentation responsibility extraction does not require a parallel Relation PR.
 5. Do not invent automatic Object merge/dedup Relation rewrites without an explicit product policy.
 6. Keep deterministic index reconciliation separate from ambiguous user-data repair.
 
@@ -127,4 +133,4 @@ Do not overwrite `docs/AI_PROGRESS.md` merely to record lane-local details while
 - During the old #219 replay, a transient note file was created and immediately deleted on `main`; the two commits have net-zero tree effect. Do not rewrite main history for that.
 
 ## Stop reason
-The Relation lane was re-audited on 2026-09-05 through latest `main` `9b10d7143ad6a9d6df6c3e61772620da493adb9f` (`#282`), open PR `#223`, issues `#56/#155/#249`, and current default-branch `setRelation` call sites. `#281/#282` do not move Relation semantics, `#223` is presentation-only, and `#249` is explicitly Object-owned presentation/read-model work. `#280` still protects canonical Relation bootstrap from the oldest real migration fixture and `#273` still protects the latest real Weblink/Image creation-composition-root Relation attach boundary. No additional independent Relation implementation is currently justified without duplicating coverage or competing with another lane. Resume when another lane introduces a new Relation-producing workflow, moves canonical Relation storage/index behavior, or exposes a concrete correctness regression.
+The Relation lane was re-audited on 2026-09-05 through latest `main` `a598d4f50449da0d29fa2e6e89d6f64f1f03e0d`, including merged Object work `#284–#287`, current issues `#56/#155/#249`, open-PR state, and the actual `#286/#287` diffs. The new Weblink URL-entry and managed Image import flows create/reuse canonical Objects but do not attach Relations, bypass `RelationMutationService`, move Relation persistence/index behavior, or expose a correctness regression. `#280` still protects canonical Relation bootstrap from the oldest real migration fixture and `#273` still protects the real page-services Weblink/Image Relation attach boundary. No additional independent Relation implementation is currently justified without duplicating coverage. Resume when another lane introduces a new Relation-producing workflow, moves canonical Relation storage/index behavior, or exposes a concrete correctness regression.
