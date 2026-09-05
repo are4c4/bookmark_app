@@ -1,0 +1,28 @@
+name: Fix v4 saved-view migration
+
+on:
+  push:
+    branches:
+      - refactor/issue-225-migration-v3-regression
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: refactor/issue-225-migration-v3-regression
+      - name: Patch v4 historical saved-view read
+        run: python3 tool/fix_v4_saved_view_migration.py
+      - name: Remove one-shot files
+        run: rm tool/fix_v4_saved_view_migration.py .github/workflows/fix_v4_saved_view_migration.yml
+      - name: Commit compatibility fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Fix historical v4 saved-view migration read"
+          git push origin HEAD:refactor/issue-225-migration-v3-regression
