@@ -69,6 +69,18 @@ class ProfileManager {
 
   ProfileState get state => _state;
 
+  static void _debugFallbackFailure(
+    String operation,
+    Object error,
+    StackTrace stackTrace,
+  ) {
+    assert(() {
+      stderr.writeln('ProfileManager: $operation failed; using fallback: $error');
+      stderr.writeln(stackTrace);
+      return true;
+    }());
+  }
+
   static Future<ProfileManager> load() async {
     final support = await getApplicationSupportDirectory();
     final documents = await getApplicationDocumentsDirectory();
@@ -118,7 +130,11 @@ class ProfileManager {
             ? requestedActive
             : profiles.first.id;
         state = ProfileState(profiles: profiles, activeProfileId: active);
-      } catch (_) {
+      } catch (error, stackTrace) {
+        // Existing installations intentionally fail soft to the default profile,
+        // but preserve the cause in debug/assert builds so corrupt profile
+        // metadata or data-location regressions are not completely silent.
+        _debugFallbackFailure('profile state load', error, stackTrace);
         state = ProfileState(
           profiles: [
             DatabaseProfile(
@@ -313,7 +329,11 @@ class ProfileManager {
               Map<String, Object?>.from(raw),
             );
           }
-        } catch (_) {
+        } catch (error, stackTrace) {
+          // Backup metadata is advisory for path rewriting. The restored profile
+          // remains usable without it, so keep the import best-effort while
+          // exposing malformed metadata during development.
+          _debugFallbackFailure('imported profile metadata read', error, stackTrace);
           sourceProfile = null;
         }
       }
