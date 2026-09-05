@@ -923,15 +923,14 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (mode == GalleryViewMode.masonry)
-                      WeblinkGalleryMedia(
-                        database: widget.repository.workspaceStore.database,
-                        objectStore: _objectStore,
-                        workspaceId: widget.repository.workspaceId,
-                        objectTypeId: record.databaseId,
-                        objectId: record.id,
-                        mode: mode,
-                      ),
+                    WeblinkGalleryMedia(
+                      database: widget.repository.workspaceStore.database,
+                      objectStore: _objectStore,
+                      workspaceId: widget.repository.workspaceId,
+                      objectTypeId: record.databaseId,
+                      objectId: record.id,
+                      mode: mode,
+                    ),
                     Text(
                       record.title,
                       maxLines: 2,

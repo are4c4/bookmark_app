@@ -35,7 +35,7 @@ void main() {
     for (var index = 0; index < 4; index++) {
       expect(
         tester.getSize(find.byKey(ValueKey('gallery-item-$index'))).height,
-        180,
+        240,
       );
     }
   });
