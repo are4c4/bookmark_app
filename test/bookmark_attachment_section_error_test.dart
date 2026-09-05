@@ -68,6 +68,23 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  Future<void> disposeSection(WidgetTester tester) async {
+    // Unsubscribe Drift-backed StreamBuilders before tearDown closes the DB,
+    // then advance fake time once so Drift's zero-duration close timer drains.
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  }
+
+  Future<void> pumpUntilImportCompletes(WidgetTester tester) async {
+    // The section intentionally shows an indeterminate progress indicator while
+    // import/enrichment is active, so pumpAndSettle cannot be used here.
+    for (var attempt = 0; attempt < 20; attempt++) {
+      await tester.pump(const Duration(milliseconds: 50));
+      if (find.byType(CircularProgressIndicator).evaluate().isEmpty) return;
+    }
+    fail('Attachment import did not complete within the bounded test pumps.');
+  }
+
   testWidgets('attachment import failure hides raw implementation details',
       (tester) async {
     await pumpSection(
@@ -78,8 +95,7 @@ void main() {
     );
 
     await tester.tap(find.byTooltip('PDF / 動画を添付'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+    await pumpUntilImportCompletes(tester);
 
     expect(
       find.text('ファイルを添付できませんでした。もう一度お試しください。'),
@@ -87,6 +103,8 @@ void main() {
     );
     expect(find.textContaining('secret-path'), findsNothing);
     expect(find.textContaining('/Users/private'), findsNothing);
+
+    await disposeSection(tester);
   });
 
   testWidgets('PDF author enrichment stays best-effort when person creation fails',
@@ -125,11 +143,13 @@ void main() {
 
     expect(find.text('PDFの情報を反映しますか？'), findsOneWidget);
     await tester.tap(find.text('反映'));
-    await tester.pumpAndSettle();
+    await pumpUntilImportCompletes(tester);
 
     expect(createPersonCalls, 1);
     final updated = (await repository.watchAll().first).single;
     expect(updated.title, 'Updated from PDF');
     expect(find.textContaining('author-secret-error'), findsNothing);
+
+    await disposeSection(tester);
   });
 }
