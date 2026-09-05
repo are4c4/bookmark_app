@@ -1,6 +1,44 @@
 part of 'app_database.dart';
 
 extension AppDatabaseMigrationSteps on AppDatabase {
+  Future<void> migrateToV12(Migrator migrator) async {
+    final existing = await customSelect(
+      "SELECT name FROM sqlite_master WHERE type = 'table'",
+    ).get();
+    final tableNames = existing.map((row) => row.read<String>('name')).toSet();
+
+    if (!tableNames.contains('workspaces')) {
+      await migrator.createTable(workspaces);
+    } else {
+      final columns = await customSelect('PRAGMA table_info(workspaces)').get();
+      final names = columns.map((row) => row.read<String>('name')).toSet();
+      if (!names.contains('icon')) {
+        await customStatement(
+          "ALTER TABLE workspaces ADD COLUMN icon TEXT NOT NULL DEFAULT '📁'",
+        );
+      }
+      if (!names.contains('color_value')) {
+        await customStatement(
+          'ALTER TABLE workspaces ADD COLUMN color_value INTEGER NOT NULL DEFAULT 4288585374',
+        );
+      }
+      if (!names.contains('sort_order')) {
+        await customStatement(
+          'ALTER TABLE workspaces ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0',
+        );
+      }
+    }
+    if (!tableNames.contains('bookmark_workspace')) {
+      await migrator.createTable(bookmarkWorkspaces);
+    }
+    if (!tableNames.contains('saved_view_workspace')) {
+      await migrator.createTable(savedViewWorkspaces);
+    }
+    if (!tableNames.contains('workspace_settings')) {
+      await migrator.createTable(workspaceSettings);
+    }
+  }
+
   Future<void> migrateToV13(Migrator migrator) async {
     final existing = await customSelect(
       "SELECT name FROM sqlite_master WHERE type = 'table'",
