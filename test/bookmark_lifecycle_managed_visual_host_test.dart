@@ -2,7 +2,7 @@ import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/bookmark_lifecycle_store.dart';
 import 'package:bookmark_app/data/bookmark_repository.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
-import 'package:bookmark_app/services/object_sync_service.dart';
+import 'package:bookmark_app/services/bookmark_url_resolver.dart';
 import 'package:bookmark_app/views/bookmark_lifecycle_page.dart';
 import 'package:bookmark_app/widgets/bookmark_visual_image.dart';
 import 'package:drift/native.dart';
@@ -52,50 +52,48 @@ void main() {
     await tester.pump();
   });
 
-  testWidgets('inbox subtitle prefers canonical Weblink URL over stale legacy URL',
+  testWidgets('inbox subtitle uses the host canonical URL resolver result',
       (tester) async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
-    final workspaceStore = WorkspaceStore(database);
-    final workspaceId = await workspaceStore.initialize();
-    final lifecycleStore = BookmarkLifecycleStore(database);
-    await lifecycleStore.initialize();
-    final repository = BookmarkRepository(
-      database,
-      workspaceStore: workspaceStore,
-      lifecycleStore: lifecycleStore,
-      workspaceId: workspaceId,
-    );
-    final bookmarkId = await repository.create(
-      url: 'https://Example.com/a/../canonical?x=1',
+    final bookmark = BookmarkItem(
+      id: -2,
+      url: 'https://legacy.example/stale',
       title: 'Canonical lifecycle article',
-      inbox: true,
+      createdAt: DateTime(2026, 9, 5),
+      favorite: false,
+      status: 'unread',
+      rating: 0,
+      openCount: 0,
+      tags: const [],
+      people: const [],
+      photos: const [],
+      collections: const [],
     );
-    final sync = ObjectSyncService(database);
-    await sync.syncWorkspace(workspaceId);
-
-    await database.customStatement(
-      'UPDATE bookmarks SET url = ? WHERE id = ?',
-      <Object>['https://legacy.example/stale', bookmarkId],
+    final repository = _StaticInboxRepository(
+      database,
+      items: <BookmarkItem>[bookmark],
     );
 
     await tester.pumpWidget(
-      MaterialApp(home: BookmarkLifecyclePage.inbox(repository: repository)),
+      MaterialApp(
+        home: BookmarkLifecyclePage.inbox(
+          repository: repository,
+          resolveUrl: (_) async => const BookmarkUrlSource(
+            kind: BookmarkUrlSourceKind.canonicalWeblink,
+            value: 'https://example.com/canonical?x=1',
+          ),
+        ),
+      ),
     );
-    for (var attempt = 0; attempt < 30; attempt += 1) {
-      await tester.pump(const Duration(milliseconds: 50));
-      if (find.text('https://example.com/canonical?x=1').evaluate().isNotEmpty) {
-        break;
-      }
-    }
+    await tester.pump();
 
     expect(find.text('Canonical lifecycle article'), findsOneWidget);
     expect(find.text('https://example.com/canonical?x=1'), findsOneWidget);
     expect(find.text('https://legacy.example/stale'), findsNothing);
 
     await tester.pumpWidget(const SizedBox.shrink());
-    await sync.dispose();
-    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump();
   });
 }
 
