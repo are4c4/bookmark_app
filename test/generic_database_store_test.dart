@@ -90,4 +90,46 @@ void main() {
     final records = await store.listRecords(databaseId);
     expect(records.single.values, isEmpty);
   });
+
+  test('malformed persisted property config and record value remain fail-soft',
+      () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final store = GenericDatabaseStore(database);
+    final databaseId = await store.createDatabase(
+      workspaceId: workspaceId,
+      name: '壊れたJSON',
+    );
+    final propertyId = await store.createProperty(
+      databaseId: databaseId,
+      name: '値',
+      type: 'text',
+      config: const {'example': 'safe'},
+    );
+    final recordId = await store.createRecord(
+      databaseId: databaseId,
+      title: 'Record',
+    );
+    await store.setValue(
+      recordId: recordId,
+      propertyId: propertyId,
+      value: 'safe',
+    );
+
+    await database.customStatement(
+      'UPDATE generic_properties SET config_json = ? WHERE id = ?',
+      ['{not-json', propertyId],
+    );
+    await database.customStatement(
+      'UPDATE generic_values SET value_json = ? WHERE record_id = ? AND property_id = ?',
+      ['{not-json', recordId, propertyId],
+    );
+
+    final properties = await store.listProperties(databaseId);
+    final records = await store.listRecords(databaseId);
+
+    expect(properties.single.config, isEmpty);
+    expect(records.single.values[propertyId], isNull);
+  });
 }
