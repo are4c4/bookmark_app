@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:rxdart/rxdart.dart';
 
@@ -76,6 +77,16 @@ class ObjectSyncService {
   bool _syncing = false;
   bool _syncQueued = false;
   bool _disposed = false;
+
+  static void _debugPreviewFailure(String stage, StackTrace stackTrace) {
+    assert(() {
+      stderr.writeln(
+        'ObjectSyncService: optional remote preview $stage failed; canonical sync continues.',
+      );
+      stderr.writeln(stackTrace);
+      return true;
+    }());
+  }
 
   /// Activates a live Object mirror for [workspaceId].
   ///
@@ -203,13 +214,18 @@ class ObjectSyncService {
             workspaceId: workspaceId,
             weblinkObjectId: weblink.id,
           );
-        } catch (_) {
+        } catch (_, stackTrace) {
           // Thumbnail ingestion is optional. Canonical Bookmark -> Weblink sync
           // remains successful even if remote I/O or Image enrichment fails.
+          // Do not log URLs, Object ids, exception text or other user content.
+          _debugPreviewFailure('image ingestion', stackTrace);
         }
       }
-    } catch (_) {
+    } catch (_, stackTrace) {
       // Schema/setup enrichment failures are contained for the same reason.
+      // Preserve that contract, but make unexpected failures observable in
+      // debug/test builds without logging user content.
+      _debugPreviewFailure('schema/setup', stackTrace);
     }
   }
 
