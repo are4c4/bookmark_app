@@ -82,63 +82,7 @@ class AppDatabase extends _$AppDatabase {
         onCreate: (m) => m.createAll(),
         onUpgrade: (m, from, to) async {
           if (from < 2) await m.addColumn(bookmarks, bookmarks.tags);
-          if (from < 3) {
-            // Recreate the actual v3 table shapes instead of using today's
-            // Drift definitions. Later migrations add their newer columns.
-            await customStatement('''
-              CREATE TABLE tags (
-                id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL UNIQUE,
-                parent_tag_id INTEGER NULL,
-                created_at INTEGER NOT NULL DEFAULT
-                  (CAST(strftime('%s','now') AS INTEGER))
-              )
-            ''');
-            await customStatement('''
-              CREATE TABLE bookmark_tags (
-                bookmark_id INTEGER NOT NULL REFERENCES bookmarks(id)
-                  ON DELETE CASCADE,
-                tag_id INTEGER NOT NULL REFERENCES tags(id)
-                  ON DELETE CASCADE,
-                PRIMARY KEY (bookmark_id, tag_id)
-              )
-            ''');
-            await customStatement('''
-              CREATE TABLE saved_views (
-                id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                layout_type TEXT NOT NULL DEFAULT 'gallery',
-                search_query TEXT NOT NULL DEFAULT '',
-                favorites_only INTEGER NOT NULL DEFAULT 0,
-                tag_id INTEGER NULL REFERENCES tags(id) ON DELETE SET NULL,
-                created_at INTEGER NOT NULL DEFAULT
-                  (CAST(strftime('%s','now') AS INTEGER))
-              )
-            ''');
-
-            final existingBookmarks = await customSelect(
-              'SELECT id, tags FROM bookmarks',
-            ).get();
-            for (final bookmark in existingBookmarks) {
-              final bookmarkId = bookmark.read<int>('id');
-              final legacyTags = bookmark.read<String>('tags');
-              for (final name in _normalizeNames(legacyTags.split(','))) {
-                await customStatement(
-                  'INSERT OR IGNORE INTO tags (name) VALUES (?)',
-                  [name],
-                );
-                final tag = await customSelect(
-                  'SELECT id FROM tags WHERE name = ? LIMIT 1',
-                  variables: [Variable<String>(name)],
-                ).getSingle();
-                await customStatement(
-                  'INSERT OR IGNORE INTO bookmark_tags '
-                  '(bookmark_id, tag_id) VALUES (?, ?)',
-                  [bookmarkId, tag.read<int>('id')],
-                );
-              }
-            }
-          }
+          if (from < 3) await migrateToV3(m);
           if (from < 4) await migrateToV4(m);
           if (from < 5) await migrateToV5(m);
           if (from < 6) await migrateToV6(m);
