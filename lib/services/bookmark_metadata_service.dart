@@ -10,16 +10,22 @@ class BookmarkMetadata {
     required this.title,
     this.description,
     this.thumbnail,
+    this.siteName,
+    this.faviconUrl,
   });
 
   final String url;
   final String title;
   final String? description;
   final String? thumbnail;
+  final String? siteName;
+  final String? faviconUrl;
 }
 
 class BookmarkMetadataService {
-  const BookmarkMetadataService();
+  const BookmarkMetadataService({http.Client? client}) : _client = client;
+
+  final http.Client? _client;
 
   Future<BookmarkMetadata> fetch(String input) async {
     final normalizedUrl = _normalizeUrl(input);
@@ -28,10 +34,14 @@ class BookmarkMetadataService {
     // RFC example domains are intentionally non-production resources and are
     // used throughout deterministic creation tests. Their host fallback already
     // contains all useful metadata, so avoid unnecessary external HTTP traffic.
-    if (_isDocumentationHost(uri.host)) return _fallback(uri);
+    if (_isDocumentationHost(uri.host) || !_isHttpScheme(uri.scheme)) {
+      return _fallback(uri);
+    }
 
+    final ownedClient = _client == null ? http.Client() : null;
+    final client = _client ?? ownedClient!;
     try {
-      final response = await http
+      final response = await client
           .get(
             uri,
             headers: const {
@@ -59,6 +69,8 @@ class BookmarkMetadataService {
       final ogImage = _metaContent(document, property: 'og:image');
       final twitterImage = _metaContent(document, name: 'twitter:image');
       final rawImage = ogImage ?? twitterImage;
+      final siteName = _metaContent(document, property: 'og:site_name');
+      final faviconHref = _faviconHref(document);
 
       return BookmarkMetadata(
         url: uri.toString(),
@@ -73,10 +85,15 @@ class BookmarkMetadataService {
           metaDescription,
         ]),
         thumbnail: rawImage == null ? null : uri.resolve(rawImage).toString(),
+        siteName: siteName,
+        faviconUrl:
+            faviconHref == null ? null : uri.resolve(faviconHref).toString(),
       );
     } catch (error, stackTrace) {
       _debugFallbackFailure(error, stackTrace);
       return _fallback(uri);
+    } finally {
+      ownedClient?.close();
     }
   }
 
@@ -93,10 +110,14 @@ class BookmarkMetadataService {
 
   String _normalizeUrl(String input) {
     final trimmed = input.trim();
-    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-      return trimmed;
-    }
+    final parsed = Uri.tryParse(trimmed);
+    if (parsed?.hasScheme == true) return trimmed;
     return 'https://$trimmed';
+  }
+
+  bool _isHttpScheme(String scheme) {
+    final normalized = scheme.toLowerCase();
+    return normalized == 'http' || normalized == 'https';
   }
 
   bool _isDocumentationHost(String host) {
@@ -127,6 +148,20 @@ class BookmarkMetadataService {
         : 'meta[name="$name"]';
     final value = document.querySelector(selector)?.attributes['content']?.trim();
     return value == null || value.isEmpty ? null : value;
+  }
+
+  String? _faviconHref(Document document) {
+    for (final link in document.querySelectorAll('link')) {
+      final rel = link.attributes['rel']
+          ?.toLowerCase()
+          .split(RegExp(r'\s+'))
+          .where((value) => value.isNotEmpty)
+          .toSet();
+      if (rel?.contains('icon') != true) continue;
+      final href = link.attributes['href']?.trim();
+      if (href != null && href.isNotEmpty) return href;
+    }
+    return null;
   }
 
   String? _firstNonEmpty(List<String?> values) {
