@@ -1,11 +1,10 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
 import '../widgets/bookmark_create_dialog.dart';
+import '../widgets/bookmark_visual_image.dart';
 
 class BookmarkLifecyclePage extends StatelessWidget {
   const BookmarkLifecyclePage.inbox({
@@ -79,20 +78,20 @@ class BookmarkLifecyclePage extends StatelessWidget {
                       );
                     },
                     child: ListView.builder(
-                    itemCount: candidates.length,
-                    itemBuilder: (context, index) {
-                      final item = candidates[index];
-                      return RadioListTile<int>(
-                        value: item.id,
-                        title: Text(item.title),
-                        subtitle: Text(
-                          item.url,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      );
-                    },
-                  ),
+                      itemCount: candidates.length,
+                      itemBuilder: (context, index) {
+                        final item = candidates[index];
+                        return RadioListTile<int>(
+                          value: item.id,
+                          title: Text(item.title),
+                          subtitle: Text(
+                            item.url,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        );
+                      },
+                    ),
                   ),
           ),
           actions: [
@@ -172,26 +171,20 @@ class BookmarkLifecyclePage extends StatelessWidget {
               final bookmark = items[index];
               return ListTile(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                leading: bookmark.coverPhoto == null
-                    ? const SizedBox(
-                        width: 52,
-                        height: 40,
-                        child: Icon(Icons.bookmark_outline),
-                      )
-                    : ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: Image.file(
-                          File(bookmark.coverPhoto!.path),
-                          width: 52,
-                          height: 40,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const SizedBox(
-                            width: 52,
-                            height: 40,
-                            child: Icon(Icons.bookmark_outline),
-                          ),
-                        ),
-                      ),
+                leading: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: BookmarkVisualImage(
+                    repository: repository,
+                    bookmark: bookmark,
+                    width: 52,
+                    height: 40,
+                    placeholder: const SizedBox(
+                      width: 52,
+                      height: 40,
+                      child: Icon(Icons.bookmark_outline),
+                    ),
+                  ),
+                ),
                 title: Text(bookmark.title),
                 subtitle: Text(
                   [
