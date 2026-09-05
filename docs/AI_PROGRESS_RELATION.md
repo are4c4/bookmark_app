@@ -66,6 +66,12 @@ Object #213/#214 exposed and date-keyed Daily Notes, but no new Relation-produci
 ## Latest audit
 Repository search after #222 found no new view-level direct `ObjectStore.setRelation(...)` use. Low-level calls remain in Relation internals and tests/corruption fixtures. Object #221/#223 are read-only Weblink Gallery/media presentation and explicitly do not mutate Relation/index/backlink state.
 
+Refactoring lane audit:
+- Issue #225 explicitly treats the Relation subsystem as mature and out of redesign scope.
+- Refactor PR #226 changes docs/tooling only and records that broad `GenericDatabasePage` extraction is deferred while Object #223 owns that hotspot.
+- Refactor PR #227 only replaces an empty file-drop enrichment catch with debug/assert visibility; it does not change Person creation, Relation mutation, schema, or import success semantics.
+- no new Relation-producing workflow was introduced by the current Refactor work.
+
 ## Validation
 Latest Relation CI:
 - #208 CI #853 — success
@@ -83,14 +89,21 @@ Earlier important green runs remain #811/#819/#823/#825/#828 for alias and manag
 3. Add real-host lifecycle/idempotency/backlink/index/delete regression only when the new workflow or concrete bug exists.
 4. Keep deterministic index reconcile separate from ambiguous user-data repair.
 5. Do not invent automatic Object merge/dedup Relation rewrites without an explicit product policy.
+6. Before touching `generic_database_page.dart`, `app_shell.dart`, or `object_inspector_page.dart`, re-check open Object/Refactor PR ownership; while another lane owns one of these hotspots, prefer tests-only or Relation-internal/service work and sequence any necessary UI patch after that PR merges.
 
 ## Cross-lane dependency
 Object lane currently owns #155/#156 presentation work. Open #221/#223 consume canonical Relation reads for Weblink managed media but do not create or mutate Relations. Relation lane should not modify their presentation/core files unless a concrete Relation defect appears.
+
+Refactoring lane is active under #225. Open #226/#227 establish behavior-preserving maintainability/error-policy work. Relation lane must not compete with broad refactors of shared hotspots. In particular:
+- `generic_database_page.dart` is currently owned by Object #223 and explicitly deferred by Refactor #226;
+- `app_shell.dart` and `object_inspector_page.dart` must be re-checked immediately before any non-trivial Relation edit;
+- do not edit `docs/AI_PROGRESS.md` while Refactor #226 is open because that PR currently owns repository-wide handoff changes; use `docs/AI_PROGRESS_RELATION.md` and Issue comments for Relation-specific coordination until #226 lands.
 
 ## Notes / risks
 - During the #219 clean-replay operation, a transient note file was accidentally created and immediately deleted on `main`; commits `7c656300...` and `0135bdd7...` have net-zero tree effect and contain no product/data change. Do not rewrite main history to remove them.
 - Automatic repair of missing targets/cardinality conflicts remains intentionally prohibited.
 - Future Object merge/deduplication requires a new explicit Relation policy.
+- Refactor extraction must preserve canonical Relation API ownership; do not move Relation semantics into presentation facades or duplicate mutation/index logic during composition cleanup.
 
 ## Stop reason
-After #208/#210/#211/#216/#222, the currently exposed Weblink/Image generic hosts are covered for canonical edit/read/backlink/delete lifecycle, and no new production Relation-producing workflow or correctness regression remains. Open Object #221/#223 are presentation-only. This matches the `AGENTS.md` stopping criterion: no independent actionable Relation work remains until Object lane introduces a new Relation-producing surface or a concrete Relation defect appears.
+After #208/#210/#211/#216/#222, the currently exposed Weblink/Image generic hosts are covered for canonical edit/read/backlink/delete lifecycle, and no new production Relation-producing workflow or correctness regression remains. Open Object #221/#223 are presentation-only; Refactor #226/#227 are behavior-preserving and do not add Relation semantics. With shared hotspots actively owned by other lanes, starting speculative UI/refactor work here would create avoidable conflict. This matches the `AGENTS.md` stopping criteria: no independent actionable Relation work remains until another lane introduces a new Relation-producing surface or a concrete Relation defect appears.
