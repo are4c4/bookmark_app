@@ -60,6 +60,9 @@ void main() {
               importAttachments: importAttachments,
               readPdfMetadata: readPdfMetadata,
               createPerson: createPerson,
+              watchAttachments: (_) =>
+                  Stream.value(const <BookmarkAttachment>[]),
+              loadPeople: () async => const <Person>[],
             ),
           ),
         ),
@@ -69,8 +72,6 @@ void main() {
   }
 
   Future<void> disposeSection(WidgetTester tester) async {
-    // Unsubscribe Drift-backed StreamBuilders before tearDown closes the DB,
-    // then advance fake time once so Drift's zero-duration close timer drains.
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
   }
