@@ -76,7 +76,8 @@ void main() {
 
   Future<void> submitUrl(WidgetTester tester, String url) async {
     await tester.tap(find.text('URLを追加').last);
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
     expect(
       find.byKey(const ValueKey('weblink-url-create-input')),
       findsOneWidget,
