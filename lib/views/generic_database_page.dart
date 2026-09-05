@@ -18,6 +18,7 @@ import '../domain/object_model.dart';
 import '../domain/object_type_defaults.dart';
 import '../features/database/presentation/widgets/database_property_value_view.dart';
 import '../features/database/presentation/widgets/object_gallery_view.dart';
+import '../features/database/presentation/widgets/weblink_gallery_media.dart';
 import '../features/object/presentation/object_open_presentation_host.dart';
 import '../features/object/presentation/widgets/object_detail_property_view.dart';
 import '../widgets/database_collection_settings_dialog.dart';
@@ -261,7 +262,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
       final config = await _pageServices.collectionConfig.load(widget.databaseId);
       if (config == null || !mounted) return;
       final draft = await showDatabaseCollectionSettingsDialog(
-        context,
+        context: context,
         config: config,
       );
       if (draft == null) return;
@@ -885,6 +886,15 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (mode == GalleryViewMode.masonry)
+                      WeblinkGalleryMedia(
+                        database: widget.repository.workspaceStore.database,
+                        objectStore: _objectStore,
+                        workspaceId: widget.repository.workspaceId,
+                        objectTypeId: record.databaseId,
+                        objectId: record.id,
+                        mode: mode,
+                      ),
                     Text(
                       record.title,
                       maxLines: 2,

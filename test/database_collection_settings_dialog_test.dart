@@ -96,7 +96,7 @@ void main() {
           builder: (context) => FilledButton(
             onPressed: () async {
               result = await showDatabaseCollectionSettingsDialog(
-                context,
+                context: context,
                 config: config(),
               );
             },
