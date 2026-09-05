@@ -277,12 +277,7 @@ class AppDatabase extends _$AppDatabase {
             );
           }
           if (from < 14) {
-            await m.addColumn(
-              savedViews,
-              savedViews.includeDescendants,
-            );
-            await m.addColumn(savedViews, savedViews.personFilterId);
-            await m.addColumn(savedViews, savedViews.photoFilterId);
+            await migrateToV14(m);
           }
           if (from < 15) {
             await migrateToV15(m);
