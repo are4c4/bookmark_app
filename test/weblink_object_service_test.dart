@@ -60,16 +60,26 @@ void main() {
     expect(
       defaults?.visiblePropertyIds,
       <int>[
-        first.urlProperty.id,
-        first.domainProperty.id,
         first.pageTitleProperty.id,
+        first.domainProperty.id,
         first.descriptionProperty.id,
+        first.urlProperty.id,
+      ],
+    );
+    expect(
+      defaults?.propertyOrder,
+      <int>[
+        first.pageTitleProperty.id,
+        first.domainProperty.id,
+        first.descriptionProperty.id,
+        first.urlProperty.id,
+        first.previewImageUrlProperty.id,
       ],
     );
     expect(defaults?.openMode, ObjectOpenMode.sidePeek);
   });
 
-  test('definition upgrades URL-only defaults but preserves customized lists',
+  test('definition upgrades generated defaults but preserves customized lists',
       () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
@@ -106,26 +116,47 @@ void main() {
       defaultsStore: defaultsStore,
     );
     final definition = await service.ensureDefinition(workspaceId);
+    final desiredVisible = <int>[
+      definition.pageTitleProperty.id,
+      definition.domainProperty.id,
+      definition.descriptionProperty.id,
+      definition.urlProperty.id,
+    ];
+    final desiredOrder = <int>[
+      definition.pageTitleProperty.id,
+      definition.domainProperty.id,
+      definition.descriptionProperty.id,
+      definition.urlProperty.id,
+      definition.previewImageUrlProperty.id,
+    ];
     final upgraded = await defaultsStore.read(type.id);
-    expect(
-      upgraded?.visiblePropertyIds,
-      <int>[
-        definition.urlProperty.id,
-        definition.domainProperty.id,
-        definition.pageTitleProperty.id,
-        definition.descriptionProperty.id,
-      ],
+    expect(upgraded?.visiblePropertyIds, desiredVisible);
+    expect(upgraded?.propertyOrder, desiredOrder);
+
+    await defaultsStore.write(
+      objectTypeId: type.id,
+      defaults: ObjectTypeDefaults(
+        visiblePropertyIds: <int>[
+          definition.urlProperty.id,
+          definition.domainProperty.id,
+          definition.pageTitleProperty.id,
+          definition.descriptionProperty.id,
+        ],
+        propertyOrder: <int>[
+          definition.urlProperty.id,
+          definition.domainProperty.id,
+          definition.pageTitleProperty.id,
+          definition.descriptionProperty.id,
+          definition.previewImageUrlProperty.id,
+        ],
+        openMode: ObjectOpenMode.sidePeek,
+      ),
     );
-    expect(
-      upgraded?.propertyOrder,
-      <int>[
-        definition.urlProperty.id,
-        definition.domainProperty.id,
-        definition.pageTitleProperty.id,
-        definition.descriptionProperty.id,
-        definition.previewImageUrlProperty.id,
-      ],
-    );
+
+    await service.ensureDefinition(workspaceId);
+    final reordered = await defaultsStore.read(type.id);
+    expect(reordered?.visiblePropertyIds, desiredVisible);
+    expect(reordered?.propertyOrder, desiredOrder);
 
     final customVisible = <int>[
       definition.urlProperty.id,
