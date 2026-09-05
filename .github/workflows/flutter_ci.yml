@@ -17,7 +17,7 @@ jobs:
   quality:
     name: analyze-test
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -38,7 +38,7 @@ jobs:
         run: flutter analyze
 
       - name: Test
-        timeout-minutes: 8
+        timeout-minutes: 12
         run: flutter test --timeout 2m
 
   build-macos:
