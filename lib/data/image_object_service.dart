@@ -127,8 +127,10 @@ class ImageObjectService {
   /// Finds or creates one native Image Object for an app-managed asset.
   ///
   /// [sourceUrl] is the preferred reuse key when present. Otherwise [filePath]
-  /// is used. Existing non-empty metadata is preserved so retries or another
-  /// Weblink cannot silently replace the managed file already owned by an Image.
+  /// is used. Safe URL-equivalent source variants reuse one Image while query
+  /// and fragment distinctions remain identity-significant. Existing non-empty
+  /// metadata is preserved so retries or another Weblink cannot silently
+  /// replace the managed file already owned by an Image.
   Future<AppObject> findOrCreateManaged({
     required int workspaceId,
     required String filePath,
@@ -160,8 +162,9 @@ class ImageObjectService {
           '${object.values[definition.sourceUrlProperty.id] ?? ''}'.trim();
       final storedFile =
           '${object.values[definition.fileProperty.id] ?? ''}'.trim();
-      final matches =
-          source != null ? storedSource == source : storedFile == path;
+      final matches = source != null
+          ? _sourceUrlsMatch(storedSource, source)
+          : storedFile == path;
       if (!matches) continue;
       await _setIfMissing(object, definition.fileProperty, path);
       await _setIfMissing(object, definition.sourceUrlProperty, source);
@@ -275,15 +278,70 @@ class ImageObjectService {
   String? _validatedSourceUrl(String? value) {
     final candidate = value?.trim();
     if (candidate == null || candidate.isEmpty) return null;
-    final uri = Uri.tryParse(candidate);
-    if (uri == null || !uri.hasScheme) {
+    return _normalizeSourceUrl(candidate, originalValue: value);
+  }
+
+  bool _sourceUrlsMatch(String stored, String normalizedCandidate) {
+    if (stored.isEmpty) return false;
+    try {
+      return _normalizeSourceUrl(stored, originalValue: stored) ==
+          normalizedCandidate;
+    } on ArgumentError {
+      // Malformed pre-existing provenance should not block a valid managed
+      // Image from being created or reused by unrelated source metadata.
+      return false;
+    }
+  }
+
+  String _normalizeSourceUrl(
+    String candidate, {
+    required String originalValue,
+  }) {
+    final parsed = Uri.tryParse(candidate);
+    if (parsed == null || !parsed.hasScheme) {
       throw ArgumentError.value(
-        value,
+        originalValue,
         'sourceUrl',
         'Image source URL must be absolute.',
       );
     }
-    return uri.toString();
+
+    final uri = parsed.normalizePath();
+    final scheme = uri.scheme.toLowerCase();
+    if (!uri.hasAuthority || uri.host.isEmpty) {
+      return uri.replace(scheme: scheme).toString();
+    }
+
+    final host = uri.host.toLowerCase();
+    final defaultPort = uri.hasPort &&
+        ((scheme == 'http' && uri.port == 80) ||
+            (scheme == 'https' && uri.port == 443));
+    final authority = StringBuffer();
+    if (uri.userInfo.isNotEmpty) {
+      authority
+        ..write(uri.userInfo)
+        ..write('@');
+    }
+    if (host.contains(':')) {
+      authority
+        ..write('[')
+        ..write(host)
+        ..write(']');
+    } else {
+      authority.write(host);
+    }
+    if (uri.hasPort && !defaultPort) {
+      authority
+        ..write(':')
+        ..write(uri.port);
+    }
+
+    final path = uri.path.isEmpty && (scheme == 'http' || scheme == 'https')
+        ? '/'
+        : uri.path;
+    final query = uri.hasQuery ? '?${uri.query}' : '';
+    final fragment = uri.hasFragment ? '#${uri.fragment}' : '';
+    return '$scheme://${authority.toString()}$path$query$fragment';
   }
 
   int? _validatedDimension(int? value, String name) {
