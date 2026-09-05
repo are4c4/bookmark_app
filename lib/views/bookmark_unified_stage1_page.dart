@@ -19,6 +19,7 @@ import '../widgets/app_toast.dart';
 import '../widgets/bookmark_create_dialog.dart';
 import '../widgets/bookmark_detail_panel.dart';
 import '../widgets/bookmark_list_metadata.dart';
+import '../widgets/bookmark_visual_image.dart';
 import '../widgets/database_create_tiles.dart';
 import '../widgets/database_view_tabs.dart';
 import '../widgets/bookmark_property_order_dialog.dart';
@@ -564,35 +565,15 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
     BookmarkItem bookmark, {
     double width = 60,
     double height = 44,
-  }) {
-    if (bookmark.coverPhoto != null) {
-      return Image.file(
-        File(bookmark.coverPhoto!.path),
+  }) =>
+      BookmarkVisualImage(
+        repository: widget.repository,
+        bookmark: bookmark,
         width: width,
         height: height,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) =>
-            _networkImage(bookmark, width, height),
+        placeholder: const Center(child: Icon(Icons.image_outlined)),
       );
-    }
-    return _networkImage(bookmark, width, height);
-  }
-
-  Widget _networkImage(BookmarkItem bookmark, double width, double height) {
-    if (bookmark.thumbnail?.trim().isNotEmpty == true) {
-      return Image.network(
-        bookmark.thumbnail!,
-        width: width,
-        height: height,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) =>
-            const Center(child: Icon(Icons.image_outlined)),
-      );
-    }
-    return const Center(child: Icon(Icons.image_outlined));
-  }
-
-
 
   Widget _list(List<BookmarkItem> bookmarks) => ListView.separated(
         padding: const EdgeInsets.fromLTRB(14, 8, 14, 90),
