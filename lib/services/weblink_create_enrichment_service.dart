@@ -38,17 +38,25 @@ class WeblinkCreateEnrichmentService {
       _debugFailure('metadata fetch', error, stackTrace);
     }
 
-    if (metadata != null && _hasUsefulResourceMetadata(metadata)) {
-      try {
-        await weblinks.enrichIfMissing(
-          workspaceId: workspaceId,
-          objectId: objectId,
-          pageTitle: metadata.title,
-          description: metadata.description,
-          previewImageUrl: metadata.thumbnail,
-        );
-      } catch (error, stackTrace) {
-        _debugFailure('metadata persistence', error, stackTrace);
+    if (metadata != null) {
+      final pageTitle = _resourcePageTitle(metadata);
+      final description = metadata.description?.trim();
+      final thumbnail = metadata.thumbnail?.trim();
+      final hasUsefulMetadata = pageTitle != null ||
+          description?.isNotEmpty == true ||
+          thumbnail?.isNotEmpty == true;
+      if (hasUsefulMetadata) {
+        try {
+          await weblinks.enrichIfMissing(
+            workspaceId: workspaceId,
+            objectId: objectId,
+            pageTitle: pageTitle,
+            description: metadata.description,
+            previewImageUrl: metadata.thumbnail,
+          );
+        } catch (error, stackTrace) {
+          _debugFailure('metadata persistence', error, stackTrace);
+        }
       }
     }
 
@@ -64,19 +72,14 @@ class WeblinkCreateEnrichmentService {
     }
   }
 
-  bool _hasUsefulResourceMetadata(BookmarkMetadata metadata) {
+  String? _resourcePageTitle(BookmarkMetadata metadata) {
     final title = metadata.title.trim();
-    final description = metadata.description?.trim();
-    final thumbnail = metadata.thumbnail?.trim();
-    if (description?.isNotEmpty == true || thumbnail?.isNotEmpty == true) {
-      return true;
-    }
-
+    if (title.isEmpty) return null;
     final uri = Uri.tryParse(metadata.url.trim());
     final fallbackTitle = uri == null
         ? metadata.url.trim()
         : (uri.host.isEmpty ? uri.toString() : uri.host);
-    return title.isNotEmpty && title != fallbackTitle;
+    return title == fallbackTitle ? null : title;
   }
 
   void _debugFailure(
