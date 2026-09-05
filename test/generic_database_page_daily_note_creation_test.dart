@@ -56,7 +56,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(await objectStore.listObjects(definition.objectType.id), isEmpty);
-    await tester.tap(find.text('新規ページ').last);
+    await tester.tap(find.text('今日のノートを開く').last);
     await tester.pumpAndSettle();
 
     final notes = await objectStore.listObjects(definition.objectType.id);
