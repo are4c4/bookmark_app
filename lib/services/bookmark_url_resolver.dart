@@ -8,6 +8,7 @@ import '../data/object_store.dart';
 import '../data/relation_read_service.dart';
 import '../data/system_object_store.dart';
 import '../data/weblink_object_service.dart';
+import '../domain/object_model.dart';
 
 enum BookmarkUrlSourceKind {
   canonicalWeblink,
@@ -133,7 +134,7 @@ class BookmarkUrlResolver {
            FROM bookmark_object_links
            WHERE workspace_id = ? AND bookmark_id = ?
            LIMIT 1''',
-        variables: <Variable<Object>>[
+        variables: [
           Variable<int>(workspaceId),
           Variable<int>(legacyBookmarkId),
         ],
@@ -150,11 +151,11 @@ class BookmarkUrlResolver {
     final candidate = value?.trim();
     if (candidate == null || candidate.isEmpty) return null;
     final uri = Uri.tryParse(candidate);
+    final scheme = uri?.scheme.toLowerCase();
     if (uri == null ||
         !uri.hasAuthority ||
         uri.host.isEmpty ||
-        (uri.scheme.toLowerCase() != 'http' &&
-            uri.scheme.toLowerCase() != 'https')) {
+        (scheme != 'http' && scheme != 'https')) {
       return null;
     }
     return candidate;
