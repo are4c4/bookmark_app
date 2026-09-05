@@ -28,6 +28,29 @@ flutter run -d macos
 
 Run the same generation step after Drift schema changes. `--delete-conflicting-outputs` is not required by the current build_runner setup.
 
+## macOS app / DMG
+
+To build the app as `Bookmark.app` and create an installable DMG:
+
+```bash
+bash tool/package_macos.sh
+```
+
+For a first direct install into `/Applications`:
+
+```bash
+bash tool/package_macos.sh --install
+```
+
+The release script reads the version from `pubspec.yaml`, applies the release product identity safely, preserves an existing Bundle Identifier when changing it would hide existing profile data, and creates:
+
+```text
+build/macos/Build/Products/Release/Bookmark.app
+dist/macos/Bookmark-<version>.dmg
+```
+
+See [`docs/MACOS_RELEASE.md`](docs/MACOS_RELEASE.md) for Bundle Identifier safety, custom AppIcon input, DMG packaging, Gatekeeper notes, and update/install details.
+
 ## Database
 
 The current Drift schema version is **13**. Migration code preserves existing bookmark, workspace, lifecycle, tag-group, attachment, and PDF-annotation data while moving runtime CRUD toward typed Drift queries.
