@@ -1,6 +1,11 @@
 part of 'app_database.dart';
 
 extension AppDatabaseMigrationSteps on AppDatabase {
+  Future<void> migrateToV5(Migrator migrator) async {
+    await migrator.createTable(people);
+    await migrator.createTable(bookmarkPeople);
+  }
+
   Future<void> migrateToV6(Migrator migrator) async {
     await migrator.createTable(photos);
     await migrator.createTable(bookmarkPhotos);
