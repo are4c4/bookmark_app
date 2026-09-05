@@ -69,6 +69,11 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  Future<void> pumpDialog(WidgetTester tester) async {
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+  }
+
   testWidgets('real Weblinks page exposes URL entry instead of title-only create',
       (tester) async {
     final fixture = await buildFixture();
@@ -87,7 +92,7 @@ void main() {
     expect(find.text('新規ページ'), findsNothing);
 
     await tester.tap(find.text('URLを追加').last);
-    await tester.pumpAndSettle();
+    await pumpDialog(tester);
 
     expect(
       find.byKey(const ValueKey('weblink-url-create-input')),
@@ -96,7 +101,11 @@ void main() {
     expect(await fixture.objectStore.listObjects(definition.objectType.id), isEmpty);
 
     await tester.tap(find.text('キャンセル'));
-    await tester.pumpAndSettle();
+    await pumpDialog(tester);
+    expect(
+      find.byKey(const ValueKey('weblink-url-create-input')),
+      findsNothing,
+    );
   });
 
   testWidgets('real Images page keeps managed-file creation fail-closed',
