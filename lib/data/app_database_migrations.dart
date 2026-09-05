@@ -1,6 +1,15 @@
 part of 'app_database.dart';
 
 extension AppDatabaseMigrationSteps on AppDatabase {
+  Future<void> migrateToV14(Migrator migrator) async {
+    await migrator.addColumn(
+      savedViews,
+      savedViews.includeDescendants,
+    );
+    await migrator.addColumn(savedViews, savedViews.personFilterId);
+    await migrator.addColumn(savedViews, savedViews.photoFilterId);
+  }
+
   Future<void> migrateToV15(Migrator migrator) async {
     final existing = await customSelect(
       "SELECT name FROM sqlite_master WHERE type = 'table'",
