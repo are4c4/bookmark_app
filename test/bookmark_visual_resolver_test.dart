@@ -93,6 +93,8 @@ void main() {
       workspaceId: workspaceId,
       filePath: managedFile.path,
       sourceUrl: 'https://cdn.example.com/preview.jpg',
+      pixelWidth: 1200,
+      pixelHeight: 800,
     );
     final weblink = (await sync.objectStore.listObjects(
       schema.weblinkObjectTypeId,
@@ -119,6 +121,9 @@ void main() {
     );
     expect(weblinkVisual?.imageObjectId, image.id);
     expect(weblinkVisual?.filePath, managedFile.path);
+    expect(weblinkVisual?.pixelWidth, 1200);
+    expect(weblinkVisual?.pixelHeight, 800);
+    expect(weblinkVisual?.aspectRatio, 1.5);
 
     final bookmarkResolver = BookmarkVisualResolver(
       database: database,
