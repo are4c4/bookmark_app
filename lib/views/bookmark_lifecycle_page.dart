@@ -11,20 +11,24 @@ class BookmarkLifecyclePage extends StatelessWidget {
   const BookmarkLifecyclePage.inbox({
     super.key,
     required this.repository,
+    this.resolveUrl,
   }) : mode = BookmarkLifecycleMode.inbox;
 
   const BookmarkLifecyclePage.archive({
     super.key,
     required this.repository,
+    this.resolveUrl,
   }) : mode = BookmarkLifecycleMode.archive;
 
   const BookmarkLifecyclePage.trash({
     super.key,
     required this.repository,
+    this.resolveUrl,
   }) : mode = BookmarkLifecycleMode.trash;
 
   final BookmarkRepository repository;
   final BookmarkLifecycleMode mode;
+  final BookmarkUrlResolve? resolveUrl;
 
   String get _title => switch (mode) {
         BookmarkLifecycleMode.inbox => '未整理',
@@ -38,10 +42,14 @@ class BookmarkLifecyclePage extends StatelessWidget {
         BookmarkLifecycleMode.trash => Icons.delete_outline,
       };
 
-  BookmarkUrlResolver get _urlResolver => BookmarkUrlResolver(
-        database: repository.workspaceStore.database,
-        workspaceId: repository.workspaceId,
-      );
+  Future<BookmarkUrlSource?> _resolveUrl(BookmarkItem bookmark) {
+    final injected = resolveUrl;
+    if (injected != null) return injected(bookmark);
+    return BookmarkUrlResolver(
+      database: repository.workspaceStore.database,
+      workspaceId: repository.workspaceId,
+    ).resolve(bookmark);
+  }
 
   Stream<List<BookmarkItem>> _stream() => switch (mode) {
         BookmarkLifecycleMode.inbox => repository.watchInbox(),
@@ -50,7 +58,7 @@ class BookmarkLifecyclePage extends StatelessWidget {
       };
 
   Future<void> _open(BookmarkItem bookmark) async {
-    final resolved = await _urlResolver.resolve(bookmark);
+    final resolved = await _resolveUrl(bookmark);
     final uri = resolved == null ? null : Uri.tryParse(resolved.value);
     if (uri == null) return;
     await repository.recordOpen(bookmark);
@@ -92,7 +100,7 @@ class BookmarkLifecyclePage extends StatelessWidget {
                           value: item.id,
                           title: Text(item.title),
                           subtitle: _BookmarkLifecycleUrlText(
-                            repository: repository,
+                            resolveUrl: _resolveUrl,
                             bookmark: item,
                           ),
                         );
@@ -193,7 +201,7 @@ class BookmarkLifecyclePage extends StatelessWidget {
                 ),
                 title: Text(bookmark.title),
                 subtitle: _BookmarkLifecycleUrlText(
-                  repository: repository,
+                  resolveUrl: _resolveUrl,
                   bookmark: bookmark,
                   includeTags: true,
                 ),
@@ -263,12 +271,12 @@ class BookmarkLifecyclePage extends StatelessWidget {
 
 class _BookmarkLifecycleUrlText extends StatefulWidget {
   const _BookmarkLifecycleUrlText({
-    required this.repository,
+    required this.resolveUrl,
     required this.bookmark,
     this.includeTags = false,
   });
 
-  final BookmarkRepository repository;
+  final BookmarkUrlResolve resolveUrl;
   final BookmarkItem bookmark;
   final bool includeTags;
 
@@ -283,24 +291,18 @@ class _BookmarkLifecycleUrlTextState extends State<_BookmarkLifecycleUrlText> {
   @override
   void initState() {
     super.initState();
-    _resolved = _resolve();
+    _resolved = widget.resolveUrl(widget.bookmark);
   }
 
   @override
   void didUpdateWidget(covariant _BookmarkLifecycleUrlText oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.repository != widget.repository ||
-        oldWidget.repository.workspaceId != widget.repository.workspaceId ||
-        oldWidget.bookmark.id != widget.bookmark.id ||
-        oldWidget.bookmark.url != widget.bookmark.url) {
-      _resolved = _resolve();
+    if (oldWidget.bookmark.id != widget.bookmark.id ||
+        oldWidget.bookmark.url != widget.bookmark.url ||
+        oldWidget.resolveUrl != widget.resolveUrl) {
+      _resolved = widget.resolveUrl(widget.bookmark);
     }
   }
-
-  Future<BookmarkUrlSource?> _resolve() => BookmarkUrlResolver(
-        database: widget.repository.workspaceStore.database,
-        workspaceId: widget.repository.workspaceId,
-      ).resolve(widget.bookmark);
 
   @override
   Widget build(BuildContext context) {
