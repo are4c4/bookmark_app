@@ -9,17 +9,18 @@ Before changing code, read these in order:
 1. The active GitHub Issue and its acceptance criteria.
 2. `docs/AI_PROGRESS.md` for repository-wide integration state.
 3. The progress file for the active implementation lane:
-   - `docs/AI_PROGRESS_OBJECT.md` for Object/ObjectType/Property/Database-View integration/Body/Daily Note work.
+   - `docs/AI_PROGRESS_OBJECT.md` for Object/ObjectType/Property/Database-View integration/Body/Daily Note/product presentation work.
    - `docs/AI_PROGRESS_RELATION.md` for Relation/backlink/bidirectional lifecycle/relation integrity work.
+   - `docs/AI_PROGRESS_REFACTOR.md` for maintainability/technical-debt/legacy-retirement/behavior-preserving refactor work.
 4. Existing code, tests, and repository documentation.
 
 `docs/AI_PROGRESS_OBJECT_RELATION.md` is legacy combined context only. New implementation runs should not use it as their primary writable handoff file.
 
 GitHub is the durable handoff layer between chat sessions. Do not rely on chat history alone.
 
-## Two-lane development model
+## Three-lane development model
 
-The project may be implemented concurrently in two focused lanes.
+The project may be implemented concurrently in three focused lanes.
 
 ### Lane A — Object
 
@@ -32,6 +33,7 @@ Primary scope:
 - Body/block model
 - Daily Note and time-based Object patterns
 - Value-to-Object promotion contracts
+- system-collection/product presentation and app delivery work that does not belong to Relation semantics
 
 Progress file: `docs/AI_PROGRESS_OBJECT.md`
 
@@ -48,14 +50,31 @@ Primary scope:
 
 Progress file: `docs/AI_PROGRESS_RELATION.md`
 
+### Lane C — Refactor
+
+Primary scope:
+- Issue #225 maintainability work
+- behavior-preserving extraction and responsibility reduction
+- legacy Bookmark dependency inventory and retirement after Object-first parity
+- `AppDatabase` narrowing and migration-body extraction with regression coverage
+- error/fallback observability improvements
+- maintainability guardrails and architecture-boundary enforcement
+- incremental movement toward `lib/features/...` ownership when code is already being touched
+
+Progress file: `docs/AI_PROGRESS_REFACTOR.md`
+
+The Refactor lane must not redesign working Relation semantics or hide product changes inside refactor PRs. Prefer deletion and small extraction over adding abstraction for its own sake.
+
 ### Ownership rule
 
 Each implementation run must identify exactly one primary lane before editing code.
 
-- Do not modify the other lane's progress file unless recording a cross-lane dependency.
+- Do not modify another lane's progress file unless recording a cross-lane dependency or repository-wide coordination change.
 - Avoid large edits to files currently owned by another active lane.
-- If a change necessarily spans both lanes, keep it small, document the dependency, and prefer sequencing instead of concurrent broad edits to the same core file.
+- Before non-trivial edits to shared hotspots such as `generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, `bookmark_unified_stage1_page.dart`, or `app_database.dart`, inspect current open PR ownership.
+- If a change necessarily spans lanes, keep it small, document the dependency, and prefer sequencing instead of concurrent broad edits to the same core file.
 - Shared architectural decisions belong in the active GitHub Issue and may also be summarized in `docs/AI_PROGRESS.md`.
+- Relation subsystem redesign is not a Refactor-lane goal; preserve canonical Relation APIs unless a concrete Relation issue explicitly requires otherwise.
 
 ## Autonomous implementation loop
 
@@ -121,18 +140,19 @@ The next AI run should be able to resume from GitHub state without needing the u
 - Do not delete user data or perform destructive migrations without explicit approval.
 - Do not silently broaden scope beyond the active Issue.
 - Prefer reversible changes and focused PRs/checkpoints.
+- Existing historical migrations are compatibility contracts: extract/refactor them only with regression coverage and preserve semantics/order.
 - If a product/design decision is genuinely ambiguous and materially changes behavior, record the alternatives and blocker in the relevant progress file instead of inventing a major requirement.
 
 ## Branch and integration policy
 
 - Use dedicated branches for non-trivial implementation work.
-- Prefer lane-identifiable branch names such as `feature/object-*` and `feature/relation-*` where practical.
+- Prefer lane-identifiable branch names such as `feature/object-*`, `feature/relation-*`, and `refactor/issue-*` where practical.
 - A sustained run may create multiple focused commits and, when appropriate, multiple sequential PRs; opening a PR does not automatically end the run.
 - Keep `main` releasable.
 - Rebase or refresh from latest `main` before integration when another lane has merged overlapping foundation changes.
 - Merge after relevant checks pass or when the user explicitly directs integration.
 - When multiple agents are working, avoid editing unrelated areas merely to reformat them.
-- Do not let both lanes concurrently own a broad refactor of the same core file; split or sequence the work first.
+- Do not let two lanes concurrently own a broad refactor of the same core file; split or sequence the work first.
 
 ## Planning chat vs implementation chats
 
@@ -145,5 +165,6 @@ A practical chat split is:
 - Planning / design chat
 - Implementation chat A: Object lane
 - Implementation chat B: Relation lane
+- Implementation chat C: Refactor lane
 
 Creating separate chats is recommended for concurrent work, but it is not required for the repository workflow to function.
