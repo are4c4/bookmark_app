@@ -10,7 +10,14 @@ extension AppDatabaseMigrationSteps on AppDatabase {
     await migrator.addColumn(bookmarks, bookmarks.rating);
     await migrator.addColumn(bookmarks, bookmarks.lastOpenedAt);
     await migrator.addColumn(bookmarks, bookmarks.openCount);
-    await migrator.addColumn(people, people.profilePhotoId);
+
+    final peopleColumns = await customSelect('PRAGMA table_info(people)').get();
+    final peopleColumnNames =
+        peopleColumns.map((row) => row.read<String>('name')).toSet();
+    if (!peopleColumnNames.contains('profile_photo_id')) {
+      await migrator.addColumn(people, people.profilePhotoId);
+    }
+
     await migrator.addColumn(savedViews, savedViews.statusFilter);
     await migrator.addColumn(savedViews, savedViews.minRating);
     await migrator.createTable(collections);
