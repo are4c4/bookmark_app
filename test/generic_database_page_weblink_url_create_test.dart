@@ -68,6 +68,12 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  Future<void> pumpFiniteAsyncUi(WidgetTester tester) async {
+    for (var index = 0; index < 20; index++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+  }
+
   Future<void> submitUrl(WidgetTester tester, String url) async {
     await tester.tap(find.text('URLを追加').last);
     await tester.pumpAndSettle();
@@ -80,7 +86,7 @@ void main() {
       url,
     );
     await tester.tap(find.byKey(const ValueKey('weblink-url-create-submit')));
-    await tester.pumpAndSettle();
+    await pumpFiniteAsyncUi(tester);
   }
 
   testWidgets(
