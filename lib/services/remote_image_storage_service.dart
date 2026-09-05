@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:http/http.dart' as http;
 import 'package:image/image.dart' as img;
 
@@ -44,6 +46,19 @@ class RemoteImageStorageService {
   final http.Client? _client;
   final PhotoStorageService _storage;
 
+  void _debugDimensionProbeFailure(Object error, StackTrace stackTrace) {
+    assert(() {
+      developer.log(
+        'RemoteImageStorageService: optional image dimension probe failed; '
+        'continuing managed import without geometry.',
+        name: 'bookmark_app.remote_image_storage',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return true;
+    }());
+  }
+
   Future<ManagedRemoteImage?> download(String sourceUrl) async {
     final rawUrl = sourceUrl.trim();
     final uri = Uri.tryParse(rawUrl);
@@ -87,7 +102,8 @@ class RemoteImageStorageService {
       img.Image? decoded;
       try {
         decoded = img.decodeImage(response.bodyBytes);
-      } catch (_) {
+      } catch (error, stackTrace) {
+        _debugDimensionProbeFailure(error, stackTrace);
         decoded = null;
       }
 
