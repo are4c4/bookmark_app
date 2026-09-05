@@ -598,9 +598,11 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
           url: url,
         );
       } else if (_createMode == GenericDatabaseCreateMode.managedImage) {
-        throw UnsupportedError(
-          'Images must be imported from managed image/file input.',
+        final ids = await _pageServices.imageImport.pickAndImport(
+          databaseId: widget.databaseId,
         );
+        if (ids.isEmpty) return;
+        id = ids.first;
       } else {
         id = await _pageServices.creator.create(
           databaseId: widget.databaseId,
@@ -1397,7 +1399,6 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
         ),
       );
       if (result == null) return;
-
       await _pageServices.relationEditor.save(
         context: selection,
         selectedObjectIds: result,
