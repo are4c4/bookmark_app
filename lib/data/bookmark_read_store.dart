@@ -1,11 +1,13 @@
 import 'package:drift/drift.dart';
 
 import 'app_database.dart';
+import 'photo_read_store.dart';
 
 class BookmarkReadStore {
-  BookmarkReadStore(this.database);
+  BookmarkReadStore(this.database) : _photoReads = PhotoReadStore(database);
 
   final AppDatabase database;
+  final PhotoReadStore _photoReads;
 
   Stream<List<BookmarkItem>> watchItems() {
     final trigger = database.customSelect(
@@ -71,7 +73,7 @@ class BookmarkReadStore {
       ]).get();
       for (final row in photoRows) {
         final relation = row.readTable(database.bookmarkPhotos);
-        final photo = _resolvedPhoto(row.readTable(database.photos));
+        final photo = _photoReads.resolveRecord(row.readTable(database.photos));
         photosByBookmark
             .putIfAbsent(relation.bookmarkId, () => <PhotoRecord>[])
             .add(photo);
@@ -140,13 +142,4 @@ class BookmarkReadStore {
           .toList();
     });
   }
-
-  PhotoRecord _resolvedPhoto(PhotoRecord photo) => PhotoRecord(
-        id: photo.id,
-        path: database.pathResolver.resolveStoredPath(photo.path),
-        title: photo.title,
-        note: photo.note,
-        tags: photo.tags,
-        createdAt: photo.createdAt,
-      );
 }

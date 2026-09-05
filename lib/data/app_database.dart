@@ -147,10 +147,6 @@ class AppDatabase extends _$AppDatabase {
 
   Stream<List<Tag>> watchAllTags() => (select(tags)..orderBy([(t) => OrderingTerm.asc(t.name)])).watch();
   Stream<List<Person>> watchAllPeople() => (select(people)..orderBy([(p) => OrderingTerm.asc(p.name)])).watch();
-  Stream<List<PhotoRecord>> watchAllPhotos() =>
-      (select(photos)..orderBy([(p) => OrderingTerm.desc(p.createdAt)]))
-          .watch()
-          .map((rows) => rows.map(_resolvedPhoto).toList());
   Stream<List<CollectionRecord>> watchAllCollections() =>
       (select(collections)..orderBy([(c) => OrderingTerm.asc(c.name)])).watch();
   Stream<List<BookmarkRelation>> watchRelationsForBookmark(int bookmarkId) =>
@@ -541,15 +537,6 @@ class AppDatabase extends _$AppDatabase {
         ));
         await _setSavedViewTags(id, tagIds);
       });
-
-  PhotoRecord _resolvedPhoto(PhotoRecord photo) => PhotoRecord(
-        id: photo.id,
-        path: pathResolver.resolveStoredPath(photo.path),
-        title: photo.title,
-        note: photo.note,
-        tags: photo.tags,
-        createdAt: photo.createdAt,
-      );
 
 
   Future<int> deleteSavedView(int id) => (delete(savedViews)..where((v) => v.id.equals(id))).go();
