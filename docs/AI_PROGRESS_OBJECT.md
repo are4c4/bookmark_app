@@ -26,6 +26,8 @@ Important `main` state:
 - generic Weblink/Image title-only and Board creation fail closed instead of bypassing canonical URL/file identity (#215);
 - Gallery fixed/masonry persistence, renderer, toolbar and real `GenericDatabasePage` integration are complete (#204/#206/#212/#223);
 - managed Image dimensions and canonical Weblink visual geometry are live (#207/#209/#217/#221/#223);
+- managed Image Gallery read-only presentation foundation is merged (#284);
+- identity-aware generic collection create-mode classification is merged (#285);
 - deterministic shared six-dot Property handle/grid is merged (#205);
 - exposed Weblink/Image Relation editing/backlink/delete lifecycle is covered through #208/#210/#211/#216/#222;
 - macOS packaging from #220 is merged and the main-push macOS workflow successfully built/uploaded both the release app and DMG.
@@ -34,50 +36,67 @@ Important `main` state:
 ### #223 — real managed Weblink media in masonry Gallery
 Merged to `main` as `72ed6f6dc26e00e92e5753578ea72b9500d30311`.
 
-This completes #156:
+This completed #156:
 - real `GenericDatabasePage` masonry cards consume `WeblinkGalleryMedia`;
 - managed Representative-image geometry is driven by persisted Image dimensions without eager full-resolution decoding for layout;
 - portrait/landscape geometry, stable fallback and canonical Object opening are regression-covered;
 - final Analyze/Test CI passed before merge;
 - Issue #156 is closed as completed.
 
-## Active Object PR
-### PR #285 — `Expose identity-aware generic collection create modes`
-Branch: `feature/object-weblink-url-create-mode-155`
-Status: open; CI running at the latest handoff refresh.
+### #284 — managed Image Gallery media foundation
+Merged to `main` as `56441ba951369b4d3461bb3bb08aa53ba0bbc511` after Analyze/Test passed.
 
-This small #155 preparation slice:
+This #155 presentation foundation:
+- adds read-only canonical managed Image visual resolution;
+- exposes persisted Image geometry without decoding bytes for layout;
+- adds reusable `ImageGalleryMedia` fixed/masonry/fallback presentation coverage;
+- does not yet insert Image media into the real `GenericDatabasePage` host.
+
+### #285 — identity-aware collection create modes
+Merged to `main` as `59f32bc80e31ca0b7a2319eaec7b1ecd626f8748` after Analyze/Test passed.
+
+This #155 creation foundation:
 - adds typed `GenericDatabaseCreateMode` classification to `GenericDatabaseObjectCreateService`;
 - centralizes system collection creation semantics instead of duplicating system-key checks in presentation hosts;
 - classifies Weblink as URL-entry, Image as managed-file import, Daily Note as date-keyed creation, and normal ObjectTypes as generic creation;
 - adds focused in-memory coverage for all four modes.
 
-No Relation mutation/index/backlink behavior changes.
+## Active Object PR
+### PR #286 — `Add canonical Weblink URL entry in generic host`
+Branch: `feature/object-weblink-url-entry-155`
+Base: `main`.
+
+Current slice:
+- real Gallery/List/Table create affordances show `URLを追加` for Weblink collections;
+- Weblink creation opens a URL-specific dialog and writes only through canonical `createWeblinkFromUrl()` normalization/reuse;
+- created/reused Weblinks reopen through the existing shared Object opening-mode path;
+- normal immediate creation and Daily Note behavior remain unchanged;
+- managed Image creation remains fail-closed until the dedicated file import slice;
+- Board create-in-group is hidden for identity-sensitive system collection modes;
+- a real `GenericDatabasePage` regression covers URL normalization and canonical reuse.
+
+No direct Relation mutation/index/backlink path is introduced.
 
 ## Exact next Object actions
-1. Integrate #285 after Analyze/Test passes.
-2. Wire the typed create mode into the real `GenericDatabasePage` create affordances with a deliberately small host diff:
-   - Weblinks: show URL-oriented create UI and call canonical `createWeblinkFromUrl()`;
-   - normal collections: preserve current immediate Object creation;
-   - Daily Notes: preserve date-keyed open-or-create;
-   - Images: remain fail-closed until managed file-picker/import UI is provided.
-3. Add a real Weblinks host regression proving URL input creates/reuses one canonical normalized Weblink and opens the same Object.
-4. Add the managed Image import affordance as a separate identity-safe slice; do not create raw title-only Images.
-5. Continue #155 legacy Bookmark visual migration in small patches that do not conflict with Refactor work; prefer existing `BookmarkVisualImage` / canonical resolver.
-6. Polish generic Weblink/Image Table/Gallery/List/detail defaults through existing ObjectType/View contracts rather than feature-specific pages.
-7. Validate #205 six-dot alignment in the user's actual app/theme and close #149 only after visible confirmation.
-8. Complete #218 local install/data-preservation check when the user is ready.
+1. Finish #286 Analyze/Test; fix any regression, then integrate the canonical Weblink URL-entry host slice.
+2. Insert the already-merged #284 `ImageGalleryMedia` into the real `GenericDatabasePage` Gallery in a small patch, preserving Object opening and existing Weblink media behavior.
+3. Add the managed Image file-picker/import affordance as a separate identity-safe slice; do not create raw title-only Images.
+4. Continue #155 legacy Bookmark visual migration in small patches that do not conflict with Refactor work; prefer existing `BookmarkVisualImage` / canonical resolver.
+5. Polish generic Weblink/Image Table/Gallery/List/detail defaults through existing ObjectType/View contracts rather than feature-specific pages.
+6. Validate #205 six-dot alignment in the user's actual app/theme and close #149 only after visible confirmation.
+7. Complete #218 local install/data-preservation check when the user is ready.
 
 ## Cross-lane boundaries
 ### Relation lane
 - Canonical Relation mutation/read/index/backlink/audit/reconcile is mature.
 - Exposed Weblink/Image Relation host coverage is integrated through #222.
-- #285 and the next URL-entry host slice are Object-owned creation/presentation work and must not introduce direct Relation writes.
+- #284/#285/#286 are Object-owned presentation/creation work and introduce no direct Relation writes.
 - Resume Relation implementation only for a new Relation-producing workflow or concrete correctness regression.
 
 ### Refactor lane — #225
 - Refactor owns maintainability guardrails, migration extraction, failure-policy cleanup, legacy inventory and behavior-preserving technical-debt reduction.
 - Current open Refactor PR #283 changes `app_database.dart`, `bookmark_repository.dart`, `saved_view_read_store.dart` and focused tests; it does not currently own `generic_database_page.dart`.
+- PR #286 owns a deliberately small `generic_database_page.dart` product patch; broad Refactor edits to that hotspot should remain sequenced until #286 lands.
 - Before either lane touches `app_shell.dart`, `object_inspector_page.dart`, `bookmark_unified_stage1_page.dart`, or another hotspot, inspect active PR ownership again.
 - Object lane owns product-semantic replacement surfaces; Refactor may delete/relocate legacy paths only after Object-first parity is proven.
 
@@ -90,7 +109,9 @@ No Relation mutation/index/backlink behavior changes.
 
 ## Validation
 - #223 Analyze/Test: passed before merge.
-- #285: CI triggered; latest observed run was still in progress while this handoff was refreshed.
+- #284 Analyze/Test: passed before merge.
+- #285 Analyze/Test: passed before merge.
+- #286: real-host regression added; CI should run from the latest handoff-refresh commit.
 
 ## Stop reason
-No Object-lane product blocker is known. This handoff was refreshed during an active sustained run; the next implementation dependency is #285 integration followed by a small real-host URL-entry patch.
+No Object-lane product blocker is known. This handoff was refreshed during an active sustained run; continue through #286 integration and then the next non-conflicting #155 Image presentation/import slice.

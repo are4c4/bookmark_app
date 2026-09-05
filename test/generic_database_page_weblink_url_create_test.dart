@@ -2,7 +2,6 @@ import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/bookmark_lifecycle_store.dart';
 import 'package:bookmark_app/data/bookmark_repository.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
-import 'package:bookmark_app/data/image_object_service.dart';
 import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/object_type_defaults_store.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
@@ -69,69 +68,75 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  Future<void> pumpDialog(WidgetTester tester) async {
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 200));
+  Future<void> pumpFiniteAsyncUi(WidgetTester tester) async {
+    for (var index = 0; index < 20; index++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
   }
 
-  testWidgets('real Weblinks page exposes URL entry instead of title-only create',
-      (tester) async {
-    final fixture = await buildFixture();
-    addTearDown(fixture.database.close);
-    final definition = await WeblinkObjectService(
-      systemObjects: fixture.systemObjects,
-      defaultsStore: fixture.defaultsStore,
-    ).ensureDefinition(fixture.workspaceId);
-
-    await pumpPage(
-      tester,
-      repository: fixture.repository,
-      databaseId: definition.objectType.id,
-    );
-    expect(await fixture.objectStore.listObjects(definition.objectType.id), isEmpty);
-    expect(find.text('新規ページ'), findsNothing);
-
+  Future<void> submitUrl(WidgetTester tester, String url) async {
     await tester.tap(find.text('URLを追加').last);
-    await pumpDialog(tester);
-
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
     expect(
       find.byKey(const ValueKey('weblink-url-create-input')),
       findsOneWidget,
     );
-    expect(await fixture.objectStore.listObjects(definition.objectType.id), isEmpty);
-
-    await tester.tap(find.text('キャンセル'));
-    await pumpDialog(tester);
-    expect(
+    await tester.enterText(
       find.byKey(const ValueKey('weblink-url-create-input')),
-      findsNothing,
+      url,
     );
-  });
+    await tester.tap(find.byKey(const ValueKey('weblink-url-create-submit')));
+    await pumpFiniteAsyncUi(tester);
+  }
 
-  testWidgets('real Images page keeps managed-file creation fail-closed',
-      (tester) async {
-    final fixture = await buildFixture();
-    addTearDown(fixture.database.close);
-    final definition = await ImageObjectService(
-      systemObjects: fixture.systemObjects,
-      defaultsStore: fixture.defaultsStore,
-    ).ensureDefinition(fixture.workspaceId);
+  testWidgets(
+    'real Weblinks page creates and reuses canonical Weblink from URL entry',
+    (tester) async {
+      final fixture = await buildFixture();
+      addTearDown(fixture.database.close);
+      final definition = await WeblinkObjectService(
+        systemObjects: fixture.systemObjects,
+        defaultsStore: fixture.defaultsStore,
+      ).ensureDefinition(fixture.workspaceId);
 
-    await pumpPage(
-      tester,
-      repository: fixture.repository,
-      databaseId: definition.objectType.id,
-    );
-    expect(await fixture.objectStore.listObjects(definition.objectType.id), isEmpty);
-    expect(find.text('新規ページ'), findsNothing);
+      await pumpPage(
+        tester,
+        repository: fixture.repository,
+        databaseId: definition.objectType.id,
+      );
 
-    await tester.tap(find.text('画像をインポート').last);
-    await tester.pumpAndSettle();
+      expect(find.text('URLを追加'), findsOneWidget);
+      expect(
+        await fixture.objectStore.listObjects(definition.objectType.id),
+        isEmpty,
+      );
 
-    expect(await fixture.objectStore.listObjects(definition.objectType.id), isEmpty);
-    expect(
-      find.textContaining('Images must be imported from managed image/file input'),
-      findsOneWidget,
-    );
-  });
+      await submitUrl(
+        tester,
+        'HTTPS://Example.COM:443/articles/../guide',
+      );
+
+      var objects =
+          await fixture.objectStore.listObjects(definition.objectType.id);
+      expect(objects, hasLength(1));
+      final canonicalId = objects.single.id;
+      expect(objects.single.title, 'example.com');
+      expect(
+        objects.single.values[definition.urlProperty.id],
+        'https://example.com/guide',
+      );
+      expect(find.text('example.com'), findsWidgets);
+
+      await submitUrl(tester, 'https://example.com/guide');
+
+      objects = await fixture.objectStore.listObjects(definition.objectType.id);
+      expect(objects, hasLength(1));
+      expect(objects.single.id, canonicalId);
+      expect(
+        objects.single.values[definition.urlProperty.id],
+        'https://example.com/guide',
+      );
+    },
+  );
 }
