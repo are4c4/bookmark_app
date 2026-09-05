@@ -455,6 +455,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
       builder: (context, snapshot) {
         final scheme = Theme.of(context).colorScheme;
         final card = NotionBookmarkCard(
+          repository: widget.repository,
           bookmark: bookmark,
           selected: selected,
           showImage: _visibleProperties.contains(BookmarkStage1Property.image),
