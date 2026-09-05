@@ -15,8 +15,8 @@ class DatabaseCollectionSettingsDraft {
   final List<ObjectFilterRule> collectionFilter;
 }
 
-Future<DatabaseCollectionSettingsDraft?> showDatabaseCollectionSettingsDialog(
-  BuildContext context, {
+Future<DatabaseCollectionSettingsDraft?> showDatabaseCollectionSettingsDialog({
+  required BuildContext context,
   required DatabaseCollectionConfigContext config,
 }) {
   return showDialog<DatabaseCollectionSettingsDraft>(
