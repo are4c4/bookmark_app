@@ -1,5 +1,5 @@
+import 'package:bookmark_app/data/database_view_gallery_adapter.dart';
 import 'package:bookmark_app/features/database/presentation/widgets/image_gallery_media.dart';
-import 'package:bookmark_app/features/database/presentation/widgets/object_gallery_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
