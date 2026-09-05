@@ -38,7 +38,7 @@ void main() {
     final table = _between(
       source,
       '  Widget _table(',
-      '\n  Future<void> _edit',
+      '\n  String _compactUrl(',
     );
     expect(table, contains('width: 58'));
     expect(table, contains('height: 38'));
