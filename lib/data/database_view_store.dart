@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 
 import 'package:drift/drift.dart';
 
@@ -86,11 +87,28 @@ class DatabaseViewStore {
         );
       });
 
+  void _debugDecodeFailure(
+    String valueKind,
+    Object error,
+    StackTrace stackTrace,
+  ) {
+    assert(() {
+      developer.log(
+        'DatabaseViewStore: invalid persisted $valueKind JSON; using empty fallback.',
+        name: 'bookmark_app.database_view_store',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return true;
+    }());
+  }
+
   Map<String, dynamic> _decodeMap(String raw) {
     try {
       final value = jsonDecode(raw);
       return value is Map<String, dynamic> ? value : <String, dynamic>{};
-    } catch (_) {
+    } catch (error, stackTrace) {
+      _debugDecodeFailure('map', error, stackTrace);
       return <String, dynamic>{};
     }
   }
@@ -99,7 +117,8 @@ class DatabaseViewStore {
     try {
       final value = jsonDecode(raw);
       return value is List ? value : <dynamic>[];
-    } catch (_) {
+    } catch (error, stackTrace) {
+      _debugDecodeFailure('list', error, stackTrace);
       return <dynamic>[];
     }
   }
