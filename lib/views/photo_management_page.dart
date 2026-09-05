@@ -273,6 +273,7 @@ class _PhotoManagementPageState extends State<PhotoManagementPage> {
   void _showRelatedBookmarks(PhotoRecord photo) {
     showBookmarkReverseLookupDialog(
       context: context,
+      repository: repository,
       title: 'この写真を使っているブックマーク',
       bookmarks: repository.watchBookmarksForPhoto(photo),
     );

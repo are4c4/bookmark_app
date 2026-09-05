@@ -1,12 +1,13 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../data/app_database.dart';
+import '../data/bookmark_repository.dart';
+import 'bookmark_visual_image.dart';
 
 Future<void> showBookmarkReverseLookupDialog({
   required BuildContext context,
+  required BookmarkRepository repository,
   required String title,
   required Stream<List<BookmarkItem>> bookmarks,
 }) {
@@ -38,7 +39,14 @@ Future<void> showBookmarkReverseLookupDialog({
                     height: 48,
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(6),
-                      child: _BookmarkLookupThumbnail(bookmark: bookmark),
+                      child: BookmarkVisualImage(
+                        repository: repository,
+                        bookmark: bookmark,
+                        width: 72,
+                        height: 48,
+                        fit: BoxFit.cover,
+                        placeholder: const _Placeholder(),
+                      ),
                     ),
                   ),
                   title: Text(
@@ -75,31 +83,6 @@ Future<void> showBookmarkReverseLookupDialog({
       ],
     ),
   );
-}
-
-class _BookmarkLookupThumbnail extends StatelessWidget {
-  const _BookmarkLookupThumbnail({required this.bookmark});
-
-  final BookmarkItem bookmark;
-
-  @override
-  Widget build(BuildContext context) {
-    if (bookmark.coverPhoto != null) {
-      return Image.file(
-        File(bookmark.coverPhoto!.path),
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => const _Placeholder(),
-      );
-    }
-    if (bookmark.thumbnail?.trim().isNotEmpty == true) {
-      return Image.network(
-        bookmark.thumbnail!,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => const _Placeholder(),
-      );
-    }
-    return const _Placeholder();
-  }
 }
 
 class _Placeholder extends StatelessWidget {

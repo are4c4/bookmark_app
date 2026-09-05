@@ -406,6 +406,7 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
     final related = _bookmarksFor(person, bookmarks);
     showBookmarkReverseLookupDialog(
       context: context,
+      repository: repository,
       title: '${person.name} のブックマーク（${related.length}件）',
       bookmarks: repository.watchBookmarksForPerson(person),
     );
