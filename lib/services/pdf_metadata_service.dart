@@ -25,9 +25,23 @@ class PdfMetadataService {
       final title = _parseTitle(output) ?? fallback;
       final authors = _parseAuthors(output);
       return PdfFileMetadata(title: title, authors: authors);
-    } catch (_) {
+    } catch (error, stackTrace) {
+      _debugMetadataReadFailure(error, stackTrace);
       return PdfFileMetadata(title: fallback);
     }
+  }
+
+  void _debugMetadataReadFailure(Object error, StackTrace stackTrace) {
+    assert(() {
+      // Keep fallback diagnostics useful without logging the user file path or
+      // exception text, either of which may contain local file information.
+      stderr.writeln(
+        'PdfMetadataService: mdls read failed; using filename fallback '
+        '(${error.runtimeType})',
+      );
+      stderr.writeln(stackTrace);
+      return true;
+    }());
   }
 
   String? _parseTitle(String output) {
@@ -37,7 +51,10 @@ class PdfMetadataService {
   }
 
   List<String> _parseAuthors(String output) {
-    final block = RegExp(r'kMDItemAuthors\s*=\s*\((.*?)\)', dotAll: true).firstMatch(output)?.group(1);
+    final block = RegExp(
+      r'kMDItemAuthors\s*=\s*\((.*?)\)',
+      dotAll: true,
+    ).firstMatch(output)?.group(1);
     if (block == null) return const [];
     return RegExp(r'"([^"]+)"')
         .allMatches(block)
