@@ -116,7 +116,12 @@ void main() {
     );
 
     await tester.tap(find.byTooltip('PDF / 動画を添付'));
-    await tester.pumpAndSettle();
+    // The import remains active while the metadata confirmation dialog is open,
+    // so an indeterminate progress indicator keeps scheduling frames. Use fixed
+    // pumps here instead of pumpAndSettle to avoid waiting on that intentional
+    // animation.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.text('PDFの情報を反映しますか？'), findsOneWidget);
     await tester.tap(find.text('反映'));
