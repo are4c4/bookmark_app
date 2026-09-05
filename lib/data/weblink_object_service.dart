@@ -152,7 +152,10 @@ class WeblinkObjectService {
   /// by the reusable Weblink Object.
   ///
   /// This lets legacy Bookmark metadata seed a Weblink once while keeping later
-  /// Bookmark-specific edits independent.
+  /// Bookmark-specific edits independent. When the Object is still using the
+  /// deterministic URL-derived title, a stored or newly supplied Page title is
+  /// promoted to the Object title so generic List/Gallery/Table surfaces become
+  /// useful without overwriting an explicit or manually edited Object title.
   Future<AppObject> enrichIfMissing({
     required int workspaceId,
     required int objectId,
@@ -167,6 +170,17 @@ class WeblinkObjectService {
       throw StateError('Weblink metadata enrichment requires a URL Value.');
     }
     final normalizedUrl = normalizeUrl(rawUrl);
+    final storedPageTitle =
+        '${object.values[definition.pageTitleProperty.id] ?? ''}'.trim();
+    final incomingPageTitle = pageTitle?.trim();
+    final preferredPageTitle = storedPageTitle.isNotEmpty
+        ? storedPageTitle
+        : (incomingPageTitle?.isNotEmpty == true ? incomingPageTitle : null);
+    final promoteGeneratedTitle = preferredPageTitle != null &&
+        _usesGeneratedUrlTitle(
+          objectTitle: object.title,
+          normalizedUrl: normalizedUrl,
+        );
 
     await _setDomainIfMissing(
       object: object,
@@ -178,6 +192,12 @@ class WeblinkObjectService {
       property: definition.pageTitleProperty,
       value: pageTitle,
     );
+    if (promoteGeneratedTitle) {
+      await systemObjects.objectStore.renameObject(
+        object.id,
+        preferredPageTitle,
+      );
+    }
     await _setIfMissing(
       object: object,
       property: definition.descriptionProperty,
@@ -373,6 +393,15 @@ class WeblinkObjectService {
       property: definition.domainProperty,
       value: host,
     );
+  }
+
+  bool _usesGeneratedUrlTitle({
+    required String objectTitle,
+    required String normalizedUrl,
+  }) {
+    final uri = Uri.parse(normalizedUrl);
+    final generated = uri.host.isNotEmpty ? uri.host : normalizedUrl;
+    return objectTitle.trim() == generated;
   }
 
   Future<void> _setIfMissing({

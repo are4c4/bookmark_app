@@ -279,7 +279,7 @@ void main() {
       previewImageUrl: 'HTTPS://CDN.Example.com:443/a/../preview.jpg?sig=1',
     );
 
-    expect(enriched.title, 'example.com');
+    expect(enriched.title, 'Resource title');
     expect(enriched.values[definition.domainProperty.id], 'example.com');
     expect(enriched.values[definition.pageTitleProperty.id], 'Resource title');
     expect(
@@ -298,6 +298,7 @@ void main() {
       description: 'Bookmark-specific later description',
       previewImageUrl: 'https://cdn.example.com/other.jpg',
     );
+    expect(preserved.title, 'Resource title');
     expect(preserved.values[definition.pageTitleProperty.id], 'Resource title');
     expect(
       preserved.values[definition.descriptionProperty.id],
@@ -306,6 +307,92 @@ void main() {
     expect(
       preserved.values[definition.previewImageUrlProperty.id],
       'https://cdn.example.com/preview.jpg?sig=1',
+    );
+  });
+
+  test('enrichment preserves explicit and manually edited Weblink titles',
+      () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final service = WeblinkObjectService(
+      systemObjects: SystemObjectStore(
+        database: database,
+        objectStore: objectStore,
+      ),
+      defaultsStore: ObjectTypeDefaultsStore(genericStore),
+    );
+    final definition = await service.ensureDefinition(workspaceId);
+
+    final explicit = await service.findOrCreate(
+      workspaceId: workspaceId,
+      url: 'https://example.com/explicit',
+      title: 'Pinned Weblink title',
+    );
+    final explicitEnriched = await service.enrichIfMissing(
+      workspaceId: workspaceId,
+      objectId: explicit.id,
+      pageTitle: 'Fetched explicit page title',
+    );
+    expect(explicitEnriched.title, 'Pinned Weblink title');
+    expect(
+      explicitEnriched.values[definition.pageTitleProperty.id],
+      'Fetched explicit page title',
+    );
+
+    final edited = await service.findOrCreate(
+      workspaceId: workspaceId,
+      url: 'https://example.com/edited',
+    );
+    await objectStore.renameObject(edited.id, 'My edited title');
+    final editedEnriched = await service.enrichIfMissing(
+      workspaceId: workspaceId,
+      objectId: edited.id,
+      pageTitle: 'Fetched edited page title',
+    );
+    expect(editedEnriched.title, 'My edited title');
+    expect(
+      editedEnriched.values[definition.pageTitleProperty.id],
+      'Fetched edited page title',
+    );
+  });
+
+  test('stored Page title upgrades an older generated Weblink title', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final service = WeblinkObjectService(
+      systemObjects: SystemObjectStore(
+        database: database,
+        objectStore: objectStore,
+      ),
+      defaultsStore: ObjectTypeDefaultsStore(genericStore),
+    );
+    final weblink = await service.findOrCreate(
+      workspaceId: workspaceId,
+      url: 'https://example.net/legacy',
+    );
+    final definition = await service.ensureDefinition(workspaceId);
+    await objectStore.setPropertyValue(
+      objectId: weblink.id,
+      property: definition.pageTitleProperty,
+      value: 'Already stored page title',
+    );
+
+    final enriched = await service.enrichIfMissing(
+      workspaceId: workspaceId,
+      objectId: weblink.id,
+      description: 'Description refresh',
+    );
+
+    expect(enriched.title, 'Already stored page title');
+    expect(
+      enriched.values[definition.pageTitleProperty.id],
+      'Already stored page title',
     );
   });
 
@@ -336,6 +423,7 @@ void main() {
       previewImageUrl: 'not an absolute URL',
     );
 
+    expect(enriched.title, 'Valid title');
     expect(enriched.values[definition.pageTitleProperty.id], 'Valid title');
     expect(enriched.values[definition.previewImageUrlProperty.id], isNull);
   });
