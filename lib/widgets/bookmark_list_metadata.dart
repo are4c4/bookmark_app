@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../data/app_database.dart';
 import '../data/person_roles.dart';
+import '../services/bookmark_url_resolver.dart';
 import '../views/bookmark_query_engine.dart';
+import 'bookmark_resolved_url_text.dart';
 
 class BookmarkListMetadata extends StatelessWidget {
   const BookmarkListMetadata({
@@ -10,11 +12,13 @@ class BookmarkListMetadata extends StatelessWidget {
     required this.bookmark,
     required this.assignments,
     required this.propertyTokens,
+    this.resolveUrl,
   });
 
   final BookmarkItem bookmark;
   final List<PersonRoleAssignment> assignments;
   final List<String> propertyTokens;
+  final BookmarkUrlResolve? resolveUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -34,7 +38,25 @@ class BookmarkListMetadata extends StatelessWidget {
       }
       switch (token) {
         case 'url':
-          widgets.add(_PlainMeta(text: _compactUrl(bookmark.url)));
+          final resolver = resolveUrl;
+          if (resolver == null) {
+            widgets.add(_PlainMeta(text: _compactUrl(bookmark.url)));
+          } else {
+            widgets.add(
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 320),
+                child: BookmarkResolvedUrlText(
+                  bookmark: bookmark,
+                  resolveUrl: resolver,
+                  compact: true,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            );
+          }
         case 'tags':
           widgets.addAll(
             bookmark.tags.map(
