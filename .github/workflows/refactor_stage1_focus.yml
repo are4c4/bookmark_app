@@ -1,0 +1,20 @@
+name: Refactor Stage1 Focus
+
+on:
+  push:
+    branches:
+      - refactor/issue-225-stage1-visual
+
+jobs:
+  stage1-visual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: dart run build_runner build --delete-conflicting-outputs
+      - run: flutter test test/bookmark_stage1_visual_test.dart --timeout 2m
