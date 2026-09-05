@@ -3,6 +3,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
+import '../services/bookmark_url_resolver.dart';
 import 'bookmark_visual_image.dart';
 
 const _statusLabels = <String, String>{
@@ -73,13 +74,37 @@ class NotionBookmarkCard extends StatefulWidget {
 
 class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
   var _hovered = false;
+  late Future<BookmarkUrlSource?> _resolvedUrl;
+
+  BookmarkUrlResolver get _urlResolver => BookmarkUrlResolver(
+        database: widget.repository.workspaceStore.database,
+        workspaceId: widget.repository.workspaceId,
+      );
+
+  @override
+  void initState() {
+    super.initState();
+    _resolvedUrl = _urlResolver.resolve(widget.bookmark);
+  }
+
+  @override
+  void didUpdateWidget(covariant NotionBookmarkCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.repository != widget.repository ||
+        oldWidget.repository.workspaceId != widget.repository.workspaceId ||
+        oldWidget.bookmark.id != widget.bookmark.id ||
+        oldWidget.bookmark.url != widget.bookmark.url) {
+      _resolvedUrl = _urlResolver.resolve(widget.bookmark);
+    }
+  }
 
   Future<void> _openLink() async {
     if (widget.onOpen != null) {
       widget.onOpen!.call();
       return;
     }
-    final uri = Uri.tryParse(widget.bookmark.url);
+    final resolved = await _resolvedUrl;
+    final uri = resolved == null ? null : Uri.tryParse(resolved.value);
     if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
@@ -88,6 +113,16 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
     if (uri == null || uri.host.isEmpty) return value;
     return uri.host.startsWith('www.') ? uri.host.substring(4) : uri.host;
   }
+
+  Widget _urlText(Color color) => FutureBuilder<BookmarkUrlSource?>(
+        future: _resolvedUrl,
+        builder: (context, snapshot) => Text(
+          _compactUrl(snapshot.data?.value ?? widget.bookmark.url),
+          style: TextStyle(fontSize: 12, color: color),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      );
 
   String _date(DateTime value) {
     final local = value.toLocal();
@@ -193,15 +228,7 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
           break;
         case 'url':
           if (widget.showUrl) {
-            add(
-              Text(
-                _compactUrl(bookmark.url),
-                style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              top: 5,
-            );
+            add(_urlText(scheme.onSurfaceVariant), top: 5);
           }
         case 'status':
           if (widget.showStatus) {
@@ -502,8 +529,8 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
                                                 ? Icons.star
                                                 : Icons.star_border,
                                           ),
-                                        ),
                                       ),
+                                    ),
                                     SizedBox(
                                       width: 28,
                                       height: 28,
