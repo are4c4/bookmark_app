@@ -120,14 +120,7 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(photos);
             await m.createTable(bookmarkPhotos);
           }
-          if (from < 7) {
-            final photoColumns = await customSelect('PRAGMA table_info(photos)').get();
-            final photoColumnNames =
-                photoColumns.map((row) => row.read<String>('name')).toSet();
-            if (!photoColumnNames.contains('tags')) {
-              await m.addColumn(photos, photos.tags);
-            }
-          }
+          if (from < 7) await migrateToV7(m);
           if (from < 8) await migrateToV8(m);
           if (from < 9) {
             await migrateToV9(m);
