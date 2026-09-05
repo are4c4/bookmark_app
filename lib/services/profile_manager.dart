@@ -249,7 +249,7 @@ class ProfileManager {
         if (copiedPath == null || !await File(copiedPath).exists()) continue;
         await (database.update(database.photos)
               ..where((row) => row.id.equals(photo.id)))
-            .write(PhotosCompanion(path: Value(database.toStoredPath(copiedPath))));
+            .write(PhotosCompanion(path: Value(database.pathResolver.toStoredPath(copiedPath))));
       }
 
       final attachments =
@@ -260,7 +260,7 @@ class ProfileManager {
         await (database.update(database.bookmarkAttachments)
               ..where((row) => row.id.equals(attachment.id)))
             .write(BookmarkAttachmentsCompanion(
-              path: Value(database.toStoredPath(copiedPath)),
+              path: Value(database.pathResolver.toStoredPath(copiedPath)),
             ));
       }
     } finally {

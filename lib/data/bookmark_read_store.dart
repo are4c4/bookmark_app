@@ -143,7 +143,7 @@ class BookmarkReadStore {
 
   PhotoRecord _resolvedPhoto(PhotoRecord photo) => PhotoRecord(
         id: photo.id,
-        path: database.resolveStoredPath(photo.path),
+        path: database.pathResolver.resolveStoredPath(photo.path),
         title: photo.title,
         note: photo.note,
         tags: photo.tags,
