@@ -1,7 +1,6 @@
 import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
 import 'package:bookmark_app/data/object_store.dart';
-import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -61,7 +60,14 @@ void main() {
     expect(migratedLegacyRows, hasLength(1));
     expect(migratedLegacyRows.single.read<String>('role'), '出演者');
 
-    final workspaceId = await WorkspaceStore(database).initialize();
+    await database.customStatement(
+      "INSERT INTO workspaces(name) VALUES ('Relation migration test')",
+    );
+    final workspaceRow = await database.customSelect(
+      'SELECT last_insert_rowid() AS id',
+    ).getSingle();
+    final workspaceId = workspaceRow.read<int>('id');
+
     final store = ObjectStore(GenericDatabaseStore(database));
 
     final targetTypeId = await store.createObjectType(
