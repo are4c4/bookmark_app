@@ -36,13 +36,17 @@ void main() {
     expect(first.urlProperty.type, ObjectPropertyType.url);
     expect(first.domainProperty.type, ObjectPropertyType.text);
     expect(first.pageTitleProperty.type, ObjectPropertyType.text);
+    expect(first.siteNameProperty.type, ObjectPropertyType.text);
     expect(first.descriptionProperty.type, ObjectPropertyType.text);
+    expect(first.faviconUrlProperty.type, ObjectPropertyType.url);
     expect(first.previewImageUrlProperty.type, ObjectPropertyType.url);
     for (final name in <String>[
       'URL',
       'Domain',
       'Page title',
+      'Site name',
       'Description',
+      'Favicon URL',
       'Preview image URL',
     ]) {
       expect(
@@ -61,6 +65,7 @@ void main() {
       defaults?.visiblePropertyIds,
       <int>[
         first.pageTitleProperty.id,
+        first.siteNameProperty.id,
         first.domainProperty.id,
         first.descriptionProperty.id,
         first.urlProperty.id,
@@ -70,9 +75,11 @@ void main() {
       defaults?.propertyOrder,
       <int>[
         first.pageTitleProperty.id,
+        first.siteNameProperty.id,
         first.domainProperty.id,
         first.descriptionProperty.id,
         first.urlProperty.id,
+        first.faviconUrlProperty.id,
         first.previewImageUrlProperty.id,
       ],
     );
@@ -118,15 +125,18 @@ void main() {
     final definition = await service.ensureDefinition(workspaceId);
     final desiredVisible = <int>[
       definition.pageTitleProperty.id,
+      definition.siteNameProperty.id,
       definition.domainProperty.id,
       definition.descriptionProperty.id,
       definition.urlProperty.id,
     ];
     final desiredOrder = <int>[
       definition.pageTitleProperty.id,
+      definition.siteNameProperty.id,
       definition.domainProperty.id,
       definition.descriptionProperty.id,
       definition.urlProperty.id,
+      definition.faviconUrlProperty.id,
       definition.previewImageUrlProperty.id,
     ];
     final upgraded = await defaultsStore.read(type.id);
@@ -275,16 +285,23 @@ void main() {
       workspaceId: workspaceId,
       objectId: weblink.id,
       pageTitle: '  Resource title  ',
+      siteName: '  Resource Site  ',
       description: '  Resource description  ',
+      faviconUrl: 'HTTPS://Example.com:443/assets/../favicon.ico',
       previewImageUrl: 'HTTPS://CDN.Example.com:443/a/../preview.jpg?sig=1',
     );
 
     expect(enriched.title, 'Resource title');
     expect(enriched.values[definition.domainProperty.id], 'example.com');
     expect(enriched.values[definition.pageTitleProperty.id], 'Resource title');
+    expect(enriched.values[definition.siteNameProperty.id], 'Resource Site');
     expect(
       enriched.values[definition.descriptionProperty.id],
       'Resource description',
+    );
+    expect(
+      enriched.values[definition.faviconUrlProperty.id],
+      'https://example.com/favicon.ico',
     );
     expect(
       enriched.values[definition.previewImageUrlProperty.id],
@@ -295,14 +312,21 @@ void main() {
       workspaceId: workspaceId,
       objectId: weblink.id,
       pageTitle: 'Bookmark-specific later title',
+      siteName: 'Later Site',
       description: 'Bookmark-specific later description',
+      faviconUrl: 'https://example.com/other.ico',
       previewImageUrl: 'https://cdn.example.com/other.jpg',
     );
     expect(preserved.title, 'Resource title');
     expect(preserved.values[definition.pageTitleProperty.id], 'Resource title');
+    expect(preserved.values[definition.siteNameProperty.id], 'Resource Site');
     expect(
       preserved.values[definition.descriptionProperty.id],
       'Resource description',
+    );
+    expect(
+      preserved.values[definition.faviconUrlProperty.id],
+      'https://example.com/favicon.ico',
     );
     expect(
       preserved.values[definition.previewImageUrlProperty.id],
@@ -396,7 +420,7 @@ void main() {
     );
   });
 
-  test('invalid preview metadata is ignored without blocking Weblink enrichment',
+  test('invalid optional URL metadata is ignored without blocking enrichment',
       () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
@@ -420,11 +444,13 @@ void main() {
       workspaceId: workspaceId,
       objectId: weblink.id,
       pageTitle: 'Valid title',
-      previewImageUrl: 'not an absolute URL',
+      faviconUrl: 'not an absolute URL',
+      previewImageUrl: 'also not an absolute URL',
     );
 
     expect(enriched.title, 'Valid title');
     expect(enriched.values[definition.pageTitleProperty.id], 'Valid title');
+    expect(enriched.values[definition.faviconUrlProperty.id], isNull);
     expect(enriched.values[definition.previewImageUrlProperty.id], isNull);
   });
 
