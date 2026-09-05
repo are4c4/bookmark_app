@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
 
@@ -10,9 +11,16 @@ import '../widgets/app_empty_state.dart';
 import '../widgets/bookmark_detail_panel.dart';
 
 class GlobalSearchPage extends StatefulWidget {
-  const GlobalSearchPage({super.key, required this.repository});
+  const GlobalSearchPage({
+    super.key,
+    required this.repository,
+    this.rebuildSearchIndex,
+    this.searchBookmarks,
+  });
 
   final BookmarkRepository repository;
+  final Future<void> Function()? rebuildSearchIndex;
+  final Future<List<BookmarkSearchHit>> Function(String rawQuery, int limit)? searchBookmarks;
 
   @override
   State<GlobalSearchPage> createState() => _GlobalSearchPageState();
@@ -26,7 +34,7 @@ class _GlobalSearchPageState extends State<GlobalSearchPage> {
   bool _indexing = true;
   bool _searching = false;
   int? _selectedBookmarkId;
-  Object? _error;
+  bool _searchFailed = false;
 
   @override
   void initState() {
@@ -51,24 +59,44 @@ class _GlobalSearchPageState extends State<GlobalSearchPage> {
     super.dispose();
   }
 
+  Future<void> _rebuildSearchIndex() =>
+      widget.rebuildSearchIndex?.call() ?? _searchRepository.rebuild();
+
+  Future<List<BookmarkSearchHit>> _runSearch(String rawQuery, int limit) =>
+      widget.searchBookmarks?.call(rawQuery, limit) ??
+      _searchRepository.search(rawQuery, limit: limit);
+
+  void _recordSearchFailure(String message, StackTrace stackTrace) {
+    assert(() {
+      developer.log(
+        message,
+        name: 'bookmark_app.global_search',
+        stackTrace: stackTrace,
+      );
+      return true;
+    }());
+    if (!mounted) return;
+    setState(() {
+      _indexing = false;
+      _searching = false;
+      _searchFailed = true;
+    });
+  }
+
   Future<void> _prepareIndex() async {
     if (mounted) {
       setState(() {
         _indexing = true;
-        _error = null;
+        _searchFailed = false;
       });
     }
     try {
-      await _searchRepository.rebuild();
+      await _rebuildSearchIndex();
       if (!mounted) return;
       setState(() => _indexing = false);
       if (_controller.text.trim().isNotEmpty) await _search(_controller.text);
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _indexing = false;
-        _error = error;
-      });
+    } catch (_, stackTrace) {
+      _recordSearchFailure('Global search index rebuild failed.', stackTrace);
     }
   }
 
@@ -88,7 +116,7 @@ class _GlobalSearchPageState extends State<GlobalSearchPage> {
     if (query.isEmpty || _indexing) return;
     if (mounted) setState(() => _searching = true);
     try {
-      final hits = await _searchRepository.search(query, limit: 120);
+      final hits = await _runSearch(query, 120);
       final bookmarks = await widget.repository.watchAll().first;
       final byId = {for (final bookmark in bookmarks) bookmark.id: bookmark};
       final resolved = <_ResolvedSearchHit>[];
@@ -107,12 +135,8 @@ class _GlobalSearchPageState extends State<GlobalSearchPage> {
           _selectedBookmarkId = null;
         }
       });
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _searching = false;
-        _error = error;
-      });
+    } catch (_, stackTrace) {
+      _recordSearchFailure('Global search query failed.', stackTrace);
     }
   }
 
@@ -130,11 +154,11 @@ class _GlobalSearchPageState extends State<GlobalSearchPage> {
     if (_indexing) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (_error != null) {
+    if (_searchFailed) {
       return AppEmptyState(
         icon: Icons.error_outline,
         title: '全文検索を準備できませんでした',
-        message: '$_error',
+        message: '検索処理で問題が発生しました。検索インデックスを再構築して、もう一度お試しください。',
         actionLabel: '検索インデックスを再構築',
         onAction: _prepareIndex,
       );
