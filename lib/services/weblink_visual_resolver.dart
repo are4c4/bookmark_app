@@ -3,6 +3,7 @@ import 'dart:io';
 import '../data/object_store.dart';
 import '../data/relation_read_service.dart';
 import '../data/weblink_image_schema_service.dart';
+import '../domain/object_model.dart';
 
 class WeblinkManagedVisual {
   const WeblinkManagedVisual({
@@ -102,12 +103,11 @@ class WeblinkVisualResolver {
   }
 
   int? _dimensionValue(
-    List<dynamic> properties,
+    List<ObjectPropertyDefinition> properties,
     Map<int, dynamic> values,
   ) {
     if (properties.length != 1) return null;
-    final property = properties.single;
-    final value = values[property.id];
+    final value = values[properties.single.id];
     if (value is! num || !value.isFinite || value <= 0) return null;
     final integer = value.toInt();
     if (integer.toDouble() != value.toDouble()) return null;
