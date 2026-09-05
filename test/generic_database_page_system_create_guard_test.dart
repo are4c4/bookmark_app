@@ -108,7 +108,7 @@ void main() {
     );
   });
 
-  testWidgets('real Images page keeps managed-file creation fail-closed',
+  testWidgets('real Images page exposes managed import instead of title-only create',
       (tester) async {
     final fixture = await buildFixture();
     addTearDown(fixture.database.close);
@@ -122,16 +122,13 @@ void main() {
       repository: fixture.repository,
       databaseId: definition.objectType.id,
     );
+
     expect(await fixture.objectStore.listObjects(definition.objectType.id), isEmpty);
     expect(find.text('新規ページ'), findsNothing);
-
-    await tester.tap(find.text('画像をインポート').last);
-    await tester.pumpAndSettle();
-
-    expect(await fixture.objectStore.listObjects(definition.objectType.id), isEmpty);
+    expect(find.text('画像をインポート'), findsOneWidget);
     expect(
       find.textContaining('Images must be imported from managed image/file input'),
-      findsOneWidget,
+      findsNothing,
     );
   });
 }
