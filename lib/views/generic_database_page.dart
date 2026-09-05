@@ -5,6 +5,7 @@ import '../data/database_view_gallery_adapter.dart';
 import '../data/database_view_store.dart';
 import '../data/generic_database_object_create_service.dart';
 import '../data/generic_database_page_services.dart';
+import '../data/generic_database_page_state_loader.dart';
 import '../data/generic_database_store.dart';
 import '../data/generic_object_view_coordinator.dart';
 import '../data/object_board_move_service.dart';
@@ -51,6 +52,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
   late final GenericDatabaseStore _store;
   late final ObjectStore _objectStore;
   late final GenericDatabasePageServices _pageServices;
+  late final GenericDatabasePageStateLoader _stateLoader;
   late final ObjectComputedValueStore _computedStore;
   late final ObjectTypeManagementStore _managementStore;
   late final ObjectGraphQueryStore _graphStore;
@@ -101,6 +103,12 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     );
     _boardMoveService = ObjectBoardMoveService(_objectStore);
     _computedStore = ObjectComputedValueStore(_objectStore);
+    _stateLoader = GenericDatabasePageStateLoader(
+      pageLoader: _pageServices.loader,
+      genericStore: _store,
+      computedStore: _computedStore,
+      createModeForObjectType: _pageServices.creator.createModeForObjectType,
+    );
     _managementStore = ObjectTypeManagementStore(
       genericStore: _store,
       objectStore: _objectStore,
@@ -123,61 +131,24 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
 
   Future<void> _reload() async {
     if (mounted) setState(() => _loading = true);
-    final page = await _pageServices.loader.load(widget.databaseId);
-    final database = page?.database;
-    final properties = page?.properties ?? const <GenericPropertyRecord>[];
-    final records = page?.records ?? const <GenericRecord>[];
-    final objectType = page?.objectType;
-    final objects = page?.objects ?? const <AppObject>[];
-    final createMode = objectType == null
-        ? GenericDatabaseCreateMode.generic
-        : await _pageServices.creator.createModeForObjectType(objectType.id);
-    final objectTypes =
-        await _store.listAllDatabases(widget.repository.workspaceId);
-    final recordsByType = <int, List<GenericRecord>>{};
-    for (final relatedType in objectTypes) {
-      recordsByType[relatedType.id] = await _store.listRecords(relatedType.id);
-    }
-
-    final computedValues = <int, Map<int, dynamic>>{};
-    if (objectType != null) {
-      final computedProperties = objectType.properties
-          .where(
-            (property) =>
-                property.type == ObjectPropertyType.formula ||
-                property.type == ObjectPropertyType.rollup,
-          )
-          .toList(growable: false);
-      for (final object in objects) {
-        for (final property in computedProperties) {
-          try {
-            final value = await _computedStore.evaluate(
-              object: object,
-              property: property,
-            );
-            (computedValues[object.id] ??= <int, dynamic>{})[property.id] =
-                value;
-          } catch (_) {
-            (computedValues[object.id] ??= <int, dynamic>{})[property.id] =
-                null;
-          }
-        }
-      }
-    }
+    final state = await _stateLoader.load(
+      databaseId: widget.databaseId,
+      workspaceId: widget.repository.workspaceId,
+    );
 
     if (!mounted) return;
     setState(() {
-      _database = database;
-      _objectType = objectType;
-      _objects = objects;
-      _properties = properties;
-      _records = records;
-      _objectTypes = objectTypes;
-      _recordsByType = recordsByType;
-      _computedValues = computedValues;
-      _createMode = createMode;
+      _database = state.database;
+      _objectType = state.objectType;
+      _objects = state.objects;
+      _properties = state.properties;
+      _records = state.records;
+      _objectTypes = state.objectTypes;
+      _recordsByType = state.recordsByType;
+      _computedValues = state.computedValues;
+      _createMode = state.createMode;
       if (_selectedRecordId != null &&
-          !records.any((record) => record.id == _selectedRecordId)) {
+          !state.records.any((record) => record.id == _selectedRecordId)) {
         _selectedRecordId = null;
       }
       _loading = false;
