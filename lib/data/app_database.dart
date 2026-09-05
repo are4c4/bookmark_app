@@ -81,7 +81,7 @@ class AppDatabase extends _$AppDatabase {
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (m) => m.createAll(),
         onUpgrade: (m, from, to) async {
-          if (from < 2) await m.addColumn(bookmarks, bookmarks.tags);
+          if (from < 2) await migrateToV2(m);
           if (from < 3) await migrateToV3(m);
           if (from < 4) await migrateToV4(m);
           if (from < 5) await migrateToV5(m);
