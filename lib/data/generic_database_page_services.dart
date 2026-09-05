@@ -1,5 +1,9 @@
+import '../services/bookmark_metadata_service.dart';
 import '../services/generic_database_image_import_service.dart';
 import '../services/photo_storage_service.dart';
+import '../services/remote_image_storage_service.dart';
+import '../services/weblink_create_enrichment_service.dart';
+import '../services/weblink_preview_image_pipeline.dart';
 import 'bidirectional_relation_store.dart';
 import 'daily_note_service.dart';
 import 'database_collection_config_service.dart';
@@ -45,6 +49,8 @@ class GenericDatabasePageServices {
     required GenericDatabaseStore genericStore,
     required ObjectStore objectStore,
     PhotoStorageService photoStorage = const PhotoStorageService(),
+    WeblinkMetadataFetch? weblinkMetadataFetch,
+    WeblinkPreviewImageIngest? weblinkPreviewImageIngest,
   }) {
     final collectionStore = DatabaseCollectionStore(
       genericStore: genericStore,
@@ -90,6 +96,21 @@ class GenericDatabasePageServices {
       systemObjects: systemObjects,
       defaultsStore: defaultsStore,
     );
+    final previewPipeline = weblinkPreviewImageIngest == null
+        ? WeblinkPreviewImagePipeline(
+            database: genericStore.database,
+            objectStore: objectStore,
+            systemObjectStore: systemObjects,
+            remoteStorage: RemoteImageStorageService(storage: photoStorage),
+          )
+        : null;
+    final weblinkEnrichment = WeblinkCreateEnrichmentService(
+      weblinks: weblinks,
+      metadataFetch:
+          weblinkMetadataFetch ?? const BookmarkMetadataService().fetch,
+      previewImageIngest:
+          weblinkPreviewImageIngest ?? previewPipeline!.ingestIfMissing,
+    );
     final creator = GenericDatabaseObjectCreateService(
       pageLoader: loader,
       objectStore: objectStore,
@@ -101,6 +122,7 @@ class GenericDatabasePageServices {
       dailyNotes: dailyNotes,
       weblinks: weblinks,
       images: images,
+      weblinkCreateEnricher: weblinkEnrichment.enrich,
     );
 
     return GenericDatabasePageServices(
