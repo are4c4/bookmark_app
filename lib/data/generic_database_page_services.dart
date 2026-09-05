@@ -1,3 +1,5 @@
+import '../services/generic_database_image_import_service.dart';
+import '../services/photo_storage_service.dart';
 import 'bidirectional_relation_store.dart';
 import 'daily_note_service.dart';
 import 'database_collection_config_service.dart';
@@ -32,6 +34,7 @@ class GenericDatabasePageServices {
   const GenericDatabasePageServices({
     required this.loader,
     required this.creator,
+    required this.imageImport,
     required this.relationEditor,
     required this.relationMutations,
     required this.collectionConfig,
@@ -41,6 +44,7 @@ class GenericDatabasePageServices {
   factory GenericDatabasePageServices.fromStores({
     required GenericDatabaseStore genericStore,
     required ObjectStore objectStore,
+    PhotoStorageService photoStorage = const PhotoStorageService(),
   }) {
     final collectionStore = DatabaseCollectionStore(
       genericStore: genericStore,
@@ -86,20 +90,25 @@ class GenericDatabasePageServices {
       systemObjects: systemObjects,
       defaultsStore: defaultsStore,
     );
+    final creator = GenericDatabaseObjectCreateService(
+      pageLoader: loader,
+      objectStore: objectStore,
+      boardCreate: ObjectBoardCreateService(
+        objectStore,
+        relationMutations: relationMutations,
+      ),
+      systemObjects: systemObjects,
+      dailyNotes: dailyNotes,
+      weblinks: weblinks,
+      images: images,
+    );
 
     return GenericDatabasePageServices(
       loader: loader,
-      creator: GenericDatabaseObjectCreateService(
-        pageLoader: loader,
-        objectStore: objectStore,
-        boardCreate: ObjectBoardCreateService(
-          objectStore,
-          relationMutations: relationMutations,
-        ),
-        systemObjects: systemObjects,
-        dailyNotes: dailyNotes,
-        weblinks: weblinks,
-        images: images,
+      creator: creator,
+      imageImport: GenericDatabaseImageImportService(
+        photoStorage: photoStorage,
+        objectCreate: creator,
       ),
       relationEditor: ObjectRelationEditorService(
         targets: RelationTargetService(objectStore),
@@ -120,6 +129,7 @@ class GenericDatabasePageServices {
 
   final GenericDatabaseCollectionPageLoader loader;
   final GenericDatabaseObjectCreateService creator;
+  final GenericDatabaseImageImportService imageImport;
   final ObjectRelationEditorService relationEditor;
   final RelationMutationService relationMutations;
   final DatabaseCollectionConfigService collectionConfig;
