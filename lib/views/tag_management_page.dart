@@ -955,6 +955,7 @@ class _TagManagementPageState extends State<TagManagementPage> {
     if (includeDescendants) ids.addAll(_descendants(tag.id));
     return showBookmarkReverseLookupDialog(
       context: context,
+      repository: repository,
       title: '${tag.name} のブックマーク'
           '${includeDescendants ? '（子孫を含む）' : ''}',
       bookmarks: repository.watchAll().map(
