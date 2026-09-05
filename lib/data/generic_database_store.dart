@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:drift/drift.dart';
 
@@ -64,6 +65,16 @@ class GenericDatabaseStore {
   final AppDatabase database;
   Future<void>? _schemaReady;
 
+  static void _debugJsonFallback(String valueKind, StackTrace stackTrace) {
+    assert(() {
+      stderr.writeln(
+        'GenericDatabaseStore: invalid persisted $valueKind JSON; using fallback.',
+      );
+      stderr.writeln(stackTrace);
+      return true;
+    }());
+  }
+
   Future<void> ensureSchema() => _schemaReady ??= database.transaction(() async {
         await database.customStatement('''
           CREATE TABLE IF NOT EXISTS generic_databases (
@@ -121,7 +132,10 @@ class GenericDatabaseStore {
     try {
       final decoded = jsonDecode(raw);
       return decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
-    } catch (_) {
+    } catch (_, stackTrace) {
+      // Property configuration can contain user-entered options/expressions.
+      // Keep the established empty fallback without logging persisted content.
+      _debugJsonFallback('property config', stackTrace);
       return <String, dynamic>{};
     }
   }
@@ -129,7 +143,10 @@ class GenericDatabaseStore {
   dynamic _decodeValue(String raw) {
     try {
       return jsonDecode(raw);
-    } catch (_) {
+    } catch (_, stackTrace) {
+      // Record values are user data. Preserve the established null fallback and
+      // expose only a generic diagnostic plus stack trace in assert builds.
+      _debugJsonFallback('record value', stackTrace);
       return null;
     }
   }
