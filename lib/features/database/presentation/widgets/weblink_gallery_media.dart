@@ -4,18 +4,22 @@ import 'package:flutter/material.dart';
 
 import '../../../../data/app_database.dart';
 import '../../../../data/database_view_gallery_adapter.dart';
+import '../../../../data/image_object_service.dart';
 import '../../../../data/object_store.dart';
 import '../../../../data/system_object_store.dart';
 import '../../../../data/weblink_object_service.dart';
 import '../../../../services/weblink_visual_resolver.dart';
+import 'image_gallery_media.dart';
+
+enum _GalleryMediaKind { unsupported, weblink, image }
 
 class _WeblinkGalleryMediaResolution {
   const _WeblinkGalleryMediaResolution({
-    required this.isWeblink,
+    required this.kind,
     this.visual,
   });
 
-  final bool isWeblink;
+  final _GalleryMediaKind kind;
   final WeblinkManagedVisual? visual;
 }
 
@@ -76,13 +80,15 @@ class WeblinkGalleryMediaFrame extends StatelessWidget {
   }
 }
 
-/// Read-only managed media presentation for generic Gallery cards.
+/// Read-only managed media presentation for generic system-Object Gallery
+/// cards.
 ///
-/// The widget first confirms that the host ObjectType is the canonical system
-/// Weblink type, then resolves its Representative Image through the shared
-/// [WeblinkVisualResolver]. Fixed Gallery keeps a uniform media band while
-/// masonry preserves persisted image geometry. Missing media/geometry uses a
-/// stable placeholder height and never mutates Object or Relation state.
+/// Weblinks resolve their Representative Image through the shared
+/// [WeblinkVisualResolver]. Canonical Image Objects delegate to
+/// [ImageGalleryMedia] so the same generic Gallery host can present the managed
+/// file itself without adding an Image-specific page or persistence path.
+/// Unsupported/custom ObjectTypes stay media-free. This widget never mutates
+/// Object or Relation state.
 class WeblinkGalleryMedia extends StatefulWidget {
   const WeblinkGalleryMedia({
     super.key,
@@ -136,7 +142,9 @@ class _WeblinkGalleryMediaState extends State<WeblinkGalleryMedia> {
     if (widget.workspaceId <= 0 ||
         widget.objectTypeId <= 0 ||
         widget.objectId <= 0) {
-      return const _WeblinkGalleryMediaResolution(isWeblink: false);
+      return const _WeblinkGalleryMediaResolution(
+        kind: _GalleryMediaKind.unsupported,
+      );
     }
 
     final systemObjects = SystemObjectStore(
@@ -147,18 +155,30 @@ class _WeblinkGalleryMediaState extends State<WeblinkGalleryMedia> {
       workspaceId: widget.workspaceId,
       systemKey: WeblinkObjectService.systemKey,
     );
-    if (weblinkType?.id != widget.objectTypeId) {
-      return const _WeblinkGalleryMediaResolution(isWeblink: false);
+    if (weblinkType?.id == widget.objectTypeId) {
+      final visual = await WeblinkVisualResolver(widget.objectStore)
+          .resolveManagedRepresentative(
+        weblinkObjectTypeId: widget.objectTypeId,
+        weblinkObjectId: widget.objectId,
+      );
+      return _WeblinkGalleryMediaResolution(
+        kind: _GalleryMediaKind.weblink,
+        visual: visual,
+      );
     }
 
-    final visual = await WeblinkVisualResolver(widget.objectStore)
-        .resolveManagedRepresentative(
-      weblinkObjectTypeId: widget.objectTypeId,
-      weblinkObjectId: widget.objectId,
+    final imageType = await systemObjects.getSystemObjectType(
+      workspaceId: widget.workspaceId,
+      systemKey: ImageObjectService.systemKey,
     );
-    return _WeblinkGalleryMediaResolution(
-      isWeblink: true,
-      visual: visual,
+    if (imageType?.id == widget.objectTypeId) {
+      return const _WeblinkGalleryMediaResolution(
+        kind: _GalleryMediaKind.image,
+      );
+    }
+
+    return const _WeblinkGalleryMediaResolution(
+      kind: _GalleryMediaKind.unsupported,
     );
   }
 
@@ -168,8 +188,27 @@ class _WeblinkGalleryMediaState extends State<WeblinkGalleryMedia> {
       future: _resolution,
       builder: (context, snapshot) {
         final resolved = snapshot.data;
-        if (resolved == null || !resolved.isWeblink) {
+        if (resolved == null ||
+            resolved.kind == _GalleryMediaKind.unsupported) {
           return const SizedBox.shrink();
+        }
+
+        if (resolved.kind == _GalleryMediaKind.image) {
+          return ImageGalleryMedia(
+            database: widget.database,
+            objectStore: widget.objectStore,
+            workspaceId: widget.workspaceId,
+            objectTypeId: widget.objectTypeId,
+            objectId: widget.objectId,
+            mode: widget.mode,
+            imageBuilder: widget.imageBuilder == null
+                ? null
+                : (context, filePath) => widget.imageBuilder!(
+                      context,
+                      filePath,
+                      () => _placeholder(context),
+                    ),
+          );
         }
 
         final visual = resolved.visual;
