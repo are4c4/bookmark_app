@@ -10,6 +10,10 @@ import '../data/system_object_store.dart';
 import '../data/weblink_object_service.dart';
 import '../domain/object_model.dart';
 
+typedef BookmarkUrlResolve = Future<BookmarkUrlSource?> Function(
+  BookmarkItem bookmark,
+);
+
 enum BookmarkUrlSourceKind {
   canonicalWeblink,
   legacyBookmark,
