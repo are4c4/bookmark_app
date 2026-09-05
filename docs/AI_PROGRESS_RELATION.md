@@ -16,45 +16,35 @@ Cross-lane coordination:
 `#166` alias-aware Relation picker is complete/closed.
 
 ## Current checkpoint
-Latest observed `main`: `897be7aa620baa261a78c412ec49ebc62b71a267` (Object #303 merged on top of the latest main line).
+Latest Relation merge on `main`: `6a14c778602bdb89d51e53dfe9206f10199213a8` — PR #307 `Cover Relation lifecycle for direct Weblink enrichment`.
 
-Latest Relation implementation merge on `main` remains `f01597fb596e03b7f19ab56048c84d4a55f8810d` (#280). The canonical Relation subsystem itself remains mature; current Relation work is focused on new production integration boundaries rather than redesign.
-
-## Active Relation work — direct Weblink create enrichment
-Object PR #303 `Enrich Weblinks created from the generic collection` introduced a genuinely new Relation-producing workflow and triggered the Relation lane resume condition.
-
-The new production path is:
+Object PR #303 `Enrich Weblinks created from the generic collection` is also merged. It introduced the new production Relation-producing path that triggered this Relation-lane run:
 
 `GenericDatabaseObjectCreateService.createWeblinkFromUrl()`
 → `WeblinkCreateEnrichmentService`
-→ existing `WeblinkPreviewImagePipeline.ingestIfMissing()`
+→ `WeblinkPreviewImagePipeline.ingestIfMissing()`
 → canonical `RelationMutationService.setRelation(...)`
 → `Weblink -> Representative image -> Image`.
 
-#303 is now merged. Its CI run #1196 passed.
-
-Active Relation branch / PR:
-- branch: `test/relation-weblink-create-enrichment-155-v2`
-- PR **#307 `Cover Relation lifecycle for direct Weblink enrichment`**
-- latest Relation code commit: `e9ea6e3c9fd34b97cbe8a19bb9b99ae490f571f1`
-
-An earlier stacked PR #305 was closed unmerged after #303 merged because retargeting exposed Object-lane commits in the diff due the merge-base shape. #307 was replayed cleanly from latest `main` and contains only the Relation regression plus this handoff update.
+The canonical Relation subsystem itself remains mature; #307 adds integration protection for this newly exposed workflow rather than redesigning Relation internals.
 
 ## Checkpoint completed in this run
-Added `test/generic_database_weblink_create_enrichment_relation_test.dart`.
+Merged #307 adds `test/generic_database_weblink_create_enrichment_relation_test.dart`.
 
 The regression exercises the real page-services creator plus the real preview pipeline with deterministic in-memory DB, mock HTTP response, and temporary managed image storage. It proves:
 - normalized-equivalent direct URL creations reuse one canonical Weblink Object;
 - metadata enrichment supplies the preview URL;
-- `WeblinkPreviewImagePipeline` creates exactly one managed Image;
-- the pipeline attaches exactly one `Representative image` Relation through the canonical mutation boundary;
+- the real preview pipeline creates exactly one managed Image;
+- exactly one `Representative image` Relation is attached through the canonical mutation boundary;
 - repeating the same direct creation/enrichment does not redownload, duplicate the Image, or duplicate the Relation;
 - `RelationReadService.outgoing(...)` resolves exactly one Representative Image;
 - normalized `object_relation_edges` contains exactly one matching edge;
-- `RelationReadService.backlinks(...)` resolves exactly one backlink from the Image;
+- `RelationReadService.backlinks(...)` resolves exactly one matching backlink;
 - `RelationIntegrityService.auditWorkspace(...)` remains healthy.
 
-Existing lower-level pipeline lifecycle coverage already proves canonical replacement, index-only reconciliation, and Relation-safe Image deletion. #307 intentionally covers only the newly exposed composition-root path instead of duplicating those cases.
+Existing lower-level pipeline lifecycle coverage already proves replacement, deterministic index reconciliation, and Relation-safe Image deletion, so #307 intentionally covers only the new composition-root boundary.
+
+An earlier stacked PR #305 was closed unmerged after #303 merged because retargeting exposed Object-lane commits through the old merge base. The test was replayed cleanly from latest `main` as #307, preserving lane ownership.
 
 ## Canonical Relation contract
 - `RelationMutationService` is the feature-facing mutation boundary.
@@ -66,7 +56,7 @@ Existing lower-level pipeline lifecycle coverage already proves canonical replac
 - no feature may introduce its own serialized-id Relation path or alternate edge/index store.
 - low-level `ObjectStore.setRelation` remains storage-internal/test-facing rather than a normal product mutation path.
 
-## Stable Relation coverage already on main
+## Stable Relation coverage on main
 Important merged guardrails include:
 - `#174–#177` Bookmark/Weblink and Weblink/Image boundary integrity.
 - `#182/#184/#188` Bookmark -> Weblink retarget, detach/delete, shared targets and index reconcile.
@@ -76,30 +66,34 @@ Important merged guardrails include:
 - `#208/#210/#211/#216/#222` exposed Weblink/Image real-host edit/backlink/delete/composite-delete lifecycle.
 - `#273` real page-services creation + explicit Relation editor attach for Representative/Related Images.
 - `#264/#266/#271/#280` canonical Relation bootstrap remains separate from legacy Bookmark relation-like tables across historical migrations, including real v1 -> current.
+- `#307` direct generic Weblink creation enrichment -> managed Representative Image Relation composition-root lifecycle.
 
 ## Latest repository audit
-Recent Object/Refactor work through #288–#304 was re-audited. Gallery/media/default/title/chip/read-store/legacy visual changes do not change canonical Relation persistence semantics. #303 is the material new Relation boundary because direct user-facing Weblink creation can now produce a managed Representative Image Relation.
+After #307 merge, open work was re-audited:
+- #304 Refactor — Stage1 canonical visual presentation cleanup; no Relation persistence/mutation semantics.
+- #306 Object — managed Image source URL identity normalization; changes Object reuse semantics only and introduces no new Relation write/index path.
 
-Open PR ownership at this checkpoint:
-- #304 Refactor — Stage1 visual resolver cleanup; no Relation semantics.
-- #307 Relation — tests-only lifecycle guardrail for merged #303.
+The default Relation mutation call-site audit still shows feature writes going through canonical `RelationMutationService` paths such as Relation editor, Bookmark/Weblink bridge, preview Image pipeline, Tag bridge and value-promotion execution. No new direct serialized-id write path or alternate relation index was found.
 
-Relation must continue to avoid broad edits to Object/Refactor-owned shared hotspots.
+No new independent Relation-producing workflow is currently open beyond the now-covered #303 path.
 
 ## Validation
 - Object dependency #303 CI run #1196: **success**.
-- #307 targets `main`, so normal PR Analyze/Test CI should run from the clean branch.
-- Local Flutter execution is not available through the GitHub connector in this chat.
+- Relation #307 CI run #1203: **success**.
+  - Drift generation: success.
+  - Analyze: success.
+  - Full Test: success.
+- #307 merged to `main` as `6a14c778602bdb89d51e53dfe9206f10199213a8`.
 
 Relevant existing lower-level regressions:
 - `test/weblink_preview_image_pipeline_relation_lifecycle_test.dart`
 - `test/generic_database_page_services_relation_create_integration_test.dart`
 
 ## Exact next Relation actions
-1. Check #307 CI and fix any compile/test failure caused by the new regression.
-2. Merge #307 after relevant CI passes.
-3. Re-audit subsequent Object work for new Relation-producing flows, especially explicit `Related images` population.
-4. Watch #245 for the first real legacy Photo -> Bookmark/Image Relation migration slice; add lifecycle/idempotency/backlink/delete coverage only when that production workflow exists.
+1. Monitor Object work for the next genuinely new Relation-producing flow, especially explicit `Related images` population or a new attach/retarget/detach path.
+2. Watch #245 for the first real legacy Photo -> Bookmark/Image Relation migration slice; add lifecycle/idempotency/backlink/delete coverage when that production workflow exists.
+3. Audit future changes to Image/Weblink identity when they materially change the Relation target selected by a production Relation workflow; do not add duplicate tests for identity-only changes without an integration risk.
+4. Audit any change that moves persisted Relation values, `object_relation_edges`, `ObjectStore`, or the canonical Relation service boundary.
 5. Do not invent automatic Object merge/dedup Relation rewriting without an explicit product policy.
 6. Keep deterministic index reconciliation separate from ambiguous user-data repair.
 
@@ -110,4 +104,4 @@ Relevant existing lower-level regressions:
 - #245 Photo/Image migration must preserve explicit cover semantics and use canonical Relation APIs once it reaches production Relation writes.
 
 ## Stop reason
-This run resumed because #303 introduced a genuine new Relation-producing workflow. The focused composition-root Relation regression is implemented in clean PR #307 and the lane handoff is updated. Continue immediately if #307 CI exposes a failure; otherwise the next safe integration step is merging #307 after green CI. No second independent Relation slice is currently justified without duplicating existing preview-pipeline lifecycle coverage or entering another lane's production ownership.
+This run resumed because #303 introduced a genuine new Relation-producing workflow. The required focused lifecycle/idempotency/backlink/index/audit regression was implemented, passed full CI, and merged as #307. Subsequent open PRs #304/#306 do not add or move Relation persistence/mutation semantics, and no additional independent Relation slice is currently justified without duplicating existing coverage or entering another lane's ownership. Resume when a new Relation-producing workflow, canonical Relation storage/index change, or concrete correctness regression appears.
