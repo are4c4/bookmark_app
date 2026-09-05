@@ -77,7 +77,7 @@ void main() {
     expect(previewCalled, isTrue);
   });
 
-  test('host-only fallback metadata does not claim Page title ownership',
+  test('host fallback title is not claimed when preview metadata is useful',
       () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
@@ -102,6 +102,7 @@ void main() {
       metadataFetch: (_) async => const BookmarkMetadata(
         url: 'https://example.org/fallback',
         title: 'example.org',
+        thumbnail: 'https://cdn.example.org/preview.jpg',
       ),
       previewImageIngest: ({
         required workspaceId,
@@ -122,6 +123,10 @@ void main() {
         .singleWhere((object) => object.id == weblink.id);
     expect(preserved.title, 'example.org');
     expect(preserved.values[definition.pageTitleProperty.id], isNull);
+    expect(
+      preserved.values[definition.previewImageUrlProperty.id],
+      'https://cdn.example.org/preview.jpg',
+    );
     expect(previewCalled, isTrue);
   });
 
