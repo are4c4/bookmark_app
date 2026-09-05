@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/material.dart';
 
 import '../../../../data/database_view_creation_service.dart';
@@ -56,6 +58,17 @@ class _DatabaseViewTabsState extends State<DatabaseViewTabs> {
         oldWidget.definition.key != widget.definition.key) {
       _reload(initial: true);
     }
+  }
+
+  void _debugOpenModeDecodeFailure(StackTrace stackTrace) {
+    assert(() {
+      developer.log(
+        'Database View Object open-mode decode failed.',
+        name: 'bookmark_app.database_view_tabs',
+        stackTrace: stackTrace,
+      );
+      return true;
+    }());
   }
 
   Future<void> _reload({bool initial = false}) async {
@@ -150,10 +163,13 @@ class _DatabaseViewTabsState extends State<DatabaseViewTabs> {
     ObjectOpenMode? current;
     try {
       current = _openModes.overrideFor(view);
-    } on FormatException catch (error) {
+    } on FormatException catch (_, stackTrace) {
+      _debugOpenModeDecodeFailure(stackTrace);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Objectの開き方を読み込めませんでした: $error')),
+        const SnackBar(
+          content: Text('Objectの開き方を読み込めませんでした。View設定を確認してください。'),
+        ),
       );
       return;
     }
