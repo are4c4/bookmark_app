@@ -38,7 +38,7 @@ class BookmarkAttachmentStore {
         id: row.id,
         bookmarkId: row.bookmarkId,
         fileName: row.fileName,
-        path: database.resolveStoredPath(row.path),
+        path: database.pathResolver.resolveStoredPath(row.path),
         kind: row.kind,
         sizeBytes: row.sizeBytes,
         createdAt: DateTime.tryParse(row.createdAt) ?? DateTime.now(),
@@ -70,7 +70,7 @@ class BookmarkAttachmentStore {
             BookmarkAttachmentsCompanion.insert(
               bookmarkId: bookmarkId,
               fileName: fileName,
-              path: database.toStoredPath(path),
+              path: database.pathResolver.toStoredPath(path),
               kind: Value(kind),
               sizeBytes: Value(sizeBytes),
               createdAt: DateTime.now().toIso8601String(),

@@ -17,9 +17,9 @@ class ProfileStorageMigrator {
     final photos = await database.select(database.photos).get();
 
     for (final photo in photos) {
-      final resolvedPath = database.resolveStoredPath(photo.path);
+      final resolvedPath = database.pathResolver.resolveStoredPath(photo.path);
       if (_isInside(resolvedPath, targetDir.path)) {
-        final relativePath = database.toStoredPath(resolvedPath);
+        final relativePath = database.pathResolver.toStoredPath(resolvedPath);
         if (relativePath != photo.path) {
           await (database.update(database.photos)
                 ..where((row) => row.id.equals(photo.id)))
@@ -41,7 +41,7 @@ class ProfileStorageMigrator {
       await (database.update(database.photos)
             ..where((row) => row.id.equals(photo.id)))
           .write(
-        PhotosCompanion(path: Value(database.toStoredPath(targetPath))),
+        PhotosCompanion(path: Value(database.pathResolver.toStoredPath(targetPath))),
       );
     }
 
@@ -52,7 +52,7 @@ class ProfileStorageMigrator {
     final attachments =
         await database.select(database.bookmarkAttachments).get();
     for (final attachment in attachments) {
-      final resolvedPath = database.resolveStoredPath(attachment.path);
+      final resolvedPath = database.pathResolver.resolveStoredPath(attachment.path);
       var managedPath = resolvedPath;
       if (!_isInside(resolvedPath, profileDirectory.path)) {
         final source = File(resolvedPath);
@@ -63,7 +63,7 @@ class ProfileStorageMigrator {
           await source.copy(managedPath);
         }
       }
-      final relativePath = database.toStoredPath(managedPath);
+      final relativePath = database.pathResolver.toStoredPath(managedPath);
       if (relativePath != attachment.path) {
         await (database.update(database.bookmarkAttachments)
               ..where((row) => row.id.equals(attachment.id)))

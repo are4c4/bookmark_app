@@ -1,6 +1,8 @@
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 
+import 'profile_path_resolver.dart';
+
 part 'app_database.g.dart';
 part 'app_database_schema.dart';
 part 'app_database_migrations.dart';
@@ -39,40 +41,17 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase({
     String databaseName = 'bookmark_app',
     this.profileDirectoryPath,
-  }) : super(driftDatabase(name: databaseName));
+  })  : pathResolver = ProfilePathResolver(profileDirectoryPath),
+        super(driftDatabase(name: databaseName));
 
   AppDatabase.forTesting(
     QueryExecutor executor, {
     this.profileDirectoryPath,
-  }) : super(executor);
+  })  : pathResolver = ProfilePathResolver(profileDirectoryPath),
+        super(executor);
 
   final String? profileDirectoryPath;
-
-  String resolveStoredPath(String path) {
-    if (path.isEmpty ||
-        path.startsWith('/') ||
-        RegExp(r'^[A-Za-z]:[\\/]').hasMatch(path)) {
-      return path;
-    }
-    final root = profileDirectoryPath
-        ?.replaceAll('\\', '/')
-        .replaceAll(RegExp(r'/+$'), '');
-    if (root == null || root.isEmpty) return path;
-    return '$root/${path.replaceAll('\\', '/').replaceAll(RegExp(r'^/+'), '')}';
-  }
-
-  String toStoredPath(String path) {
-    final normalized = path.replaceAll('\\', '/');
-    final root = profileDirectoryPath
-        ?.replaceAll('\\', '/')
-        .replaceAll(RegExp(r'/+$'), '');
-    if (root == null || root.isEmpty) return normalized;
-    if (normalized == root) return '.';
-    final prefix = '$root/';
-    return normalized.startsWith(prefix)
-        ? normalized.substring(prefix.length)
-        : normalized;
-  }
+  final ProfilePathResolver pathResolver;
 
   @override
   int get schemaVersion => 16;
@@ -356,7 +335,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<int> addPhoto({required String path, String? title, String? note, Iterable<String> tagNames = const []}) =>
-      into(photos).insert(PhotosCompanion.insert(path: toStoredPath(path), title: Value(title), note: Value(note), tags: Value(_normalizeNamesText(tagNames))));
+      into(photos).insert(PhotosCompanion.insert(path: pathResolver.toStoredPath(path), title: Value(title), note: Value(note), tags: Value(_normalizeNamesText(tagNames))));
 
   Future<void> updatePhoto(int id, {String? title, String? note, Iterable<String>? tagNames}) =>
       (update(photos)..where((p) => p.id.equals(id))).write(PhotosCompanion(
@@ -583,7 +562,7 @@ class AppDatabase extends _$AppDatabase {
 
   PhotoRecord _resolvedPhoto(PhotoRecord photo) => PhotoRecord(
         id: photo.id,
-        path: resolveStoredPath(photo.path),
+        path: pathResolver.resolveStoredPath(photo.path),
         title: photo.title,
         note: photo.note,
         tags: photo.tags,
