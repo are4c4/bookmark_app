@@ -10,6 +10,7 @@ import '../data/daily_note_service.dart';
 import '../data/generic_database_store.dart';
 import '../data/object_store.dart';
 import '../data/object_type_defaults_store.dart';
+import '../data/photo_read_store.dart';
 import '../data/system_object_store.dart';
 import '../data/tag_object_bridge.dart';
 import '../data/weblink_object_service.dart';
@@ -110,7 +111,7 @@ class ObjectSyncService {
     final workspaceStore = WorkspaceStore(database);
     final changes = Rx.merge<Object?>([
       database.watchAllTags().map<Object?>((_) => null),
-      database.watchAllPhotos().map<Object?>((_) => null),
+      PhotoReadStore(database).watchAll().map<Object?>((_) => null),
       BookmarkReadStore(database).watchItems().map<Object?>((_) => null),
       workspaceStore.watchBookmarkIds(workspaceId).map<Object?>((_) => null),
     ]).debounceTime(const Duration(milliseconds: 250));

@@ -10,6 +10,7 @@ import 'bookmark_attachment_store.dart';
 import 'bookmark_read_store.dart';
 import 'bookmark_lifecycle_store.dart';
 import 'person_roles.dart';
+import 'photo_read_store.dart';
 import 'saved_view_read_store.dart';
 import 'tag_group_store.dart';
 import 'workspace_store.dart';
@@ -23,11 +24,13 @@ class BookmarkRepository {
     this.profileDirectoryPath,
     AutoOrganizeService? autoOrganizeService,
   })  : _bookmarkReads = BookmarkReadStore(_database),
+        _photoReads = PhotoReadStore(_database),
         _savedViewReads = SavedViewReadStore(_database),
         autoOrganize = autoOrganizeService ?? AutoOrganizeService(_database);
 
   final AppDatabase _database;
   final BookmarkReadStore _bookmarkReads;
+  final PhotoReadStore _photoReads;
   final SavedViewReadStore _savedViewReads;
   final WorkspaceStore workspaceStore;
   final BookmarkLifecycleStore lifecycleStore;
@@ -84,7 +87,7 @@ class BookmarkRepository {
 
   Stream<List<Tag>> watchTags() => _database.watchAllTags();
   Stream<List<Person>> watchPeople() => _database.watchAllPeople();
-  Stream<List<PhotoRecord>> watchPhotos() => _database.watchAllPhotos();
+  Stream<List<PhotoRecord>> watchPhotos() => _photoReads.watchAll();
   Stream<List<CollectionRecord>> watchCollections() => _database.watchAllCollections();
   Stream<List<BookmarkRelation>> watchRelationsForBookmark(int bookmarkId) =>
       _database.watchRelationsForBookmark(bookmarkId);
