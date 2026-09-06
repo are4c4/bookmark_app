@@ -67,6 +67,7 @@ void main() {
               'name': 'Other Vault',
               'databaseName': 'BookmarkApp/Profiles/other/database',
               'directoryPath': otherPath,
+              'otherFutureField': 'keep-me',
             },
           ],
         }),
@@ -159,5 +160,76 @@ void main() {
     );
 
     expect(registry.existsSync(), isFalse);
+  });
+
+  test('unregisterInactive removes only registry metadata and keeps Vault files',
+      () async {
+    final otherDirectory = Directory('${sandbox.path}/Other Vault');
+    await otherDirectory.create(recursive: true);
+    final marker = File('${otherDirectory.path}/keep.txt');
+    await marker.writeAsString('user data');
+    await writeRegistry(otherPath: otherDirectory.path);
+
+    await service().unregisterInactive('other');
+
+    final decoded = jsonDecode(await registry.readAsString()) as Map<String, dynamic>;
+    expect(decoded['activeProfileId'], 'target');
+    expect(decoded['futureRootField'], {'keep': true});
+    final profiles = (decoded['profiles'] as List<dynamic>)
+        .cast<Map<String, dynamic>>();
+    expect(profiles, hasLength(1));
+    expect(profiles.single['id'], 'target');
+    expect(profiles.single['futureProfileField'], 42);
+    expect(await marker.readAsString(), 'user data');
+    expect(otherDirectory.existsSync(), isTrue);
+  });
+
+  test('unregisterInactive refuses the active Vault without registry mutation',
+      () async {
+    await writeRegistry();
+    final original = await registry.readAsString();
+
+    await expectLater(
+      service().unregisterInactive('target'),
+      throwsA(isA<StateError>()),
+    );
+
+    expect(await registry.readAsString(), original);
+  });
+
+  test('unregisterInactive refuses the last remaining Vault', () async {
+    await registry.writeAsString(
+      jsonEncode({
+        'activeProfileId': 'only',
+        'profiles': [
+          {
+            'id': 'only',
+            'name': 'Only Vault',
+            'directoryPath': '/missing/only',
+          },
+        ],
+      }),
+    );
+    final original = await registry.readAsString();
+
+    await expectLater(
+      service().unregisterInactive('only'),
+      throwsA(isA<StateError>()),
+    );
+
+    expect(await registry.readAsString(), original);
+  });
+
+  test('unregisterInactive rejects unknown ids without registry mutation',
+      () async {
+    await writeRegistry();
+    final original = await registry.readAsString();
+
+    await expectLater(
+      service().unregisterInactive('unknown'),
+      throwsA(isA<StateError>()),
+    );
+
+    expect(await registry.readAsString(), original);
   });
 }
