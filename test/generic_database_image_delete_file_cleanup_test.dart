@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/generic_database_page_services.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
 import 'package:bookmark_app/data/image_object_service.dart';
@@ -7,7 +8,6 @@ import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/object_type_defaults_store.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
-import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/services/photo_storage_service.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -130,6 +130,39 @@ void main() {
     );
 
     expect(await externalFile.exists(), isTrue);
+    expect(
+      await fixture.objectStore.listObjects(imageType.objectType.id),
+      isEmpty,
+    );
+  });
+
+  test('managed-directory symlink to external file is never physically deleted',
+      () async {
+    if (Platform.isWindows) return;
+    final fixture = await _DeleteFixture.create();
+    addTearDown(fixture.dispose);
+    final externalDirectory =
+        await Directory.systemTemp.createTemp('image_delete_symlink_external_');
+    addTearDown(() => externalDirectory.delete(recursive: true));
+    final externalFile = File('${externalDirectory.path}/outside.png');
+    await externalFile.writeAsBytes(const <int>[7, 7, 7]);
+    final link = Link('${fixture.photoDirectory.path}/linked.png');
+    await link.create(externalFile.path);
+    final image = await fixture.images.findOrCreateManaged(
+      workspaceId: fixture.workspaceId,
+      filePath: link.path,
+      title: 'Linked external image',
+    );
+    final imageType = await fixture.images.ensureDefinition(fixture.workspaceId);
+
+    await fixture.services.relationMutations.deleteObject(
+      workspaceId: fixture.workspaceId,
+      objectTypeId: imageType.objectType.id,
+      objectId: image.id,
+    );
+
+    expect(await externalFile.exists(), isTrue);
+    expect(await link.exists(), isTrue);
     expect(
       await fixture.objectStore.listObjects(imageType.objectType.id),
       isEmpty,
