@@ -47,7 +47,7 @@ Recent Image edit/crop/geometry work is Relation-neutral and does not justify ne
 
 ## Current implementation checkpoint — 2026-09-07
 
-Active integrity contract: Issue #493 Relation target/cardinality schema evolution.
+Active integrity contract: Issue #493 Relation target/cardinality schema evolution, plus #491/#492/new-workflow integrity audits.
 
 Integrated checkpoint:
 - implementation branch: `feature/relation-schema-evolution-integrity`
@@ -69,6 +69,8 @@ Completed checkpoints in this run:
 9. Audited Database/View PR #507 for #492. Its current Gallery cover-source discovery is read-only, checks Relation target existence/workspace, and adds no alternate Relation writer/index. Commented one B-lane constraint for the resolver follow-up: #492 intentionally permits multi Relations such as `Images`, so resolution must not assume single cardinality and must not repair corrupted Relation data from a View path.
 10. Recorded the #493 integrity contract on the Issue so Database/View can consume the preflight result for impact/prompt UX without owning Relation mutation semantics.
 11. Detected and reconciled concurrent duplicate #508 before integration so only one Relation schema-evolution implementation landed.
+12. Audited Database/View PR #515 for #491 compact Relation Property authoring. The presentation widget only returns a structured target ObjectType/cardinality request, requires explicit target selection, and does not persist Relation config. B-lane integration constraint was recorded: the host must route creation through `ObjectStore.createRelationProperty(...)` (or a canonical facade delegating to it), not generic hand-built Relation config.
+13. Audited Database/View PR #516, a real new Relation-producing domain-template workflow. It resolves every required primitive target by stable system key **before** user ObjectType creation, fails before user schema when a target is missing, wraps ObjectType/Property/View/provenance creation in one transaction, and creates Relations via canonical `ObjectStore.createRelationProperty(...)` with explicit cardinality. Its focused tests cover target/cardinality persistence and missing-target no-partial-schema behavior. No B-lane blocker or duplicate Relation writer was found.
 
 Validation state:
 - PR #506 final head `c60e0800...` completed Flutter CI successfully.
@@ -83,23 +85,25 @@ Validation state:
 
 Cross-lane dependencies / ownership:
 - Database/View lane owns the schema-authoring UI, impact summary, explicit multi-to-single target choice UI, and user confirmation flows. It should call the integrated B-lane integrity service rather than directly updating Relation config.
-- #491 has not yet landed a production target/cardinality edit path to audit. When it does, verify it reuses this fail-closed service/canonical Relation mutation path and introduces no serialized-id writer or alternate index.
-- #507 current slice is Relation-read-only and has no B blocker; its future media resolver must define stable behavior for multi-valued Relation cover sources without mutating Relation state.
-- No shared hotspot lease was taken in this run. Production changes were isolated to the new data-integrity service plus focused tests and this handoff; `generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, and `app_database.dart` were not edited.
+- PR #515 is presentation-only and B-audited; the next #491 host wiring remains the point where canonical `ObjectStore.createRelationProperty(...)` routing must be verified.
+- PR #516 is a B-audited new Relation-producing workflow and currently follows the canonical target/cardinality/transaction contract. Keep its outer transaction as the atomic boundary as template Views/provenance evolve.
+- PR #507 current slice is Relation-read-only and has no B blocker; its future media resolver must define stable behavior for multi-valued Relation cover sources without mutating Relation state.
+- No shared hotspot lease was taken in this run. Production changes were isolated to the new data-integrity service plus focused tests and this handoff; `generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, and `app_database.dart` were not edited by Lane B.
 
 Exact next actions, in priority order:
-1. When Database/View implements the #493 editing surface, audit that Relation target/cardinality changes call `inspectChange` / `updateRelationSchema` and preserve explicit-choice semantics.
-2. When #491 lands Relation Property edit/quick-create production code, audit canonical target/cardinality validation and ensure no alternate writer/index appears.
-3. If product requirements later need bidirectional Relation target retargeting, design it as an explicit paired migration that validates both sides before writes; keep the current fail-closed rejection until then.
-4. Continue Relation-producing workflow coverage only when a real new production writer/reader lands from #491/#492/#245/#484.
+1. When Database/View wires #515 into the real #491 host, audit that Relation creation calls `ObjectStore.createRelationProperty(...)` with the structured target/cardinality request and does not construct `targetObjectTypeId`/`multiple` config directly.
+2. When Database/View implements the #493 editing surface, audit that Relation target/cardinality edits call `inspectChange` / `updateRelationSchema` and preserve explicit-choice semantics.
+3. When #507 gains actual Relation-backed media resolution, audit multi-valued selection/fallback and ensure View reads never repair or mutate Relation state.
+4. If product requirements later need bidirectional Relation target retargeting, design it as an explicit paired migration that validates both sides before writes; keep the current fail-closed rejection until then.
+5. Continue Relation-producing workflow coverage only when a real new production writer/reader lands from #491/#492/#245/#484 or another composable-domain path.
 
 Current risks / stop condition:
 - Non-empty Relation target retargeting can only proceed when every existing target is already valid for the proposed ObjectType. Mapping/converting targets across ObjectTypes is a separate explicit migration decision and must not be guessed here.
 - Bidirectional target retargeting remains intentionally unsupported rather than partially rewriting pair metadata.
-- The independent #493 integrity foundation is merged and no other open PR currently implements a #493 mutation path. Until #491/#492/Database-View produces a new concrete Relation mutation/resolution integration to audit, Lane B should remain idle per the stop rule rather than inventing speculative Relation abstractions. This cross-lane dependency is the explicit stop reason for this checkpoint.
+- #515 has not yet been wired into the real Property-creation host, and #507 has not yet added the actual Relation media resolver. #516's current Relation writer has been audited and is canonical. With no remaining unreviewed Relation writer/resolver or independent #493 integrity slice at this checkpoint, Lane B should remain idle until one of those concrete cross-lane paths lands rather than invent speculative abstractions. This is the explicit stop reason.
 
 ## Initial next actions
-The original bootstrap list below is retained as historical context; merged PR #506 implements actions 1–4 and narrows the live next work to cross-lane integration/audit.
+The original bootstrap list below is retained as historical context; merged PR #506 implements actions 1–4 and subsequent audits cover the currently open #491/#492/new-template seams.
 
 1. For #493, define transactional validation rules for `Relation(A) -> Relation(B)` target changes: validate all existing targets first and leave old schema/data intact on any failure.
 2. Define `multi -> single` behavior: require explicit deterministic user choice when multiple values exist; never silently drop targets.
