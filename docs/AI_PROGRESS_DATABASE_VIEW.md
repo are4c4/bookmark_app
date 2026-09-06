@@ -14,7 +14,7 @@ Make generic ObjectType/Database/View configuration expressive enough that new d
 - #56 / #484 — umbrella product architecture.
 
 ## Current checkpoint — 2026-09-07
-Latest observed main while refreshing this handoff: `3f896ae0ab7310e2ad62c5b23f649ad233729df7`. Main is moving rapidly because all seven lanes are active, so recheck immediately before editing a shared hotspot.
+Main is moving rapidly because all seven lanes are active, so recheck immediately before editing a shared hotspot.
 
 ### Integrated #490 template foundation
 - #516 — generic user-owned template instantiation through ordinary Object/Relation/View APIs.
@@ -22,9 +22,12 @@ Latest observed main while refreshing this handoff: `3f896ae0ab7310e2ad62c5b23f6
 - #526 — Plant template proves an unrelated domain can be created as a normal custom ObjectType without a Plant management page.
 - #563 — template Views can resolve a template-local Relation Property to its created stable id and persist the ordinary `galleryCoverSource` contract transactionally.
 - Plant uses its Image Relation as a generic Gallery cover source.
+- #592 — primitive Relation targets are provisioned through canonical ensure paths on fresh workspaces, and Paper is now a user-owned template composed from Weblink/Image/File/Tag plus ordinary DOI/date/text Properties and generic Gallery/Table Views. Unknown primitive keys remain fail-closed. CI run 1907 completed successfully before merge.
 
-Open follow-up:
-- #592 — provisions required primitive targets through canonical ensure paths and adds a Paper template composed from Weblink/Image/File/Tag plus ordinary properties and generic Gallery/Table Views. At this checkpoint CI is still running.
+Remaining #490 work:
+- prove empty custom ObjectType creation remains a first-class path in real UX;
+- continue moving domain defaults into ordinary user-owned configuration rather than dedicated pages;
+- avoid adding Bookmark/Paper-specific persistence or management hosts.
 
 ### Integrated #491 Relation Property authoring
 - #515 — compact Property-add popover supports searchable Relation target selection, built-in/custom distinction and explicit single/multi cardinality.
@@ -33,7 +36,7 @@ Open follow-up:
 - #567 — existing user-owned Relation Property target/cardinality editing uses inspect -> impact confirmation -> explicit choices -> transactional canonical schema update.
 
 Open follow-up:
-- #595 — adds a presentation-only `RelationTargetQuickCreateAction` that renders the mode-appropriate affordance and hides unavailable/missing-writer cases instead of falling back to title-only creation. It delegates every mutation to host-supplied canonical callbacks. CI is running.
+- #595 — adds a presentation-only `RelationTargetQuickCreateAction` that renders the mode-appropriate affordance and hides unavailable/missing-writer cases instead of falling back to title-only creation. It delegates every mutation to host-supplied canonical callbacks. Analyze is green; full test completion is still pending at this checkpoint.
 
 Remaining #491 work:
 - connect Property-add authoring to the real generic Database host through `DatabasePropertyAuthoringService` with a patch-sized page diff;
@@ -46,6 +49,7 @@ Remaining #491 work:
 - #542 — shared cover media dispatcher delegates Image/Weblink targets to canonical media widgets and preserves stable fixed/masonry fallback geometry.
 - #556 — distinguishes never-configured Views from explicit `none`; system Image/Weblink collections keep historical defaults while custom ObjectTypes require explicit configuration.
 - #563 — templates persist the same generic cover contract using generated Relation Property ids.
+- #592 — Paper template exercises the same generic Image Relation cover configuration on a fresh workspace.
 
 Remaining #492 work:
 - patch-size real-host wiring so generic fixed/masonry Gallery cards consume compatibility resolution + shared cover dispatcher;
@@ -68,11 +72,10 @@ Remaining #493 work:
 ## Validation
 This connector execution path has no local Flutter checkout, so repository Flutter CI is the executable validation source.
 
-Previously merged Lane C production slices were green before integration. Current open work:
-- #592 analyze completed successfully; test step was still in progress at the latest check.
-- #595 maintainability checks, dependency guards and analyze completed successfully; test step was still in progress at the latest check.
+- #592: Flutter CI run 1907 completed successfully and the PR merged.
+- #595: maintainability checks, dependency guards and analyze completed successfully; test step was still in progress at the latest check.
 
-Do not infer test success until the workflow concludes.
+Do not infer #595 test success until the workflow concludes.
 
 ## Shared hotspot / concurrency status
 Before this run, open-PR searches found no active PR claiming `generic_database_page.dart` or `object_inspector_page.dart` broadly. Recheck immediately before edits because main changes continuously.
@@ -89,7 +92,7 @@ Shared hotspots still include:
 Do not reconstruct a whole hotspot for a small host integration. Prefer service/widget seams and narrowly-scoped hunks.
 
 ## Exact next actions
-1. Recheck #592 and #595 CI; merge only after relevant checks pass and the branches remain safely mergeable.
+1. Recheck #595 CI and integrate only after relevant checks pass and the branch remains safely mergeable.
 2. Wire `DatabasePropertyAuthoringService` + `PropertyAddPopover` into the real generic Database Property-add host; do not write Relation config directly in the widget.
 3. Wire the quick-create policy/action into the existing Relation value picker, delegating to canonical custom Object/Tag/Weblink/Image/File creation/import callbacks.
 4. Wire generic Gallery cover compatibility + dispatcher into fixed and masonry real-host cards, then expose schema-derived cover choices in the toolbar.
@@ -105,4 +108,4 @@ Do not reconstruct a whole hotspot for a small host integration. Prefer service/
 - No destructive Property archive/delete migration is approved; existing fail-closed behavior remains correct until a reversible storage contract exists.
 
 ## Stop reason for this run
-Two coherent non-hotspot Lane C checkpoints were produced (#592 template/primitive composition and #595 quick-create presentation seam), and the durable handoff was refreshed from current main. The next valuable work is real-host wiring in shared files; it should begin only after the currently running Lane C CI results are known and open-PR ownership is rechecked, rather than stacking overlapping host edits while those branches are still validating.
+Two coherent non-hotspot Lane C checkpoints were produced: #592 merged the fresh-workspace primitive/Paper template composition, and #595 added the quick-create presentation seam. The durable handoff was refreshed from current repository state. The next valuable work is real-host wiring in shared files; it should begin only after #595 completes validation and open-PR ownership is rechecked, rather than stacking overlapping host edits while that branch is still validating.
