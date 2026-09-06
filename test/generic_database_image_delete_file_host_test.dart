@@ -95,6 +95,11 @@ void main() {
           .map((object) => object.id),
       isNot(contains(image.id)),
     );
+
+    // Explicitly dispose the real host before database teardown so its live
+    // Drift subscriptions cannot keep the test process waiting indefinitely.
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
   });
 }
 
