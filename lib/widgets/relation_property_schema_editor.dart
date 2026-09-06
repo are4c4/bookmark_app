@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/object_store.dart';
 import '../data/relation_schema_evolution_service.dart';
 import '../domain/object_model.dart';
+import '../features/database/presentation/widgets/relation_property_authoring_fields.dart';
 import 'relation_schema_change_impact_dialog.dart';
 
 class RelationPropertySchemaDraft {
@@ -124,6 +125,17 @@ class _RelationPropertySchemaEditorDialogState
 
   @override
   Widget build(BuildContext context) {
+    final targetOptions = widget.targetTypes
+        .map(
+          (type) => RelationPropertyTargetOption(
+            objectTypeId: type.id,
+            name: type.name,
+            icon: type.icon.isEmpty ? '◻️' : type.icon,
+            isBuiltIn: type.kind == ObjectTypeKind.system,
+          ),
+        )
+        .toList(growable: false);
+
     return AlertDialog(
       title: const Text('Relation Propertyを編集'),
       content: SizedBox(
@@ -137,32 +149,14 @@ class _RelationPropertySchemaEditorDialogState
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 14),
-            DropdownButtonFormField<int>(
-              key: const ValueKey('relation-property-target-type'),
-              initialValue: _targetObjectTypeId,
-              decoration: const InputDecoration(labelText: '関連先ObjectType'),
-              items: widget.targetTypes
-                  .map(
-                    (type) => DropdownMenuItem<int>(
-                      value: type.id,
-                      child: Text(
-                        '${type.icon.isEmpty ? '◻️' : type.icon} ${type.name}  '
-                        '${type.kind == ObjectTypeKind.system ? '組み込み' : 'カスタム'}',
-                      ),
-                    ),
-                  )
-                  .toList(growable: false),
-              onChanged: (value) =>
+            RelationPropertyAuthoringFields(
+              targets: targetOptions,
+              selectedTargetObjectTypeId: _targetObjectTypeId,
+              multiple: _multiple,
+              onTargetChanged: (value) =>
                   setState(() => _targetObjectTypeId = value),
-            ),
-            const SizedBox(height: 10),
-            SwitchListTile(
-              key: const ValueKey('relation-property-multiple'),
-              contentPadding: EdgeInsets.zero,
-              title: const Text('複数のObjectを関連付ける'),
-              subtitle: Text(_multiple ? 'multi' : 'single'),
-              value: _multiple,
-              onChanged: (value) => setState(() => _multiple = value),
+              onMultipleChanged: (value) =>
+                  setState(() => _multiple = value),
             ),
           ],
         ),
