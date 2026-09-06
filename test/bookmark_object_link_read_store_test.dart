@@ -7,6 +7,7 @@ import 'package:bookmark_app/data/bookmark_repository.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/services/object_sync_service.dart';
 import 'package:drift/native.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -53,6 +54,32 @@ void main() {
     );
     expect(objectId, isNotNull);
     expect(objectId, greaterThan(0));
+  });
+
+  test('compatibility lookup failure stays fail-soft but emits a debug diagnostic',
+      () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final store = BookmarkObjectLinkReadStore(database);
+    await database.customStatement('DROP TABLE bookmark_object_links');
+
+    final messages = <String>[];
+    final previousDebugPrint = debugPrint;
+    debugPrint = (message, {wrapWidth}) {
+      if (message != null) messages.add(message);
+    };
+    addTearDown(() => debugPrint = previousDebugPrint);
+
+    expect(
+      await store.objectIdForBookmark(workspaceId: workspaceId, bookmarkId: 42),
+      isNull,
+    );
+    expect(messages, isNotEmpty);
+    expect(
+      messages.first,
+      'Bookmark object-link compatibility lookup failed.',
+    );
   });
 
   test('canonical Bookmark resolvers share the object-link read boundary', () {
