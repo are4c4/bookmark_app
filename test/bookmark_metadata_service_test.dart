@@ -51,7 +51,7 @@ void main() {
     expect(metadata.publishedDate, '2026-09-05T12:34:56+09:00');
   });
 
-  test('metadata uses final redirected URL for resource identity and relatives',
+  test('redirect uses final URL for relative media without retargeting identity',
       () async {
     final finalUrl = Uri.parse('https://cdn.resource.test/articles/final/');
     final service = BookmarkMetadataService(
@@ -76,7 +76,7 @@ void main() {
 
     final metadata = await service.fetch('https://resource.test/go');
 
-    expect(metadata.url, finalUrl.toString());
+    expect(metadata.url, 'https://resource.test/go');
     expect(metadata.title, 'Redirected article');
     expect(
       metadata.thumbnail,
