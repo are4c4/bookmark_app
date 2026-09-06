@@ -128,6 +128,94 @@ void main() {
     expect((await bodyStore.read(secondId)).blocks.single.text, 'Updated template');
   });
 
+  test('focused Body template updates preserve presentation defaults', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final defaultsStore = ObjectTypeDefaultsStore(genericStore);
+
+    final typeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Article',
+    );
+    await defaultsStore.write(
+      objectTypeId: typeId,
+      defaults: const ObjectTypeDefaults(
+        visiblePropertyIds: <int>[11, 12],
+        propertyOrder: <int>[12, 11],
+        openMode: ObjectOpenMode.fullPage,
+      ),
+    );
+
+    await defaultsStore.writeBodyTemplate(
+      objectTypeId: typeId,
+      bodyTemplate: const ObjectBodyDocument(
+        blocks: <ObjectBodyBlock>[
+          ObjectBodyBlock(
+            id: 'abstract',
+            type: 'paragraph',
+            text: 'Abstract',
+          ),
+        ],
+      ),
+    );
+
+    var restored = await defaultsStore.read(typeId);
+    expect(restored, isNotNull);
+    expect(restored!.visiblePropertyIds, <int>[11, 12]);
+    expect(restored.propertyOrder, <int>[12, 11]);
+    expect(restored.openMode, ObjectOpenMode.fullPage);
+    expect(restored.bodyTemplate?.blocks.single.text, 'Abstract');
+
+    await defaultsStore.writeBodyTemplate(
+      objectTypeId: typeId,
+      bodyTemplate: null,
+    );
+
+    restored = await defaultsStore.read(typeId);
+    expect(restored, isNotNull);
+    expect(restored!.visiblePropertyIds, <int>[11, 12]);
+    expect(restored.propertyOrder, <int>[12, 11]);
+    expect(restored.openMode, ObjectOpenMode.fullPage);
+    expect(restored.bodyTemplate, isNull);
+  });
+
+  test('clearing a template-only default removes the defaults row', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final defaultsStore = ObjectTypeDefaultsStore(genericStore);
+
+    final typeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Template only',
+    );
+    await defaultsStore.writeBodyTemplate(
+      objectTypeId: typeId,
+      bodyTemplate: const ObjectBodyDocument(
+        blocks: <ObjectBodyBlock>[
+          ObjectBodyBlock(
+            id: 'notes',
+            type: 'paragraph',
+            text: 'Notes',
+          ),
+        ],
+      ),
+    );
+    expect(await defaultsStore.read(typeId), isNotNull);
+
+    await defaultsStore.writeBodyTemplate(
+      objectTypeId: typeId,
+      bodyTemplate: null,
+    );
+
+    expect(await defaultsStore.read(typeId), isNull);
+  });
+
   test('empty defaults clear persisted ObjectType overrides', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
