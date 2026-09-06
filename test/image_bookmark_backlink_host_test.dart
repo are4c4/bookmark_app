@@ -4,6 +4,7 @@ import 'package:bookmark_app/data/bookmark_repository.dart';
 import 'package:bookmark_app/data/core_object_bridge.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
 import 'package:bookmark_app/data/object_store.dart';
+import 'package:bookmark_app/data/relation_read_service.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
 import 'package:bookmark_app/data/tag_object_bridge.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
@@ -75,8 +76,22 @@ void main() {
         systemKey: CoreObjectBridge.photoSystemKey,
       ))!;
       final image = (await objectStore.listObjects(imageType.id)).single;
-      final backlinks = await objectStore.backlinks(image.id);
-      expect(backlinks, hasLength(2));
+      final neighborhood = await RelationReadService(objectStore).neighborhood(
+        workspaceId: workspaceId,
+        objectTypeId: imageType.id,
+        objectId: image.id,
+      );
+      expect(neighborhood.backlinks, hasLength(2));
+      expect(
+        neighborhood.backlinks.map((backlink) => backlink.property.name).toSet(),
+        <String>{'Images', 'Cover Image'},
+      );
+      expect(
+        neighborhood.backlinks
+            .map((backlink) => backlink.sourceObject.title)
+            .toList(growable: false),
+        everyElement('Bookmark using image'),
+      );
 
       tester.view.physicalSize = const Size(1600, 1000);
       tester.view.devicePixelRatio = 1;
@@ -98,8 +113,6 @@ void main() {
 
       expect(find.text('Backlinks  2'), findsOneWidget);
       expect(find.text('Bookmark using image'), findsNWidgets(2));
-      expect(find.text('Images'), findsOneWidget);
-      expect(find.text('Cover Image'), findsOneWidget);
     },
   );
 }
