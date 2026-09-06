@@ -407,8 +407,19 @@ class CoreObjectBridge {
   }
 
   Future<bool> _storedPhotoFileExists(String storedPath) async {
+    final candidate = storedPath.trim();
+    if (candidate.isEmpty) return false;
+    final isAbsolute = candidate.startsWith('/') ||
+        RegExp(r'^[A-Za-z]:[\\/]').hasMatch(candidate);
+
+    // A relative legacy path without a profile/Vault root is only a logical
+    // compatibility identity. Its filesystem location is indeterminate here,
+    // so preserve the established bridge behavior instead of treating the
+    // current process working directory as authoritative.
+    if (!isAbsolute && database.profileDirectoryPath == null) return true;
+
     try {
-      final resolved = database.pathResolver.resolveStoredPath(storedPath);
+      final resolved = database.pathResolver.resolveStoredPath(candidate);
       return await File(resolved).exists();
     } catch (_) {
       // File-system lookup is a compatibility gate only. Keep the legacy Photo
@@ -483,9 +494,8 @@ class CoreObjectBridge {
     }
 
     // A first promotion must not mint a canonical Image around a broken legacy
-    // file reference. Resolve only for the existence check; the original stored
-    // path remains the Image identity so relative/absolute identities are not
-    // silently rewritten or conflated. Missing media stays retryable.
+    // file reference when that reference resolves to a concrete filesystem
+    // location. Unrooted relative paths remain compatibility identities.
     if (!await _storedPhotoFileExists(filePath)) return null;
 
     final existingIds = (await objectStore.listObjects(photoType.id))
