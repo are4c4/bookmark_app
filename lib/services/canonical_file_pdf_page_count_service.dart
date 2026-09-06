@@ -63,7 +63,7 @@ class CanonicalFilePdfPageCountService {
     try {
       final result = await Process.run(
         '/usr/bin/mdls',
-        const ['-raw', '-name', 'kMDItemNumberOfPages'],
+        ['-raw', '-name', 'kMDItemNumberOfPages', filePath],
         runInShell: false,
       );
       if (result.exitCode != 0) return null;
