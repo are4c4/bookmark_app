@@ -93,6 +93,28 @@ class FullTextSearchRepository {
     ''', arguments);
   }
 
+  Future<void> _deleteBookmarkFromIndex(int bookmarkId) async {
+    // bookmark_id is intentionally UNINDEXED metadata. Resolve any matching
+    // virtual-table rows first, then mutate FTS5 through its stable rowid so a
+    // focused refresh cannot leave the old token stream behind. Reading every
+    // matching rowid also cleans up accidental duplicate projections without
+    // touching unrelated bookmarks.
+    final rows = await _database.customSelect(
+      '''
+      SELECT rowid AS fts_rowid
+      FROM bookmark_fts
+      WHERE CAST(bookmark_id AS INTEGER) = ?
+      ''',
+      variables: [Variable<int>(bookmarkId)],
+    ).get();
+    for (final row in rows) {
+      await _database.customStatement(
+        'DELETE FROM bookmark_fts WHERE rowid = ?',
+        [row.read<int>('fts_rowid')],
+      );
+    }
+  }
+
   Future<void> rebuild() async {
     await initialize();
     await _database.transaction(() async {
@@ -104,10 +126,7 @@ class FullTextSearchRepository {
   Future<void> refreshBookmark(int bookmarkId) async {
     await initialize();
     await _database.transaction(() async {
-      await _database.customStatement(
-        'DELETE FROM bookmark_fts WHERE bookmark_id = ?',
-        [bookmarkId],
-      );
+      await _deleteBookmarkFromIndex(bookmarkId);
       await _insertBookmarksIntoIndex(bookmarkId: bookmarkId);
     });
   }
