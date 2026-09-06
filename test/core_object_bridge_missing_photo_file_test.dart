@@ -41,8 +41,8 @@ void main() {
     expect(await sync.objectStore.listObjects(imageType.id), isEmpty);
     expect(
       await database.customSelect(
-        'SELECT object_id FROM photo_object_links WHERE workspace_id = ? AND photo_id = ?',
-        variables: [],
+        'SELECT object_id FROM photo_object_links '
+        'WHERE workspace_id = $workspaceId AND photo_id = $photoId',
       ).get(),
       isEmpty,
     );
@@ -67,7 +67,8 @@ void main() {
         imageType.properties.singleWhere((property) => property.name == 'File');
     expect(images.single.values[fileProperty.id], storedPath);
     final links = await database.customSelect(
-      'SELECT object_id FROM photo_object_links WHERE workspace_id = $workspaceId AND photo_id = $photoId',
+      'SELECT object_id FROM photo_object_links '
+      'WHERE workspace_id = $workspaceId AND photo_id = $photoId',
     ).get();
     expect(links, hasLength(1));
     expect(links.single.read<int>('object_id'), images.single.id);
