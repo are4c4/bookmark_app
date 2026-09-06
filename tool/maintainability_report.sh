@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Reports Dart LOC without changing the repository. This is intentionally a
-# visibility tool first: existing hotspots are debt to reduce, not CI failures.
+# Reports Dart LOC and selected dependency-boundary debt without changing the
+# repository. This is intentionally a visibility tool first: existing hotspots
+# are debt to reduce, not CI failures.
 #
 # Usage:
 #   bash tool/maintainability_report.sh
@@ -37,7 +38,8 @@ if [[ ! -d lib ]]; then
 fi
 
 tmp_file="$(mktemp "${TMPDIR:-/tmp}/bookmark-maintainability.XXXXXX")"
-trap 'rm -f "$tmp_file"' EXIT
+boundary_file="$(mktemp "${TMPDIR:-/tmp}/bookmark-boundaries.XXXXXX")"
+trap 'rm -f "$tmp_file" "$boundary_file"' EXIT
 
 scan_root() {
   local root="$1"
@@ -49,15 +51,35 @@ scan_root() {
   done
 }
 
+scan_presentation_database_reachthrough() {
+  for root in lib/views lib/widgets; do
+    [[ -d "$root" ]] || continue
+    find "$root" -type f -name '*.dart' -print | while IFS= read -r file; do
+      count="$(
+        { grep -o 'workspaceStore\.database' "$file" 2>/dev/null || true; } |
+          wc -l |
+          tr -d ' '
+      )"
+      if [[ "$count" -gt 0 ]]; then
+        printf '%08d\t%s\n' "$count" "$file"
+      fi
+    done
+  done
+}
+
 {
   scan_root lib
   scan_root test
 } | sort -r > "$tmp_file"
 
+scan_presentation_database_reachthrough | sort -r > "$boundary_file"
+
 lib_files="$(awk -F '\t' '$2 ~ /^lib\// { count++ } END { print count + 0 }' "$tmp_file")"
 lib_loc="$(awk -F '\t' '$2 ~ /^lib\// { sum += $1 } END { print sum + 0 }' "$tmp_file")"
 test_files="$(awk -F '\t' '$2 ~ /^test\// { count++ } END { print count + 0 }' "$tmp_file")"
 test_loc="$(awk -F '\t' '$2 ~ /^test\// { sum += $1 } END { print sum + 0 }' "$tmp_file")"
+boundary_files="$(awk -F '\t' 'END { print NR + 0 }' "$boundary_file")"
+boundary_refs="$(awk -F '\t' '{ sum += $1 } END { print sum + 0 }' "$boundary_file")"
 
 echo "Dart maintainability report"
 echo "==========================="
@@ -81,6 +103,26 @@ head -n "$TOP" "$tmp_file" | while IFS=$'\t' read -r lines file; do
 done
 
 echo
-echo "Policy: this report is non-blocking. Existing hotspots must not be hidden by"
-echo "moving code without reducing responsibility or duplication. Review major LOC"
-echo "growth against docs/MAINTAINABILITY.md and Issue #225."
+echo "Presentation direct database reach-through:"
+printf '  %s workspaceStore.database reference(s) across %s file(s)\n' \
+  "$boundary_refs" "$boundary_files"
+if [[ "$boundary_files" -gt 0 ]]; then
+  printf '%8s  %s\n' 'refs' 'path'
+  printf '%8s  %s\n' '--------' '----'
+  while IFS=$'\t' read -r refs file; do
+    refs="${refs#0000000}"
+    refs="${refs#000000}"
+    refs="${refs#00000}"
+    refs="${refs#0000}"
+    refs="${refs#000}"
+    refs="${refs#00}"
+    refs="${refs#0}"
+    [[ -n "$refs" ]] || refs=0
+    printf '%8s  %s\n' "$refs" "$file"
+  done < "$boundary_file"
+fi
+
+echo
+echo "Policy: this report is non-blocking. Existing hotspots and boundary debt must"
+echo "not be hidden by moving code without reducing responsibility or duplication."
+echo "Review major LOC/boundary growth against docs/MAINTAINABILITY.md and Issue #225."
