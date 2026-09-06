@@ -22,6 +22,18 @@ void main() {
     final evicted = <String>[];
     var resolveCount = 0;
 
+    Future<ImageManagedVisual?> resolveVisual({
+      required int objectTypeId,
+      required int objectId,
+    }) async {
+      expect(objectTypeId, 3);
+      expect(objectId, 7);
+      resolveCount++;
+      return visual;
+    }
+
+    Future<void> evictCache(String path) async => evicted.add(path);
+
     Widget host(int refreshToken) => MaterialApp(
           home: Scaffold(
             body: ObjectImageDetailPreview(
@@ -30,13 +42,8 @@ void main() {
               objectTypeId: 3,
               objectId: 7,
               refreshToken: refreshToken,
-              visualResolver: ({required objectTypeId, required objectId}) async {
-                expect(objectTypeId, 3);
-                expect(objectId, 7);
-                resolveCount++;
-                return visual;
-              },
-              cacheEvictor: (path) async => evicted.add(path),
+              visualResolver: resolveVisual,
+              cacheEvictor: evictCache,
               imageBuilder: (_, path) => Text(path),
             ),
           ),
