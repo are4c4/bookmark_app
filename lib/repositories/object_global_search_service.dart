@@ -1,5 +1,6 @@
 import '../data/generic_database_store.dart';
 import '../data/object_store.dart';
+import '../services/canonical_file_pdf_search_indexer.dart';
 import 'object_search_refresh_planner.dart';
 import 'object_search_repository.dart';
 import 'object_search_result_resolver.dart';
@@ -10,19 +11,37 @@ import 'object_search_result_resolver.dart';
 /// re-resolve ids. Search always returns current canonical Objects/ObjectTypes,
 /// while stale index identities fail closed in [ObjectSearchResultResolver].
 class ObjectGlobalSearchService {
-  ObjectGlobalSearchService(GenericDatabaseStore genericStore)
-      : _index = ObjectSearchRepository(genericStore),
+  ObjectGlobalSearchService(
+    GenericDatabaseStore genericStore, {
+    CanonicalFilePdfSearchIndexer? pdfSearchIndexer,
+  })  : _index = ObjectSearchRepository(genericStore),
         _resolver = ObjectSearchResultResolver(ObjectStore(genericStore)),
-        _refreshPlanner = ObjectSearchRefreshPlanner(ObjectStore(genericStore));
+        _refreshPlanner = ObjectSearchRefreshPlanner(ObjectStore(genericStore)),
+        _pdfSearchIndexer =
+            pdfSearchIndexer ?? CanonicalFilePdfSearchIndexer.forStore(genericStore);
 
   final ObjectSearchRepository _index;
   final ObjectSearchResultResolver _resolver;
   final ObjectSearchRefreshPlanner _refreshPlanner;
+  final CanonicalFilePdfSearchIndexer _pdfSearchIndexer;
 
+  /// Rebuilds canonical Object search for one workspace after reconciling the
+  /// optional PDF-derived contribution of canonical File Objects.
   Future<void> rebuildWorkspace(int workspaceId) =>
-      _index.rebuildWorkspace(workspaceId);
+      _pdfSearchIndexer.rebuildWorkspace(workspaceId);
 
   Future<void> refreshObject(int objectId) => _index.refreshObject(objectId);
+
+  /// Re-extracts and reindexes one canonical File's optional PDF text without
+  /// rebuilding unrelated Objects.
+  Future<bool> refreshFilePdfText({
+    required int fileObjectTypeId,
+    required int fileObjectId,
+  }) =>
+      _pdfSearchIndexer.refresh(
+        fileObjectTypeId: fileObjectTypeId,
+        fileObjectId: fileObjectId,
+      );
 
   /// Refreshes a deterministic set of canonical Object ids without rebuilding
   /// unrelated workspace rows.
