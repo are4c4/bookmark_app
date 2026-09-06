@@ -395,11 +395,6 @@ class AppDatabase extends _$AppDatabase {
     if (parentTagId != null) await setTagParent(id, parentTagId);
     return id;
   }
-  Future<void> renameTag(int id, String newName) async {
-    final name = newName.trim();
-    if (name.isEmpty) return;
-    await (update(tags)..where((t) => t.id.equals(id))).write(TagsCompanion(name: Value(name)));
-  }
   Future<bool> _wouldCreateTagCycle(int id, int? parentTagId) async {
     var current = parentTagId;
     final visited = <int>{id};
@@ -415,17 +410,6 @@ class AppDatabase extends _$AppDatabase {
     if (await _wouldCreateTagCycle(id, parentTagId)) throw ArgumentError('This parent would create a tag cycle');
     await (update(tags)..where((t) => t.id.equals(id))).write(TagsCompanion(parentTagId: Value(parentTagId)));
   }
-  Future<void> deleteTag(int id) async {
-    await transaction(() async {
-      await (update(tags)..where((t) => t.parentTagId.equals(id))).write(const TagsCompanion(parentTagId: Value(null)));
-      await (delete(tags)..where((t) => t.id.equals(id))).go();
-    });
-  }
-
-  Future<void> setGenre(int id, String genre) =>
-      (update(bookmarks)..where((b) => b.id.equals(id))).write(
-        BookmarksCompanion(genre: Value(genre.trim())),
-      );
 
   Future<int> deleteBookmark(int id) => (delete(bookmarks)..where((b) => b.id.equals(id))).go();
 }
