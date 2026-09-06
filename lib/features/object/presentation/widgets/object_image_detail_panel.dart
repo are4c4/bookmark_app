@@ -21,6 +21,7 @@ class ObjectImageDetailPanel extends StatefulWidget {
     required this.objectTypeId,
     required this.objectId,
     required this.editService,
+    this.onChanged,
     this.onError,
     this.maxPreviewHeight = 480,
     this.previewImageBuilder,
@@ -33,6 +34,13 @@ class ObjectImageDetailPanel extends StatefulWidget {
   final int objectTypeId;
   final int objectId;
   final CanonicalImageEditService editService;
+
+  /// Notifies the host after bytes and canonical geometry were updated.
+  ///
+  /// The panel always refreshes its own same-path preview first; hosts may use
+  /// this callback to re-read any surrounding metadata rows such as Pixel
+  /// width/height without learning about file-cache invalidation details.
+  final VoidCallback? onChanged;
   final void Function(Object error)? onError;
   final double maxPreviewHeight;
   final Widget Function(BuildContext context, String filePath)? previewImageBuilder;
@@ -58,7 +66,9 @@ class _ObjectImageDetailPanelState extends State<ObjectImageDetailPanel> {
   }
 
   void _handleChanged() {
+    if (!mounted) return;
     setState(() => _previewRefreshToken++);
+    widget.onChanged?.call();
   }
 
   @override
