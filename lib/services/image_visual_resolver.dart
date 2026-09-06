@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'dart:io';
 
 import '../data/object_store.dart';
@@ -109,9 +110,22 @@ class ImageVisualResolver {
   Future<bool> _existingFile(String path) async {
     try {
       return await File(path).exists();
-    } catch (_) {
+    } catch (_, stackTrace) {
+      _debugFileProbeFailure(stackTrace);
       return false;
     }
+  }
+
+  void _debugFileProbeFailure(StackTrace stackTrace) {
+    assert(() {
+      developer.log(
+        'ImageVisualResolver: managed file existence probe failed; '
+        'treating the optional visual as unavailable.',
+        name: 'bookmark_app.image_visual_resolver',
+        stackTrace: stackTrace,
+      );
+      return true;
+    }());
   }
 
   String? _nonEmpty(String? value) {
