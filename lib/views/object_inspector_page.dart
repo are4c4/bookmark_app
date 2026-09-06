@@ -6,6 +6,7 @@ import '../data/daily_note_navigation_service.dart';
 import '../data/daily_note_service.dart';
 import '../data/database_view_store.dart';
 import '../data/generic_database_store.dart';
+import '../data/image_object_service.dart';
 import '../data/object_alias_store.dart';
 import '../data/object_body_block_action_controller.dart';
 import '../data/object_body_block_duplicate_service.dart';
@@ -159,6 +160,7 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
       );
 
   bool get _isDailyNote => _systemKey == DailyNoteService.systemKey;
+  bool get _isImage => _systemKey == ImageObjectService.systemKey;
 
   @override
   void initState() {
@@ -485,7 +487,7 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
     ObjectGraphNodeRecord node,
     ObjectDetailContent content,
   ) async {
-    if (node.isSystemType) return;
+    if (node.isSystemType && !_isImage) return;
     var value = content.object.title;
     final result = await showDialog<String>(
       context: context,
@@ -531,7 +533,12 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
     ObjectGraphNodeRecord node,
     ObjectPropertyDefinition property,
   ) {
-    if (node.isSystemType || !property.isValue) return false;
+    if (!property.isValue) return false;
+    if (node.isSystemType) {
+      return _isImage &&
+          property.name == 'Note' &&
+          property.type == ObjectPropertyType.text;
+    }
     return property.type == ObjectPropertyType.text ||
         property.type == ObjectPropertyType.url ||
         property.type == ObjectPropertyType.number;
@@ -724,7 +731,7 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
                       ),
                 ),
               ),
-              if (!node.isSystemType)
+              if (!node.isSystemType || _isImage)
                 IconButton(
                   key: const ValueKey('object-title-edit-button'),
                   tooltip: 'Object名を変更',
