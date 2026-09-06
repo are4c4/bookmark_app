@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
+import '../services/bookmark_presentation_resolver_factory.dart';
 import '../services/bookmark_visual_resolver.dart';
 
 typedef BookmarkVisualSourceResolver = Future<BookmarkVisualSource?> Function(
@@ -68,10 +69,9 @@ class _BookmarkVisualImageState extends State<BookmarkVisualImage> {
   Future<BookmarkVisualSource?> _resolve() {
     final injected = widget.resolveSource;
     if (injected != null) return injected(widget.bookmark);
-    return BookmarkVisualResolver(
-      database: widget.repository.workspaceStore.database,
-      workspaceId: widget.repository.workspaceId,
-    ).resolve(widget.bookmark);
+    return BookmarkPresentationResolverFactory.visualFor(widget.repository)(
+      widget.bookmark,
+    );
   }
 
   @override
