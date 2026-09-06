@@ -63,11 +63,19 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      expect(find.text('Objectが見つかりません'), findsNothing);
     }
 
     Future<void> createAndEditBody(int objectId, String text) async {
-      expect(find.byKey(const ValueKey('body-empty-insert')), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('body-empty-insert')));
+      final emptyInsert = find.byKey(const ValueKey('body-empty-insert'));
+      await tester.scrollUntilVisible(
+        emptyInsert,
+        240,
+        scrollable: find.byType(Scrollable).first,
+        maxScrolls: 20,
+      );
+      expect(emptyInsert, findsOneWidget);
+      await tester.tap(emptyInsert);
       await tester.pumpAndSettle();
       await tester.tap(find.text('テキスト').last);
       await tester.pumpAndSettle();
@@ -76,10 +84,14 @@ void main() {
       expect(body.blocks, hasLength(1));
       expect(body.blocks.single.type, ObjectBodyBlockType.paragraph);
 
-      await tester.enterText(
-        find.byKey(ValueKey('body-text-${body.blocks.single.id}')),
-        text,
+      final textField = find.byKey(ValueKey('body-text-${body.blocks.single.id}'));
+      await tester.scrollUntilVisible(
+        textField,
+        160,
+        scrollable: find.byType(Scrollable).first,
+        maxScrolls: 10,
       );
+      await tester.enterText(textField, text);
       await tester.pumpAndSettle();
       body = await bodyStore.read(objectId);
       expect(body.blocks.single.text, text);
