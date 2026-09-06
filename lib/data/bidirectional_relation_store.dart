@@ -202,7 +202,8 @@ class BidirectionalRelationStore {
   }) async {
     final storedProperty = await _canonicalRelationProperty(property);
     final hasPairMetadata = storedProperty.config['bidirectional'] == true ||
-        storedProperty.config['inversePropertyId'] != null;
+        storedProperty.config['inversePropertyId'] != null ||
+        storedProperty.config['pairRole'] != null;
     if (!hasPairMetadata) {
       await objectStore.setRelation(
         objectId: objectId,
