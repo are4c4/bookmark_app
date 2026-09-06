@@ -63,6 +63,7 @@ void main() {
 
     await tester.pumpWidget(host(1));
     await pumpUntil(() => evicted.length == 1);
+    await pumpUntil(() => find.text(visual.filePath).evaluate().isNotEmpty);
 
     expect(resolveCount, 2);
     expect(evicted, [visual.filePath]);
