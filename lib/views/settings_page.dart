@@ -16,6 +16,9 @@ class SettingsPage extends StatelessWidget {
     this.chooseBackupFile,
     this.restoreBackupFile,
     this.revealVaultDirectory,
+    this.onCreateVault,
+    this.onOpenVault,
+    this.onSwitchVault,
   });
 
   final ThemeMode themeMode;
@@ -25,6 +28,9 @@ class SettingsPage extends StatelessWidget {
   final Future<String?> Function()? chooseBackupFile;
   final Future<void> Function(String path)? restoreBackupFile;
   final Future<void> Function(String path)? revealVaultDirectory;
+  final VoidCallback? onCreateVault;
+  final VoidCallback? onOpenVault;
+  final VoidCallback? onSwitchVault;
 
   @override
   Widget build(BuildContext context) {
@@ -94,6 +100,9 @@ class SettingsPage extends StatelessWidget {
             VaultSettingsSection(
               directoryPath: vaultPath,
               revealDirectory: revealVaultDirectory,
+              onCreateVault: onCreateVault,
+              onOpenVault: onOpenVault,
+              onSwitchVault: onSwitchVault,
             ),
           ],
           const SizedBox(height: UiTokens.space24),
