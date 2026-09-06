@@ -2,11 +2,12 @@ import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/database_view_gallery_adapter.dart';
 import 'package:bookmark_app/data/database_view_gallery_cover_source_service.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
+import 'package:bookmark_app/data/image_object_service.dart';
 import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
-import 'package:bookmark_app/data/workspace_store.dart';
-import 'package:bookmark_app/services/image_object_service.dart';
 import 'package:bookmark_app/data/weblink_object_service.dart';
+import 'package:bookmark_app/data/workspace_store.dart';
+import 'package:bookmark_app/domain/object_model.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
