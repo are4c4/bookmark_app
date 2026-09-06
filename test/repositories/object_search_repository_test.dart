@@ -137,7 +137,7 @@ void main() {
       objectId: focused,
       aliases: const ['Current Alias'],
     );
-    await search.refreshObject(workspaceId: workspaceId, objectId: focused);
+    await search.refreshObject(focused);
 
     expect(
       (await search.search(workspaceId: workspaceId, rawQuery: 'gamma'))
@@ -177,8 +177,8 @@ void main() {
     );
     await search.rebuildWorkspace(workspaceId);
 
-    await search.refreshObject(workspaceId: workspaceId, objectId: objectId);
-    await search.refreshObject(workspaceId: workspaceId, objectId: objectId);
+    await search.refreshObject(objectId);
+    await search.refreshObject(objectId);
     expect(
       (await search.search(workspaceId: workspaceId, rawQuery: 'disposable'))
           .map((hit) => hit.objectId),
@@ -186,7 +186,7 @@ void main() {
     );
 
     await objectStore.deleteObject(objectId);
-    await search.refreshObject(workspaceId: workspaceId, objectId: objectId);
+    await search.refreshObject(objectId);
     expect(
       await search.search(workspaceId: workspaceId, rawQuery: 'disposable'),
       isEmpty,
