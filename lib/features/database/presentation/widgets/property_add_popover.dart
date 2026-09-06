@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'relation_property_authoring_fields.dart';
+
 class PropertyAddCandidate {
   const PropertyAddCandidate({
     required this.id,
@@ -66,10 +68,11 @@ typedef CreatePropertyFromPopover = FutureOr<void> Function(
 /// Persistence and Property-type semantics remain caller-owned. This widget only
 /// owns the common interaction: search hidden Properties, reveal one directly,
 /// or switch into a compact create-new flow using caller-supplied canonical
-/// Property type options. When callers expose `relation`, the same flow also
-/// collects an explicit target ObjectType and single/multi cardinality; callers
-/// remain responsible for passing that request through canonical Relation schema
-/// validation rather than writing Relation config directly from presentation.
+/// Property type options. When callers expose `relation`, the same reusable
+/// Relation authoring fields collect an explicit target ObjectType and
+/// single/multi cardinality; callers remain responsible for passing that request
+/// through canonical Relation schema validation rather than writing Relation
+/// config directly from presentation.
 class PropertyAddPopover extends StatefulWidget {
   const PropertyAddPopover({
     super.key,
@@ -99,7 +102,6 @@ class PropertyAddPopover extends StatefulWidget {
 class _PropertyAddPopoverState extends State<PropertyAddPopover> {
   final _searchController = TextEditingController();
   final _nameController = TextEditingController();
-  final _relationTargetSearchController = TextEditingController();
   bool _creating = false;
   String _selectedType = '';
   int? _selectedRelationTargetId;
@@ -129,14 +131,12 @@ class _PropertyAddPopoverState extends State<PropertyAddPopover> {
   void dispose() {
     _searchController.dispose();
     _nameController.dispose();
-    _relationTargetSearchController.dispose();
     super.dispose();
   }
 
   void _reset() {
     _searchController.clear();
     _nameController.clear();
-    _relationTargetSearchController.clear();
     _creating = false;
     _selectedType = widget.propertyTypes.firstOrNull?.key ?? '';
     _selectedRelationTargetId = null;
@@ -148,14 +148,6 @@ class _PropertyAddPopoverState extends State<PropertyAddPopover> {
     if (query.isEmpty) return widget.hiddenProperties;
     return widget.hiddenProperties
         .where((property) => property.name.toLowerCase().contains(query))
-        .toList(growable: false);
-  }
-
-  List<PropertyAddRelationTarget> get _filteredRelationTargets {
-    final query = _relationTargetSearchController.text.trim().toLowerCase();
-    if (query.isEmpty) return widget.relationTargets;
-    return widget.relationTargets
-        .where((target) => target.name.toLowerCase().contains(query))
         .toList(growable: false);
   }
 
@@ -368,7 +360,6 @@ class _PropertyAddPopoverState extends State<PropertyAddPopover> {
                     _selectedType = option.key;
                     if (_selectedType != 'relation') {
                       _selectedRelationTargetId = null;
-                      _relationTargetSearchController.clear();
                       _relationMultiple = true;
                     }
                   }),
@@ -378,99 +369,32 @@ class _PropertyAddPopoverState extends State<PropertyAddPopover> {
         ),
         if (_selectedType == 'relation') ...[
           const SizedBox(height: 12),
-          _buildRelationFields(),
+          RelationPropertyAuthoringFields(
+            keyPrefix: 'property-add-relation',
+            showResultsInitially: true,
+            targets: widget.relationTargets
+                .map(
+                  (target) => RelationPropertyTargetOption(
+                    objectTypeId: target.id,
+                    name: target.name,
+                    icon: target.icon.trim().isEmpty ? '◻️' : target.icon,
+                    isBuiltIn: target.isBuiltIn,
+                  ),
+                )
+                .toList(growable: false),
+            selectedTargetObjectTypeId: _selectedRelationTargetId,
+            multiple: _relationMultiple,
+            onTargetChanged: (value) =>
+                setState(() => _selectedRelationTargetId = value),
+            onMultipleChanged: (value) =>
+                setState(() => _relationMultiple = value),
+          ),
         ],
         const SizedBox(height: 12),
         FilledButton(
           key: const ValueKey('property-add-create-submit'),
           onPressed: _canCreate ? () => _create(controller) : null,
           child: const Text('追加'),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildRelationFields() {
-    final filteredTargets = _filteredRelationTargets;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text('関連先 ObjectType', style: Theme.of(context).textTheme.labelSmall),
-        const SizedBox(height: 6),
-        TextField(
-          key: const ValueKey('property-add-relation-target-search'),
-          controller: _relationTargetSearchController,
-          decoration: const InputDecoration(
-            isDense: true,
-            prefixIcon: Icon(Icons.search, size: 18),
-            hintText: 'ObjectTypeを検索',
-          ),
-          onChanged: (_) => setState(() {}),
-        ),
-        const SizedBox(height: 6),
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 160),
-          child: filteredTargets.isEmpty
-              ? const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Text('一致するObjectTypeがありません'),
-                )
-              : SingleChildScrollView(
-                  primary: false,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: filteredTargets
-                        .map(
-                          (target) => ListTile(
-                            key: ValueKey(
-                              'property-add-relation-target-${target.id}',
-                            ),
-                            dense: true,
-                            minTileHeight: 42,
-                            contentPadding:
-                                const EdgeInsets.symmetric(horizontal: 4),
-                            leading: target.icon.trim().isEmpty
-                                ? const Icon(Icons.category_outlined, size: 18)
-                                : Text(target.icon),
-                            title: Text(target.name),
-                            subtitle: Text(
-                              target.isBuiltIn
-                                  ? '組み込み ObjectType'
-                                  : 'カスタム ObjectType',
-                            ),
-                            trailing: _selectedRelationTargetId == target.id
-                                ? const Icon(Icons.check, size: 18)
-                                : null,
-                            onTap: () => setState(
-                              () => _selectedRelationTargetId = target.id,
-                            ),
-                          ),
-                        )
-                        .toList(),
-                  ),
-                ),
-        ),
-        const SizedBox(height: 10),
-        Text('関連できる数', style: Theme.of(context).textTheme.labelSmall),
-        const SizedBox(height: 6),
-        SegmentedButton<bool>(
-          key: const ValueKey('property-add-relation-cardinality'),
-          segments: const [
-            ButtonSegment<bool>(
-              value: false,
-              icon: Icon(Icons.looks_one_outlined, size: 16),
-              label: Text('single'),
-            ),
-            ButtonSegment<bool>(
-              value: true,
-              icon: Icon(Icons.library_add_outlined, size: 16),
-              label: Text('multi'),
-            ),
-          ],
-          selected: <bool>{_relationMultiple},
-          showSelectedIcon: false,
-          onSelectionChanged: (selection) =>
-              setState(() => _relationMultiple = selection.single),
         ),
       ],
     );
