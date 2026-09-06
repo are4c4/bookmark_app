@@ -1,53 +1,40 @@
-import 'dart:io';
-
 import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
-import 'package:bookmark_app/data/image_object_service.dart';
 import 'package:bookmark_app/data/object_store.dart';
-import 'package:bookmark_app/data/object_type_defaults_store.dart';
-import 'package:bookmark_app/data/system_object_store.dart';
-import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/domain/object_model.dart';
 import 'package:bookmark_app/features/object/presentation/widgets/object_image_detail_panel.dart';
 import 'package:bookmark_app/services/canonical_image_edit_service.dart';
+import 'package:bookmark_app/services/image_visual_resolver.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:image/image.dart' as image;
 
 void main() {
   testWidgets('Image detail panel refreshes preview after safe edit',
       (tester) async {
-    final directory = await Directory.systemTemp.createTemp('image_detail_panel_');
-    addTearDown(() => directory.delete(recursive: true));
-    final managedFile = File('${directory.path}/managed.png');
-    await managedFile.writeAsBytes(
-      image.encodePng(image.Image(width: 4, height: 2)),
-    );
-
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
-    final workspaceId = await WorkspaceStore(database).initialize();
-    final genericStore = GenericDatabaseStore(database);
-    final objectStore = ObjectStore(genericStore);
-    final images = ImageObjectService(
-      systemObjects: SystemObjectStore(
-        database: database,
-        objectStore: objectStore,
-      ),
-      defaultsStore: ObjectTypeDefaultsStore(genericStore),
-    );
-    final definition = await images.ensureDefinition(workspaceId);
-    final imageObject = await images.findOrCreateManaged(
-      workspaceId: workspaceId,
-      filePath: managedFile.path,
-      originalFilename: 'managed.png',
-      pixelWidth: 4,
-      pixelHeight: 2,
+    final objectStore = ObjectStore(GenericDatabaseStore(database));
+    const visual = ImageManagedVisual(
+      imageObjectId: 7,
+      filePath: '/managed/preview.png',
+      pixelWidth: 640,
+      pixelHeight: 480,
     );
     final evicted = <String>[];
     var hostRefreshes = 0;
+    var resolveCount = 0;
     final editService = _FakeCanonicalImageEditService();
+
+    Future<ImageManagedVisual?> resolveVisual({
+      required int objectTypeId,
+      required int objectId,
+    }) async {
+      expect(objectTypeId, 3);
+      expect(objectId, visual.imageObjectId);
+      resolveCount++;
+      return visual;
+    }
 
     await tester.pumpWidget(
       MaterialApp(
@@ -55,11 +42,12 @@ void main() {
           body: ObjectImageDetailPanel(
             database: database,
             objectStore: objectStore,
-            workspaceId: workspaceId,
-            objectTypeId: definition.objectType.id,
-            objectId: imageObject.id,
+            workspaceId: 1,
+            objectTypeId: 3,
+            objectId: visual.imageObjectId,
             editService: editService,
             onChanged: () => hostRefreshes++,
+            previewVisualResolver: resolveVisual,
             previewCacheEvictor: (path) async => evicted.add(path),
             previewImageBuilder: (_, path) => Text(path),
           ),
@@ -68,8 +56,8 @@ void main() {
     );
 
     Future<void> pumpUntil(bool Function() condition) async {
-      for (var i = 0; i < 60 && !condition(); i++) {
-        await tester.pump(const Duration(milliseconds: 20));
+      for (var i = 0; i < 30 && !condition(); i++) {
+        await tester.pump(const Duration(milliseconds: 10));
       }
       expect(condition(), isTrue);
     }
@@ -81,7 +69,8 @@ void main() {
     }
 
     await pumpUntil(rotateRightEnabled);
-    expect(find.text(managedFile.path), findsOneWidget);
+    await pumpUntil(() => find.text(visual.filePath).evaluate().isNotEmpty);
+    expect(resolveCount, 1);
     expect(evicted, isEmpty);
     expect(hostRefreshes, 0);
 
@@ -89,10 +78,11 @@ void main() {
     await pumpUntil(() => evicted.length == 1);
     await pumpUntil(rotateRightEnabled);
 
-    expect(editService.lastWorkspaceId, workspaceId);
-    expect(editService.lastObjectId, imageObject.id);
+    expect(editService.lastWorkspaceId, 1);
+    expect(editService.lastObjectId, visual.imageObjectId);
     expect(editService.lastQuarterTurns, 1);
-    expect(evicted, [managedFile.path]);
+    expect(resolveCount, 2);
+    expect(evicted, [visual.filePath]);
     expect(hostRefreshes, 1);
 
     await tester.pumpWidget(const SizedBox.shrink());
