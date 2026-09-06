@@ -46,13 +46,12 @@ class RemoteImageStorageService {
   final http.Client? _client;
   final PhotoStorageService _storage;
 
-  void _debugDimensionProbeFailure(Object error, StackTrace stackTrace) {
+  void _debugDimensionProbeFailure(StackTrace stackTrace) {
     assert(() {
       developer.log(
         'RemoteImageStorageService: optional image dimension probe failed; '
         'continuing managed import without geometry.',
         name: 'bookmark_app.remote_image_storage',
-        error: error,
         stackTrace: stackTrace,
       );
       return true;
@@ -102,8 +101,8 @@ class RemoteImageStorageService {
       img.Image? decoded;
       try {
         decoded = img.decodeImage(response.bodyBytes);
-      } catch (error, stackTrace) {
-        _debugDimensionProbeFailure(error, stackTrace);
+      } catch (_, stackTrace) {
+        _debugDimensionProbeFailure(stackTrace);
         decoded = null;
       }
 
