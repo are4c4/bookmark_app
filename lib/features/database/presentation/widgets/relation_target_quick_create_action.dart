@@ -1,8 +1,7 @@
 import 'dart:async';
 
+import 'package:bookmark_app/data/relation_target_quick_create_policy.dart';
 import 'package:flutter/material.dart';
-
-import '../../../data/relation_target_quick_create_policy.dart';
 
 typedef RelationTargetQuickCreateCallback = FutureOr<void> Function();
 
