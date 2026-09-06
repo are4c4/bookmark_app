@@ -70,15 +70,23 @@ class ObjectSearchRepository {
     return terms.map((term) => '"$term"*').join(' AND ');
   }
 
-  Future<void> _insertWorkspaceObjects({
-    required int workspaceId,
+  Future<void> _insertObjects({
+    int? workspaceId,
     int? objectId,
   }) {
-    final objectClause = objectId == null ? '' : 'AND r.id = ?';
-    final arguments = <Object?>[
-      workspaceId,
-      if (objectId != null) objectId,
-    ];
+    if (workspaceId == null && objectId == null) {
+      throw ArgumentError('Object search projection insert requires a scope.');
+    }
+    final conditions = <String>[];
+    final arguments = <Object?>[];
+    if (workspaceId != null) {
+      conditions.add('d.workspace_id = ?');
+      arguments.add(workspaceId);
+    }
+    if (objectId != null) {
+      conditions.add('r.id = ?');
+      arguments.add(objectId);
+    }
     return _database.customStatement('''
       INSERT INTO object_search_fts(
         object_id,
@@ -113,8 +121,7 @@ class ObjectSearchRepository {
         ''
       FROM generic_records r
       JOIN generic_databases d ON d.id = r.database_id
-      WHERE d.workspace_id = ?
-        $objectClause
+      WHERE ${conditions.join(' AND ')}
     ''', arguments);
   }
 
@@ -122,7 +129,9 @@ class ObjectSearchRepository {
     int? workspaceId,
     int? objectId,
   }) async {
-    assert(workspaceId != null || objectId != null);
+    if (workspaceId == null && objectId == null) {
+      throw ArgumentError('Object search row lookup requires a scope.');
+    }
     final conditions = <String>[];
     final variables = <Variable<Object>>[];
     if (workspaceId != null) {
@@ -159,23 +168,18 @@ class ObjectSearchRepository {
     await initialize();
     await _database.transaction(() async {
       await _deleteRows(await _matchingRowIds(workspaceId: workspaceId));
-      await _insertWorkspaceObjects(workspaceId: workspaceId);
+      await _insertObjects(workspaceId: workspaceId);
     });
   }
 
-  /// Refreshes one canonical Object projection. A deleted Object is naturally
-  /// removed because the focused INSERT SELECT yields no row.
-  Future<void> refreshObject({
-    required int workspaceId,
-    required int objectId,
-  }) async {
+  /// Refreshes one canonical Object projection by identity alone. A deleted
+  /// Object is naturally removed because the focused INSERT SELECT yields no
+  /// row, and callers cannot accidentally supply a mismatched workspace.
+  Future<void> refreshObject(int objectId) async {
     await initialize();
     await _database.transaction(() async {
       await _deleteRows(await _matchingRowIds(objectId: objectId));
-      await _insertWorkspaceObjects(
-        workspaceId: workspaceId,
-        objectId: objectId,
-      );
+      await _insertObjects(objectId: objectId);
     });
   }
 
