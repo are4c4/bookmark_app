@@ -51,6 +51,43 @@ void main() {
     expect(metadata.publishedDate, '2026-09-05T12:34:56+09:00');
   });
 
+  test('metadata uses final redirected URL for resource identity and relatives',
+      () async {
+    final finalUrl = Uri.parse('https://cdn.resource.test/articles/final/');
+    final service = BookmarkMetadataService(
+      client: MockClient((request) async {
+        expect(request.url.toString(), 'https://resource.test/go');
+        return http.Response(
+          '''
+<html>
+  <head>
+    <meta property="og:title" content="Redirected article">
+    <meta property="og:image" content="preview.jpg">
+    <link rel="icon" href="../favicon.ico">
+  </head>
+</html>
+''',
+          200,
+          request: http.Request('GET', finalUrl),
+          headers: const {'content-type': 'text/html; charset=utf-8'},
+        );
+      }),
+    );
+
+    final metadata = await service.fetch('https://resource.test/go');
+
+    expect(metadata.url, finalUrl.toString());
+    expect(metadata.title, 'Redirected article');
+    expect(
+      metadata.thumbnail,
+      'https://cdn.resource.test/articles/final/preview.jpg',
+    );
+    expect(
+      metadata.faviconUrl,
+      'https://cdn.resource.test/articles/favicon.ico',
+    );
+  });
+
   test('itemprop published date is used and malformed dates are ignored', () async {
     var responseIndex = 0;
     final service = BookmarkMetadataService(
