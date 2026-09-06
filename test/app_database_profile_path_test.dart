@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:bookmark_app/data/app_database.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -11,7 +12,15 @@ void main() {
     final sandbox = await Directory.systemTemp.createTemp(
       'bookmark_app_database_profile_path_',
     );
+    const pathProviderChannel = MethodChannel('plugins.flutter.io/path_provider');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(pathProviderChannel, (call) async {
+      if (call.method == 'getTemporaryDirectory') return sandbox.path;
+      return null;
+    });
     addTearDown(() async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(pathProviderChannel, null);
       if (await sandbox.exists()) {
         await sandbox.delete(recursive: true);
       }
