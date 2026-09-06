@@ -197,6 +197,7 @@ class _PropertyAddPopoverState extends State<PropertyAddPopover> {
           ConstrainedBox(
             constraints: const BoxConstraints(maxHeight: 210),
             child: SingleChildScrollView(
+              primary: false,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: filtered
