@@ -112,6 +112,27 @@ class CanonicalImageEditService {
     }
   }
 
+  /// Advisory presentation preflight for whether this canonical Image has an
+  /// original backup that can currently be restored safely. Restore support is
+  /// intentionally independent of the current file extension: the backup may
+  /// exist for a file that is no longer editable by today's format policy.
+  Future<bool> canRestoreOriginal({
+    required int workspaceId,
+    required int objectId,
+  }) async {
+    try {
+      final editablePath = await _editablePath(
+        workspaceId: workspaceId,
+        objectId: objectId,
+      );
+      return imageEdit.hasBackup(editablePath);
+    } on CanonicalImageEditTargetException {
+      return false;
+    } on CanonicalImageEditOwnershipException {
+      return false;
+    }
+  }
+
   Future<AppObject> edit({
     required int workspaceId,
     required int objectId,
