@@ -90,6 +90,24 @@ void main() {
     expect(switchCalled, isFalse);
   });
 
+  test('switchVault succeeds only after the requested Vault is active', () async {
+    var activeId = 'previous';
+    final target = _profile('target', '/tmp/Target');
+    final controller = VaultLifecycleController(
+      directoryPicker: VaultDirectoryPickerService(
+        directoryPicker: () async => null,
+      ),
+      createProfile: ({required name, required directoryPath}) async => target,
+      openProfile: (_) async => target,
+      switchProfile: (profile) async => activeId = profile.id,
+      activeVaultId: () => activeId,
+    );
+
+    await controller.switchVault(target);
+
+    expect(activeId, 'target');
+  });
+
   test('switch verification fails closed when host rolls back to previous Vault',
       () async {
     final target = _profile('target', '/tmp/Target');
