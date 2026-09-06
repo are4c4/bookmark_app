@@ -14,6 +14,7 @@ import 'bookmark_lifecycle_store.dart';
 import 'person_roles.dart';
 import 'photo_read_store.dart';
 import 'saved_view_read_store.dart';
+import 'saved_view_write_store.dart';
 import 'tag_group_store.dart';
 import 'workspace_store.dart';
 
@@ -29,6 +30,7 @@ class BookmarkRepository {
         _engagement = BookmarkEngagementStore(_database),
         _photoReads = PhotoReadStore(_database),
         _savedViewReads = SavedViewReadStore(_database),
+        _savedViewWrites = SavedViewWriteStore(_database),
         autoOrganize = autoOrganizeService ?? AutoOrganizeService(_database);
 
   final AppDatabase _database;
@@ -36,6 +38,7 @@ class BookmarkRepository {
   final BookmarkEngagementStore _engagement;
   final PhotoReadStore _photoReads;
   final SavedViewReadStore _savedViewReads;
+  final SavedViewWriteStore _savedViewWrites;
   final WorkspaceStore workspaceStore;
   final BookmarkLifecycleStore lifecycleStore;
   final int workspaceId;
@@ -397,7 +400,7 @@ class BookmarkRepository {
     int? personFilterId,
     int? photoFilterId,
   }) async {
-    final id = await _database.createSavedView(
+    final id = await _savedViewWrites.create(
       name: name,
       layoutType: layoutType,
       searchQuery: searchQuery,
@@ -433,7 +436,7 @@ class BookmarkRepository {
     bool includeDescendants = true,
     int? personFilterId,
     int? photoFilterId,
-  }) => _database.updateSavedView(
+  }) => _savedViewWrites.update(
         id: id,
         name: name,
         layoutType: layoutType,
@@ -451,5 +454,5 @@ class BookmarkRepository {
         photoFilterId: photoFilterId,
       );
 
-  Future<int> deleteSavedView(int id) => _database.deleteSavedView(id);
+  Future<int> deleteSavedView(int id) => _savedViewWrites.delete(id);
 }
