@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
 import '../data/person_roles.dart';
+import '../features/object/presentation/widgets/property_drag_handle.dart';
 import 'bookmark_attachment_section.dart';
 import 'detail_property_row.dart';
 import 'relation_database_picker.dart';
@@ -230,12 +231,6 @@ class BookmarkReorderableProperties extends StatelessWidget {
     return '$y/$m/$d $h:$min';
   }
 
-  Widget _dragHandle(BuildContext context) => Icon(
-        Icons.drag_indicator,
-        size: 15,
-        color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: .50),
-      );
-
   Widget _rating(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Row(
@@ -398,11 +393,16 @@ class BookmarkReorderableProperties extends StatelessWidget {
               },
               itemBuilder: (context, index) {
                 final token = ordered[index];
+                final dragHandle = ReorderableDragStartListener(
+                  index: index,
+                  child: const PropertyDragHandle(),
+                );
                 Widget row;
                 if (token == 'status') {
                   row = DetailPropertyRow(
                     icon: Icons.flag_outlined,
                     label: 'ステータス',
+                    dragHandle: dragHandle,
                     child: DetailSelectField<String>(
                       value: bookmark.status,
                       items: _statusLabels,
@@ -413,12 +413,14 @@ class BookmarkReorderableProperties extends StatelessWidget {
                   row = DetailPropertyRow(
                     icon: Icons.star_outline,
                     label: '評価',
+                    dragHandle: dragHandle,
                     child: _rating(context),
                   );
                 } else if (token == 'tags') {
                   row = DetailPropertyRow(
                     icon: Icons.sell_outlined,
                     label: 'タグ',
+                    dragHandle: dragHandle,
                     onAdd: () => _selectTags(context),
                     onTapValue: () => _selectTags(context),
                     addTooltip: 'タグDBから選択・新規作成',
@@ -432,6 +434,7 @@ class BookmarkReorderableProperties extends StatelessWidget {
                       return DetailPropertyRow(
                         icon: Icons.category_outlined,
                         label: 'ジャンル',
+                        dragHandle: dragHandle,
                         child: DetailSelectField<String>(
                           value: genre,
                           items: {'': '未設定', for (final value in _bookmarkGenres) value: value},
@@ -445,6 +448,7 @@ class BookmarkReorderableProperties extends StatelessWidget {
                   row = DetailPropertyRow(
                     icon: Icons.collections_bookmark_outlined,
                     label: 'コレクション',
+                    dragHandle: dragHandle,
                     onAdd: () => _selectCollections(context),
                     onTapValue: () => _selectCollections(context),
                     addTooltip: 'コレクションを選択',
@@ -454,6 +458,7 @@ class BookmarkReorderableProperties extends StatelessWidget {
                   row = DetailPropertyRow(
                     icon: Icons.history,
                     label: '履歴',
+                    dragHandle: dragHandle,
                     child: Text(
                       '${bookmark.openCount}回 · ${_formatDateTime(bookmark.lastOpenedAt)}',
                       style: TextStyle(fontSize: 12.5, color: Theme.of(context).colorScheme.onSurface),
@@ -465,22 +470,16 @@ class BookmarkReorderableProperties extends StatelessWidget {
                   row = DetailPropertyRow(
                     icon: Icons.person_outline,
                     label: role,
+                    dragHandle: dragHandle,
                     onAdd: () => _selectPeople(context, role, assignments),
                     onTapValue: () => _selectPeople(context, role, assignments),
                     addTooltip: '$roleを人物DBから選択・新規作成',
                     child: _personValue(context, role, people),
                   );
                 }
-                return ReorderableDragStartListener(
+                return KeyedSubtree(
                   key: ValueKey(token),
-                  index: index,
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _dragHandle(context),
-                      Expanded(child: row),
-                    ],
-                  ),
+                  child: row,
                 );
               },
             ),
