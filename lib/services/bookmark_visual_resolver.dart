@@ -1,8 +1,7 @@
 import 'dart:io';
 
-import 'package:drift/drift.dart';
-
 import '../data/app_database.dart';
+import '../data/bookmark_object_link_read_store.dart';
 import '../data/bookmark_weblink_object_bridge.dart';
 import '../data/core_object_bridge.dart';
 import '../data/generic_database_store.dart';
@@ -44,6 +43,7 @@ class BookmarkVisualResolver {
     );
     _relationReads = RelationReadService(_objectStore);
     _weblinkVisuals = WeblinkVisualResolver(_objectStore);
+    _bookmarkLinks = BookmarkObjectLinkReadStore(database);
   }
 
   final AppDatabase database;
@@ -53,6 +53,7 @@ class BookmarkVisualResolver {
   late final SystemObjectStore _systemObjects;
   late final RelationReadService _relationReads;
   late final WeblinkVisualResolver _weblinkVisuals;
+  late final BookmarkObjectLinkReadStore _bookmarkLinks;
 
   BookmarkVisualSource? choosePreferred({
     String? userCoverPath,
@@ -104,7 +105,10 @@ class BookmarkVisualResolver {
   Future<String?> resolveManagedRepresentativePath(int legacyBookmarkId) async {
     if (legacyBookmarkId <= 0 || workspaceId <= 0) return null;
 
-    final bookmarkObjectId = await _bookmarkObjectId(legacyBookmarkId);
+    final bookmarkObjectId = await _bookmarkLinks.objectIdForBookmark(
+      workspaceId: workspaceId,
+      bookmarkId: legacyBookmarkId,
+    );
     if (bookmarkObjectId == null) return null;
 
     final bookmarkType = await _systemObjects.getSystemObjectType(
@@ -134,26 +138,6 @@ class BookmarkVisualResolver {
       weblinkObjectId: weblinkEdge.targetObject.id,
     );
     return visual?.filePath;
-  }
-
-  Future<int?> _bookmarkObjectId(int legacyBookmarkId) async {
-    try {
-      final rows = await database.customSelect(
-        '''SELECT object_id
-           FROM bookmark_object_links
-           WHERE workspace_id = ? AND bookmark_id = ?
-           LIMIT 1''',
-        variables: [
-          Variable<int>(workspaceId),
-          Variable<int>(legacyBookmarkId),
-        ],
-      ).get();
-      if (rows.isEmpty) return null;
-      return rows.first.read<int>('object_id');
-    } catch (_) {
-      // Compatibility installations may not have completed Object mirroring yet.
-      return null;
-    }
   }
 
   Future<String?> _existingFile(String? value) async {
