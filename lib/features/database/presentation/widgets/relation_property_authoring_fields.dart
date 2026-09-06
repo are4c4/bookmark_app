@@ -17,7 +17,7 @@ class RelationPropertyTargetOption {
   final String icon;
   final bool isBuiltIn;
 
-  String get kindLabel => isBuiltIn ? '組み込み' : 'カスタム';
+  String get kindLabel => isBuiltIn ? '組み込み ObjectType' : 'カスタム ObjectType';
 }
 
 /// Compact, reusable Relation-specific portion of the generic Property authoring
@@ -35,6 +35,7 @@ class RelationPropertyAuthoringFields extends StatefulWidget {
     required this.onTargetChanged,
     required this.onMultipleChanged,
     this.keyPrefix = 'relation-property',
+    this.showResultsInitially = false,
   });
 
   final List<RelationPropertyTargetOption> targets;
@@ -47,6 +48,10 @@ class RelationPropertyAuthoringFields extends StatefulWidget {
   /// multiple authoring surfaces.
   final String keyPrefix;
 
+  /// Existing compact create popovers may keep their target list expanded,
+  /// while schema-edit dialogs can remain collapsed until the user searches.
+  final bool showResultsInitially;
+
   @override
   State<RelationPropertyAuthoringFields> createState() =>
       _RelationPropertyAuthoringFieldsState();
@@ -56,7 +61,13 @@ class _RelationPropertyAuthoringFieldsState
     extends State<RelationPropertyAuthoringFields> {
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocus = FocusNode();
-  bool _showResults = false;
+  late bool _showResults;
+
+  @override
+  void initState() {
+    super.initState();
+    _showResults = widget.showResultsInitially;
+  }
 
   @override
   void dispose() {
