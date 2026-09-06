@@ -6,6 +6,7 @@ import 'package:bookmark_app/data/generic_database_store.dart';
 import 'package:bookmark_app/data/image_object_service.dart';
 import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/object_type_defaults_store.dart';
+import 'package:bookmark_app/data/profile_path_resolver.dart';
 import 'package:bookmark_app/data/relation_mutation_service.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
 import 'package:bookmark_app/data/weblink_image_schema_service.dart';
@@ -113,5 +114,69 @@ void main() {
     expect(landscape?.pixelHeight, 600);
     expect(landscape?.aspectRatio, 2);
     expect(noMedia, isNull);
+  });
+
+  test('managed Weblink visual resolves profile-relative Image file', () async {
+    final directory = await Directory.systemTemp.createTemp('weblink_relative_');
+    addTearDown(() => directory.delete(recursive: true));
+    final mediaDirectory = Directory('${directory.path}/managed');
+    await mediaDirectory.create(recursive: true);
+    final managedFile = File('${mediaDirectory.path}/cover.img');
+    await managedFile.writeAsBytes(const <int>[7, 8, 9]);
+
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final defaultsStore = ObjectTypeDefaultsStore(genericStore);
+    final systemObjects = SystemObjectStore(
+      database: database,
+      objectStore: objectStore,
+    );
+    final schema = await WeblinkImageSchemaService(
+      systemObjects: systemObjects,
+      defaultsStore: defaultsStore,
+    ).ensureDefinition(workspaceId);
+    final weblink = await WeblinkObjectService(
+      systemObjects: systemObjects,
+      defaultsStore: defaultsStore,
+    ).findOrCreate(
+      workspaceId: workspaceId,
+      url: 'https://example.com/relative-cover',
+    );
+    final image = await ImageObjectService(
+      systemObjects: systemObjects,
+      defaultsStore: defaultsStore,
+    ).findOrCreateManaged(
+      workspaceId: workspaceId,
+      filePath: 'managed/cover.img',
+      pixelWidth: 900,
+      pixelHeight: 600,
+    );
+    final mutations = RelationMutationService(
+      objectStore: objectStore,
+      genericStore: genericStore,
+      bidirectionalStore: BidirectionalRelationStore(
+        genericStore: genericStore,
+        objectStore: objectStore,
+      ),
+    );
+    await mutations.setRelation(
+      objectId: weblink.id,
+      property: schema.representativeImageProperty,
+      targetObjectIds: <int>[image.id],
+    );
+
+    final visual = await WeblinkVisualResolver(
+      objectStore,
+      pathResolver: ProfilePathResolver(directory.path),
+    ).resolveManagedRepresentative(
+      weblinkObjectTypeId: schema.weblinkObjectTypeId,
+      weblinkObjectId: weblink.id,
+    );
+
+    expect(visual?.filePath, managedFile.path);
+    expect(visual?.aspectRatio, 1.5);
   });
 }
