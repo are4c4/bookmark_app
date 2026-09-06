@@ -1,8 +1,18 @@
 import 'dart:io';
 
+import 'package:bookmark_app/data/app_database.dart';
+import 'package:bookmark_app/data/generic_database_store.dart';
+import 'package:bookmark_app/data/image_object_service.dart';
+import 'package:bookmark_app/data/object_store.dart';
+import 'package:bookmark_app/data/object_type_defaults_store.dart';
+import 'package:bookmark_app/data/system_object_store.dart';
+import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/domain/object_model.dart';
 import 'package:bookmark_app/services/canonical_image_edit_service.dart';
 import 'package:bookmark_app/services/image_edit_service.dart';
+import 'package:bookmark_app/services/image_managed_file_deletion_policy.dart';
+import 'package:bookmark_app/services/photo_storage_service.dart';
+import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as image;
 
@@ -191,5 +201,72 @@ void main() {
     expect(restored.height, 4);
     expect(updatedWidth, 6);
     expect(updatedHeight, 4);
+  });
+
+  test('factory uses canonical File identity and blocks later legacy sharing',
+      () async {
+    final root = await Directory.systemTemp.createTemp('canonical_edit_factory_');
+    addTearDown(() => root.delete(recursive: true));
+    final photoDirectory = Directory('${root.path}/photos');
+    await photoDirectory.create(recursive: true);
+    final database = AppDatabase.forTesting(
+      NativeDatabase.memory(),
+      profileDirectoryPath: root.path,
+    );
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final systemObjects = SystemObjectStore(
+      database: database,
+      objectStore: objectStore,
+    );
+    final images = ImageObjectService(
+      systemObjects: systemObjects,
+      defaultsStore: ObjectTypeDefaultsStore(genericStore),
+    );
+    final photoStorage = PhotoStorageService(
+      photoDirectoryPath: photoDirectory.path,
+    );
+    final ownershipPolicy = ImageManagedFileDeletionPolicy(
+      database: database,
+      objectStore: objectStore,
+      photoStorage: photoStorage,
+    );
+    final service = CanonicalImageEditService.fromServices(
+      ownershipPolicy: ownershipPolicy,
+      images: images,
+    );
+    final file = File('${photoDirectory.path}/factory.png');
+    await file.writeAsBytes(image.encodePng(image.Image(width: 8, height: 4)));
+    final storedPath = database.pathResolver.toStoredPath(file.path);
+    final imageObject = await images.findOrCreateManaged(
+      workspaceId: workspaceId,
+      filePath: storedPath,
+      pixelWidth: 8,
+      pixelHeight: 4,
+    );
+
+    final editedObject = await service.edit(
+      workspaceId: workspaceId,
+      objectId: imageObject.id,
+      quarterTurns: 1,
+    );
+    final definition = await images.ensureDefinition(workspaceId);
+    expect(editedObject.values[definition.pixelWidthProperty.id], 4);
+    expect(editedObject.values[definition.pixelHeightProperty.id], 8);
+    final bytesBeforeBlockedEdit = await file.readAsBytes();
+
+    await database.addPhoto(path: file.path);
+
+    await expectLater(
+      service.edit(
+        workspaceId: workspaceId,
+        objectId: imageObject.id,
+        quarterTurns: 1,
+      ),
+      throwsA(isA<CanonicalImageEditOwnershipException>()),
+    );
+    expect(await file.readAsBytes(), bytesBeforeBlockedEdit);
   });
 }
