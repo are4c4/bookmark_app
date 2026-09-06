@@ -25,6 +25,9 @@ jobs:
       - name: Maintainability guardrail tests
         run: bash tool/maintainability_report_test.sh
 
+      - name: Maintainability boundary regression ceiling
+        run: bash tool/maintainability_report.sh --max-boundary-refs 12
+
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
