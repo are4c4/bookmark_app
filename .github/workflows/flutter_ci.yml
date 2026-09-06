@@ -28,7 +28,7 @@ jobs:
       - name: Maintainability regression ceilings
         run: >-
           bash tool/maintainability_report.sh
-          --max-boundary-refs 12
+          --max-boundary-refs 9
           --max-legacy-shim-imports 19
           --max-legacy-shims 5
 
