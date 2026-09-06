@@ -2,6 +2,8 @@ import 'package:drift/drift.dart';
 
 import '../domain/object_model.dart';
 import 'generic_database_store.dart';
+import 'object_body_store.dart';
+import 'object_type_defaults_store.dart';
 
 class ObjectStore {
   ObjectStore(this._genericStore);
@@ -147,8 +149,21 @@ class ObjectStore {
   Future<int> createObject({
     required int objectTypeId,
     required String title,
-  }) {
-    return _genericStore.createRecord(databaseId: objectTypeId, title: title);
+  }) async {
+    final bodyTemplate =
+        (await ObjectTypeDefaultsStore(_genericStore).read(objectTypeId))
+            ?.bodyTemplate;
+    final objectId = await _genericStore.createRecord(
+      databaseId: objectTypeId,
+      title: title,
+    );
+    if (bodyTemplate != null) {
+      await ObjectBodyStore(_genericStore).write(
+        objectId: objectId,
+        document: bodyTemplate,
+      );
+    }
+    return objectId;
   }
 
   Future<void> renameObject(int id, String title) =>
