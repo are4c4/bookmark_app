@@ -117,7 +117,15 @@ class DailyNoteService {
           dateKey: dateKey,
           objectId: object.id,
         );
-        return object;
+        final winner = await _registeredObject(
+          workspaceId: workspaceId,
+          dateKey: dateKey,
+          objectTypeId: definition.objectType.id,
+        );
+        if (winner == null) {
+          throw StateError('Daily Note registry did not retain an Object.');
+        }
+        return winner;
       }
     }
 
@@ -189,6 +197,15 @@ class DailyNoteService {
     for (final object in objects) {
       if (object.id == objectId) return object;
     }
+
+    // A registry row is only authoritative when it still resolves to a Daily
+    // Note Object in this ObjectType. Historical/corrupt rows must not block
+    // the date forever through INSERT OR IGNORE on the primary key.
+    await genericStore.database.customStatement(
+      '''DELETE FROM daily_note_registry
+         WHERE workspace_id = ? AND note_date = ? AND object_id = ?''',
+      [workspaceId, dateKey, objectId],
+    );
     return null;
   }
 
