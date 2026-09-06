@@ -1,4 +1,3 @@
-import '../domain/object_body_plain_text.dart';
 import '../domain/object_detail_content.dart';
 import '../domain/object_model.dart';
 import 'object_body_store.dart';
@@ -8,20 +7,19 @@ import 'object_store.dart';
 /// Narrow Object-owned mutation facade for shared detail surfaces.
 ///
 /// Relation mutation is intentionally excluded. Side/center/full-page editors
-/// can use this service for title, ordinary Value Properties and paragraph Body
-/// changes, while Relation edits are delegated to the Relation lane facade.
+/// can use this service for title and ordinary Value Property changes, while
+/// Relation edits are delegated to the Relation lane facade and Body mutations
+/// use the canonical block-oriented Body action path.
 class ObjectDetailEditService {
   ObjectDetailEditService({
     required this.objectStore,
     required this.bodyStore,
     required this.loader,
-    this.bodyAdapter = const ObjectBodyPlainTextAdapter(),
   });
 
   final ObjectStore objectStore;
   final ObjectBodyStore bodyStore;
   final ObjectDetailContentLoader loader;
-  final ObjectBodyPlainTextAdapter bodyAdapter;
 
   Future<ObjectDetailContent> rename({
     required ObjectDetailContent content,
@@ -123,24 +121,6 @@ class ObjectDetailEditService {
       expectedType: ObjectPropertyType.rating,
       value: value,
     );
-  }
-
-  Future<ObjectDetailContent> setPlainTextBody({
-    required ObjectDetailContent content,
-    required String text,
-    required String Function(int index) blockIdForIndex,
-  }) async {
-    final updated = bodyAdapter.write(
-      document: content.body,
-      text: text,
-      blockIdForIndex: blockIdForIndex,
-    );
-    if (updated.isEmpty) {
-      await bodyStore.clear(content.object.id);
-    } else {
-      await bodyStore.write(objectId: content.object.id, document: updated);
-    }
-    return _reload(content);
   }
 
   Future<ObjectDetailContent> _setTypedValue({
