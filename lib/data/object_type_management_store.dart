@@ -1,6 +1,8 @@
 import '../domain/object_model.dart';
+import '../domain/object_type_defaults.dart';
 import 'generic_database_store.dart';
 import 'object_store.dart';
+import 'object_type_defaults_store.dart';
 
 class ObjectTypeManagementStore {
   ObjectTypeManagementStore({
@@ -24,20 +26,25 @@ class ObjectTypeManagementStore {
       throw StateError('System ObjectTypes cannot be duplicated as managed schemas.');
     }
 
+    final defaultsStore = ObjectTypeDefaultsStore(genericStore);
+    final sourceDefaults = await defaultsStore.read(source.id);
+
     return genericStore.database.transaction(() async {
       final duplicatedId = await objectStore.createObjectType(
         workspaceId: source.workspaceId,
         name: name?.trim().isNotEmpty == true ? name!.trim() : '${source.name} のコピー',
         icon: icon?.trim().isNotEmpty == true ? icon!.trim() : source.icon,
       );
+      final duplicatedPropertyIds = <int, int>{};
 
       for (final property in source.properties.where((item) => !item.isRelation)) {
-        await objectStore.createProperty(
+        final duplicatedPropertyId = await objectStore.createProperty(
           objectTypeId: duplicatedId,
           name: property.name,
           type: property.type,
           config: Map<String, dynamic>.from(property.config),
         );
+        duplicatedPropertyIds[property.id] = duplicatedPropertyId;
       }
       for (final property in source.properties.where((item) => item.isRelation)) {
         final sourceTargetId = property.targetObjectTypeId;
@@ -50,11 +57,30 @@ class ObjectTypeManagementStore {
           ..remove('inversePropertyId')
           ..remove('bidirectional')
           ..remove('pairRole');
-        await objectStore.createProperty(
+        final duplicatedPropertyId = await objectStore.createProperty(
           objectTypeId: duplicatedId,
           name: property.name,
           type: ObjectPropertyType.objectRelation,
           config: config,
+        );
+        duplicatedPropertyIds[property.id] = duplicatedPropertyId;
+      }
+
+      if (sourceDefaults != null) {
+        List<int>? remapPropertyIds(List<int>? ids) => ids
+            ?.map((id) => duplicatedPropertyIds[id])
+            .whereType<int>()
+            .toList(growable: false);
+
+        await defaultsStore.write(
+          objectTypeId: duplicatedId,
+          defaults: ObjectTypeDefaults(
+            visiblePropertyIds:
+                remapPropertyIds(sourceDefaults.visiblePropertyIds),
+            propertyOrder: remapPropertyIds(sourceDefaults.propertyOrder),
+            openMode: sourceDefaults.openMode,
+            bodyTemplate: sourceDefaults.bodyTemplate,
+          ),
         );
       }
       return duplicatedId;
