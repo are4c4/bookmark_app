@@ -8,6 +8,14 @@ import 'object_type_defaults_store.dart';
 class ObjectStore {
   ObjectStore(this._genericStore);
 
+  static const _reservedRelationMetadataKeys = <String>{
+    'targetObjectTypeId',
+    'multiple',
+    'bidirectional',
+    'inversePropertyId',
+    'pairRole',
+  };
+
   final GenericDatabaseStore _genericStore;
   Future<void>? _relationSchemaReady;
 
@@ -103,8 +111,20 @@ class ObjectStore {
     required String name,
     required int targetObjectTypeId,
     bool multiple = true,
+    Map<String, dynamic> metadata = const <String, dynamic>{},
     bool allowSystemMutation = false,
   }) async {
+    final reservedKeys = metadata.keys
+        .where(_reservedRelationMetadataKeys.contains)
+        .toList(growable: false);
+    if (reservedKeys.isNotEmpty) {
+      throw ArgumentError.value(
+        metadata,
+        'metadata',
+        'Relation structural and bidirectional metadata is managed by canonical Relation APIs: ${reservedKeys.join(', ')}.',
+      );
+    }
+
     final sourceType = await getObjectType(objectTypeId);
     final targetType = await getObjectType(targetObjectTypeId);
     if (sourceType == null || targetType == null) {
@@ -123,6 +143,7 @@ class ObjectStore {
       name: name,
       type: ObjectPropertyType.objectRelation,
       config: <String, dynamic>{
+        ...metadata,
         'targetObjectTypeId': targetObjectTypeId,
         'multiple': multiple,
       },
