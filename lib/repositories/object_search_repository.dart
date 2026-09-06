@@ -3,6 +3,8 @@ import 'package:drift/drift.dart';
 import '../data/app_database.dart';
 import '../data/generic_database_store.dart';
 import '../data/object_alias_store.dart';
+import '../data/object_body_store.dart';
+import 'object_body_search_text.dart';
 
 class ObjectSearchHit {
   const ObjectSearchHit({
@@ -22,25 +24,27 @@ class ObjectSearchHit {
 
 /// Canonical FTS5 index for Object-level search.
 ///
-/// The first production slice indexes Object titles and aliases. The remaining
-/// text buckets are present from the start so Properties, Body, Relation
-/// labels, Weblink metadata, and derived File text can join the same projection
-/// instead of creating domain-specific search products.
+/// All ObjectTypes share one projection. Domain- and capability-specific
+/// sources contribute user-facing text to dedicated buckets rather than
+/// creating parallel search products.
 class ObjectSearchRepository {
   ObjectSearchRepository(GenericDatabaseStore genericStore)
       : _genericStore = genericStore,
         _database = genericStore.database,
-        _aliasStore = ObjectAliasStore(genericStore);
+        _aliasStore = ObjectAliasStore(genericStore),
+        _bodyStore = ObjectBodyStore(genericStore);
 
   final GenericDatabaseStore _genericStore;
   final AppDatabase _database;
   final ObjectAliasStore _aliasStore;
+  final ObjectBodyStore _bodyStore;
   bool _initialized = false;
 
   Future<void> initialize() async {
     if (_initialized) return;
     await _genericStore.ensureSchema();
     await _aliasStore.ensureSchema();
+    await _bodyStore.ensureSchema();
     await _database.customStatement('''
       CREATE VIRTUAL TABLE IF NOT EXISTS object_search_fts USING fts5(
         object_id UNINDEXED,
@@ -73,56 +77,63 @@ class ObjectSearchRepository {
   Future<void> _insertObjects({
     int? workspaceId,
     int? objectId,
-  }) {
+  }) async {
     if (workspaceId == null && objectId == null) {
       throw ArgumentError('Object search projection insert requires a scope.');
     }
     final conditions = <String>[];
-    final arguments = <Object?>[];
+    final variables = <Variable<Object>>[];
     if (workspaceId != null) {
       conditions.add('d.workspace_id = ?');
-      arguments.add(workspaceId);
+      variables.add(Variable<int>(workspaceId));
     }
     if (objectId != null) {
       conditions.add('r.id = ?');
-      arguments.add(objectId);
+      variables.add(Variable<int>(objectId));
     }
-    return _database.customStatement('''
-      INSERT INTO object_search_fts(
-        object_id,
-        object_type_id,
-        workspace_id,
-        title,
-        aliases,
-        properties,
-        body,
-        relation_labels,
-        weblink_metadata,
-        derived_text
-      )
-      SELECT
-        r.id,
-        r.database_id,
-        d.workspace_id,
-        r.title,
-        COALESCE((
-          SELECT GROUP_CONCAT(ordered_aliases.alias, ' ')
-          FROM (
-            SELECT a.alias
-            FROM object_aliases a
-            WHERE a.object_id = r.id
-            ORDER BY a.position, a.normalized_alias
-          ) AS ordered_aliases
-        ), ''),
-        '',
-        '',
-        '',
-        '',
-        ''
-      FROM generic_records r
-      JOIN generic_databases d ON d.id = r.database_id
-      WHERE ${conditions.join(' AND ')}
-    ''', arguments);
+
+    final rows = await _database.customSelect(
+      '''SELECT
+           r.id AS object_id,
+           r.database_id AS object_type_id,
+           d.workspace_id AS workspace_id,
+           r.title AS title
+         FROM generic_records r
+         JOIN generic_databases d ON d.id = r.database_id
+         WHERE ${conditions.join(' AND ')}
+         ORDER BY r.id''',
+      variables: variables,
+    ).get();
+
+    for (final row in rows) {
+      final currentObjectId = row.read<int>('object_id');
+      final aliases = (await _aliasStore.listAliases(currentObjectId)).join(' ');
+      final body = buildObjectBodySearchText(
+        await _bodyStore.read(currentObjectId),
+      );
+      await _database.customStatement(
+        '''INSERT INTO object_search_fts(
+             object_id,
+             object_type_id,
+             workspace_id,
+             title,
+             aliases,
+             properties,
+             body,
+             relation_labels,
+             weblink_metadata,
+             derived_text
+           ) VALUES (?, ?, ?, ?, ?, '', ?, '', '', '')''',
+        [
+          currentObjectId,
+          row.read<int>('object_type_id'),
+          row.read<int>('workspace_id'),
+          row.read<String>('title'),
+          aliases,
+          body,
+        ],
+      );
+    }
   }
 
   Future<List<int>> _matchingRowIds({
@@ -173,8 +184,8 @@ class ObjectSearchRepository {
   }
 
   /// Refreshes one canonical Object projection by identity alone. A deleted
-  /// Object is naturally removed because the focused INSERT SELECT yields no
-  /// row, and callers cannot accidentally supply a mismatched workspace.
+  /// Object is naturally removed because the focused projection query yields
+  /// no row, and callers cannot accidentally supply a mismatched workspace.
   Future<void> refreshObject(int objectId) async {
     await initialize();
     await _database.transaction(() async {
