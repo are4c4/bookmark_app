@@ -67,61 +67,90 @@ class _ObjectImageDetailPreviewState extends State<ObjectImageDetailPreview> {
   Widget build(BuildContext context) {
     return FutureBuilder<ImageManagedVisual?>(
       future: _visual,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return _frame(
-            context,
-            key: ValueKey('object-image-preview-loading-${widget.objectId}'),
-            child: const Center(child: CircularProgressIndicator()),
-          );
-        }
+      builder: (context, snapshot) => ObjectImageDetailPreviewContent(
+        objectId: widget.objectId,
+        maxHeight: widget.maxHeight,
+        isLoading: snapshot.connectionState != ConnectionState.done,
+        visual: snapshot.data,
+        imageBuilder: widget.imageBuilder,
+      ),
+    );
+  }
+}
 
-        final visual = snapshot.data;
-        if (visual == null) {
-          return _frame(
-            context,
-            key: ValueKey('object-image-preview-missing-${widget.objectId}'),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.broken_image_outlined,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '画像ファイルを表示できません',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                ),
-              ],
+/// Pure presentation layer for [ObjectImageDetailPreview].
+///
+/// Keeping async Object/file resolution outside this widget makes the detail
+/// layout deterministic and lets the resolver keep its own focused coverage.
+class ObjectImageDetailPreviewContent extends StatelessWidget {
+  const ObjectImageDetailPreviewContent({
+    super.key,
+    required this.objectId,
+    required this.isLoading,
+    required this.visual,
+    this.maxHeight = 480,
+    this.imageBuilder,
+  });
+
+  final int objectId;
+  final bool isLoading;
+  final ImageManagedVisual? visual;
+  final double maxHeight;
+  final Widget Function(BuildContext context, String filePath)? imageBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    if (isLoading) {
+      return _frame(
+        context,
+        key: ValueKey('object-image-preview-loading-$objectId'),
+        child: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final resolved = visual;
+    if (resolved == null) {
+      return _frame(
+        context,
+        key: ValueKey('object-image-preview-missing-$objectId'),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.broken_image_outlined,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
-          );
-        }
+            const SizedBox(height: 8),
+            Text(
+              '画像ファイルを表示できません',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+          ],
+        ),
+      );
+    }
 
-        final ratio = visual.aspectRatio;
-        final child = widget.imageBuilder?.call(context, visual.filePath) ??
-            Image.file(
-              File(visual.filePath),
-              width: double.infinity,
-              height: double.infinity,
-              fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => Center(
-                child: Icon(
-                  Icons.broken_image_outlined,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            );
-
-        return _frame(
-          context,
-          key: ValueKey('object-image-preview-${widget.objectId}'),
-          aspectRatio: ratio,
-          child: child,
+    final child = imageBuilder?.call(context, resolved.filePath) ??
+        Image.file(
+          File(resolved.filePath),
+          width: double.infinity,
+          height: double.infinity,
+          fit: BoxFit.contain,
+          errorBuilder: (_, __, ___) => Center(
+            child: Icon(
+              Icons.broken_image_outlined,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
         );
-      },
+
+    return _frame(
+      context,
+      key: ValueKey('object-image-preview-$objectId'),
+      aspectRatio: resolved.aspectRatio,
+      child: child,
     );
   }
 
@@ -148,7 +177,7 @@ class _ObjectImageDetailPreviewState extends State<ObjectImageDetailPreview> {
     if (ratio != null && ratio.isFinite && ratio > 0) {
       return ConstrainedBox(
         key: key,
-        constraints: BoxConstraints(maxHeight: widget.maxHeight),
+        constraints: BoxConstraints(maxHeight: maxHeight),
         child: AspectRatio(aspectRatio: ratio, child: framed),
       );
     }
