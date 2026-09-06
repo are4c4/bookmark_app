@@ -169,8 +169,8 @@ void main() {
     expect(mp3.contentType, 'audio/mpeg');
   });
 
-  test('unsupported AVIF content never falls through to png extension', () {
-    final classification = classifier.classify(
+  test('unsupported image content never falls through to png extension', () {
+    final avif = classifier.classify(
       filename: 'future.png',
       headerBytes: <int>[
         0, 0, 0, 24,
@@ -178,10 +178,32 @@ void main() {
         ...'avif'.codeUnits,
       ],
     );
+    final bmp = classifier.classify(
+      filename: 'bitmap.png',
+      headerBytes: const <int>[0x42, 0x4d, 0, 0, 0, 0],
+    );
+    final tiff = classifier.classify(
+      filename: 'scan.png',
+      headerBytes: const <int>[0x49, 0x49, 0x2a, 0x00, 8, 0, 0, 0],
+    );
+    final icon = classifier.classify(
+      filename: 'icon.png',
+      headerBytes: const <int>[0x00, 0x00, 0x01, 0x00, 1, 0],
+    );
 
-    expect(classification.target, PrimitiveFileImportTarget.file);
-    expect(classification.evidence, PrimitiveFileImportEvidence.content);
-    expect(classification.contentType, 'image/avif');
+    for (final classification in <PrimitiveFileImportClassification>[
+      avif,
+      bmp,
+      tiff,
+      icon,
+    ]) {
+      expect(classification.target, PrimitiveFileImportTarget.file);
+      expect(classification.evidence, PrimitiveFileImportEvidence.content);
+    }
+    expect(avif.contentType, 'image/avif');
+    expect(bmp.contentType, 'image/bmp');
+    expect(tiff.contentType, 'image/tiff');
+    expect(icon.contentType, 'image/x-icon');
   });
 
   test('path classifier reads only enough bytes to identify content', () async {
