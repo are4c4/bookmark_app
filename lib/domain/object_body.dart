@@ -15,7 +15,9 @@ class ObjectBodyDocument {
   final List<ObjectBodyBlock> blocks;
 
   factory ObjectBodyDocument.fromJson(dynamic value) {
-    if (value is! Map) return const ObjectBodyDocument();
+    if (value is! Map) {
+      throw const FormatException('Object body document must be a JSON object.');
+    }
     final rawVersion = value['version'];
     final rawBlocks = value['blocks'];
     final blocks = rawBlocks is List
