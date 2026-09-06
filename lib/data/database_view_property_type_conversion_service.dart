@@ -16,7 +16,7 @@ class PropertyTypeConversionImpact {
     required this.nextType,
     required this.mode,
     required this.objectsWithStoredValue,
-    this.objectsRequiringChoice = const <int>[],
+    this.explicitChoiceOptions = const <int, List<String>>{},
     this.objectsRequiringMigration = const <int>[],
   });
 
@@ -24,8 +24,16 @@ class PropertyTypeConversionImpact {
   final ObjectPropertyType nextType;
   final PropertyTypeConversionMode mode;
   final int objectsWithStoredValue;
-  final List<int> objectsRequiringChoice;
+
+  /// Per-Object values from which the user must explicitly choose before a
+  /// narrowing conversion can proceed. Today this is used by MultiSelect ->
+  /// Select; keeping the choice payload in preflight avoids UI re-parsing raw
+  /// values independently from the conversion contract.
+  final Map<int, List<String>> explicitChoiceOptions;
   final List<int> objectsRequiringMigration;
+
+  List<int> get objectsRequiringChoice =>
+      List<int>.unmodifiable(explicitChoiceOptions.keys);
 
   bool get hasStoredValues => objectsWithStoredValue > 0;
   bool get canApplyWithoutUserValueDecision => switch (mode) {
@@ -66,27 +74,28 @@ class DatabaseViewPropertyTypeConversionService {
       throw StateError('System ObjectType Properties cannot be retyped by users.');
     }
 
-    ObjectPropertyDefinition? property;
+    ObjectPropertyDefinition? found;
     for (final candidate in objectType.properties) {
       if (candidate.id == propertyId) {
-        property = candidate;
+        found = candidate;
         break;
       }
     }
-    if (property == null) {
+    if (found == null) {
       throw ArgumentError.value(
         propertyId,
         'propertyId',
         'Property does not belong to the ObjectType.',
       );
     }
+    final property = found;
     if (!property.isValue || _isManagedValueType(property.type)) {
       throw StateError('Only user-editable Value Properties can use Value type conversion.');
     }
 
     final objects = await objectStore.listObjects(objectTypeId);
     final stored = objects
-        .where((object) => object.values.containsKey(property!.id))
+        .where((object) => object.values.containsKey(property.id))
         .toList(growable: false);
 
     if (nextType == property.type) {
@@ -109,7 +118,10 @@ class DatabaseViewPropertyTypeConversionService {
     final current = property.type;
     if (_preservesStorageWithoutNarrowing(current, nextType)) {
       final invalid = stored
-          .where((object) => !_matchesPreservedShape(current, object.values[property!.id]))
+          .where(
+            (object) =>
+                !_matchesPreservedShape(current, object.values[property.id]),
+          )
           .map((object) => object.id)
           .toList(growable: false);
       return _impact(
@@ -127,7 +139,7 @@ class DatabaseViewPropertyTypeConversionService {
         nextType == ObjectPropertyType.multiSelect) {
       final invalid = stored
           .where((object) {
-            final value = object.values[property!.id];
+            final value = object.values[property.id];
             return value != null && value is! String;
           })
           .map((object) => object.id)
@@ -145,7 +157,7 @@ class DatabaseViewPropertyTypeConversionService {
 
     if (current == ObjectPropertyType.multiSelect &&
         nextType == ObjectPropertyType.select) {
-      final choice = <int>[];
+      final choices = <int, List<String>>{};
       final invalid = <int>[];
       for (final object in stored) {
         final value = object.values[property.id];
@@ -154,16 +166,19 @@ class DatabaseViewPropertyTypeConversionService {
           invalid.add(object.id);
           continue;
         }
+        final seen = <String>{};
         final nonEmpty = value
             .whereType<String>()
             .map((item) => item.trim())
-            .where((item) => item.isNotEmpty)
+            .where((item) => item.isNotEmpty && seen.add(item))
             .toList(growable: false);
-        if (nonEmpty.length > 1) choice.add(object.id);
+        if (nonEmpty.length > 1) {
+          choices[object.id] = List<String>.unmodifiable(nonEmpty);
+        }
       }
       final mode = invalid.isNotEmpty
           ? PropertyTypeConversionMode.requiresMigration
-          : choice.isNotEmpty
+          : choices.isNotEmpty
               ? PropertyTypeConversionMode.requiresExplicitChoice
               : PropertyTypeConversionMode.transformStoredValues;
       return _impact(
@@ -171,7 +186,7 @@ class DatabaseViewPropertyTypeConversionService {
         nextType: nextType,
         mode: mode,
         storedCount: stored.length,
-        choice: choice,
+        choiceOptions: choices,
         migration: invalid,
       );
     }
@@ -179,7 +194,7 @@ class DatabaseViewPropertyTypeConversionService {
     if (current == ObjectPropertyType.number &&
         nextType == ObjectPropertyType.rating) {
       final invalid = stored
-          .where((object) => !_isRatingCompatible(object.values[property!.id]))
+          .where((object) => !_isRatingCompatible(object.values[property.id]))
           .map((object) => object.id)
           .toList(growable: false);
       return _impact(
@@ -258,7 +273,7 @@ class DatabaseViewPropertyTypeConversionService {
     required ObjectPropertyType nextType,
     required PropertyTypeConversionMode mode,
     required int storedCount,
-    List<int> choice = const <int>[],
+    Map<int, List<String>> choiceOptions = const <int, List<String>>{},
     List<int> migration = const <int>[],
   }) =>
       PropertyTypeConversionImpact(
@@ -266,7 +281,12 @@ class DatabaseViewPropertyTypeConversionService {
         nextType: nextType,
         mode: mode,
         objectsWithStoredValue: storedCount,
-        objectsRequiringChoice: List<int>.unmodifiable(choice),
+        explicitChoiceOptions: Map<int, List<String>>.unmodifiable(
+          choiceOptions.map(
+            (objectId, options) =>
+                MapEntry(objectId, List<String>.unmodifiable(options)),
+          ),
+        ),
         objectsRequiringMigration: List<int>.unmodifiable(migration),
       );
 }
