@@ -6,6 +6,12 @@ import '../../../../data/app_database.dart';
 import '../../../../data/object_store.dart';
 import '../../../../services/image_visual_resolver.dart';
 
+typedef ObjectImagePreviewCacheEvictor = Future<void> Function(String filePath);
+typedef ObjectImagePreviewVisualResolver = Future<ImageManagedVisual?> Function({
+  required int objectTypeId,
+  required int objectId,
+});
+
 /// Read-only managed Image preview for the shared Object detail surface.
 ///
 /// The host is responsible for rendering this only for the canonical system
@@ -20,7 +26,10 @@ class ObjectImageDetailPreview extends StatefulWidget {
     required this.objectTypeId,
     required this.objectId,
     this.maxHeight = 480,
+    this.refreshToken = 0,
     this.imageBuilder,
+    this.cacheEvictor,
+    this.visualResolver,
   });
 
   final AppDatabase database;
@@ -28,7 +37,17 @@ class ObjectImageDetailPreview extends StatefulWidget {
   final int objectTypeId;
   final int objectId;
   final double maxHeight;
+
+  /// Increment after a successful same-path byte edit/restore to re-resolve
+  /// persisted geometry and evict Flutter's cached file image before repaint.
+  final int refreshToken;
+
   final Widget Function(BuildContext context, String filePath)? imageBuilder;
+  final ObjectImagePreviewCacheEvictor? cacheEvictor;
+
+  /// Test/presentation seam for the asynchronous visual read. Production hosts
+  /// leave this null and continue using [ImageVisualResolver].
+  final ObjectImagePreviewVisualResolver? visualResolver;
 
   @override
   State<ObjectImageDetailPreview> createState() =>
@@ -47,21 +66,45 @@ class _ObjectImageDetailPreviewState extends State<ObjectImageDetailPreview> {
   @override
   void didUpdateWidget(covariant ObjectImageDetailPreview oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.database != widget.database ||
+    final identityChanged = oldWidget.database != widget.database ||
         oldWidget.objectStore != widget.objectStore ||
         oldWidget.objectTypeId != widget.objectTypeId ||
-        oldWidget.objectId != widget.objectId) {
-      _visual = _resolve();
+        oldWidget.objectId != widget.objectId ||
+        oldWidget.visualResolver != widget.visualResolver;
+    final refreshRequested = oldWidget.refreshToken != widget.refreshToken;
+    if (identityChanged || refreshRequested) {
+      _visual = _resolve(evictCachedFile: refreshRequested && !identityChanged);
     }
   }
 
-  Future<ImageManagedVisual?> _resolve() => ImageVisualResolver(
-        widget.objectStore,
-        pathResolver: widget.database.pathResolver,
-      ).resolveManaged(
-        imageObjectTypeId: widget.objectTypeId,
-        imageObjectId: widget.objectId,
-      );
+  Future<ImageManagedVisual?> _resolve({bool evictCachedFile = false}) async {
+    final customResolver = widget.visualResolver;
+    final visual = customResolver != null
+        ? await customResolver(
+            objectTypeId: widget.objectTypeId,
+            objectId: widget.objectId,
+          )
+        : await ImageVisualResolver(
+            widget.objectStore,
+            pathResolver: widget.database.pathResolver,
+          ).resolveManaged(
+            imageObjectTypeId: widget.objectTypeId,
+            imageObjectId: widget.objectId,
+          );
+    if (evictCachedFile && visual != null) {
+      await _evict(visual.filePath);
+    }
+    return visual;
+  }
+
+  Future<void> _evict(String filePath) async {
+    final custom = widget.cacheEvictor;
+    if (custom != null) {
+      await custom(filePath);
+      return;
+    }
+    await FileImage(File(filePath)).evict();
+  }
 
   @override
   Widget build(BuildContext context) {
