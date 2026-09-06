@@ -10,6 +10,14 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+Future<void> _submitCreate(WidgetTester tester) async {
+  final submit = find.byKey(const ValueKey('property-add-create-submit'));
+  await tester.ensureVisible(submit);
+  await tester.pumpAndSettle();
+  await tester.tap(submit);
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('compact host creates Relation through canonical authoring service',
       (tester) async {
@@ -81,10 +89,7 @@ void main() {
     );
     await tester.tap(find.text('single'));
     await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const ValueKey('property-add-create-submit')),
-    );
-    await tester.pumpAndSettle();
+    await _submitCreate(tester);
 
     expect(createdPropertyId, isNotNull);
     final source = (await objectStore.getObjectType(sourceTypeId))!;
@@ -135,10 +140,7 @@ void main() {
       find.byKey(const ValueKey('property-add-create-name')),
       'Memo',
     );
-    await tester.tap(
-      find.byKey(const ValueKey('property-add-create-submit')),
-    );
-    await tester.pumpAndSettle();
+    await _submitCreate(tester);
 
     expect(createdPropertyId, isNotNull);
     final created = (await objectStore.getObjectType(sourceTypeId))!
