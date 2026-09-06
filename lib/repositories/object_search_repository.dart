@@ -8,6 +8,7 @@ import '../data/object_store.dart';
 import '../data/relation_read_service.dart';
 import '../domain/object_model.dart';
 import 'object_body_search_text.dart';
+import 'object_derived_search_text_store.dart';
 import 'object_property_search_text.dart';
 import 'object_relation_search_text.dart';
 
@@ -38,6 +39,7 @@ class ObjectSearchRepository {
         _database = genericStore.database,
         _aliasStore = ObjectAliasStore(genericStore),
         _bodyStore = ObjectBodyStore(genericStore),
+        _derivedTextStore = ObjectDerivedSearchTextStore(genericStore),
         _objectStore = ObjectStore(genericStore),
         _relationReads = RelationReadService(ObjectStore(genericStore));
 
@@ -45,6 +47,7 @@ class ObjectSearchRepository {
   final AppDatabase _database;
   final ObjectAliasStore _aliasStore;
   final ObjectBodyStore _bodyStore;
+  final ObjectDerivedSearchTextStore _derivedTextStore;
   final ObjectStore _objectStore;
   final RelationReadService _relationReads;
   bool _initialized = false;
@@ -54,6 +57,7 @@ class ObjectSearchRepository {
     await _genericStore.ensureSchema();
     await _aliasStore.ensureSchema();
     await _bodyStore.ensureSchema();
+    await _derivedTextStore.ensureSchema();
     await _database.customStatement('''
       CREATE VIRTUAL TABLE IF NOT EXISTS object_search_fts USING fts5(
         object_id UNINDEXED,
@@ -147,6 +151,7 @@ class ObjectSearchRepository {
           sourceObjectId: currentObjectId,
         ),
       );
+      final derivedText = await _derivedTextStore.readCombined(currentObjectId);
       await _database.customStatement(
         '''INSERT INTO object_search_fts(
              object_id,
@@ -159,7 +164,7 @@ class ObjectSearchRepository {
              relation_labels,
              weblink_metadata,
              derived_text
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', '')''',
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', ?)''',
         [
           currentObjectId,
           objectTypeId,
@@ -169,6 +174,7 @@ class ObjectSearchRepository {
           properties,
           body,
           relationLabels,
+          derivedText,
         ],
       );
     }
