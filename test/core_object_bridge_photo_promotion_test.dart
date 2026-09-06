@@ -7,6 +7,7 @@ import 'package:bookmark_app/data/object_type_defaults_store.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
 import 'package:bookmark_app/data/tag_object_bridge.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
+import 'package:drift/drift.dart' show Variable;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -80,12 +81,10 @@ void main() {
     final link = await database.customSelect(
       'SELECT object_id FROM photo_object_links WHERE workspace_id = ? AND photo_id = ?',
       variables: [
-        driftVariable(workspaceId),
-        driftVariable(photoId),
+        Variable<int>(workspaceId),
+        Variable<int>(photoId),
       ],
     ).getSingle();
     expect(link.read<int>('object_id'), nativeImage.id);
   });
 }
-
-Variable<T> driftVariable<T>(T value) => Variable<T>(value);
