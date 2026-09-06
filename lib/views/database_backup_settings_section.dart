@@ -35,9 +35,7 @@ class DatabaseBackupSettingsSection extends StatelessWidget {
   Future<void> _exportBackup(BuildContext context) async {
     try {
       final path = await (exportBackupFile?.call() ??
-          DatabaseBackupService(
-            repository.workspaceStore.database,
-          ).exportToFile());
+          DatabaseBackupService.fromRepository(repository).exportToFile());
       if (!context.mounted || path == null) return;
       showAppToast(context, 'バックアップを書き出しました');
     } catch (_, stackTrace) {
@@ -53,7 +51,7 @@ class DatabaseBackupSettingsSection extends StatelessWidget {
   }
 
   Future<void> _restoreBackup(BuildContext context) async {
-    final service = DatabaseBackupService(repository.workspaceStore.database);
+    final service = DatabaseBackupService.fromRepository(repository);
     final path = await (chooseBackupFile?.call() ?? service.chooseBackupFile());
     if (path == null || !context.mounted) return;
     final confirmed = await showDialog<bool>(
