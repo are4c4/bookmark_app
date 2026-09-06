@@ -50,6 +50,54 @@ void main() {
     expect(parent.targetObjectTypeId, copyId);
   });
 
+  test('duplicateSchema preserves interleaved Value and Relation Property order',
+      () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final management = ObjectTypeManagementStore(
+      genericStore: genericStore,
+      objectStore: objectStore,
+    );
+
+    final sourceId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Ordered',
+    );
+    await objectStore.createRelationProperty(
+      objectTypeId: sourceId,
+      name: '親',
+      targetObjectTypeId: sourceId,
+      multiple: false,
+    );
+    await objectStore.createProperty(
+      objectTypeId: sourceId,
+      name: '説明',
+      type: ObjectPropertyType.text,
+    );
+    await objectStore.createRelationProperty(
+      objectTypeId: sourceId,
+      name: '関連',
+      targetObjectTypeId: sourceId,
+    );
+    await objectStore.createProperty(
+      objectTypeId: sourceId,
+      name: '評価',
+      type: ObjectPropertyType.number,
+    );
+
+    final copyId = await management.duplicateSchema(objectTypeId: sourceId);
+    final copy = (await objectStore.getObjectType(copyId))!;
+
+    expect(
+      copy.properties.map((item) => item.name).toList(),
+      <String>['親', '説明', '関連', '評価'],
+    );
+    expect(copy.properties.map((item) => item.sortOrder).toList(), <int>[0, 1, 2, 3]);
+  });
+
   test('duplicateSchema remaps reusable defaults and preserves Body template',
       () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
