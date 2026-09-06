@@ -5,6 +5,7 @@ import 'package:bookmark_app/data/generic_database_store.dart';
 import 'package:bookmark_app/data/image_object_service.dart';
 import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/object_type_defaults_store.dart';
+import 'package:bookmark_app/data/profile_path_resolver.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/services/image_visual_resolver.dart';
@@ -51,6 +52,49 @@ void main() {
     expect(visual?.pixelWidth, 600);
     expect(visual?.pixelHeight, 1200);
     expect(visual?.aspectRatio, .5);
+  });
+
+  test('profile-relative Image file resolves against the active profile root',
+      () async {
+    final directory =
+        await Directory.systemTemp.createTemp('image_visual_relative_');
+    addTearDown(() => directory.delete(recursive: true));
+    final managedFile = File('${directory.path}/photos/legacy.img');
+    await managedFile.parent.create(recursive: true);
+    await managedFile.writeAsBytes(const <int>[4, 5, 6]);
+
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final service = ImageObjectService(
+      systemObjects: SystemObjectStore(
+        database: database,
+        objectStore: objectStore,
+      ),
+      defaultsStore: ObjectTypeDefaultsStore(genericStore),
+    );
+    final definition = await service.ensureDefinition(workspaceId);
+    final image = await service.findOrCreateManaged(
+      workspaceId: workspaceId,
+      filePath: 'photos/legacy.img',
+      originalFilename: 'legacy.img',
+      pixelWidth: 320,
+      pixelHeight: 240,
+    );
+
+    final visual = await ImageVisualResolver(
+      objectStore,
+      pathResolver: ProfilePathResolver(directory.path),
+    ).resolveManaged(
+      imageObjectTypeId: definition.objectType.id,
+      imageObjectId: image.id,
+    );
+
+    expect(visual?.imageObjectId, image.id);
+    expect(visual?.filePath, managedFile.path);
+    expect(visual?.aspectRatio, closeTo(4 / 3, .0001));
   });
 
   test('missing managed file fails closed', () async {
