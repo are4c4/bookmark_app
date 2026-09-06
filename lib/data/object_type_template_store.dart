@@ -161,6 +161,31 @@ class ObjectTypeTemplateStore {
         ObjectTypeTemplateView(name: 'すべて', layoutType: 'list'),
       ],
     ),
+    ObjectTypeTemplate(
+      key: 'plant',
+      name: '植物',
+      icon: '🪴',
+      description: '写真、タグ、購入日、育成メモを組み合わせる汎用植物データベース',
+      properties: [
+        ObjectTypeTemplateProperty(
+          name: '写真',
+          type: 'relation',
+          relationTargetSystemKey: 'image',
+          relationMultiple: true,
+        ),
+        ObjectTypeTemplateProperty(
+          name: 'タグ',
+          type: 'relation',
+          relationTargetSystemKey: 'tag',
+          relationMultiple: true,
+        ),
+        ObjectTypeTemplateProperty(name: '購入日', type: 'date'),
+        ObjectTypeTemplateProperty(name: '育成メモ', type: 'text'),
+      ],
+      views: [
+        ObjectTypeTemplateView(name: '一覧', layoutType: 'gallery'),
+      ],
+    ),
   ];
 
   ObjectTypeTemplate? templateByKey(String key) {

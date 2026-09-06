@@ -4,7 +4,10 @@ import '../data/app_database.dart';
 import '../data/generic_database_store.dart';
 import '../data/object_alias_store.dart';
 import '../data/object_body_store.dart';
+import '../data/object_store.dart';
+import '../domain/object_model.dart';
 import 'object_body_search_text.dart';
+import 'object_property_search_text.dart';
 
 class ObjectSearchHit {
   const ObjectSearchHit({
@@ -32,12 +35,14 @@ class ObjectSearchRepository {
       : _genericStore = genericStore,
         _database = genericStore.database,
         _aliasStore = ObjectAliasStore(genericStore),
-        _bodyStore = ObjectBodyStore(genericStore);
+        _bodyStore = ObjectBodyStore(genericStore),
+        _objectStore = ObjectStore(genericStore);
 
   final GenericDatabaseStore _genericStore;
   final AppDatabase _database;
   final ObjectAliasStore _aliasStore;
   final ObjectBodyStore _bodyStore;
+  final ObjectStore _objectStore;
   bool _initialized = false;
 
   Future<void> initialize() async {
@@ -96,8 +101,7 @@ class ObjectSearchRepository {
       '''SELECT
            r.id AS object_id,
            r.database_id AS object_type_id,
-           d.workspace_id AS workspace_id,
-           r.title AS title
+           d.workspace_id AS workspace_id
          FROM generic_records r
          JOIN generic_databases d ON d.id = r.database_id
          WHERE ${conditions.join(' AND ')}
@@ -105,9 +109,31 @@ class ObjectSearchRepository {
       variables: variables,
     ).get();
 
+    final typesById = <int, AppObjectType>{};
+    final objectsByType = <int, Map<int, AppObject>>{};
     for (final row in rows) {
       final currentObjectId = row.read<int>('object_id');
+      final objectTypeId = row.read<int>('object_type_id');
+      var objectType = typesById[objectTypeId];
+      var objectsById = objectsByType[objectTypeId];
+      if (objectType == null || objectsById == null) {
+        objectType = await _objectStore.getObjectType(objectTypeId);
+        if (objectType == null) continue;
+        typesById[objectTypeId] = objectType;
+        final objects = await _objectStore.listObjects(objectTypeId);
+        objectsById = <int, AppObject>{
+          for (final object in objects) object.id: object,
+        };
+        objectsByType[objectTypeId] = objectsById;
+      }
+      final object = objectsById[currentObjectId];
+      if (object == null) continue;
+
       final aliases = (await _aliasStore.listAliases(currentObjectId)).join(' ');
+      final properties = buildObjectPropertiesSearchText(
+        object: object,
+        objectType: objectType,
+      );
       final body = buildObjectBodySearchText(
         await _bodyStore.read(currentObjectId),
       );
@@ -123,13 +149,14 @@ class ObjectSearchRepository {
              relation_labels,
              weblink_metadata,
              derived_text
-           ) VALUES (?, ?, ?, ?, ?, '', ?, '', '', '')''',
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, '', '', '')''',
         [
           currentObjectId,
-          row.read<int>('object_type_id'),
+          objectTypeId,
           row.read<int>('workspace_id'),
-          row.read<String>('title'),
+          object.title,
           aliases,
+          properties,
           body,
         ],
       );
