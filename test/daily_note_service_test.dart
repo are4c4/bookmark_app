@@ -6,6 +6,7 @@ import 'package:bookmark_app/data/object_type_defaults_store.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/domain/object_type_defaults.dart';
+import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -102,5 +103,57 @@ void main() {
     );
     expect(dailyNotes.name, 'Daily Notes');
     expect(dailyNotes.icon, '📅');
+  });
+
+  test('stale registry row cannot permanently block a Daily Note date', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final defaultsStore = ObjectTypeDefaultsStore(genericStore);
+    final service = DailyNoteService(
+      genericStore: genericStore,
+      objectStore: objectStore,
+      systemObjects: SystemObjectStore(
+        database: database,
+        objectStore: objectStore,
+      ),
+      defaultsStore: defaultsStore,
+    );
+
+    await service.ensureRegistry();
+    await service.ensureDefinition(workspaceId);
+    final foreignTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Foreign',
+    );
+    final foreignObjectId = await objectStore.createObject(
+      objectTypeId: foreignTypeId,
+      title: 'Not a Daily Note',
+    );
+    const dateKey = '2026-09-04';
+    await database.customStatement(
+      '''INSERT INTO daily_note_registry(workspace_id, note_date, object_id)
+         VALUES (?, ?, ?)''',
+      [workspaceId, dateKey, foreignObjectId],
+    );
+
+    final note = await service.openOrCreate(
+      workspaceId: workspaceId,
+      date: DateTime(2026, 9, 4),
+    );
+
+    expect(note.id, isNot(foreignObjectId));
+    expect(note.title, dateKey);
+    final registry = await database.customSelect(
+      '''SELECT object_id FROM daily_note_registry
+         WHERE workspace_id = ? AND note_date = ?''',
+      variables: [
+        Variable<int>(workspaceId),
+        const Variable<String>(dateKey),
+      ],
+    ).getSingle();
+    expect(registry.read<int>('object_id'), note.id);
   });
 }
