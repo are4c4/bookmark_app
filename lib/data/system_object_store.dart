@@ -123,15 +123,40 @@ class SystemObjectStore {
     required String name,
     required int targetObjectTypeId,
     bool multiple = true,
-  }) {
-    return ensureProperty(
+  }) async {
+    final sourceType = await objectStore.getObjectType(objectTypeId);
+    final targetType = await objectStore.getObjectType(targetObjectTypeId);
+    if (sourceType == null || targetType == null) {
+      throw ArgumentError(
+        'Relation source and target ObjectTypes must both exist.',
+      );
+    }
+    if (sourceType.workspaceId != targetType.workspaceId) {
+      throw ArgumentError(
+        'Relation source and target ObjectTypes must belong to the same workspace.',
+      );
+    }
+
+    for (final property in sourceType.properties) {
+      if (property.name != name) continue;
+      if (!property.isRelation ||
+          property.targetObjectTypeId != targetObjectTypeId ||
+          property.allowsMultipleRelations != multiple) {
+        throw StateError(
+          'Existing system Property "$name" does not match the required Relation schema.',
+        );
+      }
+      return property;
+    }
+
+    final id = await objectStore.createRelationProperty(
       objectTypeId: objectTypeId,
       name: name,
-      type: ObjectPropertyType.objectRelation,
-      config: <String, dynamic>{
-        'targetObjectTypeId': targetObjectTypeId,
-        'multiple': multiple,
-      },
+      targetObjectTypeId: targetObjectTypeId,
+      multiple: multiple,
+      allowSystemMutation: true,
     );
+    final refreshed = (await objectStore.getObjectType(objectTypeId))!;
+    return refreshed.properties.firstWhere((property) => property.id == id);
   }
 }
