@@ -23,7 +23,9 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Maintainability guardrail tests
-        run: bash tool/maintainability_report_test.sh
+        run: |
+          bash tool/maintainability_report_test.sh
+          bash tool/feature_legacy_dependency_guard_test.sh
 
       - name: Maintainability regression ceilings
         run: >-
@@ -31,6 +33,9 @@ jobs:
           --max-boundary-refs 9
           --max-legacy-shim-imports 18
           --max-legacy-shims 5
+
+      - name: Feature legacy dependency guard
+        run: bash tool/feature_legacy_dependency_guard.sh
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
