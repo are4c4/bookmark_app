@@ -45,21 +45,11 @@ class BookmarkMetadataService {
     final ownedClient = _client == null ? http.Client() : null;
     final client = _client ?? ownedClient!;
     try {
-      final response = await client
-          .get(
-            uri,
-            headers: const {
-              'User-Agent':
-                  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
-                  'AppleWebKit/537.36 bookmark_app/0.1',
-              'Accept': 'text/html,application/xhtml+xml',
-            },
-          )
-          .timeout(const Duration(seconds: 10));
-      final resourceUri = switch (response) {
-        http.BaseResponseWithUrl(:final url) => url,
-        _ => response.request?.url ?? uri,
-      };
+      final fetched = await _fetch(client, uri).timeout(
+        const Duration(seconds: 10),
+      );
+      final response = fetched.response;
+      final resourceUri = fetched.resourceUri;
 
       if (response.statusCode < 200 || response.statusCode >= 400) {
         return _fallback(uri);
@@ -124,6 +114,26 @@ class BookmarkMetadataService {
     } finally {
       ownedClient?.close();
     }
+  }
+
+  Future<({http.Response response, Uri resourceUri})> _fetch(
+    http.Client client,
+    Uri uri,
+  ) async {
+    final request = http.Request('GET', uri)
+      ..headers.addAll(const {
+        'User-Agent':
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
+            'AppleWebKit/537.36 bookmark_app/0.1',
+        'Accept': 'text/html,application/xhtml+xml',
+      });
+    final streamed = await client.send(request);
+    final resourceUri = switch (streamed) {
+      http.BaseResponseWithUrl(:final url) => url,
+      _ => streamed.request?.url ?? uri,
+    };
+    final response = await http.Response.fromStream(streamed);
+    return (response: response, resourceUri: resourceUri);
   }
 
   static void _debugFallbackFailure(Object error, StackTrace stackTrace) {
