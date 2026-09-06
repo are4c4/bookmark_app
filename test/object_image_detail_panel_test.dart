@@ -45,6 +45,7 @@ void main() {
       pixelHeight: 2,
     );
     final evicted = <String>[];
+    var hostRefreshes = 0;
     final editService = CanonicalImageEditService(
       resolveStoredFile: ({required workspaceId, required objectId}) async {
         expect(workspaceId, greaterThan(0));
@@ -80,6 +81,7 @@ void main() {
             objectTypeId: definition.objectType.id,
             objectId: imageObject.id,
             editService: editService,
+            onChanged: () => hostRefreshes++,
             previewCacheEvictor: (path) async => evicted.add(path),
             previewImageBuilder: (_, path) => Text(path),
           ),
@@ -103,12 +105,14 @@ void main() {
     await pumpUntil(rotateRightEnabled);
     expect(find.text(managedFile.path), findsOneWidget);
     expect(evicted, isEmpty);
+    expect(hostRefreshes, 0);
 
     await tester.tap(find.byKey(const ValueKey('object-image-rotate-right')));
     await pumpUntil(() => evicted.length == 1);
     await pumpUntil(rotateRightEnabled);
 
     expect(evicted, [managedFile.path]);
+    expect(hostRefreshes, 1);
     final persisted = (await objectStore.listObjects(definition.objectType.id))
         .singleWhere((object) => object.id == imageObject.id);
     expect(persisted.values[definition.pixelWidthProperty.id], 2);
