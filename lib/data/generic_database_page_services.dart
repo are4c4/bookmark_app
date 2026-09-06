@@ -14,7 +14,11 @@ import 'daily_note_service.dart';
 import 'database_collection_config_service.dart';
 import 'database_collection_resolver.dart';
 import 'database_collection_store.dart';
+import 'database_property_authoring_service.dart';
 import 'database_view_open_mode_service.dart';
+import 'database_view_property_schema_service.dart';
+import 'database_view_property_type_conversion_service.dart';
+import 'database_view_property_type_migration_service.dart';
 import 'database_view_store.dart';
 import 'generic_database_collection_page_data.dart';
 import 'generic_database_object_create_service.dart';
@@ -33,6 +37,7 @@ import 'object_store.dart';
 import 'object_type_defaults_store.dart';
 import 'object_type_management_store.dart';
 import 'relation_mutation_service.dart';
+import 'relation_schema_evolution_service.dart';
 import 'relation_target_service.dart';
 import 'system_object_store.dart';
 import 'weblink_object_service.dart';
@@ -40,11 +45,11 @@ import 'workspace_store.dart';
 
 /// Composition root for Object-owned services consumed by GenericDatabasePage.
 ///
-/// Keeping the canonical collection, creation, Relation and Object-opening
-/// adapters assembled in one place reduces the amount of dependency wiring that
-/// the large page must own during the ObjectType != Database migration. Behavior
-/// remains delegated to the focused services rather than being reimplemented
-/// here.
+/// Keeping the canonical collection, creation, Relation, schema-authoring and
+/// Object-opening adapters assembled in one place reduces the amount of
+/// dependency wiring that the large page must own during the ObjectType !=
+/// Database migration. Behavior remains delegated to focused services rather
+/// than being reimplemented here.
 class GenericDatabasePageServices {
   const GenericDatabasePageServices({
     required this.genericStore,
@@ -54,6 +59,11 @@ class GenericDatabasePageServices {
     required this.imageImport,
     required this.relationEditor,
     required this.relationMutations,
+    required this.propertyAuthoring,
+    required this.propertySchema,
+    required this.relationSchemaEvolution,
+    required this.valueTypeConversion,
+    required this.valueTypeMigration,
     required this.collectionConfig,
     required this.openPresentation,
     required this.stateLoader,
@@ -125,6 +135,23 @@ class GenericDatabasePageServices {
       ),
     );
     final viewStore = DatabaseViewStore(genericStore.database);
+    final propertyAuthoring = DatabasePropertyAuthoringService(objectStore);
+    final propertySchema = DatabaseViewPropertySchemaService(
+      objectStore: objectStore,
+      genericStore: genericStore,
+      viewStore: viewStore,
+    );
+    final relationSchemaEvolution = RelationSchemaEvolutionService(
+      objectStore: objectStore,
+      genericStore: genericStore,
+      relationMutations: relationMutations,
+    );
+    final valueTypeConversion =
+        DatabaseViewPropertyTypeConversionService(objectStore);
+    final valueTypeMigration = DatabaseViewPropertyTypeMigrationService(
+      genericStore: genericStore,
+      objectStore: objectStore,
+    );
     final identitySearch = ObjectIdentitySearchService(
       objectStore: objectStore,
       aliasStore: ObjectAliasStore(genericStore),
@@ -189,6 +216,11 @@ class GenericDatabasePageServices {
         identitySearch: identitySearch,
       ),
       relationMutations: relationMutations,
+      propertyAuthoring: propertyAuthoring,
+      propertySchema: propertySchema,
+      relationSchemaEvolution: relationSchemaEvolution,
+      valueTypeConversion: valueTypeConversion,
+      valueTypeMigration: valueTypeMigration,
       collectionConfig: DatabaseCollectionConfigService(
         collectionStore: collectionStore,
         objectStore: objectStore,
@@ -221,6 +253,11 @@ class GenericDatabasePageServices {
   final GenericDatabaseImageImportService imageImport;
   final ObjectRelationEditorService relationEditor;
   final RelationMutationService relationMutations;
+  final DatabasePropertyAuthoringService propertyAuthoring;
+  final DatabaseViewPropertySchemaService propertySchema;
+  final RelationSchemaEvolutionService relationSchemaEvolution;
+  final DatabaseViewPropertyTypeConversionService valueTypeConversion;
+  final DatabaseViewPropertyTypeMigrationService valueTypeMigration;
   final DatabaseCollectionConfigService collectionConfig;
   final ObjectOpenPresentationService openPresentation;
   final GenericDatabasePageStateLoader stateLoader;
