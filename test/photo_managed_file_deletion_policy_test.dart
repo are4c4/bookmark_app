@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/core_object_bridge.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
@@ -107,6 +109,44 @@ void main() {
       await policy.shouldPreserve(
         legacyPhotoId: photoId,
         filePath: 'photos/shared.jpg',
+      ),
+      isTrue,
+    );
+  });
+
+  test('relative Photo and absolute Image resolving to one profile file preserve it',
+      () async {
+    final directory =
+        await Directory.systemTemp.createTemp('resolved_image_ownership_');
+    addTearDown(() => directory.delete(recursive: true));
+    final database = AppDatabase.forTesting(
+      NativeDatabase.memory(),
+      profileDirectoryPath: directory.path,
+    );
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final systemObjects = SystemObjectStore(
+      database: database,
+      objectStore: objectStore,
+    );
+    final images = ImageObjectService(
+      systemObjects: systemObjects,
+      defaultsStore: ObjectTypeDefaultsStore(genericStore),
+    );
+    await images.findOrCreateManaged(
+      workspaceId: workspaceId,
+      filePath: '${directory.path}/photos/resolved.jpg',
+      title: 'Absolute native image',
+    );
+    final photoId = await database.addPhoto(path: 'photos/resolved.jpg');
+
+    final policy = PhotoManagedFileDeletionPolicy(database);
+    expect(
+      await policy.shouldPreserve(
+        legacyPhotoId: photoId,
+        filePath: 'photos/resolved.jpg',
       ),
       isTrue,
     );
