@@ -153,17 +153,24 @@ class ObjectStore {
     final bodyTemplate =
         (await ObjectTypeDefaultsStore(_genericStore).read(objectTypeId))
             ?.bodyTemplate;
-    final objectId = await _genericStore.createRecord(
-      databaseId: objectTypeId,
-      title: title,
-    );
+    final bodyStore = ObjectBodyStore(_genericStore);
     if (bodyTemplate != null) {
-      await ObjectBodyStore(_genericStore).write(
-        objectId: objectId,
-        document: bodyTemplate,
-      );
+      await bodyStore.ensureSchema();
     }
-    return objectId;
+
+    return _genericStore.database.transaction(() async {
+      final objectId = await _genericStore.createRecord(
+        databaseId: objectTypeId,
+        title: title,
+      );
+      if (bodyTemplate != null) {
+        await bodyStore.write(
+          objectId: objectId,
+          document: bodyTemplate,
+        );
+      }
+      return objectId;
+    });
   }
 
   Future<void> renameObject(int id, String title) =>
