@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:drift/drift.dart';
 
 import '../domain/object_model.dart';
@@ -203,6 +205,7 @@ class CoreObjectBridge {
         photoType: photoType,
         legacyIdProperty: legacyId,
       );
+      if (link == null) continue;
       if (link.legacyOwned) {
         await objectStore.renameObject(link.object.id, title);
         await objectStore.setPropertyValue(
@@ -403,6 +406,17 @@ class CoreObjectBridge {
     return slash < 0 ? normalized : normalized.substring(slash + 1);
   }
 
+  Future<bool> _storedPhotoFileExists(String storedPath) async {
+    try {
+      final resolved = database.pathResolver.resolveStoredPath(storedPath);
+      return await File(resolved).exists();
+    } catch (_) {
+      // File-system lookup is a compatibility gate only. Keep the legacy Photo
+      // row untouched and retry promotion on a later sync if media reappears.
+      return false;
+    }
+  }
+
   Future<void> _setStringIfMissing(
     AppObject object,
     ObjectPropertyDefinition property,
@@ -442,7 +456,7 @@ class CoreObjectBridge {
     }
   }
 
-  Future<_PhotoObjectLink> _ensurePhotoLinkedObject({
+  Future<_PhotoObjectLink?> _ensurePhotoLinkedObject({
     required int workspaceId,
     required int legacyId,
     required String filePath,
@@ -467,6 +481,12 @@ class CoreObjectBridge {
       }
       throw StateError('Linked Image Object $existing does not exist.');
     }
+
+    // A first promotion must not mint a canonical Image around a broken legacy
+    // file reference. Resolve only for the existence check; the original stored
+    // path remains the Image identity so relative/absolute identities are not
+    // silently rewritten or conflated. Missing media stays retryable.
+    if (!await _storedPhotoFileExists(filePath)) return null;
 
     final existingIds = (await objectStore.listObjects(photoType.id))
         .map((object) => object.id)
