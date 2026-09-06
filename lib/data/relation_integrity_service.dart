@@ -126,7 +126,8 @@ class RelationIntegrityService {
         final validTargetIds = targetObjects.map((object) => object.id).toSet();
 
         final hasPairMetadata = property.config['bidirectional'] == true ||
-            property.config['inversePropertyId'] != null;
+            property.config['inversePropertyId'] != null ||
+            property.config['pairRole'] != null;
         BidirectionalRelationPair? pair;
         if (hasPairMetadata) {
           pair = await bidirectionalStore.pairFor(property);
