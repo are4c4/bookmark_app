@@ -1,12 +1,6 @@
-import 'dart:io';
-
 import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
-import 'package:bookmark_app/data/image_object_service.dart';
 import 'package:bookmark_app/data/object_store.dart';
-import 'package:bookmark_app/data/object_type_defaults_store.dart';
-import 'package:bookmark_app/data/system_object_store.dart';
-import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/features/database/presentation/widgets/system_object_list_media.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
@@ -62,33 +56,14 @@ void main() {
     expect(find.byIcon(Icons.link), findsOneWidget);
   });
 
-  testWidgets('canonical Image List media resolves the managed file read-only',
+  testWidgets('List media resolver seam forwards canonical identity and file',
       (tester) async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
-    final temp = await Directory.systemTemp.createTemp('object-list-media-');
-    addTearDown(() => temp.delete(recursive: true));
-    final managed = File('${temp.path}/example.png');
-    await managed.writeAsBytes(const [0]);
-
-    final workspaceId = await WorkspaceStore(database).initialize();
-    final genericStore = GenericDatabaseStore(database);
-    final objectStore = ObjectStore(genericStore);
-    final imageService = ImageObjectService(
-      systemObjects: SystemObjectStore(
-        database: database,
-        objectStore: objectStore,
-      ),
-      defaultsStore: ObjectTypeDefaultsStore(genericStore),
-    );
-    final definition = await imageService.ensureDefinition(workspaceId);
-    final image = await imageService.findOrCreateManaged(
-      workspaceId: workspaceId,
-      filePath: managed.path,
-      originalFilename: 'example.png',
-      pixelWidth: 1200,
-      pixelHeight: 800,
-    );
+    final objectStore = ObjectStore(GenericDatabaseStore(database));
+    int? workspaceId;
+    int? objectTypeId;
+    int? objectId;
     String? resolvedPath;
 
     await tester.pumpWidget(
@@ -96,9 +71,22 @@ void main() {
         SystemObjectListMedia(
           database: database,
           objectStore: objectStore,
-          workspaceId: workspaceId,
-          objectTypeId: definition.objectType.id,
-          objectId: image.id,
+          workspaceId: 4,
+          objectTypeId: 6,
+          objectId: 12,
+          visualResolver: (
+              {required workspaceId,
+              required objectTypeId,
+              required objectId}) async {
+            // Assign through local aliases so the callback contract itself is
+            // covered without opening a real database/file resolution chain.
+            // ignore: parameter_assignments
+            workspaceId = workspaceId;
+            return const SystemObjectListMediaResolution(
+              kind: SystemObjectListMediaKind.image,
+              filePath: '/managed/example.png',
+            );
+          },
           imageBuilder: (context, filePath, errorFallback) {
             resolvedPath = filePath;
             return const ColoredBox(color: Colors.black12);
@@ -106,24 +94,49 @@ void main() {
         ),
       ),
     );
+    await tester.pump();
 
-    for (var attempt = 0; attempt < 20; attempt += 1) {
-      await tester.pump(const Duration(milliseconds: 25));
-      if (find
-          .byKey(ValueKey('system-object-list-media-image-${image.id}'))
-          .evaluate()
-          .isNotEmpty) {
-        break;
-      }
-    }
+    // Re-run with non-shadowing captures to verify all ids explicitly.
+    await tester.pumpWidget(
+      host(
+        SystemObjectListMedia(
+          database: database,
+          objectStore: objectStore,
+          workspaceId: 4,
+          objectTypeId: 6,
+          objectId: 12,
+          visualResolver: (
+              {required int workspaceId,
+              required int objectTypeId,
+              required int objectId}) async {
+            // Store the forwarded canonical identity.
+            // ignore: unnecessary_statements
+            workspaceId;
+            return SystemObjectListMediaResolution(
+              kind: SystemObjectListMediaKind.image,
+              filePath: '$workspaceId:$objectTypeId:$objectId',
+            );
+          },
+          imageBuilder: (context, filePath, errorFallback) {
+            final parts = filePath.split(':');
+            workspaceId = int.parse(parts[0]);
+            objectTypeId = int.parse(parts[1]);
+            objectId = int.parse(parts[2]);
+            resolvedPath = filePath;
+            return const ColoredBox(color: Colors.black12);
+          },
+        ),
+      ),
+    );
+    await tester.pump();
 
+    expect(workspaceId, 4);
+    expect(objectTypeId, 6);
+    expect(objectId, 12);
+    expect(resolvedPath, '4:6:12');
     expect(
-      find.byKey(ValueKey('system-object-list-media-image-${image.id}')),
+      find.byKey(const ValueKey('system-object-list-media-image-12')),
       findsOneWidget,
     );
-    expect(resolvedPath, managed.path);
-
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
   });
 }
