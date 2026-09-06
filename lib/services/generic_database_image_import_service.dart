@@ -39,6 +39,36 @@ class GenericDatabaseImageImportService {
     return _createImported(databaseId: databaseId, imported: imported);
   }
 
+  /// Imports one source that has already been classified as a supported Image
+  /// by the canonical primitive router.
+  ///
+  /// Unlike the legacy picker path, this does not trust the source extension:
+  /// `image/png` content named `document.pdf` is copied into managed Image
+  /// storage with a codec-appropriate managed extension while preserving the
+  /// original filename as provenance.
+  Future<int> importClassifiedPath({
+    required int databaseId,
+    required String sourcePath,
+    required String contentType,
+  }) async {
+    final photo = await photoStorage.importClassifiedImagePath(
+      sourcePath: sourcePath,
+      contentType: contentType,
+      reuseIdentical: true,
+    );
+    if (photo == null) {
+      throw StateError('Classified Image source is not available.');
+    }
+    final objectIds = await _createImported(
+      databaseId: databaseId,
+      imported: <ImportedPhoto>[photo],
+    );
+    if (objectIds.length != 1) {
+      throw StateError('Classified Image import did not resolve one Object.');
+    }
+    return objectIds.single;
+  }
+
   Future<List<int>> _createImported({
     required int databaseId,
     required List<ImportedPhoto> imported,
@@ -54,7 +84,7 @@ class GenericDatabaseImageImportService {
             databaseId: databaseId,
             filePath: photo.path,
             originalFilename: photo.originalName,
-            contentType: _contentType(photo.originalName),
+            contentType: photo.contentType ?? _contentType(photo.originalName),
             pixelWidth: geometry?.width,
             pixelHeight: geometry?.height,
           ),
