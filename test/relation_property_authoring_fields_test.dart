@@ -56,8 +56,8 @@ void main() {
     expect(find.text('Image'), findsOneWidget);
     expect(find.text('Weblink'), findsOneWidget);
     expect(find.text('Plant'), findsOneWidget);
-    expect(find.text('組み込み'), findsNWidgets(2));
-    expect(find.text('カスタム'), findsOneWidget);
+    expect(find.text('組み込み ObjectType'), findsNWidgets(2));
+    expect(find.text('カスタム ObjectType'), findsOneWidget);
 
     await tester.enterText(
       find.byKey(const ValueKey('relation-property-target-search')),
