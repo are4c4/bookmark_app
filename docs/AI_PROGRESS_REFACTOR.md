@@ -8,7 +8,7 @@ Issue #225 — reduce maintenance hotspots and retire duplicate/unused legacy pa
 Primary lane: **G — Refactor & Architecture Health**. Object Core owns shared Object/Body product semantics, Relations owns canonical Relation semantics, Database/View owns Database presentation semantics, Primitive Objects & Media owns Weblink/Image/File/etc. product behavior, Search owns indexing/query semantics, and Storage/Vault owns storage/delivery behavior. Lane G owns measurable responsibility reduction, proven caller-zero retirement, failure-policy/privacy cleanup, maintainability guardrails, architecture-health audits, AppDatabase responsibility reduction, and incremental legacy shim retirement.
 
 ## Current checkpoint — 2026-09-07
-Latest verified `main`: **`6e6b1bdb737b513fb2f7fe40c94012c3783c703b`** after Refactor **#541**.
+Lane G integration checkpoint: **`6e6b1bdb737b513fb2f7fe40c94012c3783c703b`** after Refactor **#541**. Latest `main` observed during this handoff refresh: **`735c8be7bba099b9c5b253ff3bb509caafae9086`** after Primitive **#528**. Re-read current `main` before the next edit because parallel lanes move rapidly.
 
 Integrated in the current Lane G run:
 - **#510 merged** as `1c998a4136e9671a3b5ca4d2d2f32032e195d835` — remove duplicated numeric ceilings from `maintainability_report.sh --help`; point to CI as the source of truth and guard that contract with a regression.
