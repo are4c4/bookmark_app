@@ -1,4 +1,5 @@
 import 'dart:developer' as developer;
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 
@@ -13,6 +14,7 @@ import 'services/profile_manager.dart';
 import 'services/profile_storage_migrator.dart';
 import 'services/vault_lifecycle_controller.dart';
 import 'services/vault_lifecycle_scope.dart';
+import 'services/vault_move_lifecycle_controller.dart';
 import 'ui/ui_tokens.dart';
 import 'views/app_shell.dart';
 import 'views/vault_startup_recovery_gate.dart';
@@ -294,6 +296,126 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
     }
   }
 
+  bool _sameDirectory(String left, String right) =>
+      Directory(left).absolute.path == Directory(right).absolute.path;
+
+  Future<void> _prepareActiveVaultMove(DatabaseProfile source) async {
+    final manager = _profileManager;
+    final database = _database;
+    if (!mounted ||
+        manager == null ||
+        database == null ||
+        manager.state.activeProfile.id != source.id ||
+        _switching) {
+      throw StateError('Active Vault is not ready to move.');
+    }
+
+    await database.customStatement('PRAGMA wal_checkpoint(FULL)');
+    final lifecycle = _lifecycleStore;
+    setState(() {
+      _switching = true;
+      _repository = null;
+    });
+    await WidgetsBinding.instance.endOfFrame;
+
+    try {
+      await lifecycle?.dispose();
+      await database.close();
+      _database = null;
+      _workspaceStore = null;
+      _lifecycleStore = null;
+    } catch (error, stackTrace) {
+      _database = null;
+      _workspaceStore = null;
+      _lifecycleStore = null;
+      try {
+        await _reopenVaultAfterMove(source);
+      } catch (_, restoreStackTrace) {
+        _debugBootstrapFailure(
+          'Vault move prepare rollback failed.',
+          restoreStackTrace,
+        );
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+  }
+
+  Future<void> _reopenVaultAfterMove(DatabaseProfile expected) async {
+    final manager = await ProfileManager.load();
+    final profile = manager.state.activeProfile;
+    if (profile.id != expected.id ||
+        !_sameDirectory(profile.directoryPath, expected.directoryPath)) {
+      throw StateError('Vault registry does not point to the expected location.');
+    }
+
+    final database = AppDatabase(
+      databaseName: profile.databaseName,
+      profileDirectoryPath: profile.directoryPath,
+    );
+    try {
+      final repository = await _openRepository(database, profile);
+      if (!mounted) {
+        await _lifecycleStore?.dispose();
+        await database.close();
+        return;
+      }
+      setState(() {
+        _profileManager = manager;
+        _database = database;
+        _repository = repository;
+        _switching = false;
+        _error = null;
+        _profileLoadFailed = false;
+      });
+    } catch (error, stackTrace) {
+      try {
+        await _lifecycleStore?.dispose();
+      } catch (_, cleanupStackTrace) {
+        _debugBootstrapFailure(
+          'Vault move lifecycle cleanup failed.',
+          cleanupStackTrace,
+        );
+      }
+      try {
+        await database.close();
+      } catch (_, cleanupStackTrace) {
+        _debugBootstrapFailure(
+          'Vault move database cleanup failed.',
+          cleanupStackTrace,
+        );
+      }
+      _database = null;
+      _workspaceStore = null;
+      _lifecycleStore = null;
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+  }
+
+  Future<void> _moveActiveVault() async {
+    final manager = _profileManager;
+    if (manager == null || _switching) return;
+    final source = manager.state.activeProfile;
+    final move = VaultMoveLifecycleController.fromServices(
+      prepareSource: _prepareActiveVaultMove,
+      activateTarget: _reopenVaultAfterMove,
+      restoreSource: _reopenVaultAfterMove,
+    );
+
+    try {
+      await move.moveActiveVault(source);
+    } catch (error, stackTrace) {
+      _debugBootstrapFailure('Vault move failed.', stackTrace);
+      if (mounted && _repository == null) {
+        setState(() {
+          _switching = false;
+          _error = error;
+          _profileLoadFailed = false;
+        });
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+  }
+
   @override
   void dispose() {
     _lifecycleStore?.dispose();
@@ -450,6 +572,7 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
           await vaultLifecycle.openVault();
         },
         switchVault: vaultLifecycle.switchVault,
+        moveVault: _moveActiveVault,
         child: GlobalFileDropLayer(
           repository: repository,
           child: BookmarkAppShell(
