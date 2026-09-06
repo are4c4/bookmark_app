@@ -42,11 +42,10 @@ Canonical Image is already advanced: managed import/reuse, legacy Photo mirrorin
 ### 2026-09-07 — canonical File / shared file-backed foundation
 Active implementation: #484, #489, #495.
 
-Branch / PR:
-- `feature/primitives-file-capability-484`
-- PR #512 — `Add canonical File primitive and shared file-backed capability`
+Merged foundation:
+- PR #512 — `Add canonical File primitive and shared file-backed capability`, merged as `29cc878f8b13b4795506ca6a3d28fd192780b618`.
 
-Implemented in PR #512:
+Implemented in #512:
 - canonical system `File` ObjectType service with managed File identity, original filename, normalized content type, extension, byte size, and imported timestamp;
 - profile/Vault-relative stored-path normalization through the existing `ProfilePathResolver` contract;
 - deterministic File reimport reuse by canonical stored path while preserving existing non-empty metadata;
@@ -57,32 +56,51 @@ Implemented in PR #512:
 - one `PrimitiveFileImportClassifier` implements #495 routing precedence `content signature > meaningful MIME > extension fallback`, routing supported JPEG/PNG/GIF/WebP/HEIC/HEIF to Image and PDF/ZIP/unsupported/unknown content to File;
 - diagnostics for new file capability/classification code do not log raw user file paths or exception text.
 
-Tests added:
-- `test/managed_file_resolver_test.dart`
-- `test/file_object_service_test.dart`
-- `test/generic_database_file_create_service_test.dart`
-- `test/primitive_file_import_classifier_test.dart`
-- `test/file_managed_resource_resolver_test.dart`
-- existing `test/image_visual_resolver_test.dart` remains the Image regression boundary after shared resolver adoption.
+Validation for #512:
+- maintainability guardrails, Drift generation, `flutter analyze`, and full `flutter test` passed before merge.
+
+### 2026-09-07 — exclusive primitive import orchestration
+Active branch / PR:
+- `feature/primitives-import-router-495`
+- PR #528 — `Add exclusive Image/File primitive import router`
+
+Implemented in #528:
+- adds `PrimitiveObjectImportService` as the single Image-vs-File orchestration boundary after classification;
+- each source path is first required to be an available regular file, then classified through the canonical `PrimitiveFileImportClassifier`;
+- delegates to exactly one injected canonical Image or File importer and forwards classifier-derived content type;
+- selected-importer failure propagates and never falls through to the other primitive, preventing one user action from creating both Image and File Objects after a partial failure;
+- non-positive Object ids returned by a delegate are rejected fail-closed without alternate-target retry;
+- multi-file imports preserve source order, validate/classify each source independently, and perform exactly one delegation per source;
+- no new filesystem-copy abstraction is introduced: managed File copying remains a Storage/Vault coordination dependency.
+
+Focused tests in #528:
+- disguised PDF named as an image routes only to File using content evidence;
+- disguised PNG named as a document routes only to Image using content evidence;
+- selected Image importer failure never falls through to File;
+- missing source fails before either importer runs;
+- invalid/non-positive delegate Object id fails without alternate primitive retry;
+- mixed multi-file input routes each source exactly once and preserves source order.
+
+Concurrency notes:
+- a second overlapping PR #534 was detected during the latest concurrency audit and closed unmerged as a duplicate of #528;
+- its two useful stricter checks were folded into #528 instead of keeping parallel router services;
+- #528 edits only a primitive service, its focused test, and this handoff; it does not touch `generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, Relation internals, Vault switching, or legacy Bookmark hosts.
 
 Validation:
-- repository maintainability guardrail tests pass on PR #512;
-- maintainability regression ceilings pass;
-- Drift generation passes;
-- the first CI analyze run exposed only two invalid `const` constructors introduced around runtime resolver composition; both were corrected without behavior changes;
-- latest full analyze/test CI must be green before merge; local Flutter validation is unavailable in this execution environment.
+- the earlier #528 head passed maintainability guardrails, Drift generation, `flutter analyze`, and the full test suite;
+- #528 was refreshed onto latest main and strengthened with missing-source/Object-id fail-closed checks, so the refreshed head requires CI again before merge;
+- local Flutter/Dart validation is unavailable in this connector execution environment.
 
-Hotspot / concurrency notes:
-- PR #512 deliberately does not edit `generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, or Relation internals;
-- File UI create-mode wiring is intentionally deferred until a canonical managed-copy/import boundary is composed, avoiding a visible but unusable system collection;
-- open Image editing work was checked before this slice; the shared Image change is limited to read-only path/existence resolution.
+Exact next actions:
+1. Fix/merge refreshed PR #528 only after CI is green.
+2. Coordinate a Storage-owned canonical managed-copy callback for generic File imports, reusing/evolving the existing `<profile>/attachments` boundary rather than creating another generic file root.
+3. Compose `PrimitiveObjectImportService` with the existing canonical Image import path plus that File managed-copy/create callback; add end-to-end duplicate/reimport/rollback coverage proving one user action creates only one primitive.
+4. Once the import composition exists, expose File creation/import in the generic Database host with a patch-sized hotspot lease and add open/reveal/export behavior through the shared file-backed capability.
+5. Add PDF-on-File enrichment/preview in optional capability services; do not create a PDF ObjectType or persistence model.
+6. Continue #245 Image real-host parity / legacy Photo retirement and #155 Weblink legacy retirement only where replacement paths are already proven and concurrent hotspot ownership is clear.
 
-Exact next actions after PR #512:
-1. Compose a single managed import orchestration boundary for #495 that classifies one user action and delegates to exactly one canonical Image or File identity path.
-2. Coordinate generic File copying/ownership/safe deletion with the Storage/Vault lane, reusing the existing profile attachment boundary where appropriate rather than inventing another filesystem subsystem.
-3. Once that import boundary exists, expose File creation in the generic Database host with a patch-sized hotspot lease and add open/reveal/export behavior through the shared file-backed capability.
-4. Add PDF-on-File enrichment/preview in optional capability services; do not create a PDF ObjectType or persistence model.
-5. Continue #245 Image real-host parity / legacy Photo retirement and #155 Weblink legacy retirement only where replacement paths are already proven and concurrent hotspot ownership is clear.
+## Stop reason
+Current implementation checkpoint is refreshed PR #528. Independent File-copy composition is intentionally blocked on the Storage-owned managed-copy seam; do not invent a duplicate filesystem abstraction merely to continue.
 
 ## Handoff checklist
 Record active Issue, branch/PR/commit, tests, native capability/storage dependencies, hotspot ownership, exact next actions, and stop reason.
