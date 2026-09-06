@@ -55,6 +55,7 @@ void main() {
     );
 
     await bridge.syncAll(workspaceId);
+    await bridge.syncAll(workspaceId);
 
     final imageType = await systemStore.getSystemObjectType(
       workspaceId: workspaceId,
@@ -87,6 +88,8 @@ void main() {
 
     final images = await objectStore.listObjects(imageType!.id);
     final bookmarks = await objectStore.listObjects(bookmarkType!.id);
+    expect(images, hasLength(1));
+    expect(bookmarks, hasLength(1));
     expect(images.single.title, '表紙');
     final fileProperty = imageType.properties.firstWhere((p) => p.name == 'File');
     final noteProperty = imageType.properties.firstWhere((p) => p.name == 'Note');
