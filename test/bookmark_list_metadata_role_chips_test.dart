@@ -127,4 +127,52 @@ void main() {
     expect(find.text('example.com'), findsOneWidget);
     expect(find.text('未読'), findsOneWidget);
   });
+
+  testWidgets('long semantic chip labels stay bounded', (tester) async {
+    const longName =
+        'とても長い人物名であってもBookmarkのList行全体を押し広げないための表示名';
+    final person = Person(
+      id: 10,
+      name: longName,
+      createdAt: DateTime(2026, 9, 6),
+    );
+    final bookmark = BookmarkItem(
+      id: 4,
+      url: 'https://example.com',
+      title: 'Bounded chip',
+      createdAt: DateTime(2026, 9, 6),
+      favorite: false,
+      status: 'unread',
+      rating: 0,
+      openCount: 0,
+      tags: const [],
+      people: [person],
+      photos: const [],
+      collections: const [],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.topLeft,
+            child: BookmarkListMetadata(
+              bookmark: bookmark,
+              assignments: const [],
+              propertyTokens: const ['people'],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final label = find.text(longName);
+    expect(label, findsOneWidget);
+    final chip = find.ancestor(
+      of: label,
+      matching: find.byType(Container),
+    );
+    expect(chip, findsWidgets);
+    expect(tester.getSize(chip.first).width, lessThanOrEqualTo(190));
+  });
 }
