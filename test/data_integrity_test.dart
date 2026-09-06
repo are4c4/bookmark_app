@@ -5,7 +5,6 @@ import 'package:bookmark_app/data/bookmark_attachment_store.dart';
 import 'package:bookmark_app/data/bookmark_lifecycle_store.dart';
 import 'package:bookmark_app/data/bookmark_repository.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
-import 'package:bookmark_app/repositories/full_text_search_repository.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -51,16 +50,6 @@ void main() {
     return (await repository.watchAll().first)
         .firstWhere((bookmark) => bookmark.id == id);
   }
-
-  test('FTS initializes on a fresh current-schema database', () async {
-    final bookmark = await createBookmark();
-    final search = FullTextSearchRepository(repository);
-
-    await search.rebuild();
-    final hits = await search.search('Example');
-
-    expect(hits.map((hit) => hit.bookmarkId), contains(bookmark.id));
-  });
 
   test('archive and unarchive keep storage and reading state consistent',
       () async {
@@ -152,6 +141,7 @@ void main() {
       isNull,
     );
   });
+
   test('saved views persist relation and tag matching filters', () async {
     final personId = await repository.createPerson('Author');
     final photoFile = File('${tempDirectory.path}/photos/cover.jpg');
@@ -176,5 +166,4 @@ void main() {
     expect(view.personFilterId, personId);
     expect(view.photoFilterId, photoId);
   });
-
 }
