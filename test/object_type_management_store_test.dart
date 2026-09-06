@@ -223,7 +223,7 @@ void main() {
     await genericStore.createProperty(
       databaseId: sourceId,
       name: 'Broken relation',
-      type: 'objectRelation',
+      type: 'relation',
       config: const <String, dynamic>{'multiple': true},
     );
 
