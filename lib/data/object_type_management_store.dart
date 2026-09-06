@@ -75,6 +75,40 @@ class ObjectTypeManagementStore {
         duplicatedPropertyIds[property.id] = duplicatedPropertyId;
       }
 
+      // Formula and Rollup configs persist Property ids. They can only be
+      // rewritten after every duplicated Property id is known, so create the
+      // schema in source order first and then patch computed configs inside the
+      // same transaction before the duplicate becomes visible.
+      final duplicatedProperties = await genericStore.listProperties(duplicatedId);
+      final duplicatedPropertiesById = <int, GenericPropertyRecord>{
+        for (final property in duplicatedProperties) property.id: property,
+      };
+      for (final property in source.properties.where((item) => item.isComputed)) {
+        final duplicatedPropertyId = duplicatedPropertyIds[property.id];
+        final duplicatedProperty = duplicatedPropertyId == null
+            ? null
+            : duplicatedPropertiesById[duplicatedPropertyId];
+        if (duplicatedProperty == null) {
+          throw StateError(
+            'Computed Property ${property.id} was not duplicated.',
+          );
+        }
+        await genericStore.updateProperty(
+          GenericPropertyRecord(
+            id: duplicatedProperty.id,
+            databaseId: duplicatedProperty.databaseId,
+            name: duplicatedProperty.name,
+            type: duplicatedProperty.type,
+            sortOrder: duplicatedProperty.sortOrder,
+            config: _remapComputedConfig(
+              source: source,
+              property: property,
+              duplicatedPropertyIds: duplicatedPropertyIds,
+            ),
+          ),
+        );
+      }
+
       if (sourceDefaults != null) {
         List<int>? remapPropertyIds(List<int>? ids) => ids
             ?.map((id) => duplicatedPropertyIds[id])
@@ -95,6 +129,90 @@ class ObjectTypeManagementStore {
       return duplicatedId;
     });
   }
+
+  Map<String, dynamic> _remapComputedConfig({
+    required AppObjectType source,
+    required ObjectPropertyDefinition property,
+    required Map<int, int> duplicatedPropertyIds,
+  }) {
+    final config = Map<String, dynamic>.from(property.config);
+    switch (property.type) {
+      case ObjectPropertyType.formula:
+        final expression = '${config['expression'] ?? ''}';
+        config['expression'] = expression.replaceAllMapped(
+          RegExp(r'\{\s*(\d+)\s*\}'),
+          (match) {
+            final sourcePropertyId = int.parse(match.group(1)!);
+            final duplicatedPropertyId =
+                duplicatedPropertyIds[sourcePropertyId];
+            if (duplicatedPropertyId == null) {
+              throw StateError(
+                'Formula Property ${property.id} references Property '
+                '$sourcePropertyId outside the duplicated ObjectType.',
+              );
+            }
+            return '{$duplicatedPropertyId}';
+          },
+        );
+        return config;
+      case ObjectPropertyType.rollup:
+        final sourceRelationPropertyId =
+            _configInt(config['relationPropertyId']);
+        if (sourceRelationPropertyId == null) {
+          throw StateError(
+            'Rollup Property ${property.id} is missing relationPropertyId.',
+          );
+        }
+        final duplicatedRelationPropertyId =
+            duplicatedPropertyIds[sourceRelationPropertyId];
+        ObjectPropertyDefinition? sourceRelationProperty;
+        for (final candidate in source.properties) {
+          if (candidate.id == sourceRelationPropertyId) {
+            sourceRelationProperty = candidate;
+            break;
+          }
+        }
+        if (duplicatedRelationPropertyId == null ||
+            sourceRelationProperty == null ||
+            !sourceRelationProperty.isRelation) {
+          throw StateError(
+            'Rollup Property ${property.id} references an invalid Relation '
+            'Property $sourceRelationPropertyId.',
+          );
+        }
+        config['relationPropertyId'] = duplicatedRelationPropertyId;
+
+        if (config.containsKey('targetPropertyId')) {
+          final sourceTargetPropertyId = _configInt(config['targetPropertyId']);
+          if (sourceTargetPropertyId == null) {
+            throw StateError(
+              'Rollup Property ${property.id} has an invalid targetPropertyId.',
+            );
+          }
+          if (sourceRelationProperty.targetObjectTypeId == source.id) {
+            final duplicatedTargetPropertyId =
+                duplicatedPropertyIds[sourceTargetPropertyId];
+            if (duplicatedTargetPropertyId == null) {
+              throw StateError(
+                'Rollup Property ${property.id} references Property '
+                '$sourceTargetPropertyId outside the duplicated self target.',
+              );
+            }
+            config['targetPropertyId'] = duplicatedTargetPropertyId;
+          } else {
+            // The Relation still targets the original external ObjectType, so
+            // its target Property identity remains canonical and unchanged.
+            config['targetPropertyId'] = sourceTargetPropertyId;
+          }
+        }
+        return config;
+      default:
+        return config;
+    }
+  }
+
+  int? _configInt(dynamic value) =>
+      value is int ? value : int.tryParse('${value ?? ''}');
 
   Future<void> updateIdentity({
     required int objectTypeId,
