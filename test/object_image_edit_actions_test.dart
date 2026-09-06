@@ -19,6 +19,8 @@ void main() {
             editService: service,
             workspaceId: 1,
             objectId: 10,
+            freeCropSelector: (_) async =>
+                const Rect.fromLTWH(0.1, 0.1, 0.8, 0.8),
           ),
         ),
       ),
@@ -32,15 +34,18 @@ void main() {
       isNull,
     );
     expect(_cropButton(tester).enabled, isFalse);
+    expect(_freeCropButton(tester).onPressed, isNull);
     expect(_restoreButton(tester).onPressed, isNull);
   });
 
-  testWidgets('routes edits, crop presets and restore through CanonicalImageEditService',
+  testWidgets(
+      'routes edits, crop presets, free crop and restore through CanonicalImageEditService',
       (tester) async {
     final service = _FakeCanonicalImageEditService(
       canEditValue: true,
       canRestoreValue: true,
     );
+    const freeCrop = Rect.fromLTWH(0.2, 0.1, 0.5, 0.7);
     var changed = 0;
 
     await tester.pumpWidget(
@@ -50,6 +55,7 @@ void main() {
             editService: service,
             workspaceId: 7,
             objectId: 42,
+            freeCropSelector: (_) async => freeCrop,
             onChanged: () => changed += 1,
           ),
         ),
@@ -82,10 +88,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(service.lastCropAspectRatio, 1.0);
 
+    await tester.tap(find.byKey(const ValueKey('object-image-free-crop')));
+    await tester.pumpAndSettle();
+    expect(service.lastNormalizedCropRect, freeCrop);
+
     await tester.tap(find.byKey(const ValueKey('object-image-restore-original')));
     await tester.pumpAndSettle();
     expect(service.restoreCalls, 1);
-    expect(changed, 4);
+    expect(changed, 5);
   });
 }
 
@@ -95,6 +105,11 @@ IconButton _iconButton(WidgetTester tester, String key) =>
 PopupMenuButton<double> _cropButton(WidgetTester tester) =>
     tester.widget<PopupMenuButton<double>>(
       find.byKey(const ValueKey('object-image-crop-aspect-ratio')),
+    );
+
+OutlinedButton _freeCropButton(WidgetTester tester) =>
+    tester.widget<OutlinedButton>(
+      find.byKey(const ValueKey('object-image-free-crop')),
     );
 
 OutlinedButton _restoreButton(WidgetTester tester) =>
@@ -126,6 +141,7 @@ class _FakeCanonicalImageEditService extends CanonicalImageEditService {
   int? lastQuarterTurns;
   bool? lastFlipHorizontal;
   double? lastCropAspectRatio;
+  Rect? lastNormalizedCropRect;
   int restoreCalls = 0;
 
   @override
@@ -153,6 +169,7 @@ class _FakeCanonicalImageEditService extends CanonicalImageEditService {
     lastQuarterTurns = quarterTurns;
     lastFlipHorizontal = flipHorizontal;
     lastCropAspectRatio = cropAspectRatio;
+    lastNormalizedCropRect = normalizedCropRect;
     return _object(objectId);
   }
 
