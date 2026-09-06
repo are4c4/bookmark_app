@@ -56,6 +56,10 @@ class ObjectTypeDefaultsStore {
       await clear(objectTypeId);
       return;
     }
+    await _validatePropertyReferences(
+      objectTypeId: objectTypeId,
+      defaults: defaults,
+    );
     await _genericStore.database.customStatement(
       '''INSERT INTO object_type_defaults(object_type_id, defaults_json, updated_at)
          VALUES (?, ?, CURRENT_TIMESTAMP)
@@ -95,5 +99,41 @@ class ObjectTypeDefaultsStore {
       'DELETE FROM object_type_defaults WHERE object_type_id = ?',
       [objectTypeId],
     );
+  }
+
+  Future<void> _validatePropertyReferences({
+    required int objectTypeId,
+    required ObjectTypeDefaults defaults,
+  }) async {
+    final objectType = await _genericStore.getDatabase(objectTypeId);
+    if (objectType == null) {
+      throw ArgumentError.value(
+        objectTypeId,
+        'objectTypeId',
+        'ObjectType does not exist.',
+      );
+    }
+
+    final referencedIds = <int>{
+      ...?defaults.visiblePropertyIds,
+      ...?defaults.propertyOrder,
+    };
+    if (referencedIds.isEmpty) return;
+
+    final propertyIds = (await _genericStore.listProperties(objectTypeId))
+        .map((property) => property.id)
+        .toSet();
+    final invalidIds = referencedIds
+        .where((propertyId) => !propertyIds.contains(propertyId))
+        .toList(growable: false)
+      ..sort();
+    if (invalidIds.isNotEmpty) {
+      throw ArgumentError.value(
+        invalidIds,
+        'defaults',
+        'ObjectType defaults may reference only Properties owned by ObjectType '
+            '$objectTypeId.',
+      );
+    }
   }
 }
