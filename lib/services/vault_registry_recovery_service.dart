@@ -127,23 +127,36 @@ class VaultRegistryRecoveryService {
       originalMoved = true;
       await temporary.rename(registry.path);
       if (await backup.exists()) await backup.delete();
-    } catch (_) {
-      if (await temporary.exists()) {
-        try {
-          await temporary.delete();
-        } catch (_) {}
+    } catch (error, stackTrace) {
+      try {
+        if (await temporary.exists()) await temporary.delete();
+      } catch (_, cleanupStackTrace) {
+        _debugRecoveryFailure('temporary cleanup', cleanupStackTrace);
       }
       if (originalMoved && await backup.exists()) {
         try {
           if (await registry.exists()) await registry.delete();
           await backup.rename(registry.path);
-        } catch (_) {
-          if (!await registry.exists()) {
-            await registry.writeAsString(original, flush: true);
+        } catch (_, restoreStackTrace) {
+          _debugRecoveryFailure('backup restore', restoreStackTrace);
+          try {
+            if (!await registry.exists()) {
+              await registry.writeAsString(original, flush: true);
+            }
+          } catch (_, fallbackStackTrace) {
+            _debugRecoveryFailure('fallback registry restore', fallbackStackTrace);
           }
         }
       }
-      rethrow;
+      Error.throwWithStackTrace(error, stackTrace);
     }
+  }
+
+  void _debugRecoveryFailure(String operation, StackTrace stackTrace) {
+    assert(() {
+      stderr.writeln('Vault registry recovery: $operation failed.');
+      stderr.writeln(stackTrace);
+      return true;
+    }());
   }
 }
