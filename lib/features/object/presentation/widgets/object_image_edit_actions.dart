@@ -95,6 +95,14 @@ class _ObjectImageEditActionsState extends State<ObjectImageEditActions> {
         );
       });
 
+  Future<void> _cropAspectRatio(double ratio) => _run(() async {
+        await widget.editService.edit(
+          workspaceId: widget.workspaceId,
+          objectId: widget.objectId,
+          cropAspectRatio: ratio,
+        );
+      });
+
   Future<void> _restore() => _run(() async {
         await widget.editService.restoreOriginal(
           workspaceId: widget.workspaceId,
@@ -141,6 +149,35 @@ class _ObjectImageEditActionsState extends State<ObjectImageEditActions> {
               tooltip: '左右反転',
               onPressed: canEdit ? _flipHorizontal : null,
               icon: const Icon(Icons.flip),
+            ),
+            PopupMenuButton<double>(
+              key: const ValueKey('object-image-crop-aspect-ratio'),
+              tooltip: '中央トリミング',
+              enabled: canEdit,
+              onSelected: _cropAspectRatio,
+              icon: const Icon(Icons.crop),
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                  value: 1.0,
+                  child: Text('正方形 1:1'),
+                ),
+                PopupMenuItem(
+                  value: 4 / 3,
+                  child: Text('横 4:3'),
+                ),
+                PopupMenuItem(
+                  value: 3 / 4,
+                  child: Text('縦 3:4'),
+                ),
+                PopupMenuItem(
+                  value: 16 / 9,
+                  child: Text('ワイド 16:9'),
+                ),
+                PopupMenuItem(
+                  value: 9 / 16,
+                  child: Text('縦長 9:16'),
+                ),
+              ],
             ),
             OutlinedButton.icon(
               key: const ValueKey('object-image-restore-original'),

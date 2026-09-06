@@ -31,10 +31,11 @@ void main() {
       _iconButton(tester, 'object-image-flip-horizontal').onPressed,
       isNull,
     );
+    expect(_cropButton(tester).enabled, isFalse);
     expect(_restoreButton(tester).onPressed, isNull);
   });
 
-  testWidgets('routes edits and restore through CanonicalImageEditService',
+  testWidgets('routes edits, crop presets and restore through CanonicalImageEditService',
       (tester) async {
     final service = _FakeCanonicalImageEditService(
       canEditValue: true,
@@ -66,15 +67,35 @@ void main() {
     await tester.pumpAndSettle();
     expect(service.lastFlipHorizontal, isTrue);
 
+    await tester.tap(find.byKey(const ValueKey('object-image-crop-aspect-ratio')));
+    await tester.pumpAndSettle();
+    for (final label in const [
+      '正方形 1:1',
+      '横 4:3',
+      '縦 3:4',
+      'ワイド 16:9',
+      '縦長 9:16',
+    ]) {
+      expect(find.text(label), findsOneWidget);
+    }
+    await tester.tap(find.text('正方形 1:1'));
+    await tester.pumpAndSettle();
+    expect(service.lastCropAspectRatio, 1.0);
+
     await tester.tap(find.byKey(const ValueKey('object-image-restore-original')));
     await tester.pumpAndSettle();
     expect(service.restoreCalls, 1);
-    expect(changed, 3);
+    expect(changed, 4);
   });
 }
 
 IconButton _iconButton(WidgetTester tester, String key) =>
     tester.widget<IconButton>(find.byKey(ValueKey(key)));
+
+PopupMenuButton<double> _cropButton(WidgetTester tester) =>
+    tester.widget<PopupMenuButton<double>>(
+      find.byKey(const ValueKey('object-image-crop-aspect-ratio')),
+    );
 
 OutlinedButton _restoreButton(WidgetTester tester) =>
     tester.widget<OutlinedButton>(
@@ -104,6 +125,7 @@ class _FakeCanonicalImageEditService extends CanonicalImageEditService {
   int? lastObjectId;
   int? lastQuarterTurns;
   bool? lastFlipHorizontal;
+  double? lastCropAspectRatio;
   int restoreCalls = 0;
 
   @override
@@ -130,6 +152,7 @@ class _FakeCanonicalImageEditService extends CanonicalImageEditService {
     lastObjectId = objectId;
     lastQuarterTurns = quarterTurns;
     lastFlipHorizontal = flipHorizontal;
+    lastCropAspectRatio = cropAspectRatio;
     return _object(objectId);
   }
 

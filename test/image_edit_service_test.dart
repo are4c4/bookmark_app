@@ -60,6 +60,17 @@ void main() {
     expect(result.height, 120);
   });
 
+  test('aspect-ratio crop produces centered requested geometry', () async {
+    final file = await createImage(width: 120, height: 80);
+
+    await service.apply(path: file.path, cropAspectRatio: 1);
+
+    final result = img.decodeImage(await file.readAsBytes());
+    expect(result, isNotNull);
+    expect(result!.width, 80);
+    expect(result.height, 80);
+  });
+
   test('first edit preserves a restorable original backup', () async {
     final file = await createImage(width: 90, height: 60);
 
