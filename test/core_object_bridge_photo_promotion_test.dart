@@ -12,7 +12,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('Photo promotion reuses an existing managed Image with the exact File',
+  test('Photo promotion reuses exact-File native Image without taking ownership',
       () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
@@ -27,11 +27,17 @@ void main() {
       systemObjects: systemStore,
       defaultsStore: ObjectTypeDefaultsStore(genericStore),
     );
+    final definition = await images.ensureDefinition(workspaceId);
     final nativeImage = await images.findOrCreateManaged(
       workspaceId: workspaceId,
       filePath: 'photos/shared.jpg',
       title: 'Native before promotion',
       originalFilename: 'shared.jpg',
+    );
+    await objectStore.setPropertyValue(
+      objectId: nativeImage.id,
+      property: definition.noteProperty,
+      value: 'Native note',
     );
 
     await database.customStatement(
@@ -60,10 +66,10 @@ void main() {
       workspaceId: workspaceId,
       systemKey: CoreObjectBridge.photoSystemKey,
     ))!;
-    final imageObjects = await objectStore.listObjects(imageType.id);
+    var imageObjects = await objectStore.listObjects(imageType.id);
     expect(imageObjects, hasLength(1));
     expect(imageObjects.single.id, nativeImage.id);
-    expect(imageObjects.single.title, 'Legacy shared');
+    expect(imageObjects.single.title, 'Native before promotion');
 
     final legacyIdProperty =
         imageType.properties.singleWhere((property) => property.name == 'Legacy Photo ID');
@@ -73,9 +79,9 @@ void main() {
         imageType.properties.singleWhere((property) => property.name == 'Note');
     final filenameProperty = imageType.properties
         .singleWhere((property) => property.name == 'Original filename');
-    expect(imageObjects.single.values[legacyIdProperty.id], photoId);
+    expect(imageObjects.single.values[legacyIdProperty.id], isNull);
     expect(imageObjects.single.values[fileProperty.id], 'photos/shared.jpg');
-    expect(imageObjects.single.values[noteProperty.id], 'Legacy note');
+    expect(imageObjects.single.values[noteProperty.id], 'Native note');
     expect(imageObjects.single.values[filenameProperty.id], 'shared.jpg');
 
     final link = await database.customSelect(
@@ -86,5 +92,20 @@ void main() {
       ],
     ).getSingle();
     expect(link.read<int>('object_id'), nativeImage.id);
+
+    await database.customStatement(
+      'DELETE FROM photos WHERE id = ?',
+      <Object>[photoId],
+    );
+    await bridge.syncAll(workspaceId);
+
+    imageObjects = await objectStore.listObjects(imageType.id);
+    expect(imageObjects, hasLength(1));
+    expect(imageObjects.single.id, nativeImage.id);
+    final remainingLinks = await database.customSelect(
+      'SELECT object_id FROM photo_object_links WHERE workspace_id = ?',
+      variables: [Variable<int>(workspaceId)],
+    ).get();
+    expect(remainingLinks, isEmpty);
   });
 }
