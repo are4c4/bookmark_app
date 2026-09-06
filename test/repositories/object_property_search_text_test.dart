@@ -216,6 +216,50 @@ void main() {
     expect(projected, isNot(contains('PrivateSearchToken')));
   });
 
+  test('dedicated contributors can exclude owned Property ids', () {
+    final dedicated = property(
+      ObjectPropertyType.text,
+      id: 10,
+      sortOrder: 0,
+      name: 'Dedicated metadata',
+    );
+    final generic = property(
+      ObjectPropertyType.text,
+      id: 20,
+      sortOrder: 1,
+      name: 'User notes',
+    );
+    final objectType = AppObjectType(
+      id: 1,
+      workspaceId: 1,
+      name: 'Specialized type',
+      icon: '📦',
+      kind: ObjectTypeKind.system,
+      sortOrder: 0,
+      properties: <ObjectPropertyDefinition>[dedicated, generic],
+    );
+    final object = AppObject(
+      id: 100,
+      objectTypeId: 1,
+      title: 'Object',
+      createdAt: DateTime.utc(2026, 9, 7),
+      updatedAt: DateTime.utc(2026, 9, 7),
+      values: <int, dynamic>{
+        dedicated.id: 'DedicatedToken',
+        generic.id: 'GenericToken',
+      },
+    );
+
+    expect(
+      buildObjectPropertiesSearchText(
+        object: object,
+        objectType: objectType,
+        excludedPropertyIds: <int>{dedicated.id},
+      ),
+      'GenericToken',
+    );
+  });
+
   test('whole-Object projection rejects a mismatched ObjectType', () {
     final object = AppObject(
       id: 100,
