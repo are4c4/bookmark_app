@@ -197,10 +197,11 @@ class CoreObjectBridge {
       final title = photo.title?.trim().isNotEmpty == true
           ? photo.title!.trim()
           : '画像 ${photo.id}';
+      final storedFilePath = database.pathResolver.toStoredPath(photo.path.trim());
       final link = await _ensurePhotoLinkedObject(
         workspaceId: workspaceId,
         legacyId: photo.id,
-        filePath: photo.path,
+        filePath: storedFilePath,
         title: title,
         photoType: photoType,
         legacyIdProperty: legacyId,
@@ -216,7 +217,7 @@ class CoreObjectBridge {
         await objectStore.setPropertyValue(
           objectId: link.object.id,
           property: file,
-          value: photo.path,
+          value: storedFilePath,
         );
         await objectStore.setPropertyValue(
           objectId: link.object.id,
