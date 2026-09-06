@@ -112,10 +112,15 @@ void main() {
             bookmark: bookmark,
             assignments: const [],
             propertyTokens: const ['url', 'status'],
+            resolveUrl: (_) async => const BookmarkUrlSource(
+              kind: BookmarkUrlSourceKind.canonicalWeblink,
+              value: 'https://example.com/article',
+            ),
           ),
         ),
       ),
     );
+    await tester.pumpAndSettle();
 
     final secondary = find.byKey(
       const ValueKey('bookmark-list-secondary-metadata'),
