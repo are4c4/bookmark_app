@@ -16,7 +16,9 @@ Cross-lane coordination:
 `#166` alias-aware Relation picker is complete/closed.
 
 ## Current checkpoint
-Latest Relation implementation merge on `main`: PR #307 `Cover Relation lifecycle for direct Weblink enrichment`.
+Latest audited `main`: `a566ae28516b0ee46639666465e6ffad9cebb1e4` — #362 `Preserve profile restore failure during cleanup`.
+
+Latest Relation implementation merge on `main`: `6a14c778602bdb89d51e53dfe9206f10199213a8` — PR #307 `Cover Relation lifecycle for direct Weblink enrichment`.
 
 That regression protects the production path:
 
@@ -51,26 +53,31 @@ Important merged guardrails include:
 - `#307` direct generic Weblink creation enrichment -> managed Representative Image Relation composition-root lifecycle.
 - `#351` indirectly exercises canonical target ObjectType validation during Board grouped-preset failure and confirms cleanup failure does not replace the original Relation validation error; it does not change Relation semantics.
 
-## Latest repository audit — 2026-09-06 14:10 JST
-Latest `main` and current open PRs were audited after the prior Relation handoff PR was closed.
+## Latest repository audit — 2026-09-06 14:35 JST
+Latest `main`, current issues and open PRs were re-audited.
 
 Recent merged Object/Refactor changes relevant to Relation boundaries:
 - `#344` — Bookmark opening-mode convergence; presentation-only, no Relation mutation.
-- `#346/#349/#350` — shared Property-add popover and Bookmark person-role UX convergence. Relation/computed Property creation deliberately remains on the existing advanced/canonical paths; no new Relation persistence path was introduced.
+- `#346/#349/#350` — shared Property-add popover and Bookmark person-role UX convergence. Relation/computed Property creation remains on existing canonical/advanced paths; no new Relation persistence path was introduced.
 - `#351` — rollback/failure-policy coverage around Board grouped preset creation. It triggers existing canonical Relation target-type validation but does not alter mutation/index/backlink behavior.
 - `#352/#354` — Bookmark List readability and one-Person-per-chip presentation; no Relation persistence changes.
 - `#358` — Image-import rollback cleanup; no Relation persistence changes.
+- `#360` — Bookmark List URL metadata now routes through the read-only canonical URL resolver; no Relation write/index change.
+- `#362` — profile restore cleanup preserves the primary failure; profile/backup-only and unrelated to Relation semantics.
 
-Current open PRs:
-- `#360` Object — removes a direct legacy `bookmark.url` fallback from Bookmark List metadata and keeps URL presentation on read-only `BookmarkUrlResolver`; no Relation writes/index changes.
-- `#359/#357/#355` Refactor — profile/bootstrap failure-policy/privacy work; no Relation semantics.
+Current open non-Relation PRs:
+- `#357` — ProfileManager diagnostic privacy.
+- `#355` — stable bootstrap failure boundary.
+- `#336` — attachment failure handling.
 
-Issue `#245` still has not reached the first production Bookmark -> Image or Person -> Image Relation migration slice. Therefore no new Relation lifecycle test is justified yet.
+These open Refactor PRs do not touch Relation persistence, `ObjectStore`, normalized edges, backlink semantics, or the canonical mutation/read services.
 
-The current default-branch call-site audit still shows feature Relation writes going through canonical `RelationMutationService` boundaries. No new direct serialized-id Relation mutation path or alternate `object_relation_edges` writer was found in the audited changes.
+Issue `#245` still has not reached the first production Bookmark -> Image or Person -> Image Relation migration slice. Phase 3 remains the explicit trigger for Relation lifecycle ownership; no speculative Bookmark/Image Relation schema or migration should be invented in this lane before Object owns that product contract.
+
+The current default-branch call-site audit still shows feature Relation writes going through canonical `RelationMutationService` boundaries (`ObjectRelationEditorService`, Bookmark/Weblink bridge, Weblink preview pipeline, Tag bridge, Board grouped creation and value-promotion execution). No new direct serialized-id Relation mutation path or alternate `object_relation_edges` writer was found.
 
 ## Exact next Relation actions
-1. Watch `#245` for the first real Bookmark -> Image or Person -> Image Relation-producing migration/workflow. When it lands, add focused lifecycle coverage for attach/idempotency/backlink/delete/detach and any cover-cardinality semantics.
+1. Watch `#245` for the first real Bookmark -> Image or Person -> Image Relation-producing migration/workflow. When it lands, add focused lifecycle coverage for attach/idempotency/backlink/delete/detach and cover-cardinality semantics.
 2. Watch Object work for a genuinely new explicit `Related images` population, retarget, detach, batch Relation mutation, or new Relation Property creation path.
 3. Audit any change touching persisted Relation values, `object_relation_edges`, `ObjectStore`, `RelationMutationService`, `RelationReadService`, `RelationIntegrityService`, or reconcile behavior.
 4. If an identity change materially changes the Relation target chosen by a production workflow, add integration coverage only where the existing lifecycle suite does not already protect it.
@@ -85,7 +92,7 @@ The current default-branch call-site audit still shows feature Relation writes g
 - Presentation-only Person chips/person-role popovers must not be mistaken for generic Relation migration; current Bookmark person-role persistence remains a compatibility path.
 
 ## Validation / audit result
-No production Relation change was made in this run because the latest Object/Refactor changes do not introduce a new Relation-producing workflow or canonical Relation storage/index change. The correct Relation-lane action was a fresh cross-lane audit and handoff refresh rather than speculative code or duplicate tests.
+No production Relation change was made in this run because the latest Object/Refactor changes do not introduce a new Relation-producing workflow or canonical Relation storage/index change. `#362` was reviewed directly and only changes profile-backup cleanup failure handling. The current `setRelation(` call-site audit found no new low-level product writer. The correct Relation-lane action was to refresh and integrate this durable handoff rather than add speculative code or duplicate tests.
 
 ## Stop reason
-The active Relation lane currently has no remaining independent actionable implementation work. Latest open/merged Object and Refactor changes preserve canonical Relation semantics, and `#245` has not yet entered the production Bookmark/Image or Person/Image Relation migration phase. Stop to avoid duplicate lifecycle coverage or crossing into presentation/refactor ownership. Resume immediately when a new Relation-producing workflow, Relation storage/index change, or concrete correctness regression appears.
+The active Relation lane currently has no remaining independent actionable implementation work. Latest merged/open Object and Refactor changes preserve canonical Relation semantics, and `#245` has not yet entered the production Bookmark/Image or Person/Image Relation migration phase. Stop to avoid duplicate lifecycle coverage or crossing into presentation/refactor ownership. Resume immediately when a new Relation-producing workflow, Relation storage/index change, or concrete correctness regression appears.
