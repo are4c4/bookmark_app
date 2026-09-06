@@ -9,6 +9,7 @@ Converge search on one canonical Object-level indexing/query architecture that w
 - **#414 closed.** Focused Bookmark FTS refresh removes stale rows through FTS `rowid`; removed title/tag regressions are covered.
 - **#494 closed as completed.** All acceptance criteria and the close condition are satisfied on main.
 - Latest verified Search completion checkpoint: **main `683bdbb74cc5dabd3ac067e9ce5a802fc16ca2b4`**, the squash merge of #635.
+- Refactor lane subsequently retired the caller-zero Bookmark-only `FullTextSearchRepository` in **#654**, merged as `c2d4bd082e1e88c6781db4f51b2c12998a6ff85f`.
 
 ## Canonical Object search architecture
 `ObjectSearchRepository` owns one FTS5 projection shared by every ObjectType:
@@ -49,11 +50,12 @@ Major merged Search-lane slices for #414/#494:
 - #572 — canonical `ObjectGlobalSearchPage`, mixed ObjectType results and Object Inspector opening.
 - #575 / #587 / #626 — Weblink projection ownership, dedicated Property-id exclusions and live `weblink_metadata` integration. #626 merged as `70375d3d...` after all CI passed.
 - #584 / #589 — real canonical File/Image primitive metadata participates in the same Object search repository while managed file identity/path values remain non-searchable.
-- #629 — live `GlobalSearchPage` delegates to canonical Object Global Search; old Bookmark-only `FullTextSearchRepository` is no longer a live UI dependency. A first maintainability failure caught an added presentation DB reach-through; `ObjectSearchCompatibilityBridge` moved that conversion outside presentation, after which guardrails, Analyze and full tests passed. #629 merged as `8f74c411...`.
+- #629 — live `GlobalSearchPage` delegates to canonical Object Global Search; old Bookmark-only `FullTextSearchRepository` stopped being a live UI dependency. A first maintainability failure caught an added presentation DB reach-through; `ObjectSearchCompatibilityBridge` moved that conversion outside presentation, after which guardrails, Analyze and full tests passed. #629 merged as `8f74c411...`.
 - #635 — Lane D PDF extraction -> Search `pdf-text` -> canonical FTS -> `ObjectGlobalSearchService.rebuildWorkspace(...)`. Workspace rebuild reconciles canonical File PDF text before one FTS rebuild; focused `refreshFilePdfText(...)` replaces/clears only that File's derived contribution. All guardrails, Analyze and full tests passed; merged as `683bdbb7...`.
 
-Cross-lane prerequisite:
+Cross-lane completion:
 - Primitive lane #609 — `CanonicalFilePdfTextService` exposes optional content-first PDF extracted text for canonical File Objects without owning search persistence. #635 consumes this capability.
+- Refactor lane #654 — removed the caller-zero legacy Bookmark `FullTextSearchRepository` implementation and its dedicated legacy-only tests after #629 proved live Object-search routing. Canonical Object search regressions remain the active coverage.
 
 ## Incremental / stale-token contracts
 - focused Object refresh deletes the previous FTS row by `rowid` and inserts the current projection;
@@ -65,11 +67,11 @@ Cross-lane prerequisite:
 - raw extracted text, private local file paths and raw search exceptions are not rendered/logged by normal diagnostics.
 
 ## Live product routing
-`BookmarkAppShell` still calls `GlobalSearchPage(repository: ...)`, but that class is now only a compatibility entrypoint. It resolves the Object search context through `ObjectSearchCompatibilityBridge` and renders `ObjectGlobalSearchPage`.
+`BookmarkAppShell` still calls `GlobalSearchPage(repository: ...)`, but that class is only a compatibility entrypoint. It resolves the Object search context through `ObjectSearchCompatibilityBridge` and renders `ObjectGlobalSearchPage`.
 
-Therefore the live full-text search product is Object-based without rewriting the shared `app_shell.dart` hotspot. `FullTextSearchRepository` remains compatibility/regression infrastructure and is a caller-zero retirement candidate for Refactor lane #225. Lane E recorded that handoff on #225 instead of deleting legacy code inside #494.
+Therefore the live full-text search product is Object-based without rewriting the shared `app_shell.dart` hotspot. The former Bookmark-only `FullTextSearchRepository` is no longer present after Refactor #654; new work must not recreate a parallel Bookmark search product.
 
-Global Search workspace rebuild now also reconciles optional canonical File PDF extracted text. This makes user-defined ObjectTypes, Weblinks, Images/File metadata, Body notes, Relation labels and PDF-derived text participate in one application-facing Object search path.
+Global Search workspace rebuild also reconciles optional canonical File PDF extracted text. This makes user-defined ObjectTypes, Weblinks, Images/File metadata, Body notes, Relation labels and PDF-derived text participate in one application-facing Object search path.
 
 ## Validation
 Search completion slices were gated by repository Flutter CI, including:
@@ -92,11 +94,13 @@ Focused regressions cover:
 - canonical Object result resolution/opening;
 - Global Search stable error boundaries without exposing raw exception/path/query content.
 
+Refactor #654 separately passed the repository validation gates before removing the caller-zero legacy Bookmark FTS implementation and its legacy-only tests.
+
 ## Cross-lane dependencies / ownership
 - Primitive lane owns File/PDF extraction and native managed-resource behavior; Search consumes #609 through #635.
 - Object Core owns Body persistence/editing; Search reads only its search-text projection.
 - Relation lane owns Relation persistence/integrity; Search reads resolved labels and owns denormalized search refresh planning.
-- Refactor lane owns eventual deletion of caller-zero legacy Bookmark search code; see #225 handoff comment created after #629.
+- Refactor lane completed the caller-zero Bookmark FTS retirement in #654 after Search #629 established replacement parity.
 - No hotspot lease is held by Lane E. #629 deliberately avoided an `app_shell.dart` edit.
 
 ## Next actions
@@ -106,7 +110,7 @@ For the next Lane E run:
 1. Re-read GitHub for any newly opened Search/Indexing issue before creating work.
 2. If no new Search issue exists, remain idle rather than inventing speculative search abstractions.
 3. Potential follow-ups belong in separately scoped issues, for example PDF extraction/rebuild caching for very large File sets, richer ranking/filter UX, or semantic/vector search; none are required by #494.
-4. Do not physically delete `FullTextSearchRepository` from Lane E; Refactor lane #225 owns caller-zero retirement after re-verifying remaining tests/migration needs.
+4. Do not recreate a Bookmark/domain-specific long-term search repository; the legacy Bookmark FTS path was retired in #654.
 
 ## Safety
 - Removing/changing source data must remove stale searchable tokens.
@@ -115,4 +119,4 @@ For the next Lane E run:
 - New domains contribute to the canonical Object projection instead of introducing domain-specific long-term search repositories.
 
 ## Stop reason
-**Active Lane E issues #414 and #494 are complete and closed; no remaining actionable Search task is currently assigned.** This matches the AGENTS.md stopping condition for an idle lane. Resume only when a new Search/Indexing issue or a concrete cross-lane search obligation appears.
+**Active Lane E issues #414 and #494 are complete and closed; the legacy Bookmark FTS duplicate has also been retired by Refactor #654; no remaining actionable Search task is currently assigned.** This matches the AGENTS.md stopping condition for an idle lane. Resume only when a new Search/Indexing issue or a concrete cross-lane search obligation appears.
