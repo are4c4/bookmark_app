@@ -124,6 +124,30 @@ class ImageObjectService {
     );
   }
 
+  /// Looks up an existing Image through the same canonical source-URL identity
+  /// rules used by [findOrCreateManaged].
+  ///
+  /// Older stored provenance may not already be normalized. Lookup normalizes
+  /// both sides so callers can avoid expensive downloads/copies before the
+  /// eventual create-or-reuse step without maintaining a second identity rule.
+  Future<AppObject?> findBySourceUrl({
+    required int workspaceId,
+    required String sourceUrl,
+  }) async {
+    final source = _validatedSourceUrl(sourceUrl);
+    if (source == null) return null;
+    final definition = await ensureDefinition(workspaceId);
+    final objects = await systemObjects.objectStore.listObjects(
+      definition.objectType.id,
+    );
+    for (final object in objects) {
+      final storedSource =
+          '${object.values[definition.sourceUrlProperty.id] ?? ''}'.trim();
+      if (_sourceUrlsMatch(storedSource, source)) return object;
+    }
+    return null;
+  }
+
   /// Finds or creates one native Image Object for an app-managed asset.
   ///
   /// [sourceUrl] is the preferred reuse key when present, while an exact
