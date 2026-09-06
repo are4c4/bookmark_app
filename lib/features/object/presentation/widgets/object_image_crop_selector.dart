@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 
 enum ObjectImageCropHandle {
   topLeft,
+  top,
   topRight,
-  bottomLeft,
+  right,
   bottomRight,
+  bottom,
+  bottomLeft,
+  left,
 }
 
 /// Pure normalized geometry used by the free-crop presentation surface.
@@ -87,15 +91,23 @@ class ObjectImageCropGeometry {
       case ObjectImageCropHandle.topLeft:
         left = (left + dx).clamp(0.0, right - minSize).toDouble();
         top = (top + dy).clamp(0.0, bottom - minSize).toDouble();
+      case ObjectImageCropHandle.top:
+        top = (top + dy).clamp(0.0, bottom - minSize).toDouble();
       case ObjectImageCropHandle.topRight:
         right = (right + dx).clamp(left + minSize, 1.0).toDouble();
         top = (top + dy).clamp(0.0, bottom - minSize).toDouble();
-      case ObjectImageCropHandle.bottomLeft:
-        left = (left + dx).clamp(0.0, right - minSize).toDouble();
-        bottom = (bottom + dy).clamp(top + minSize, 1.0).toDouble();
+      case ObjectImageCropHandle.right:
+        right = (right + dx).clamp(left + minSize, 1.0).toDouble();
       case ObjectImageCropHandle.bottomRight:
         right = (right + dx).clamp(left + minSize, 1.0).toDouble();
         bottom = (bottom + dy).clamp(top + minSize, 1.0).toDouble();
+      case ObjectImageCropHandle.bottom:
+        bottom = (bottom + dy).clamp(top + minSize, 1.0).toDouble();
+      case ObjectImageCropHandle.bottomLeft:
+        left = (left + dx).clamp(0.0, right - minSize).toDouble();
+        bottom = (bottom + dy).clamp(top + minSize, 1.0).toDouble();
+      case ObjectImageCropHandle.left:
+        left = (left + dx).clamp(0.0, right - minSize).toDouble();
     }
 
     return Rect.fromLTRB(left, top, right, bottom);
@@ -124,9 +136,9 @@ class ObjectImageCropGeometry {
 
 /// Interactive free-crop overlay that only edits a normalized [Rect].
 ///
-/// The child is read-only presentation. Drag the crop frame to move it or one
-/// of the four corner handles to resize it freely. No file path or image bytes
-/// are mutated by this widget.
+/// The child is read-only presentation. Drag the crop frame to move it, one of
+/// the four corner handles to resize both axes, or an edge handle to resize one
+/// axis. No file path or image bytes are mutated by this widget.
 class ObjectImageCropSelector extends StatefulWidget {
   const ObjectImageCropSelector({
     super.key,
@@ -264,9 +276,37 @@ class _ObjectImageCropSelectorState extends State<ObjectImageCropSelector> {
               color: scheme.primary,
             ),
             _handle(
+              handle: ObjectImageCropHandle.top,
+              point: Offset(crop.center.dx, crop.top),
+              cursor: SystemMouseCursors.resizeUpDown,
+              size: size,
+              color: scheme.primary,
+            ),
+            _handle(
               handle: ObjectImageCropHandle.topRight,
               point: crop.topRight,
               cursor: SystemMouseCursors.resizeUpRightDownLeft,
+              size: size,
+              color: scheme.primary,
+            ),
+            _handle(
+              handle: ObjectImageCropHandle.right,
+              point: Offset(crop.right, crop.center.dy),
+              cursor: SystemMouseCursors.resizeLeftRight,
+              size: size,
+              color: scheme.primary,
+            ),
+            _handle(
+              handle: ObjectImageCropHandle.bottomRight,
+              point: crop.bottomRight,
+              cursor: SystemMouseCursors.resizeUpLeftDownRight,
+              size: size,
+              color: scheme.primary,
+            ),
+            _handle(
+              handle: ObjectImageCropHandle.bottom,
+              point: Offset(crop.center.dx, crop.bottom),
+              cursor: SystemMouseCursors.resizeUpDown,
               size: size,
               color: scheme.primary,
             ),
@@ -278,9 +318,9 @@ class _ObjectImageCropSelectorState extends State<ObjectImageCropSelector> {
               color: scheme.primary,
             ),
             _handle(
-              handle: ObjectImageCropHandle.bottomRight,
-              point: crop.bottomRight,
-              cursor: SystemMouseCursors.resizeUpLeftDownRight,
+              handle: ObjectImageCropHandle.left,
+              point: Offset(crop.left, crop.center.dy),
+              cursor: SystemMouseCursors.resizeLeftRight,
               size: size,
               color: scheme.primary,
             ),
@@ -299,10 +339,24 @@ class _ObjectImageCropSelectorState extends State<ObjectImageCropSelector> {
   }) {
     final name = switch (handle) {
       ObjectImageCropHandle.topLeft => 'top-left',
+      ObjectImageCropHandle.top => 'top',
       ObjectImageCropHandle.topRight => 'top-right',
-      ObjectImageCropHandle.bottomLeft => 'bottom-left',
+      ObjectImageCropHandle.right => 'right',
       ObjectImageCropHandle.bottomRight => 'bottom-right',
+      ObjectImageCropHandle.bottom => 'bottom',
+      ObjectImageCropHandle.bottomLeft => 'bottom-left',
+      ObjectImageCropHandle.left => 'left',
     };
+    final isEdge = switch (handle) {
+      ObjectImageCropHandle.top ||
+      ObjectImageCropHandle.right ||
+      ObjectImageCropHandle.bottom ||
+      ObjectImageCropHandle.left => true,
+      _ => false,
+    };
+    final isHorizontalEdge = handle == ObjectImageCropHandle.top ||
+        handle == ObjectImageCropHandle.bottom;
+
     return Positioned(
       left: point.dx - _handleSize / 2,
       top: point.dy - _handleSize / 2,
@@ -326,10 +380,14 @@ class _ObjectImageCropSelectorState extends State<ObjectImageCropSelector> {
             child: DecoratedBox(
               decoration: BoxDecoration(
                 color: color,
-                shape: BoxShape.circle,
+                shape: isEdge ? BoxShape.rectangle : BoxShape.circle,
+                borderRadius: isEdge ? BorderRadius.circular(2) : null,
                 border: Border.all(color: Colors.white, width: 2),
               ),
-              child: const SizedBox.square(dimension: 12),
+              child: SizedBox(
+                width: isEdge ? (isHorizontalEdge ? 14 : 8) : 12,
+                height: isEdge ? (isHorizontalEdge ? 8 : 14) : 12,
+              ),
             ),
           ),
         ),
