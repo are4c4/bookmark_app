@@ -70,10 +70,8 @@ void main() {
   test('managed File collection creation reuses canonical File identity', () async {
     final definition = await files.ensureDefinition(workspaceId);
 
-    expect(
-      await service.createModeForObjectType(definition.objectType.id),
-      GenericDatabaseCreateMode.managedFile,
-    );
+    // Until the mixed file-import host lands, title-only generic creation must
+    // fail closed rather than bypass canonical managed-file identity.
     await expectLater(
       service.create(
         databaseId: definition.objectType.id,
