@@ -53,11 +53,12 @@ void main() {
 
   test('redirect uses final URL for relative media without retargeting identity',
       () async {
+    final requestedUrl = Uri.parse('https://resource.test/go');
     final finalUrl = Uri.parse('https://cdn.resource.test/articles/final/');
     final service = BookmarkMetadataService(
       client: MockClient((request) async {
-        expect(request.url.toString(), 'https://resource.test/go');
-        return http.Response(
+        expect(request.url, requestedUrl);
+        return _ResponseWithUrl(
           '''
 <html>
   <head>
@@ -68,15 +69,16 @@ void main() {
 </html>
 ''',
           200,
-          request: http.Request('GET', finalUrl),
+          url: finalUrl,
+          request: http.Request('GET', requestedUrl),
           headers: const {'content-type': 'text/html; charset=utf-8'},
         );
       }),
     );
 
-    final metadata = await service.fetch('https://resource.test/go');
+    final metadata = await service.fetch(requestedUrl.toString());
 
-    expect(metadata.url, 'https://resource.test/go');
+    expect(metadata.url, requestedUrl.toString());
     expect(metadata.title, 'Redirected article');
     expect(
       metadata.thumbnail,
@@ -131,4 +133,18 @@ void main() {
     expect(metadata.contentType, isNull);
     expect(metadata.publishedDate, isNull);
   });
+}
+
+class _ResponseWithUrl extends http.Response
+    implements http.BaseResponseWithUrl {
+  _ResponseWithUrl(
+    super.body,
+    super.statusCode, {
+    required this.url,
+    super.request,
+    super.headers,
+  });
+
+  @override
+  final Uri url;
 }
