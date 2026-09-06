@@ -47,6 +47,50 @@ void main() {
     expect(restored.blocks.last.attributes['answer'], 42);
   });
 
+  test('invalid Body structure fails before replacing persisted content', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final bodyStore = ObjectBodyStore(genericStore);
+
+    final typeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Note',
+    );
+    final objectId = await objectStore.createObject(
+      objectTypeId: typeId,
+      title: 'Protected',
+    );
+    await bodyStore.write(
+      objectId: objectId,
+      document: const ObjectBodyDocument(
+        blocks: <ObjectBodyBlock>[
+          ObjectBodyBlock(id: 'safe', type: 'paragraph', text: 'keep me'),
+        ],
+      ),
+    );
+
+    await expectLater(
+      bodyStore.write(
+        objectId: objectId,
+        document: const ObjectBodyDocument(
+          blocks: <ObjectBodyBlock>[
+            ObjectBodyBlock(id: 'duplicate', type: 'paragraph'),
+            ObjectBodyBlock(id: 'duplicate', type: 'futureWidget'),
+          ],
+        ),
+      ),
+      throwsFormatException,
+    );
+
+    final restored = await bodyStore.read(objectId);
+    expect(restored.blocks, hasLength(1));
+    expect(restored.blocks.single.id, 'safe');
+    expect(restored.blocks.single.text, 'keep me');
+  });
+
   test('deleting an Object cascades its Body row', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
