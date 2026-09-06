@@ -45,10 +45,11 @@ class VaultMoveCopyService {
         throw StateError('Vault copy verification failed.');
       }
 
-      return validator.validate(
+      final validated = await validator.validate(
         expectedProfile: profile,
         directoryPath: target.path,
       );
+      return validated;
     } catch (_) {
       await _cleanupCopiedTarget(
         target: target,
