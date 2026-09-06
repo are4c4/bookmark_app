@@ -124,7 +124,7 @@ void main() {
     expect(rows, isEmpty);
   });
 
-  test('clear removes Body without deleting the Object', () async {
+  test('clear removes Body, advances Object freshness and keeps Object', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
     final workspaceId = await WorkspaceStore(database).initialize();
@@ -148,10 +148,64 @@ void main() {
         ],
       ),
     );
+    await database.customStatement(
+      "UPDATE generic_records SET updated_at = '2000-01-01 00:00:00' WHERE id = ?",
+      [objectId],
+    );
 
     await bodyStore.clear(objectId);
 
     expect((await bodyStore.read(objectId)).isEmpty, isTrue);
-    expect((await objectStore.listObjects(typeId)).single.id, objectId);
+    final object = (await objectStore.listObjects(typeId)).single;
+    expect(object.id, objectId);
+    expect(object.updatedAt.year, isNot(2000));
+
+    await database.customStatement(
+      "UPDATE generic_records SET updated_at = '2000-01-01 00:00:00' WHERE id = ?",
+      [objectId],
+    );
+    await bodyStore.clear(objectId);
+    expect((await objectStore.listObjects(typeId)).single.updatedAt.year, 2000);
+  });
+
+  test('clear rolls Body deletion back when Object freshness update fails', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final bodyStore = ObjectBodyStore(genericStore);
+
+    final typeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Note',
+    );
+    final objectId = await objectStore.createObject(
+      objectTypeId: typeId,
+      title: 'Protected body',
+    );
+    await bodyStore.write(
+      objectId: objectId,
+      document: const ObjectBodyDocument(
+        blocks: <ObjectBodyBlock>[
+          ObjectBodyBlock(id: 'safe', type: 'paragraph', text: 'keep me'),
+        ],
+      ),
+    );
+    await database.customStatement('''
+      CREATE TRIGGER fail_object_body_clear_parent_touch
+      BEFORE UPDATE OF updated_at ON generic_records
+      WHEN OLD.id = $objectId
+      BEGIN
+        SELECT RAISE(ABORT, 'forced parent freshness failure');
+      END
+    ''');
+
+    await expectLater(bodyStore.clear(objectId), throwsA(anything));
+
+    final restored = await bodyStore.read(objectId);
+    expect(restored.blocks, hasLength(1));
+    expect(restored.blocks.single.id, 'safe');
+    expect(restored.blocks.single.text, 'keep me');
   });
 }
