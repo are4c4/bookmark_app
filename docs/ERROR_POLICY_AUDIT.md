@@ -25,11 +25,12 @@ Issue #225 requires reducing silent failure without breaking intentional best-ef
 | `lib/data/tag_group_store.dart` | malformed persisted tag-tree expansion JSON returns default collapsed state | fallback is the contract | #325 keeps the same state while making malformed/non-map values debug-visible without stored JSON or exception text. |
 | `lib/data/generic_database_page_state_loader.dart` | formula/rollup evaluation failure projects `null` and page loading continues | fallback is the contract | #326 preserves the null projection and adds fixed debug stack visibility without Object titles, Property names/expressions or exception text. |
 | `lib/data/generic_database_store.dart` | malformed Property config JSON -> `{}`; malformed Record value JSON -> `null` | fallback is the contract | #329 adds privacy-safe debug visibility and focused persisted-corruption coverage without logging raw config/value/exception text. |
-| `lib/data/object_board_create_service.dart` | catch rolls back newly-created Object | rollback / fail-closed | Preserve exactly; this protects invariants. Ensure original failure is rethrown/translated after rollback. |
-| `lib/services/profile_backup_service.dart` | catch cleans partial target | rollback / fail-closed | Preserve cleanup semantics; avoid swallowing the original failure after cleanup. |
-| `lib/services/profile_manager.dart` | decode failure can fall back to default profile state | fallback is the contract, **higher risk** | Debug visibility exists, but behavior changes are deferred. This path can affect data-location recovery and requires an explicit recovery/product policy before changing fallback selection or persistence. |
-| `lib/views/global_search_page.dart` | search/index catch stores the caught Object and renders it via `message: '$_error'` | user-visible failure | **Known next candidate.** Replace with a focused, testable stable-error state while preserving indexing/search retry behavior; do not make an untested one-line cosmetic substitution. |
-| `lib/views/settings_page.dart` | backup/settings operation catches may surface implementation errors | user-visible failure | Lower priority than silent persistence corruption; move toward stable domain messages when the service/error boundary is touched. |
+| `lib/data/object_board_create_service.dart` | grouped-preset failure rolls back the newly-created Object | rollback / fail-closed | #347 makes cleanup explicitly best-effort so delete failure cannot replace the original preset failure; fixed debug stack diagnostics contain no Object/Property/user content. |
+| `lib/services/generic_database_image_import_service.dart` | failed canonical Image creation removes the copied managed file | rollback / fail-closed | #343 makes cleanup best-effort and preserves the original Object-creation failure if managed-file deletion also fails. |
+| `lib/services/profile_backup_service.dart` | restore/extraction failure cleans partial target | rollback / fail-closed | #342 makes rollback cleanup best-effort so a secondary directory-delete failure cannot mask the original restore failure. |
+| `lib/services/profile_manager.dart` | decode failure can fall back to default profile state | fallback is the contract, **higher risk** | #340 sanitizes fallback diagnostics; behavior changes remain deferred because this path affects data-location recovery and needs explicit policy. |
+| `lib/views/global_search_page.dart` | search/index failure uses a stable retry-oriented error state | user-visible failure | #331 replaced raw caught-Object rendering with a stable boundary while preserving rebuild retry behavior. |
+| `lib/views/settings_page.dart` | backup/settings operation failures use stable messages | user-visible failure | #332/#333/#335 cover backup, AutoOrganize, and malformed View-opening settings without exposing implementation details. |
 | `lib/main.dart` | initialization catch stores `_error` and fails visibly rather than continuing partially | user-visible/fail-closed initialization | Keep fail-closed startup. Audit message exposure separately if raw exception details are rendered. |
 
 ## Refactor order
@@ -39,6 +40,7 @@ Issue #225 requires reducing silent failure without breaking intentional best-ef
 3. Raw user-visible implementation exceptions — introduce stable domain/error-state boundaries with tests preserving retry/failure behavior.
 4. Repeated parsing of database constraint exceptions in Widgets — translate at Store/Service boundaries when a real repeated caller is simplified.
 5. Stable normal fallbacks such as file-existence checks should remain quiet unless evidence shows a debugging gap; reducing `catch` counts is not itself a goal.
+6. Rollback cleanup must never replace the primary failure that triggered rollback; cleanup failures are secondary diagnostics unless the product contract explicitly says otherwise.
 
 ## Diagnostic privacy rule
 
@@ -56,3 +58,4 @@ Debug/test observability must not create a secondary user-data leak. Prefer:
 - Prefer typed/domain errors for actionable user failures.
 - Do not display raw database/HTTP exception strings when a stable domain message exists.
 - Do not add noisy logs to ordinary file-not-found / no-media compatibility fallbacks simply to make every catch observable.
+- When rollback itself fails, preserve the original operation failure and treat cleanup failure as secondary diagnostics unless recovery semantics require otherwise.
