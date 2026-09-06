@@ -37,16 +37,21 @@ class ObjectTypeManagementStore {
       );
       final duplicatedPropertyIds = <int, int>{};
 
-      for (final property in source.properties.where((item) => !item.isRelation)) {
-        final duplicatedPropertyId = await objectStore.createProperty(
-          objectTypeId: duplicatedId,
-          name: property.name,
-          type: property.type,
-          config: Map<String, dynamic>.from(property.config),
-        );
-        duplicatedPropertyIds[property.id] = duplicatedPropertyId;
-      }
-      for (final property in source.properties.where((item) => item.isRelation)) {
+      // Preserve canonical schema order. Splitting Value and Relation Properties
+      // into separate loops changes the copied ObjectType whenever the source
+      // interleaves those semantics.
+      for (final property in source.properties) {
+        if (!property.isRelation) {
+          final duplicatedPropertyId = await objectStore.createProperty(
+            objectTypeId: duplicatedId,
+            name: property.name,
+            type: property.type,
+            config: Map<String, dynamic>.from(property.config),
+          );
+          duplicatedPropertyIds[property.id] = duplicatedPropertyId;
+          continue;
+        }
+
         final sourceTargetId = property.targetObjectTypeId;
         if (sourceTargetId == null) continue;
         final duplicatedTargetId = sourceTargetId == source.id
