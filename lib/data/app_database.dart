@@ -290,38 +290,6 @@ class AppDatabase extends _$AppDatabase {
         }
       });
 
-  Future<void> batchSetStatus(Iterable<int> ids, String status) async {
-    final readingStatus = status == 'archived' ? 'unread' : status;
-    for (final id in ids.toSet()) {
-      await (update(bookmarks)..where((b) => b.id.equals(id))).write(BookmarksCompanion(
-        status: Value(status),
-        readingStatus: Value(readingStatus),
-        storageState: status == 'archived' ? const Value('archived') : const Value.absent(),
-      ));
-    }
-  }
-
-  Future<void> batchSetRating(Iterable<int> ids, int rating) async {
-    for (final id in ids.toSet()) {
-      await (update(bookmarks)..where((b) => b.id.equals(id))).write(BookmarksCompanion(rating: Value(rating.clamp(0, 5))));
-    }
-  }
-
-  Future<void> batchSetFavorite(Iterable<int> ids, bool favorite) async {
-    for (final id in ids.toSet()) {
-      await (update(bookmarks)..where((b) => b.id.equals(id))).write(BookmarksCompanion(favorite: Value(favorite)));
-    }
-  }
-
-  Future<void> recordBookmarkOpen(int id) async {
-    final bookmark = await (select(bookmarks)..where((b) => b.id.equals(id))).getSingleOrNull();
-    if (bookmark == null) return;
-    await (update(bookmarks)..where((b) => b.id.equals(id))).write(BookmarksCompanion(
-      lastOpenedAt: Value(DateTime.now()),
-      openCount: Value(bookmark.openCount + 1),
-    ));
-  }
-
   Future<int> addPhoto({required String path, String? title, String? note, Iterable<String> tagNames = const []}) =>
       into(photos).insert(PhotosCompanion.insert(path: pathResolver.toStoredPath(path), title: Value(title), note: Value(note), tags: Value(_normalizeNamesText(tagNames))));
 
@@ -454,25 +422,11 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 
-  Future<void> setFavorite(int id, bool favorite) async {
-    await (update(bookmarks)..where((b) => b.id.equals(id))).write(BookmarksCompanion(favorite: Value(favorite)));
-  }
-
-  Future<void> setStatus(int id, String status) async {
-    await (update(bookmarks)..where((b) => b.id.equals(id))).write(BookmarksCompanion(
-      status: Value(status),
-      readingStatus: Value(status == 'archived' ? 'unread' : status),
-      storageState: status == 'archived' ? const Value('archived') : const Value.absent(),
-    ));
-  }
-
   Future<void> setGenre(int id, String genre) =>
       (update(bookmarks)..where((b) => b.id.equals(id))).write(
         BookmarksCompanion(genre: Value(genre.trim())),
       );
 
-  Future<void> setRating(int id, int rating) =>
-      (update(bookmarks)..where((b) => b.id.equals(id))).write(BookmarksCompanion(rating: Value(rating.clamp(0, 5))));
   Future<int> deleteBookmark(int id) => (delete(bookmarks)..where((b) => b.id.equals(id))).go();
 
   Future<void> _setSavedViewTags(int viewId, Iterable<int> tagIds) async {

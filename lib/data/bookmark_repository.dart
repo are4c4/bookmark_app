@@ -8,6 +8,7 @@ import '../services/photo_storage_service.dart';
 import '../domain/bookmark_state.dart';
 import 'app_database.dart';
 import 'bookmark_attachment_store.dart';
+import 'bookmark_engagement_store.dart';
 import 'bookmark_read_store.dart';
 import 'bookmark_lifecycle_store.dart';
 import 'person_roles.dart';
@@ -25,12 +26,14 @@ class BookmarkRepository {
     this.profileDirectoryPath,
     AutoOrganizeService? autoOrganizeService,
   })  : _bookmarkReads = BookmarkReadStore(_database),
+        _engagement = BookmarkEngagementStore(_database),
         _photoReads = PhotoReadStore(_database),
         _savedViewReads = SavedViewReadStore(_database),
         autoOrganize = autoOrganizeService ?? AutoOrganizeService(_database);
 
   final AppDatabase _database;
   final BookmarkReadStore _bookmarkReads;
+  final BookmarkEngagementStore _engagement;
   final PhotoReadStore _photoReads;
   final SavedViewReadStore _savedViewReads;
   final WorkspaceStore workspaceStore;
@@ -252,10 +255,14 @@ class BookmarkRepository {
   Future<void> setBookmarkCollections(BookmarkItem bookmark, Iterable<CollectionRecord> selected) =>
       _database.setBookmarkCollections(bookmark.id, selected.map((collection) => collection.name));
 
-  Future<void> toggleFavorite(BookmarkItem bookmark) => _database.setFavorite(bookmark.id, !bookmark.favorite);
-  Future<void> setStatus(BookmarkItem bookmark, String status) => _database.setStatus(bookmark.id, status);
-  Future<void> setRating(BookmarkItem bookmark, int rating) => _database.setRating(bookmark.id, rating);
-  Future<void> recordOpen(BookmarkItem bookmark) => _database.recordBookmarkOpen(bookmark.id);
+  Future<void> toggleFavorite(BookmarkItem bookmark) =>
+      _engagement.setFavorite(bookmark.id, !bookmark.favorite);
+  Future<void> setStatus(BookmarkItem bookmark, String status) =>
+      _engagement.setStatus(bookmark.id, status);
+  Future<void> setRating(BookmarkItem bookmark, int rating) =>
+      _engagement.setRating(bookmark.id, rating);
+  Future<void> recordOpen(BookmarkItem bookmark) =>
+      _engagement.recordOpen(bookmark.id);
   Future<void> setInbox(BookmarkItem bookmark, bool value) => lifecycleStore.setInbox(bookmark.id, value);
   Future<void> archive(BookmarkItem bookmark) =>
       lifecycleStore.setArchived(bookmark.id, true);
@@ -304,9 +311,12 @@ class BookmarkRepository {
     }
   }
 
-  Future<void> batchSetStatus(Iterable<int> ids, String status) => _database.batchSetStatus(ids, status);
-  Future<void> batchSetRating(Iterable<int> ids, int rating) => _database.batchSetRating(ids, rating);
-  Future<void> batchSetFavorite(Iterable<int> ids, bool favorite) => _database.batchSetFavorite(ids, favorite);
+  Future<void> batchSetStatus(Iterable<int> ids, String status) =>
+      _engagement.batchSetStatus(ids, status);
+  Future<void> batchSetRating(Iterable<int> ids, int rating) =>
+      _engagement.batchSetRating(ids, rating);
+  Future<void> batchSetFavorite(Iterable<int> ids, bool favorite) =>
+      _engagement.batchSetFavorite(ids, favorite);
   Future<void> batchDelete(Iterable<int> ids) async {
     for (final id in ids.toSet()) {
       await lifecycleStore.moveToTrash(id);
