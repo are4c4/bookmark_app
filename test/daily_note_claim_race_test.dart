@@ -65,9 +65,9 @@ void main() {
     final registryRows = await database.customSelect(
       '''SELECT object_id FROM daily_note_registry
          WHERE workspace_id = ? AND note_date = ?''',
-      variables: <Variable<Object>>[
+      variables: [
         Variable<int>(workspaceId),
-        const Variable<String>('2026-09-08'),
+        Variable<String>('2026-09-08'),
       ],
     ).get();
     expect(registryRows, hasLength(1));
