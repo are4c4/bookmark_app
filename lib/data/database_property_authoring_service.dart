@@ -63,6 +63,13 @@ class DatabasePropertyAuthoringService {
         'Only Relation Properties may declare a target ObjectType.',
       );
     }
+    if (!relationMultiple) {
+      throw ArgumentError.value(
+        relationMultiple,
+        'relationMultiple',
+        'Only Relation Properties may declare Relation cardinality.',
+      );
+    }
 
     return objectStore.createProperty(
       objectTypeId: objectTypeId,
