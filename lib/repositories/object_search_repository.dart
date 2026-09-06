@@ -5,9 +5,11 @@ import '../data/generic_database_store.dart';
 import '../data/object_alias_store.dart';
 import '../data/object_body_store.dart';
 import '../data/object_store.dart';
+import '../data/relation_read_service.dart';
 import '../domain/object_model.dart';
 import 'object_body_search_text.dart';
 import 'object_property_search_text.dart';
+import 'object_relation_search_text.dart';
 
 class ObjectSearchHit {
   const ObjectSearchHit({
@@ -36,13 +38,15 @@ class ObjectSearchRepository {
         _database = genericStore.database,
         _aliasStore = ObjectAliasStore(genericStore),
         _bodyStore = ObjectBodyStore(genericStore),
-        _objectStore = ObjectStore(genericStore);
+        _objectStore = ObjectStore(genericStore),
+        _relationReads = RelationReadService(ObjectStore(genericStore));
 
   final GenericDatabaseStore _genericStore;
   final AppDatabase _database;
   final ObjectAliasStore _aliasStore;
   final ObjectBodyStore _bodyStore;
   final ObjectStore _objectStore;
+  final RelationReadService _relationReads;
   bool _initialized = false;
 
   Future<void> initialize() async {
@@ -137,6 +141,12 @@ class ObjectSearchRepository {
       final body = buildObjectBodySearchText(
         await _bodyStore.read(currentObjectId),
       );
+      final relationLabels = buildObjectRelationSearchText(
+        await _relationReads.outgoing(
+          sourceObjectTypeId: objectTypeId,
+          sourceObjectId: currentObjectId,
+        ),
+      );
       await _database.customStatement(
         '''INSERT INTO object_search_fts(
              object_id,
@@ -149,7 +159,7 @@ class ObjectSearchRepository {
              relation_labels,
              weblink_metadata,
              derived_text
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, '', '', '')''',
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', '')''',
         [
           currentObjectId,
           objectTypeId,
@@ -158,6 +168,7 @@ class ObjectSearchRepository {
           aliases,
           properties,
           body,
+          relationLabels,
         ],
       );
     }
