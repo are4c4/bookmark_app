@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../data/bookmark_repository.dart';
+import '../services/vault_lifecycle_scope.dart';
 import '../ui/ui_tokens.dart';
 import 'auto_organize_settings_section.dart';
 import 'database_backup_settings_section.dart';
 import 'vault_settings_section.dart';
+import 'vault_switch_dialog.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({
@@ -32,10 +34,68 @@ class SettingsPage extends StatelessWidget {
   final VoidCallback? onOpenVault;
   final VoidCallback? onSwitchVault;
 
+  Future<void> _runVaultAction(
+    BuildContext context,
+    Future<void> Function() action,
+    String failureMessage,
+  ) async {
+    try {
+      await action();
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(failureMessage)),
+      );
+    }
+  }
+
+  Future<void> _switchVaultFromScope(
+    BuildContext context,
+    VaultLifecycleScope scope,
+  ) async {
+    final selected = await showVaultSwitchDialog(
+      context,
+      state: scope.profileState,
+    );
+    if (selected == null || !context.mounted) return;
+    await _runVaultAction(
+      context,
+      () => scope.switchVault(selected),
+      'Vaultを切り替えられませんでした。現在のVaultは変更されていません。',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final vaultPath = repository.profileDirectoryPath?.trim();
+    final vaultScope = VaultLifecycleScope.maybeOf(context);
+    final VoidCallback? createVaultAction = onCreateVault ??
+        (vaultScope == null
+            ? null
+            : () async {
+                await _runVaultAction(
+                  context,
+                  vaultScope.createVault,
+                  '新しいVaultを作成できませんでした。現在のVaultは変更されていません。',
+                );
+              });
+    final VoidCallback? openVaultAction = onOpenVault ??
+        (vaultScope == null
+            ? null
+            : () async {
+                await _runVaultAction(
+                  context,
+                  vaultScope.openVault,
+                  'Vaultを開けませんでした。現在のVaultは変更されていません。',
+                );
+              });
+    final VoidCallback? switchVaultAction = onSwitchVault ??
+        (vaultScope == null
+            ? null
+            : () async {
+                await _switchVaultFromScope(context, vaultScope);
+              });
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: UiTokens.appBarHeight,
@@ -100,9 +160,9 @@ class SettingsPage extends StatelessWidget {
             VaultSettingsSection(
               directoryPath: vaultPath,
               revealDirectory: revealVaultDirectory,
-              onCreateVault: onCreateVault,
-              onOpenVault: onOpenVault,
-              onSwitchVault: onSwitchVault,
+              onCreateVault: createVaultAction,
+              onOpenVault: openVaultAction,
+              onSwitchVault: switchVaultAction,
             ),
           ],
           const SizedBox(height: UiTokens.space24),
