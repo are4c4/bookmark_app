@@ -33,6 +33,10 @@ void main() {
       _iconButton(tester, 'object-image-flip-horizontal').onPressed,
       isNull,
     );
+    expect(
+      _iconButton(tester, 'object-image-flip-vertical').onPressed,
+      isNull,
+    );
     expect(_cropButton(tester).enabled, isFalse);
     expect(_freeCropButton(tester).onPressed, isNull);
     expect(_restoreButton(tester).onPressed, isNull);
@@ -71,6 +75,12 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('object-image-flip-horizontal')));
     await tester.pumpAndSettle();
+    expect(service.lastQuarterTurns, 0);
+    expect(service.lastFlipHorizontal, isTrue);
+
+    await tester.tap(find.byKey(const ValueKey('object-image-flip-vertical')));
+    await tester.pumpAndSettle();
+    expect(service.lastQuarterTurns, 2);
     expect(service.lastFlipHorizontal, isTrue);
 
     await tester.tap(find.byKey(const ValueKey('object-image-crop-aspect-ratio')));
@@ -95,7 +105,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('object-image-restore-original')));
     await tester.pumpAndSettle();
     expect(service.restoreCalls, 1);
-    expect(changed, 5);
+    expect(changed, 6);
   });
 }
 
