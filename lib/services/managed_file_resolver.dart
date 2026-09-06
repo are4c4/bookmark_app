@@ -36,15 +36,9 @@ class ManagedFileResolver {
 
   /// Canonicalizes either an absolute or already-stored path into the portable
   /// identity used by file-backed primitives.
-  ///
-  /// Relative input is first resolved against the active profile/Vault before
-  /// being converted back to stored form. This makes absolute and relative
-  /// representations of the same managed resource compare identically while
-  /// leaving external absolute paths absolute.
   String canonicalStoredPath(String path) {
     final normalized = _requiredPath(path);
-    final resolved = _pathResolver?.resolveStoredPath(normalized) ?? normalized;
-    return _pathResolver?.toStoredPath(resolved) ?? resolved;
+    return _pathResolver?.canonicalStoredPath(normalized) ?? normalized;
   }
 
   /// Converts a known resolved path into portable stored form without first
