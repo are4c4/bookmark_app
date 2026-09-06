@@ -2,14 +2,16 @@
 set -euo pipefail
 
 # Reports Dart LOC and selected dependency-boundary debt without changing the
-# repository. This is intentionally a visibility tool first: existing hotspots
-# are debt to reduce, not CI failures.
+# repository. Existing hotspots stay non-blocking by default; callers may opt
+# into a regression-only presentation/database reach-through threshold.
 #
 # Usage:
 #   bash tool/maintainability_report.sh
 #   bash tool/maintainability_report.sh --top 30
+#   bash tool/maintainability_report.sh --max-boundary-refs 12
 
 TOP=20
+MAX_BOUNDARY_REFS=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -21,8 +23,16 @@ while [[ $# -gt 0 ]]; do
       TOP="$2"
       shift 2
       ;;
+    --max-boundary-refs)
+      if [[ $# -lt 2 || ! "$2" =~ ^[0-9]+$ ]]; then
+        echo "--max-boundary-refs requires a non-negative integer" >&2
+        exit 2
+      fi
+      MAX_BOUNDARY_REFS="$2"
+      shift 2
+      ;;
     -h|--help)
-      sed -n '3,10p' "$0"
+      sed -n '3,11p' "$0"
       exit 0
       ;;
     *)
@@ -122,7 +132,17 @@ if [[ "$boundary_files" -gt 0 ]]; then
   done < "$boundary_file"
 fi
 
+if [[ -n "$MAX_BOUNDARY_REFS" ]]; then
+  echo
+  echo "Boundary regression threshold: $MAX_BOUNDARY_REFS reference(s) maximum"
+  if [[ "$boundary_refs" -gt "$MAX_BOUNDARY_REFS" ]]; then
+    echo "Maintainability regression: $boundary_refs presentation database reach-through references exceed maximum $MAX_BOUNDARY_REFS." >&2
+    exit 1
+  fi
+fi
+
 echo
-echo "Policy: this report is non-blocking. Existing hotspots and boundary debt must"
-echo "not be hidden by moving code without reducing responsibility or duplication."
-echo "Review major LOC/boundary growth against docs/MAINTAINABILITY.md and Issue #225."
+echo "Policy: this report is non-blocking unless an explicit regression threshold is supplied."
+echo "Existing hotspots and boundary debt must not be hidden by moving code without reducing"
+echo "responsibility or duplication. Review major LOC/boundary growth against"
+echo "docs/MAINTAINABILITY.md and Issue #225."
