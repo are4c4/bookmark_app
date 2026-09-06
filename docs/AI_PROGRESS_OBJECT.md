@@ -15,7 +15,7 @@ Object/ObjectType architecture, Property value semantics, Object-centric Databas
 Completed/closed for current implementation scope: #247 Bookmark opening modes, #149 Property handle, #252 Property-add UX, #156 generic fixed/masonry Gallery, #166 aliases.
 
 ## Current merged state — 2026-09-07
-Latest main observed in this run: `887d3ac74ea8f8c8ef67dc7299a87978c9804038` after Refactor handoff #456. #456 is documentation-only relative to the Image work.
+Latest main observed in this run: `0a9f50704b63705c662f26bfb4119364c6801ca8` after Refactor #458. #458 only removed the caller-zero `ObjectGroupMode` declaration and did not touch the active Image files or shared Object hotspots.
 
 Recent Object checkpoints relevant to current Image work:
 - #416 merged: reusable canonical Image detail preview resolves managed media through `ImageVisualResolver`, uses persisted geometry/profile-relative paths, and fails safely for missing files.
@@ -50,7 +50,7 @@ PR #457 `Compose canonical Image detail preview and edit actions` is the current
 
 Flutter CI #1588 for #457 passed maintainability checks and Analyze, and 716 tests passed. The only failure was the new panel regression timing out after 10 minutes. The initial test redundantly exercised real file-byte editing/geometry persistence even though that behavior is already covered by `CanonicalImageEditService` tests. Commit `67ce96a6e6c6c2591ee569d92c5de3e00c8e57c8` narrows the panel regression to the panel-owned contract: safe action dispatch -> host notification -> refresh-token-driven same-path preview cache eviction. Production code is unchanged by this fix. Flutter CI #1593 is the current rerun and was still in progress when this handoff was written.
 
-Open Refactor PR #458 removes only the caller-zero `ObjectGroupMode` declaration and explicitly does not touch #457 Image files or shared Object hotspots.
+Refactor #458 is merged and has no overlap with #457 Image files.
 
 The current GitHub connector can replace complete existing files but does not provide a hunk-sized patch write. `object_inspector_page.dart` and `bookmark_unified_stage1_page.dart` are shared, conflict-prone hotspots, so do not reconstruct either large host merely to insert a few lines. #457 deliberately creates a naturally smaller Image-detail seam so the eventual Inspector integration can remain patch-sized.
 
@@ -72,11 +72,11 @@ Person profile Image migration remains deferred because People UX is still legac
 Canonical Relation behavior remains mature. Current Image edit/detail work is Object-owned filesystem/presentation behavior and creates no new Relation producer. Bookmark `Images` and `Cover Image` continue to use canonical Relation APIs. Resume Relation implementation only if a new production Image/Bookmark workflow creates or retargets Relations or a concrete lifecycle regression appears.
 
 ### Refactor
-Open Refactor #458 is deletion-only caller-zero cleanup in `object_group.dart` and has no overlap with #457. Always recheck live ownership before editing shared hosts/resolvers; Object product replacement must establish parity before Refactor removes compatibility paths.
+#458 is merged deletion-only caller-zero cleanup in `object_group.dart` and has no overlap with #457. Always recheck live ownership before editing shared hosts/resolvers; Object product replacement must establish parity before Refactor removes compatibility paths.
 
 ## Validation in this run
 - Re-read latest `AGENTS.md`, Issue #56, `docs/AI_PROGRESS.md`, `docs/AI_PROGRESS_OBJECT.md`, #155/#245/#249, closed priority checks #247/#149/#252, live open PRs, current main and CI before edits.
-- Confirmed #447 is merged and main subsequently advanced only through Refactor handoff #456 before the current #457 work.
+- Confirmed #447 is merged and main subsequently advanced through Refactor handoff #456 and caller-zero cleanup #458 without touching active Image files.
 - Audited #457 as a clean two-file Image-detail composition seam and confirmed it did not claim `ObjectInspectorPage` or Stage1.
 - Inspected Flutter CI #1588 job logs: Analyze succeeded, 716 tests passed, and only `object_image_detail_panel_test.dart` timed out after 10 minutes.
 - Replaced the redundant real-file integration inside that panel regression with a fake `CanonicalImageEditService`, preserving the important composition checks while leaving byte/geometry behavior to the already-existing coordinator tests. Fix commit: `67ce96a6e6c6c2591ee569d92c5de3e00c8e57c8`.
