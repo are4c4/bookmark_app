@@ -71,13 +71,20 @@ class DailyNoteService {
     ))!;
 
     final currentDefaults = await defaultsStore.read(type.id);
-    if (currentDefaults == null) {
+    final needsDefaultBackfill = currentDefaults == null ||
+        currentDefaults.visiblePropertyIds == null ||
+        currentDefaults.propertyOrder == null ||
+        currentDefaults.openMode == null;
+    if (needsDefaultBackfill) {
       await defaultsStore.write(
         objectTypeId: type.id,
         defaults: ObjectTypeDefaults(
-          visiblePropertyIds: <int>[dateProperty.id],
-          propertyOrder: <int>[dateProperty.id],
-          openMode: ObjectOpenMode.fullPage,
+          visiblePropertyIds:
+              currentDefaults?.visiblePropertyIds ?? <int>[dateProperty.id],
+          propertyOrder:
+              currentDefaults?.propertyOrder ?? <int>[dateProperty.id],
+          openMode: currentDefaults?.openMode ?? ObjectOpenMode.fullPage,
+          bodyTemplate: currentDefaults?.bodyTemplate,
         ),
       );
     }
