@@ -43,14 +43,15 @@ class ObjectPropertyDeletionService {
         break;
       }
     }
-    if (stored == null) {
+    final storedProperty = stored;
+    if (storedProperty == null) {
       throw ArgumentError.value(
         property.id,
         'property',
         'Property does not belong to ObjectType ${property.objectTypeId}.',
       );
     }
-    if (stored.isRelation) {
+    if (storedProperty.isRelation) {
       throw StateError(
         'Relation Properties must be deleted through canonical Relation lifecycle APIs.',
       );
@@ -58,22 +59,22 @@ class ObjectPropertyDeletionService {
 
     await _defaultsStore.ensureSchema();
     await _genericStore.database.transaction(() async {
-      final current = await _defaultsStore.read(stored!.objectTypeId);
+      final current = await _defaultsStore.read(storedProperty.objectTypeId);
       if (current != null) {
         final visiblePropertyIds = _withoutProperty(
           current.visiblePropertyIds,
-          stored.id,
+          storedProperty.id,
         );
         final propertyOrder = _withoutProperty(
           current.propertyOrder,
-          stored.id,
+          storedProperty.id,
         );
         final changed =
             visiblePropertyIds?.length != current.visiblePropertyIds?.length ||
                 propertyOrder?.length != current.propertyOrder?.length;
         if (changed) {
           await _defaultsStore.write(
-            objectTypeId: stored.objectTypeId,
+            objectTypeId: storedProperty.objectTypeId,
             defaults: ObjectTypeDefaults(
               visiblePropertyIds: visiblePropertyIds,
               propertyOrder: propertyOrder,
@@ -84,7 +85,7 @@ class ObjectPropertyDeletionService {
         }
       }
 
-      await _objectStore.deleteProperty(stored.id);
+      await _objectStore.deleteProperty(storedProperty.id);
     });
   }
 
