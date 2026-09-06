@@ -69,11 +69,25 @@ class ObjectBodyStore {
   }
 
   /// Removes Body content only. The Object itself and all Properties remain.
+  ///
+  /// Clearing actual Body content is an Object mutation just like [write], so
+  /// the parent Object timestamp advances in the same transaction. Re-clearing
+  /// an already-empty Body is a no-op and does not manufacture an update.
   Future<void> clear(int objectId) async {
     await ensureSchema();
-    await _genericStore.database.customStatement(
-      'DELETE FROM object_bodies WHERE object_id = ?',
-      [objectId],
-    );
+    await _genericStore.database.transaction(() async {
+      await _genericStore.database.customStatement(
+        'DELETE FROM object_bodies WHERE object_id = ?',
+        [objectId],
+      );
+      final row = await _genericStore.database.customSelect(
+        'SELECT changes() AS changed',
+      ).getSingle();
+      if (row.read<int>('changed') == 0) return;
+      await _genericStore.database.customStatement(
+        'UPDATE generic_records SET updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [objectId],
+      );
+    });
   }
 }
