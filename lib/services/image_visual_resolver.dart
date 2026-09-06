@@ -45,7 +45,7 @@ class ImageManagedVisual {
 /// through the shared file-backed capability so stored Image identity remains
 /// portable across profile/Vault moves.
 class ImageVisualResolver {
-  const ImageVisualResolver(
+  ImageVisualResolver(
     this._objectStore, {
     ProfilePathResolver? pathResolver,
     this.probeMissingGeometry = true,
