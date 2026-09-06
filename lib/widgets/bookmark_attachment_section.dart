@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import '../data/app_database.dart';
 import '../data/bookmark_attachment_store.dart';
 import '../data/bookmark_repository.dart';
+import '../features/database/presentation/widgets/detail_property_row.dart';
 import '../services/attachment_storage_service.dart';
 import '../services/pdf_metadata_service.dart';
 import '../views/attachment_viewer_page.dart';
-import 'detail_property_row.dart';
 
 class BookmarkAttachmentSection extends StatefulWidget {
   const BookmarkAttachmentSection({super.key, required this.repository, required this.bookmark});
