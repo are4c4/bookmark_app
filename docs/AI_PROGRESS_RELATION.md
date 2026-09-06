@@ -27,12 +27,13 @@ Own cross-Object correctness and fail-closed data integrity: canonical Relation 
 - #568: one-sided bidirectional Relation Property deletion is blocked by delete-impact inspection, including empty pairs and corrupt pair metadata.
 - #577: system Relation schema provisioning validates workspace/target/cardinality and delegates creation to canonical `ObjectStore.createRelationProperty(...)`.
 - #590: safe non-structural Relation metadata is allowed while target/cardinality/bidirectional pair keys stay reserved to canonical Relation APIs.
-- #601: template Gallery cover settings validate Relation target kind before schema/View creation; Image cover -> Tag Relation and other mismatches fail with no partial ObjectType. This preserves #592 primitive target provisioning and canonical Relation Property creation.
+- #601: template Gallery cover settings validate Relation target kind before schema/View creation; Image cover -> Tag Relation and other mismatches fail with no partial ObjectType.
+- #628: system Relation provisioning rejects any persisted `bidirectional`, `inversePropertyId`, or `pairRole` key presence instead of reusing pair-polluted system schema; focused tests cover each reserved key and preserve the corrupt Property unchanged.
 
 ## Current implementation — pairRole-only metadata corruption
-Original PR #649 `Detect pairRole-only Relation metadata corruption` reached Flutter CI #2035 fully green but became non-mergeable after main advanced.
+Original PR #649 `Detect pairRole-only Relation metadata corruption` passed Flutter CI #2035 but became non-mergeable after main advanced and was closed as superseded.
 
-Latest-main replacement branch: `feature/relation-pair-metadata-detection-v2`.
+Replacement PR #658 on `feature/relation-pair-metadata-detection-v2` is based on current main at branch creation.
 
 This slice closes a concrete fail-open gap:
 - managed bidirectional metadata detection previously checked `bidirectional == true` or non-null `inversePropertyId` only;
@@ -41,34 +42,32 @@ This slice closes a concrete fail-open gap:
 - `RelationIntegrityService.auditWorkspace(...)` uses the same detection and reports `invalidBidirectionalPair`;
 - focused regression proves mutation rejection leaves Relation value/backlink/index state untouched.
 
-No shared hotspot lease is held; this branch changes only Relation service/test files and this handoff.
+No shared hotspot lease is held; #658 changes only Relation service/test files and this handoff.
 
-## Other active B-lane work
-- #628 `Reject pair metadata pollution on system Relations` also passed Flutter CI #2037 on its old branch but is non-mergeable against current main. Its change remains independently useful: system Relation provisioning should reject any persisted `bidirectional`, `inversePropertyId`, or `pairRole` key presence rather than reusing corrupted schema. Refresh it only after the current pairRole detection slice is integrated or clearly non-overlapping on latest main.
+## #491 / #492 correctness audit
+- #627 is merged: `RelationTargetQuickCreateService` creates custom targets through canonical Object creation, Tags through Tag bridge sync, Weblinks through normalized/reusable Weblink identity, and requires canonical managed Image/File import callbacks. Returned ids are revalidated against workspace and configured target ObjectType. It does not write Relation values.
+- #604 is the refresh-safe picker seam: quick-create must reload canonical selection context before the created Object can be selected; the picker does not bypass `ObjectRelationEditorService.save(...)` / `RelationMutationService`.
+- #633 is merged: compact Relation Property authoring uses `DatabasePropertyAuthoringService` and canonical `ObjectStore.createRelationProperty(...)` with explicit target/cardinality.
+- #608 keeps Relation schema editing on `inspectChange -> impact confirmation -> updateRelationSchema` and is presentation-only around the canonical service.
+- #492 Gallery media consumers remain read-only from the Relation side; no View-layer Relation repair/writer should be introduced.
 
-## Cross-lane audits
-- #633 (#491): compact Relation Property authoring delegates target/cardinality creation to `DatabasePropertyAuthoringService` and canonical `ObjectStore.createRelationProperty(...)`; no parallel persistence/index path.
-- #608 (#491/#493): shared Relation authoring fields are presentation-only; existing Relation edits keep `inspectChange -> impact confirmation -> updateRelationSchema`.
-- #492 Gallery media work remains read-only from the Relation side; no View-layer Relation repair/writer should be introduced.
-- #596 Value schema evolution keeps Value -> Relation outside ordinary Value conversion.
+No production host currently composes the target quick-create service into a Relation value editor; code search still finds `createManagedImage` only inside the service and its focused tests. The next value-writing trigger is the real host composition.
 
 ## Validation state
-- #601 merged after the refreshed target-kind guard.
-- original #649 Flutter CI #2035: fully green, but old head became stale/non-mergeable.
-- original #628 Flutter CI #2037: fully green, but old head became stale/non-mergeable.
-- latest-main `feature/relation-pair-metadata-detection-v2` requires its own CI after replacement PR creation.
+- #601 merged.
+- #628 merged as `59a56231632edae94f4fe5554378a543a4489460`; its old CI #2037 was green.
+- original #649 CI #2035: fully green before supersession.
+- #658 CI #2069: maintainability guards, dependency setup, Drift generation, and Analyze are green; full Test is running at this handoff update.
 - local Flutter validation is unavailable in the connector execution environment; GitHub Actions is the executable validation source.
 
 ## Exact next actions
-1. Open the latest-main replacement PR for pairRole-only corruption detection and close superseded #649.
-2. If replacement CI is green/mergeable, integrate it.
-3. Refresh #628 on then-current main and re-run its focused/full CI.
-4. Continue auditing #491 real host quick-create wiring: target creation/import must succeed first, then canonical Relation attach; failure/retry must not leave partial/duplicate attachments.
-5. Keep bidirectional target retargeting fail-closed until a paired migration validates both schema sides before writes.
-6. Audit any new Relation-producing workflow for target/cardinality validation, delete/detach/retarget, retry/idempotency, backlink/index consistency, and integrity audit health.
+1. Re-check #658 CI #2069; if fully green and mergeable, integrate it. If main advanced without overlapping Relation files, refresh only this small slice rather than broad rebasing unrelated changes.
+2. On real #491 quick-create host composition, add lifecycle regression covering canonical target create/import -> refreshed candidate context -> canonical Relation attach; cancellation/failure must leave no attachment and retry must not duplicate edges/backlinks.
+3. Keep bidirectional target retargeting fail-closed until a paired migration validates both schema sides before writes.
+4. Audit new Relation-producing workflows for target/cardinality validation, delete/detach/retarget, retry/idempotency, backlink/index consistency, and integrity audit health.
 
 ## Risks / stop rule
 - Non-empty Relation retargeting may proceed only when every existing target is valid for the proposed ObjectType; mapping/conversion requires an explicit migration.
 - Bidirectional target retargeting remains intentionally unsupported rather than partially rewriting pair metadata.
 - Corrupt pair metadata must never be silently downgraded to an ordinary Relation.
-- Do not add speculative abstractions. If the active corruption guards are integrated and no concrete Relation-producing workflow or correctness regression exists, record the next trigger and remain idle.
+- Do not add speculative abstractions. If #658 is integrated and no real quick-create host, new Relation-producing workflow, or concrete correctness regression exists, record the next trigger and remain idle.
