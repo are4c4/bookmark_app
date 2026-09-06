@@ -50,6 +50,54 @@ void main() {
     expect(parent.targetObjectTypeId, copyId);
   });
 
+  test('duplicateSchema preserves interleaved Value and Relation Property order',
+      () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final management = ObjectTypeManagementStore(
+      genericStore: genericStore,
+      objectStore: objectStore,
+    );
+
+    final sourceId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Ordered',
+    );
+    await objectStore.createRelationProperty(
+      objectTypeId: sourceId,
+      name: '親',
+      targetObjectTypeId: sourceId,
+      multiple: false,
+    );
+    await objectStore.createProperty(
+      objectTypeId: sourceId,
+      name: '説明',
+      type: ObjectPropertyType.text,
+    );
+    await objectStore.createRelationProperty(
+      objectTypeId: sourceId,
+      name: '関連',
+      targetObjectTypeId: sourceId,
+    );
+    await objectStore.createProperty(
+      objectTypeId: sourceId,
+      name: '評価',
+      type: ObjectPropertyType.number,
+    );
+
+    final copyId = await management.duplicateSchema(objectTypeId: sourceId);
+    final copy = (await objectStore.getObjectType(copyId))!;
+
+    expect(
+      copy.properties.map((item) => item.name).toList(),
+      <String>['親', '説明', '関連', '評価'],
+    );
+    expect(copy.properties.map((item) => item.sortOrder).toList(), <int>[0, 1, 2, 3]);
+  });
+
   test('duplicateSchema remaps reusable defaults and preserves Body template',
       () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
@@ -154,6 +202,39 @@ void main() {
     expect(relation.config['bidirectional'], isNull);
     expect(relation.config['inversePropertyId'], isNull);
     expect(relation.config['pairRole'], isNull);
+  });
+
+  test('duplicateSchema rolls back when Relation target metadata is missing',
+      () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final management = ObjectTypeManagementStore(
+      genericStore: genericStore,
+      objectStore: objectStore,
+    );
+
+    final sourceId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Broken relation source',
+    );
+    await genericStore.createProperty(
+      databaseId: sourceId,
+      name: 'Broken relation',
+      type: 'relation',
+      config: const <String, dynamic>{'multiple': true},
+    );
+
+    await expectLater(
+      management.duplicateSchema(objectTypeId: sourceId),
+      throwsStateError,
+    );
+
+    final remainingTypes = await objectStore.listObjectTypes(workspaceId);
+    expect(remainingTypes.map((type) => type.id).toList(), <int>[sourceId]);
+    expect(remainingTypes.single.name, 'Broken relation source');
   });
 
   test('identity editing and deletion reject system ObjectTypes', () async {
