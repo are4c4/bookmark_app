@@ -94,7 +94,10 @@ void main() {
       ),
     );
 
-    expect(find.textContaining('Image'), findsOneWidget);
+    final targetField = tester.widget<TextField>(
+      find.byKey(const ValueKey('relation-property-target-search')),
+    );
+    expect(targetField.decoration?.hintText, contains('Image'));
     await tester.tap(find.byKey(const ValueKey('relation-property-target-clear')));
     await tester.pump();
 
