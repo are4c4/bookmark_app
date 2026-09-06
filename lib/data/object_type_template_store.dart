@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../database/database_definition.dart';
 import '../domain/object_model.dart';
+import 'database_view_gallery_adapter.dart';
 import 'database_view_store.dart';
 import 'generic_database_store.dart';
 import 'object_store.dart';
@@ -29,6 +30,11 @@ class ObjectTypeTemplateProperty {
   final bool relationMultiple;
 }
 
+enum ObjectTypeTemplateGalleryCoverKind {
+  imageRelation,
+  weblinkRelationRepresentativeImage,
+}
+
 class ObjectTypeTemplateView {
   const ObjectTypeTemplateView({
     required this.name,
@@ -36,13 +42,24 @@ class ObjectTypeTemplateView {
     this.filters = const <String, dynamic>{},
     this.sorts = const <dynamic>[],
     this.settings = const <String, dynamic>{},
-  });
+    this.galleryCoverRelationPropertyName,
+    this.galleryCoverKind,
+  }) : assert(
+          (galleryCoverRelationPropertyName == null) ==
+              (galleryCoverKind == null),
+        );
 
   final String name;
   final String layoutType;
   final Map<String, dynamic> filters;
   final List<dynamic> sorts;
   final Map<String, dynamic> settings;
+
+  /// Template-local Relation name resolved to the newly-created stable
+  /// Property id while instantiating this View. Workspace-specific ids never
+  /// enter the static template definition.
+  final String? galleryCoverRelationPropertyName;
+  final ObjectTypeTemplateGalleryCoverKind? galleryCoverKind;
 }
 
 class ObjectTypeTemplate {
@@ -183,7 +200,12 @@ class ObjectTypeTemplateStore {
         ObjectTypeTemplateProperty(name: '育成メモ', type: 'text'),
       ],
       views: [
-        ObjectTypeTemplateView(name: '一覧', layoutType: 'gallery'),
+        ObjectTypeTemplateView(
+          name: '一覧',
+          layoutType: 'gallery',
+          galleryCoverRelationPropertyName: '写真',
+          galleryCoverKind: ObjectTypeTemplateGalleryCoverKind.imageRelation,
+        ),
       ],
     ),
   ];
@@ -272,22 +294,27 @@ class ObjectTypeTemplateStore {
         icon: icon?.trim().isNotEmpty == true ? icon!.trim() : template.icon,
       );
 
+      final createdPropertyIds = <String, int>{};
       for (final property in template.properties) {
-        if (property.type == 'relation') {
-          await objectStore.createRelationProperty(
-            objectTypeId: objectTypeId,
-            name: property.name,
-            targetObjectTypeId: relationTargets[property]!,
-            multiple: property.relationMultiple,
+        if (createdPropertyIds.containsKey(property.name)) {
+          throw StateError(
+            'Template ${template.key} contains duplicate Property name "${property.name}".',
           );
-          continue;
         }
-        await objectStore.createProperty(
-          objectTypeId: objectTypeId,
-          name: property.name,
-          type: ObjectPropertyDefinition.fromStorageType(property.type),
-          config: property.config,
-        );
+        final propertyId = property.type == 'relation'
+            ? await objectStore.createRelationProperty(
+                objectTypeId: objectTypeId,
+                name: property.name,
+                targetObjectTypeId: relationTargets[property]!,
+                multiple: property.relationMultiple,
+              )
+            : await objectStore.createProperty(
+                objectTypeId: objectTypeId,
+                name: property.name,
+                type: ObjectPropertyDefinition.fromStorageType(property.type),
+                config: property.config,
+              );
+        createdPropertyIds[property.name] = propertyId;
       }
 
       final definition = DatabaseDefinition(
@@ -297,6 +324,36 @@ class ObjectTypeTemplateStore {
         properties: const <DatabasePropertyDefinition>[],
       );
       for (final view in template.views) {
+        final settings = <String, dynamic>{...view.settings};
+        final coverPropertyName = view.galleryCoverRelationPropertyName;
+        final coverKind = view.galleryCoverKind;
+        if (coverPropertyName != null && coverKind != null) {
+          final templateProperties = template.properties
+              .where((property) => property.name == coverPropertyName)
+              .toList(growable: false);
+          if (templateProperties.length != 1 ||
+              templateProperties.single.type != 'relation') {
+            throw StateError(
+              'Template View ${view.name} Gallery cover must reference exactly one Relation Property.',
+            );
+          }
+          final propertyId = createdPropertyIds[coverPropertyName];
+          if (propertyId == null) {
+            throw StateError(
+              'Template View ${view.name} Gallery cover Property was not created.',
+            );
+          }
+          final source = switch (coverKind) {
+            ObjectTypeTemplateGalleryCoverKind.imageRelation =>
+              GalleryCoverSource.imageRelation(propertyId),
+            ObjectTypeTemplateGalleryCoverKind
+                  .weblinkRelationRepresentativeImage =>
+              GalleryCoverSource.weblinkRelationRepresentativeImage(propertyId),
+          };
+          settings[DatabaseViewGalleryAdapter.coverSourceSettingsKey] =
+              source.toStorage();
+        }
+
         await viewStore.createView(
           workspaceId: workspaceId,
           definition: definition,
@@ -306,7 +363,7 @@ class ObjectTypeTemplateStore {
           sorts: view.sorts,
           visibleProperties: const <String>[],
           propertyOrder: const <String>[],
-          settings: view.settings,
+          settings: settings,
         );
       }
 
