@@ -1,12 +1,16 @@
+import 'dart:io';
+
 import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/core_object_bridge.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
 import 'package:bookmark_app/data/image_object_service.dart';
 import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/object_type_defaults_store.dart';
+import 'package:bookmark_app/data/profile_path_resolver.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
 import 'package:bookmark_app/data/tag_object_bridge.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
+import 'package:bookmark_app/services/image_visual_resolver.dart';
 import 'package:drift/drift.dart' show Variable;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -107,5 +111,57 @@ void main() {
       variables: [Variable<int>(workspaceId)],
     ).get();
     expect(remainingLinks, isEmpty);
+  });
+
+  test('promoted relative Photo path resolves through the active profile root',
+      () async {
+    final directory =
+        await Directory.systemTemp.createTemp('photo_promotion_relative_');
+    addTearDown(() => directory.delete(recursive: true));
+    final managedFile = File('${directory.path}/photos/legacy.jpg');
+    await managedFile.parent.create(recursive: true);
+    await managedFile.writeAsBytes(const <int>[1, 2, 3]);
+
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final systemStore = SystemObjectStore(
+      database: database,
+      objectStore: objectStore,
+    );
+    final bridge = CoreObjectBridge(
+      database: database,
+      objectStore: objectStore,
+      systemObjectStore: systemStore,
+      tagBridge: TagObjectBridge(
+        database: database,
+        objectStore: objectStore,
+        systemObjectStore: systemStore,
+      ),
+    );
+    await database.customStatement(
+      "INSERT INTO photos(path, title) VALUES ('photos/legacy.jpg', 'Legacy relative')",
+    );
+
+    await bridge.syncAll(workspaceId);
+
+    final imageType = (await systemStore.getSystemObjectType(
+      workspaceId: workspaceId,
+      systemKey: CoreObjectBridge.photoSystemKey,
+    ))!;
+    final promoted = (await objectStore.listObjects(imageType.id)).single;
+    final visual = await ImageVisualResolver(
+      objectStore,
+      pathResolver: ProfilePathResolver(directory.path),
+    ).resolveManaged(
+      imageObjectTypeId: imageType.id,
+      imageObjectId: promoted.id,
+    );
+
+    expect(visual, isNotNull);
+    expect(visual?.imageObjectId, promoted.id);
+    expect(visual?.filePath, managedFile.path);
   });
 }
