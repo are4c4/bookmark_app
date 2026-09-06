@@ -313,8 +313,7 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
     return null;
   }
 
-  bool _canEditBody(ObjectGraphNodeRecord node) =>
-      !node.isSystemType || _isDailyNote;
+  bool _canEditBody(ObjectGraphNodeRecord _) => true;
 
   void _applyBodyDocument(ObjectBodyDocument document) {
     final current = _content;
