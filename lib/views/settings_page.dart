@@ -4,6 +4,7 @@ import '../data/bookmark_repository.dart';
 import '../ui/ui_tokens.dart';
 import 'auto_organize_settings_section.dart';
 import 'database_backup_settings_section.dart';
+import 'vault_settings_section.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({
@@ -14,6 +15,7 @@ class SettingsPage extends StatelessWidget {
     this.exportBackupFile,
     this.chooseBackupFile,
     this.restoreBackupFile,
+    this.revealVaultDirectory,
   });
 
   final ThemeMode themeMode;
@@ -22,10 +24,12 @@ class SettingsPage extends StatelessWidget {
   final Future<String?> Function()? exportBackupFile;
   final Future<String?> Function()? chooseBackupFile;
   final Future<void> Function(String path)? restoreBackupFile;
+  final Future<void> Function(String path)? revealVaultDirectory;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final vaultPath = repository.profileDirectoryPath?.trim();
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: UiTokens.appBarHeight,
@@ -83,6 +87,15 @@ class SettingsPage extends StatelessWidget {
               },
             ),
           ),
+          if (vaultPath != null && vaultPath.isNotEmpty) ...[
+            const SizedBox(height: UiTokens.space24),
+            const Divider(),
+            const SizedBox(height: UiTokens.space24),
+            VaultSettingsSection(
+              directoryPath: vaultPath,
+              revealDirectory: revealVaultDirectory,
+            ),
+          ],
           const SizedBox(height: UiTokens.space24),
           const Divider(),
           const SizedBox(height: UiTokens.space24),
