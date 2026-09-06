@@ -92,7 +92,7 @@ class CanonicalImageEditService {
   final ImageEditService imageEdit;
 
   /// Advisory presentation preflight for whether an in-place canonical Image
-  /// edit is currently safe. Edit/restore still repeat the same ownership
+  /// edit is currently safe and supported. Edit/restore still repeat ownership
   /// checks immediately before mutation so callers must not treat this as a
   /// durable lock.
   Future<bool> canEdit({
@@ -100,11 +100,11 @@ class CanonicalImageEditService {
     required int objectId,
   }) async {
     try {
-      await _editablePath(
+      final editablePath = await _editablePath(
         workspaceId: workspaceId,
         objectId: objectId,
       );
-      return true;
+      return imageEdit.supports(editablePath);
     } on CanonicalImageEditTargetException {
       return false;
     } on CanonicalImageEditOwnershipException {
