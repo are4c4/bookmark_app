@@ -31,7 +31,33 @@ The Relation subsystem itself is mature, so production Relation redesign is rare
 - deletion/reference integrity across newly composable domains;
 - corruption/inconsistent-index regressions.
 
-This gives the lane useful independent work without inventing new Relation architecture.
+## Current implementation checkpoint — 2026-09-07
+Active Issue: #493.
+
+Branch: `feature/relation-safe-schema-evolution`
+Latest lane commit: `88c34d390da5246ebd2252ca70233d629a553252`
+Base inspected: main `844f6b77e7b6947bceaaf6986e6ff8182212e71b`.
+
+Implemented first fail-closed schema-evolution slice:
+- added `RelationSchemaEvolutionService.changeRelationSchema(...)` for custom unidirectional Relation Properties;
+- resolves the persisted Relation Property rather than trusting stale caller metadata;
+- requires the new target ObjectType to exist in the same workspace;
+- validates every currently referenced target before changing `targetObjectTypeId`;
+- rejects `multi -> single` when any Object currently stores multiple targets, requiring a later explicit target-choice flow instead of silently dropping data;
+- allows `single -> multi` by changing schema metadata only, preserving the existing stored target and normalized edges/backlinks;
+- target changes with no existing values update schema metadata only;
+- system Relations and bidirectional pairs fail closed pending explicit system/paired migration semantics;
+- no Relation values, normalized edges, or backlinks are rewritten by this schema-only service.
+
+Focused regressions added in `test/relation_schema_evolution_service_test.dart`:
+- failed target-type change preserves old schema/value/edge/backlink;
+- ambiguous `multi -> single` preserves old schema/data;
+- `single -> multi` preserves stored target and exact normalized edge shape;
+- empty target-type change updates only the Relation schema.
+
+Open PR ownership was checked before editing. Current open #503/#504/#498 do not overlap this new service/test slice; no shared hotspot lease was required. Stale docs-only Relation PR #477 was closed rather than rebased because this #493 implementation supersedes its handoff.
+
+Validation status: GitHub-hosted CI will be the first executable validation because the runtime container cannot resolve github.com for a local clone. Review/CI failures should be fixed on this branch before merge.
 
 ## Stable integrated coverage
 Existing production workflows already have strong lifecycle coverage for:
@@ -45,13 +71,14 @@ Existing production workflows already have strong lifecycle coverage for:
 
 Recent Image edit/crop/geometry work is Relation-neutral and does not justify new Relation production code.
 
-## Initial next actions
-1. For #493, define transactional validation rules for `Relation(A) -> Relation(B)` target changes: validate all existing targets first and leave old schema/data intact on any failure.
-2. Define `multi -> single` behavior: require explicit deterministic user choice when multiple values exist; never silently drop targets.
-3. Define `single -> multi` behavior: preserve the existing target without rewriting unrelated edges.
-4. Add focused service/domain regressions around schema mutation rollback, edge/index/backlink preservation and fail-closed target mismatch.
-5. As #491 lands, verify generic Relation Property creation still uses canonical target/cardinality validation and no alternate writer/index.
-6. Resume product-workflow lifecycle coverage only when Primitive/Database-View lanes add a genuinely new Relation-producing production path.
+## Next actions
+1. Run/fix CI for the first #493 schema-evolution slice and merge when green.
+2. Add an explicit deterministic `multi -> single` choice API only after the Database/View lane establishes the migration prompt contract; it must validate the selected target before any write.
+3. Define explicit bidirectional-pair schema migration semantics; do not mutate only one half of a managed pair.
+4. Add transaction/rollback coverage around any future schema migration that rewrites values rather than metadata only.
+5. As #491 lands, verify generic Relation Property creation/inline target creation still uses canonical target/cardinality validation and no alternate writer/index.
+6. As #492 lands, audit Gallery Relation traversal assumptions without moving presentation work into this lane.
+7. Resume product-workflow lifecycle coverage only when Primitive/Database-View lanes add a genuinely new Relation-producing production path.
 
 ## Cross-lane boundaries
 - **Database/View lane** owns schema-authoring dialogs and user-facing migration prompts.
@@ -64,16 +91,8 @@ Recent Image edit/crop/geometry work is Relation-neutral and does not justify ne
 - Do not infer a new Person -> Image Relation contract until Primitive/Object work establishes a real production workflow.
 - Do not add Relation tests merely because an Image/Weblink participates in Relations; add them only when identity/targets/writes/deletion semantics change.
 - Prefer tests/integrity services and avoid presentation-only edits.
-
-## Handoff checklist
-Before ending a run, record:
-- active Issue and exact integrity contract;
-- branch/commit/PR;
-- regressions/services added;
-- validation results;
-- cross-lane dependency and hotspot ownership;
-- next independent integrity actions;
-- explicit stop reason.
+- Never silently discard Relation targets during a cardinality migration.
+- Never mutate only one side of a managed bidirectional Relation pair.
 
 ## Stop rule
-If there is no new Relation-producing workflow, schema-integrity slice, deletion/reference invariant, or concrete correctness regression, remain idle rather than adding speculative abstractions. The broadened #493/#491 scope is the current source of independent work.
+Continue #493 while independent integrity slices exist. If there is no new Relation-producing workflow, schema-integrity slice, deletion/reference invariant, or concrete correctness regression, remain idle rather than adding speculative abstractions.
