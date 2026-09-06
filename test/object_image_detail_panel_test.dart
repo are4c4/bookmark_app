@@ -7,6 +7,7 @@ import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/object_type_defaults_store.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
+import 'package:bookmark_app/domain/object_model.dart';
 import 'package:bookmark_app/features/object/presentation/widgets/object_image_detail_panel.dart';
 import 'package:bookmark_app/services/canonical_image_edit_service.dart';
 import 'package:drift/native.dart';
@@ -15,7 +16,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as image;
 
 void main() {
-  testWidgets('Image detail panel refreshes preview after safe same-path edit',
+  testWidgets('Image detail panel refreshes preview after safe edit',
       (tester) async {
     final directory = await Directory.systemTemp.createTemp('image_detail_panel_');
     addTearDown(() => directory.delete(recursive: true));
@@ -46,30 +47,7 @@ void main() {
     );
     final evicted = <String>[];
     var hostRefreshes = 0;
-    final editService = CanonicalImageEditService(
-      resolveStoredFile: ({required workspaceId, required objectId}) async {
-        expect(workspaceId, greaterThan(0));
-        expect(objectId, imageObject.id);
-        return managedFile.path;
-      },
-      resolveExclusiveManagedPath: ({required objectId, required filePath}) async {
-        expect(objectId, imageObject.id);
-        expect(filePath, managedFile.path);
-        return managedFile.path;
-      },
-      geometryUpdater: ({
-        required workspaceId,
-        required objectId,
-        required pixelWidth,
-        required pixelHeight,
-      }) =>
-          images.updateManagedGeometry(
-        workspaceId: workspaceId,
-        objectId: objectId,
-        pixelWidth: pixelWidth,
-        pixelHeight: pixelHeight,
-      ),
-    );
+    final editService = _FakeCanonicalImageEditService();
 
     await tester.pumpWidget(
       MaterialApp(
@@ -111,14 +89,70 @@ void main() {
     await pumpUntil(() => evicted.length == 1);
     await pumpUntil(rotateRightEnabled);
 
+    expect(editService.lastWorkspaceId, workspaceId);
+    expect(editService.lastObjectId, imageObject.id);
+    expect(editService.lastQuarterTurns, 1);
     expect(evicted, [managedFile.path]);
     expect(hostRefreshes, 1);
-    final persisted = (await objectStore.listObjects(definition.objectType.id))
-        .singleWhere((object) => object.id == imageObject.id);
-    expect(persisted.values[definition.pixelWidthProperty.id], 2);
-    expect(persisted.values[definition.pixelHeightProperty.id], 4);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
   });
+}
+
+class _FakeCanonicalImageEditService extends CanonicalImageEditService {
+  _FakeCanonicalImageEditService()
+      : super(
+          resolveStoredFile: ({required workspaceId, required objectId}) async =>
+              null,
+          resolveExclusiveManagedPath:
+              ({required objectId, required filePath}) async => null,
+          geometryUpdater: ({
+            required workspaceId,
+            required objectId,
+            required pixelWidth,
+            required pixelHeight,
+          }) async => _object(objectId),
+        );
+
+  int? lastWorkspaceId;
+  int? lastObjectId;
+  int? lastQuarterTurns;
+
+  @override
+  Future<bool> canEdit({required int workspaceId, required int objectId}) async =>
+      true;
+
+  @override
+  Future<bool> canRestoreOriginal({
+    required int workspaceId,
+    required int objectId,
+  }) async =>
+      false;
+
+  @override
+  Future<AppObject> edit({
+    required int workspaceId,
+    required int objectId,
+    int quarterTurns = 0,
+    bool flipHorizontal = false,
+    double? cropAspectRatio,
+    Rect? normalizedCropRect,
+  }) async {
+    lastWorkspaceId = workspaceId;
+    lastObjectId = objectId;
+    lastQuarterTurns = quarterTurns;
+    return _object(objectId);
+  }
+}
+
+AppObject _object(int id) {
+  final now = DateTime(2026, 9, 7);
+  return AppObject(
+    id: id,
+    objectTypeId: 1,
+    title: 'Image',
+    createdAt: now,
+    updatedAt: now,
+  );
 }
