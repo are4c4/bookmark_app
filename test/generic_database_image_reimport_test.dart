@@ -124,6 +124,22 @@ void main() {
     expect(firstFiles.single.path, managedFiles().single.path);
   });
 
+  test('duplicate content in one batch returns each canonical Image id once',
+      () async {
+    final firstSource = await writeTinyPng('first.png');
+    final secondSource = await writeTinyPng('second.png');
+    final definition = await images.ensureDefinition(workspaceId);
+
+    final ids = await importService.importPaths(
+      databaseId: definition.objectType.id,
+      sourcePaths: <String>[firstSource.path, secondSource.path],
+    );
+
+    expect(ids, hasLength(1));
+    expect(managedFiles(), hasLength(1));
+    expect(await objectStore.listObjects(definition.objectType.id), hasLength(1));
+  });
+
   test('failed Image creation never deletes a reused pre-existing managed file',
       () async {
     final source = await writeTinyPng('preserve.png');

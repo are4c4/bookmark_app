@@ -12,8 +12,8 @@ import 'photo_storage_service.dart';
 /// File picking/copying remains owned by [PhotoStorageService], while Object
 /// identity/reuse remains owned by [GenericDatabaseObjectCreateService]. This
 /// workflow composes the two boundaries, reuses byte-identical managed files on
-/// canonical Image reimport, and removes only newly copied files if canonical
-/// Object creation fails.
+/// canonical Image reimport, returns each canonical Image Object id once, and
+/// removes only newly copied files if canonical Object creation fails.
 class GenericDatabaseImageImportService {
   const GenericDatabaseImageImportService({
     required this.photoStorage,
@@ -45,7 +45,7 @@ class GenericDatabaseImageImportService {
   }) async {
     if (imported.isEmpty) return const <int>[];
 
-    final objectIds = <int>[];
+    final objectIds = <int>{};
     for (final photo in imported) {
       try {
         final geometry = await _probeGeometry(photo.path);
@@ -66,7 +66,7 @@ class GenericDatabaseImageImportService {
         rethrow;
       }
     }
-    return objectIds;
+    return objectIds.toList(growable: false);
   }
 
   Future<void> _deleteManagedPhotoBestEffort(String path) async {
