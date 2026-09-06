@@ -45,7 +45,54 @@ Existing production workflows already have strong lifecycle coverage for:
 
 Recent Image edit/crop/geometry work is Relation-neutral and does not justify new Relation production code.
 
+## Current implementation checkpoint — 2026-09-07
+
+Active integrity contract: Issue #493 Relation target/cardinality schema evolution.
+
+Branch / PR:
+- branch: `feature/relation-schema-evolution-integrity`
+- PR: #506 `Add fail-closed Relation schema evolution integrity`
+- latest implementation commit before this handoff update: `9304b925e2625e658a99ad3ff920a9e277bb1a06`
+- base when the branch started: main `844f6b77e7b6947bceaaf6986e6ff8182212e71b`
+
+Completed checkpoints in this run:
+1. Added UI-agnostic `RelationSchemaEvolutionService` with a read-only `inspectChange(...)` impact/preflight contract and transactional `updateRelationSchema(...)` apply path.
+2. Relation target ObjectType changes resolve the persisted Property, validate current/next ObjectTypes in the same workspace, audit existing Relation/index/bidirectional health, then validate **every existing target** against the proposed target ObjectType before any write.
+3. `multi -> single` now reports per-source conflicts and refuses to proceed until the caller supplies an explicit target already present in each conflicting source value; no target is silently selected or dropped.
+4. `single -> multi` changes schema configuration without rewriting the existing stored Relation value or unrelated normalized edges.
+5. Ambiguous/corrupt state fails closed: stale/missing index edges, missing target Objects, invalid pair metadata, or other relevant `RelationIntegrityService` findings block schema mutation rather than triggering editor-side repair.
+6. Bidirectional Relation target retargeting is deliberately blocked until an explicit paired migration contract exists. Cardinality reduction continues through `RelationMutationService`, preserving inverse values/index lifecycle.
+7. Added forced database-failure coverage: if the schema Property update fails after a multi-to-single reduction begins, the enclosing transaction rolls back the earlier Relation value/index changes and preserves the old schema/data.
+8. Added regressions for target mismatch rollback/preservation, empty-value target retarget, explicit multi-to-single selection, single-to-multi preservation, bidirectional integrity, stale index fail-closed behavior, missing-target fail-closed behavior, and transaction rollback.
+9. Audited Database/View PR #507 for #492. Its current Gallery cover-source discovery is read-only, checks Relation target existence/workspace, and adds no alternate Relation writer/index. Commented one B-lane constraint for the resolver follow-up: #492 intentionally permits multi Relations such as `Images`, so resolution must not assume single cardinality and must not repair corrupted Relation data from a View path.
+10. Recorded the #493 integrity contract on the Issue so Database/View can consume the preflight result for impact/prompt UX without owning Relation mutation semantics.
+
+Validation state:
+- GitHub Actions maintainability guardrail tests and maintainability regression ceilings passed on the preceding #506 heads.
+- The final implementation head after adding the forced rollback regression is queued/running through Flutter CI; analyze/test must be checked before integration.
+- Local Flutter validation was not available in this execution environment because the container could not resolve `github.com` for a repository clone; GitHub Actions is the executable validation source for this run.
+
+Cross-lane dependencies / ownership:
+- Database/View lane owns the schema-authoring UI, impact summary, explicit multi-to-single target choice UI, and user confirmation flows. It should call the B-lane integrity service rather than directly updating Relation config.
+- #491 has not yet landed a production target/cardinality edit path to audit. When it does, verify it reuses this fail-closed service/canonical Relation mutation path and introduces no serialized-id writer or alternate index.
+- #507 current slice is Relation-read-only and has no B blocker; its future media resolver must define stable behavior for multi-valued Relation cover sources without mutating Relation state.
+- No shared hotspot lease was taken in this run. Production changes are isolated to a new data-integrity service plus focused tests and this handoff file; `generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, and `app_database.dart` were not edited.
+
+Exact next actions, in priority order:
+1. Check/fix the final #506 GitHub Actions analyze/test result. Merge only after the relevant checks are green or an explicit integration direction permits otherwise.
+2. When Database/View implements the #493 editing surface, audit that its Relation target/cardinality changes call `inspectChange`/`updateRelationSchema` and preserve explicit-choice semantics.
+3. When #491 lands Relation Property edit/quick-create production code, audit canonical target/cardinality validation and ensure no alternate writer/index appears.
+4. If product requirements later need bidirectional Relation target retargeting, design it as an explicit paired migration that validates both sides before writes; keep the current fail-closed rejection until then.
+5. Continue Relation-producing workflow coverage only when a real new production writer/reader lands from #491/#492/#245/#484.
+
+Current risks / stop condition:
+- Non-empty Relation target retargeting can only proceed when every existing target is already valid for the proposed ObjectType. Mapping/converting targets across ObjectTypes is a separate explicit migration decision and must not be guessed here.
+- Bidirectional target retargeting remains intentionally unsupported rather than partially rewriting pair metadata.
+- After #506 validation is resolved, if #491/#492 have no new production Relation mutation/resolution path requiring audit, Lane B should remain idle per the stop rule rather than inventing speculative Relation abstractions. That cross-lane dependency is the expected stop reason for this checkpoint.
+
 ## Initial next actions
+The original bootstrap list below is retained as historical context; the #506 checkpoint above implements actions 1–4 and narrows the live next work to cross-lane integration/audit.
+
 1. For #493, define transactional validation rules for `Relation(A) -> Relation(B)` target changes: validate all existing targets first and leave old schema/data intact on any failure.
 2. Define `multi -> single` behavior: require explicit deterministic user choice when multiple values exist; never silently drop targets.
 3. Define `single -> multi` behavior: preserve the existing target without rewriting unrelated edges.
