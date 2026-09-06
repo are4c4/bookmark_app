@@ -7,6 +7,7 @@ import 'package:bookmark_app/data/object_type_defaults_store.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/domain/object_body.dart';
+import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -64,8 +65,10 @@ void main() {
     final registryRows = await database.customSelect(
       '''SELECT object_id FROM daily_note_registry
          WHERE workspace_id = ? AND note_date = ?''',
-      variables: [],
-      readsFrom: const {},
+      variables: <Variable<Object>>[
+        Variable<int>(workspaceId),
+        const Variable<String>('2026-09-08'),
+      ],
     ).get();
     expect(registryRows, hasLength(1));
     expect(registryRows.single.read<int>('object_id'), winnerId);
