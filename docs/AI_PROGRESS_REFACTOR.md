@@ -8,9 +8,15 @@ Issue #225 — reduce maintenance hotspots and retire duplicate/unused legacy pa
 Primary lane: **Refactor**. Object owns replacement product semantics and Relation owns canonical Relation semantics. Refactor owns measurable responsibility reduction, caller-zero retirement after proof, failure-policy/privacy cleanup, and maintainability guardrails.
 
 ## Current checkpoint — 2026-09-07
-Latest verified `main` for this handoff: **`2b25c55bd621ad438290923995c24756827beb53`** after Refactor #463/#464/#466 and Object #465.
+Latest verified `main` for this handoff: **`5a7c5169a304af958ef12644d874774384ab33e7`** after Refactor #467/#472. The immediately preceding product checkpoint already included Refactor #463/#464/#466 and Object #465.
 
-At this checkpoint there were **no open PRs**. Re-read live PR ownership before every shared-host edit because Object/Relation work moves main quickly.
+Open PR ownership at this checkpoint:
+- **Object #469** — safe vertical flip for canonical Image actions. It owns `ObjectImageEditActions` and its focused tests; Refactor must avoid those files while it is open.
+- **Relation #468** — Relation handoff refresh only; docs-only, no Relation production semantics.
+- **Object #471** — Object handoff refresh only; docs-only.
+- **Refactor #470** — this handoff refresh.
+
+Re-read live PR ownership before every shared-host edit because parallel lanes move `main` quickly.
 
 The CI presentation/database boundary guard introduced by #443 is enforced by #448 at a ceiling of **12** `workspaceStore.database` references. The local report remains non-blocking unless a threshold is supplied. Ratchet the CI ceiling downward only when a Refactor slice actually removes a measured presentation reach-through; do not add wrappers merely to hide the metric.
 
@@ -25,8 +31,9 @@ Merged behavior-preserving cleanup PRs in the current series:
 - **#463 merged** — retired the caller-zero Object detail Value editor/descriptor/input-codec mini-layer plus dead-only tests while keeping live `ObjectDetailEditService`, **480 deletions / 0 additions**; Flutter CI #1608 green.
 - **#464 merged** — retired caller-zero `DatabaseRecordAdapter<T>`, `DatabasePropertyValue`, and the abandoned database-property presenter module, **89 deletions / 0 additions**; Flutter CI #1609 green.
 - **#466 merged** — retired the old paragraph-only `ObjectBodySection` compatibility widget and its dead-only widget regression, **216 deletions / 0 additions**; Flutter CI #1612 green.
+- **#472 merged** — retired caller-zero `PersonRoleProperties` and its dead-only architecture/source-string test after confirming Bookmark detail/property UI already uses `BookmarkReorderableProperties` plus shared canonical Property rows, **290 deletions / 0 additions**; Flutter CI #1623 green.
 
-Combined for #451/#453/#454/#455/#458/#459/#463/#464/#466: **1,481 deletions / 1 addition, net -1,480 LOC**.
+Combined for #451/#453/#454/#455/#458/#459/#463/#464/#466/#472: **1,771 deletions / 1 addition, net -1,770 LOC**.
 
 **#456 merged** refreshed the handoff after the first cleanup batch. Its first CI attempt was externally cancelled during Flutter setup after both maintainability guards passed; rerun attempt 2 completed successfully before merge.
 
@@ -34,19 +41,27 @@ Stale docs-only PR #452 was closed rather than force-merged after main moved.
 
 Shared hotspots (`generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, `bookmark_unified_stage1_page.dart`, `app_database.dart`) were deliberately not rewritten in these cleanup PRs.
 
+## Recent failure-policy cleanup
+- **#467 merged** — made unexpected canonical Image managed-file probe failures observable while preserving fail-soft `null` behavior. The diagnostic is stable/privacy-safe and includes the stack trace; no raw user path is interpolated. Scope was one `ImageVisualResolver` file, **15 additions / 1 deletion**; Flutter CI #1618 green.
+
+Do not mechanically add logging to expected compatibility misses. For example, `BookmarkObjectLinkReadStore` intentionally returns `null` when mirrored Object-link storage is absent/unavailable during old-install or pre-sync compatibility reads; its focused regression explicitly depends on fail-soft behavior. Logging such expected misses on every read would add noise without improving recovery.
+
 ## Cross-lane ownership
 ### Object lane
-Recent Object product work is now merged through:
+Recent Object product work merged through:
 - **#457 merged** — canonical Image detail preview/edit panel composition.
 - **#460 merged** — safe canonical Image crop presets.
-- **#465 merged** — safe free-crop selector/dialog routed through `CanonicalImageEditService`; latest main for this handoff is the #465 merge commit.
+- **#465 merged** — safe free-crop selector/dialog routed through `CanonicalImageEditService`.
 
-At the latest live check there were no open Object PRs. Object handoff text is stale relative to #457/#460/#465, so trust live GitHub state first.
+Current active Object production PR at this checkpoint:
+- **#469** — safe vertical flip for canonical Image actions. Avoid `ObjectImageEditActions` and its focused tests until it lands or closes.
 
-Refactor must still avoid changing canonical Image byte-edit/file-ownership semantics, Photo mapping, or Relation semantics. `ObjectInspectorPage` remains a shared hotspot and should only be touched through a genuinely patch-sized write path; do not reconstruct the whole file to remove one argument/import.
+Object #471 is docs-only handoff maintenance.
+
+Refactor must avoid changing canonical Image byte-edit/file-ownership semantics, Photo mapping, or Relation semantics. `ObjectInspectorPage` remains a shared hotspot and should only be touched through a genuinely patch-sized write path; do not reconstruct the whole file to remove one argument/import.
 
 ### Relation lane
-No open Relation production PR was present at the latest live open-PR check. Canonical Relation mutation/read/index/backlink/audit/reconcile semantics remain Relation-owned. Refactor must not create alternate Relation writes, indexes, repair paths, or presentation-side mutation.
+Relation #468 is docs-only at this checkpoint. Canonical Relation mutation/read/index/backlink/audit/reconcile semantics remain Relation-owned. Refactor must not create alternate Relation writes, indexes, repair paths, or presentation-side mutation.
 
 ## Recent Refactor convergence
 - **#373 merged** — Bookmark visual/lifecycle URL presentation delegates resolver composition to `BookmarkPresentationResolverFactory`.
@@ -64,7 +79,8 @@ No open Relation production PR was present at the latest live open-PR check. Can
 - **#439 merged** — `NotionBookmarkCard` delegates URL resolver composition through `BookmarkPresentationResolverFactory`.
 - **#443 merged** — opt-in presentation/database reach-through regression threshold plus fixture regression test.
 - **#448 merged** — enforces the accepted repository boundary ceiling of 12 in Flutter CI.
-- **#451/#453/#454/#455/#458/#459/#463/#464/#466 merged** — latest caller-zero retirement series described above.
+- **#451/#453/#454/#455/#458/#459/#463/#464/#466/#472 merged** — current caller-zero retirement series described above.
+- **#467 merged** — privacy-safe observability for unexpected Image file-probe failures while remaining fail-soft.
 
 Issue #414 separately tracks possible FTS focused-refresh stale-token correctness. Do not turn that semantic question into behavior-preserving cleanup.
 
@@ -98,7 +114,7 @@ The originally inventoried direct Bookmark visual duplicates are canonicalized t
 
 #401 prevents new direct URL/visual resolver construction in presentation. #439 removed the remaining known direct Notion-card URL resolver construction.
 
-Whole-module caller-zero retirement is preferred to speculative compatibility wrappers. Current examples include #417, #431 and the #451–#466 cleanup series.
+Whole-module caller-zero retirement is preferred to speculative compatibility wrappers. Current examples include #417, #431 and the #451–#472 cleanup series.
 
 Legacy `bookmarks.url`, thumbnail, Photo and Bookmark tables remain live compatibility/import/export data until production caller-zero and migration/backup policy are proven. Presentation convergence alone is not permission to delete storage.
 
@@ -110,7 +126,7 @@ Merged focused slices:
 Remaining high-value responsibilities include schema/database actions, Property-create/edit workflows and layout-specific host code. Continue only through patch-sized moves that measurably remove Widget responsibility/LOC. Do not reconstruct the large host for a small hunk.
 
 ### Failure policy / diagnostic privacy
-Intentional fail-soft behavior stays fail-soft; rollback cleanup never replaces the primary failure; user-visible errors use stable messages; debug diagnostics avoid raw persisted/request user content. Remaining raw exception interpolation is concentrated in large/shared legacy hosts and should not trigger isolated logging churn.
+Intentional fail-soft behavior stays fail-soft; rollback cleanup never replaces the primary failure; user-visible errors use stable messages; debug diagnostics avoid raw persisted/request user content. #467 extends that policy to unexpected managed Image file-probe failures. Expected compatibility misses remain silent when logging would be routine noise rather than actionable diagnostics.
 
 ## Dependency-composition state
 Presentation database reach-through is measured by `tool/maintainability_report.sh` and enforced in CI at **12**. Confirmed reductions include resolver composition (#373/#395/#439), backup composition (#400) and focused Bookmark backlink reads (#408).
@@ -137,6 +153,7 @@ Confirmed live and therefore **not** deletion candidates include:
 - `PhotoReadStore`;
 - `BookmarkAttachmentStore` / attachment UI, drop and deletion paths;
 - Bookmark state/lifecycle enums used by repository/lifecycle code;
+- `BookmarkReorderableProperties`, `BookmarkListMetadata`, `BookmarkResolvedUrlText`, and `BookmarkReverseLookupDialog` production hosts;
 - legacy `ImageEditorPage` / `ImageEditService`, because Photo management still invokes the raw-path editor;
 - live `ObjectTypeDefaults` / `ObjectOpenMode` storage and open-presentation consumers.
 
@@ -149,7 +166,8 @@ Confirmed dead and removed in this series:
 - `ResolvedObjectTypeDefaults` / `ObjectTypeDefaultsResolver` (#459);
 - Object detail Value editor/descriptor/input codec (#463);
 - abandoned Database record adapter/property presenter layer (#464);
-- old paragraph-only `ObjectBodySection` compatibility widget (#466).
+- old paragraph-only `ObjectBodySection` compatibility widget (#466);
+- `PersonRoleProperties` and its dead-only source-string architecture test (#472).
 
 ### Deferred dead-chain candidates because of connector/write shape
 Two follow-up candidates are real but should not be forced with whole-file rewrites:
@@ -163,8 +181,8 @@ Two follow-up candidates are real but should not be forced with whole-file rewri
 
 2. **`lib/widgets/detail_property_row.dart` re-export shim**
    - Canonical implementation is `lib/features/database/presentation/widgets/detail_property_row.dart`.
-   - Remaining shim consumers are `person_role_properties.dart`, `bookmark_attachment_section.dart`, `bookmark_reorderable_properties.dart`, plus one test import.
-   - The first two/test are easy, but `bookmark_reorderable_properties.dart` is ~18 KB and currently requires whole-file replacement for a one-line import change through the connector.
+   - After #472 removed `PersonRoleProperties`, remaining shim consumers are `bookmark_attachment_section.dart`, `bookmark_reorderable_properties.dart`, plus one test import.
+   - The attachment widget/test are easy, but `bookmark_reorderable_properties.dart` is ~18 KB and currently requires whole-file replacement for a one-line import change through the connector.
    - Remove the shim when a hunk-sized edit path is available or when that legacy widget is otherwise being safely touched.
 
 Future caller-zero searches must re-run current-source and filename/import searches against latest main before deletion; stale GitHub search-index hits are not sufficient proof by themselves.
@@ -200,6 +218,6 @@ Future caller-zero searches must re-run current-source and filename/import searc
 - stale search-index results can lag main, so verify candidate files and callers against current-source content before deletion.
 
 ## Stop / continuation state
-The latest obvious whole-module caller-zero candidates were retired through #463/#464/#466. Fresh audits found live callers for the other inspected small modules. Two genuine cleanup chains remain (`ObjectBodyPlainTextAdapter`/`setPlainTextBody` and the `detail_property_row.dart` shim), but both currently need a one-line change inside a substantially larger file and should wait for a patch/hunk-sized edit path rather than trigger whole-file reconstruction.
+The latest obvious whole-module caller-zero candidates were retired through #472. Fresh audits found live callers for the other inspected small modules. Two genuine cleanup chains remain (`ObjectBodyPlainTextAdapter`/`setPlainTextBody` and the `detail_property_row.dart` shim), but both currently need a one-line change inside a substantially larger file and should wait for a patch/hunk-sized edit path rather than trigger whole-file reconstruction.
 
 Safe next Refactor work should therefore begin from a fresh live ownership audit and proceed only when a true caller-zero module or patch-sized existing responsibility boundary is found. Avoid Relation semantics, Object-owned Image mutation policy, and large-host reconstruction.
