@@ -49,8 +49,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('非表示のプロパティ'), findsOneWidget);
-    expect(find.text('説明'), findsOneWidget);
-    expect(find.text('評価'), findsOneWidget);
+    expect(find.byKey(const ValueKey('property-add-existing-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('property-add-existing-2')), findsOneWidget);
 
     await tester.enterText(
       find.byKey(const ValueKey('property-add-search')),
@@ -58,8 +58,8 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('説明'), findsNothing);
-    expect(find.text('評価'), findsOneWidget);
+    expect(find.byKey(const ValueKey('property-add-existing-1')), findsNothing);
+    expect(find.byKey(const ValueKey('property-add-existing-2')), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('property-add-existing-2')));
     await tester.pumpAndSettle();
