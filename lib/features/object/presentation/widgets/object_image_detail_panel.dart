@@ -26,6 +26,7 @@ class ObjectImageDetailPanel extends StatefulWidget {
     this.maxPreviewHeight = 480,
     this.previewImageBuilder,
     this.previewCacheEvictor,
+    this.previewVisualResolver,
   });
 
   final AppDatabase database;
@@ -37,14 +38,19 @@ class ObjectImageDetailPanel extends StatefulWidget {
 
   /// Notifies the host after bytes and canonical geometry were updated.
   ///
-  /// The panel always refreshes its own same-path preview first; hosts may use
-  /// this callback to re-read any surrounding metadata rows such as Pixel
-  /// width/height without learning about file-cache invalidation details.
+  /// The panel schedules its own same-path preview refresh before invoking this
+  /// callback; hosts may use it to re-read surrounding metadata rows such as
+  /// Pixel width/height without learning about file-cache invalidation details.
   final VoidCallback? onChanged;
   final void Function(Object error)? onError;
   final double maxPreviewHeight;
   final Widget Function(BuildContext context, String filePath)? previewImageBuilder;
   final ObjectImagePreviewCacheEvictor? previewCacheEvictor;
+
+  /// Optional preview read seam forwarded to [ObjectImageDetailPreview].
+  /// Production hosts leave this null; focused widget tests can keep resolver,
+  /// filesystem and codec coverage in their existing dedicated tests.
+  final ObjectImagePreviewVisualResolver? previewVisualResolver;
 
   @override
   State<ObjectImageDetailPanel> createState() => _ObjectImageDetailPanelState();
@@ -86,6 +92,7 @@ class _ObjectImageDetailPanelState extends State<ObjectImageDetailPanel> {
           refreshToken: _previewRefreshToken,
           imageBuilder: widget.previewImageBuilder,
           cacheEvictor: widget.previewCacheEvictor,
+          visualResolver: widget.previewVisualResolver,
         ),
         const SizedBox(height: 12),
         ObjectImageEditActions(
