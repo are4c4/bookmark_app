@@ -5,72 +5,74 @@
 ## Current goal
 Issue #225 — reduce maintenance hotspots and retire duplicate/unused legacy paths while preserving product behavior.
 
-Primary lane: **G — Refactor & Architecture Health**. Object Core owns shared Object/Body product semantics, Relations owns canonical Relation semantics, Database/View owns Database presentation semantics, Primitive Objects & Media owns Weblink/Image/File/etc. product behavior, Search owns indexing/query semantics, and Storage/Vault owns storage/delivery behavior. Lane G owns measurable responsibility reduction, proven caller-zero retirement, failure-policy/privacy cleanup, maintainability guardrails, architecture-health audits, and incremental legacy shim retirement.
+Primary lane: **G — Refactor & Architecture Health**. Object Core owns shared Object/Body product semantics, Relations owns canonical Relation semantics, Database/View owns Database presentation semantics, Primitive Objects & Media owns Weblink/Image/File/etc. product behavior, Search owns indexing/query semantics, and Storage/Vault owns storage/delivery behavior. Lane G owns measurable responsibility reduction, proven caller-zero retirement, failure-policy/privacy cleanup, maintainability guardrails, architecture-health audits, AppDatabase responsibility reduction, and incremental legacy shim retirement.
 
 ## Current checkpoint — 2026-09-07
-Latest verified `main` at the current branch/PR checkpoint: **`821c7abb229217a88e5caf88a691d7a0bb2fd458`** after Search **#514**. Parallel lanes move `main` quickly, so re-read it before every merge/shared-host edit.
+Latest verified `main`: **`6e6b1bdb737b513fb2f7fe40c94012c3783c703b`** after Refactor **#541**.
 
-Integrated in this run:
-- **#510 merged** as `1c998a4136e9671a3b5ca4d2d2f32032e195d835` — `maintainability_report.sh --help` no longer duplicates numeric CI ceilings; help uses `<N>` and points to `.github/workflows/flutter_ci.yml`, with a focused regression preventing numeric `--max-*` examples from returning.
-- #510 final CI #1723 passed maintainability guardrail tests, current regression ceilings, Drift generation, Analyze and full Test.
+Integrated in the current Lane G run:
+- **#510 merged** as `1c998a4136e9671a3b5ca4d2d2f32032e195d835` — remove duplicated numeric ceilings from `maintainability_report.sh --help`; point to CI as the source of truth and guard that contract with a regression.
+- **#522 merged** as `0254b87e8a29b31333a1cc99edf17a462759e919` — extend direct presentation/database reach-through measurement from legacy `lib/views` / `lib/widgets` into canonical `lib/features/**/presentation` without raising the ceiling.
+- **#504 merged** as `34a4ac24a5a3fe5bbe1b29f8118627082792dc1d` — reject new `BookmarkItem` / `BookmarkRepository` dependencies under canonical `lib/features`.
+- **#532 merged** as `f8882dd2a0955f57e867ea98394d210ecfbea463` — extend the same feature dependency guard so canonical feature code cannot import/export legacy `lib/views` or `lib/widgets`, while preserving feature-to-feature imports.
+- **#541 merged** as `6e6b1bdb737b513fb2f7fe40c94012c3783c703b` — move `BookmarkReorderableProperties` from the legacy `DetailPropertyRow` re-export to the canonical feature widget and ratchet shim-import ceiling **18 → 17**.
 
-Active branch: `refactor/feature-presentation-boundary-225`.
-Active PR: **#522 — Cover feature presentation in database boundary guard**.
-Current implementation/test commits before this handoff refresh:
-- `e2040faafcc51d4e5889eaf31ad8d11691ad478d` — extend presentation/database reach-through scanning from legacy `lib/views` + `lib/widgets` to every `lib/features/**/presentation` tree.
-- `ac463ffebb9cbd8faaa06b7578f44207b19eceda` — extend the fixture so feature-owned presentation reach-through is counted and trips the same existing threshold.
+#532 and #541 both passed maintainability guardrails, current ceilings, Drift generation, Analyze and full Test before merge. #541 production behavior change is import-only: the Bookmark properties host diff is one added canonical import and one removed shim import.
 
-Recent integrated architecture-health sequence:
-- **#474 merged** — guard temporary Database-presentation shim imports; migrated three test-only imports and ratcheted 22 → 19.
-- **#482 merged** — guard the number of Database-presentation re-export shim files; current ceiling 5.
-- **#485 merged** — ratchet direct presentation → database reach-through ceiling to 9.
-- **#488 merged** — make unexpected Bookmark object-link compatibility-query failures observable with privacy-safe diagnostics while preserving expected-miss fallback behavior.
-- **#499 merged** — move `BookmarkAttachmentSection` from the legacy `DetailPropertyRow` shim to the canonical feature import and ratchet shim-import ceiling 19 → 18.
-- **#502 merged** — expand repository routing to seven focused lanes.
-- **#510 merged** — remove maintainability-help threshold duplication and guard its source-of-truth contract.
+## Live ownership / sequencing
+Rechecked during this run:
+- **Object #503 remains open** and owns the patch-sized `ObjectInspectorPage._canEditBody(...)` universal-Body hunk. Lane G must not touch `ObjectInspectorPage` or retire the plain-text Body chain while #503 remains open.
+- **Primitive #498 remains open** and owns canonical Image edit composition. Lane G must not alter Image edit/ownership semantics.
+- **Storage #509 is merged**. Its prior `app_database.dart` lease is clear; a later AppDatabase refactor still requires a fresh open-PR check immediately before editing.
+- No open PR was found owning `bookmark_reorderable_properties.dart` or `app_database.dart` when their latest audits were run.
 
-## Live open-PR ownership at this checkpoint
-Rechecked after #510 merged:
-- **Object #503** — owns the patch-sized `ObjectInspectorPage._canEditBody(...)` universal-Body hunk. Lane G must not retire the plain-text Body chain or touch that Inspector seam while #503 remains open.
-- **Primitive #498** — owns canonical Image edit composition. Lane G must not alter Image edit/ownership semantics.
-- **Refactor #504** — already owns the separate `lib/features` legacy-Bookmark dependency guard plus its CI wiring. Do not duplicate/rewrite that guard from #522; #522 only closes the existing presentation/database reach-through measurement blind spot.
-- Storage #509 currently touches `app_database.dart`; do not use AppDatabase narrowing as a pretext to reconstruct that shared hotspot while the Vault path slice is active.
-
-Re-read open PRs again before every shared-hotspot edit because parallel lanes move quickly.
+Parallel lanes move `main` rapidly. Re-read open PR ownership before every shared-host edit.
 
 ## Current measurable guardrails
 Flutter CI currently enforces three monotonic ceilings:
 
 1. Presentation direct `workspaceStore.database` reach-through: **9 references maximum**.
-2. Temporary Database-presentation re-export shim imports: **18 imports maximum**.
+2. Temporary Database-presentation re-export shim imports: **17 imports maximum**.
 3. Temporary Database-presentation re-export shim files: **5 files maximum**.
 
-### Presentation reach-through coverage
-Before #522, the reach-through scan only covered legacy presentation roots `lib/views` and `lib/widgets`, leaving canonical `lib/features/<feature>/presentation` outside the measurement even though that is the target module layout.
+### Presentation/database reach-through
+#522 closes the folder-layout loophole: the same ceiling now scans legacy `lib/views` / `lib/widgets` and canonical `lib/features/**/presentation`. Moving presentation code into `lib/features` therefore cannot hide direct database reach-through.
 
-#522 adds every `lib/features/**/presentation` directory to the same scanner. It deliberately:
-- does **not** scan feature application/data/service code as presentation debt;
-- does **not** create a new threshold;
-- does **not** increase the existing ceiling of 9;
-- adds a fixture regression proving a feature-presentation `workspaceStore.database` reference is counted.
+The accepted ceiling remains **9**. Lower it only when a real responsibility move removes reach-through; do not add page-specific wrappers merely to hide the metric.
 
-On #522 head `ac463ff...`, both **Maintainability guardrail tests** and **Maintainability regression ceilings** passed immediately. Therefore the expanded real-repository scan still fits the existing ceiling of 9; canonical feature presentation currently adds no regression requiring the ceiling to be relaxed.
+A separate audit found **7 `AppDatabase` references under current `lib/features`**, including existing Database/Object presentation widgets. Therefore a blanket zero-`AppDatabase` feature guard would currently encode a behavior/architecture migration rather than a regression-only boundary. Do not add such a guard until those references are classified and an explicit replacement boundary exists.
 
 ### Legacy Database-presentation shims
 Shim-import history:
 - initial baseline: **22**;
 - #474: three test-only imports moved canonical, **22 → 19**;
-- #499: `BookmarkAttachmentSection` moved canonical, **19 → 18**.
+- #499: `BookmarkAttachmentSection` moved to canonical `DetailPropertyRow`, **19 → 18**;
+- #541: `BookmarkReorderableProperties` moved to canonical `DetailPropertyRow`, **18 → 17**.
 
-Current remaining shim-import distribution from the current source/guardrail history:
+Remaining shim-import distribution:
 - Photo management: 4
 - People management: 4
 - Collection management: 4
 - GenericDatabasePage: 3
 - Stage1: 2
-- BookmarkReorderableProperties: 1
 
-Do not reconstruct these large/shared hosts merely to lower a metric. Migrate imports when a host can be patched naturally and safely, then ratchet the ceiling in the same or immediately following slice.
+These 17 callers are concentrated in large/shared legacy hosts. Do not reconstruct those files merely to lower a metric. Migrate imports when a host is naturally and safely touched, then ratchet the CI ceiling in the same or immediately following focused slice.
+
+Tracked shim files remain:
+- `lib/widgets/database_page_toolbar.dart`
+- `lib/widgets/database_view_tabs.dart`
+- `lib/widgets/database_create_tiles.dart`
+- `lib/widgets/resizable_detail_pane.dart`
+- `lib/widgets/detail_property_row.dart`
+
+Delete a shim file only after every real caller is gone.
+
+## Canonical feature dependency boundary
+#504 + #532 now make `lib/features` monotonic in two directions:
+- no new `BookmarkItem` / `BookmarkRepository` dependency;
+- no import/export back to legacy `lib/views` / `lib/widgets`, for both package and relative forms.
+
+This does **not** prohibit feature-to-feature presentation imports. Reusable presentation should move to a canonical feature/shared boundary instead of making canonical feature code depend back on legacy hosts.
 
 ## Caller-zero cleanup series
 Merged behavior-preserving cleanup PRs:
@@ -89,109 +91,96 @@ Combined #451/#453/#454/#455/#458/#459/#463/#464/#466/#472: **1,771 deletions / 
 
 Shared hotspots (`generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, `bookmark_unified_stage1_page.dart`, `app_database.dart`) were deliberately not reconstructed for these deletions.
 
-## 2026-09-07 current-source caller audit
-This run re-audited small/medium modules rather than trusting old inventory labels. The following still have real production callers and are **not deletion candidates**:
-- `AutoOrganizeService` — BookmarkRepository/settings automation remains live.
-- `BookmarkTransferService` — import/export compatibility remains live through `AppShell`.
-- `AppSettingsService` and `ProfileStorageMigrator` — composition/bootstrap callers remain live in `main.dart`.
-- `DatabaseBackupService` — settings backup section remains live.
-- `BookmarkPresentationResolverFactory` — Bookmark visual/URL compatibility hosts still compose through it.
-- `GenericDatabaseImageImportService` — `GenericDatabasePageServices` still owns the live composition path.
-- `BookmarkObjectLinkReadStore` — canonical/legacy URL and visual resolvers still use it.
-- `DatabaseViewQueryAdapter` and `DatabaseViewManagementService` — canonical Object/View projection and Database View tabs still use them.
-- `GenericDatabaseCollectionPageData` — state loader/page services/object creation still use it.
-- `ObjectBodyBlockActionController` — shared Inspector Body actions still use it.
-- `ObjectBoardMoveService` — board creation, GenericDatabasePage and page services still use it.
-- `ObjectDetailPropertyPresentation` — Inspector, GenericDatabasePage and canonical feature widgets still use it.
-- `ObjectValuePromotion` — promotion execution/Weblink services and Inspector still use it.
-- `BacklinkRepository` / `FullTextSearchRepository` — live compatibility/search boundaries.
-- Small presentation helpers audited in this pass (`NotionInlineField`, `DetailSection`, `BookmarkResolvedUrlText`, `ObjectTypeTemplatePicker`, `TagDetailPane`) also retain production callers.
+## Current-source caller audit
+The following audited modules still have real production callers and are **not deletion candidates**:
+- `AutoOrganizeService`
+- `BookmarkTransferService`
+- `AppSettingsService`
+- `ProfileStorageMigrator`
+- `DatabaseBackupService`
+- `BookmarkPresentationResolverFactory`
+- `GenericDatabaseImageImportService`
+- `BookmarkObjectLinkReadStore`
+- `DatabaseViewQueryAdapter`
+- `DatabaseViewManagementService`
+- `GenericDatabaseCollectionPageData`
+- `ObjectBodyBlockActionController`
+- `ObjectBoardMoveService`
+- `ObjectDetailPropertyPresentation`
+- `ObjectValuePromotion`
+- `BacklinkRepository`
+- `FullTextSearchRepository`
+- `NotionInlineField`, `DetailSection`, `BookmarkResolvedUrlText`, `ObjectTypeTemplatePicker`, and `TagDetailPane`.
 
-`tool/performance_probe.dart` has no import caller, but it is an intentional standalone CLI entrypoint added for repeatable performance measurement and aligns with Issue #225 P3; do not classify CLI/tools as caller-zero merely because production Dart does not import them.
+`tool/performance_probe.dart` is an intentional standalone CLI entrypoint; lack of an import caller does not make it dead production code.
 
-No new safe whole-module production caller-zero deletion was proven in this pass.
+No new safe whole-module caller-zero deletion was proven in this run.
+
+## Deferred cleanup candidates
+### Plain-text Body mutation chain
+`ObjectBodySection` is already gone. `ObjectDetailEditService.setPlainTextBody(...)` and `ObjectBodyPlainTextAdapter` were previously identified as a possible caller-zero chain.
+
+**Do not retire it while Object #503 remains open.** After #503 merges, re-audit production callers from current `main`; remove only if caller-zero is still proven and surviving Body behavior has independent coverage.
+
+### AppDatabase mutation responsibility
+`BookmarkRepository` still forwards favorite/status/rating/open-count and batch mutation operations into methods implemented on `AppDatabase`.
+
+Storage #509 no longer owns `app_database.dart`, but the next change must remove real root-database responsibility rather than add a one-caller wrapper. Current constraints:
+- creating a new mutation abstraction solely for `BookmarkRepository` would violate the repository rule against abstractions without multiple real callers;
+- pushing unrelated favorite/rating semantics into `BookmarkLifecycleStore` would distort ownership;
+- connector whole-file replacement of `app_database.dart` is too risky for a small extraction.
+
+Revisit only when a patch-sized edit/extraction mechanism is available or an existing meaningful Store boundary can absorb the responsibility without semantic distortion.
+
+### Remaining shim imports
+All 17 remaining imports live in large/shared hosts. Prefer opportunistic canonical-import migration during naturally owned patches rather than a whole-file reconstruction campaign.
 
 ## Architecture / responsibility state
-### P0 / P3 guardrails
-Integrated or active guardrails include:
-- `tool/maintainability_report.sh` and fixture regression;
-- no-new-legacy-dependency policy and hotspot baseline;
-- `docs/LEGACY_BOOKMARK_INVENTORY.md`;
-- `docs/ERROR_POLICY_AUDIT.md`;
-- dependency-boundary guidance in `docs/architecture.md`;
-- #401 guard against new direct Bookmark URL/visual resolver construction in presentation;
-- #443/#448 presentation/database reach-through measurement and regression ceiling;
-- #474 legacy presentation-shim import measurement/ceiling;
-- #482 shim-file-count ceiling;
-- #485 reach-through ratchet to 9;
-- #499 shim-import ratchet to 18;
-- #510 non-duplicated maintainability-help source of truth;
-- **#522 active** — include canonical feature presentation in the reach-through ceiling;
-- **#504 active separately** — forbid new `BookmarkItem` / `BookmarkRepository` dependencies under `lib/features`.
-
-New feature work must not deepen Bookmark-era coupling or bypass application composition by reaching from presentation into the raw workspace database.
-
 ### AppDatabase
-Historical migration bodies v2-v16 are extracted behind migration helpers. `AppDatabase.migration` is sequencing/wiring rather than the home of historical bodies.
+Historical migration bodies v2-v16 are extracted behind migration helpers. `AppDatabase.migration` is sequencing/wiring rather than the home of historical migration bodies.
 
-Responsibility moves include #281 `BookmarkReadStore`, #282 `ProfilePathResolver`, #283 `SavedViewReadStore`, and #289 `PhotoReadStore`.
-
-Possible future mutation responsibility remains favorite/status/rating/open-count and nearby batch updates that are close passthroughs from `BookmarkRepository`. Move only when `app_database.dart` is not actively leased and the change removes real database-root responsibility rather than adding a wrapper.
+Existing responsibility moves include #281 `BookmarkReadStore`, #282 `ProfilePathResolver`, #283 `SavedViewReadStore`, and #289 `PhotoReadStore`.
 
 ### GenericDatabasePage
 Focused extractions already integrated:
 - #310 `GenericDatabasePageStateLoader`
 - #323 `GenericDatabasePageServices.fromWorkspaceStore(...)`
 
-Remaining high-value responsibility includes schema/database actions, Property create/edit workflows and layout-specific host code. Continue only through patch-sized moves that measurably remove Widget responsibility/LOC; do not reconstruct the large file through connector whole-file writes.
+Remaining high-value responsibility includes schema/database actions, Property create/edit workflows and layout-specific host code. Continue only through patch-sized moves that measurably remove Widget responsibility/LOC.
 
 ### Legacy Bookmark compatibility
-Canonical Bookmark visual/URL presentation has converged substantially, but legacy `bookmarks.url`, thumbnail, Photo and Bookmark storage remains live compatibility/import/export data until production caller-zero and migration/backup handling are proven. Presentation convergence alone is not permission to delete storage.
+Canonical Bookmark visual/URL presentation has converged substantially, but legacy Bookmark URL/thumbnail/Photo/storage remains live compatibility/import/export data. Presentation convergence alone is not permission to delete storage.
 
-## Failure-policy state
-The small high-value silent/privacy boundaries are largely complete. #488 clarifies Bookmark object-link fallback policy: a normal missing mirror row remains quiet; a thrown compatibility-query failure may emit a privacy-safe debug/assert diagnostic while the user-visible fallback stays fail-soft.
-
-Remaining raw implementation exception interpolation is concentrated in large/shared legacy hosts. Do not reconstruct those hosts merely to change one error string.
-
-## Deferred real cleanup candidates
-### Plain-text Body mutation chain
-`ObjectBodySection` is gone. `ObjectDetailEditService.setPlainTextBody(...)` previously had no production caller and `ObjectBodyPlainTextAdapter` was only needed by that dead service method plus dedicated tests.
-
-**Do not retire this chain during Object #503.** Re-audit after #503 merges; if the plain-text path is still caller-zero, remove it only through a genuinely patch-sized Inspector/service change.
-
-### Temporary Database-presentation re-export shims
-Canonical implementations live under `lib/features/database/presentation/widgets/`. The remaining 18 imports are concentrated in shared/large production hosts. Remove a shim only after all real callers naturally move to canonical imports.
-
-### Presentation/database reach-through
-The accepted ceiling remains 9. #522 broadens where that ceiling is enforced; it does not hide or redistribute existing debt. Lower the ceiling only when a real responsibility move removes reach-through.
+### Failure policy
+The small high-value silent/privacy boundaries are largely complete. Keep intentional compatibility/read fallbacks fail-soft, keep rollback cleanup secondary to the original failure, and avoid raw exception/user-data diagnostics.
 
 ## Exact next actions
-1. Validate/merge **#522**; fix only failures caused by expanded presentation scanning/test coverage.
-2. Do not duplicate **#504** while it owns the separate feature legacy-Bookmark dependency guard/CI slice; re-evaluate after it merges/closes.
-3. Re-run current-source caller-zero audits after parallel lane merges; delete only when production callers are zero and surviving behavior has independent coverage.
-4. After Object #503 merges, re-audit the plain-text Body chain before touching `ObjectInspectorPage`.
-5. Lower shim-import ceiling below 18 only when a production host can safely switch to canonical imports without whole-file reconstruction.
-6. Lower presentation/database ceiling below 9 only when a real responsibility move removes reach-through.
-7. Continue GenericDatabasePage P1 only via patch-sized extraction of concrete schema/database action, Property workflow, or layout-host responsibility.
-8. Revisit AppDatabase mutation responsibility only after Storage #509/shared-hotspot ownership clears.
-9. Follow Object-first storage retirement: prove production caller-zero plus import/export/backup handling before deleting Bookmark URL/thumbnail/Photo storage.
-10. Treat search correctness/index semantics as Search-lane work rather than a Refactor pretext for semantic change.
+1. Re-read current `main`, Issue #225, open PRs and CI before the next edit.
+2. If Object #503 has merged, re-audit the plain-text Body chain; otherwise leave the Inspector untouched.
+3. Continue caller-zero audits only on small/medium modules and delete only after production caller-zero plus replacement coverage are proven.
+4. Lower shim-import ceiling below 17 only when a real production caller can safely move canonical without reconstructing a large shared host.
+5. Lower presentation/database ceiling below 9 only through real responsibility reduction.
+6. Revisit AppDatabase mutation responsibility only with a patch-sized extraction that reduces responsibility without creating a one-caller wrapper or distorting `BookmarkLifecycleStore`.
+7. Continue GenericDatabasePage P1 only via patch-sized extraction; never rewrite the whole hotspot for architecture aesthetics.
+8. Treat Relation/Object/Primitive/Search/Storage product semantics as their owning lanes, not as Refactor opportunities.
 
-## Validation
-- #510 final CI #1723: maintainability guardrail tests **pass**, regression ceilings **pass**, Drift generation **pass**, Analyze **pass**, full Test **pass**.
-- #510 merged as `1c998a4136e9671a3b5ca4d2d2f32032e195d835`.
-- Before #510 merge, parallel main changes through Relation/Object/Database-View work were compared and did not overlap #510's files.
-- Current CI-owned guardrail values remain **9 / 18 / 5**.
-- #522 first implementation/test head `ac463ff...`: Maintainability guardrail tests **pass** and Maintainability regression ceilings **pass** with `lib/features/**/presentation` included; full Flutter setup/Analyze/Test were still running before this handoff-doc commit advanced the PR head.
+## Validation checkpoint
+- #510 CI: guardrails, ceilings, Drift, Analyze, full Test **pass**.
+- #522 CI: expanded feature-presentation reach-through fixture and unchanged ceiling **pass**; PR merged.
+- #504 CI: feature legacy-domain guard **pass**; PR merged.
+- #532 CI run #1770: guardrails, ceilings, feature dependency guard, Drift, Analyze, full Test **pass**; PR merged.
+- #541 CI run #1780: guardrails, ceiling **17**, feature dependency guard, Drift, Analyze, full Test **pass**; PR merged.
 
 ## Risks / sequencing
-- parallel lanes can move `main` quickly; compare/re-read before merge;
-- #503 owns `ObjectInspectorPage`; #498 owns canonical Image edit composition; #509 touches AppDatabase; #504 owns the separate feature legacy-dependency CI guard;
+- `main` moves rapidly across seven parallel lanes; always refresh ownership immediately before shared edits/merges;
+- Object #503 owns `ObjectInspectorPage`; Primitive #498 owns canonical Image edit composition;
 - large shared hosts must remain patch-sized;
-- connector file writes replace complete existing files, so do not reconstruct a large host for a one-line import/constructor change;
+- connector file writes replace complete files, so avoid using them to reconstruct production hotspots for one-line changes;
 - legacy Bookmark URL/thumbnail/Photo storage remains live compatibility data;
-- wrapper-only abstractions that reduce a metric without deleting responsibility should be rejected;
-- product semantics remain with their owning lanes; Lane G is behavior-preserving by default.
+- reject wrapper-only abstractions that improve a metric without reducing responsibility;
+- G lane is behavior-preserving by default.
 
-## Stop/continuation state
-#510 is integrated and #522 is the active safe G-lane slice. The expanded guard already proves canonical feature presentation can be brought under the existing ceiling without relaxing it. After #522 validation/merge, the obvious next cleanup targets remain sequenced behind active shared-hotspot ownership or already-active #504 guard work; do not manufacture a duplicate abstraction merely to keep the lane busy.
+## Stop / continuation state
+The current safe G-lane guardrail sequence is integrated through #541. Guardrails are now **9 / 17 / 5**, canonical feature code cannot regress into Bookmark-era types or legacy presentation, and folder migration cannot hide direct `workspaceStore.database` reach-through.
+
+The next obvious production cleanups are intentionally sequenced: plain-text Body retirement is blocked by Object #503, remaining shim callers are large/shared hosts, and AppDatabase mutation extraction currently lacks a safe patch-sized boundary. Continue with fresh current-source audits rather than manufacturing an abstraction solely to keep the lane busy.
