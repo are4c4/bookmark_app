@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
 import '../data/person_roles.dart';
+import '../features/database/presentation/widgets/property_add_popover.dart';
 import 'bookmark_attachment_section.dart';
 import 'detail_property_row.dart';
 import 'relation_database_picker.dart';
@@ -49,93 +50,41 @@ class PersonRoleProperties extends StatelessWidget {
     }
   }
 
-  Future<void> _addRole(
+  Widget _roleAddPopover(
     BuildContext context,
     List<PersonRoleAssignment> assignments,
-  ) async {
+  ) {
     final existingRoles = assignments.map((assignment) => assignment.role).toSet();
-    final suggestions = defaultPersonRoles
-        .where((role) => !existingRoles.contains(role))
-        .toList();
-    String typedRole = '';
-    String? selectedRole;
-
-    final role = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setLocalState) => AlertDialog(
-          title: const Text('人物プロパティを追加'),
-          content: SizedBox(
-            width: 420,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (suggestions.isNotEmpty) ...[
-                  Text(
-                    '候補',
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: suggestions
-                        .map(
-                          (suggestion) => ChoiceChip(
-                            label: Text(suggestion),
-                            selected: selectedRole == suggestion,
-                            onSelected: (_) => setLocalState(() {
-                              selectedRole = suggestion;
-                              typedRole = '';
-                            }),
-                          ),
-                        )
-                        .toList(),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                TextFormField(
-                  autofocus: suggestions.isEmpty,
-                  decoration: InputDecoration(
-                    labelText: '役割名',
-                    hintText: selectedRole ?? '例: 著者、講師、監督',
-                  ),
-                  onChanged: (value) => setLocalState(() {
-                    typedRole = value;
-                    if (value.trim().isNotEmpty) selectedRole = null;
-                  }),
-                  onFieldSubmitted: (_) {
-                    final value = normalizePersonRole(
-                      selectedRole ?? typedRole,
-                    );
-                    if (value.isNotEmpty) Navigator.pop(dialogContext, value);
-                  },
-                ),
-              ],
-            ),
+    final hiddenRoles = <PropertyAddCandidate>[
+      for (var index = 0; index < defaultPersonRoles.length; index++)
+        if (!existingRoles.contains(defaultPersonRoles[index]))
+          PropertyAddCandidate(
+            id: index,
+            name: defaultPersonRoles[index],
+            type: '人物',
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('キャンセル'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final value = normalizePersonRole(selectedRole ?? typedRole);
-                if (value.isNotEmpty) Navigator.pop(dialogContext, value);
-              },
-              child: const Text('次へ'),
-            ),
-          ],
+    ];
+
+    return PropertyAddPopover(
+      buttonKey: const ValueKey('person-role-property-add'),
+      buttonLabel: '人物プロパティを追加',
+      tooltip: '人物プロパティを追加',
+      hiddenProperties: hiddenRoles,
+      propertyTypes: const [
+        PropertyAddTypeOption(
+          key: 'personRole',
+          label: '人物',
+          icon: Icons.person_outline,
         ),
-      ),
+      ],
+      onRevealExisting: (candidate) =>
+          _selectPeople(context, candidate.name, assignments),
+      onCreateNew: (request) async {
+        final role = normalizePersonRole(request.name);
+        if (role.isEmpty) return;
+        await _selectPeople(context, role, assignments);
+      },
     );
-    if (role == null || !context.mounted) return;
-    await _selectPeople(context, role, assignments);
   }
 
   Future<void> _addPersonToDroppedBookmark(
@@ -303,17 +252,7 @@ class PersonRoleProperties extends StatelessWidget {
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(112, 2, 0, 4),
-              child: TextButton.icon(
-                onPressed: () => _addRole(context, assignments),
-                icon: const Icon(Icons.add, size: 15),
-                label: const Text('人物プロパティを追加'),
-                style: TextButton.styleFrom(
-                  foregroundColor:
-                      Theme.of(context).colorScheme.onSurfaceVariant,
-                  textStyle: const TextStyle(fontSize: 12),
-                  visualDensity: VisualDensity.compact,
-                ),
-              ),
+              child: _roleAddPopover(context, assignments),
             ),
             const SizedBox(height: 2),
             BookmarkAttachmentSection(repository: repository, bookmark: bookmark),
