@@ -1,6 +1,5 @@
-import 'package:drift/drift.dart';
-
 import '../data/app_database.dart';
+import '../data/bookmark_object_link_read_store.dart';
 import '../data/bookmark_weblink_object_bridge.dart';
 import '../data/core_object_bridge.dart';
 import '../data/generic_database_store.dart';
@@ -46,6 +45,7 @@ class BookmarkUrlResolver {
       objectStore: _objectStore,
     );
     _relationReads = RelationReadService(_objectStore);
+    _bookmarkLinks = BookmarkObjectLinkReadStore(database);
   }
 
   final AppDatabase database;
@@ -54,6 +54,7 @@ class BookmarkUrlResolver {
   late final ObjectStore _objectStore;
   late final SystemObjectStore _systemObjects;
   late final RelationReadService _relationReads;
+  late final BookmarkObjectLinkReadStore _bookmarkLinks;
 
   BookmarkUrlSource? choosePreferred({
     String? canonicalWeblinkUrl,
@@ -91,7 +92,10 @@ class BookmarkUrlResolver {
   Future<String?> resolveCanonicalWeblinkUrl(int legacyBookmarkId) async {
     if (legacyBookmarkId <= 0 || workspaceId <= 0) return null;
 
-    final bookmarkObjectId = await _bookmarkObjectId(legacyBookmarkId);
+    final bookmarkObjectId = await _bookmarkLinks.objectIdForBookmark(
+      workspaceId: workspaceId,
+      bookmarkId: legacyBookmarkId,
+    );
     if (bookmarkObjectId == null) return null;
 
     final bookmarkType = await _systemObjects.getSystemObjectType(
@@ -129,26 +133,6 @@ class BookmarkUrlResolver {
 
     final raw = edges.single.targetObject.values[urlProperties.single.id];
     return _validHttpUrl(raw == null ? null : '$raw');
-  }
-
-  Future<int?> _bookmarkObjectId(int legacyBookmarkId) async {
-    try {
-      final rows = await database.customSelect(
-        '''SELECT object_id
-           FROM bookmark_object_links
-           WHERE workspace_id = ? AND bookmark_id = ?
-           LIMIT 1''',
-        variables: [
-          Variable<int>(workspaceId),
-          Variable<int>(legacyBookmarkId),
-        ],
-      ).get();
-      if (rows.isEmpty) return null;
-      return rows.first.read<int>('object_id');
-    } catch (_) {
-      // Compatibility installations may not have completed Object mirroring.
-      return null;
-    }
   }
 
   String? _validHttpUrl(String? value) {
