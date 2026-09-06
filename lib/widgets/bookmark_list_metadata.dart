@@ -22,6 +22,7 @@ class BookmarkListMetadata extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Widget? description;
     final secondary = <Widget>[];
     final chips = <Widget>[];
     for (final token in propertyTokens) {
@@ -76,7 +77,7 @@ class BookmarkListMetadata extends StatelessWidget {
           );
         case 'description':
           if (bookmark.description?.trim().isNotEmpty == true) {
-            secondary.add(_PlainMeta(text: bookmark.description!));
+            description = _DescriptionMeta(text: bookmark.description!);
           }
         case 'createdAt':
           secondary.add(_PlainMeta(text: _formatDate(bookmark.createdAt)));
@@ -107,11 +108,20 @@ class BookmarkListMetadata extends StatelessWidget {
           );
       }
     }
-    if (secondary.isEmpty && chips.isEmpty) return const SizedBox.shrink();
+    if (description == null && secondary.isEmpty && chips.isEmpty) {
+      return const SizedBox.shrink();
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (description != null)
+          KeyedSubtree(
+            key: const ValueKey('bookmark-list-description-metadata'),
+            child: description,
+          ),
+        if (description != null && secondary.isNotEmpty)
+          const SizedBox(height: 5),
         if (secondary.isNotEmpty)
           Wrap(
             key: const ValueKey('bookmark-list-secondary-metadata'),
@@ -120,7 +130,8 @@ class BookmarkListMetadata extends StatelessWidget {
             crossAxisAlignment: WrapCrossAlignment.center,
             children: secondary,
           ),
-        if (secondary.isNotEmpty && chips.isNotEmpty) const SizedBox(height: 7),
+        if ((description != null || secondary.isNotEmpty) && chips.isNotEmpty)
+          const SizedBox(height: 8),
         if (chips.isNotEmpty)
           Wrap(
             key: const ValueKey('bookmark-list-chip-metadata'),
@@ -206,6 +217,24 @@ class _MetaChip extends StatelessWidget {
       ),
     );
   }
+}
+
+class _DescriptionMeta extends StatelessWidget {
+  const _DescriptionMeta({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Text(
+        text,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 12,
+          height: 1.25,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+      );
 }
 
 class _PlainMeta extends StatelessWidget {
