@@ -5,6 +5,7 @@ import '../../../../data/object_store.dart';
 import '../../../../services/canonical_image_edit_service.dart';
 import 'object_image_detail_preview.dart';
 import 'object_image_edit_actions.dart';
+import 'object_image_free_crop_dialog.dart';
 
 /// Canonical Image detail presentation seam.
 ///
@@ -77,6 +78,18 @@ class _ObjectImageDetailPanelState extends State<ObjectImageDetailPanel> {
     widget.onChanged?.call();
   }
 
+  Future<Rect?> _selectFreeCrop(BuildContext context) => showDialog<Rect>(
+        context: context,
+        builder: (_) => ObjectImageFreeCropDialog(
+          database: widget.database,
+          objectStore: widget.objectStore,
+          objectTypeId: widget.objectTypeId,
+          objectId: widget.objectId,
+          visualResolver: widget.previewVisualResolver,
+          imageBuilder: widget.previewImageBuilder,
+        ),
+      );
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -99,6 +112,7 @@ class _ObjectImageDetailPanelState extends State<ObjectImageDetailPanel> {
           editService: widget.editService,
           workspaceId: widget.workspaceId,
           objectId: widget.objectId,
+          freeCropSelector: _selectFreeCrop,
           onChanged: _handleChanged,
           onError: widget.onError,
         ),

@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../../../services/canonical_image_edit_service.dart';
 
+typedef ObjectImageFreeCropRectSelector = Future<Rect?> Function(
+  BuildContext context,
+);
+
 /// Small presentation seam for safe canonical Image edits.
 ///
 /// The widget never resolves file paths itself and never calls [ImageEditService]
@@ -13,6 +17,7 @@ class ObjectImageEditActions extends StatefulWidget {
     required this.editService,
     required this.workspaceId,
     required this.objectId,
+    this.freeCropSelector,
     this.onChanged,
     this.onError,
   });
@@ -20,6 +25,12 @@ class ObjectImageEditActions extends StatefulWidget {
   final CanonicalImageEditService editService;
   final int workspaceId;
   final int objectId;
+
+  /// Optional UI-only selector for a normalized free-crop rectangle.
+  ///
+  /// The selector must not mutate image bytes. Its result is routed back through
+  /// [CanonicalImageEditService.edit], which repeats ownership/format checks.
+  final ObjectImageFreeCropRectSelector? freeCropSelector;
   final VoidCallback? onChanged;
   final void Function(Object error)? onError;
 
@@ -103,6 +114,24 @@ class _ObjectImageEditActionsState extends State<ObjectImageEditActions> {
         );
       });
 
+  Future<void> _freeCrop() async {
+    final selector = widget.freeCropSelector;
+    if (selector == null || _busy) return;
+    try {
+      final rect = await selector(context);
+      if (!mounted || rect == null) return;
+      await _run(() async {
+        await widget.editService.edit(
+          workspaceId: widget.workspaceId,
+          objectId: widget.objectId,
+          normalizedCropRect: rect,
+        );
+      });
+    } catch (error) {
+      widget.onError?.call(error);
+    }
+  }
+
   Future<void> _restore() => _run(() async {
         await widget.editService.restoreOriginal(
           workspaceId: widget.workspaceId,
@@ -179,6 +208,13 @@ class _ObjectImageEditActionsState extends State<ObjectImageEditActions> {
                 ),
               ],
             ),
+            if (widget.freeCropSelector != null)
+              OutlinedButton.icon(
+                key: const ValueKey('object-image-free-crop'),
+                onPressed: canEdit ? _freeCrop : null,
+                icon: const Icon(Icons.crop_free),
+                label: const Text('自由'),
+              ),
             OutlinedButton.icon(
               key: const ValueKey('object-image-restore-original'),
               onPressed: canRestore ? _restore : null,
