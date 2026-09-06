@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/bookmark_repository.dart';
-import '../data/generic_database_store.dart';
+import '../data/object_search_compatibility_bridge.dart';
 import '../repositories/object_global_search_service.dart';
 import 'object_global_search_page.dart';
 
@@ -22,10 +22,11 @@ class GlobalSearchPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final store = GenericDatabaseStore(repository.workspaceStore.database);
+    final searchContext =
+        ObjectSearchCompatibilityBridge.fromRepository(repository);
     return ObjectGlobalSearchPage(
-      store: store,
-      workspaceId: repository.workspaceId,
+      store: searchContext.store,
+      workspaceId: searchContext.workspaceId,
       searchService: searchService,
     );
   }
