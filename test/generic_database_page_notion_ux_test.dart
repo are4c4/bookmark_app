@@ -219,7 +219,7 @@ void main() {
     expect(find.text('詳細'), findsNothing);
   });
 
-  testWidgets('Table header adds Property and persists it in active View',
+  testWidgets('Table Property popover reveals hidden and creates quick Property',
       (tester) async {
     final harness = await _Harness.create();
     addTearDown(harness.database.close);
@@ -231,7 +231,27 @@ void main() {
       name: 'Tasks',
       icon: '✅',
     );
-    final definition = _definition(typeId, const <DatabasePropertyDefinition>[]);
+    final doneId = await harness.genericStore.createProperty(
+      databaseId: typeId,
+      name: 'Done',
+      type: 'checkbox',
+    );
+    final estimateId = await harness.genericStore.createProperty(
+      databaseId: typeId,
+      name: 'Estimate',
+      type: 'number',
+    );
+    final definition = _definition(
+      typeId,
+      <DatabasePropertyDefinition>[
+        DatabasePropertyDefinition(
+          key: 'p:$doneId',
+          label: 'Done',
+          type: DatabasePropertyType.checkbox,
+          icon: Icons.check_box_outlined,
+        ),
+      ],
+    );
     await DatabaseViewStore(harness.database).createView(
       workspaceId: harness.workspaceId,
       definition: definition,
@@ -240,26 +260,42 @@ void main() {
     );
 
     await _pumpPage(tester, harness, typeId);
+    expect(find.text('Estimate'), findsNothing);
+
     await tester.tap(find.byKey(const ValueKey<String>('table-add-property')));
     await tester.pumpAndSettle();
+    expect(
+      find.byKey(ValueKey('property-add-existing-$estimateId')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(ValueKey('property-add-existing-$estimateId')));
+    await tester.pumpAndSettle();
+    expect(find.text('Estimate'), findsOneWidget);
 
-    final dialog = find.byType(AlertDialog);
-    expect(dialog, findsOneWidget);
-    final nameField =
-        find.descendant(of: dialog, matching: find.byType(TextField)).first;
-    await tester.enterText(nameField, 'Priority');
-    await tester.tap(find.descendant(of: dialog, matching: find.text('追加')));
+    await tester.tap(find.byKey(const ValueKey<String>('table-add-property')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('property-add-create-new')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('property-add-create-name')),
+      'Priority',
+    );
+    await tester.tap(find.byKey(const ValueKey('property-add-type-number')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('property-add-create-submit')));
     await tester.pumpAndSettle();
 
     final properties = await harness.genericStore.listProperties(typeId);
-    expect(properties.map((property) => property.name), contains('Priority'));
     final created =
         properties.singleWhere((property) => property.name == 'Priority');
+    expect(created.type, 'number');
     final views = await DatabaseViewStore(harness.database).listViews(
       workspaceId: harness.workspaceId,
       databaseKey: 'custom:$typeId',
     );
+    expect(views.single.visibleProperties, contains('p:$estimateId'));
     expect(views.single.visibleProperties, contains('p:${created.id}'));
+    expect(views.single.propertyOrder, contains('p:$estimateId'));
     expect(views.single.propertyOrder, contains('p:${created.id}'));
     expect(find.text('Priority'), findsOneWidget);
   });

@@ -20,6 +20,7 @@ import '../domain/object_model.dart';
 import '../domain/object_type_defaults.dart';
 import '../features/database/presentation/widgets/database_property_value_view.dart';
 import '../features/database/presentation/widgets/object_gallery_view.dart';
+import '../features/database/presentation/widgets/property_add_popover.dart';
 import '../features/database/presentation/widgets/weblink_gallery_media.dart';
 import '../features/object/presentation/object_open_presentation_host.dart';
 import '../features/object/presentation/widgets/object_detail_property_view.dart';
@@ -91,6 +92,39 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     'formula': '数式',
     'rollup': 'ロールアップ',
   };
+
+  static const _quickPropertyTypes = <PropertyAddTypeOption>[
+    PropertyAddTypeOption(
+      key: 'text',
+      label: 'テキスト',
+      icon: Icons.text_fields,
+    ),
+    PropertyAddTypeOption(
+      key: 'number',
+      label: '数値',
+      icon: Icons.numbers,
+    ),
+    PropertyAddTypeOption(
+      key: 'checkbox',
+      label: 'チェックボックス',
+      icon: Icons.check_box_outlined,
+    ),
+    PropertyAddTypeOption(
+      key: 'date',
+      label: '日付',
+      icon: Icons.calendar_today_outlined,
+    ),
+    PropertyAddTypeOption(
+      key: 'url',
+      label: 'URL',
+      icon: Icons.link,
+    ),
+    PropertyAddTypeOption(
+      key: 'rating',
+      label: '評価',
+      icon: Icons.star_outline,
+    ),
+  ];
 
   @override
   void initState() {
@@ -424,6 +458,80 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     }
     return result;
   }
+
+  List<PropertyAddCandidate> get _hiddenPropertyCandidates {
+    final active = _activeView;
+    if (active == null || active.visibleProperties.isEmpty) return const [];
+    final visible = active.visibleProperties.toSet();
+    return _properties
+        .where((property) => !visible.contains('p:${property.id}'))
+        .map(
+          (property) => PropertyAddCandidate(
+            id: property.id,
+            name: property.name,
+            type: _propertyTypes[property.type] ?? property.type,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  Future<void> _revealExistingProperty(PropertyAddCandidate property) async {
+    final active = _activeView;
+    if (active == null || active.visibleProperties.isEmpty) return;
+    final key = 'p:${property.id}';
+    final visible = active.visibleProperties.contains(key)
+        ? active.visibleProperties
+        : [...active.visibleProperties, key];
+    final order = active.propertyOrder.isEmpty || active.propertyOrder.contains(key)
+        ? active.propertyOrder
+        : [...active.propertyOrder, key];
+    await _saveView(propertyOrder: order, visibleProperties: visible);
+  }
+
+  Future<void> _createQuickProperty(PropertyCreateRequest request) async {
+    final objectTypeId = _objectType?.id;
+    if (objectTypeId == null ||
+        !_quickPropertyTypes.any((option) => option.key == request.type)) {
+      return;
+    }
+    try {
+      final propertyId = await _store.createProperty(
+        databaseId: objectTypeId,
+        name: request.name.trim(),
+        type: request.type,
+      );
+      await _reload();
+      final active = _activeView;
+      if (active == null) return;
+      final key = 'p:$propertyId';
+      await _saveView(
+        propertyOrder: active.propertyOrder.isEmpty
+            ? null
+            : [...active.propertyOrder, key],
+        visibleProperties: active.visibleProperties.isEmpty
+            ? null
+            : [...active.visibleProperties, key],
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('プロパティを追加できませんでした: $error')),
+      );
+    }
+  }
+
+  Widget _propertyAddPopover({
+    required Key buttonKey,
+    String? buttonLabel,
+  }) =>
+      PropertyAddPopover(
+        buttonKey: buttonKey,
+        buttonLabel: buttonLabel,
+        hiddenProperties: _hiddenPropertyCandidates,
+        propertyTypes: _quickPropertyTypes,
+        onRevealExisting: _revealExistingProperty,
+        onCreateNew: _createQuickProperty,
+      );
 
   GenericRecord? get _selectedRecord {
     for (final record in _records) {
@@ -1032,12 +1140,8 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                 (property) => DataColumn(label: Text(property.name)),
               ),
               DataColumn(
-                label: IconButton(
-                  key: const ValueKey('table-add-property'),
-                  tooltip: 'プロパティを追加',
-                  visualDensity: VisualDensity.compact,
-                  onPressed: _createProperty,
-                  icon: const Icon(Icons.add, size: 18),
+                label: _propertyAddPopover(
+                  buttonKey: const ValueKey<String>('table-add-property'),
                 ),
               ),
             ],
@@ -1814,10 +1918,9 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                 const SizedBox(height: 8),
                 Align(
                   alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                    onPressed: _createProperty,
-                    icon: const Icon(Icons.add, size: 16),
-                    label: const Text('プロパティを追加'),
+                  child: _propertyAddPopover(
+                    buttonKey: ValueKey('detail-add-property-${record.id}'),
+                    buttonLabel: 'プロパティを追加',
                   ),
                 ),
                 _backlinks(record),

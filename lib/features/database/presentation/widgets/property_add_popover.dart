@@ -57,6 +57,8 @@ class PropertyAddPopover extends StatefulWidget {
     required this.onRevealExisting,
     required this.onCreateNew,
     this.tooltip = 'プロパティを追加',
+    this.buttonKey = const ValueKey('property-add-popover-button'),
+    this.buttonLabel,
   });
 
   final List<PropertyAddCandidate> hiddenProperties;
@@ -64,6 +66,8 @@ class PropertyAddPopover extends StatefulWidget {
   final RevealExistingProperty onRevealExisting;
   final CreatePropertyFromPopover onCreateNew;
   final String tooltip;
+  final Key? buttonKey;
+  final String? buttonLabel;
 
   @override
   State<PropertyAddPopover> createState() => _PropertyAddPopoverState();
@@ -155,18 +159,34 @@ class _PropertyAddPopoverState extends State<PropertyAddPopover> {
           ),
         ),
       ],
-      builder: (context, controller, child) => IconButton(
-        key: const ValueKey('property-add-popover-button'),
-        tooltip: widget.tooltip,
-        icon: const Icon(Icons.add, size: 18),
-        onPressed: () {
+      builder: (context, controller, child) {
+        void toggle() {
           if (controller.isOpen) {
             controller.close();
           } else {
             controller.open();
           }
-        },
-      ),
+        }
+
+        final label = widget.buttonLabel;
+        if (label != null) {
+          return Tooltip(
+            message: widget.tooltip,
+            child: TextButton.icon(
+              key: widget.buttonKey,
+              onPressed: toggle,
+              icon: const Icon(Icons.add, size: 16),
+              label: Text(label),
+            ),
+          );
+        }
+        return IconButton(
+          key: widget.buttonKey,
+          tooltip: widget.tooltip,
+          icon: const Icon(Icons.add, size: 18),
+          onPressed: toggle,
+        );
+      },
     );
   }
 
