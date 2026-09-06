@@ -133,6 +133,69 @@ void main() {
     expect(find.text('未読'), findsOneWidget);
   });
 
+  testWidgets('description gets a dedicated readable line above compact metadata',
+      (tester) async {
+    const description =
+        '説明文はURLや日付と同じ横並びに押し込まず、Listを流し読みしやすい独立した副情報として表示する。';
+    final bookmark = BookmarkItem(
+      id: 5,
+      url: 'https://example.com/article',
+      title: 'Description hierarchy',
+      description: description,
+      createdAt: DateTime(2026, 9, 6),
+      favorite: false,
+      status: 'unread',
+      rating: 0,
+      openCount: 0,
+      tags: const [],
+      people: const [],
+      photos: const [],
+      collections: const [],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 420,
+            child: BookmarkListMetadata(
+              bookmark: bookmark,
+              assignments: const [],
+              propertyTokens: const ['description', 'url', 'status'],
+              resolveUrl: (_) async => const BookmarkUrlSource(
+                kind: BookmarkUrlSourceKind.canonicalWeblink,
+                value: 'https://example.com/article',
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final descriptionGroup = find.byKey(
+      const ValueKey('bookmark-list-description-metadata'),
+    );
+    final secondary = find.byKey(
+      const ValueKey('bookmark-list-secondary-metadata'),
+    );
+    final chips = find.byKey(const ValueKey('bookmark-list-chip-metadata'));
+    expect(descriptionGroup, findsOneWidget);
+    expect(secondary, findsOneWidget);
+    expect(chips, findsOneWidget);
+    expect(
+      tester.getTopLeft(descriptionGroup).dy,
+      lessThan(tester.getTopLeft(secondary).dy),
+    );
+    expect(
+      tester.getTopLeft(secondary).dy,
+      lessThan(tester.getTopLeft(chips).dy),
+    );
+    final descriptionText = tester.widget<Text>(find.text(description));
+    expect(descriptionText.maxLines, 2);
+    expect(descriptionText.overflow, TextOverflow.ellipsis);
+  });
+
   testWidgets('long semantic chip labels stay bounded', (tester) async {
     const longName =
         'とても長い人物名であってもBookmarkのList行全体を押し広げないための表示名';
