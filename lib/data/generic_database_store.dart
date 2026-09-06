@@ -422,6 +422,37 @@ class GenericDatabaseStore {
     required dynamic value,
   }) async {
     await ensureSchema();
+    final ownership = await database.customSelect(
+      '''SELECT
+           (SELECT database_id FROM generic_records WHERE id = ? LIMIT 1)
+             AS record_database_id,
+           (SELECT database_id FROM generic_properties WHERE id = ? LIMIT 1)
+             AS property_database_id''',
+      variables: [Variable<int>(recordId), Variable<int>(propertyId)],
+    ).getSingle();
+    final recordDatabaseId = ownership.readNullable<int>('record_database_id');
+    final propertyDatabaseId = ownership.readNullable<int>('property_database_id');
+    if (recordDatabaseId == null) {
+      throw ArgumentError.value(
+        recordId,
+        'recordId',
+        'Record does not exist.',
+      );
+    }
+    if (propertyDatabaseId == null) {
+      throw ArgumentError.value(
+        propertyId,
+        'propertyId',
+        'Property does not exist.',
+      );
+    }
+    if (recordDatabaseId != propertyDatabaseId) {
+      throw ArgumentError.value(
+        propertyId,
+        'propertyId',
+        'Property belongs to ObjectType $propertyDatabaseId, not Record ObjectType $recordDatabaseId.',
+      );
+    }
     await database.customStatement(
       '''INSERT INTO generic_values(record_id, property_id, value_json)
          VALUES (?, ?, ?)
