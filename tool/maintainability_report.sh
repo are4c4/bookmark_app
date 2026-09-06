@@ -4,18 +4,21 @@ set -euo pipefail
 # Reports Dart LOC and selected dependency-boundary debt without changing the
 # repository. Existing hotspots stay non-blocking by default; callers may opt
 # into regression-only thresholds for presentation/database reach-through,
-# legacy Database-presentation re-export imports, and shim files themselves.
+# canonical feature-presentation AppDatabase imports, legacy Database-
+# presentation re-export imports, and shim files themselves.
 #
 # Usage:
 #   bash tool/maintainability_report.sh
 #   bash tool/maintainability_report.sh --top 30
 #   bash tool/maintainability_report.sh --max-boundary-refs <N>
+#   bash tool/maintainability_report.sh --max-feature-presentation-db-imports <N>
 #   bash tool/maintainability_report.sh --max-legacy-shim-imports <N>
 #   bash tool/maintainability_report.sh --max-legacy-shims <N>
 # Current CI-owned ceilings live in .github/workflows/flutter_ci.yml.
 
 TOP=20
 MAX_BOUNDARY_REFS=""
+MAX_FEATURE_PRESENTATION_DB_IMPORTS=""
 MAX_LEGACY_SHIM_IMPORTS=""
 MAX_LEGACY_SHIMS=""
 
@@ -37,6 +40,14 @@ while [[ $# -gt 0 ]]; do
       MAX_BOUNDARY_REFS="$2"
       shift 2
       ;;
+    --max-feature-presentation-db-imports)
+      if [[ $# -lt 2 || ! "$2" =~ ^[0-9]+$ ]]; then
+        echo "--max-feature-presentation-db-imports requires a non-negative integer" >&2
+        exit 2
+      fi
+      MAX_FEATURE_PRESENTATION_DB_IMPORTS="$2"
+      shift 2
+      ;;
     --max-legacy-shim-imports)
       if [[ $# -lt 2 || ! "$2" =~ ^[0-9]+$ ]]; then
         echo "--max-legacy-shim-imports requires a non-negative integer" >&2
@@ -54,7 +65,7 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     -h|--help)
-      sed -n '3,15p' "$0"
+      sed -n '3,17p' "$0"
       exit 0
       ;;
     *)
@@ -71,9 +82,10 @@ fi
 
 tmp_file="$(mktemp "${TMPDIR:-/tmp}/bookmark-maintainability.XXXXXX")"
 boundary_file="$(mktemp "${TMPDIR:-/tmp}/bookmark-boundaries.XXXXXX")"
+feature_database_import_file="$(mktemp "${TMPDIR:-/tmp}/bookmark-feature-db-imports.XXXXXX")"
 legacy_shim_import_file="$(mktemp "${TMPDIR:-/tmp}/bookmark-legacy-shim-imports.XXXXXX")"
 legacy_shim_definition_file="$(mktemp "${TMPDIR:-/tmp}/bookmark-legacy-shim-files.XXXXXX")"
-trap 'rm -f "$tmp_file" "$boundary_file" "$legacy_shim_import_file" "$legacy_shim_definition_file"' EXIT
+trap 'rm -f "$tmp_file" "$boundary_file" "$feature_database_import_file" "$legacy_shim_import_file" "$legacy_shim_definition_file"' EXIT
 
 scan_root() {
   local root="$1"
@@ -106,6 +118,24 @@ scan_presentation_database_reachthrough() {
       fi
     done
   done
+}
+
+scan_feature_presentation_database_imports() {
+  [[ -d lib/features ]] || return 0
+  local import_pattern="^[[:space:]]*import[[:space:]]+['\"](package:bookmark_app/data/app_database\\.dart|(\\.\\./)+data/app_database\\.dart)['\"]"
+
+  while IFS= read -r root; do
+    find "$root" -type f -name '*.dart' -print | while IFS= read -r file; do
+      count="$(
+        { grep -E "$import_pattern" "$file" 2>/dev/null || true; } |
+          wc -l |
+          tr -d ' '
+      )"
+      if [[ "$count" -gt 0 ]]; then
+        printf '%08d\t%s\n' "$count" "$file"
+      fi
+    done
+  done < <(find lib/features -type d -name presentation -print | sort)
 }
 
 scan_legacy_presentation_shim_imports() {
@@ -154,6 +184,7 @@ scan_legacy_presentation_shims() {
 } | sort -r > "$tmp_file"
 
 scan_presentation_database_reachthrough | sort -r > "$boundary_file"
+scan_feature_presentation_database_imports | sort -r > "$feature_database_import_file"
 scan_legacy_presentation_shim_imports | sort -r > "$legacy_shim_import_file"
 scan_legacy_presentation_shims | sort > "$legacy_shim_definition_file"
 
@@ -163,6 +194,8 @@ test_files="$(awk -F '\t' '$2 ~ /^test\// { count++ } END { print count + 0 }' "
 test_loc="$(awk -F '\t' '$2 ~ /^test\// { sum += $1 } END { print sum + 0 }' "$tmp_file")"
 boundary_files="$(awk -F '\t' 'END { print NR + 0 }' "$boundary_file")"
 boundary_refs="$(awk -F '\t' '{ sum += $1 } END { print sum + 0 }' "$boundary_file")"
+feature_database_import_files="$(awk -F '\t' 'END { print NR + 0 }' "$feature_database_import_file")"
+feature_database_imports="$(awk -F '\t' '{ sum += $1 } END { print sum + 0 }' "$feature_database_import_file")"
 legacy_shim_import_files="$(awk -F '\t' 'END { print NR + 0 }' "$legacy_shim_import_file")"
 legacy_shim_imports="$(awk -F '\t' '{ sum += $1 } END { print sum + 0 }' "$legacy_shim_import_file")"
 legacy_shims="$(awk 'END { print NR + 0 }' "$legacy_shim_definition_file")"
@@ -208,6 +241,26 @@ if [[ "$boundary_files" -gt 0 ]]; then
 fi
 
 echo
+echo "Canonical feature presentation direct AppDatabase imports:"
+printf '  %s direct AppDatabase import(s) across %s file(s)\n' \
+  "$feature_database_imports" "$feature_database_import_files"
+if [[ "$feature_database_import_files" -gt 0 ]]; then
+  printf '%8s  %s\n' 'imports' 'path'
+  printf '%8s  %s\n' '--------' '----'
+  while IFS=$'\t' read -r imports file; do
+    imports="${imports#0000000}"
+    imports="${imports#000000}"
+    imports="${imports#00000}"
+    imports="${imports#0000}"
+    imports="${imports#000}"
+    imports="${imports#00}"
+    imports="${imports#0}"
+    [[ -n "$imports" ]] || imports=0
+    printf '%8s  %s\n' "$imports" "$file"
+  done < "$feature_database_import_file"
+fi
+
+echo
 echo "Legacy Database presentation re-export imports:"
 printf '  %s legacy shim import(s) across %s file(s)\n' \
   "$legacy_shim_imports" "$legacy_shim_import_files"
@@ -241,6 +294,15 @@ if [[ -n "$MAX_BOUNDARY_REFS" ]]; then
   echo "Boundary regression threshold: $MAX_BOUNDARY_REFS reference(s) maximum"
   if [[ "$boundary_refs" -gt "$MAX_BOUNDARY_REFS" ]]; then
     echo "Maintainability regression: $boundary_refs presentation database reach-through references exceed maximum $MAX_BOUNDARY_REFS." >&2
+    exit 1
+  fi
+fi
+
+if [[ -n "$MAX_FEATURE_PRESENTATION_DB_IMPORTS" ]]; then
+  echo
+  echo "Feature presentation AppDatabase import regression threshold: $MAX_FEATURE_PRESENTATION_DB_IMPORTS import(s) maximum"
+  if [[ "$feature_database_imports" -gt "$MAX_FEATURE_PRESENTATION_DB_IMPORTS" ]]; then
+    echo "Maintainability regression: $feature_database_imports canonical feature presentation AppDatabase imports exceed maximum $MAX_FEATURE_PRESENTATION_DB_IMPORTS." >&2
     exit 1
   fi
 fi
