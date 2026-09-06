@@ -23,6 +23,11 @@ class BidirectionalRelationStore {
   final GenericDatabaseStore genericStore;
   final ObjectStore objectStore;
 
+  bool hasManagedPairMetadata(ObjectPropertyDefinition property) =>
+      property.config.containsKey('bidirectional') ||
+      property.config.containsKey('inversePropertyId') ||
+      property.config.containsKey('pairRole');
+
   Future<BidirectionalRelationPair> createPair({
     required int sourceObjectTypeId,
     required String sourceName,
@@ -100,6 +105,9 @@ class BidirectionalRelationStore {
     if (!property.isRelation || property.config['bidirectional'] != true) {
       return null;
     }
+    final propertyRole = property.config['pairRole'];
+    if (propertyRole != 'source' && propertyRole != 'inverse') return null;
+
     final inversePropertyId = _intConfig(property.config['inversePropertyId']);
     final targetTypeId = property.targetObjectTypeId;
     if (inversePropertyId == null || targetTypeId == null) return null;
@@ -119,6 +127,10 @@ class BidirectionalRelationStore {
     if (_intConfig(inverse.config['inversePropertyId']) != property.id) {
       return null;
     }
+
+    final inverseRole = inverse.config['pairRole'];
+    if (propertyRole == 'source' && inverseRole != 'inverse') return null;
+    if (propertyRole == 'inverse' && inverseRole != 'source') return null;
 
     return BidirectionalRelationPair(
       sourceProperty: property,
@@ -201,9 +213,7 @@ class BidirectionalRelationStore {
     required List<int> targetObjectIds,
   }) async {
     final storedProperty = await _canonicalRelationProperty(property);
-    final hasPairMetadata = storedProperty.config['bidirectional'] == true ||
-        storedProperty.config['inversePropertyId'] != null;
-    if (!hasPairMetadata) {
+    if (!hasManagedPairMetadata(storedProperty)) {
       await objectStore.setRelation(
         objectId: objectId,
         property: storedProperty,
