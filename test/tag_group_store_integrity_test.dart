@@ -1,5 +1,6 @@
 import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/saved_view_read_store.dart';
+import 'package:bookmark_app/data/saved_view_write_store.dart';
 import 'package:bookmark_app/data/tag_group_store.dart';
 import 'package:bookmark_app/services/auto_organize_service.dart';
 import 'package:drift/native.dart';
@@ -134,7 +135,7 @@ void main() {
             tagId: targetId,
           ),
         );
-    await database.createSavedView(
+    await SavedViewWriteStore(database).create(
       name: 'Source view',
       layoutType: 'gallery',
       tagIds: [sourceId, targetId],
