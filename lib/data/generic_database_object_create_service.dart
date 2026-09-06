@@ -22,7 +22,6 @@ enum GenericDatabaseCreateMode {
   dailyNote,
   weblinkUrl,
   managedImage,
-  managedFile,
 }
 
 /// Object creation facade for collection-backed Database pages.
@@ -58,9 +57,10 @@ class GenericDatabaseObjectCreateService {
   ///
   /// Generic hosts can use this to choose the correct affordance without
   /// duplicating system-key knowledge. Identity-sensitive system collections
-  /// stay explicit: Weblinks require URL input, Images/File require managed
-  /// file input, while Daily Notes keep their date-keyed open-or-create
-  /// behavior.
+  /// stay explicit: Weblinks require URL input and Images require managed file
+  /// input, while Daily Notes keep their date-keyed open-or-create behavior.
+  /// File import receives its own create mode when the generic import host is
+  /// wired; until then the File service itself remains the canonical boundary.
   Future<GenericDatabaseCreateMode> createModeForObjectType(
     int objectTypeId,
   ) async {
@@ -71,7 +71,6 @@ class GenericDatabaseObjectCreateService {
       DailyNoteService.systemKey => GenericDatabaseCreateMode.dailyNote,
       WeblinkObjectService.systemKey => GenericDatabaseCreateMode.weblinkUrl,
       ImageObjectService.systemKey => GenericDatabaseCreateMode.managedImage,
-      FileObjectService.systemKey => GenericDatabaseCreateMode.managedFile,
       _ => GenericDatabaseCreateMode.generic,
     };
   }
