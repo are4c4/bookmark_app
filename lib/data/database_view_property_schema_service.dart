@@ -138,18 +138,14 @@ class DatabaseViewPropertySchemaService {
         .length;
 
     ObjectPropertyDefinition? pairedRelationProperty;
-    if (property.isRelation) {
-      final hasPairMetadata = property.config['bidirectional'] == true ||
-          property.config['inversePropertyId'] != null;
-      if (hasPairMetadata) {
-        final pair = await _bidirectionalStore.pairFor(property);
-        if (pair == null) {
-          throw StateError(
-            'Relation Property ${property.name} has inconsistent bidirectional metadata.',
-          );
-        }
-        pairedRelationProperty = pair.inverseProperty;
+    if (property.isRelation && _bidirectionalStore.hasManagedPairMetadata(property)) {
+      final pair = await _bidirectionalStore.pairFor(property);
+      if (pair == null) {
+        throw StateError(
+          'Relation Property ${property.name} has inconsistent bidirectional metadata.',
+        );
       }
+      pairedRelationProperty = pair.inverseProperty;
     }
 
     final views = await viewStore.listViews(
