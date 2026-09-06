@@ -102,7 +102,7 @@ class ObjectTypeManagementStore {
             name: duplicatedProperty.name,
             type: duplicatedProperty.type,
             sortOrder: duplicatedProperty.sortOrder,
-            config: _remapComputedConfig(
+            config: await _remapComputedConfig(
               source: source,
               property: property,
               duplicatedPropertyIds: duplicatedPropertyIds,
@@ -132,11 +132,11 @@ class ObjectTypeManagementStore {
     });
   }
 
-  Map<String, dynamic> _remapComputedConfig({
+  Future<Map<String, dynamic>> _remapComputedConfig({
     required AppObjectType source,
     required ObjectPropertyDefinition property,
     required Map<int, int> duplicatedPropertyIds,
-  }) {
+  }) async {
     final config = Map<String, dynamic>.from(property.config);
     switch (property.type) {
       case ObjectPropertyType.formula:
@@ -184,6 +184,14 @@ class ObjectTypeManagementStore {
         }
         config['relationPropertyId'] = duplicatedRelationPropertyId;
 
+        final aggregation = '${config['aggregation'] ?? 'count'}';
+        if (aggregation != 'count' && !config.containsKey('targetPropertyId')) {
+          throw StateError(
+            'Rollup Property ${property.id} requires targetPropertyId for '
+            '$aggregation.',
+          );
+        }
+
         if (config.containsKey('targetPropertyId')) {
           final sourceTargetPropertyId = _configInt(config['targetPropertyId']);
           if (sourceTargetPropertyId == null) {
@@ -200,10 +208,36 @@ class ObjectTypeManagementStore {
                 '$sourceTargetPropertyId outside the duplicated self target.',
               );
             }
+            if (aggregation != 'count') {
+              final sourceTargetProperty = source.properties
+                  .where((candidate) => candidate.id == sourceTargetPropertyId)
+                  .firstOrNull;
+              if (!_isNumericRollupTarget(sourceTargetProperty)) {
+                throw StateError(
+                  'Rollup Property ${property.id} requires a numeric target '
+                  'Property.',
+                );
+              }
+            }
             config['targetPropertyId'] = duplicatedTargetPropertyId;
           } else {
             // The Relation still targets the original external ObjectType, so
             // its target Property identity remains canonical and unchanged.
+            if (aggregation != 'count') {
+              final targetTypeId = sourceRelationProperty.targetObjectTypeId;
+              final targetType = targetTypeId == null
+                  ? null
+                  : await objectStore.getObjectType(targetTypeId);
+              final targetProperty = targetType?.properties
+                  .where((candidate) => candidate.id == sourceTargetPropertyId)
+                  .firstOrNull;
+              if (!_isNumericRollupTarget(targetProperty)) {
+                throw StateError(
+                  'Rollup Property ${property.id} requires a numeric target '
+                  'Property on its Relation target ObjectType.',
+                );
+              }
+            }
             config['targetPropertyId'] = sourceTargetPropertyId;
           }
         }
@@ -212,6 +246,11 @@ class ObjectTypeManagementStore {
         return config;
     }
   }
+
+  bool _isNumericRollupTarget(ObjectPropertyDefinition? property) =>
+      property != null &&
+      (property.type == ObjectPropertyType.number ||
+          property.type == ObjectPropertyType.rating);
 
   int? _configInt(dynamic value) =>
       value is int ? value : int.tryParse('${value ?? ''}');
@@ -245,5 +284,13 @@ class ObjectTypeManagementStore {
       throw StateError('System ObjectTypes cannot be deleted.');
     }
     await objectStore.deleteObjectType(objectTypeId);
+  }
+}
+
+extension _FirstOrNull<T> on Iterable<T> {
+  T? get firstOrNull {
+    final iterator = this.iterator;
+    if (!iterator.moveNext()) return null;
+    return iterator.current;
   }
 }
