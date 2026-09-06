@@ -6,6 +6,16 @@ script="$repo_root/tool/maintainability_report.sh"
 fixture="$(mktemp -d "${TMPDIR:-/tmp}/bookmark-maintainability-test.XXXXXX")"
 trap 'rm -rf "$fixture"' EXIT
 
+help_output="$(bash "$script" --help)"
+grep -Fq -- '--max-boundary-refs <N>' <<<"$help_output"
+grep -Fq -- '--max-legacy-shim-imports <N>' <<<"$help_output"
+grep -Fq -- '--max-legacy-shims <N>' <<<"$help_output"
+grep -Fq 'Current CI-owned ceilings live in .github/workflows/flutter_ci.yml.' <<<"$help_output"
+if grep -Eq -- '--max-(boundary-refs|legacy-shim-imports|legacy-shims) [0-9]+' <<<"$help_output"; then
+  echo "Threshold help examples must not duplicate CI-owned numeric ceilings" >&2
+  exit 1
+fi
+
 mkdir -p "$fixture/lib/views" "$fixture/lib/widgets" "$fixture/test"
 cat > "$fixture/lib/views/example_page.dart" <<'EOF'
 import '../widgets/database_view_tabs.dart';
