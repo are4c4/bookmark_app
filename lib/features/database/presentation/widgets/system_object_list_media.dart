@@ -16,8 +16,8 @@ enum SystemObjectListMediaKind {
   image,
 }
 
-class _SystemObjectListMediaResolution {
-  const _SystemObjectListMediaResolution({
+class SystemObjectListMediaResolution {
+  const SystemObjectListMediaResolution({
     required this.kind,
     this.filePath,
   });
@@ -25,6 +25,13 @@ class _SystemObjectListMediaResolution {
   final SystemObjectListMediaKind kind;
   final String? filePath;
 }
+
+typedef SystemObjectListMediaResolver = Future<SystemObjectListMediaResolution>
+    Function({
+  required int workspaceId,
+  required int objectTypeId,
+  required int objectId,
+});
 
 typedef SystemObjectListMediaImageBuilder = Widget Function(
   BuildContext context,
@@ -47,6 +54,7 @@ class SystemObjectListMedia extends StatefulWidget {
     required this.objectTypeId,
     required this.objectId,
     this.size = 44,
+    this.visualResolver,
     this.imageBuilder,
   });
 
@@ -56,6 +64,11 @@ class SystemObjectListMedia extends StatefulWidget {
   final int objectTypeId;
   final int objectId;
   final double size;
+
+  /// Optional presentation seam for focused widget tests/hosts. Production
+  /// callers leave this null and use the canonical system Object + visual
+  /// resolvers below.
+  final SystemObjectListMediaResolver? visualResolver;
   final SystemObjectListMediaImageBuilder? imageBuilder;
 
   @override
@@ -63,7 +76,7 @@ class SystemObjectListMedia extends StatefulWidget {
 }
 
 class _SystemObjectListMediaState extends State<SystemObjectListMedia> {
-  late Future<_SystemObjectListMediaResolution> _resolution;
+  late Future<SystemObjectListMediaResolution> _resolution;
 
   @override
   void initState() {
@@ -78,17 +91,27 @@ class _SystemObjectListMediaState extends State<SystemObjectListMedia> {
         oldWidget.objectStore != widget.objectStore ||
         oldWidget.workspaceId != widget.workspaceId ||
         oldWidget.objectTypeId != widget.objectTypeId ||
-        oldWidget.objectId != widget.objectId) {
+        oldWidget.objectId != widget.objectId ||
+        oldWidget.visualResolver != widget.visualResolver) {
       _resolution = _resolve();
     }
   }
 
-  Future<_SystemObjectListMediaResolution> _resolve() async {
+  Future<SystemObjectListMediaResolution> _resolve() async {
     if (widget.workspaceId <= 0 ||
         widget.objectTypeId <= 0 ||
         widget.objectId <= 0) {
-      return const _SystemObjectListMediaResolution(
+      return const SystemObjectListMediaResolution(
         kind: SystemObjectListMediaKind.fallback,
+      );
+    }
+
+    final custom = widget.visualResolver;
+    if (custom != null) {
+      return custom(
+        workspaceId: widget.workspaceId,
+        objectTypeId: widget.objectTypeId,
+        objectId: widget.objectId,
       );
     }
 
@@ -108,7 +131,7 @@ class _SystemObjectListMediaState extends State<SystemObjectListMedia> {
         imageObjectTypeId: widget.objectTypeId,
         imageObjectId: widget.objectId,
       );
-      return _SystemObjectListMediaResolution(
+      return SystemObjectListMediaResolution(
         kind: SystemObjectListMediaKind.image,
         filePath: visual?.filePath,
       );
@@ -126,20 +149,20 @@ class _SystemObjectListMediaState extends State<SystemObjectListMedia> {
         weblinkObjectTypeId: widget.objectTypeId,
         weblinkObjectId: widget.objectId,
       );
-      return _SystemObjectListMediaResolution(
+      return SystemObjectListMediaResolution(
         kind: SystemObjectListMediaKind.weblink,
         filePath: visual?.filePath,
       );
     }
 
-    return const _SystemObjectListMediaResolution(
+    return const SystemObjectListMediaResolution(
       kind: SystemObjectListMediaKind.fallback,
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<_SystemObjectListMediaResolution>(
+    return FutureBuilder<SystemObjectListMediaResolution>(
       future: _resolution,
       builder: (context, snapshot) {
         final resolved = snapshot.data;
