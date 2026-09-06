@@ -1,15 +1,47 @@
+import 'package:flutter/material.dart';
+
+import '../database/database_definition.dart';
+import '../domain/object_model.dart';
+import 'database_view_store.dart';
 import 'generic_database_store.dart';
+import 'object_store.dart';
+import 'system_object_store.dart';
 
 class ObjectTypeTemplateProperty {
   const ObjectTypeTemplateProperty({
     required this.name,
     required this.type,
     this.config = const <String, dynamic>{},
+    this.relationTargetSystemKey,
+    this.relationMultiple = true,
   });
 
   final String name;
   final String type;
   final Map<String, dynamic> config;
+
+  /// Stable primitive identity used only while instantiating Relation schema.
+  ///
+  /// The resolved ObjectType id is persisted by the canonical Relation API; the
+  /// template never stores a workspace-specific id.
+  final String? relationTargetSystemKey;
+  final bool relationMultiple;
+}
+
+class ObjectTypeTemplateView {
+  const ObjectTypeTemplateView({
+    required this.name,
+    this.layoutType = 'table',
+    this.filters = const <String, dynamic>{},
+    this.sorts = const <dynamic>[],
+    this.settings = const <String, dynamic>{},
+  });
+
+  final String name;
+  final String layoutType;
+  final Map<String, dynamic> filters;
+  final List<dynamic> sorts;
+  final Map<String, dynamic> settings;
 }
 
 class ObjectTypeTemplate {
@@ -19,13 +51,29 @@ class ObjectTypeTemplate {
     required this.icon,
     required this.description,
     required this.properties,
-  });
+    this.version = 1,
+    this.views = const <ObjectTypeTemplateView>[],
+  }) : assert(version > 0);
 
   final String key;
+  final int version;
   final String name;
   final String icon;
   final String description;
   final List<ObjectTypeTemplateProperty> properties;
+  final List<ObjectTypeTemplateView> views;
+}
+
+class ObjectTypeTemplateInstance {
+  const ObjectTypeTemplateInstance({
+    required this.objectTypeId,
+    required this.templateKey,
+    required this.templateVersion,
+  });
+
+  final int objectTypeId;
+  final String templateKey;
+  final int templateVersion;
 }
 
 class ObjectTypeTemplateStore {
@@ -52,6 +100,9 @@ class ObjectTypeTemplateStore {
         ObjectTypeTemplateProperty(name: 'URL', type: 'url'),
         ObjectTypeTemplateProperty(name: 'メモ', type: 'text'),
       ],
+      views: [
+        ObjectTypeTemplateView(name: 'すべて', layoutType: 'gallery'),
+      ],
     ),
     ObjectTypeTemplate(
       key: 'person',
@@ -63,6 +114,9 @@ class ObjectTypeTemplateStore {
         ObjectTypeTemplateProperty(name: '役割', type: 'text'),
         ObjectTypeTemplateProperty(name: 'URL', type: 'url'),
         ObjectTypeTemplateProperty(name: 'メモ', type: 'text'),
+      ],
+      views: [
+        ObjectTypeTemplateView(name: 'すべて', layoutType: 'table'),
       ],
     ),
     ObjectTypeTemplate(
@@ -88,6 +142,9 @@ class ObjectTypeTemplateStore {
         ),
         ObjectTypeTemplateProperty(name: 'メモ', type: 'text'),
       ],
+      views: [
+        ObjectTypeTemplateView(name: 'すべて', layoutType: 'table'),
+      ],
     ),
     ObjectTypeTemplate(
       key: 'note',
@@ -99,6 +156,9 @@ class ObjectTypeTemplateStore {
         ObjectTypeTemplateProperty(name: 'URL', type: 'url'),
         ObjectTypeTemplateProperty(name: 'メモ', type: 'text'),
       ],
+      views: [
+        ObjectTypeTemplateView(name: 'すべて', layoutType: 'list'),
+      ],
     ),
   ];
 
@@ -109,28 +169,128 @@ class ObjectTypeTemplateStore {
     return null;
   }
 
+  Future<void> _ensureInstanceSchema() async {
+    await store.ensureSchema();
+    await store.database.customStatement('''
+      CREATE TABLE IF NOT EXISTS object_type_template_instances (
+        object_type_id INTEGER PRIMARY KEY
+          REFERENCES generic_databases(id) ON DELETE CASCADE,
+        template_key TEXT NOT NULL,
+        template_version INTEGER NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    ''');
+    await store.database.customStatement(
+      'CREATE INDEX IF NOT EXISTS object_type_template_instances_key_idx '
+      'ON object_type_template_instances(template_key, template_version)',
+    );
+  }
+
+  Future<ObjectTypeTemplateInstance?> instanceForObjectType(
+    int objectTypeId,
+  ) async {
+    await _ensureInstanceSchema();
+    final row = await store.database.customSelect(
+      '''SELECT object_type_id, template_key, template_version
+         FROM object_type_template_instances
+         WHERE object_type_id = ? LIMIT 1''',
+      variables: [Variable<int>(objectTypeId)],
+    ).getSingleOrNull();
+    if (row == null) return null;
+    return ObjectTypeTemplateInstance(
+      objectTypeId: row.read<int>('object_type_id'),
+      templateKey: row.read<String>('template_key'),
+      templateVersion: row.read<int>('template_version'),
+    );
+  }
+
   Future<int> createFromTemplate({
     required int workspaceId,
     required ObjectTypeTemplate template,
     String? name,
     String? icon,
   }) async {
-    await store.ensureSchema();
+    await _ensureInstanceSchema();
+    final objectStore = ObjectStore(store);
+    final systemObjects = SystemObjectStore(
+      database: store.database,
+      objectStore: objectStore,
+    );
+    final viewStore = DatabaseViewStore(store.database);
+
+    final relationTargets = <ObjectTypeTemplateProperty, int>{};
+    for (final property in template.properties) {
+      if (property.type != 'relation') continue;
+      final systemKey = property.relationTargetSystemKey?.trim() ?? '';
+      if (systemKey.isEmpty) {
+        throw ArgumentError(
+          'Relation template Property ${property.name} requires a target system key.',
+        );
+      }
+      final target = await systemObjects.getSystemObjectType(
+        workspaceId: workspaceId,
+        systemKey: systemKey,
+      );
+      if (target == null) {
+        throw StateError(
+          'Required primitive ObjectType "$systemKey" is not available in this workspace.',
+        );
+      }
+      relationTargets[property] = target.id;
+    }
+
     return store.database.transaction(() async {
-      final databaseId = await store.createDatabase(
+      final objectTypeId = await objectStore.createObjectType(
         workspaceId: workspaceId,
         name: name?.trim().isNotEmpty == true ? name!.trim() : template.name,
         icon: icon?.trim().isNotEmpty == true ? icon!.trim() : template.icon,
       );
+
       for (final property in template.properties) {
-        await store.createProperty(
-          databaseId: databaseId,
+        if (property.type == 'relation') {
+          await objectStore.createRelationProperty(
+            objectTypeId: objectTypeId,
+            name: property.name,
+            targetObjectTypeId: relationTargets[property]!,
+            multiple: property.relationMultiple,
+          );
+          continue;
+        }
+        await objectStore.createProperty(
+          objectTypeId: objectTypeId,
           name: property.name,
-          type: property.type,
+          type: ObjectPropertyDefinition.fromStorageType(property.type),
           config: property.config,
         );
       }
-      return databaseId;
+
+      final definition = DatabaseDefinition(
+        key: 'custom:$objectTypeId',
+        label: name?.trim().isNotEmpty == true ? name!.trim() : template.name,
+        icon: Icons.table_chart_outlined,
+        properties: const <DatabasePropertyDefinition>[],
+      );
+      for (final view in template.views) {
+        await viewStore.createView(
+          workspaceId: workspaceId,
+          definition: definition,
+          name: view.name,
+          layoutType: view.layoutType,
+          filters: view.filters,
+          sorts: view.sorts,
+          visibleProperties: const <String>[],
+          propertyOrder: const <String>[],
+          settings: view.settings,
+        );
+      }
+
+      await store.database.customStatement(
+        '''INSERT INTO object_type_template_instances(
+             object_type_id, template_key, template_version
+           ) VALUES (?, ?, ?)''',
+        [objectTypeId, template.key, template.version],
+      );
+      return objectTypeId;
     });
   }
 }
