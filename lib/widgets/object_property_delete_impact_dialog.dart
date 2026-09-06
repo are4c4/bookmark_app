@@ -4,10 +4,11 @@ import '../data/database_view_property_schema_service.dart';
 
 /// Presents the read-only impact of deleting a user-defined Property.
 ///
-/// Deletion is enabled only when no Object value and no persisted View setting
-/// references the Property. This keeps the first destructive UX fail-closed:
-/// callers must migrate/clear data and detach View configuration explicitly
-/// before invoking their canonical deletion path.
+/// Deletion is enabled only when no Object value, persisted View setting, or
+/// managed bidirectional Relation pair would be affected. This keeps the first
+/// destructive UX fail-closed: callers must migrate/clear data, detach View
+/// configuration, and choose an explicit paired-Relation lifecycle before
+/// invoking their canonical deletion path.
 Future<bool?> showObjectPropertyDeleteImpactDialog(
   BuildContext context, {
   required ObjectPropertyDeleteImpact impact,
@@ -29,7 +30,9 @@ class ObjectPropertyDeleteImpactDialog extends StatelessWidget {
   final ObjectPropertyDeleteImpact impact;
 
   bool get _canDelete =>
-      !impact.hasStoredValues && !impact.isReferencedByViews;
+      !impact.hasStoredValues &&
+      !impact.isReferencedByViews &&
+      !impact.hasPairedRelationImpact;
 
   @override
   Widget build(BuildContext context) {
@@ -56,8 +59,8 @@ class ObjectPropertyDeleteImpactDialog extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.all(12),
                     child: Text(
-                      'データやView設定を失わないため、この状態では削除できません。'
-                      '影響を解消してから再度実行してください。',
+                      'データ・View設定・関連するRelation schemaを失わないため、'
+                      'この状態では削除できません。影響を解消してから再度実行してください。',
                       style: TextStyle(color: scheme.onErrorContainer),
                     ),
                   ),
@@ -74,6 +77,12 @@ class ObjectPropertyDeleteImpactDialog extends StatelessWidget {
                 value: '${impact.viewReferences.length}件',
                 warning: impact.isReferencedByViews,
               ),
+              if (impact.pairedRelationProperty case final paired?)
+                _ImpactRow(
+                  label: '双方向Relationの相手Property',
+                  value: paired.name,
+                  warning: true,
+                ),
               if (impact.viewReferences.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 Text(
