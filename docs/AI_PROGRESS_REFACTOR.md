@@ -148,3 +148,18 @@ For failure-policy work:
 - Object #317/#320 canonical URL host slices are merged; #322 is the only currently open PR observed at this checkpoint.
 
 Refactor work remains actionable. The next useful work is a safe, measurable hotspot responsibility extraction or a focused stable-error boundary—not another speculative abstraction layer.
+
+## Latest run checkpoint — 2026-09-06
+- Refactor PR **#351** (`Preserve Board create failure during rollback cleanup`) had full Flutter CI green (run #1329) and was merged to `main` as `1b8c3eb073bb718d6cf6ee91b95f8c05923ce591`.
+- The stale Image-import rollback PR **#353** was replaced by **#358**, rebuilt from current `main` after #351 integration. #358 preserves the original canonical Image Object creation failure when rollback deletion of the copied managed file also fails, keeps cleanup privacy-safe/best-effort, and adds focused regression coverage.
+- Existing Refactor PRs **#355/#356/#357** all have successful Flutter CI runs (#1341/#1339/#1340 respectively), but main has advanced and their mergeability must be re-checked before integration rather than force-merging stale branches.
+- Object PR #354 owns Bookmark List presentation; Refactor did not touch Stage1/shared presentation hotspots in this run.
+- Relation semantics were unchanged. No new Relation storage/index/backlink path was introduced.
+
+### Next actions
+1. Let #358 run CI; if green and mergeable, integrate it.
+2. Re-check #355/#356/#357 against the latest main and rebuild only the minimal intended diff when stale/conflicting.
+3. Continue #225 with another focused failure-policy or responsibility-reduction slice only where it removes a real risk or responsibility; do not add speculative wrappers.
+
+### Stop reason
+This run completed two safe integration checkpoints (#351 merge and #358 rebuild) while avoiding current Object-owned hotspots. Remaining Refactor work is actionable in subsequent runs, but the next integration steps depend on fresh CI/mergeability for the newly rebuilt branch.
