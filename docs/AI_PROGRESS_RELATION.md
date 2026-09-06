@@ -25,8 +25,8 @@ Cross-lane coordination:
 - No feature may introduce a parallel serialized-id Relation writer or alternate Relation edge/index store.
 - Low-level `ObjectStore.setRelation` remains storage-internal/test-facing rather than a normal product mutation path.
 
-## Current checkpoint — 2026-09-06 17:40 JST
-Latest audited `main`: `c8f00b25f38e6bc3523fba524798b1f7200f326a` — Relation PR `#403 Cover Bookmark Cover Image Relation lifecycle from latest main`.
+## Current checkpoint — 2026-09-06 17:43 JST
+Latest non-handoff production/refactor commit audited: `80b7eb979f20a28cd64f415b48f44a56427f85a4` — Refactor `#404 Scrub remote image dimension-probe diagnostics`, immediately after Relation `#403`. Relation handoff PR `#405` then merged as `eedaf61eee06bbcb2da1bf147671dd460ec288a4`.
 
 Latest production Relation-producing Object workflow:
 - Object `#387` merged as `5a3cab0847664f2e2a7579dfa6de801223b0d4d5` and added system Bookmark `Cover Image` as a **single Relation** targeting canonical Image Objects.
@@ -75,7 +75,7 @@ Recent Object/Refactor work was classified as follows:
 - `#396` — missing legacy Photo file promotion guard; no Relation persistence/schema change.
 - `#400` — backup service composition refactor; no Relation behavior.
 - `#401` — resolver presentation architecture guard; tests-only, no Relation behavior.
-- open Refactor `#404` — remote Image dimension-probe diagnostic privacy; no Weblink/Image Relation behavior.
+- `#404` — merged remote Image dimension-probe diagnostic privacy cleanup; no Weblink/Image Relation behavior.
 - open Object `#402` — managed Image filesystem cleanup after canonical deletion. It wraps page-services `RelationMutationService` with an Object-owned cleanup adapter but calls `super.deleteObject(...)` before any physical file deletion.
 
 `#402` was audited specifically because it changes the page-services deletion composition boundary. Existing `test/generic_database_page_services_test.dart` already exercises `services.relationMutations.deleteObject(...)` with an incoming Relation and asserts the surviving source is detached. Therefore the #402 adapter remains covered by the existing canonical Relation-safe deletion regression when it replaces the service implementation; adding a duplicate Relation test is not justified unless the actual merged semantics diverge.
@@ -98,4 +98,4 @@ No new direct serialized-id writer, alternate `object_relation_edges` writer, or
 - Person profile Image migration remains deferred until Object lane establishes the first-class Person/Image product contract.
 
 ## Stop reason
-Relation #403 is merged and green. Current open #402/#404 do not introduce an uncovered Relation-producing workflow or change canonical Relation persistence/index semantics; #402's deletion adapter still delegates to `RelationMutationService.deleteObject(...)` and is already exercised by the existing page-services Relation-safe deletion regression. No further independent Relation implementation is currently justified without duplicating coverage or crossing into Object/Refactor ownership. Resume immediately for Person -> Image, a distinct Bookmark Image write/edit producer, Relation storage/index changes, or a concrete lifecycle correctness regression.
+Relation #403 is merged and green. Current open Object #402 does not introduce an uncovered Relation-producing workflow or change canonical Relation persistence/index semantics; its deletion adapter still delegates to `RelationMutationService.deleteObject(...)` and is already exercised by the existing page-services Relation-safe deletion regression. Merged Refactor #404 is diagnostic-only. No further independent Relation implementation is currently justified without duplicating coverage or crossing into Object/Refactor ownership. Resume immediately for Person -> Image, a distinct Bookmark Image write/edit producer, Relation storage/index changes, or a concrete lifecycle correctness regression.
