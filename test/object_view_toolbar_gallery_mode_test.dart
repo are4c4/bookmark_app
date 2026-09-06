@@ -1,5 +1,6 @@
 import 'package:bookmark_app/data/database_view_gallery_adapter.dart';
 import 'package:bookmark_app/data/database_view_store.dart';
+import 'package:bookmark_app/widgets/object_gallery_mode_menu.dart';
 import 'package:bookmark_app/widgets/object_view_toolbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -51,6 +52,36 @@ void main() {
       const DatabaseViewGalleryAdapter().decode(changed!),
       GalleryViewMode.masonry,
     );
+  });
+
+  testWidgets('shared Gallery menu preserves unrelated View settings',
+      (tester) async {
+    DatabaseViewConfig? changed;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ObjectGalleryModeMenu(
+            view: _view(
+              settings: const {
+                'openMode': 'sidePeek',
+                'galleryMode': 'fixed',
+              },
+            ),
+            onViewChanged: (next) => changed = next,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('固定比率'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('メイソンリー').last);
+    await tester.pumpAndSettle();
+
+    expect(changed, isNotNull);
+    expect(changed!.settings['galleryMode'], 'masonry');
+    expect(changed!.settings['openMode'], 'sidePeek');
+    expect(changed!.layoutType, 'gallery');
   });
 
   testWidgets('non-Gallery layouts do not show the Gallery geometry control',
