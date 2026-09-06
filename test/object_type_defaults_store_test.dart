@@ -5,6 +5,7 @@ import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/object_type_defaults_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/domain/object_body.dart';
+import 'package:bookmark_app/domain/object_model.dart';
 import 'package:bookmark_app/domain/object_type_defaults.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -22,13 +23,23 @@ void main() {
       workspaceId: workspaceId,
       name: 'Book',
     );
+    final titlePropertyId = await objectStore.createProperty(
+      objectTypeId: typeId,
+      name: 'Title note',
+      type: ObjectPropertyType.text,
+    );
+    final ratingPropertyId = await objectStore.createProperty(
+      objectTypeId: typeId,
+      name: 'Rating',
+      type: ObjectPropertyType.number,
+    );
     await defaultsStore.write(
       objectTypeId: typeId,
-      defaults: const ObjectTypeDefaults(
-        visiblePropertyIds: <int>[7, 9],
-        propertyOrder: <int>[9, 7],
+      defaults: ObjectTypeDefaults(
+        visiblePropertyIds: <int>[titlePropertyId, ratingPropertyId],
+        propertyOrder: <int>[ratingPropertyId, titlePropertyId],
         openMode: ObjectOpenMode.centerPeek,
-        bodyTemplate: ObjectBodyDocument(
+        bodyTemplate: const ObjectBodyDocument(
           blocks: <ObjectBodyBlock>[
             ObjectBodyBlock(
               id: 'summary',
@@ -48,8 +59,8 @@ void main() {
 
     final restored = await defaultsStore.read(typeId);
     expect(restored, isNotNull);
-    expect(restored!.visiblePropertyIds, <int>[7, 9]);
-    expect(restored.propertyOrder, <int>[9, 7]);
+    expect(restored!.visiblePropertyIds, <int>[titlePropertyId, ratingPropertyId]);
+    expect(restored.propertyOrder, <int>[ratingPropertyId, titlePropertyId]);
     expect(restored.openMode, ObjectOpenMode.centerPeek);
     expect(restored.bodyTemplate?.blocks, hasLength(2));
     expect(restored.bodyTemplate?.blocks.first.type, 'heading');
@@ -140,11 +151,21 @@ void main() {
       workspaceId: workspaceId,
       name: 'Article',
     );
+    final authorPropertyId = await objectStore.createProperty(
+      objectTypeId: typeId,
+      name: 'Author',
+      type: ObjectPropertyType.text,
+    );
+    final yearPropertyId = await objectStore.createProperty(
+      objectTypeId: typeId,
+      name: 'Year',
+      type: ObjectPropertyType.number,
+    );
     await defaultsStore.write(
       objectTypeId: typeId,
-      defaults: const ObjectTypeDefaults(
-        visiblePropertyIds: <int>[11, 12],
-        propertyOrder: <int>[12, 11],
+      defaults: ObjectTypeDefaults(
+        visiblePropertyIds: <int>[authorPropertyId, yearPropertyId],
+        propertyOrder: <int>[yearPropertyId, authorPropertyId],
         openMode: ObjectOpenMode.fullPage,
       ),
     );
@@ -164,8 +185,8 @@ void main() {
 
     var restored = await defaultsStore.read(typeId);
     expect(restored, isNotNull);
-    expect(restored!.visiblePropertyIds, <int>[11, 12]);
-    expect(restored.propertyOrder, <int>[12, 11]);
+    expect(restored!.visiblePropertyIds, <int>[authorPropertyId, yearPropertyId]);
+    expect(restored.propertyOrder, <int>[yearPropertyId, authorPropertyId]);
     expect(restored.openMode, ObjectOpenMode.fullPage);
     expect(restored.bodyTemplate?.blocks.single.text, 'Abstract');
 
@@ -176,8 +197,8 @@ void main() {
 
     restored = await defaultsStore.read(typeId);
     expect(restored, isNotNull);
-    expect(restored!.visiblePropertyIds, <int>[11, 12]);
-    expect(restored.propertyOrder, <int>[12, 11]);
+    expect(restored!.visiblePropertyIds, <int>[authorPropertyId, yearPropertyId]);
+    expect(restored.propertyOrder, <int>[yearPropertyId, authorPropertyId]);
     expect(restored.openMode, ObjectOpenMode.fullPage);
     expect(restored.bodyTemplate, isNull);
   });

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
 import 'package:bookmark_app/data/object_store.dart';
@@ -31,7 +33,9 @@ void main() {
       name: 'Value',
       type: ObjectPropertyType.text,
     );
-    await defaultsStore.write(
+    await _seedCorruptDefaults(
+      database: database,
+      defaultsStore: defaultsStore,
       objectTypeId: sourceId,
       defaults: ObjectTypeDefaults(
         visiblePropertyIds: <int>[propertyId, 999999],
@@ -69,7 +73,9 @@ void main() {
       name: 'Value',
       type: ObjectPropertyType.text,
     );
-    await defaultsStore.write(
+    await _seedCorruptDefaults(
+      database: database,
+      defaultsStore: defaultsStore,
       objectTypeId: sourceId,
       defaults: ObjectTypeDefaults(
         visiblePropertyIds: <int>[propertyId],
@@ -85,4 +91,18 @@ void main() {
     final types = await objectStore.listObjectTypes(workspaceId);
     expect(types.map((type) => type.id).toList(), <int>[sourceId]);
   });
+}
+
+Future<void> _seedCorruptDefaults({
+  required AppDatabase database,
+  required ObjectTypeDefaultsStore defaultsStore,
+  required int objectTypeId,
+  required ObjectTypeDefaults defaults,
+}) async {
+  await defaultsStore.ensureSchema();
+  await database.customStatement(
+    '''INSERT INTO object_type_defaults(object_type_id, defaults_json, updated_at)
+       VALUES (?, ?, CURRENT_TIMESTAMP)''',
+    <Object?>[objectTypeId, jsonEncode(defaults.toJson())],
+  );
 }
