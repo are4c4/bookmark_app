@@ -96,6 +96,67 @@ void main() {
     expect(zip.contentType, 'application/zip');
   });
 
+  test('common audio and video signatures beat misleading image names', () {
+    final mp4 = classifier.classify(
+      filename: 'movie.png',
+      declaredContentType: 'image/png',
+      headerBytes: <int>[
+        0, 0, 0, 24,
+        ...'ftyp'.codeUnits,
+        ...'mp42'.codeUnits,
+      ],
+    );
+    final quickTime = classifier.classify(
+      filename: 'clip.jpg',
+      headerBytes: <int>[
+        0, 0, 0, 24,
+        ...'ftyp'.codeUnits,
+        ...'qt  '.codeUnits,
+      ],
+    );
+    final wav = classifier.classify(
+      filename: 'audio.gif',
+      headerBytes: <int>[
+        ...'RIFF'.codeUnits,
+        0, 0, 0, 0,
+        ...'WAVE'.codeUnits,
+      ],
+    );
+    final mp3 = classifier.classify(
+      filename: 'track.webp',
+      headerBytes: <int>[...'ID3'.codeUnits, 4, 0, 0],
+    );
+
+    for (final classification in <PrimitiveFileImportClassification>[
+      mp4,
+      quickTime,
+      wav,
+      mp3,
+    ]) {
+      expect(classification.target, PrimitiveFileImportTarget.file);
+      expect(classification.evidence, PrimitiveFileImportEvidence.content);
+    }
+    expect(mp4.contentType, 'video/mp4');
+    expect(quickTime.contentType, 'video/quicktime');
+    expect(wav.contentType, 'audio/wav');
+    expect(mp3.contentType, 'audio/mpeg');
+  });
+
+  test('unsupported AVIF content never falls through to png extension', () {
+    final classification = classifier.classify(
+      filename: 'future.png',
+      headerBytes: <int>[
+        0, 0, 0, 24,
+        ...'ftyp'.codeUnits,
+        ...'avif'.codeUnits,
+      ],
+    );
+
+    expect(classification.target, PrimitiveFileImportTarget.file);
+    expect(classification.evidence, PrimitiveFileImportEvidence.content);
+    expect(classification.contentType, 'image/avif');
+  });
+
   test('path classifier reads only enough bytes to identify content', () async {
     final root = await Directory.systemTemp.createTemp('primitive_classifier_');
     addTearDown(() => root.delete(recursive: true));
