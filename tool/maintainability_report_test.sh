@@ -9,6 +9,7 @@ trap 'rm -rf "$fixture"' EXIT
 mkdir -p "$fixture/lib/views" "$fixture/lib/widgets" "$fixture/test"
 cat > "$fixture/lib/views/example_page.dart" <<'EOF'
 import '../widgets/database_view_tabs.dart';
+import '../features/database/presentation/widgets/database_page_toolbar.dart';
 final first = repository.workspaceStore.database;
 final second = repository.workspaceStore.database;
 EOF
@@ -18,6 +19,7 @@ final database = repository.workspaceStore.database;
 EOF
 cat > "$fixture/test/example_test.dart" <<'EOF'
 import 'package:bookmark_app/widgets/database_create_tiles.dart';
+import 'package:bookmark_app/features/database/presentation/widgets/resizable_detail_pane.dart';
 void main() {}
 EOF
 
