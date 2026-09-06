@@ -8,11 +8,11 @@ Issue #225 — reduce maintenance hotspots and retire duplicate/unused legacy pa
 Primary lane: **Refactor**. Object owns replacement product semantics and Relation owns canonical Relation semantics. Refactor owns measurable responsibility reduction, caller-zero retirement after proof, failure-policy/privacy cleanup, and maintainability guardrails.
 
 ## Current checkpoint — 2026-09-07
-Latest verified `main` for this handoff: **`c481b8b1b05078e14424433bee564a33804b76b7`** after Refactor #451/#453/#454/#455.
+Latest verified `main` for this handoff: **`5aacb98af79cb5387aa09b2abf2dd3f04f8da722`** after Refactor #455 and Object #447.
 
 The CI presentation/database boundary guard introduced by #443 is now enforced by #448 at a ceiling of **12** `workspaceStore.database` references. The local report remains non-blocking unless a threshold is supplied. Ratchet the CI ceiling downward whenever a Refactor slice actually removes a measured presentation reach-through.
 
-This session completed four behavior-preserving cleanup PRs:
+This Refactor session completed four behavior-preserving cleanup PRs:
 - **#451 merged** — retired the caller-zero Object detail session composition chain (`ObjectDetailRelationContextLoader`, `ObjectDetailSessionLoader`, `ObjectTypeDefaultsService` and dead-only models/tests), **337 deletions / 0 additions**.
 - **#453 merged** — retired unused drag/drop intent payload/target hierarchy, **49 deletions / 0 additions**; Flutter CI #1577 green.
 - **#454 merged** — retired caller-zero `ObjectBodyReferenceIndex` and its dead-only test, **106 deletions / 0 additions**; Flutter CI #1578 green.
@@ -26,14 +26,13 @@ Shared hotspots (`generic_database_page.dart`, `app_shell.dart`, `object_inspect
 
 ## Live cross-lane ownership at this checkpoint
 ### Object lane
-Open Object PRs at handoff time:
-- **#447** — canonical Image preview same-path refresh; owns `object_image_detail_preview.dart` and its focused regression test.
-- **#450** — canonical Image detail preview/edit composition; owns `object_image_detail_panel.dart` and its focused regression test.
+- **#447 merged** — canonical Image preview same-path refresh is now on main.
+- **#450 open** — canonical Image detail preview/edit composition. At this checkpoint its PR diff includes `object_image_detail_panel.dart`, `object_image_detail_preview.dart` and their focused tests.
 
-Refactor must not alter Image edit/restore/file-ownership semantics, Photo mapping, or those active presentation files while this work is in flight.
+Refactor must not alter Image edit/restore/file-ownership semantics, Photo mapping, or the active #450 files. #450's documented next step is a patch-sized `ObjectInspectorPage` wiring after its panel seam merges, so re-check ownership before touching the shared inspector host.
 
 ### Relation lane
-No open Relation production PR was present at this checkpoint. Canonical Relation mutation/read/index/backlink/audit/reconcile semantics remain Relation-owned. Refactor must not create alternate Relation writes, indexes, repair paths, or presentation-side mutation.
+No open Relation production PR was present at the last live open-PR check in this session. Canonical Relation mutation/read/index/backlink/audit/reconcile semantics remain Relation-owned. Refactor must not create alternate Relation writes, indexes, repair paths, or presentation-side mutation.
 
 Re-read live open PRs before every shared-host change because main moves quickly across lanes.
 
@@ -153,4 +152,4 @@ Future caller-zero searches must re-run current-source and filename/import searc
 - stale search-index results can lag main, so verify candidate files and callers against current-source content before deletion.
 
 ## Stop / continuation state
-Refactor remains actionable, but the obvious caller-zero Object Body/detail modules found in this pass have now been retired. The next safe work should either prove another true caller-zero module or perform a patch-sized responsibility move through an already meaningful boundary. Avoid active Image files (#447/#450), Relation semantics, and large-host reconstruction.
+Refactor remains actionable, but the obvious caller-zero Object Body/detail modules found in this pass have now been retired. The next safe work should either prove another true caller-zero module or perform a patch-sized responsibility move through an already meaningful boundary. Avoid active Image files in #450, Relation semantics, and large-host reconstruction; re-check `ObjectInspectorPage` ownership before any inspector edit.
