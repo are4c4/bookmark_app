@@ -11,22 +11,27 @@ void main() {
         File('lib/widgets/bookmark_visual_image.dart').readAsStringSync();
     final lifecycle =
         File('lib/views/bookmark_lifecycle_page.dart').readAsStringSync();
+    final reverseLookup = File(
+      'lib/widgets/bookmark_reverse_lookup_dialog.dart',
+    ).readAsStringSync();
 
     expect(factory, contains('repository.workspaceStore.database'));
     expect(factory, contains('BookmarkUrlResolver('));
     expect(factory, contains('BookmarkVisualResolver('));
 
-    for (final source in [visual, lifecycle]) {
+    for (final source in [visual, lifecycle, reverseLookup]) {
       expect(source, contains('BookmarkPresentationResolverFactory'));
       expect(source, isNot(contains('workspaceStore.database')));
     }
 
     expect(visual, isNot(contains('BookmarkVisualResolver(')));
     expect(lifecycle, isNot(contains('BookmarkUrlResolver(')));
+    expect(reverseLookup, isNot(contains('BookmarkUrlResolver(')));
 
     // Existing host/test injection seams remain available; this slice only
     // moves low-level resolver construction out of presentation code.
     expect(visual, contains('resolveSource'));
     expect(lifecycle, contains('resolveUrl'));
+    expect(reverseLookup, contains('resolveUrl'));
   });
 }
