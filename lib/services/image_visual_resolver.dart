@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import '../data/object_store.dart';
+import '../data/profile_path_resolver.dart';
 import '../domain/object_model.dart';
 
 class ImageManagedVisual {
@@ -32,10 +33,16 @@ class ImageManagedVisual {
 /// canonical system Image ObjectType. This reader never ensures schema or
 /// mutates Object values. Persisted Pixel width/height remain optional layout
 /// metadata, while the managed file must still exist before it is presented.
+/// Profile-relative File values are resolved only at this read boundary so the
+/// stored Image identity remains portable across profile/Vault moves.
 class ImageVisualResolver {
-  const ImageVisualResolver(this._objectStore);
+  const ImageVisualResolver(
+    this._objectStore, {
+    ProfilePathResolver? pathResolver,
+  }) : _pathResolver = pathResolver;
 
   final ObjectStore _objectStore;
+  final ProfilePathResolver? _pathResolver;
 
   Future<ImageManagedVisual?> resolveManaged({
     required int imageObjectTypeId,
@@ -60,8 +67,11 @@ class ImageVisualResolver {
     }
     if (image == null) return null;
 
-    final path = _nonEmpty(image.values[fileProperties.single.id]?.toString());
-    if (path == null || !await _existingFile(path)) return null;
+    final storedPath =
+        _nonEmpty(image.values[fileProperties.single.id]?.toString());
+    if (storedPath == null) return null;
+    final path = _pathResolver?.resolveStoredPath(storedPath) ?? storedPath;
+    if (!await _existingFile(path)) return null;
 
     final width = _dimensionValue(
       imageType.properties
