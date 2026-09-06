@@ -40,6 +40,7 @@ Widget _page(
   Future<void> Function()? createVault,
   Future<void> Function()? openVault,
   Future<void> Function(DatabaseProfile profile)? switchVault,
+  Future<void> Function()? moveVault,
 }) {
   Widget child = SettingsPage(
     themeMode: ThemeMode.system,
@@ -53,6 +54,7 @@ Widget _page(
       createVault: createVault ?? () async {},
       openVault: openVault ?? () async {},
       switchVault: switchVault ?? (_) async {},
+      moveVault: moveVault,
       child: child,
     );
   }
@@ -123,7 +125,7 @@ void main() {
     expect(find.textContaining('private Finder detail'), findsNothing);
   });
 
-  testWidgets('Vault lifecycle scope wires create, open, and switch actions',
+  testWidgets('Vault lifecycle scope wires create, open, switch, and move actions',
       (tester) async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
@@ -140,6 +142,7 @@ void main() {
     );
     var createCount = 0;
     var openCount = 0;
+    var moveCount = 0;
     String? switchedId;
 
     await tester.pumpWidget(
@@ -149,6 +152,7 @@ void main() {
         createVault: () async => createCount++,
         openVault: () async => openCount++,
         switchVault: (profile) async => switchedId = profile.id,
+        moveVault: () async => moveCount++,
       ),
     );
     await tester.pump();
@@ -174,6 +178,12 @@ void main() {
     await tester.tap(find.text('Other Vault'));
     await tester.pumpAndSettle();
     expect(switchedId, 'other');
+
+    final moveButton = find.text('Vaultを移動');
+    await tester.ensureVisible(moveButton);
+    await tester.tap(moveButton);
+    await tester.pump();
+    expect(moveCount, 1);
   });
 
   testWidgets('Vault action failure hides raw filesystem exception details',
@@ -211,5 +221,42 @@ void main() {
       findsOneWidget,
     );
     expect(find.textContaining('/Users/example/Secret'), findsNothing);
+  });
+
+  testWidgets('Vault move failure hides raw path and states source is retained',
+      (tester) async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    const vaultPath = '/Users/example/Documents/Current Vault';
+    final repository = await _repository(
+      database,
+      profileDirectoryPath: vaultPath,
+    );
+    final current = _profile('current', 'Current Vault', vaultPath);
+
+    await tester.pumpWidget(
+      _page(
+        repository,
+        vaultState: ProfileState(
+          profiles: [current],
+          activeProfileId: current.id,
+        ),
+        moveVault: () async {
+          throw StateError('target failed: /Users/example/PrivateTarget');
+        },
+      ),
+    );
+    await tester.pump();
+
+    final moveButton = find.text('Vaultを移動');
+    await tester.ensureVisible(moveButton);
+    await tester.tap(moveButton);
+    await tester.pump();
+
+    expect(
+      find.text('Vaultを移動できませんでした。移動元のVaultは削除されていません。'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('/Users/example/PrivateTarget'), findsNothing);
   });
 }
