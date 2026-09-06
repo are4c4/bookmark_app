@@ -121,20 +121,26 @@ class DailyNoteService {
       }
     }
 
-    final createdId = await objectStore.createObject(
-      objectTypeId: definition.objectType.id,
-      title: dateKey,
-    );
-    await objectStore.setPropertyValue(
-      objectId: createdId,
-      property: definition.dateProperty,
-      value: dateKey,
-    );
-    await _register(
-      workspaceId: workspaceId,
-      dateKey: dateKey,
-      objectId: createdId,
-    );
+    // Object identity, its required Date value, the optional Body template
+    // applied by ObjectStore, and the registry claim are one creation unit.
+    // If any write fails, do not leave a partially initialized Daily Note.
+    final createdId = await genericStore.database.transaction(() async {
+      final objectId = await objectStore.createObject(
+        objectTypeId: definition.objectType.id,
+        title: dateKey,
+      );
+      await objectStore.setPropertyValue(
+        objectId: objectId,
+        property: definition.dateProperty,
+        value: dateKey,
+      );
+      await _register(
+        workspaceId: workspaceId,
+        dateKey: dateKey,
+        objectId: objectId,
+      );
+      return objectId;
+    });
 
     final winner = await _registeredObject(
       workspaceId: workspaceId,
