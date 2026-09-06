@@ -93,11 +93,11 @@ class ImageManagedFileDeletionPolicy {
   String? _managedPhotoRoot() {
     final explicit = photoStorage.photoDirectoryPath?.trim();
     if (explicit != null && explicit.isNotEmpty) return explicit;
+    final profile = database.profileDirectoryPath?.trim();
+    if (profile != null && profile.isNotEmpty) return '$profile/photos';
     final active = PhotoStorageService.activePhotoDirectoryPath?.trim();
     if (active != null && active.isNotEmpty) return active;
-    final profile = database.profileDirectoryPath?.trim();
-    if (profile == null || profile.isEmpty) return null;
-    return '$profile/photos';
+    return null;
   }
 
   bool _isManagedPath(String candidate, String managedRoot) {
