@@ -4,7 +4,9 @@ import '../domain/object_model.dart';
 import 'app_database.dart';
 import 'bidirectional_relation_store.dart';
 import 'generic_database_store.dart';
+import 'image_object_service.dart';
 import 'object_store.dart';
+import 'object_type_defaults_store.dart';
 import 'relation_mutation_service.dart';
 import 'system_object_store.dart';
 import 'tag_object_bridge.dart';
@@ -17,7 +19,7 @@ class CoreObjectBridge {
     required this.tagBridge,
   });
 
-  static const photoSystemKey = 'image';
+  static const photoSystemKey = ImageObjectService.systemKey;
   static const bookmarkSystemKey = 'bookmark';
 
   final AppDatabase database;
@@ -27,6 +29,10 @@ class CoreObjectBridge {
   Future<void>? _schemaReady;
 
   late final GenericDatabaseStore _genericStore = GenericDatabaseStore(database);
+  late final ImageObjectService _images = ImageObjectService(
+        systemObjects: systemObjectStore,
+        defaultsStore: ObjectTypeDefaultsStore(_genericStore),
+      );
   late final RelationMutationService _relationMutations = RelationMutationService(
         objectStore: objectStore,
         genericStore: _genericStore,
@@ -76,12 +82,11 @@ class CoreObjectBridge {
   }
 
   Future<AppObjectType> _ensurePhotoType(int workspaceId) async {
-    final type = await systemObjectStore.ensureSystemObjectType(
+    await _images.ensureDefinition(workspaceId);
+    var type = (await systemObjectStore.getSystemObjectType(
       workspaceId: workspaceId,
       systemKey: photoSystemKey,
-      name: '画像',
-      icon: '🖼️',
-    );
+    ))!;
     await systemObjectStore.ensureProperty(
       objectTypeId: type.id,
       name: 'Legacy Photo ID',
@@ -90,25 +95,15 @@ class CoreObjectBridge {
     );
     await systemObjectStore.ensureProperty(
       objectTypeId: type.id,
-      name: 'File',
-      type: ObjectPropertyType.file,
-      config: const {'system': true},
-    );
-    await systemObjectStore.ensureProperty(
-      objectTypeId: type.id,
-      name: 'Note',
-      type: ObjectPropertyType.text,
-    );
-    await systemObjectStore.ensureProperty(
-      objectTypeId: type.id,
       name: 'Legacy Tags',
       type: ObjectPropertyType.text,
       config: const {'system': true, 'hidden': true},
     );
-    return (await systemObjectStore.getSystemObjectType(
+    type = (await systemObjectStore.getSystemObjectType(
       workspaceId: workspaceId,
       systemKey: photoSystemKey,
     ))!;
+    return type;
   }
 
   Future<AppObjectType> _ensureBookmarkType(
@@ -187,6 +182,7 @@ class CoreObjectBridge {
     final legacyId = _property(photoType, 'Legacy Photo ID');
     final file = _property(photoType, 'File');
     final note = _property(photoType, 'Note');
+    final originalFilename = _property(photoType, 'Original filename');
     final legacyTags = _property(photoType, 'Legacy Tags');
 
     for (final photo in photos) {
@@ -205,6 +201,11 @@ class CoreObjectBridge {
       await objectStore.setPropertyValue(objectId: objectId, property: legacyId, value: photo.id);
       await objectStore.setPropertyValue(objectId: objectId, property: file, value: photo.path);
       await objectStore.setPropertyValue(objectId: objectId, property: note, value: photo.note);
+      await objectStore.setPropertyValue(
+        objectId: objectId,
+        property: originalFilename,
+        value: _fileName(photo.path),
+      );
       await objectStore.setPropertyValue(objectId: objectId, property: legacyTags, value: photo.tags);
     }
 
@@ -304,6 +305,12 @@ class CoreObjectBridge {
 
   ObjectPropertyDefinition _property(AppObjectType type, String name) =>
       type.properties.firstWhere((property) => property.name == name);
+
+  String _fileName(String path) {
+    final normalized = path.replaceAll('\\', '/');
+    final slash = normalized.lastIndexOf('/');
+    return slash < 0 ? normalized : normalized.substring(slash + 1);
+  }
 
   Future<void> _removeOrphanObjects({
     required int workspaceId,
