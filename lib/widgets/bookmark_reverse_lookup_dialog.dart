@@ -64,7 +64,7 @@ Future<void> showBookmarkReverseLookupDialog({
                   subtitle: FutureBuilder<BookmarkUrlSource?>(
                     future: resolver(bookmark),
                     builder: (context, snapshot) => Text(
-                      snapshot.data?.value ?? bookmark.url,
+                      snapshot.data?.value ?? '',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
