@@ -34,6 +34,7 @@ class RelationPropertyAuthoringFields extends StatefulWidget {
     required this.multiple,
     required this.onTargetChanged,
     required this.onMultipleChanged,
+    this.keyPrefix = 'relation-property',
   });
 
   final List<RelationPropertyTargetOption> targets;
@@ -41,6 +42,10 @@ class RelationPropertyAuthoringFields extends StatefulWidget {
   final bool multiple;
   final ValueChanged<int?> onTargetChanged;
   final ValueChanged<bool> onMultipleChanged;
+
+  /// Keeps stable host-specific widget keys when this field set is reused by
+  /// multiple authoring surfaces.
+  final String keyPrefix;
 
   @override
   State<RelationPropertyAuthoringFields> createState() =>
@@ -90,12 +95,13 @@ class _RelationPropertyAuthoringFieldsState
     final selected = _selectedTarget;
     final filtered = _filteredTargets;
     final scheme = Theme.of(context).colorScheme;
+    final keyPrefix = widget.keyPrefix;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         TextField(
-          key: const ValueKey('relation-property-target-search'),
+          key: ValueKey('$keyPrefix-target-search'),
           controller: _searchController,
           focusNode: _searchFocus,
           decoration: InputDecoration(
@@ -107,7 +113,7 @@ class _RelationPropertyAuthoringFieldsState
             suffixIcon: selected == null
                 ? null
                 : IconButton(
-                    key: const ValueKey('relation-property-target-clear'),
+                    key: ValueKey('$keyPrefix-target-clear'),
                     tooltip: '関連先をクリア',
                     onPressed: () {
                       widget.onTargetChanged(null);
@@ -124,7 +130,7 @@ class _RelationPropertyAuthoringFieldsState
         if (_showResults) ...[
           const SizedBox(height: 6),
           Container(
-            key: const ValueKey('relation-property-target-results'),
+            key: ValueKey('$keyPrefix-target-results'),
             constraints: const BoxConstraints(maxHeight: 220),
             decoration: BoxDecoration(
               border: Border.all(color: scheme.outlineVariant),
@@ -143,9 +149,7 @@ class _RelationPropertyAuthoringFieldsState
                       final isSelected = target.objectTypeId ==
                           widget.selectedTargetObjectTypeId;
                       return ListTile(
-                        key: ValueKey(
-                          'relation-property-target-${target.objectTypeId}',
-                        ),
+                        key: ValueKey('$keyPrefix-target-${target.objectTypeId}'),
                         dense: true,
                         leading: Text(
                           target.icon,
@@ -169,7 +173,7 @@ class _RelationPropertyAuthoringFieldsState
         ),
         const SizedBox(height: 6),
         SegmentedButton<bool>(
-          key: const ValueKey('relation-property-cardinality'),
+          key: ValueKey('$keyPrefix-cardinality'),
           segments: const [
             ButtonSegment<bool>(
               value: false,
