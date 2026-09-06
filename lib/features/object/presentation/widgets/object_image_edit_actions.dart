@@ -106,6 +106,18 @@ class _ObjectImageEditActionsState extends State<ObjectImageEditActions> {
         );
       });
 
+  Future<void> _flipVertical() => _run(() async {
+        // A vertical reflection is equivalent to a 180° rotation followed by
+        // the existing horizontal reflection. Keeping the composition here
+        // avoids widening the canonical byte-mutation API solely for UI parity.
+        await widget.editService.edit(
+          workspaceId: widget.workspaceId,
+          objectId: widget.objectId,
+          quarterTurns: 2,
+          flipHorizontal: true,
+        );
+      });
+
   Future<void> _cropAspectRatio(double ratio) => _run(() async {
         await widget.editService.edit(
           workspaceId: widget.workspaceId,
@@ -178,6 +190,15 @@ class _ObjectImageEditActionsState extends State<ObjectImageEditActions> {
               tooltip: '左右反転',
               onPressed: canEdit ? _flipHorizontal : null,
               icon: const Icon(Icons.flip),
+            ),
+            IconButton.outlined(
+              key: const ValueKey('object-image-flip-vertical'),
+              tooltip: '上下反転',
+              onPressed: canEdit ? _flipVertical : null,
+              icon: const RotatedBox(
+                quarterTurns: 1,
+                child: Icon(Icons.flip),
+              ),
             ),
             PopupMenuButton<double>(
               key: const ValueKey('object-image-crop-aspect-ratio'),
