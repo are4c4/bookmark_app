@@ -4,7 +4,6 @@ import '../data/app_database.dart';
 import '../data/generic_database_store.dart';
 import '../data/image_object_service.dart';
 import '../data/object_store.dart';
-import '../data/system_object_store.dart';
 
 /// Decides whether deleting one legacy Photo row may also delete its managed
 /// file while first-class Image Objects coexist with the legacy subsystem.
@@ -16,16 +15,10 @@ import '../data/system_object_store.dart';
 /// on the side of retaining media when canonical Object state cannot be audited.
 class PhotoManagedFileDeletionPolicy {
   PhotoManagedFileDeletionPolicy(this.database)
-      : _objectStore = ObjectStore(GenericDatabaseStore(database)) {
-    _systemObjects = SystemObjectStore(
-      database: database,
-      objectStore: _objectStore,
-    );
-  }
+      : _objectStore = ObjectStore(GenericDatabaseStore(database));
 
   final AppDatabase database;
   final ObjectStore _objectStore;
-  late final SystemObjectStore _systemObjects;
 
   Future<bool> shouldPreserve({
     required int legacyPhotoId,
@@ -37,7 +30,13 @@ class PhotoManagedFileDeletionPolicy {
 
     try {
       final resolvedCandidate = database.pathResolver.resolveStoredPath(candidate);
-      await _systemObjects.ensureSchema();
+      final systemTableExists = await _tableExists('system_object_types');
+      if (!systemTableExists) {
+        // The canonical system-Object registry has never been bootstrapped, so
+        // no first-class system Image can currently own this legacy file.
+        return false;
+      }
+
       final linkedObjectIds = await _linkedObjectIds(legacyPhotoId);
       final imageTypeRows = await database.customSelect(
         '''SELECT object_type_id
@@ -87,14 +86,7 @@ class PhotoManagedFileDeletionPolicy {
   }
 
   Future<Set<int>> _linkedObjectIds(int legacyPhotoId) async {
-    final tableExists = await database.customSelect(
-      '''SELECT 1 AS present
-         FROM sqlite_master
-         WHERE type = 'table' AND name = 'photo_object_links'
-         LIMIT 1''',
-    ).getSingleOrNull();
-    if (tableExists == null) return <int>{};
-
+    if (!await _tableExists('photo_object_links')) return <int>{};
     final rows = await database.customSelect(
       '''SELECT object_id
          FROM photo_object_links
@@ -102,5 +94,16 @@ class PhotoManagedFileDeletionPolicy {
       variables: [Variable<int>(legacyPhotoId)],
     ).get();
     return rows.map((row) => row.read<int>('object_id')).toSet();
+  }
+
+  Future<bool> _tableExists(String tableName) async {
+    final row = await database.customSelect(
+      '''SELECT 1 AS present
+         FROM sqlite_master
+         WHERE type = 'table' AND name = ?
+         LIMIT 1''',
+      variables: [Variable<String>(tableName)],
+    ).getSingleOrNull();
+    return row != null;
   }
 }
