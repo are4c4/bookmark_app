@@ -141,4 +141,42 @@ void main() {
     expect(managedDirectory.listSync(), isEmpty);
     expect(await objectStore.listObjects(customTypeId), isEmpty);
   });
+
+  test('cleanup failure does not mask Image creation failure', () async {
+    final source = await writeTinyPng('cleanup_failure.png');
+    final customTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Book',
+    );
+    final failingStorage = _DeleteFailingPhotoStorageService(
+      photoDirectoryPath: managedDirectory.path,
+    );
+    final failingImportService = GenericDatabaseImageImportService(
+      photoStorage: failingStorage,
+      objectCreate: objectCreate,
+    );
+
+    await expectLater(
+      failingImportService.importPaths(
+        databaseId: customTypeId,
+        sourcePaths: <String>[source.path],
+      ),
+      throwsA(isA<UnsupportedError>()),
+    );
+
+    expect(failingStorage.deleteAttempts, 1);
+    expect(await objectStore.listObjects(customTypeId), isEmpty);
+  });
+}
+
+class _DeleteFailingPhotoStorageService extends PhotoStorageService {
+  _DeleteFailingPhotoStorageService({required super.photoDirectoryPath});
+
+  int deleteAttempts = 0;
+
+  @override
+  Future<void> deleteManagedPhoto(String path) async {
+    deleteAttempts += 1;
+    throw StateError('sensitive cleanup detail: $path');
+  }
 }

@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:image/image.dart' as image;
@@ -55,11 +56,29 @@ class GenericDatabaseImageImportService {
           ),
         );
       } catch (_) {
-        await photoStorage.deleteManagedPhoto(photo.path);
+        await _deleteManagedPhotoBestEffort(photo.path);
         rethrow;
       }
     }
     return objectIds;
+  }
+
+  Future<void> _deleteManagedPhotoBestEffort(String path) async {
+    try {
+      await photoStorage.deleteManagedPhoto(path);
+    } catch (_, stackTrace) {
+      // Cleanup is rollback-only. Never replace the canonical Object-creation
+      // failure with a secondary file-delete failure, and do not log paths or
+      // exception text because either may contain user content.
+      assert(() {
+        developer.log(
+          'Managed image import rollback cleanup failed.',
+          name: 'GenericDatabaseImageImportService',
+          stackTrace: stackTrace,
+        );
+        return true;
+      }());
+    }
   }
 
   Future<({int width, int height})?> _probeGeometry(String path) async {
