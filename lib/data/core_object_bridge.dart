@@ -189,12 +189,10 @@ class CoreObjectBridge {
       final title = photo.title?.trim().isNotEmpty == true
           ? photo.title!.trim()
           : '画像 ${photo.id}';
-      final objectId = await _ensureLinkedObject(
+      final objectId = await _ensurePhotoLinkedObject(
         workspaceId: workspaceId,
-        table: 'photo_object_links',
-        legacyColumn: 'photo_id',
         legacyId: photo.id,
-        objectTypeId: photoType.id,
+        filePath: photo.path,
         title: title,
       );
       await objectStore.renameObject(objectId, title);
@@ -333,6 +331,36 @@ class CoreObjectBridge {
         objectId: object.id,
       );
     }
+  }
+
+  Future<int> _ensurePhotoLinkedObject({
+    required int workspaceId,
+    required int legacyId,
+    required String filePath,
+    required String title,
+  }) async {
+    final existing = await _linkedObjectId(
+      workspaceId: workspaceId,
+      table: 'photo_object_links',
+      legacyColumn: 'photo_id',
+      legacyId: legacyId,
+    );
+    if (existing != null) return existing;
+
+    // First promotion may reuse an already-managed Image with the exact same
+    // canonical File identity. Once linked, the stable mapping is authoritative;
+    // no path heuristic is consulted on subsequent compatibility syncs.
+    final image = await _images.findOrCreateManaged(
+      workspaceId: workspaceId,
+      filePath: filePath,
+      title: title,
+      originalFilename: _fileName(filePath),
+    );
+    await database.customStatement(
+      'INSERT INTO photo_object_links(workspace_id, photo_id, object_id) VALUES (?, ?, ?)',
+      [workspaceId, legacyId, image.id],
+    );
+    return image.id;
   }
 
   Future<int> _ensureLinkedObject({
