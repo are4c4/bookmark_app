@@ -2,6 +2,7 @@ import 'package:rxdart/rxdart.dart';
 
 import '../services/attachment_storage_service.dart';
 import '../services/auto_organize_service.dart';
+import '../services/photo_managed_file_deletion_policy.dart';
 import '../services/photo_storage_service.dart';
 
 import '../domain/bookmark_state.dart';
@@ -317,8 +318,12 @@ class BookmarkRepository {
   Future<void> updatePhoto(PhotoRecord photo, {String? title, String? note, Iterable<String>? tagNames}) =>
       _database.updatePhoto(photo.id, title: title, note: note, tagNames: tagNames);
   Future<void> deletePhoto(PhotoRecord photo) async {
+    final preserveManagedFile = await PhotoManagedFileDeletionPolicy(_database)
+        .shouldPreserve(legacyPhotoId: photo.id, filePath: photo.path);
     await _database.deletePhoto(photo.id);
-    await const PhotoStorageService().deleteManagedPhoto(photo.path);
+    if (!preserveManagedFile) {
+      await const PhotoStorageService().deleteManagedPhoto(photo.path);
+    }
   }
   Future<void> attachPhoto(BookmarkItem bookmark, PhotoRecord photo, {bool asCover = false}) =>
       _database.attachPhotoToBookmark(bookmark.id, photo.id, asCover: asCover);
