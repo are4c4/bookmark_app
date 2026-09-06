@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:flutter/foundation.dart';
 
 import 'app_database.dart';
 
@@ -31,9 +32,18 @@ class BookmarkObjectLinkReadStore {
       ).get();
       if (rows.isEmpty) return null;
       return rows.first.read<int>('object_id');
-    } catch (_) {
+    } catch (_, stackTrace) {
       // Compatibility installations may not have completed Object mirroring.
+      _debugLookupFailure(stackTrace);
       return null;
     }
   }
+}
+
+void _debugLookupFailure(StackTrace stackTrace) {
+  assert(() {
+    debugPrint('Bookmark object-link compatibility lookup failed.');
+    debugPrintStack(stackTrace: stackTrace);
+    return true;
+  }());
 }
