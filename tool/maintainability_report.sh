@@ -9,8 +9,8 @@ set -euo pipefail
 # Usage:
 #   bash tool/maintainability_report.sh
 #   bash tool/maintainability_report.sh --top 30
-#   bash tool/maintainability_report.sh --max-boundary-refs 12
-#   bash tool/maintainability_report.sh --max-legacy-shim-imports 19
+#   bash tool/maintainability_report.sh --max-boundary-refs 9
+#   bash tool/maintainability_report.sh --max-legacy-shim-imports 18
 #   bash tool/maintainability_report.sh --max-legacy-shims 5
 
 TOP=20
