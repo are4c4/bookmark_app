@@ -6,11 +6,14 @@ import '../data/object_alias_store.dart';
 import '../data/object_body_store.dart';
 import '../data/object_store.dart';
 import '../data/relation_read_service.dart';
+import '../data/system_object_store.dart';
+import '../data/weblink_object_service.dart';
 import '../domain/object_model.dart';
 import 'object_body_search_text.dart';
 import 'object_derived_search_text_store.dart';
 import 'object_property_search_text.dart';
 import 'object_relation_search_text.dart';
+import 'weblink_search_text.dart';
 
 class ObjectSearchHit {
   const ObjectSearchHit({
@@ -41,7 +44,11 @@ class ObjectSearchRepository {
         _bodyStore = ObjectBodyStore(genericStore),
         _derivedTextStore = ObjectDerivedSearchTextStore(genericStore),
         _objectStore = ObjectStore(genericStore),
-        _relationReads = RelationReadService(ObjectStore(genericStore));
+        _relationReads = RelationReadService(ObjectStore(genericStore)),
+        _systemObjects = SystemObjectStore(
+          database: genericStore.database,
+          objectStore: ObjectStore(genericStore),
+        );
 
   final GenericDatabaseStore _genericStore;
   final AppDatabase _database;
@@ -50,6 +57,7 @@ class ObjectSearchRepository {
   final ObjectDerivedSearchTextStore _derivedTextStore;
   final ObjectStore _objectStore;
   final RelationReadService _relationReads;
+  final SystemObjectStore _systemObjects;
   bool _initialized = false;
 
   Future<void> initialize() async {
@@ -58,6 +66,7 @@ class ObjectSearchRepository {
     await _aliasStore.ensureSchema();
     await _bodyStore.ensureSchema();
     await _derivedTextStore.ensureSchema();
+    await _systemObjects.ensureSchema();
     await _database.customStatement('''
       CREATE VIRTUAL TABLE IF NOT EXISTS object_search_fts USING fts5(
         object_id UNINDEXED,
@@ -119,6 +128,7 @@ class ObjectSearchRepository {
 
     final typesById = <int, AppObjectType>{};
     final objectsByType = <int, Map<int, AppObject>>{};
+    final systemKeysByType = <int, String?>{};
     for (final row in rows) {
       final currentObjectId = row.read<int>('object_id');
       final objectTypeId = row.read<int>('object_type_id');
@@ -137,10 +147,24 @@ class ObjectSearchRepository {
       final object = objectsById[currentObjectId];
       if (object == null) continue;
 
+      if (!systemKeysByType.containsKey(objectTypeId)) {
+        systemKeysByType[objectTypeId] =
+            await _systemObjects.systemKeyForObjectType(objectTypeId);
+      }
+      final systemKey = systemKeysByType[objectTypeId];
+      final weblinkProjection = systemKey == WeblinkObjectService.systemKey
+          ? buildWeblinkSearchProjection(
+              object: object,
+              objectType: objectType,
+            )
+          : null;
+
       final aliases = (await _aliasStore.listAliases(currentObjectId)).join(' ');
       final properties = buildObjectPropertiesSearchText(
         object: object,
         objectType: objectType,
+        excludedPropertyIds:
+            weblinkProjection?.consumedPropertyIds ?? const <int>{},
       );
       final body = buildObjectBodySearchText(
         await _bodyStore.read(currentObjectId),
@@ -164,7 +188,7 @@ class ObjectSearchRepository {
              relation_labels,
              weblink_metadata,
              derived_text
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', ?)''',
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
         [
           currentObjectId,
           objectTypeId,
@@ -174,6 +198,7 @@ class ObjectSearchRepository {
           properties,
           body,
           relationLabels,
+          weblinkProjection?.text ?? '',
           derivedText,
         ],
       );
