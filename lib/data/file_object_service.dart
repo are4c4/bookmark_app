@@ -11,6 +11,7 @@ class FileObjectDefinition {
     required this.contentTypeProperty,
     required this.extensionProperty,
     required this.sizeBytesProperty,
+    required this.sha256Property,
     required this.importedAtProperty,
   });
 
@@ -20,6 +21,7 @@ class FileObjectDefinition {
   final ObjectPropertyDefinition contentTypeProperty;
   final ObjectPropertyDefinition extensionProperty;
   final ObjectPropertyDefinition sizeBytesProperty;
+  final ObjectPropertyDefinition sha256Property;
   final ObjectPropertyDefinition importedAtProperty;
 }
 
@@ -74,6 +76,12 @@ class FileObjectService {
       type: ObjectPropertyType.number,
       config: const <String, dynamic>{'system': true},
     );
+    final sha256 = await systemObjects.ensureProperty(
+      objectTypeId: type.id,
+      name: 'SHA-256',
+      type: ObjectPropertyType.text,
+      config: const <String, dynamic>{'system': true},
+    );
     final importedAt = await systemObjects.ensureProperty(
       objectTypeId: type.id,
       name: 'Imported at',
@@ -92,6 +100,7 @@ class FileObjectService {
       contentTypeProperty: contentType,
       extensionProperty: extension,
       sizeBytesProperty: sizeBytes,
+      sha256Property: sha256,
       importedAtProperty: importedAt,
     );
 
@@ -102,6 +111,7 @@ class FileObjectService {
       contentTypeProperty: contentType,
       extensionProperty: extension,
       sizeBytesProperty: sizeBytes,
+      sha256Property: sha256,
       importedAtProperty: importedAt,
     );
   }
@@ -110,8 +120,8 @@ class FileObjectService {
   ///
   /// Reimport is deterministic by canonical stored path. Existing non-empty
   /// metadata is preserved; a retry may only fill fields that were previously
-  /// missing. Hash-based dedup can be added later without changing this path
-  /// identity contract.
+  /// missing. SHA-256 is optional metadata and does not replace stored-path
+  /// identity or silently merge two independently managed files.
   Future<AppObject> findOrCreateManaged({
     required int workspaceId,
     required String filePath,
@@ -119,10 +129,12 @@ class FileObjectService {
     String? originalFilename,
     String? contentType,
     int? sizeBytes,
+    String? sha256,
     DateTime? importedAt,
   }) async {
     final storedPath = _canonicalStoredPath(filePath);
     final validatedSize = _validatedSize(sizeBytes);
+    final normalizedSha256 = _normalizedSha256(sha256);
     final filename = _firstNonEmpty(<String?>[
       originalFilename,
       _fileName(storedPath),
@@ -137,7 +149,8 @@ class FileObjectService {
     for (final object in objects) {
       final existingPath =
           '${object.values[definition.fileProperty.id] ?? ''}'.trim();
-      if (existingPath.isEmpty || _canonicalStoredPath(existingPath) != storedPath) {
+      if (existingPath.isEmpty ||
+          _canonicalStoredPath(existingPath) != storedPath) {
         continue;
       }
       await _setIfMissing(
@@ -151,7 +164,12 @@ class FileObjectService {
         normalizedContentType,
       );
       await _setIfMissing(object, definition.extensionProperty, extension);
-      await _setNumberIfMissing(object, definition.sizeBytesProperty, validatedSize);
+      await _setNumberIfMissing(
+        object,
+        definition.sizeBytesProperty,
+        validatedSize,
+      );
+      await _setIfMissing(object, definition.sha256Property, normalizedSha256);
       return _reload(definition.objectType.id, object.id);
     }
 
@@ -177,7 +195,12 @@ class FileObjectService {
       normalizedContentType,
     );
     await _setIfMissing(created, definition.extensionProperty, extension);
-    await _setNumberIfMissing(created, definition.sizeBytesProperty, validatedSize);
+    await _setNumberIfMissing(
+      created,
+      definition.sizeBytesProperty,
+      validatedSize,
+    );
+    await _setIfMissing(created, definition.sha256Property, normalizedSha256);
     await _setIfMissing(
       created,
       definition.importedAtProperty,
@@ -193,6 +216,7 @@ class FileObjectService {
     required ObjectPropertyDefinition contentTypeProperty,
     required ObjectPropertyDefinition extensionProperty,
     required ObjectPropertyDefinition sizeBytesProperty,
+    required ObjectPropertyDefinition sha256Property,
     required ObjectPropertyDefinition importedAtProperty,
   }) async {
     final desiredVisible = <int>[
@@ -208,6 +232,7 @@ class FileObjectService {
       extensionProperty.id,
       sizeBytesProperty.id,
       importedAtProperty.id,
+      sha256Property.id,
       fileProperty.id,
     ];
     final current = await defaultsStore.read(objectTypeId);
@@ -248,11 +273,26 @@ class FileObjectService {
     return value;
   }
 
+  String? _normalizedSha256(String? value) {
+    final candidate = value?.trim().toLowerCase();
+    if (candidate == null || candidate.isEmpty) return null;
+    if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(candidate)) {
+      throw ArgumentError.value(
+        value,
+        'sha256',
+        'SHA-256 must be a 64-character hexadecimal digest.',
+      );
+    }
+    return candidate;
+  }
+
   String? _normalizedContentType(String? value) {
     final candidate = value?.trim().toLowerCase();
     if (candidate == null || candidate.isEmpty) return null;
     final separator = candidate.indexOf(';');
-    final mime = separator < 0 ? candidate : candidate.substring(0, separator).trim();
+    final mime = separator < 0
+        ? candidate
+        : candidate.substring(0, separator).trim();
     return mime.isEmpty ? null : mime;
   }
 
