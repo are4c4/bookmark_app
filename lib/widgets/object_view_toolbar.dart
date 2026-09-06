@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../data/database_view_gallery_adapter.dart';
 import '../data/database_view_group_adapter.dart';
 import '../data/database_view_query_adapter.dart';
 import '../data/database_view_store.dart';
 import '../domain/object_model.dart';
+import 'object_gallery_mode_menu.dart';
 import 'object_group_dialog.dart';
 import 'object_query_dialog.dart';
 
@@ -26,13 +26,11 @@ class ObjectViewToolbar extends StatelessWidget {
 
   static const _queryAdapter = DatabaseViewQueryAdapter();
   static const _groupAdapter = DatabaseViewGroupAdapter();
-  static const _galleryAdapter = DatabaseViewGalleryAdapter();
 
   @override
   Widget build(BuildContext context) {
     final query = _queryAdapter.decode(view);
     final group = _groupAdapter.decode(view);
-    final galleryMode = _galleryAdapter.decode(view);
     final filterCount = query.filters.length;
     final sortCount = query.sorts.length;
 
@@ -60,7 +58,11 @@ class ObjectViewToolbar extends StatelessWidget {
           onPressed: () => _editGroup(context),
         ),
         if (showLayoutSelector) _layoutMenu(context, group != null),
-        if (view.layoutType == 'gallery') _galleryModeMenu(galleryMode),
+        if (view.layoutType == 'gallery')
+          ObjectGalleryModeMenu(
+            view: view,
+            onViewChanged: onViewChanged,
+          ),
       ],
     );
   }
@@ -133,40 +135,6 @@ class ObjectViewToolbar extends StatelessWidget {
     );
   }
 
-  Widget _galleryModeMenu(GalleryViewMode mode) {
-    return PopupMenuButton<GalleryViewMode>(
-      key: const ValueKey('gallery-mode-menu'),
-      tooltip: 'ギャラリー表示',
-      initialValue: mode,
-      onSelected: (next) {
-        onViewChanged(_galleryAdapter.encode(view, mode: next));
-      },
-      itemBuilder: (_) => GalleryViewMode.values
-          .map(
-            (candidate) => PopupMenuItem<GalleryViewMode>(
-              value: candidate,
-              child: Row(
-                children: [
-                  Icon(_galleryModeIcon(candidate), size: 17),
-                  const SizedBox(width: 9),
-                  Text(_galleryModeLabel(candidate)),
-                  if (candidate == mode) ...[
-                    const Spacer(),
-                    const Icon(Icons.check, size: 16),
-                  ],
-                ],
-              ),
-            ),
-          )
-          .toList(growable: false),
-      child: _ToolbarButton(
-        icon: _galleryModeIcon(mode),
-        label: _galleryModeLabel(mode),
-        active: mode == GalleryViewMode.masonry,
-      ),
-    );
-  }
-
   String _groupLabel(int propertyId) {
     for (final property in properties) {
       if (property.id == propertyId) return property.name;
@@ -186,16 +154,6 @@ class ObjectViewToolbar extends StatelessWidget {
         'list' => Icons.view_list,
         'board' => Icons.view_kanban_outlined,
         _ => Icons.table_rows,
-      };
-
-  String _galleryModeLabel(GalleryViewMode mode) => switch (mode) {
-        GalleryViewMode.fixed => '固定比率',
-        GalleryViewMode.masonry => 'メイソンリー',
-      };
-
-  IconData _galleryModeIcon(GalleryViewMode mode) => switch (mode) {
-        GalleryViewMode.fixed => Icons.grid_view,
-        GalleryViewMode.masonry => Icons.view_quilt_outlined,
       };
 }
 
