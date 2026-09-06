@@ -8,7 +8,7 @@ Issue #225 — reduce maintenance hotspots and retire duplicate/unused legacy pa
 Primary lane: **Refactor**. Object owns replacement product semantics and Relation owns canonical Relation semantics. Refactor owns measurable responsibility reduction, caller-zero retirement after proof, failure-policy/privacy cleanup, maintainability guardrails, and incremental legacy shim retirement.
 
 ## Current checkpoint — 2026-09-07
-Latest verified `main`: **`31be90e1dbbfd66592832273820b092cc3a0ce7d`** after Refactor **#474**.
+Latest verified `main`: **`31be90e1dbbfd66592832273820b092cc3a0ce7d`** after Refactor **#474**, directly on top of Object **#475**.
 
 Recent integrated sequence relevant to this lane:
 - **#467 merged** — privacy-safe observability for unexpected canonical Image visual file-probe failures while preserving fail-soft behavior.
@@ -17,9 +17,14 @@ Recent integrated sequence relevant to this lane:
 - **#473 merged** — Object-owned read-only fallback geometry probing for canonical managed Images.
 - **#469 merged** — Object-owned safe vertical Image flip routed through canonical edit semantics.
 - **#471 merged** — Object/repository handoff refresh only.
+- **#475 merged** as `4e744193...` — Object-owned canonical free-crop edge handles; no Relation/shared-host change.
 - **#474 merged** as `31be90e1...` — CI guard for temporary Database-presentation re-export shim imports, plus three test-only imports migrated to canonical feature paths.
 
-At this checkpoint **#470 is the only open PR** and is docs-only. No Object or Relation production PR is open. Re-read live ownership before every shared-host edit because parallel lanes move `main` quickly.
+Open PR ownership at this checkpoint:
+- **Refactor #470** — this docs-only handoff/inventory refresh.
+- **Object #476** — canonical Image free-crop pan/zoom parity. It owns the Image crop selector/dialog geometry/widget files in its four-file diff and does not touch `ObjectInspectorPage`, Stage1, generic Database hosts, Relation, Photo mapping or schema.
+
+Refactor must not edit #476's active Image crop files or redefine Image mutation/ownership semantics. Re-read live ownership before every shared-host edit because parallel lanes move `main` quickly.
 
 ## Current measurable guardrails
 Two maintainability ceilings are now enforced by Flutter CI:
@@ -137,7 +142,7 @@ Do not introduce a page-specific wrapper merely to hide `workspaceStore.database
 
 ## Exact next actions
 1. Merge #470 after its refreshed docs head is green and mergeable against latest `main`.
-2. Post an Issue #225 checkpoint recording the caller-zero net -1,770 LOC, #474 shim guard + 22→19 ratchet, current main, and remaining deferred chains.
+2. Post an Issue #225 checkpoint recording the caller-zero net -1,770 LOC, #474 shim guard + 22→19 ratchet, current main, active Object #476 ownership, and remaining deferred chains.
 3. Continue current-source caller-zero auditing outside active Object/Relation ownership; delete only when production callers are zero and still-live behavior has independent coverage.
 4. Lower the shim ceiling below 19 whenever a production host is safely moved from a temporary shim import to its canonical feature import.
 5. Lower the presentation/database ceiling below 12 whenever a real responsibility move removes reach-through.
@@ -155,8 +160,9 @@ Do not introduce a page-specific wrapper merely to hide `workspaceStore.database
 
 ## Risks / sequencing
 - parallel lanes can move `main` quickly; re-read open PR ownership before shared code changes;
+- Object #476 currently owns canonical Image crop selector/dialog geometry/widget files; do not overlap them;
 - large shared hosts must remain patch-sized;
-- connector file writes replace complete files, so do not reconstruct a large host for a one-line import/constructor change;
+- connector file writes replace complete existing files, so do not reconstruct a large host for a one-line import/constructor change;
 - legacy Bookmark URL/thumbnail/Photo storage remains live compatibility data;
 - wrapper-only abstractions that reduce a metric without deleting responsibility should be rejected;
 - Image product semantics remain Object-owned and Relation semantics remain Relation-owned.
@@ -164,4 +170,4 @@ Do not introduce a page-specific wrapper merely to hide `workspaceStore.database
 ## Continuation state
 The obvious whole-module caller-zero candidates found in the latest pass are retired through #472. #474 now makes temporary Database-presentation shim debt monotonic and immediately reduced the measured count to 19 without production-host churn.
 
-The next safe Refactor work should be a true caller-zero deletion, a patch-sized responsibility move, or an opportunistic canonical-import migration that lowers an existing ceiling. Do not force the plain-text Body chain, shim removal, or database reach-through cleanup through whole-file reconstruction.
+The next safe Refactor work should be a true caller-zero deletion, a patch-sized responsibility move, or an opportunistic canonical-import migration that lowers an existing ceiling. Avoid Object #476's active Image crop files. Do not force the plain-text Body chain, shim removal, or database reach-through cleanup through whole-file reconstruction.
