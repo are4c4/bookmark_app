@@ -150,8 +150,6 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('property-add-type-relation')));
     await tester.pumpAndSettle();
 
-    expect(find.text('組み込み ObjectType'), findsOneWidget);
-    expect(find.text('カスタム ObjectType'), findsOneWidget);
     expect(
       tester.widget<FilledButton>(
         find.byKey(const ValueKey('property-add-create-submit')),
@@ -159,10 +157,14 @@ void main() {
       isNull,
     );
 
-    await tester.enterText(
-      find.byKey(const ValueKey('property-add-relation-target-search')),
-      'image',
-    );
+    final targetSearch =
+        find.byKey(const ValueKey('property-add-relation-target-search'));
+    await tester.tap(targetSearch);
+    await tester.pump();
+    expect(find.text('組み込み ObjectType'), findsOneWidget);
+    expect(find.text('カスタム ObjectType'), findsOneWidget);
+
+    await tester.enterText(targetSearch, 'image');
     await tester.pump();
     expect(
       find.byKey(const ValueKey('property-add-relation-target-10')),
