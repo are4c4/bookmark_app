@@ -31,6 +31,36 @@ void main() {
     expect(resized.bottom, closeTo(0.7, 0.0001));
   });
 
+  test('edge resize changes only its matching axis', () {
+    const source = Rect.fromLTWH(0.2, 0.2, 0.5, 0.5);
+    final resized = ObjectImageCropGeometry.resize(
+      source,
+      ObjectImageCropHandle.right,
+      const Offset(-40, 30),
+      const Size(200, 100),
+    );
+
+    expect(resized.left, source.left);
+    expect(resized.top, source.top);
+    expect(resized.bottom, source.bottom);
+    expect(resized.right, closeTo(0.5, 0.0001));
+  });
+
+  test('edge resize enforces minimum size on one axis', () {
+    final resized = ObjectImageCropGeometry.resize(
+      const Rect.fromLTWH(0.2, 0.2, 0.5, 0.5),
+      ObjectImageCropHandle.top,
+      const Offset(20, 500),
+      const Size(200, 100),
+      minCropSize: 0.1,
+    );
+
+    expect(resized.height, closeTo(0.1, 0.0001));
+    expect(resized.left, closeTo(0.2, 0.0001));
+    expect(resized.right, closeTo(0.7, 0.0001));
+    expect(resized.bottom, closeTo(0.7, 0.0001));
+  });
+
   test('invalid initial geometry falls back to a safe normalized rectangle', () {
     final normalized = ObjectImageCropGeometry.normalize(
       Rect.fromLTRB(double.nan, 0, 1, 1),
@@ -101,5 +131,36 @@ void main() {
     expect(changed!.bottom, closeTo(0.82, 0.02));
     expect(changed!.width, lessThan(0.84));
     expect(changed!.height, lessThan(0.84));
+  });
+
+  testWidgets('edge handle resizes only one axis', (tester) async {
+    Rect? changed;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Center(
+          child: SizedBox(
+            width: 200,
+            height: 100,
+            child: ObjectImageCropSelector(
+              onChanged: (value) => changed = value,
+              child: const ColoredBox(color: Colors.grey),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.drag(
+      find.byKey(const ValueKey('object-image-free-crop-handle-right')),
+      const Offset(-20, 20),
+    );
+    await tester.pump();
+
+    expect(changed, isNotNull);
+    expect(changed!.right, closeTo(0.82, 0.02));
+    expect(changed!.top, closeTo(0.08, 0.001));
+    expect(changed!.bottom, closeTo(0.92, 0.001));
+    expect(changed!.height, closeTo(0.84, 0.001));
   });
 }
