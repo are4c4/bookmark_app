@@ -8,9 +8,9 @@ Object/ObjectType architecture, Property value semantics, Object-centric Databas
 ## Active issues
 - #56 — generic Object/Database/View daily-use integration.
 - #155 — reusable Weblink + managed Image presentation and legacy compatibility retirement.
-- #249 — Bookmark Gallery/List parity; one-Person-per-chip and several List-readability slices are merged, Bookmark fixed/masonry remains.
+- #249 — Bookmark Gallery/List parity; one-Person-per-chip and several List-readability slices are merged, Bookmark fixed/masonry and Stage1 host spacing remain.
 - #245 — legacy Photos -> canonical Image Objects; managed import and Photo->Image bridge exist, broader product migration remains.
-- #242 — Vault folders designed but lower priority while presentation parity is actionable.
+- #242 — Vault folders designed but lower priority while presentation/Image parity is actionable.
 
 Completed/closed during current convergence:
 - #247 — Bookmark opening-mode parity; #344 merged and user validated real center-peek behavior.
@@ -19,7 +19,7 @@ Completed/closed during current convergence:
 - #156 — generic fixed/masonry Gallery support is complete/closed.
 
 ## Current merged state — 2026-09-06
-Latest main observed before PR #370 work: `49282154dbc6bc5db5e403d2902fa94d5e0d13fd` (docs refresh #369), with Object #366 immediately before it.
+Latest main observed before PR #379 work: `701a87b491c7b09afb57f8e5cce871555c21d063` after #370/#371/#375.
 
 - canonical Bookmark -> Weblink -> managed Representative Image flows are live;
 - Weblinks / Images / Daily Notes use generic Database/sidebar hosts;
@@ -28,63 +28,69 @@ Latest main observed before PR #370 work: `49282154dbc6bc5db5e403d2902fa94d5e0d1
 - Weblink/Image daily-use defaults, enriched titles, site/favicon/content-type/published-date metadata and clickable URL Properties are integrated;
 - direct Weblink creation performs fail-soft metadata/preview enrichment (#303), with Relation lifecycle coverage #307;
 - Bookmark canonical visual presentation covers Notion card, reverse lookup, lifecycle and Stage1 List/Table (#294/#299/#296/#324);
-- Bookmark canonical URL presentation covers lifecycle, reverse lookup, Notion card, Stage1 and List metadata (#317/#320/#322/#341/#360);
+- Bookmark canonical URL presentation covers lifecycle, reverse lookup, Notion card, Stage1 and List metadata (#317/#320/#322/#341/#360/#371);
 - Bookmark Stage1 honors View opening mode through shared presentation host (#344), real-host validated;
 - Bookmark Property rows use shared deterministic six-dot layout (#348), real-host validated;
 - one semantic chip per Bookmark Person role assignment is merged (#301);
 - shared anchored `PropertyAddPopover` is merged (#346);
 - generic Table and side-detail use the shared anchored add flow (#349);
 - both Bookmark person-role add surfaces reuse the shared popover (#350/#366);
-- Bookmark List metadata is split into secondary metadata and semantic-chip rows (#352);
+- Bookmark List metadata is split into description, compact secondary metadata and semantic-chip rows (#352/#370);
 - Bookmark List semantic chips are width-bounded and long labels ellipsize (#354);
-- Bookmark List URL metadata no longer directly reads legacy `bookmark.url` (#360).
+- Bookmark List URL metadata no longer directly reads legacy `bookmark.url` (#360);
+- generic Image Gallery file resolution now honors profile-relative managed paths (#375).
 
-## Work in progress — PR #370
-Branch: `feature/object-bookmark-list-description-hierarchy-249`
-Latest implementation commit at handoff: `373c1dd6e35efb32b6b4d8323a8cf570aac712e4` before this documentation commit.
+## Work in progress — PR #379
+Branch: `feature/object-image-file-identity-dedupe-245`
+Latest implementation commit: `9292d4433ac1d691de49ed3d0429962f298009e6` before this documentation commit.
 
-PR #370 `Improve Bookmark List description hierarchy`:
-- keeps the existing Bookmark List host and query/opening behavior unchanged;
-- moves visible Bookmark description out of the compact URL/date/history Wrap into its own secondary line;
-- allows description up to two lines with ellipsis so it remains readable without taking over the row;
-- preserves URL/date/rating/history as compact secondary metadata;
-- preserves semantic status/tag/person/favorite chips in their separate row;
-- slightly increases vertical separation before semantic chips;
-- adds widget regression for description -> compact metadata -> chip visual hierarchy and two-line bounding.
+PR #379 `Deduplicate managed Images by stable file identity`:
+- keeps normalized source URL as the preferred Image reuse identity;
+- also treats an exact trimmed managed file path as stable fallback identity even when a later caller presents different provenance;
+- preserves the first non-empty source/file metadata instead of silently replacing provenance;
+- keeps URL query/fragment distinctions meaningful when managed files differ;
+- adds regression coverage proving one managed file cannot fan out into duplicate Image Objects across provenance changes.
 
-This is a focused #249 product-presentation slice in the small `BookmarkListMetadata` component, intentionally avoiding the Stage1 hotspot while CI is pending.
+This directly advances #245 Phase 1/2 duplicate-control requirements without changing Relation behavior, deleting legacy Photo data, or moving files.
+
+Concurrent Object PR #378 `Converge legacy Photo mirrors on canonical Image definition` is also open on a separate non-overlapping branch. It changes `core_object_bridge.dart` / its focused test and reuses `ImageObjectService.ensureDefinition()` instead of maintaining a second partial Image schema. Sequence merges normally; #379 does not edit those files.
 
 ## #245 audit note
-`CoreObjectBridge` already provides the legacy Photo -> Image Object compatibility bridge with `photo_object_links` and the canonical system Image key. Do not build a second bridge. Remaining #245 work is product-semantic convergence: Bookmark cover/image semantics, generic Images parity, Person profile image migration, path/dedup safety where needed, and eventual legacy `写真` caller retirement.
+`CoreObjectBridge` already provides the legacy Photo -> Image Object compatibility bridge with `photo_object_links` and the canonical system Image key. Do not build a second bridge. Remaining #245 work is product-semantic convergence: deterministic reimport/storage identity, Bookmark cover/image semantics, generic Images parity, Person profile image migration, path/dedup safety where needed, and eventual legacy `写真` caller retirement.
+
+`PhotoStorageService.importPaths()` currently copies every selected source to a timestamped managed path before Image creation. Therefore #379 prevents duplicate Objects for the same already-managed file, but re-importing the same external source can still create a new managed copy/path. Treat deterministic reimport as a separate storage/import slice; do not silently change legacy Photo storage semantics without focused tests.
 
 ## Exact next actions
-1. Check PR #370 Flutter CI. If green and current with main, merge it; if main advances with overlapping files, refresh/rebuild rather than force-merging stale work.
-2. Continue #249 with a separate Stage1 List host slice for stable vertical padding/minimum height/title max-lines+ellipsis/trailing alignment after rechecking hotspot ownership.
-3. Continue #249 Bookmark Gallery parity: reuse the existing generic `DatabaseViewGalleryAdapter` / `ObjectGalleryView` fixed/masonry contract and persisted `galleryMode`; do not create Bookmark-only settings.
-4. Add/retain Bookmark real-host/widget regression for fixed/masonry switching and independent per-View persistence.
-5. Reassess #155 acceptance against actual production callers: Stage1 Gallery/List/Table already render through canonical `BookmarkVisualImage`, and URL presentation has converged through #360. Keep compatibility storage/import/export until caller-zero/migration policy is proven.
-6. Continue #245 from the existing Photo -> Image bridge; no destructive Photo table removal.
-7. Defer broad #242 Vault work unless it becomes a direct dependency.
+1. Check #378 and #379 Flutter CI. Merge each only after green/current and recheck base compatibility; they are file-disjoint at this checkpoint.
+2. Continue #245 with a focused deterministic reimport/import-storage identity design and regression. Prefer a content/source-safe policy that does not collapse unrelated files or leak absolute external paths into user-facing metadata.
+3. Continue #249 with a separate Stage1 List host slice for stable vertical padding/minimum height/title max-lines+ellipsis/trailing alignment after rechecking hotspot ownership.
+4. Continue #249 Bookmark Gallery parity: reuse the existing generic `DatabaseViewGalleryAdapter` / `ObjectGalleryView` fixed/masonry contract and persisted `galleryMode`; do not create Bookmark-only settings.
+5. Add/retain Bookmark real-host/widget regression for fixed/masonry switching and independent per-View persistence.
+6. Reassess #155 acceptance against actual production callers; keep compatibility storage/import/export until caller-zero/migration policy is proven.
+7. Continue #245 from the existing Photo -> Image bridge; no destructive Photo table removal.
+8. Defer broad #242 Vault work unless it becomes a direct dependency.
 
 ## Cross-lane coordination
 ### Relation
-Current #249 work is presentation-only. Do not move Relation storage/index/backlink logic into Bookmark widgets. New image/cover Relation production work under #245 must continue using canonical Relation APIs and should request focused Relation-lane lifecycle coverage when it becomes a real new write path.
+Current #245 Image identity work does not add a new Relation-producing workflow. Do not move Relation storage/index/backlink logic into Image services. New Bookmark -> Image or Person -> Image production writes must use canonical Relation APIs and should request focused Relation-lane lifecycle coverage once they become real write paths.
 
 ### Refactor
-At this run's ownership check, the only open PR was docs-only #369, which subsequently merged before #370 opened. No open Refactor production PR owned `bookmark_unified_stage1_page.dart` or `bookmark_list_metadata.dart` at the implementation checkpoint. Recheck live PR ownership immediately before any Stage1 edit because ownership can change between runs. Refactor owns behavior-preserving extraction/deletion after Object parity is proven.
+Open Refactor PRs at this checkpoint are #376/#377 and do not own `image_object_service.dart`, `image_object_service_test.dart`, or `bookmark_unified_stage1_page.dart`. Recheck live PR ownership before Stage1 or storage-service edits because ownership can change between runs. Refactor owns behavior-preserving extraction/deletion after Object parity is proven.
 
 ## Risks / blockers
 - `bookmark_unified_stage1_page.dart` remains a large conflict-prone shared hotspot; keep future changes patch-sized and sequence them after ownership checks;
 - legacy Bookmark URL/thumbnail and Photo storage remain compatibility data until caller-zero/migration policy is proven;
 - identity-sensitive Weblink/Image creation must never fall back to raw title-only creation;
 - ambiguous Relation state must fail closed; presentation must not repair it;
-- Gallery parity should reuse generic persisted `galleryMode` and renderer contracts rather than fork a Bookmark-only variant.
+- Gallery parity should reuse generic persisted `galleryMode` and renderer contracts rather than fork a Bookmark-only variant;
+- timestamped legacy image import paths mean external reimport dedupe is not solved solely by Image Object file-path fallback identity.
 
 ## Validation checkpoint
-- #341/#344/#346/#348/#349/#350/#352/#354/#360/#366 are merged after green Flutter CI.
+- #341/#344/#346/#348/#349/#350/#352/#354/#360/#366/#370/#371/#375 are merged after green Flutter CI.
 - #149/#247 real-host behavior was subsequently validated by the user and both issues are closed.
 - #252 is closed after #366 converged the remaining reorderable person-role add path.
-- PR #370 opened with two product/test files; Flutter CI #1372 was in progress at the latest check.
+- PR #378 Flutter CI #1392 was in progress at the latest check; Analyze had passed and Test was running.
+- PR #379 Flutter CI #1393 was in progress after opening.
 
 ## Stop / continuation condition
-This run has an active safe #249 slice under CI. Do not stop solely because CI is pending: continue with independent audits/documentation or another non-conflicting Object slice. Stop only if the next meaningful implementation requires editing a currently owned shared hotspot, requires unsafe whole-file reconstruction, or external CI/infrastructure becomes the only remaining dependency.
+This run has active safe #245 slices under CI. Do not stop solely because CI is pending: continue with independent audits/documentation or another non-conflicting Object slice. Stop only if the next meaningful implementation requires editing a currently owned shared hotspot, requires unsafe whole-file reconstruction, requires an unresolved product/storage identity decision, or external CI/infrastructure becomes the only remaining dependency.
