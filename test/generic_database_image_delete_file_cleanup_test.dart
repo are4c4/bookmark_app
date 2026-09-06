@@ -1,12 +1,14 @@
 import 'dart:io';
 
 import 'package:bookmark_app/data/app_database.dart';
+import 'package:bookmark_app/data/core_object_bridge.dart';
 import 'package:bookmark_app/data/generic_database_page_services.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
 import 'package:bookmark_app/data/image_object_service.dart';
 import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/object_type_defaults_store.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
+import 'package:bookmark_app/data/tag_object_bridge.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/domain/object_model.dart';
 import 'package:bookmark_app/services/photo_storage_service.dart';
@@ -42,29 +44,29 @@ void main() {
     );
   });
 
-  test('legacy-owned mirrored Image cannot be deleted from generic Images',
+  test('bridge-owned mirrored Image cannot be deleted from generic Images',
       () async {
     final fixture = await _DeleteFixture.create();
     addTearDown(fixture.dispose);
     final managedFile = await fixture.createManagedFile('legacy-owned.png');
     final photoId = await fixture.database.addPhoto(path: managedFile.path);
-    final image = await fixture.images.findOrCreateManaged(
+
+    await fixture.syncLegacyPhotoMirrors();
+
+    final imageType = (await fixture.systemObjects.getSystemObjectType(
       workspaceId: fixture.workspaceId,
-      filePath: managedFile.path,
-      title: 'Legacy mirror',
+      systemKey: CoreObjectBridge.photoSystemKey,
+    ))!;
+    final image = (await fixture.objectStore.listObjects(imageType.id)).single;
+    final legacyPhotoId = imageType.properties.singleWhere(
+      (property) => property.name == 'Legacy Photo ID',
     );
-    final imageType = await fixture.images.ensureDefinition(fixture.workspaceId);
-    final legacyPhotoId = await fixture.ensureLegacyPhotoIdProperty();
-    await fixture.objectStore.setPropertyValue(
-      objectId: image.id,
-      property: legacyPhotoId,
-      value: photoId,
-    );
+    expect(image.values[legacyPhotoId.id], photoId);
 
     await expectLater(
       fixture.services.relationMutations.deleteObject(
         workspaceId: fixture.workspaceId,
-        objectTypeId: imageType.objectType.id,
+        objectTypeId: imageType.id,
         objectId: image.id,
       ),
       throwsA(isA<LegacyOwnedImageDeletionException>()),
@@ -72,7 +74,7 @@ void main() {
 
     expect(await managedFile.exists(), isTrue);
     expect(
-      (await fixture.objectStore.listObjects(imageType.objectType.id))
+      (await fixture.objectStore.listObjects(imageType.id))
           .map((object) => object.id),
       contains(image.id),
     );
@@ -300,6 +302,20 @@ class _DeleteFixture {
       images: images,
       services: services,
     );
+  }
+
+  Future<void> syncLegacyPhotoMirrors() async {
+    final tagBridge = TagObjectBridge(
+      database: database,
+      objectStore: objectStore,
+      systemObjectStore: systemObjects,
+    );
+    await CoreObjectBridge(
+      database: database,
+      objectStore: objectStore,
+      systemObjectStore: systemObjects,
+      tagBridge: tagBridge,
+    ).syncAll(workspaceId);
   }
 
   Future<ObjectPropertyDefinition> ensureLegacyPhotoIdProperty() async {
