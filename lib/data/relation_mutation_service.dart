@@ -195,15 +195,20 @@ class RelationMutationService {
     }
 
     // All pair/property/source validation is completed before the first write.
-    // Apply detachments first so no surviving Object stores a deleted id.
-    for (final plan in plans) {
-      await setRelation(
-        objectId: plan.sourceObjectId,
-        property: plan.property,
-        targetObjectIds: plan.targetObjectIds,
-      );
-    }
-    await objectStore.deleteObject(objectId);
+    // Keep every detach plus the final Object deletion in one outer transaction.
+    // Nested canonical Relation mutations participate in this transaction, so a
+    // late write failure cannot leave earlier backlinks detached while the
+    // target Object survives.
+    await genericStore.database.transaction(() async {
+      for (final plan in plans) {
+        await setRelation(
+          objectId: plan.sourceObjectId,
+          property: plan.property,
+          targetObjectIds: plan.targetObjectIds,
+        );
+      }
+      await objectStore.deleteObject(objectId);
+    });
   }
 
   Future<ObjectPropertyDefinition> _canonicalRelationProperty(
