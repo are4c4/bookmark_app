@@ -1,5 +1,7 @@
+import '../data/file_object_service.dart';
 import '../data/generic_database_store.dart';
 import '../data/object_store.dart';
+import '../data/system_object_store.dart';
 import '../repositories/object_derived_search_text_store.dart';
 import '../repositories/object_search_repository.dart';
 import 'canonical_file_pdf_text_service.dart';
@@ -9,17 +11,20 @@ import 'file_managed_resource_resolver.dart';
 /// canonical File primitive into the canonical Object search row.
 ///
 /// PDF identity and extraction remain owned by the File primitive capability.
-/// Search owns only the replaceable `pdf-text` contribution and the focused FTS
-/// refresh needed to make the current contribution visible without rebuilding
-/// unrelated Objects.
+/// Search owns only the replaceable `pdf-text` contribution plus the focused or
+/// workspace FTS reconciliation needed to expose the current contribution.
 class CanonicalFilePdfSearchIndexer {
   CanonicalFilePdfSearchIndexer({
     required CanonicalFilePdfTextService pdfText,
     required ObjectDerivedSearchTextStore derivedText,
     required ObjectSearchRepository search,
+    required ObjectStore objectStore,
+    required SystemObjectStore systemObjects,
   })  : _pdfText = pdfText,
         _derivedText = derivedText,
-        _search = search;
+        _search = search,
+        _objectStore = objectStore,
+        _systemObjects = systemObjects;
 
   /// Production composition for one profile/database.
   ///
@@ -30,6 +35,10 @@ class CanonicalFilePdfSearchIndexer {
     CanonicalPdfTextReader? readText,
   }) {
     final objectStore = ObjectStore(genericStore);
+    final systemObjects = SystemObjectStore(
+      database: genericStore.database,
+      objectStore: objectStore,
+    );
     return CanonicalFilePdfSearchIndexer(
       pdfText: CanonicalFilePdfTextService(
         resources: FileManagedResourceResolver(
@@ -40,6 +49,8 @@ class CanonicalFilePdfSearchIndexer {
       ),
       derivedText: ObjectDerivedSearchTextStore(genericStore),
       search: ObjectSearchRepository(genericStore),
+      objectStore: objectStore,
+      systemObjects: systemObjects,
     );
   }
 
@@ -48,6 +59,32 @@ class CanonicalFilePdfSearchIndexer {
   final CanonicalFilePdfTextService _pdfText;
   final ObjectDerivedSearchTextStore _derivedText;
   final ObjectSearchRepository _search;
+  final ObjectStore _objectStore;
+  final SystemObjectStore _systemObjects;
+
+  /// Reconciles current PDF-derived text for every canonical File in one
+  /// workspace, then rebuilds that workspace's canonical Object search rows
+  /// once. Non-File ObjectTypes are never sent through the PDF capability.
+  ///
+  /// This is the application-facing rebuild path used by Global Search: opening
+  /// or explicitly refreshing search is sufficient for current PDF text to join
+  /// the same Object index as title, Properties, Body and Relations.
+  Future<void> rebuildWorkspace(int workspaceId) async {
+    final fileType = await _systemObjects.getSystemObjectType(
+      workspaceId: workspaceId,
+      systemKey: FileObjectService.systemKey,
+    );
+    if (fileType != null) {
+      final files = await _objectStore.listObjects(fileType.id);
+      for (final file in files) {
+        await _replaceContribution(
+          fileObjectTypeId: fileType.id,
+          fileObjectId: file.id,
+        );
+      }
+    }
+    await _search.rebuildWorkspace(workspaceId);
+  }
 
   /// Refreshes one canonical File Object's PDF-derived search contribution.
   ///
@@ -56,6 +93,18 @@ class CanonicalFilePdfSearchIndexer {
   /// `pdf-text` contribution is removed before the focused Object refresh so no
   /// stale extracted token remains searchable.
   Future<bool> refresh({
+    required int fileObjectTypeId,
+    required int fileObjectId,
+  }) async {
+    final available = await _replaceContribution(
+      fileObjectTypeId: fileObjectTypeId,
+      fileObjectId: fileObjectId,
+    );
+    await _search.refreshObject(fileObjectId);
+    return available;
+  }
+
+  Future<bool> _replaceContribution({
     required int fileObjectTypeId,
     required int fileObjectId,
   }) async {
@@ -69,7 +118,6 @@ class CanonicalFilePdfSearchIndexer {
         objectId: fileObjectId,
         sourceKey: sourceKey,
       );
-      await _search.refreshObject(fileObjectId);
       return false;
     }
 
@@ -84,7 +132,6 @@ class CanonicalFilePdfSearchIndexer {
       sourceKey: sourceKey,
       text: extracted.text,
     );
-    await _search.refreshObject(fileObjectId);
     return true;
   }
 }
