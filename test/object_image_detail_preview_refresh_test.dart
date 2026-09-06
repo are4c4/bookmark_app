@@ -56,15 +56,26 @@ void main() {
           ),
         );
 
+    Future<void> pumpUntil(bool Function() condition) async {
+      for (var i = 0; i < 50 && !condition(); i++) {
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+      expect(condition(), isTrue);
+    }
+
     await tester.pumpWidget(host(0));
-    await tester.pumpAndSettle();
-    expect(find.text(managedFile.path), findsOneWidget);
+    await pumpUntil(() => find.text(managedFile.path).evaluate().isNotEmpty);
     expect(evicted, isEmpty);
 
     await tester.pumpWidget(host(1));
-    await tester.pumpAndSettle();
+    await pumpUntil(() => evicted.length == 1);
 
     expect(evicted, [managedFile.path]);
     expect(find.text(managedFile.path), findsOneWidget);
+
+    // Unmount the stateful preview before DB/filesystem teardown so no pending
+    // resolver Future can keep the widget test harness alive.
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
   });
 }
