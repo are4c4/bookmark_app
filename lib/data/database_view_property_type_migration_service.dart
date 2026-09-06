@@ -151,7 +151,7 @@ class DatabaseViewPropertyTypeMigrationService {
           id: rawProperty.id,
           databaseId: rawProperty.databaseId,
           name: rawProperty.name,
-          type: nextType.storageType,
+          type: _storageTypeFor(nextType),
           config: _configForNextType(rawProperty.config, nextType),
           sortOrder: rawProperty.sortOrder,
         ),
@@ -161,9 +161,13 @@ class DatabaseViewPropertyTypeMigrationService {
       if (refreshed == null) {
         throw StateError('ObjectType disappeared while applying its type migration.');
       }
-      final migrated = refreshed.properties
-          .where((property) => property.id == propertyId)
-          .firstOrNull;
+      ObjectPropertyDefinition? migrated;
+      for (final candidate in refreshed.properties) {
+        if (candidate.id == propertyId) {
+          migrated = candidate;
+          break;
+        }
+      }
       if (migrated == null || migrated.type != nextType) {
         throw StateError('Property type migration did not persist the requested schema.');
       }
@@ -224,6 +228,20 @@ class DatabaseViewPropertyTypeMigrationService {
     }
     return normalizedChoice;
   }
+
+  String _storageTypeFor(ObjectPropertyType type) => switch (type) {
+        ObjectPropertyType.text => 'text',
+        ObjectPropertyType.number => 'number',
+        ObjectPropertyType.checkbox => 'checkbox',
+        ObjectPropertyType.date => 'date',
+        ObjectPropertyType.url => 'url',
+        ObjectPropertyType.select => 'select',
+        ObjectPropertyType.multiSelect => 'multiSelect',
+        ObjectPropertyType.rating => 'rating',
+        _ => throw StateError(
+            'Only user-editable Value Property types can be persisted by this migration path.',
+          ),
+      };
 
   Map<String, dynamic> _configForNextType(
     Map<String, dynamic> current,
