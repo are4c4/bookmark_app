@@ -23,11 +23,9 @@ enum BacklinkDirection { outgoing, incoming }
 /// Existing rows remain directional in storage. This repository exposes both
 /// outgoing links and incoming backlinks without duplicating relation rows.
 class BacklinkRepository {
-  BacklinkRepository(this._root)
-      : _database = _root.lifecycleStore.database;
+  BacklinkRepository(this._root);
 
   final BookmarkRepository _root;
-  final AppDatabase _database;
 
   static List<BacklinkEntry> buildEntries({
     required int bookmarkId,
@@ -72,16 +70,11 @@ class BacklinkRepository {
   }
 
   Stream<List<BacklinkEntry>> watchFor(int bookmarkId) {
-    return _database.select(_database.bookmarkRelations).watch().asyncMap((relations) async {
-      final relevantRelations = relations.where(
-        (relation) =>
-            relation.sourceBookmarkId == bookmarkId ||
-            relation.targetBookmarkId == bookmarkId,
-      );
+    return _root.watchRelationsForBookmark(bookmarkId).asyncMap((relations) async {
       final bookmarks = await _root.watchAll().first;
       return buildEntries(
         bookmarkId: bookmarkId,
-        relations: relevantRelations,
+        relations: relations,
         bookmarks: bookmarks,
       );
     });
