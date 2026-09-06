@@ -8,20 +8,15 @@ Issue #225 — reduce maintenance hotspots and retire duplicate legacy paths whi
 Primary lane: **Refactor**. Object owns replacement product semantics and Relation owns canonical Relation semantics. Refactor owns responsibility reduction, legacy retirement after parity, failure-policy/privacy cleanup, and maintainability guardrails.
 
 ## Current checkpoint — 2026-09-06
-Latest `main` observed: `fb585376189d1303c8d8b8ef25cb1d16228df125` after Object #366.
+Latest `main` observed: `25c9618c8a957aff771fd3c864be15a57e6ba339` after Object #381.
 
-The stale Refactor failure-boundary backlog has been converged and merged without force-merging outdated branches:
+Recent Refactor work:
+- **#369 merged** — repository/refactor handoff refresh after failure-policy convergence.
+- **#377 merged** — `tool/maintainability_report.sh` now reports presentation `workspaceStore.database` reach-through so dependency-boundary debt is measurable instead of anecdotal.
+- **#383 open** — centralizes duplicate fail-soft `bookmark_object_links` compatibility reads from Bookmark URL/visual resolvers behind `BookmarkObjectLinkReadStore`; stale predecessor #376 was closed. CI #1406 was cancelled while `main` advanced, so re-check/re-run only after current mergeability is verified.
+- **#385 open** — reverse-lookup URL presentation now reuses the existing `BookmarkPresentationResolverFactory` rather than constructing `BookmarkUrlResolver` from `repository.workspaceStore.database`. The regression extends the existing composition guard to this host. This removes one presentation database reach-through reference/file without adding a new abstraction. The immediately stale predecessor #384 was closed and the same two-file diff was rebuilt on Object #381 main.
 
-- **#351 merged** — Board create rollback cleanup cannot replace the original grouped-preset/create failure.
-- **#358 merged** — Image import rollback cleanup cannot replace the original canonical Image creation/import failure.
-- **#362 merged** — Profile restore/import cleanup preserves the primary restore failure when partial-target cleanup also fails.
-- **#363 merged** — `ProfileManager` fail-soft diagnostics no longer interpolate raw exception text; fallback/recovery behavior is unchanged.
-- **#364 merged** — attachment import failure uses a stable retry message and privacy-safe debug diagnostics; optional PDF author enrichment remains best-effort. This superseded #336 and removed the old public test-only seams that caused repeated Widget/Drift lifecycle hangs.
-- **#368 merged** — bootstrap/Profile-switch remains fail-closed, but fatal UI no longer renders raw implementation exceptions; fixed debug operation labels + stack traces preserve observability without Profile/path/exception text. Full Flutter CI #1367 succeeded.
-
-Stale predecessors #336/#355/#357/#365 were closed rather than force-merged. #364 and #368 were rebuilt directly on current main and validated there.
-
-Object #366 subsequently merged as `fb585376189d1303c8d8b8ef25cb1d16228df125`, converging the remaining `BookmarkReorderableProperties` person-role add flow onto the shared Property popover. There is currently **no open production PR** observed at this checkpoint.
+Object lane is moving quickly through Image identity/import convergence (#378–#382), so Refactor must keep rebuilding only narrow intended diffs on latest main rather than force-merging stale ancestry.
 
 ## Major completed checkpoints
 
@@ -56,24 +51,20 @@ Original direct visual duplicates are canonicalized through `BookmarkVisualImage
 - lifecycle rows Object #296;
 - Stage1 List/Table #324.
 
-Object-first URL presentation has advanced well beyond the old #322 checkpoint:
-- lifecycle #317;
-- reverse lookup #320;
-- Notion card #322;
-- Stage1 #341;
-- Bookmark List metadata no longer reads legacy URL directly #360.
+Object-first URL presentation has advanced through lifecycle #317, reverse lookup #320, Notion card #322, Stage1 #341 and Bookmark List metadata #360.
 
-Legacy `bookmarks.url` remains compatibility/import/export data. Presentation progress does **not** prove storage caller-zero; deletion still requires a fresh production audit and migration policy.
+Legacy `bookmarks.url`, Photo and thumbnail storage remain compatibility/import/export/live-host data. Presentation progress does **not** prove caller-zero; deletion still requires a fresh production audit and migration policy.
 
-### GenericDatabasePage decomposition
+### GenericDatabasePage decomposition / dependency composition
 Merged focused slices:
 - #310 `GenericDatabasePageStateLoader` owns read/projection loading and computed projection;
-- #323 `GenericDatabasePageServices.fromWorkspaceStore(...)` owns the low-level Store/Service composition graph.
+- #323 `GenericDatabasePageServices.fromWorkspaceStore(...)` owns the low-level Store/Service composition graph;
+- #377 makes remaining presentation-to-database reach-through countable.
 
-Continue only through patch-sized moves that measurably remove Widget responsibility/LOC. Do not reconstruct the large host wholesale.
+Continue only through patch-sized moves that measurably remove Widget responsibility/LOC or direct persistence composition. Do not reconstruct the large host wholesale.
 
 ### Failure policy / diagnostic privacy
-Merged work now covers PDF enrichment/metadata, remote image geometry, Weblink metadata, malformed View/tag/generic Object JSON, computed projection, ObjectSync preview ingestion, GlobalSearch, Settings operations, Board/Image/Profile rollback cleanup, ProfileManager fallback diagnostics, attachment import/enrichment, and bootstrap/Profile-switch failure UI.
+Merged work covers PDF enrichment/metadata, remote image geometry, Weblink metadata, malformed View/tag/generic Object JSON, computed projection, ObjectSync preview ingestion, GlobalSearch, Settings operations, Board/Image/Profile rollback cleanup, ProfileManager fallback diagnostics, attachment import/enrichment, and bootstrap/Profile-switch failure UI.
 
 Policy:
 - intentional fail-soft behavior stays fail-soft;
@@ -85,18 +76,23 @@ Policy:
 ## Cross-lane coordination
 
 ### Object lane
-Object owns #56/#155/#149/#245/#249/#252 product/presentation convergence. #366 is now merged, so its specific ownership block is cleared; still re-check open PRs before touching Bookmark/generic hosts because Object advances quickly.
+Object owns #56/#155/#245/#249/#252 product/presentation convergence. Current open Object PRs include #382 (canonical Image reimport/file reuse); #381 merged while this run was active. Re-check all open PRs before touching shared Bookmark/generic/Image hosts.
 
 ### Relation lane
-Canonical Relation mutation/read/index/backlink/audit/reconcile remains mature. Relation handoff was refreshed in #367. Refactor must not create alternate serialized-id Relation writes, indexes, repair paths, or presentation-side mutation.
+Canonical Relation mutation/read/index/backlink/audit/reconcile remains mature. Refactor must not create alternate serialized-id Relation writes, indexes, repair paths, or presentation-side mutation.
+
+## Validation / CI state
+- #383 is mergeable on its recorded base, but Flutter CI #1406 was cancelled while `main` advanced; treat it as needing a fresh live-state check before merge/re-run.
+- #385 has a focused source-level architecture regression in `test/bookmark_presentation_resolver_composition_test.dart`; full Flutter CI should be required before merge.
+- No local toolchain validation was available in this connector-only run, so GitHub CI is authoritative for these open branches.
 
 ## Exact next actions
-1. **Do not immediately create another micro logging PR.** The recent failure-policy sequence is sufficiently broad; prefer measurable responsibility/LOC reduction next.
-2. Re-check all open PR ownership immediately before touching shared hosts.
-3. Continue GenericDatabasePage P1 only when a safe patch-sized extraction removes a concrete responsibility such as schema/database actions, Property workflow orchestration, or layout host logic.
-4. Re-audit remaining raw user-visible exception interpolation outside shared hotspots; choose only small files that can be edited/tested deterministically.
-5. Follow Object-first legacy retirement: re-run production searches before deleting any direct Bookmark URL/thumbnail/Photo dependency; compatibility/import/export data stays until caller-zero and migration policy are proven.
-6. Re-run `tool/maintainability_report.sh` after another meaningful responsibility extraction and record actual file/LOC movement rather than adapter count.
+1. Re-check current `main`, open Object PR ownership and #383/#385 mergeability before any write.
+2. If #383 remains the intended four-file diff, refresh/re-run it on current main rather than force-merging stale ancestry; merge only after green CI.
+3. Do the same for #385; expected behavioral contract is unchanged `resolveUrl` injection and URL/opening behavior with one less direct presentation database reach-through.
+4. Continue the #377 metric-driven dependency-composition cleanup using **existing** boundaries first. Small candidates include remaining Bookmark presentation hosts that still construct canonical resolvers directly. Avoid wrapper-only abstractions.
+5. Continue GenericDatabasePage P1 only when no Object PR owns it and a patch-sized extraction removes a concrete responsibility such as schema/database actions, Property workflow orchestration, or layout host logic.
+6. Follow Object-first legacy retirement: re-run production searches before deleting any Bookmark URL/thumbnail/Photo dependency; compatibility/import/export/backup data stays until caller-zero and migration policy are proven.
 7. Keep ProfileManager recovery-selection behavior deferred unless there is an explicit product/data-recovery decision.
 
 ## Validation expectations
@@ -113,4 +109,4 @@ Canonical Relation mutation/read/index/backlink/audit/reconcile remains mature. 
 - abstractions that add wrappers without removing responsibility should be rejected.
 
 ## Stop / continuation state
-The stale failure-boundary backlog has been converged and merged through #368 with full CI on the final branches, and Object #366 has also landed. Refactor is actionable, but the next useful slice should be a **measurable hotspot responsibility extraction or a genuinely unsafe remaining boundary**, not another speculative abstraction or logging-only cleanup.
+Refactor remains actionable. This run completed stale-PR cleanup and opened a measurable dependency-boundary reduction (#385) while #383 remains an independent duplicate-read-path consolidation. Further work should continue after live PR/main refresh; do not treat pending CI alone as a stopping reason when another non-conflicting patch-sized boundary reduction exists.
