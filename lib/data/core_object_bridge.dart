@@ -182,6 +182,7 @@ class CoreObjectBridge {
     final legacyId = _property(photoType, 'Legacy Photo ID');
     final file = _property(photoType, 'File');
     final note = _property(photoType, 'Note');
+    final originalFilename = _property(photoType, 'Original filename');
     final legacyTags = _property(photoType, 'Legacy Tags');
 
     for (final photo in photos) {
@@ -200,6 +201,11 @@ class CoreObjectBridge {
       await objectStore.setPropertyValue(objectId: objectId, property: legacyId, value: photo.id);
       await objectStore.setPropertyValue(objectId: objectId, property: file, value: photo.path);
       await objectStore.setPropertyValue(objectId: objectId, property: note, value: photo.note);
+      await objectStore.setPropertyValue(
+        objectId: objectId,
+        property: originalFilename,
+        value: _fileName(photo.path),
+      );
       await objectStore.setPropertyValue(objectId: objectId, property: legacyTags, value: photo.tags);
     }
 
@@ -299,6 +305,12 @@ class CoreObjectBridge {
 
   ObjectPropertyDefinition _property(AppObjectType type, String name) =>
       type.properties.firstWhere((property) => property.name == name);
+
+  String _fileName(String path) {
+    final normalized = path.replaceAll('\\', '/');
+    final slash = normalized.lastIndexOf('/');
+    return slash < 0 ? normalized : normalized.substring(slash + 1);
+  }
 
   Future<void> _removeOrphanObjects({
     required int workspaceId,
