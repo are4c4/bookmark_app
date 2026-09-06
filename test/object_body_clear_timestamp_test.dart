@@ -48,7 +48,7 @@ void main() {
     expect((await bodyStore.read(objectId)).isEmpty, isTrue);
     final row = await database.customSelect(
       'SELECT updated_at FROM generic_records WHERE id = ?',
-      variables: <Variable<Object>>[Variable<int>(objectId)],
+      variables: [Variable<int>(objectId)],
     ).getSingle();
     expect(row.read<String>('updated_at'), isNot(staleTimestamp));
   });
@@ -80,7 +80,7 @@ void main() {
 
     final row = await database.customSelect(
       'SELECT updated_at FROM generic_records WHERE id = ?',
-      variables: <Variable<Object>>[Variable<int>(objectId)],
+      variables: [Variable<int>(objectId)],
     ).getSingle();
     expect(row.read<String>('updated_at'), staleTimestamp);
   });
