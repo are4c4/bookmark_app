@@ -59,7 +59,7 @@ class BookmarkMetadataService {
       final resourceUri = response.request?.url ?? uri;
 
       if (response.statusCode < 200 || response.statusCode >= 400) {
-        return _fallback(resourceUri);
+        return _fallback(uri);
       }
 
       final document = html_parser.parse(response.body);
@@ -91,7 +91,11 @@ class BookmarkMetadataService {
       );
 
       return BookmarkMetadata(
-        url: resourceUri.toString(),
+        // Metadata retrieval may follow redirects, but the URL returned here is
+        // also used as Bookmark/Weblink creation identity. Keep that identity
+        // anchored to the requested URL; use the final response URL only as the
+        // base for resource-relative enrichment below.
+        url: uri.toString(),
         title: _firstNonEmpty([
               ogTitle,
               twitterTitle,
