@@ -191,6 +191,7 @@ class _MetaChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Container(
+      constraints: const BoxConstraints(maxWidth: 190),
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHighest,
@@ -201,7 +202,14 @@ class _MetaChip extends StatelessWidget {
         children: [
           Icon(icon, size: 12.5, color: scheme.onSurfaceVariant),
           const SizedBox(width: 4),
-          Text(label, style: const TextStyle(fontSize: 11.5)),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 11.5),
+            ),
+          ),
         ],
       ),
     );
