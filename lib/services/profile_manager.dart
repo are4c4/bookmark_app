@@ -71,11 +71,10 @@ class ProfileManager {
 
   static void _debugFallbackFailure(
     String operation,
-    Object error,
     StackTrace stackTrace,
   ) {
     assert(() {
-      stderr.writeln('ProfileManager: $operation failed; using fallback: $error');
+      stderr.writeln('ProfileManager: $operation failed; using fallback.');
       stderr.writeln(stackTrace);
       return true;
     }());
@@ -130,11 +129,12 @@ class ProfileManager {
             ? requestedActive
             : profiles.first.id;
         state = ProfileState(profiles: profiles, activeProfileId: active);
-      } catch (error, stackTrace) {
-        // Existing installations intentionally fail soft to the default profile,
-        // but preserve the cause in debug/assert builds so corrupt profile
-        // metadata or data-location regressions are not completely silent.
-        _debugFallbackFailure('profile state load', error, stackTrace);
+      } catch (_, stackTrace) {
+        // Existing installations intentionally fail soft to the default profile.
+        // Keep that recovery contract unchanged while exposing only a fixed
+        // operation label + stack so malformed persisted content cannot be
+        // echoed into debug diagnostics through exception text.
+        _debugFallbackFailure('profile state load', stackTrace);
         state = ProfileState(
           profiles: [
             DatabaseProfile(
@@ -329,11 +329,11 @@ class ProfileManager {
               Map<String, Object?>.from(raw),
             );
           }
-        } catch (error, stackTrace) {
+        } catch (_, stackTrace) {
           // Backup metadata is advisory for path rewriting. The restored profile
           // remains usable without it, so keep the import best-effort while
-          // exposing malformed metadata during development.
-          _debugFallbackFailure('imported profile metadata read', error, stackTrace);
+          // exposing only the fixed operation + stack in debug/assert builds.
+          _debugFallbackFailure('imported profile metadata read', stackTrace);
           sourceProfile = null;
         }
       }
