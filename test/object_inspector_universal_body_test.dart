@@ -6,7 +6,6 @@ import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
 import 'package:bookmark_app/data/weblink_object_service.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
-import 'package:bookmark_app/domain/object_body.dart';
 import 'package:bookmark_app/domain/object_body_block_contracts.dart';
 import 'package:bookmark_app/views/object_inspector_page.dart';
 import 'package:drift/native.dart';
