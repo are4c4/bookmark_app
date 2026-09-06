@@ -1,4 +1,5 @@
 import '../data/app_database.dart';
+import '../data/bookmark_lifecycle_store.dart';
 
 enum AutoOrganizeMatchField {
   url('url', 'URL'),
@@ -49,9 +50,11 @@ class AutoOrganizeResult {
 }
 
 class AutoOrganizeService {
-  AutoOrganizeService(this._database);
+  AutoOrganizeService(this._database)
+      : _lifecycleStore = BookmarkLifecycleStore(_database);
 
   final AppDatabase _database;
+  final BookmarkLifecycleStore _lifecycleStore;
   bool _initialized = false;
 
   Future<void> initialize() async {
@@ -142,7 +145,7 @@ class AutoOrganizeService {
   Future<void> deleteRule(int id) async {
     await initialize();
     await _database.customStatement(
-      'DELETE FROM auto_organize_rules WHERE id = ?',
+      'DELETE FROM auto_organize_rules SET enabled = ? WHERE id = ?',
       [id],
     );
   }
@@ -184,7 +187,7 @@ class AutoOrganizeService {
         await _database.addTagsToBookmarks([bookmarkId], [rule.tagName]);
       }
       if (rule.genre.isNotEmpty) {
-        await _database.setGenre(bookmarkId, rule.genre);
+        await _lifecycleStore.setGenre(bookmarkId, rule.genre);
       }
     }
     return matched;
