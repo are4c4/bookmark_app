@@ -8,7 +8,7 @@ Issue #225 — reduce maintenance hotspots and retire duplicate legacy paths whi
 Primary lane: **Refactor**. Object owns replacement product semantics and Relation owns canonical Relation semantics. Refactor owns measurable responsibility reduction, legacy retirement after parity, failure-policy/privacy cleanup, and maintainability guardrails.
 
 ## Current checkpoint — 2026-09-06
-Latest `main` verified in this checkpoint: **`ea73825855756cf26dc50e0ad97861ac204d5656`** after Refactor #427.
+Latest `main` verified in this checkpoint: **`8355c86e8d18804a61661df5055156615120f724`** after Refactor #422.
 
 Recent Refactor convergence:
 - **#373 merged** — Bookmark visual/lifecycle URL presentation delegates low-level resolver composition to `BookmarkPresentationResolverFactory`.
@@ -23,19 +23,13 @@ Recent Refactor convergence:
 - **#408 merged** — `BacklinkRepository` delegates focused relation reads through `BookmarkRepository.watchRelationsForBookmark(...)` instead of reaching through to `AppDatabase` and watching the whole legacy relation table.
 - **#417 merged** — retired caller-zero `saved_view_extensions.dart` and its dead-API-only regression: 25 production LOC + 59 test LOC removed, no replacement wrapper added.
 - **#422 merged** — deduplicated complete Bookmark -> FTS projection SQL behind one private insert implementation shared by rebuild and focused refresh. Flutter CI #1503 Analyze/Test green.
-- **#427 merged** — retired caller-zero Database collection View projector after current-source audit; no replacement abstraction.
 
 During #410/#422 validation, a possible pre-existing focused-refresh stale-token behavior was observed. It was deliberately kept out of behavior-preserving Refactor work and is tracked separately as **Issue #414**. Do not silently turn that correctness question into a Refactor semantic change.
 
-Current work in progress:
-- **Refactor #429 became stale/non-mergeable after #427** despite Flutter CI #1519 green. Do not force merge it.
-- **Current replacement branch `refactor/issue-225-retire-unused-daily-note-detail-service-v3`** is rebuilt directly from `ea738258...` and deletes caller-zero `DailyNoteDetailService` plus its dead-only test: 36 production LOC + 58 test LOC, 94 total, with no replacement abstraction.
-- current-source search before rebuilding found `DailyNoteDetailService` only in its own production file and dedicated test; active Daily Note navigation remains on `DailyNoteDetailNavigationService` / shared Object detail paths.
-
 Current parallel ownership at this checkpoint:
-- **Object #428 open** — handoff-only refresh after Image deletion work; no production overlap with the Daily Note caller-zero deletion.
-- **Relation #420 open** — handoff-only and stale/non-mergeable; Refactor must not redesign canonical Relation semantics.
-- avoid shared Object/Image deletion paths while Object work advances.
+- **Object #423 open** — generic Image deletion guard for legacy-owned mirrors; avoid overlapping Image/Object deletion paths.
+- **Relation #420 open** — handoff-only and currently stale/non-mergeable; Refactor must not redesign canonical Relation semantics.
+- no open Refactor production PR remains after #422 at the time of this checkpoint.
 
 ## Major completed checkpoints
 
@@ -66,7 +60,7 @@ All four originally inventoried direct Bookmark visual duplicates are canonicali
 
 #401 still prevents new direct URL/visual resolver construction in presentation. Remaining allowlisted direct construction must be re-audited from current source before editing; do not relax the guard for new callers.
 
-#417 is a recent whole-module caller-zero retirement: `saved_view_extensions.dart` is deleted instead of retained as a speculative compatibility wrapper. #427 continues the same deletion-first pattern for an unused Database collection View projector.
+#417 is the first recent whole-module caller-zero retirement: `saved_view_extensions.dart` is deleted instead of retained as a speculative compatibility wrapper.
 
 Legacy `bookmarks.url`, thumbnail, Photo and Bookmark tables remain live compatibility/import/export data until production caller-zero and migration/backup policy are proven. Presentation convergence alone is not permission to delete storage.
 
@@ -104,23 +98,22 @@ Attachment presentation still constructs `BookmarkAttachmentStore` in multiple h
 ## Cross-lane coordination
 
 ### Object lane
-Object owns #56/#155/#245/#249 product/presentation convergence. Re-check live PRs before touching Bookmark/generic/media hosts because Object advances quickly. Current Object work is Image/product convergence; avoid overlapping deletion/media paths.
+Object owns #56/#155/#245/#249 product/presentation convergence. Re-check live PRs before touching Bookmark/generic/media hosts because Object advances quickly. At this checkpoint #423 owns legacy-mirrored Image deletion safety.
 
 ### Relation lane
 Canonical Relation mutation/read/index/backlink/audit/reconcile remains mature. Refactor may narrow legacy Bookmark callers (as #408 did) but must not create alternate serialized-id Relation writes, indexes, repair paths or presentation-side mutation.
 
 ## Exact next actions
-1. Open/validate the latest-main replacement PR for the Daily Note caller-zero deletion; merge only after current-head CI is green and mergeable.
-2. Re-read live open PR ownership before every shared-host change.
-3. Prefer the next **measurable responsibility/LOC reduction or caller-zero deletion** over another diagnostic micro-PR.
-4. Re-audit small compatibility modules for true production caller-zero; delete only when tests/import/export/migration expectations are independently covered.
-5. Continue reducing presentation `workspaceStore.database` reach-through only in small/owned hosts with an existing meaningful Store/Service boundary. Do not mass-wrap occurrences.
-6. Continue GenericDatabasePage P1 only when a safe extraction removes concrete schema/database action, Property workflow or layout-host responsibility.
-7. Revisit `BookmarkStateMutationStore` only when `app_database.dart` can be patched safely without whole-file reconstruction.
-8. Follow Object-first storage retirement: prove production caller-zero plus import/export/backup handling before deleting Bookmark URL/thumbnail/Photo storage.
-9. Keep ProfileManager recovery-selection behavior deferred unless there is an explicit product/data-recovery decision.
-10. Treat Issue #414 as separate search correctness work, not behavior-preserving cleanup.
-11. Issue #225 checklist is historically stale. Update it only in a dedicated admin pass that preserves concurrent issue edits; do not replace the large body opportunistically from a feature branch.
+1. Re-read live open PR ownership before every shared-host change.
+2. Prefer the next **measurable responsibility/LOC reduction or caller-zero deletion** over another diagnostic micro-PR.
+3. Re-audit small compatibility modules for true production caller-zero; delete only when tests/import/export/migration expectations are independently covered.
+4. Continue reducing presentation `workspaceStore.database` reach-through only in small/owned hosts with an existing meaningful Store/Service boundary. Do not mass-wrap occurrences.
+5. Continue GenericDatabasePage P1 only when a safe extraction removes concrete schema/database action, Property workflow or layout-host responsibility.
+6. Revisit `BookmarkStateMutationStore` only when `app_database.dart` can be patched safely without whole-file reconstruction.
+7. Follow Object-first storage retirement: prove production caller-zero plus import/export/backup handling before deleting Bookmark URL/thumbnail/Photo storage.
+8. Keep ProfileManager recovery-selection behavior deferred unless there is an explicit product/data-recovery decision.
+9. Treat Issue #414 as separate search correctness work, not behavior-preserving cleanup.
+10. Issue #225 checklist is historically stale. Update it only in a dedicated admin pass that preserves concurrent issue edits; do not replace the large body opportunistically from a feature branch.
 
 ## Validation expectations
 - responsibility moves: focused regression + `flutter analyze` + full tests before merge;
@@ -139,4 +132,4 @@ Canonical Relation mutation/read/index/backlink/audit/reconcile remains mature. 
 - abstractions that add wrappers without removing responsibility should be rejected.
 
 ## Stop / continuation state
-Refactor remains actionable. Current safe slice is the latest-main Daily Note caller-zero retirement. After its CI/mergeability settles, continue auditing small compatibility modules for deletion-first reductions while avoiding Object-owned media/deletion paths and canonical Relation redesign.
+Refactor remains actionable. The recent sequence has moved from privacy micro-fixes back to responsibility reduction: #408 narrowed a read boundary, #417 deleted caller-zero code, and #422 removed duplicate FTS projection ownership. Continue in that direction while avoiding Object #423 and canonical Relation redesign.
