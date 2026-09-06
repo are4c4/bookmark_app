@@ -18,7 +18,9 @@ Issue #225 requires reducing silent failure without breaking intentional best-ef
 | `lib/widgets/bookmark_attachment_section.dart` | attachment import is user-visible; PDF author creation is optional after bookmark metadata update | user-visible failure + best-effort enrichment | #364 replaced raw import exception interpolation with a stable retry message, added fixed operation + stack diagnostics, and kept author creation non-blocking/privacy-safe. The replacement deliberately avoided the public test-only seams from stale #336. |
 | `lib/services/pdf_metadata_service.dart` | broad catch returns filename/title fallback | fallback is the contract | #274 keeps fallback and removes path/content from diagnostics. Keep non-blocking metadata behavior. |
 | `lib/services/bookmark_metadata_service.dart` | broad catch returns metadata fallback | fallback is the contract | #279 keeps external-input fallback while avoiding URL/response/exception-text logging. |
-| `lib/services/remote_image_storage_service.dart` | image geometry/decode failure does not invalidate stored media | best-effort enrichment | #237 makes geometry failure observable while preserving storage success. |
+| `lib/services/remote_image_storage_service.dart` | image geometry/decode failure does not invalidate stored media | best-effort enrichment | #237 makes geometry failure observable while preserving storage success; #404 keeps the fixed message + stack while removing the raw decode exception object. Existing behavior coverage proves undecodable bytes still import successfully without geometry. |
+| `lib/services/weblink_create_enrichment_service.dart` | metadata fetch/persistence/preview enrichment occurs only after canonical Weblink identity is valid | best-effort enrichment | #393 preserves optional enrichment semantics while using fixed stage labels + stack traces and no raw exception object/request content. |
+| `lib/data/generic_database_object_create_service.dart` | optional post-create Weblink enrichment runs after canonical Weblink creation | best-effort enrichment | #406 removes the raw exception object from debug diagnostics and adds a real regression proving an enrichment exception does not roll back the canonical Weblink. Fixed operation message + stack only. |
 | `lib/services/object_sync_service.dart` | optional remote preview ingestion/schema setup must not block canonical Bookmark→Weblink sync | best-effort enrichment | #327 keeps canonical sync/startup and no-repeat retry policy unchanged while adding privacy-safe debug stack diagnostics for ingestion/setup failures. |
 | `lib/services/bookmark_visual_resolver.dart` | compatibility read/file checks fall back when Object mirroring/media is unavailable | fallback is the contract / compatibility bridge | Keep while Bookmark compatibility hosts remain; do not turn missing legacy/canonical media into user-visible failure. |
 | `lib/services/weblink_visual_resolver.dart` | missing/unreadable managed media returns no visual | fallback is the contract | Keep read-only visual resolution fail-soft; file-existence failure is a normal fallback, not a logging target. |
@@ -31,7 +33,7 @@ Issue #225 requires reducing silent failure without breaking intentional best-ef
 | `lib/services/profile_backup_service.dart` | restore/import failure cleans partial target | rollback / fail-closed | #362 preserves the primary restore/import failure when target cleanup also fails; cleanup remains best-effort and privacy-safe. |
 | `lib/services/profile_manager.dart` | corrupt registry can fail soft to default Profile; imported metadata is advisory | fallback is the contract, **higher risk** | #363 removes raw exception interpolation from fallback diagnostics while leaving selection/recovery semantics unchanged. Changing which Profile/data location is selected still requires explicit product/data-safety policy. |
 | `lib/views/global_search_page.dart` | search/index failures use a stable retry-oriented state | user-visible failure | #331 replaced raw caught-Object rendering while preserving rebuild retry behavior. |
-| `lib/views/settings_page.dart` | backup/settings operation failures use stable messages | user-visible failure | #332/#333/#335 cover backup, AutoOrganize, and malformed View-opening settings without exposing implementation details. |
+| `lib/views/settings_page.dart` / backup section | backup/settings operation failures use stable messages | user-visible failure | #332/#333/#335 stabilize backup, AutoOrganize and malformed View-opening settings; #374 extracts backup workflow and #400 moves database composition behind `DatabaseBackupService.fromRepository(...)` without changing error behavior. |
 | `lib/main.dart` | bootstrap/Profile-switch failure remains fail-closed; rollback to previous Profile is preserved | user-visible / fail-closed initialization | #368 replaced raw fatal-screen exception interpolation with one stable retry-oriented message and fixed debug operation labels + stack traces. Original error state and rollback semantics remain unchanged; Profile/path/exception text is not logged. |
 
 ## Current policy
@@ -45,12 +47,14 @@ Issue #225 requires reducing silent failure without breaking intentional best-ef
 
 ## Refactor order
 
-The highest-value known silent/privacy boundaries have largely been covered. New failure-policy work should therefore be selective:
+The highest-value small silent/privacy boundaries have largely been covered. New failure-policy work should therefore be selective:
 
-1. remaining raw user-visible implementation exception interpolation in small, independently testable hosts;
-2. repeated exception parsing that can be replaced by a real typed/domain boundary and delete caller duplication;
-3. genuinely silent failures that can hide corruption while the product safely continues;
-4. otherwise prefer measurable responsibility/LOC reduction over another micro logging PR.
+1. prefer measurable responsibility/LOC reduction or real legacy caller retirement over another isolated logging PR;
+2. fix remaining raw user-visible implementation exception interpolation when it is in a small, independently testable/owned host;
+3. replace repeated exception parsing only when a real typed/domain boundary deletes caller duplication;
+4. address genuinely silent failures when they can hide corruption while the product safely continues.
+
+Current raw user-visible exception interpolation is concentrated in large/shared legacy hosts such as Photo management, Tag management and Stage1. Do not rewrite those hosts merely to remove one string. Handle the error boundary when a safe, focused host slice already owns the file and can add a real regression.
 
 ## Diagnostic privacy rule
 
