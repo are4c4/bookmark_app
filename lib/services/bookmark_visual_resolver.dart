@@ -5,12 +5,15 @@ import '../data/bookmark_object_link_read_store.dart';
 import '../data/bookmark_weblink_object_bridge.dart';
 import '../data/core_object_bridge.dart';
 import '../data/generic_database_store.dart';
+import '../data/image_object_service.dart';
 import '../data/object_store.dart';
 import '../data/relation_read_service.dart';
 import '../data/system_object_store.dart';
+import 'image_visual_resolver.dart';
 import 'weblink_visual_resolver.dart';
 
 enum BookmarkVisualSourceKind {
+  canonicalCover,
   userCover,
   managedRepresentative,
   legacyRemote,
@@ -27,10 +30,15 @@ class BookmarkVisualSource {
 
 /// Resolves the best visual source for a legacy Bookmark presentation.
 ///
-/// Priority intentionally preserves explicit user choice first, then follows
-/// the canonical Bookmark -> Weblink -> Representative image Relation chain,
-/// and finally falls back to the legacy remote thumbnail while old hosts still
-/// depend on it.
+/// The canonical Bookmark -> Cover Image Relation represents explicit user
+/// cover intent and is preferred first. The legacy Photo cover stays as a safe
+/// compatibility fallback while migration is in progress, followed by the
+/// canonical Bookmark -> Weblink -> Representative image Relation chain and,
+/// finally, the legacy remote thumbnail.
+///
+/// This is a read-only presentation boundary: missing, ambiguous or malformed
+/// Relation state fails closed to the next compatibility source and is never
+/// repaired from presentation.
 class BookmarkVisualResolver {
   BookmarkVisualResolver({
     required this.database,
@@ -42,9 +50,18 @@ class BookmarkVisualResolver {
       objectStore: _objectStore,
     );
     _relationReads = RelationReadService(_objectStore);
-    _weblinkVisuals = WeblinkVisualResolver(_objectStore);
+    _imageVisuals = ImageVisualResolver(
+      _objectStore,
+      pathResolver: database.pathResolver,
+    );
+    _weblinkVisuals = WeblinkVisualResolver(
+      _objectStore,
+      pathResolver: database.pathResolver,
+    );
     _bookmarkLinks = BookmarkObjectLinkReadStore(database);
   }
+
+  static const _coverImageRelationName = 'Cover Image';
 
   final AppDatabase database;
   final int workspaceId;
@@ -52,14 +69,24 @@ class BookmarkVisualResolver {
   late final ObjectStore _objectStore;
   late final SystemObjectStore _systemObjects;
   late final RelationReadService _relationReads;
+  late final ImageVisualResolver _imageVisuals;
   late final WeblinkVisualResolver _weblinkVisuals;
   late final BookmarkObjectLinkReadStore _bookmarkLinks;
 
   BookmarkVisualSource? choosePreferred({
+    String? canonicalCoverPath,
     String? userCoverPath,
     String? managedRepresentativePath,
     String? legacyThumbnailUrl,
   }) {
+    final canonicalCover = _nonEmpty(canonicalCoverPath);
+    if (canonicalCover != null) {
+      return BookmarkVisualSource(
+        kind: BookmarkVisualSourceKind.canonicalCover,
+        value: canonicalCover,
+      );
+    }
+
     final userCover = _nonEmpty(userCoverPath);
     if (userCover != null) {
       return BookmarkVisualSource(
@@ -87,13 +114,63 @@ class BookmarkVisualResolver {
   }
 
   Future<BookmarkVisualSource?> resolve(BookmarkItem bookmark) async {
-    final userCover = await _existingFile(bookmark.coverPhoto?.path);
+    final canonicalCover = await resolveCanonicalCoverPath(bookmark.id);
+    final legacyUserCover = await _existingFile(bookmark.coverPhoto?.path);
     final managed = await resolveManagedRepresentativePath(bookmark.id);
     return choosePreferred(
-      userCoverPath: userCover,
+      canonicalCoverPath: canonicalCover,
+      userCoverPath: legacyUserCover,
       managedRepresentativePath: managed,
       legacyThumbnailUrl: bookmark.thumbnail,
     );
+  }
+
+  /// Resolves the canonical Bookmark -> Cover Image single Relation.
+  ///
+  /// The Relation must resolve to exactly one edge, be declared single-valued,
+  /// target the canonical system Image ObjectType, and point to an existing
+  /// managed file. Any malformed/ambiguous state returns `null` so the caller
+  /// can use the legacy explicit-cover fallback without mutating data.
+  Future<String?> resolveCanonicalCoverPath(int legacyBookmarkId) async {
+    if (legacyBookmarkId <= 0 || workspaceId <= 0) return null;
+
+    final bookmarkObjectId = await _bookmarkLinks.objectIdForBookmark(
+      workspaceId: workspaceId,
+      bookmarkId: legacyBookmarkId,
+    );
+    if (bookmarkObjectId == null) return null;
+
+    final bookmarkType = await _systemObjects.getSystemObjectType(
+      workspaceId: workspaceId,
+      systemKey: CoreObjectBridge.bookmarkSystemKey,
+    );
+    final imageType = await _systemObjects.getSystemObjectType(
+      workspaceId: workspaceId,
+      systemKey: ImageObjectService.systemKey,
+    );
+    if (bookmarkType == null || imageType == null) return null;
+
+    final outgoing = await _relationReads.outgoing(
+      sourceObjectTypeId: bookmarkType.id,
+      sourceObjectId: bookmarkObjectId,
+    );
+    final coverEdges = outgoing
+        .where((entry) => entry.property.name == _coverImageRelationName)
+        .toList(growable: false);
+    if (coverEdges.length != 1) return null;
+
+    final edge = coverEdges.single;
+    if (edge.property.allowsMultipleRelations ||
+        edge.property.targetObjectTypeId != imageType.id ||
+        edge.targetObject.objectTypeId != imageType.id) {
+      return null;
+    }
+
+    final visual = await _imageVisuals.resolveManaged(
+      imageObjectTypeId: imageType.id,
+      imageObjectId: edge.targetObject.id,
+    );
+    return visual?.filePath;
   }
 
   /// Reads the canonical Bookmark -> Weblink edge, then delegates Weblink media
