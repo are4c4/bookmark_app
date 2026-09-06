@@ -12,12 +12,10 @@ typedef CanonicalImageStoredFileResolver = Future<String?> Function({
   required int workspaceId,
   required int objectId,
 });
-
 typedef ExclusiveManagedImagePathResolver = Future<String?> Function({
   required int objectId,
   required String filePath,
 });
-
 typedef CanonicalImageGeometryUpdater = Future<AppObject> Function({
   required int workspaceId,
   required int objectId,
@@ -141,6 +139,10 @@ class CanonicalImageEditService {
     double? cropAspectRatio,
     Rect? normalizedCropRect,
   }) async {
+    _validateCropRequest(
+      cropAspectRatio: cropAspectRatio,
+      normalizedCropRect: normalizedCropRect,
+    );
     final editablePath = await _editablePath(
       workspaceId: workspaceId,
       objectId: objectId,
@@ -193,6 +195,43 @@ class CanonicalImageEditService {
     } catch (_) {
       await file.writeAsBytes(beforeBytes, flush: true);
       rethrow;
+    }
+  }
+
+  void _validateCropRequest({
+    required double? cropAspectRatio,
+    required Rect? normalizedCropRect,
+  }) {
+    if (cropAspectRatio != null && normalizedCropRect != null) {
+      throw ArgumentError('Specify either cropAspectRatio or normalizedCropRect, not both.');
+    }
+    if (cropAspectRatio != null &&
+        (!cropAspectRatio.isFinite || cropAspectRatio <= 0)) {
+      throw ArgumentError.value(
+        cropAspectRatio,
+        'cropAspectRatio',
+        'must be finite and greater than zero',
+      );
+    }
+    final rect = normalizedCropRect;
+    if (rect == null) return;
+    final finite = rect.left.isFinite &&
+        rect.top.isFinite &&
+        rect.right.isFinite &&
+        rect.bottom.isFinite;
+    final insideUnitSquare = rect.left >= 0 &&
+        rect.top >= 0 &&
+        rect.right <= 1 &&
+        rect.bottom <= 1;
+    if (!finite ||
+        !insideUnitSquare ||
+        rect.width <= 0 ||
+        rect.height <= 0) {
+      throw ArgumentError.value(
+        rect,
+        'normalizedCropRect',
+        'must be finite, have positive area, and stay inside the unit square',
+      );
     }
   }
 
