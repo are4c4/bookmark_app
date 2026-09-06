@@ -12,8 +12,9 @@ Latest verified `main` at branch creation: **`844f6b77e7b6947bceaaf6986e6ff81822
 
 Active branch for this checkpoint: `refactor/guardrail-help-handoff-225`.
 
-Current Lane G commit:
-- `c933efe47bd2b28b81bd07fa231361d85ddfd030` — align `tool/maintainability_report.sh --help` examples with the currently enforced ceilings. The report behavior is unchanged; only stale usage examples `12 / 19 / 5` were corrected to `9 / 18 / 5`.
+Current Lane G commits:
+- `c933efe47bd2b28b81bd07fa231361d85ddfd030` — initially aligned stale `maintainability_report.sh --help` threshold examples with the then-current ceilings.
+- `268f678bf1243dc1afc635deefd32976f9c04f3e` — removed threshold literals from the help examples entirely and pointed users to the CI workflow as the single current-ceiling source, preventing the same documentation drift on future ratchets.
 
 Recent integrated architecture-health sequence:
 - **#474 merged** — guard temporary Database-presentation shim imports; migrated three test-only imports and ratcheted 22 → 19.
@@ -56,7 +57,7 @@ Current remaining shim-import distribution inferred from the current source/guar
 Do not reconstruct these large/shared hosts merely to lower a metric. Migrate imports when a host can be patched naturally and safely, then ratchet the ceiling in the same or immediately following slice.
 
 ### Guardrail help drift fixed in this run
-`tool/maintainability_report.sh` already enforced arbitrary caller-supplied thresholds correctly, but its `--help` usage block still advertised the old `12 / 19 / 5` checkpoint. This run corrected those examples to the current `9 / 18 / 5` values without changing report behavior.
+`tool/maintainability_report.sh` already accepted caller-supplied thresholds correctly, but its `--help` usage block embedded a stale historical checkpoint. This run changed the help examples to use `<N>` placeholders and names `.github/workflows/flutter_ci.yml` as the source for the current CI-owned ceilings. Report/threshold behavior is unchanged, and future ratchets no longer require updating example literals.
 
 ## Caller-zero cleanup series
 Merged behavior-preserving cleanup PRs:
@@ -91,6 +92,7 @@ This run deliberately re-audited small/medium modules rather than trusting old i
 - `ObjectDetailPropertyPresentation` — Inspector, GenericDatabasePage and canonical feature widgets still use it.
 - `ObjectValuePromotion` — promotion execution/Weblink services and Inspector still use it.
 - `BacklinkRepository` / `FullTextSearchRepository` — the only repository-layer modules remain live compatibility boundaries.
+- Small presentation helpers audited in this pass (`NotionInlineField`, `DetailSection`, `BookmarkResolvedUrlText`, `ObjectTypeTemplatePicker`, `TagDetailPane`) also retain production callers.
 
 No new whole-module production caller-zero deletion was proven in this pass. Do not delete any of the above simply to reduce LOC.
 
@@ -146,7 +148,7 @@ Canonical implementations live under `lib/features/database/presentation/widgets
 The accepted ceiling is now 9. Known direct reach-through is concentrated in shared legacy/Database hosts. Do not introduce a page-specific wrapper merely to hide `workspaceStore.database`; the next reduction must move or delete real responsibility.
 
 ## Exact next actions
-1. Open/validate the current Lane G PR for the guardrail-help correction plus this handoff refresh; fix only failures caused by this slice.
+1. Validate/merge the current Lane G PR for the guardrail-help drift fix plus this handoff refresh; fix only failures caused by this slice.
 2. Re-run current-source caller-zero audits after parallel lane merges; delete only when production callers are zero and surviving behavior has independent coverage.
 3. After Object #503 merges, re-audit the plain-text Body chain before touching `ObjectInspectorPage`.
 4. Lower shim-import ceiling below 18 only when a production host can safely switch to canonical imports without whole-file reconstruction.
@@ -158,9 +160,10 @@ The accepted ceiling is now 9. Known direct reach-through is concentrated in sha
 
 ## Validation
 - Current main guardrail values were verified directly from `.github/workflows/flutter_ci.yml`: **9 / 18 / 5**.
-- #499 diff was verified directly: only canonical import migration for `BookmarkAttachmentSection`, CI/doc ceiling 19 → 18, and maintainability documentation.
+- #499 diff was verified directly: canonical import migration for `BookmarkAttachmentSection`, CI/doc ceiling 19 → 18, and maintainability documentation.
 - #503 and #498 ownership were rechecked directly and are both open/mergeable at this checkpoint.
-- This run's production/tool change is comment/help-text only; behavior of `maintainability_report.sh` is unchanged. CI should still run the existing `tool/maintainability_report_test.sh`, current ceilings, Analyze and full Test on the PR.
+- On PR #510's first head, both **Maintainability guardrail tests** and **Maintainability regression ceilings** passed before the help examples were generalized; the final head must rerun CI after `268f678b...`.
+- This run's tool change remains comment/help-text only; behavior of `maintainability_report.sh` is unchanged. CI should run the existing guardrail tests/current ceilings, Analyze and full Test on the final PR head.
 
 ## Risks / sequencing
 - parallel lanes can move `main` quickly; re-read open PR ownership before shared code changes;
@@ -174,4 +177,4 @@ The accepted ceiling is now 9. Known direct reach-through is concentrated in sha
 ## Stop/continuation state
 This pass did not prove another safe whole-module caller-zero deletion. The next obvious code cleanup (plain-text Body chain) is temporarily blocked by active Object #503 ownership of the shared Inspector, while the remaining shim-import reductions sit in large/shared hosts that should not be reconstructed through whole-file connector writes merely to change imports.
 
-A concrete architecture-health defect was still fixed: the maintainability report's help examples now match the enforced `9 / 18 / 5` ceilings. Continue from the exact next actions above after checking the live repository state again.
+A concrete architecture-health defect was fixed at its source: `maintainability_report.sh --help` no longer hard-codes historical threshold values, so future guardrail ratchets have one CI-owned source of truth instead of a second drifting example. Continue from the exact next actions above after checking the live repository state again.
