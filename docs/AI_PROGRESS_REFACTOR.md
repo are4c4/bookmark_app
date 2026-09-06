@@ -8,31 +8,33 @@ Issue #225 — reduce maintenance hotspots and retire duplicate/unused legacy pa
 Primary lane: **G — Refactor & Architecture Health**. Object Core owns shared Object/Body product semantics, Relations owns canonical Relation semantics, Database/View owns Database presentation semantics, Primitive Objects & Media owns Weblink/Image/File/etc. product behavior, Search owns indexing/query semantics, and Storage/Vault owns storage/delivery behavior. Lane G owns measurable responsibility reduction, proven caller-zero retirement, failure-policy/privacy cleanup, maintainability guardrails, architecture-health audits, and incremental legacy shim retirement.
 
 ## Current checkpoint — 2026-09-07
-Latest verified `main` at branch creation: **`844f6b77e7b6947bceaaf6986e6ff8182212e71b`** after Refactor **#499**.
+Latest verified `main` at the current branch/PR checkpoint: **`821c7abb229217a88e5caf88a691d7a0bb2fd458`** after Search **#514**. Parallel lanes move `main` quickly, so re-read it before every merge/shared-host edit.
 
-Active branch: `refactor/guardrail-help-handoff-225`.
-Active PR: **#510 — Refresh Refactor guardrail help and Lane G handoff**.
+Integrated in this run:
+- **#510 merged** as `1c998a4136e9671a3b5ca4d2d2f32032e195d835` — `maintainability_report.sh --help` no longer duplicates numeric CI ceilings; help uses `<N>` and points to `.github/workflows/flutter_ci.yml`, with a focused regression preventing numeric `--max-*` examples from returning.
+- #510 final CI #1723 passed maintainability guardrail tests, current regression ceilings, Drift generation, Analyze and full Test.
 
-Current Lane G implementation/test commits before this handoff refresh:
-- `c933efe47bd2b28b81bd07fa231361d85ddfd030` — initially aligned stale `maintainability_report.sh --help` threshold examples with the then-current ceilings.
-- `268f678bf1243dc1afc635deefd32976f9c04f3e` — removed threshold literals from the help examples entirely and pointed users to the CI workflow as the single current-ceiling source, preventing the same documentation drift on future ratchets.
-- `399d45378a989fff8f86cbd99be3b411adccc5d1` — added a focused shell regression that requires `<N>` help placeholders, requires the CI workflow source-of-truth note, and fails if numeric `--max-*` threshold examples are reintroduced.
+Active branch: `refactor/feature-presentation-boundary-225`.
+Active PR: **#522 — Cover feature presentation in database boundary guard**.
+Current implementation/test commits before this handoff refresh:
+- `e2040faafcc51d4e5889eaf31ad8d11691ad478d` — extend presentation/database reach-through scanning from legacy `lib/views` + `lib/widgets` to every `lib/features/**/presentation` tree.
+- `ac463ffebb9cbd8faaa06b7578f44207b19eceda` — extend the fixture so feature-owned presentation reach-through is counted and trips the same existing threshold.
 
 Recent integrated architecture-health sequence:
 - **#474 merged** — guard temporary Database-presentation shim imports; migrated three test-only imports and ratcheted 22 → 19.
 - **#482 merged** — guard the number of Database-presentation re-export shim files; current ceiling 5.
 - **#485 merged** — ratchet direct presentation → database reach-through ceiling to 9.
 - **#488 merged** — make unexpected Bookmark object-link compatibility-query failures observable with privacy-safe diagnostics while preserving expected-miss fallback behavior.
-- **#499 merged** as `844f6b77...` — move `BookmarkAttachmentSection` from the legacy `DetailPropertyRow` shim to the canonical feature import and ratchet shim-import ceiling 19 → 18.
-- **#502 merged** — expand repository routing to seven focused lanes; this handoff now follows Lane G ownership.
-
-Adjacent Object/Primitive work after the prior Refactor handoff is architecture-relevant but not Lane G product ownership. In particular, Image media/edit behavior remains outside Lane G.
+- **#499 merged** — move `BookmarkAttachmentSection` from the legacy `DetailPropertyRow` shim to the canonical feature import and ratchet shim-import ceiling 19 → 18.
+- **#502 merged** — expand repository routing to seven focused lanes.
+- **#510 merged** — remove maintainability-help threshold duplication and guard its source-of-truth contract.
 
 ## Live open-PR ownership at this checkpoint
-Rechecked directly before this run's writes:
-- **Object #503** — open and mergeable; owns the patch-sized `ObjectInspectorPage._canEditBody(...)` hunk plus universal-Body regression coverage. Lane G must not touch `ObjectInspectorPage` or retire the plain-text Body chain while this shared host is actively changing.
-- **Primitive #498** — open and mergeable; owns `CanonicalImageEditService.fromStores(...)` plus its focused test. Lane G must not alter canonical Image edit composition/ownership semantics.
-- Refactor **#500 is closed and unmerged**; it does not own `docs/AI_PROGRESS_REFACTOR.md`.
+Rechecked after #510 merged:
+- **Object #503** — owns the patch-sized `ObjectInspectorPage._canEditBody(...)` universal-Body hunk. Lane G must not retire the plain-text Body chain or touch that Inspector seam while #503 remains open.
+- **Primitive #498** — owns canonical Image edit composition. Lane G must not alter Image edit/ownership semantics.
+- **Refactor #504** — already owns the separate `lib/features` legacy-Bookmark dependency guard plus its CI wiring. Do not duplicate/rewrite that guard from #522; #522 only closes the existing presentation/database reach-through measurement blind spot.
+- Storage #509 currently touches `app_database.dart`; do not use AppDatabase narrowing as a pretext to reconstruct that shared hotspot while the Vault path slice is active.
 
 Re-read open PRs again before every shared-hotspot edit because parallel lanes move quickly.
 
@@ -43,12 +45,24 @@ Flutter CI currently enforces three monotonic ceilings:
 2. Temporary Database-presentation re-export shim imports: **18 imports maximum**.
 3. Temporary Database-presentation re-export shim files: **5 files maximum**.
 
+### Presentation reach-through coverage
+Before #522, the reach-through scan only covered legacy presentation roots `lib/views` and `lib/widgets`, leaving canonical `lib/features/<feature>/presentation` outside the measurement even though that is the target module layout.
+
+#522 adds every `lib/features/**/presentation` directory to the same scanner. It deliberately:
+- does **not** scan feature application/data/service code as presentation debt;
+- does **not** create a new threshold;
+- does **not** increase the existing ceiling of 9;
+- adds a fixture regression proving a feature-presentation `workspaceStore.database` reference is counted.
+
+On #522 head `ac463ff...`, both **Maintainability guardrail tests** and **Maintainability regression ceilings** passed immediately. Therefore the expanded real-repository scan still fits the existing ceiling of 9; canonical feature presentation currently adds no regression requiring the ceiling to be relaxed.
+
+### Legacy Database-presentation shims
 Shim-import history:
 - initial baseline: **22**;
 - #474: three test-only imports moved canonical, **22 → 19**;
 - #499: `BookmarkAttachmentSection` moved canonical, **19 → 18**.
 
-Current remaining shim-import distribution inferred from the current source/guardrail history is:
+Current remaining shim-import distribution from the current source/guardrail history:
 - Photo management: 4
 - People management: 4
 - Collection management: 4
@@ -57,9 +71,6 @@ Current remaining shim-import distribution inferred from the current source/guar
 - BookmarkReorderableProperties: 1
 
 Do not reconstruct these large/shared hosts merely to lower a metric. Migrate imports when a host can be patched naturally and safely, then ratchet the ceiling in the same or immediately following slice.
-
-### Guardrail help drift fixed in this run
-`tool/maintainability_report.sh` already accepted caller-supplied thresholds correctly, but its `--help` usage block embedded a stale historical checkpoint. #510 changes the help examples to use `<N>` placeholders and names `.github/workflows/flutter_ci.yml` as the source for the current CI-owned ceilings. Report/threshold behavior is unchanged, future ratchets no longer require updating example literals, and `maintainability_report_test.sh` now guards that source-of-truth contract.
 
 ## Caller-zero cleanup series
 Merged behavior-preserving cleanup PRs:
@@ -79,7 +90,7 @@ Combined #451/#453/#454/#455/#458/#459/#463/#464/#466/#472: **1,771 deletions / 
 Shared hotspots (`generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, `bookmark_unified_stage1_page.dart`, `app_database.dart`) were deliberately not reconstructed for these deletions.
 
 ## 2026-09-07 current-source caller audit
-This run deliberately re-audited small/medium modules rather than trusting old inventory labels. The following still have real production callers and are **not deletion candidates**:
+This run re-audited small/medium modules rather than trusting old inventory labels. The following still have real production callers and are **not deletion candidates**:
 - `AutoOrganizeService` — BookmarkRepository/settings automation remains live.
 - `BookmarkTransferService` — import/export compatibility remains live through `AppShell`.
 - `AppSettingsService` and `ProfileStorageMigrator` — composition/bootstrap callers remain live in `main.dart`.
@@ -93,14 +104,16 @@ This run deliberately re-audited small/medium modules rather than trusting old i
 - `ObjectBoardMoveService` — board creation, GenericDatabasePage and page services still use it.
 - `ObjectDetailPropertyPresentation` — Inspector, GenericDatabasePage and canonical feature widgets still use it.
 - `ObjectValuePromotion` — promotion execution/Weblink services and Inspector still use it.
-- `BacklinkRepository` / `FullTextSearchRepository` — the only repository-layer modules remain live compatibility boundaries.
+- `BacklinkRepository` / `FullTextSearchRepository` — live compatibility/search boundaries.
 - Small presentation helpers audited in this pass (`NotionInlineField`, `DetailSection`, `BookmarkResolvedUrlText`, `ObjectTypeTemplatePicker`, `TagDetailPane`) also retain production callers.
 
-No new whole-module production caller-zero deletion was proven in this pass. Do not delete any of the above simply to reduce LOC.
+`tool/performance_probe.dart` has no import caller, but it is an intentional standalone CLI entrypoint added for repeatable performance measurement and aligns with Issue #225 P3; do not classify CLI/tools as caller-zero merely because production Dart does not import them.
+
+No new safe whole-module production caller-zero deletion was proven in this pass.
 
 ## Architecture / responsibility state
-### P0 guardrails
-Integrated guardrails include:
+### P0 / P3 guardrails
+Integrated or active guardrails include:
 - `tool/maintainability_report.sh` and fixture regression;
 - no-new-legacy-dependency policy and hotspot baseline;
 - `docs/LEGACY_BOOKMARK_INVENTORY.md`;
@@ -111,23 +124,26 @@ Integrated guardrails include:
 - #474 legacy presentation-shim import measurement/ceiling;
 - #482 shim-file-count ceiling;
 - #485 reach-through ratchet to 9;
-- #499 shim-import ratchet to 18.
+- #499 shim-import ratchet to 18;
+- #510 non-duplicated maintainability-help source of truth;
+- **#522 active** — include canonical feature presentation in the reach-through ceiling;
+- **#504 active separately** — forbid new `BookmarkItem` / `BookmarkRepository` dependencies under `lib/features`.
 
-New feature work must not deepen Bookmark-era coupling unless it is an explicit compatibility/migration boundary.
+New feature work must not deepen Bookmark-era coupling or bypass application composition by reaching from presentation into the raw workspace database.
 
 ### AppDatabase
 Historical migration bodies v2-v16 are extracted behind migration helpers. `AppDatabase.migration` is sequencing/wiring rather than the home of historical bodies.
 
 Responsibility moves include #281 `BookmarkReadStore`, #282 `ProfilePathResolver`, #283 `SavedViewReadStore`, and #289 `PhotoReadStore`.
 
-Possible future mutation responsibility remains favorite/status/rating/open-count and nearby batch updates that are close passthroughs from `BookmarkRepository`. Move only when `app_database.dart` can be patched safely and the change removes real database-root responsibility rather than adding a wrapper.
+Possible future mutation responsibility remains favorite/status/rating/open-count and nearby batch updates that are close passthroughs from `BookmarkRepository`. Move only when `app_database.dart` is not actively leased and the change removes real database-root responsibility rather than adding a wrapper.
 
 ### GenericDatabasePage
 Focused extractions already integrated:
 - #310 `GenericDatabasePageStateLoader`
 - #323 `GenericDatabasePageServices.fromWorkspaceStore(...)`
 
-Remaining high-value responsibility includes schema/database actions, Property create/edit workflows and layout-specific host code. Continue only through patch-sized moves that measurably remove Widget responsibility/LOC.
+Remaining high-value responsibility includes schema/database actions, Property create/edit workflows and layout-specific host code. Continue only through patch-sized moves that measurably remove Widget responsibility/LOC; do not reconstruct the large file through connector whole-file writes.
 
 ### Legacy Bookmark compatibility
 Canonical Bookmark visual/URL presentation has converged substantially, but legacy `bookmarks.url`, thumbnail, Photo and Bookmark storage remains live compatibility/import/export data until production caller-zero and migration/backup handling are proven. Presentation convergence alone is not permission to delete storage.
@@ -141,35 +157,36 @@ Remaining raw implementation exception interpolation is concentrated in large/sh
 ### Plain-text Body mutation chain
 `ObjectBodySection` is gone. `ObjectDetailEditService.setPlainTextBody(...)` previously had no production caller and `ObjectBodyPlainTextAdapter` was only needed by that dead service method plus dedicated tests.
 
-**Do not retire this chain during Object #503.** `ObjectInspectorPage` is actively owned by the universal-Body PR, and universal Body semantics are changing in the shared host. Re-audit after #503 merges; if the plain-text path is still caller-zero, remove it only through a genuinely patch-sized Inspector/service change.
+**Do not retire this chain during Object #503.** Re-audit after #503 merges; if the plain-text path is still caller-zero, remove it only through a genuinely patch-sized Inspector/service change.
 
 ### Temporary Database-presentation re-export shims
-Canonical implementations live under `lib/features/database/presentation/widgets/`. The remaining 18 imports are concentrated in shared/large production hosts. Remove a shim only after all real callers naturally move to canonical imports; do not hand-reconstruct a hotspot for a one-line import change.
+Canonical implementations live under `lib/features/database/presentation/widgets/`. The remaining 18 imports are concentrated in shared/large production hosts. Remove a shim only after all real callers naturally move to canonical imports.
 
 ### Presentation/database reach-through
-The accepted ceiling is now 9. Known direct reach-through is concentrated in shared legacy/Database hosts. Do not introduce a page-specific wrapper merely to hide `workspaceStore.database`; the next reduction must move or delete real responsibility.
+The accepted ceiling remains 9. #522 broadens where that ceiling is enforced; it does not hide or redistribute existing debt. Lower the ceiling only when a real responsibility move removes reach-through.
 
 ## Exact next actions
-1. Validate/merge #510; fix only failures caused by this slice.
-2. Re-run current-source caller-zero audits after parallel lane merges; delete only when production callers are zero and surviving behavior has independent coverage.
-3. After Object #503 merges, re-audit the plain-text Body chain before touching `ObjectInspectorPage`.
-4. Lower shim-import ceiling below 18 only when a production host can safely switch to canonical imports without whole-file reconstruction.
-5. Lower presentation/database ceiling below 9 only when a real responsibility move removes reach-through.
-6. Continue GenericDatabasePage P1 only via patch-sized extraction of concrete schema/database action, Property workflow, or layout-host responsibility.
-7. Revisit AppDatabase mutation responsibility only when `app_database.dart` can be patched safely without monolithic reconstruction.
-8. Follow Object-first storage retirement: prove production caller-zero plus import/export/backup handling before deleting Bookmark URL/thumbnail/Photo storage.
-9. Treat search correctness (including Issue #414) as Search-lane work, not a Refactor pretext for semantic change.
+1. Validate/merge **#522**; fix only failures caused by expanded presentation scanning/test coverage.
+2. Do not duplicate **#504** while it owns the separate feature legacy-Bookmark dependency guard/CI slice; re-evaluate after it merges/closes.
+3. Re-run current-source caller-zero audits after parallel lane merges; delete only when production callers are zero and surviving behavior has independent coverage.
+4. After Object #503 merges, re-audit the plain-text Body chain before touching `ObjectInspectorPage`.
+5. Lower shim-import ceiling below 18 only when a production host can safely switch to canonical imports without whole-file reconstruction.
+6. Lower presentation/database ceiling below 9 only when a real responsibility move removes reach-through.
+7. Continue GenericDatabasePage P1 only via patch-sized extraction of concrete schema/database action, Property workflow, or layout-host responsibility.
+8. Revisit AppDatabase mutation responsibility only after Storage #509/shared-hotspot ownership clears.
+9. Follow Object-first storage retirement: prove production caller-zero plus import/export/backup handling before deleting Bookmark URL/thumbnail/Photo storage.
+10. Treat search correctness/index semantics as Search-lane work rather than a Refactor pretext for semantic change.
 
 ## Validation
-- Current main guardrail values were verified directly from `.github/workflows/flutter_ci.yml`: **9 / 18 / 5**.
-- #499 diff was verified directly: canonical import migration for `BookmarkAttachmentSection`, CI/doc ceiling 19 → 18, and maintainability documentation.
-- #503 and #498 ownership were rechecked directly and are both open/mergeable at this checkpoint.
-- On #510 head `399d4537...`, **Maintainability guardrail tests** passed with the new non-duplicated-help regression, and **Maintainability regression ceilings** also passed. Analyze/full Test were still running when this handoff update was written.
-- The tool behavior outside `--help` comments is unchanged; the new test protects the source-of-truth rule rather than changing debt counting.
+- #510 final CI #1723: maintainability guardrail tests **pass**, regression ceilings **pass**, Drift generation **pass**, Analyze **pass**, full Test **pass**.
+- #510 merged as `1c998a4136e9671a3b5ca4d2d2f32032e195d835`.
+- Before #510 merge, parallel main changes through Relation/Object/Database-View work were compared and did not overlap #510's files.
+- Current CI-owned guardrail values remain **9 / 18 / 5**.
+- #522 first implementation/test head `ac463ff...`: Maintainability guardrail tests **pass** and Maintainability regression ceilings **pass** with `lib/features/**/presentation` included; full Flutter setup/Analyze/Test were still running before this handoff-doc commit advanced the PR head.
 
 ## Risks / sequencing
-- parallel lanes can move `main` quickly; re-read open PR ownership before shared code changes;
-- Object #503 owns `ObjectInspectorPage` now; Primitive #498 owns canonical Image edit composition;
+- parallel lanes can move `main` quickly; compare/re-read before merge;
+- #503 owns `ObjectInspectorPage`; #498 owns canonical Image edit composition; #509 touches AppDatabase; #504 owns the separate feature legacy-dependency CI guard;
 - large shared hosts must remain patch-sized;
 - connector file writes replace complete existing files, so do not reconstruct a large host for a one-line import/constructor change;
 - legacy Bookmark URL/thumbnail/Photo storage remains live compatibility data;
@@ -177,6 +194,4 @@ The accepted ceiling is now 9. Known direct reach-through is concentrated in sha
 - product semantics remain with their owning lanes; Lane G is behavior-preserving by default.
 
 ## Stop/continuation state
-This pass did not prove another safe whole-module caller-zero deletion. The next obvious code cleanup (plain-text Body chain) is temporarily blocked by active Object #503 ownership of the shared Inspector, while the remaining shim-import reductions sit in large/shared hosts that should not be reconstructed through whole-file connector writes merely to change imports.
-
-A concrete architecture-health defect was fixed at its source in #510: maintainability help no longer duplicates historical threshold values, and a focused guard prevents that duplication from returning. Continue from the exact next actions above after checking the live repository state again.
+#510 is integrated and #522 is the active safe G-lane slice. The expanded guard already proves canonical feature presentation can be brought under the existing ceiling without relaxing it. After #522 validation/merge, the obvious next cleanup targets remain sequenced behind active shared-hotspot ownership or already-active #504 guard work; do not manufacture a duplicate abstraction merely to keep the lane busy.
