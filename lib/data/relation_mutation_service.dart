@@ -26,6 +26,14 @@ class RelationMutationService {
     required ObjectPropertyDefinition property,
     required List<int> targetObjectIds,
   }) async {
+    if (targetObjectIds.toSet().length != targetObjectIds.length) {
+      throw ArgumentError.value(
+        targetObjectIds,
+        'targetObjectIds',
+        'Relation targets must not contain duplicate Object ids.',
+      );
+    }
+
     final storedProperty = await _canonicalRelationProperty(property);
     final pair = await _pairIfManaged(storedProperty);
     if (pair != null) {
