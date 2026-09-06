@@ -164,4 +164,84 @@ void main() {
     expect(visual?.imageObjectId, promoted.id);
     expect(visual?.filePath, managedFile.path);
   });
+
+  test('missing rooted Photo stays unmapped and promotes after file recovery',
+      () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'photo_promotion_missing_retry_',
+    );
+    addTearDown(() => directory.delete(recursive: true));
+
+    final database = AppDatabase.forTesting(
+      NativeDatabase.memory(),
+      profileDirectoryPath: directory.path,
+    );
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final systemStore = SystemObjectStore(
+      database: database,
+      objectStore: objectStore,
+    );
+    final bridge = CoreObjectBridge(
+      database: database,
+      objectStore: objectStore,
+      systemObjectStore: systemStore,
+      tagBridge: TagObjectBridge(
+        database: database,
+        objectStore: objectStore,
+        systemObjectStore: systemStore,
+      ),
+    );
+    await database.customStatement(
+      "INSERT INTO photos(path, title, note) VALUES ('photos/recover.jpg', 'Recover me', 'Legacy context')",
+    );
+    final photoId = (await database.customSelect(
+      "SELECT id FROM photos WHERE path = 'photos/recover.jpg'",
+    ).getSingle())
+        .read<int>('id');
+
+    await bridge.syncAll(workspaceId);
+
+    final imageType = (await systemStore.getSystemObjectType(
+      workspaceId: workspaceId,
+      systemKey: CoreObjectBridge.photoSystemKey,
+    ))!;
+    expect(await objectStore.listObjects(imageType.id), isEmpty);
+    expect(
+      await database.customSelect(
+        'SELECT object_id FROM photo_object_links WHERE workspace_id = ? AND photo_id = ?',
+        variables: [Variable<int>(workspaceId), Variable<int>(photoId)],
+      ).getSingleOrNull(),
+      isNull,
+    );
+
+    final recoveredFile = File('${directory.path}/photos/recover.jpg');
+    await recoveredFile.parent.create(recursive: true);
+    await recoveredFile.writeAsBytes(const <int>[9, 8, 7]);
+
+    await bridge.syncAll(workspaceId);
+    await bridge.syncAll(workspaceId);
+
+    final images = await objectStore.listObjects(imageType.id);
+    expect(images, hasLength(1));
+    expect(images.single.title, 'Recover me');
+    final legacyIdProperty = imageType.properties
+        .singleWhere((property) => property.name == 'Legacy Photo ID');
+    final fileProperty =
+        imageType.properties.singleWhere((property) => property.name == 'File');
+    final noteProperty =
+        imageType.properties.singleWhere((property) => property.name == 'Note');
+    expect(images.single.values[legacyIdProperty.id], photoId);
+    expect(images.single.values[fileProperty.id], 'photos/recover.jpg');
+    expect(images.single.values[noteProperty.id], 'Legacy context');
+
+    final links = await database.customSelect(
+      'SELECT object_id FROM photo_object_links WHERE workspace_id = ? AND photo_id = ?',
+      variables: [Variable<int>(workspaceId), Variable<int>(photoId)],
+    ).get();
+    expect(links, hasLength(1));
+    expect(links.single.read<int>('object_id'), images.single.id);
+  });
 }
