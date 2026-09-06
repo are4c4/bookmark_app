@@ -93,7 +93,7 @@ void main() {
     final managedFile = await fixture.createManagedFile('native-mapped.png');
     final nativeImage = await fixture.images.findOrCreateManaged(
       workspaceId: fixture.workspaceId,
-      filePath: managedFile.path,
+      filePath: fixture.database.pathResolver.toStoredPath(managedFile.path),
       title: 'Native mapped image',
     );
     final photoId = await fixture.database.addPhoto(path: managedFile.path);
