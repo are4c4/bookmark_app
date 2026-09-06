@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../../../data/app_database.dart';
 import '../../../../data/object_store.dart';
 import '../../../../services/image_visual_resolver.dart';
+import 'object_image_crop_pan_zoom_selector.dart';
 import 'object_image_crop_selector.dart';
 import 'object_image_detail_preview.dart';
 
@@ -40,6 +41,7 @@ class ObjectImageFreeCropDialog extends StatefulWidget {
 class _ObjectImageFreeCropDialogState extends State<ObjectImageFreeCropDialog> {
   late Future<ImageManagedVisual?> _visual;
   Rect _selection = ObjectImageCropGeometry.defaultRect;
+  bool _moveImageMode = false;
 
   @override
   void initState() {
@@ -56,6 +58,7 @@ class _ObjectImageFreeCropDialogState extends State<ObjectImageFreeCropDialog> {
         oldWidget.objectId != widget.objectId ||
         oldWidget.visualResolver != widget.visualResolver) {
       _selection = ObjectImageCropGeometry.defaultRect;
+      _moveImageMode = false;
       _visual = _resolveVisual();
     }
   }
@@ -167,15 +170,53 @@ class _ObjectImageFreeCropDialogState extends State<ObjectImageFreeCropDialog> {
           ),
         );
 
-    return SizedBox(
-      key: const ValueKey('object-image-free-crop-surface'),
-      width: width,
-      height: height,
-      child: ObjectImageCropSelector(
-        initialRect: _selection,
-        onChanged: (value) => _selection = value,
-        child: image,
-      ),
+    final selector = _moveImageMode
+        ? ObjectImageCropPanZoomSelector(
+            initialRect: _selection,
+            onChanged: (value) => _selection = value,
+            child: image,
+          )
+        : ObjectImageCropSelector(
+            initialRect: _selection,
+            onChanged: (value) => _selection = value,
+            child: image,
+          );
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            TextButton.icon(
+              key: const ValueKey('object-image-free-crop-move-image-toggle'),
+              onPressed: () => setState(() {
+                _moveImageMode = !_moveImageMode;
+              }),
+              icon: Icon(
+                _moveImageMode ? Icons.crop_free : Icons.open_with,
+              ),
+              label: Text(_moveImageMode ? '枠を調整' : '画像を動かす'),
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                _moveImageMode
+                    ? '画像をドラッグし、ホイールで拡大・縮小できます。'
+                    : '枠をドラッグするか、ハンドルで範囲を調整できます。',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          key: const ValueKey('object-image-free-crop-surface'),
+          width: width,
+          height: height,
+          child: selector,
+        ),
+      ],
     );
   }
 }
