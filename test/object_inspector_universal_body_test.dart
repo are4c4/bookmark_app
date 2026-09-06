@@ -66,14 +66,16 @@ void main() {
       expect(find.text('Objectが見つかりません'), findsNothing);
     }
 
+    Future<void> reveal(Finder target) async {
+      for (var attempt = 0; attempt < 10 && target.evaluate().isEmpty; attempt++) {
+        await tester.drag(find.byType(ListView), const Offset(0, -400));
+        await tester.pumpAndSettle();
+      }
+    }
+
     Future<void> createAndEditBody(int objectId, String text) async {
       final emptyInsert = find.byKey(const ValueKey('body-empty-insert'));
-      await tester.scrollUntilVisible(
-        emptyInsert,
-        240,
-        scrollable: find.byType(Scrollable).first,
-        maxScrolls: 20,
-      );
+      await reveal(emptyInsert);
       expect(emptyInsert, findsOneWidget);
       await tester.tap(emptyInsert);
       await tester.pumpAndSettle();
@@ -85,12 +87,8 @@ void main() {
       expect(body.blocks.single.type, ObjectBodyBlockType.paragraph);
 
       final textField = find.byKey(ValueKey('body-text-${body.blocks.single.id}'));
-      await tester.scrollUntilVisible(
-        textField,
-        160,
-        scrollable: find.byType(Scrollable).first,
-        maxScrolls: 10,
-      );
+      await reveal(textField);
+      expect(textField, findsOneWidget);
       await tester.enterText(textField, text);
       await tester.pumpAndSettle();
       body = await bodyStore.read(objectId);
