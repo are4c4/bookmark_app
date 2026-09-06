@@ -68,20 +68,18 @@ void main() {
     await bridge.syncAll(workspaceId);
     await bridge.syncAll(workspaceId);
 
-    final images = await objectStore.listObjects(definition.objectType.id);
+    final imageType = (await systemStore.getSystemObjectType(
+      workspaceId: workspaceId,
+      systemKey: ImageObjectService.systemKey,
+    ))!;
+    final legacyIdProperty = imageType.properties
+        .singleWhere((property) => property.name == 'Legacy Photo ID');
+    final images = await objectStore.listObjects(imageType.id);
     expect(images, hasLength(1));
     expect(images.single.id, native.id);
     expect(images.single.title, 'Native image');
     expect(images.single.values[definition.fileProperty.id], 'photos/shared.jpg');
-    final legacyIdProperty = images.single.values.keys.firstWhere(
-      (id) => definition.objectType.properties.any(
-        (property) => property.id == id && property.name == 'Legacy Photo ID',
-      ),
-      orElse: () => -1,
-    );
-    if (legacyIdProperty != -1) {
-      expect(images.single.values[legacyIdProperty], isNull);
-    }
+    expect(images.single.values[legacyIdProperty.id], isNull);
 
     final mapping = await database.customSelect(
       'SELECT object_id FROM photo_object_links '
