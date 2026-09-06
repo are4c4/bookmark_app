@@ -127,6 +127,9 @@ class _SystemObjectListMediaState extends State<SystemObjectListMedia> {
       final visual = await ImageVisualResolver(
         widget.objectStore,
         pathResolver: widget.database.pathResolver,
+        // List leading media needs only the managed path. Avoid decoding a
+        // full image solely to recover missing layout geometry for a 44px slot.
+        probeMissingGeometry: false,
       ).resolveManaged(
         imageObjectTypeId: widget.objectTypeId,
         imageObjectId: widget.objectId,
