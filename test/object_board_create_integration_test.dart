@@ -79,4 +79,79 @@ void main() {
     expect(edges.single.propertyId, statusPropertyId);
     expect(edges.single.targetObjectId, statusId);
   });
+
+  test('rollback cleanup failure does not mask the original preset failure',
+      () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = _DeleteFailingObjectStore(genericStore);
+    final bidirectionalStore = BidirectionalRelationStore(
+      genericStore: genericStore,
+      objectStore: objectStore,
+    );
+    final service = ObjectBoardCreateService(
+      objectStore,
+      relationMutations: RelationMutationService(
+        objectStore: objectStore,
+        bidirectionalStore: bidirectionalStore,
+        genericStore: genericStore,
+      ),
+    );
+
+    final taskTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Task',
+    );
+    final statusTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Status',
+    );
+    final unrelatedTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Unrelated',
+    );
+    final statusPropertyId = await objectStore.createRelationProperty(
+      objectTypeId: taskTypeId,
+      name: 'Status',
+      targetObjectTypeId: statusTypeId,
+      multiple: false,
+    );
+    final taskType = (await objectStore.getObjectType(taskTypeId))!;
+    final statusProperty = taskType.properties.singleWhere(
+      (property) => property.id == statusPropertyId,
+    );
+    final unrelatedId = await objectStore.createObject(
+      objectTypeId: unrelatedTypeId,
+      title: 'Wrong target',
+    );
+    final targetGroup = ObjectGroupBucket<AppObject>(
+      key: '$unrelatedId',
+      label: 'Wrong target',
+      value: unrelatedId,
+      items: const <AppObject>[],
+      isEmptyGroup: false,
+    );
+
+    await expectLater(
+      service.create(
+        objectTypeId: taskTypeId,
+        title: 'Must fail',
+        groupProperty: statusProperty,
+        targetGroup: targetGroup,
+      ),
+      throwsA(isA<ArgumentError>()),
+    );
+  });
+}
+
+class _DeleteFailingObjectStore extends ObjectStore {
+  _DeleteFailingObjectStore(GenericDatabaseStore genericStore)
+      : super(genericStore);
+
+  @override
+  Future<void> deleteObject(int id) async {
+    throw StateError('cleanup failed');
+  }
 }
