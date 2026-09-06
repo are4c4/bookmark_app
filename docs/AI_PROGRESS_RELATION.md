@@ -16,93 +16,67 @@ Own cross-Object correctness and fail-closed data integrity: canonical Relation 
 - Feature Relation value writes go through `RelationMutationService`.
 - Reads/backlinks use `RelationReadService` / canonical ObjectStore projections.
 - Relation Property creation uses `ObjectStore.createRelationProperty(...)` or a canonical facade delegating to it.
+- Managed bidirectional metadata is structural. Presence of any reserved pair key (`bidirectional`, `inversePropertyId`, `pairRole`) means the Property must resolve as a valid canonical pair or fail closed.
 - `RelationIntegrityService` is read-only.
 - `RelationIndexReconcileService` repairs deterministic index drift only.
 - Relation-safe Object deletion detaches surviving sources through canonical APIs.
-- Ambiguous damage, missing targets, cardinality conflicts, stale metadata, target-type mismatches, or broken bidirectional metadata fail closed rather than being guessed or silently repaired by editor/View code.
+- Ambiguous damage, missing targets, cardinality conflicts, stale metadata, target-type mismatches, or broken pair metadata fail closed rather than being guessed or silently repaired.
 - No feature may introduce a parallel serialized-id Relation writer or alternate edge/index store.
-- Low-level `ObjectStore.setRelation` remains storage-internal/test-facing rather than a normal product mutation path.
 
-## Stable integrated coverage
-Production workflows already have lifecycle coverage for Bookmark -> Weblink, Weblink -> Image Representative/Related image Relations, Bookmark -> Image `Images`/`Cover Image`, delete/detach/retarget/backlink/index/audit/reconcile behavior, alias-aware Relation candidate/picker behavior, and historical migration/bootstrap separation from legacy relation-like tables.
+## Integrated integrity foundation
+- #506: `RelationSchemaEvolutionService.inspectChange(...)` / transactional `updateRelationSchema(...)`; all-target validation, explicit multi->single survivor choice, single->multi preservation, stale index/pair metadata fail closed, rollback coverage.
+- #568: one-sided bidirectional Relation Property deletion is blocked by delete-impact inspection, including empty pairs and corrupt pair metadata.
+- #577: system Relation schema provisioning validates workspace/target/cardinality and delegates creation to canonical `ObjectStore.createRelationProperty(...)`.
+- #590: safe non-structural Relation metadata is allowed while target/cardinality/pair keys remain reserved to canonical Relation APIs.
+- #601: template Gallery cover settings validate Relation target kind before schema/View creation and leave no partial ObjectType on mismatch.
+- #628: system Relation provisioning rejects any persisted reserved pair key presence instead of reusing pair-polluted system schema.
+- #662: incomplete managed-pair metadata now fails closed consistently across mutation, audit, schema evolution, and deletion inspection.
 
-## Current implementation checkpoint — 2026-09-07
+### #662 managed-pair corruption hardening
+PR #662 `Fail closed on incomplete Relation pair metadata` merged as `04ef35b7b972868b718dfea90ea68d06751345ff` after Flutter CI #2078 passed fully green.
 
-### Integrated #493 integrity foundation
-- merged PR #506 `Add fail-closed Relation schema evolution integrity`
-- squash merge: `6cc91cccb4b1ac4d23b6dc8ae3d1f1e7c40aa8e4`
-- final reviewed PR head: `c60e0800a4ea78439c0fc1de34990a1f9779d9ba`
-- duplicate #508 was compared and closed unmerged.
+The merged contract:
+- `BidirectionalRelationStore.hasManagedPairMetadata(...)` centralizes structural-key presence detection for `bidirectional`, `inversePropertyId`, and `pairRole`;
+- false/null remnants are still treated as managed/stale metadata, not ordinary unidirectional Relation metadata;
+- `pairFor(...)` requires `pairRole` to be `source` or `inverse` and requires the reciprocal Property to carry the complementary role;
+- direct `BidirectionalRelationStore.setRelation(...)` fails closed on incomplete pair metadata;
+- `RelationMutationService`, `RelationIntegrityService`, `RelationSchemaEvolutionService`, and `DatabaseViewPropertySchemaService.inspectDelete(...)` all reuse the same predicate;
+- incomplete pairs are reported as `invalidBidirectionalPair`; no repair or downgrade is guessed;
+- regressions cover role mismatch and null/remnant metadata while proving Relation value/index state is not mutated.
 
-`RelationSchemaEvolutionService` now provides read-only `inspectChange(...)` plus transactional `updateRelationSchema(...)`:
-- Relation target ObjectType changes validate persisted source/target schema, workspace, current integrity/index state, and every existing target before writes;
-- ambiguous `multi -> single` requires an explicit surviving target already present for each conflicting source;
-- `single -> multi` preserves existing values/edges;
-- stale/missing index state, missing targets, corrupt pair metadata, and target mismatch fail closed;
-- bidirectional target retargeting remains deliberately unsupported until an explicit paired migration exists;
-- forced database-failure coverage proves schema/data/index rollback atomicity.
+This supersedes the unmerged #649/#658 attempts. Do not revive their branches unless a future concrete regression is not covered by #662.
 
-### Integrated deletion/reference integrity
-PR #568 `Block Property deletion when a bidirectional Relation pair is affected` is merged on main as commit `11d89aaae346b7f83341a67f5d86ccb5d92e8195`.
-- `DatabaseViewPropertySchemaService.inspectDelete(...)` surfaces the inverse Property even when neither side has stored values.
-- corrupt/incomplete bidirectional metadata fails closed.
-- delete confirmation remains disabled while a managed Relation pair would be affected, preventing one-sided schema deletion from generic Property UX.
+## #491 Relation authoring / quick-create correctness
+- #604 is merged: Relation picker quick-create must refresh canonical `RelationSelectionContext` before the new target can be selected; stale pre-create candidates cannot bypass validation.
+- #627 is merged: `RelationTargetQuickCreateService` uses canonical Object creation for custom targets, Tag bridge synchronization for Tags, normalized/reusable Weblink identity for Weblinks, and requires canonical managed Image/File import callbacks. Returned Object ids are revalidated against workspace and configured target ObjectType. It does not write Relation values.
+- #633 is merged: compact Relation Property creation uses `DatabasePropertyAuthoringService` -> canonical `ObjectStore.createRelationProperty(...)` with explicit target/cardinality.
+- latest main #666 composes canonical Property authoring, delete-impact, Relation schema evolution, and Value conversion/migration services into `GenericDatabasePageServices`; no alternate Relation writer or integrity path is introduced.
+- production code search still shows the managed Image/File quick-create callbacks only inside `RelationTargetQuickCreateService` and focused tests. A real Relation value-editor host has not yet composed the full quick-create -> refresh -> attach path.
 
-### Integrated canonical system Relation schema creation
-PR #577 `Validate system Relation schemas through canonical creation` is merged on main as merge commit `30d3ccf51a944fb22d5a072a43b0be6c1ce6cbb6`.
-- final PR head `dd29e7b395e2a701a15afc392694e55800a5e391` passed Flutter CI #1890 fully green;
-- `SystemObjectStore.ensureRelationProperty(...)` validates source/target existence and same-workspace membership;
-- matching existing system Relations are reused idempotently only when target/cardinality match exactly;
-- same-name Value Properties or target/cardinality drift fail closed without schema mutation;
-- new system Relation Properties delegate to `ObjectStore.createRelationProperty(..., allowSystemMutation: true)` rather than hand-building structural Relation config.
+Next #491 correctness trigger: when the real host composes target quick-create, regress canonical target create/import -> refreshed candidate context -> `ObjectRelationEditorService.save(...)` -> `RelationMutationService`, with cancellation/failure leaving no attachment and retry producing no duplicate edge/backlink.
 
-PR #590 `Allow safe metadata on canonical Relation Property creation` is merged.
-- canonical Relation creation accepts non-structural metadata;
-- structural/pair keys (`targetObjectTypeId`, `multiple`, `bidirectional`, `inversePropertyId`, `pairRole`) are reserved and rejected when injected through metadata;
-- target/cardinality/pair structure therefore remains owned by canonical Relation schema APIs.
+## #492 Gallery Relation correctness
+- template Gallery cover target-kind integrity is merged through #601.
+- Gallery Relation consumers remain read-only from the Relation side; View/media resolver code must not repair Relation values or indexes.
+- multi-valued Relation cover selection must remain deterministic/read-only and must not leak a single-cardinality assumption.
 
-### Current B-lane implementation — Gallery cover target integrity
-Original PR #593 `Reject mismatched Gallery cover Relation targets in templates` reached fully green Flutter CI #1911, but became non-mergeable after #592 changed the same template store.
-
-To avoid discarding #592's fresh-workspace primitive provisioning, the same focused integrity slice was refreshed from latest main `f8fa8f8bd9dd6a9a5dc4bba52216b5893e0b8574` onto:
-- branch `feature/relation-template-gallery-cover-target-guard-v2`
-- production commit `6416b12f5e156f4e161b22b9b14b864225c4a685`
-- regression commit `2b99cb6ddcdb39b69ca2adcab0035ee01c7657a0`
-
-The refreshed slice:
-- validates symbolic Gallery cover Relation references before creating the user ObjectType/View;
-- requires `imageRelation` to reference an Image-target Relation;
-- requires `weblinkRelationRepresentativeImage` to reference a Weblink-target Relation;
-- rejects one-sided declarations, duplicate/non-Relation references, and target-kind mismatches before schema creation;
-- preserves #592 primitive target provisioning and canonical `ObjectStore.createRelationProperty(...)` schema creation;
-- preserves the existing transaction and stable created Property-id persistence path;
-- includes a regression proving Image cover kind -> Tag Relation fails with no partial ObjectType.
-
-No shared hotspot lease is held by Lane B; only service/domain, focused tests, and this handoff are touched.
-
-### Cross-lane audits
-- #592 (#490/#492/#484) is merged: fresh-workspace template Relation targets reuse/provision Tag/Weblink/Image/File through canonical primitive ensure paths; no Relation value/index writer is introduced.
-- #595 (#491) remains presentation-only: quick-create persistence is callback-supplied by the host; unavailable/missing writer cases render no fallback, and built-in primitive modes do not title-create Objects directly.
-- #596 (#493) is Value-schema preflight only and explicitly keeps Value -> Relation outside that path.
-
-## Validation state
-- #506 Flutter CI: fully green before merge.
-- #568 merged with focused bidirectional delete-impact regressions.
-- #577 Flutter CI #1890: fully green before merge.
-- original #593 Flutter CI #1911: fully green, but branch became non-mergeable after #592.
-- refreshed v2 branch now needs its own Flutter CI after PR creation.
-- local Flutter validation is unavailable in this execution environment because the container cannot resolve `github.com`; GitHub Actions is the executable validation source.
+## Current validation / repository state
+- Latest main observed during this handoff run: `a6d2a0cb20b6cffa09bcd6efc7837a27cbf6146b` (#666).
+- #662 Flutter CI #2078: fully green before merge.
+- #628 and #601 are merged.
+- #649 and #658 are closed unmerged/superseded.
+- No shared hotspot lease is held by Lane B in this handoff update; this change is docs-only.
+- Local Flutter execution is unavailable in this connector environment; GitHub Actions remains the executable validation source.
 
 ## Exact next actions
-1. Open a replacement PR for `feature/relation-template-gallery-cover-target-guard-v2`, close stale #593, and run Flutter CI on the refreshed branch.
-2. If refreshed CI is green and mergeable against latest main, integrate the Gallery cover target-kind fail-closed guard.
-3. Continue auditing #491 host wiring: target creation/import must succeed first, then canonical Relation attach; failures/retries must not leave partial or duplicate attachments.
-4. Audit #492 media resolution for multi-valued Relations: deterministic read-only selection/fallback only, no View-layer repair/mutation, and no leaked single-cardinality assumption.
-5. Keep bidirectional Relation target retargeting fail-closed until a paired migration validates both schema sides before writes.
+1. Audit any new #491 real-host quick-create composition; add attach/failure/retry/idempotency regressions only when the actual value-writing path lands.
+2. Audit #492 multi-valued Relation media resolution for deterministic read-only behavior and corrupted/missing Relation fail-closed semantics.
+3. Keep bidirectional Relation target retargeting fail-closed until a paired migration validates both schema sides before writes.
+4. Review every new Relation-producing primitive/template/domain workflow for target/cardinality validation, delete/detach/retarget, retry/idempotency, backlink/index consistency, and integrity audit health.
+5. If none of those triggers exists, remain idle rather than inventing new Relation abstractions.
 
-## Current risks / stop rule
-- Non-empty Relation target retargeting can proceed only when every existing target is valid for the proposed target ObjectType; mapping/conversion is a separate explicit migration decision.
+## Risks / stop rule
+- Non-empty Relation retargeting may proceed only when every existing target is valid for the proposed ObjectType; mapping/conversion requires an explicit migration.
 - Bidirectional target retargeting remains intentionally unsupported rather than partially rewriting pair metadata.
-- One-sided bidirectional Relation Property deletion is blocked by #568; a future explicit paired-delete UX must still call canonical Relation lifecycle rather than deleting schema rows directly.
-- Quick-create host wiring is safe only if target creation/import succeeds before canonical Relation attachment and failures cannot leave a partially-attached Relation.
-- Do not add speculative abstractions. If the refreshed Gallery cover guard is integrated and no new Relation-producing workflow, schema-integrity slice, deletion/reference invariant, or concrete correctness regression exists, record the next trigger and remain idle.
+- Corrupt pair metadata must never be silently downgraded to an ordinary Relation.
+- A future quick-create host is safe only if target creation/import succeeds before canonical Relation attachment, refreshed candidates are used for validation, cancellation/failure leaves no partial Relation write, and retries stay idempotent.
