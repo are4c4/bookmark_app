@@ -35,7 +35,9 @@ class ObjectTypeDefaults {
       bodyTemplate != null;
 
   factory ObjectTypeDefaults.fromJson(dynamic value) {
-    if (value is! Map) return const ObjectTypeDefaults();
+    if (value is! Map) {
+      throw const FormatException('ObjectType defaults must be a JSON object.');
+    }
 
     List<int>? readIds(String key) {
       final raw = value[key];
