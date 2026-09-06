@@ -8,31 +8,31 @@ Issue #225 — reduce maintenance hotspots and retire duplicate/unused legacy pa
 Primary lane: **Refactor**. Object owns replacement product semantics and Relation owns canonical Relation semantics. Refactor owns measurable responsibility reduction, caller-zero retirement after proof, failure-policy/privacy cleanup, maintainability guardrails, and incremental legacy shim retirement.
 
 ## Current checkpoint — 2026-09-07
-Latest verified `main`: **`31be90e1dbbfd66592832273820b092cc3a0ce7d`** after Refactor **#474**, directly on top of Object **#475**.
+Latest verified `main`: **`f39f5e04d63795796cff8b25af3d06fd13518454`** after Refactor **#488**.
 
-Recent integrated sequence relevant to this lane:
-- **#467 merged** — privacy-safe observability for unexpected canonical Image visual file-probe failures while preserving fail-soft behavior.
-- **#472 merged** — caller-zero `PersonRoleProperties` retirement.
-- **#468 merged** — Relation handoff only; no Relation production change.
-- **#473 merged** — Object-owned read-only fallback geometry probing for canonical managed Images.
-- **#469 merged** — Object-owned safe vertical Image flip routed through canonical edit semantics.
-- **#471 merged** — Object/repository handoff refresh only.
-- **#475 merged** as `4e744193...` — Object-owned canonical free-crop edge handles; no Relation/shared-host change.
-- **#474 merged** as `31be90e1...` — CI guard for temporary Database-presentation re-export shim imports, plus three test-only imports migrated to canonical feature paths.
+Recent Refactor sequence:
+- **#472 merged** — caller-zero `PersonRoleProperties` + dead-only test retired.
+- **#474 merged** — temporary Database-presentation shim import guard; test-only canonical import migration lowered debt **22 -> 19**.
+- **#482 merged** — added a second shim ratchet that limits the number of Database-presentation re-export shim files to **5** so a sixth compatibility shim cannot bypass the known-import guard.
+- **#485 merged** — presentation `workspaceStore.database` ceiling ratcheted **12 -> 9** after real responsibility-moving cleanup had already reduced the measured baseline to 9 references across 6 files.
+- **#488 merged** — Bookmark -> mirrored Object lookup remains fail-soft; ordinary missing rows remain quiet, while an exception thrown by the compatibility SQL lookup emits a fixed privacy-safe debug/assert diagnostic + stack trace. Flutter CI #1676 green before merge.
+- Stale/non-mergeable **#478** and duplicate replacement **#487** were closed instead of force-merging.
 
-Open PR ownership at this checkpoint:
-- **Refactor #470** — this docs-only handoff/inventory refresh.
-- **Object #476** — canonical Image free-crop pan/zoom parity. It owns the Image crop selector/dialog geometry/widget files in its four-file diff and does not touch `ObjectInspectorPage`, Stage1, generic Database hosts, Relation, Photo mapping or schema.
+Current Object/Relation ownership at this checkpoint:
+- **Object #496** — active List-thumbnail performance work around `ImageVisualResolver` / generic system Object list media. Refactor must avoid those files and Image product semantics.
+- **Object #486** — docs-only handoff refresh.
+- **Relation #477** — docs-only handoff refresh.
 
-Refactor must not edit #476's active Image crop files or redefine Image mutation/ownership semantics. Re-read live ownership before every shared-host edit because parallel lanes move `main` quickly.
+Re-read live PR ownership before every shared-host edit because parallel lanes move `main` quickly.
 
 ## Current measurable guardrails
-Two maintainability ceilings are now enforced by Flutter CI:
+Flutter CI now enforces three ratchets:
 
-1. Presentation direct `workspaceStore.database` reach-through: **12 references maximum**.
+1. Presentation direct `workspaceStore.database` reach-through: **9 references maximum**.
 2. Temporary Database-presentation re-export shim imports: **19 imports maximum**.
+3. Database-presentation re-export shim files under `lib/widgets/`: **5 files maximum**.
 
-The shim ceiling started from 22 observed imports. #474 migrated three test-only imports to canonical `lib/features/database/presentation/widgets/...` paths and immediately ratcheted the accepted ceiling to **19**. Lower either ceiling whenever a real cleanup slice removes debt; never add wrappers merely to hide a metric.
+These metrics are intentionally regression-only. Lower them only when a real cleanup removes responsibility/dependency debt; never add wrappers or rename shims merely to hide a metric.
 
 Tracked temporary shims:
 - `lib/widgets/database_page_toolbar.dart`
@@ -41,16 +41,7 @@ Tracked temporary shims:
 - `lib/widgets/resizable_detail_pane.dart`
 - `lib/widgets/detail_property_row.dart`
 
-Remaining shim imports are production callers in large/shared legacy hosts. Current distribution at the #474 merge was:
-- Photo management: 4
-- People management: 4
-- Collection management: 4
-- GenericDatabasePage: 3
-- Stage1: 2
-- BookmarkAttachmentSection: 1
-- BookmarkReorderableProperties: 1
-
-Do not reconstruct those hosts just to lower the count. Migrate imports opportunistically when a host is safely/patched naturally touched, then ratchet the ceiling downward in the same slice or immediately after.
+At the #474 ratchet, remaining legacy shim imports were distributed across Photo management (4), People management (4), Collection management (4), GenericDatabasePage (3), Stage1 (2), BookmarkAttachmentSection (1), and BookmarkReorderableProperties (1). Do not reconstruct those large hosts just to lower the count. Migrate imports opportunistically when a host is safely/patched naturally touched, then lower the ceiling in the same slice or immediately after.
 
 ## Caller-zero cleanup series
 Merged behavior-preserving cleanup PRs:
@@ -70,18 +61,26 @@ Combined #451/#453/#454/#455/#458/#459/#463/#464/#466/#472: **1,771 deletions / 
 Shared hotspots (`generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, `bookmark_unified_stage1_page.dart`, `app_database.dart`) were deliberately not reconstructed in these cleanup PRs.
 
 ## Architecture / responsibility state
-### P0 guardrails
+### Guardrails
 Integrated guardrails include:
-- `tool/maintainability_report.sh` and fixture regression;
+- `tool/maintainability_report.sh` and isolated fixture regression;
 - no-new-legacy-dependency policy and hotspot baseline;
 - `docs/LEGACY_BOOKMARK_INVENTORY.md`;
 - `docs/ERROR_POLICY_AUDIT.md`;
 - dependency-boundary guidance in `docs/architecture.md`;
 - #401 guard against new direct Bookmark URL/visual resolver construction in presentation;
-- #443/#448 presentation/database reach-through measurement and CI ceiling;
-- #474 temporary Database-presentation shim-import measurement and CI ceiling.
+- #443/#448 presentation/database reach-through measurement;
+- #474 shim-import measurement;
+- #482 shim-file measurement;
+- #485 current **9 / 19 / 5** CI ceilings.
 
 New Object/Database/View work must not deepen Bookmark-era coupling unless it is an explicit compatibility/migration boundary.
+
+### Failure policy
+- Expected compatibility absence stays quiet. For `BookmarkObjectLinkReadStore`, invalid ids or a normal empty query result still return `null` without logging.
+- #488 only adds a debug/assert fixed diagnostic when the compatibility SQL lookup itself throws. It does not log workspace ids, bookmark ids, SQL values, URLs, paths, or persisted user content.
+- Similar best-effort paths should distinguish expected absence from exceptional infrastructure/query failure instead of mechanically logging every fallback.
+- Remaining raw user-visible implementation exception interpolation is concentrated in large/shared legacy hosts such as Photo/Tag/Stage1; do not reconstruct those hosts merely to change one message string.
 
 ### AppDatabase
 Historical migration bodies v2-v16 are extracted behind migration helpers. `AppDatabase.migration` is sequencing/wiring rather than the home of historical bodies.
@@ -91,35 +90,26 @@ Responsibility moves include #281 `BookmarkReadStore`, #282 `ProfilePathResolver
 Possible future mutation responsibility remains favorite/status/rating/open-count and nearby batch updates that are close passthroughs from `BookmarkRepository`. Only move them when `app_database.dart` can be patched safely and the change deletes real database-root responsibility.
 
 ### GenericDatabasePage
-Focused extractions already integrated:
-- #310 `GenericDatabasePageStateLoader`
-- #323 `GenericDatabasePageServices.fromWorkspaceStore(...)`
+Focused extractions include #310 `GenericDatabasePageStateLoader` and #323 `GenericDatabasePageServices.fromWorkspaceStore(...)`.
 
 Remaining high-value responsibility includes schema/database actions, Property create/edit workflows and layout-specific host code. Continue only through patch-sized moves that measurably remove Widget responsibility/LOC.
 
 ### Legacy Bookmark compatibility
-Canonical Bookmark visual/URL presentation is converged through shared resolvers/components in the originally inventoried hosts. `docs/LEGACY_BOOKMARK_INVENTORY.md` records #472 as caller-zero retirement rather than live product behavior.
-
-Legacy `bookmarks.url`, thumbnail, Photo and Bookmark storage remains live compatibility/import/export data until production caller-zero and migration/backup handling are proven. Presentation convergence alone is not permission to delete storage.
-
-## Failure-policy state
-The small high-value silent/privacy boundaries are largely complete. #467 and Object #473 keep Image read failures fail-soft and privacy-safe. Expected compatibility misses such as absent mirrored Object-link storage should remain quiet when logging would only add noise.
-
-Remaining raw user-visible implementation exception interpolation is concentrated in large/shared legacy hosts such as Photo/Tag/Stage1. Do not reconstruct those hosts merely to change one error string.
+Canonical Bookmark visual/URL presentation is converged through shared resolvers/components in the inventoried hosts. Legacy `bookmarks.url`, thumbnail, Photo and Bookmark storage remains live compatibility/import/export data until production caller-zero and migration/backup handling are proven. Presentation convergence alone is not permission to delete storage.
 
 ## Confirmed live — not deletion candidates
 Recent current-source audits found real production callers for:
 - `ObjectDetailContent`, `ObjectDetailContentLoader`, and live rename/typed-Value `ObjectDetailEditService` path;
-- `ObjectBodyBlockIdAllocator`, `ObjectBodyBlockDuplicator`, `ObjectBodyEditor`, action/position/reference helpers;
+- Object Body block identity/editor/action/position/reference helpers;
 - `ObjectIdentitySearchService`;
 - `DailyNoteNavigationService` / `DailyNoteDetailNavigationService`;
-- `DatabaseCollectionResolver` / `DatabaseCollectionConfigService`;
+- `DatabaseCollectionDefinition`, `DatabaseCollectionResolver` and `DatabaseCollectionConfigService`;
 - `GenericObjectViewCoordinator` / `ObjectViewProjection`;
 - `DatabaseViewGalleryAdapter`, `DatabaseViewGroupAdapter`, `DatabaseViewCreationService`, `DatabaseViewOpenModeService`;
-- `ObjectOpenPresentationService` and its real hosts;
+- `ObjectOpenPresentationService` and current hosts;
 - `PdfAnnotationStore`, `PhotoReadStore`, `BookmarkAttachmentStore`;
-- Bookmark lifecycle/state enums and current Bookmark detail/list/reverse-lookup/property/relation widgets;
-- legacy `person_roles.dart` persistence and `BookmarkRepository.watchPersonRoles(...)` used by Stage1 / Bookmark property UI;
+- `BookmarkResolvedUrlText`, `BookmarkVisualImage`, Bookmark lifecycle/state and current Bookmark detail/list/reverse-lookup/property/relation widgets;
+- legacy `person_roles.dart` persistence and `BookmarkRepository.watchPersonRoles(...)`;
 - legacy `ImageEditorPage` / `ImageEditService` while Photo management still invokes raw-path editing;
 - `ObjectBoardCreatePlanner` via production `ObjectBoardCreateService`;
 - `GenericDatabaseCollectionPageLoader`, `ObjectAliasStore`, `ObjectTypeTemplateStore`, `SavedViewReadStore`, `WeblinkImageSchemaService` and other inspected small data/services with current production callers.
@@ -128,39 +118,35 @@ Future caller-zero deletion requires current `main` verification of the candidat
 
 ## Deferred real cleanup candidates
 ### Plain-text Body mutation chain
-`ObjectBodySection` is gone. `ObjectDetailEditService.setPlainTextBody(...)` has no production caller; remaining calls are regression-only. `ObjectBodyPlainTextAdapter` is referenced by that dead service method plus its dedicated test.
+`ObjectBodySection` is gone. `ObjectDetailEditService.setPlainTextBody(...)` has no production caller; `ObjectBodyPlainTextAdapter` is referenced by that dead service method plus dedicated tests.
 
 Fully retiring the chain should remove the now-unneeded body-store/adapter dependency from `ObjectDetailEditService` and its one production constructor in `ObjectInspectorPage`. Do this only when the Inspector constructor/import edit can be applied as a genuinely small hunk; do not replace the whole shared host.
 
 ### Temporary Database-presentation re-export shims
-Canonical implementations already live under `lib/features/database/presentation/widgets/`. #474 prevents new shim-import debt and lowered test-only debt from 22 to 19. Remove each shim only after every production caller has naturally moved to the canonical feature path.
+Canonical implementations already live under `lib/features/database/presentation/widgets/`. #474/#482 prevent both dependency growth and creation of additional shim files. Remove each shim only after every production caller has naturally moved to the canonical feature path.
 
 ### Presentation/database reach-through
-Known direct reach-through remains concentrated in `app_shell.dart`, People/Photo/Collection management, Stage1 and `generic_database_page.dart`.
-
-Do not introduce a page-specific wrapper merely to hide `workspaceStore.database`. Revisit Collection rename/note persistence or shared `DatabaseViewStore` composition only when an existing meaningful boundary can absorb actual responsibility for multiple real callers.
+The ceiling is now **9**. Do not introduce page-specific wrappers merely to hide `workspaceStore.database`. Revisit Collection/People/Photo/Stage1/GenericDatabase composition only when an existing meaningful boundary can absorb actual responsibility.
 
 ## Exact next actions
-1. Merge #470 after its refreshed docs head is green and mergeable against latest `main`.
-2. Post an Issue #225 checkpoint recording the caller-zero net -1,770 LOC, #474 shim guard + 22→19 ratchet, current main, active Object #476 ownership, and remaining deferred chains.
+1. Re-read latest `main` and open PR ownership before every code edit.
+2. Keep Object #496's Image/List-media files Object-owned until it merges/closes.
 3. Continue current-source caller-zero auditing outside active Object/Relation ownership; delete only when production callers are zero and still-live behavior has independent coverage.
-4. Lower the shim ceiling below 19 whenever a production host is safely moved from a temporary shim import to its canonical feature import.
-5. Lower the presentation/database ceiling below 12 whenever a real responsibility move removes reach-through.
-6. Retire the plain-text Body chain only when `ObjectInspectorPage` can be patched narrowly.
-7. Continue GenericDatabasePage P1 only via patch-sized extraction of concrete schema/database action, Property workflow, or layout-host responsibility.
-8. Revisit AppDatabase mutation responsibility only when `app_database.dart` can be patched safely without whole-file reconstruction.
-9. Follow Object-first storage retirement: prove production caller-zero plus import/export/backup handling before deleting Bookmark URL/thumbnail/Photo storage.
-10. Treat Issue #414 as separate search-correctness work.
+4. Lower any of the **9 / 19 / 5** ceilings when a real cleanup reduces the corresponding measured debt.
+5. Retire the plain-text Body chain only when `ObjectInspectorPage` can be patched narrowly.
+6. Continue GenericDatabasePage P1 only via patch-sized extraction of concrete schema/database action, Property workflow, or layout-host responsibility.
+7. Revisit AppDatabase mutation responsibility only when `app_database.dart` can be patched safely without whole-file reconstruction.
+8. Follow Object-first storage retirement: prove production caller-zero plus import/export/backup handling before deleting Bookmark URL/thumbnail/Photo storage.
+9. Treat Issue #414 as separate search-correctness work.
 
 ## Validation
-- #467 Flutter CI #1618 green.
-- #472 Flutter CI #1623 green before merge.
-- #474 Flutter CI **#1646 green**: maintainability fixture, both regression ceilings, Drift generation, Analyze and full Test all succeeded before squash merge as `31be90e1dbbfd66592832273820b092cc3a0ce7d`.
-- #470 earlier docs heads passed CI; recheck the refreshed head before merge.
+- #474 Flutter CI #1646 green before merge.
+- #482 Flutter CI #1663 green before merge.
+- #485 Flutter CI #1671 green before merge.
+- #488 Flutter CI #1676 green before merge.
 
 ## Risks / sequencing
-- parallel lanes can move `main` quickly; re-read open PR ownership before shared code changes;
-- Object #476 currently owns canonical Image crop selector/dialog geometry/widget files; do not overlap them;
+- parallel lanes can move `main` quickly; rebuild small diffs on current main rather than force-merging stale branches;
 - large shared hosts must remain patch-sized;
 - connector file writes replace complete existing files, so do not reconstruct a large host for a one-line import/constructor change;
 - legacy Bookmark URL/thumbnail/Photo storage remains live compatibility data;
@@ -168,6 +154,6 @@ Do not introduce a page-specific wrapper merely to hide `workspaceStore.database
 - Image product semantics remain Object-owned and Relation semantics remain Relation-owned.
 
 ## Continuation state
-The obvious whole-module caller-zero candidates found in the latest pass are retired through #472. #474 now makes temporary Database-presentation shim debt monotonic and immediately reduced the measured count to 19 without production-host churn.
+The obvious whole-module caller-zero candidates found in the latest pass are retired through #472. Refactor now has monotonic CI ratchets for direct database reach-through, legacy shim imports, and shim-file count, and exceptional Bookmark object-link query failure is observable without changing fail-soft release behavior.
 
-The next safe Refactor work should be a true caller-zero deletion, a patch-sized responsibility move, or an opportunistic canonical-import migration that lowers an existing ceiling. Avoid Object #476's active Image crop files. Do not force the plain-text Body chain, shim removal, or database reach-through cleanup through whole-file reconstruction.
+The next safe Refactor work should be a true caller-zero deletion, a patch-sized responsibility move, or an opportunistic canonical-import migration that lowers an existing ceiling. Do not force the plain-text Body chain, shim removal, or database reach-through cleanup through whole-file reconstruction.
