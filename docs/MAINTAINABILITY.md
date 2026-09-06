@@ -41,7 +41,7 @@ Issue #225 recorded the following approximate source sizes before this refactor 
 
 These are a baseline, not hard limits. A refactor should reduce responsibility, duplicate production references, or source size rather than merely relocate the same complexity.
 
-## LOC report
+## Maintainability report
 
 Run from the repository root:
 
@@ -49,7 +49,12 @@ Run from the repository root:
 bash tool/maintainability_report.sh
 ```
 
-Use `--top N` to change the number of files shown. The report includes total Dart LOC under `lib/` and `test/` plus the largest Dart files by LOC.
+Use `--top N` to change the number of files shown. The report includes:
+- total Dart LOC under `lib/` and `test/`;
+- the largest Dart files by LOC;
+- direct `workspaceStore.database` reach-through occurrences under `lib/views/` and `lib/widgets/`, grouped by file.
+
+The presentation/database metric is intentionally narrow. It does not claim every existing occurrence is currently removable; it makes composition debt visible so responsibility-moving PRs can show an actual reduction instead of only adding another wrapper.
 
 The report is deliberately non-blocking at first. Existing debt should not make unrelated PRs fail. Once the baseline has stabilized, CI may add regression-only thresholds that tolerate current hotspots but reject major new growth.
 
@@ -61,4 +66,5 @@ For Issue #225, prefer these measures over abstraction count:
 2. duplicate presentation/read paths deleted;
 3. `AppDatabase` responsibilities moved behind existing Repository/Store ownership without semantic changes;
 4. large-file LOC and responsibility count reduced;
-5. broad silent catches replaced with explicit best-effort/error policy plus tests where practical.
+5. broad silent catches replaced with explicit best-effort/error policy plus tests where practical;
+6. direct presentation -> database reach-through references reduced where a focused Store/Service/composition boundary already exists.
