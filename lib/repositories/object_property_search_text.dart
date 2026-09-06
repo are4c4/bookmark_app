@@ -43,9 +43,13 @@ String buildObjectPropertySearchText({
 /// focused refresh produce the same token stream regardless of map iteration
 /// order. Object title remains a dedicated search bucket and Relation/File/
 /// Image/computed values continue through their own canonical contributors.
+/// Dedicated domain contributors can claim Property ids through
+/// [excludedPropertyIds] to prevent double indexing or accidental leakage of
+/// metadata that the domain projection deliberately treats as non-searchable.
 String buildObjectPropertiesSearchText({
   required AppObject object,
   required AppObjectType objectType,
+  Set<int> excludedPropertyIds = const <int>{},
 }) {
   if (object.objectTypeId != objectType.id) {
     throw ArgumentError(
@@ -62,7 +66,11 @@ String buildObjectPropertiesSearchText({
     });
 
   return ordered
-      .where((property) => property.type != ObjectPropertyType.title)
+      .where(
+        (property) =>
+            property.type != ObjectPropertyType.title &&
+            !excludedPropertyIds.contains(property.id),
+      )
       .map(
         (property) => buildObjectPropertySearchText(
           property: property,
