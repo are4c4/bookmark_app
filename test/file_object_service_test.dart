@@ -159,15 +159,15 @@ void main() {
       defaultsStore: ObjectTypeDefaultsStore(genericStore),
     );
 
-    expect(
-      () => service.findOrCreateManaged(
+    await expectLater(
+      service.findOrCreateManaged(
         workspaceId: workspaceId,
         filePath: '   ',
       ),
       throwsA(isA<ArgumentError>()),
     );
-    expect(
-      () => service.findOrCreateManaged(
+    await expectLater(
+      service.findOrCreateManaged(
         workspaceId: workspaceId,
         filePath: '/managed/file.bin',
         sizeBytes: -1,
