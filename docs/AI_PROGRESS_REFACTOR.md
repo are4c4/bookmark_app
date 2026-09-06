@@ -8,18 +8,19 @@ Issue #225 — reduce maintenance hotspots and retire duplicate legacy paths whi
 Primary lane: **Refactor**. Object owns replacement product semantics and Relation owns canonical Relation semantics. Refactor owns measurable responsibility reduction, legacy retirement after parity, failure-policy/privacy cleanup, and maintainability guardrails.
 
 ## Current checkpoint — 2026-09-07
-Latest `main` verified for this slice: **`f87b463b0991c8e2b4a3aa7e41db68a677b28aa3`** after Object #442/#446. Relation #445 is documentation-only and does not own Refactor files.
+Latest `main` verified for this checkpoint: **`21eb29ae08d6e51bea1264792d204be0470d9065`** after Refactor #448, followed by Relation handoff-only synchronization. #448 passed Flutter CI #1565 and is merged.
 
-Previous docs-only Refactor PR #444 became stale/non-mergeable after main moved and was closed rather than force-merged.
+Current Refactor state:
+- #443 added `--max-boundary-refs N` plus isolated fixture coverage to `tool/maintainability_report.sh`;
+- #448 now runs the real repository metric in Flutter CI with the accepted ceiling of **12** presentation `workspaceStore.database` references;
+- default local report mode remains non-blocking unless a threshold is explicitly supplied;
+- future reach-through reductions must ratchet the CI ceiling downward instead of allowing the removed debt to return;
+- no Refactor production PR is currently open at this checkpoint.
 
-Current Refactor WIP: `refactor/issue-225-ci-boundary-ceiling-447`.
-- #443 already added `--max-boundary-refs N` plus isolated fixture coverage to `tool/maintainability_report.sh`;
-- this slice wires the real repository metric into Flutter CI with the accepted ceiling of **12** presentation `workspaceStore.database` references;
-- the default local report remains non-blocking unless a threshold is explicitly supplied;
-- `docs/MAINTAINABILITY.md` now records that CI owns the current accepted ceiling and that the ceiling should ratchet downward when Refactor removes reach-through references;
-- no product, persistence, Relation, Image-edit, or UI behavior changes are included.
-
-Shared hotspots (`generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, `bookmark_unified_stage1_page.dart`, `app_database.dart`) were deliberately not touched.
+Current cross-lane ownership:
+- Object #447 owns canonical Image same-path preview refresh; do not overlap Image edit/preview/ownership semantics;
+- Relation work remains documentation/lifecycle-audit focused and canonical Relation semantics remain out of Refactor scope;
+- shared hotspots (`generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, `bookmark_unified_stage1_page.dart`, `app_database.dart`) remain patch-sized-only targets.
 
 ## Recent Refactor convergence
 - **#373 merged** — Bookmark visual/lifecycle URL presentation delegates resolver composition to `BookmarkPresentationResolverFactory`.
@@ -33,9 +34,11 @@ Shared hotspots (`generic_database_page.dart`, `app_shell.dart`, `object_inspect
 - **#408 merged** — `BacklinkRepository` delegates focused relation reads through `BookmarkRepository.watchRelationsForBookmark(...)`.
 - **#417 merged** — retired caller-zero `saved_view_extensions.dart` and dead-only tests.
 - **#422 merged** — deduplicated Bookmark -> FTS projection SQL used by rebuild and focused refresh.
+- **#427 merged** — retired caller-zero `DatabaseCollectionViewProjector` plus its dead-only test, deleting 234 LOC with no replacement abstraction.
 - **#431 merged** — retired caller-zero `DailyNoteDetailService` plus dead-only tests, deleting 94 LOC.
 - **#439 merged** — `NotionBookmarkCard` delegates URL resolver composition through `BookmarkPresentationResolverFactory`.
 - **#443 merged** — opt-in presentation/database reach-through regression threshold plus fixture regression test.
+- **#448 merged** — Flutter CI enforces the current presentation/database reach-through ceiling of 12 while preserving non-blocking default local reporting.
 
 Issue #414 separately tracks possible FTS focused-refresh stale-token correctness. Do not turn that semantic question into behavior-preserving cleanup.
 
@@ -49,9 +52,8 @@ Merged guardrails include:
 - `docs/ERROR_POLICY_AUDIT.md`;
 - `docs/architecture.md` dependency-boundary guidance;
 - #401 direct Bookmark resolver construction guard;
-- #443 opt-in regression ceiling and fixture coverage.
-
-Current WIP makes the boundary ceiling an actual CI repository regression guard at 12 references while preserving non-blocking default local reporting.
+- #443 opt-in boundary regression ceiling and fixture coverage;
+- #448 actual CI enforcement at the accepted ceiling of 12.
 
 New Object/Database/View code must not deepen `BookmarkItem` / legacy-table coupling unless it is an explicit compatibility or migration boundary.
 
@@ -71,7 +73,7 @@ The originally inventoried direct Bookmark visual duplicates are canonicalized t
 
 #401 prevents new direct URL/visual resolver construction in presentation. #439 removed the remaining known direct Notion-card URL resolver construction.
 
-#417 and #431 are whole-module caller-zero retirements: dead modules were deleted rather than retained as speculative compatibility wrappers.
+#417, #427 and #431 demonstrate the current deletion-first rule: caller-zero modules and their dead-only tests are removed instead of retained as speculative abstractions.
 
 Legacy `bookmarks.url`, thumbnail, Photo and Bookmark tables remain live compatibility/import/export data until production caller-zero and migration/backup policy are proven. Presentation convergence alone is not permission to delete storage.
 
@@ -86,25 +88,27 @@ Remaining high-value responsibilities include schema/database actions, Property-
 Intentional fail-soft behavior stays fail-soft; rollback cleanup never replaces the primary failure; user-visible errors use stable messages; debug diagnostics avoid raw persisted/request user content. Remaining raw exception interpolation is concentrated in large/shared legacy hosts and should not trigger isolated logging churn.
 
 ## Dependency-composition state
-Presentation database reach-through is measured by `tool/maintainability_report.sh`. Confirmed reductions include resolver composition (#373/#395/#439), backup composition (#400) and focused Bookmark backlink reads (#408).
+Presentation database reach-through is measured and now regression-guarded by `tool/maintainability_report.sh` + Flutter CI. Confirmed reductions include resolver composition (#373/#395/#439), backup composition (#400) and focused Bookmark backlink reads (#408).
 
 Known remaining reach-through is concentrated in `app_shell.dart`, People/Photo/Collection management, Stage1 and `generic_database_page.dart`. Photo management remains adjacent to Object-owned Image semantics. Prefer a real responsibility move with an existing meaningful boundary over wrappers created solely to hide property access.
 
-The CI ceiling is currently 12. Any future Refactor PR that reduces the measured count should lower the CI ceiling at the same time or in an immediately following focused PR.
+The CI ceiling is **12**. Any Refactor slice that removes measured reach-through must lower this ceiling in the same PR or an immediately following focused PR.
+
+`CollectionManagementPage` is a concrete future candidate because it still owns direct Drift collection rename/note writes in addition to constructing `DatabaseViewStore` from `repository.workspaceStore.database`. There is no existing general collection-update repository API today. Do not invent a one-caller facade solely to lower the metric; address this only when a patch-sized change can move actual mutation responsibility to an existing appropriate boundary.
 
 ## Cross-lane coordination
 ### Object lane
-Object owns #56/#155/#245/#249 product/presentation convergence. Object #442 added safe canonical Image detail edit actions and #446 refreshed its handoff. Refactor must not alter Image edit/restore/ownership semantics while reducing unrelated debt.
+Object owns #56/#155/#245/#249 product/presentation convergence. Current work includes canonical Image edit/preview parity. Refactor must not alter Image edit/restore/file-ownership semantics while reducing unrelated debt.
 
 ### Relation lane
-Canonical Relation mutation/read/index/backlink/audit/reconcile remains mature. Relation #445 is documentation-only. Refactor must not create alternate Relation writes, indexes, repair paths or presentation-side mutation.
+Canonical Relation mutation/read/index/backlink/audit/reconcile remains mature. Refactor may narrow legacy callers but must not create alternate Relation writes, indexes, repair paths or presentation-side mutation. Relation integrity/reconcile services are explicit Relation-owned contracts and are not caller-zero cleanup candidates merely because they are not invoked by ordinary product presentation.
 
 ## Exact next actions
-1. Validate the current CI-ceiling branch through PR CI; merge only when the maintainability ceiling, Analyze and full tests pass and the PR remains mergeable.
-2. Re-read live open PR ownership before every shared-host change.
-3. Prefer the next measurable responsibility/LOC reduction or true caller-zero deletion over another diagnostic micro-PR.
-4. Re-audit small compatibility modules for production caller-zero; delete only when tests/import/export/migration expectations are independently covered.
-5. Reduce presentation `workspaceStore.database` reach-through only in small/owned hosts with an existing meaningful Store/Service boundary, and ratchet the CI ceiling downward with each reduction.
+1. Re-read live open PR ownership before every shared-host change.
+2. Prefer the next measurable responsibility/LOC reduction or true caller-zero deletion over another diagnostic micro-PR.
+3. Re-audit small compatibility modules for production caller-zero; delete only when still-live behavior has independent coverage.
+4. Reduce presentation `workspaceStore.database` reach-through only when a real persistence/composition responsibility moves to an existing meaningful boundary; ratchet CI below 12 with each proven reduction.
+5. Keep `CollectionManagementPage` as a candidate for direct SQL/reach-through removal, but wait for a patch-sized safe edit path rather than whole-file reconstruction.
 6. Continue GenericDatabasePage P1 only when a safe extraction removes concrete schema/database action, Property workflow or layout-host responsibility.
 7. Revisit AppDatabase mutation responsibility only when `app_database.dart` can be patched safely without whole-file reconstruction.
 8. Follow Object-first storage retirement: prove production caller-zero plus import/export/backup handling before deleting Bookmark URL/thumbnail/Photo storage.
@@ -112,7 +116,7 @@ Canonical Relation mutation/read/index/backlink/audit/reconcile remains mature. 
 10. Treat Issue #414 as separate search correctness work.
 
 ## Validation expectations
-- P0 tooling: focused shell fixture regression, actual repository report with CI ceiling, plus Flutter Analyze/Test baseline;
+- P0 tooling: fixture regression + actual repository ceiling + Flutter Analyze/Test;
 - responsibility moves: focused regression + `flutter analyze` + full tests before merge;
 - caller-zero deletion: current production code search plus independent coverage for still-live behavior;
 - migration work: historical fixture coverage and exact schema/order/default preservation;
@@ -126,4 +130,4 @@ Canonical Relation mutation/read/index/backlink/audit/reconcile remains mature. 
 - abstractions that add wrappers without removing responsibility should be rejected.
 
 ## Stop / continuation state
-Refactor remains actionable. Current WIP converts the existing opt-in P0 boundary metric into a real CI regression ceiling without touching product semantics. After CI/merge, continue with caller-zero or responsibility-reduction slices that avoid active Object ownership and Relation semantics.
+Refactor remains actionable. #448 completed the P0 boundary-regression guardrail; the next work should reduce actual responsibility or delete caller-zero code. Avoid metric-only wrappers, active Object Image ownership, and canonical Relation redesign.
