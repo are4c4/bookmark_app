@@ -26,8 +26,7 @@ Re-run code search and inspect current files before deletion because the Object 
 | `lib/repositories/full_text_search_repository.dart` | compatibility bridge | Still provides Bookmark global search. #422 centralizes its Bookmark -> FTS projection; do not treat SQL deduplication as search-semantic retirement. Issue #414 separately tracks possible stale focused-refresh tokens. |
 | `lib/repositories/backlink_repository.dart` | compatibility bridge | Bookmark-facing backlink model remains live. #408 removed direct database reach-through and whole-table watch, but the compatibility model still exists until its presentation callers retire. |
 | `lib/widgets/bookmark_relation_section.dart` | compatibility bridge | Bookmark detail exposes Relation/backlink information through Bookmark-centric inputs; do not redesign Relation here. |
-| `lib/widgets/person_role_properties.dart` | canonical product behavior / compatibility | Shared Property-add flow is integrated; Person assignment remains on existing semantics. |
-| `lib/widgets/bookmark_reorderable_properties.dart` | canonical product behavior / compatibility | Still-live Bookmark Property host; UI convergence is not retirement. |
+| `lib/widgets/bookmark_reorderable_properties.dart` | canonical product behavior / compatibility | Still-live Bookmark Property/Person-role host after #472 retired the unused `PersonRoleProperties` duplicate. |
 | `lib/widgets/bookmark_detail_panel.dart` | canonical product behavior / compatibility | Still-live Bookmark detail. Managed visual migration is integrated; move metadata/URL responsibilities only with proven replacement parity. |
 | `lib/widgets/bookmark_visual_image.dart` | compatibility bridge | Shared Bookmark-host visual boundary: user cover -> canonical managed visual -> legacy thumbnail fallback. Keep until Bookmark compatibility hosts disappear. |
 | `lib/services/bookmark_visual_resolver.dart` | compatibility bridge | Read-only canonical/legacy visual precedence resolver. New presentation must not bypass it. |
@@ -53,6 +52,17 @@ Re-run code search and inspect current files before deletion because the Object 
 - no active Saved View UI, persistence schema, Database/View behavior or migration behavior changed.
 
 Do not reintroduce a duplicate-Saved-View BookmarkRepository extension unless a real product caller and ownership contract appear.
+
+### `lib/widgets/person_role_properties.dart` — removed by #472
+`PersonRoleProperties` reached **zero production callers** after Bookmark detail/property behavior converged on `BookmarkReorderableProperties` plus the shared canonical Property-row components. The only remaining reference was a source-string architecture test that asserted the internal popover choice of the dead widget itself.
+
+#472 removed the widget and that dead-only test:
+- 268 production LOC removed;
+- 22 dead-only test LOC removed;
+- no Person-role persistence, `BookmarkRepository.watchPersonRoles(...)`, Stage1 Person presentation, Relation semantics, schema, or migration behavior changed;
+- Flutter CI #1623 passed before merge.
+
+Do not infer a Person Object/Relation migration from this cleanup. Legacy Person-role persistence remains live through `person_roles.dart`, `BookmarkRepository`, Stage1 and `BookmarkReorderableProperties` until a separately defined Object-first Person contract exists.
 
 ## Retired AppDatabase responsibilities
 
@@ -112,6 +122,11 @@ Several consumers still obtain lower-level capabilities through `BookmarkReposit
 
 Attachment UI has multiple direct `BookmarkAttachmentStore` constructions through repository-owned database access. Do not solve this by making `BookmarkRepository` a broader service locator; wait for a focused boundary that removes real responsibility.
 
+### Temporary presentation re-export shims
+Current legacy re-export shims include `database_page_toolbar.dart`, `database_view_tabs.dart`, `database_create_tiles.dart`, `resizable_detail_pane.dart`, and `detail_property_row.dart` under `lib/widgets/`.
+
+Their canonical implementations live under `lib/features/database/presentation/widgets/`. The shims remain because legacy imports still exist in large real hosts such as Photo/People/Collection management, GenericDatabasePage, Stage1, `bookmark_reorderable_properties.dart`, or focused tests. Do not reconstruct those large hosts solely to change one import. Retire each shim when its remaining callers can be changed through a naturally patch-sized edit or while that host is already being safely modified.
+
 ### GenericDatabasePage hotspot
 Refactor progress includes:
 - #310 — read/projection state loading -> `GenericDatabasePageStateLoader`;
@@ -142,4 +157,5 @@ A match is not automatically wrong, but the PR must classify it and state the re
 3. Continue Object-first Photo/Image and Bookmark/Image convergence from existing bridges; do not create a second compatibility bridge or destructively remove legacy Photo storage.
 4. Re-audit Bookmark query/search/backlink/detail presentation only where generic Object/Database/Relation behavior has proven parity; do not replace live behavior just to reduce reference counts.
 5. Continue GenericDatabasePage P1 decomposition and repository/composition cleanup as measurable responsibility/LOC reductions.
-6. Treat #414 as search correctness work, not as a pretext for changing behavior inside Issue #225 refactors.
+6. Retire temporary feature re-export shims opportunistically when caller imports can be changed without whole-file host reconstruction.
+7. Treat #414 as search correctness work, not as a pretext for changing behavior inside Issue #225 refactors.
