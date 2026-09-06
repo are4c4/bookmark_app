@@ -26,8 +26,11 @@ void main() {
     );
   });
 
-  Future<({int sourceTypeId, int targetTypeId, ObjectPropertyDefinition property})>
-      createRelation({bool multiple = true}) async {
+  Future<({
+    int sourceTypeId,
+    int targetTypeId,
+    ObjectPropertyDefinition property,
+  })> createRelation({bool multiple = true}) async {
     final sourceTypeId = await objectStore.createObjectType(
       workspaceId: workspaceId,
       name: 'Source',
@@ -51,6 +54,17 @@ void main() {
       property: property,
     );
   }
+
+  List<(int, int, int, int)> edgeShape(List<ObjectRelationEdge> edges) => edges
+      .map(
+        (edge) => (
+          edge.sourceObjectId,
+          edge.propertyId,
+          edge.targetObjectId,
+          edge.position,
+        ),
+      )
+      .toList(growable: false);
 
   test('target change fails closed and preserves value, edge and backlink', () async {
     final setup = await createRelation();
@@ -161,7 +175,7 @@ void main() {
       property: setup.property,
       targetObjectIds: <int>[targetId],
     );
-    final edgesBefore = await objectStore.outgoingRelations(sourceId);
+    final edgesBefore = edgeShape(await objectStore.outgoingRelations(sourceId));
 
     final changed = await service.changeRelationSchema(
       property: setup.property,
@@ -170,7 +184,7 @@ void main() {
     );
 
     final source = (await objectStore.listObjects(setup.sourceTypeId)).single;
-    final edgesAfter = await objectStore.outgoingRelations(sourceId);
+    final edgesAfter = edgeShape(await objectStore.outgoingRelations(sourceId));
     expect(changed.allowsMultipleRelations, isTrue);
     expect(
       ObjectRelationValue.fromJson(source.values[setup.property.id]).objectIds,
