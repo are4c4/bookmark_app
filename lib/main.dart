@@ -15,6 +15,7 @@ import 'services/vault_lifecycle_controller.dart';
 import 'services/vault_lifecycle_scope.dart';
 import 'ui/ui_tokens.dart';
 import 'views/app_shell.dart';
+import 'views/vault_startup_recovery_gate.dart';
 import 'widgets/global_file_drop_layer.dart';
 
 void main() {
@@ -49,6 +50,7 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
   BookmarkLifecycleStore? _lifecycleStore;
   BookmarkRepository? _repository;
   Object? _error;
+  bool _profileLoadFailed = false;
   bool _switching = false;
   ThemeMode _themeMode = ThemeMode.system;
 
@@ -99,8 +101,9 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
   }
 
   Future<void> _load() async {
+    ProfileManager? manager;
     try {
-      final manager = await ProfileManager.load();
+      manager = await ProfileManager.load();
       final profile = manager.state.activeProfile;
       final database = AppDatabase(
         databaseName: profile.databaseName,
@@ -116,10 +119,17 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
         _profileManager = manager;
         _database = database;
         _repository = repository;
+        _error = null;
+        _profileLoadFailed = false;
       });
     } catch (error, stackTrace) {
       _debugBootstrapFailure('Bookmark bootstrap failed.', stackTrace);
-      if (mounted) setState(() => _error = error);
+      if (mounted) {
+        setState(() {
+          _error = error;
+          _profileLoadFailed = manager == null;
+        });
+      }
     }
   }
 
@@ -160,6 +170,7 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
         _repository = repository;
         _switching = false;
         _error = null;
+        _profileLoadFailed = false;
       });
     } catch (error, stackTrace) {
       _debugBootstrapFailure('Profile switch failed.', stackTrace);
@@ -180,6 +191,7 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
           _repository = fallbackRepository;
           _switching = false;
           _error = error;
+          _profileLoadFailed = false;
         });
       } catch (_, fallbackStackTrace) {
         _debugBootstrapFailure(
@@ -190,6 +202,7 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
           setState(() {
             _switching = false;
             _error = error;
+            _profileLoadFailed = false;
           });
         }
       }
@@ -409,16 +422,18 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
     final repository = _repository;
     Widget home;
     if (_error != null && repository == null) {
-      home = const Scaffold(
-        body: Center(
-          child: Padding(
-            padding: EdgeInsets.all(UiTokens.space24),
-            child: Text(
-              '起動またはProfile切替に失敗しました。\nアプリを再起動して、もう一度お試しください。',
-            ),
-          ),
-        ),
-      );
+      home = _profileLoadFailed
+          ? VaultStartupRecoveryGate(onRetryBootstrap: _load)
+          : const Scaffold(
+              body: Center(
+                child: Padding(
+                  padding: EdgeInsets.all(UiTokens.space24),
+                  child: Text(
+                    '起動またはProfile切替に失敗しました。\nアプリを再起動して、もう一度お試しください。',
+                  ),
+                ),
+              ),
+            );
     } else if (manager == null || repository == null || _switching) {
       home = const Scaffold(body: Center(child: CircularProgressIndicator()));
     } else {
