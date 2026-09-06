@@ -1,16 +1,19 @@
 import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/bidirectional_relation_store.dart';
+import 'package:bookmark_app/data/database_view_property_schema_service.dart';
+import 'package:bookmark_app/data/database_view_store.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
 import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/relation_integrity_service.dart';
 import 'package:bookmark_app/data/relation_mutation_service.dart';
+import 'package:bookmark_app/data/relation_schema_evolution_service.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/domain/object_model.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('pairRole-only metadata is audited and blocks canonical Relation writes',
+  test('pairRole-only metadata fails closed across canonical Relation boundaries',
       () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
@@ -29,6 +32,16 @@ void main() {
     final integrity = RelationIntegrityService(
       objectStore: objectStore,
       bidirectionalStore: bidirectionalStore,
+    );
+    final schemaEvolution = RelationSchemaEvolutionService(
+      objectStore: objectStore,
+      genericStore: genericStore,
+      relationMutations: mutations,
+    );
+    final propertySchema = DatabaseViewPropertySchemaService(
+      objectStore: objectStore,
+      genericStore: genericStore,
+      viewStore: DatabaseViewStore(database),
     );
 
     final sourceTypeId = await objectStore.createObjectType(
@@ -89,6 +102,29 @@ void main() {
       ),
       throwsStateError,
     );
+    await expectLater(
+      bidirectionalStore.setRelation(
+        objectId: sourceId,
+        property: relation,
+        targetObjectIds: <int>[targetId],
+      ),
+      throwsStateError,
+    );
+    await expectLater(
+      schemaEvolution.inspectChange(
+        property: relation,
+        targetObjectTypeId: targetTypeId,
+        multiple: false,
+      ),
+      throwsStateError,
+    );
+    await expectLater(
+      propertySchema.inspectDelete(
+        objectTypeId: sourceTypeId,
+        propertyId: relationId,
+      ),
+      throwsStateError,
+    );
 
     final source = (await objectStore.listObjects(sourceTypeId)).single;
     expect(
@@ -96,5 +132,12 @@ void main() {
       isEmpty,
     );
     expect(await objectStore.backlinks(targetId), isEmpty);
+
+    final unchangedRelation = (await objectStore.getObjectType(sourceTypeId))!
+        .properties
+        .singleWhere((property) => property.id == relationId);
+    expect(unchangedRelation.targetObjectTypeId, targetTypeId);
+    expect(unchangedRelation.allowsMultipleRelations, isFalse);
+    expect(unchangedRelation.config['pairRole'], 'source');
   });
 }
