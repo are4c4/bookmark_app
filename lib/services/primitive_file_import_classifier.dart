@@ -138,6 +138,18 @@ class PrimitiveFileImportClassifier {
         _startsWith(bytes, const <int>[0x50, 0x4b, 0x07, 0x08])) {
       return 'application/zip';
     }
+    if (_startsWith(bytes, const <int>[0x1f, 0x8b])) {
+      return 'application/gzip';
+    }
+    if (_startsWith(
+      bytes,
+      const <int>[0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c],
+    )) {
+      return 'application/x-7z-compressed';
+    }
+    if (_startsWith(bytes, const <int>[0x52, 0x61, 0x72, 0x21, 0x1a, 0x07])) {
+      return 'application/vnd.rar';
+    }
     if (_asciiAt(bytes, 0, 'OggS')) return 'application/ogg';
     if (_asciiAt(bytes, 0, 'fLaC')) return 'audio/flac';
     if (_asciiAt(bytes, 0, 'ID3')) return 'audio/mpeg';
