@@ -1,6 +1,8 @@
 import 'dart:developer' as developer;
 import 'dart:io';
 
+import 'package:image/image.dart' as image;
+
 import '../data/object_store.dart';
 import '../data/profile_path_resolver.dart';
 import '../domain/object_model.dart';
@@ -32,8 +34,10 @@ class ImageManagedVisual {
 ///
 /// The caller is responsible for verifying that [imageObjectTypeId] is the
 /// canonical system Image ObjectType. This reader never ensures schema or
-/// mutates Object values. Persisted Pixel width/height remain optional layout
-/// metadata, while the managed file must still exist before it is presented.
+/// mutates Object values. Persisted Pixel width/height are preferred layout
+/// metadata. If either persisted dimension is unavailable/invalid, the resolver
+/// may probe the existing managed file read-only and use the decoded dimension
+/// pair for this presentation result without writing metadata back to storage.
 /// Profile-relative File values are resolved only at this read boundary so the
 /// stored Image identity remains portable across profile/Vault moves.
 class ImageVisualResolver {
@@ -59,36 +63,45 @@ class ImageVisualResolver {
     if (fileProperties.length != 1) return null;
 
     final objects = await _objectStore.listObjects(imageObjectTypeId);
-    AppObject? image;
+    AppObject? imageObject;
     for (final candidate in objects) {
       if (candidate.id == imageObjectId) {
-        image = candidate;
+        imageObject = candidate;
         break;
       }
     }
-    if (image == null) return null;
+    if (imageObject == null) return null;
 
     final storedPath =
-        _nonEmpty(image.values[fileProperties.single.id]?.toString());
+        _nonEmpty(imageObject.values[fileProperties.single.id]?.toString());
     if (storedPath == null) return null;
     final path = _pathResolver?.resolveStoredPath(storedPath) ?? storedPath;
     if (!await _existingFile(path)) return null;
 
-    final width = _dimensionValue(
+    var width = _dimensionValue(
       imageType.properties
           .where((property) => property.name == 'Pixel width')
           .toList(growable: false),
-      image.values,
+      imageObject.values,
     );
-    final height = _dimensionValue(
+    var height = _dimensionValue(
       imageType.properties
           .where((property) => property.name == 'Pixel height')
           .toList(growable: false),
-      image.values,
+      imageObject.values,
     );
+    if (width == null || height == null) {
+      final probed = await _probeGeometry(path);
+      if (probed != null) {
+        // Use one coherent decoded pair rather than mixing persisted and probed
+        // values. Partial persisted geometry may be stale after older edits.
+        width = probed.width;
+        height = probed.height;
+      }
+    }
 
     return ImageManagedVisual(
-      imageObjectId: image.id,
+      imageObjectId: imageObject.id,
       filePath: path,
       pixelWidth: width,
       pixelHeight: height,
@@ -107,6 +120,19 @@ class ImageVisualResolver {
     return integer;
   }
 
+  Future<({int width, int height})?> _probeGeometry(String path) async {
+    try {
+      final decoded = image.decodeImage(await File(path).readAsBytes());
+      if (decoded == null || decoded.width <= 0 || decoded.height <= 0) {
+        return null;
+      }
+      return (width: decoded.width, height: decoded.height);
+    } catch (_, stackTrace) {
+      _debugGeometryProbeFailure(stackTrace);
+      return null;
+    }
+  }
+
   Future<bool> _existingFile(String path) async {
     try {
       return await File(path).exists();
@@ -114,6 +140,18 @@ class ImageVisualResolver {
       _debugFileProbeFailure(stackTrace);
       return false;
     }
+  }
+
+  void _debugGeometryProbeFailure(StackTrace stackTrace) {
+    assert(() {
+      developer.log(
+        'ImageVisualResolver: managed image geometry probe failed; '
+        'continuing without fallback dimensions.',
+        name: 'bookmark_app.image_visual_resolver',
+        stackTrace: stackTrace,
+      );
+      return true;
+    }());
   }
 
   void _debugFileProbeFailure(StackTrace stackTrace) {
