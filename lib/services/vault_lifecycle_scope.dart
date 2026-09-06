@@ -9,6 +9,7 @@ class VaultLifecycleScope extends InheritedWidget {
     required this.createVault,
     required this.openVault,
     required this.switchVault,
+    this.moveVault,
     required super.child,
   });
 
@@ -16,6 +17,7 @@ class VaultLifecycleScope extends InheritedWidget {
   final Future<void> Function() createVault;
   final Future<void> Function() openVault;
   final Future<void> Function(DatabaseProfile profile) switchVault;
+  final Future<void> Function()? moveVault;
 
   static VaultLifecycleScope? maybeOf(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<VaultLifecycleScope>();
@@ -31,5 +33,6 @@ class VaultLifecycleScope extends InheritedWidget {
       profileState != oldWidget.profileState ||
       createVault != oldWidget.createVault ||
       openVault != oldWidget.openVault ||
-      switchVault != oldWidget.switchVault;
+      switchVault != oldWidget.switchVault ||
+      moveVault != oldWidget.moveVault;
 }

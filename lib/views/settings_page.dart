@@ -21,6 +21,7 @@ class SettingsPage extends StatelessWidget {
     this.onCreateVault,
     this.onOpenVault,
     this.onSwitchVault,
+    this.onMoveVault,
   });
 
   final ThemeMode themeMode;
@@ -33,6 +34,7 @@ class SettingsPage extends StatelessWidget {
   final VoidCallback? onCreateVault;
   final VoidCallback? onOpenVault;
   final VoidCallback? onSwitchVault;
+  final VoidCallback? onMoveVault;
 
   Future<void> _runVaultAction(
     BuildContext context,
@@ -95,6 +97,17 @@ class SettingsPage extends StatelessWidget {
             ? null
             : () async {
                 await _switchVaultFromScope(context, vaultScope);
+              });
+    final scopeMoveVault = vaultScope?.moveVault;
+    final VoidCallback? moveVaultAction = onMoveVault ??
+        (scopeMoveVault == null
+            ? null
+            : () async {
+                await _runVaultAction(
+                  context,
+                  scopeMoveVault,
+                  'Vaultを移動できませんでした。移動元のVaultは削除されていません。',
+                );
               });
     return Scaffold(
       appBar: AppBar(
@@ -163,6 +176,7 @@ class SettingsPage extends StatelessWidget {
               onCreateVault: createVaultAction,
               onOpenVault: openVaultAction,
               onSwitchVault: switchVaultAction,
+              onMoveVault: moveVaultAction,
             ),
           ],
           const SizedBox(height: UiTokens.space24),
