@@ -43,10 +43,15 @@ class ObjectTypeDefaults {
       if (raw is! List) {
         throw FormatException('$key must be a list.');
       }
-      return raw
-          .map((item) => item is int ? item : int.tryParse('$item'))
-          .whereType<int>()
-          .toList(growable: false);
+      final ids = <int>[];
+      for (final item in raw) {
+        final id = item is int ? item : int.tryParse('$item');
+        if (id == null) {
+          throw FormatException('$key entries must be integer Property ids.');
+        }
+        ids.add(id);
+      }
+      return ids;
     }
 
     final rawOpenMode = value['openMode'];
