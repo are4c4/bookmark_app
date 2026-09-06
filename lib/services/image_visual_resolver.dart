@@ -6,6 +6,7 @@ import 'package:image/image.dart' as image;
 import '../data/object_store.dart';
 import '../data/profile_path_resolver.dart';
 import '../domain/object_model.dart';
+import 'managed_file_resolver.dart';
 
 class ImageManagedVisual {
   const ImageManagedVisual({
@@ -41,17 +42,17 @@ class ImageManagedVisual {
 /// result without writing metadata back to storage. Path-only consumers such as
 /// small List thumbnails can disable that probe to avoid decoding full image
 /// bytes when geometry is irrelevant. Profile-relative File values are resolved
-/// only at this read boundary so stored Image identity remains portable across
-/// profile/Vault moves.
+/// through the shared file-backed capability so stored Image identity remains
+/// portable across profile/Vault moves.
 class ImageVisualResolver {
-  const ImageVisualResolver(
+  ImageVisualResolver(
     this._objectStore, {
     ProfilePathResolver? pathResolver,
     this.probeMissingGeometry = true,
-  }) : _pathResolver = pathResolver;
+  }) : _fileResolver = ManagedFileResolver(pathResolver: pathResolver);
 
   final ObjectStore _objectStore;
-  final ProfilePathResolver? _pathResolver;
+  final ManagedFileResolver _fileResolver;
   final bool probeMissingGeometry;
 
   Future<ImageManagedVisual?> resolveManaged({
@@ -79,9 +80,9 @@ class ImageVisualResolver {
 
     final storedPath =
         _nonEmpty(imageObject.values[fileProperties.single.id]?.toString());
-    if (storedPath == null) return null;
-    final path = _pathResolver?.resolveStoredPath(storedPath) ?? storedPath;
-    if (!await _existingFile(path)) return null;
+    final fileReference = await _fileResolver.resolveExisting(storedPath);
+    if (fileReference == null) return null;
+    final path = fileReference.resolvedPath;
 
     var width = _dimensionValue(
       imageType.properties
@@ -138,32 +139,11 @@ class ImageVisualResolver {
     }
   }
 
-  Future<bool> _existingFile(String path) async {
-    try {
-      return await File(path).exists();
-    } catch (_, stackTrace) {
-      _debugFileProbeFailure(stackTrace);
-      return false;
-    }
-  }
-
   void _debugGeometryProbeFailure(StackTrace stackTrace) {
     assert(() {
       developer.log(
         'ImageVisualResolver: managed image geometry probe failed; '
         'continuing without fallback dimensions.',
-        name: 'bookmark_app.image_visual_resolver',
-        stackTrace: stackTrace,
-      );
-      return true;
-    }());
-  }
-
-  void _debugFileProbeFailure(StackTrace stackTrace) {
-    assert(() {
-      developer.log(
-        'ImageVisualResolver: managed file existence probe failed; '
-        'treating the optional visual as unavailable.',
         name: 'bookmark_app.image_visual_resolver',
         stackTrace: stackTrace,
       );
