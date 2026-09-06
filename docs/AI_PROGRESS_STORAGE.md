@@ -25,20 +25,46 @@ Own the physical data-location lifecycle independently from Object/Relation prod
 - Never add a second Image/File ownership model in Storage merely for Vault support.
 
 ## Current implementation checkpoint
-The existing Profile layout is already Vault-like (`database.sqlite`, profile metadata, photos, attachments), but custom persisted directory paths are not yet fully authoritative. macOS release packaging is effectively implemented and locally launch-validated; remaining work is small compared with #242.
+Issue #242 is now in active implementation.
 
-## Initial next actions
-1. Add/load regressions for stored custom Profile/Vault directory paths and legacy fallback.
-2. Make custom valid directory paths authoritative without silently creating replacement empty Vaults.
-3. Add read-only current Vault path + Finder reveal before create/open/switch UX.
-4. Audit backup/restore and managed Image/File paths before any move semantics.
-5. Coordinate shared file-backed capability requirements with Primitive lane before introducing new storage abstractions.
+- #519 is merged on `main` (`19e881de`): Settings shows the active Vault folder name/path and provides `Finderで表示` through a Storage-owned reveal service. This slice deliberately avoids `app_shell.dart` and derives the physical location from `BookmarkRepository.profileDirectoryPath`.
+- #509 (`feature/storage-vault-path-loading`) makes persisted non-empty `DatabaseProfile.directoryPath` authoritative, keeps legacy empty paths on the app-managed fallback, fails closed for unavailable custom Vault directories/databases, and points the native Drift connection at `<Vault>/database.sqlite`. Filesystem regressions cover custom path persistence, legacy fallback, missing Vaults, and actual SQLite placement. Current-head CI has passed maintainability checks, Drift generation and `flutter analyze`; full tests are running after adding the required `path_provider` test harness for native temporary-directory lookup.
+- #525 (`feature/storage-vault-create-open-core`, stacked on #509) adds safe `createVault` / `openVault` core operations. Create refuses non-empty target directories, initializes the normal schema before registry mutation, and writes portable metadata. Open validates `profile.json` + `database.sqlite`, runs the normal Drift open/migration path in place, and registers only after validation. Removing an external/custom Vault from Profile state is unregister-only; physical recursive deletion remains limited to app-managed Profile directories.
+- #525 filesystem tests now provide the same `path_provider` temporary-directory test boundary used by #509, so native custom-path Drift connections are testable without desktop plugins.
+
+The existing Profile layout remains the Vault v1 layout: `database.sqlite`, `profile.json`, `photos/`, and `attachments/`. Internal `DatabaseProfile` / `ProfileManager` terminology is intentionally unchanged.
+
+## Data-safety findings
+- A persisted custom Vault must never be recreated as an empty directory/database when its configured path is missing.
+- `profileDirectoryPath` must control both managed media resolution and the physical SQLite file; retaining only registry metadata is insufficient.
+- External/custom Vault unregister/delete must not recursively delete user-owned folders.
+- Create/Open must validate and initialize before registry mutation, then use the existing app-level Profile switch/bootstrap lifecycle rather than opening a second long-lived database graph.
+- `ProfilePathResolver` and existing duplication logic already provide the foundation for profile-relative media/attachment portability. Move semantics should reuse these proven rules rather than introduce another path model.
+- `ProfileBackupService` checkpoints SQLite before export and packages the whole Profile/Vault directory. Backup/restore portability still needs explicit regression coverage before safe move work changes copy semantics.
+
+## Active PR stack
+1. #509 — `feature/storage-vault-path-loading` -> `main`.
+2. #525 — `feature/storage-vault-create-open-core` -> #509 branch; retarget to `main` after #509 lands.
+
+#519 has already landed and should not be reimplemented.
+
+## Next actions
+1. Finish #509 full CI and merge when green; if `main` moves, verify the unchanged `AppDatabase` constructor / `ProfileManager.load()` hunks rather than blindly rebuilding large files.
+2. Retarget #525 to `main`, obtain full CI, and merge the Create/Open core.
+3. Add Settings `新しいVaultを作成` / `既存のVaultを開く` / `Vaultを切り替える` using the platform folder picker and the existing app-level Profile switch lifecycle. Do not open/switch databases directly inside Settings widgets.
+4. Add backup/restore portability regressions covering complete Vault contents plus profile-relative photos/attachments.
+5. Add recent/switch UX and missing/moved Vault relink recovery.
+6. Implement safe move only after Create/Open/UI paths are proven: close/checkpoint -> copy -> validate -> registry update -> reopen/verify -> optional source deletion offered separately.
+7. Document cloud-folder best-effort support and the no-concurrent-editing SQLite limitation.
 
 ## Safety
 - Never silently replace a missing Vault with a new empty database.
 - Never delete/move source Vault data before target validation and successful reopen.
-- Preserve external file references; do not silently copy/rebase them.
+- Never recursively delete external/custom Vault files as a side effect of removing a registry entry.
+- Preserve external absolute file references; do not silently copy/rebase them.
 - Keep SQLite concurrency limitations explicit for cloud-synced folders.
+- Keep Object/Relation persistence semantics unchanged.
+- Avoid large shared-hotspot rewrites; inspect open PR ownership before touching `app_shell.dart`, `main.dart`, `settings_page.dart`, or `profile_manager.dart`.
 
 ## Handoff checklist
 Record active Issue, branch/PR/commit, filesystem operations changed, data-safety validation, Primitive/Refactor dependencies, hotspot ownership, next actions, and stop reason.
