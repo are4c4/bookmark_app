@@ -47,6 +47,11 @@ void main() {
       title: 'Example Image',
     );
 
+    tester.view.physicalSize = const Size(1200, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     Future<void> openInspector(int objectId) async {
       await tester.pumpWidget(
         MaterialApp(
