@@ -146,7 +146,34 @@ void main() {
     await tester.tap(find.text('場所を指定し直す'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Vaultの保存場所を更新できませんでした'), findsOneWidget);
+    expect(find.textContaining('Vaultの復旧操作を完了できませんでした'), findsOneWidget);
+    expect(find.textContaining(secret), findsNothing);
+  });
+
+  testWidgets('unregister failures use the same privacy-safe recovery message',
+      (tester) async {
+    const secret = '/Volumes/private/offline-vault';
+    await tester.pumpWidget(
+      _host(
+        locations: [
+          _location(
+            id: 'inactive',
+            name: 'Offline',
+            path: '/missing/offline',
+            availability: VaultAvailability.missingDirectory,
+          ),
+        ],
+        onRelink: (_) async {},
+        onUnregister: (_) async => throw StateError('failed at $secret'),
+      ),
+    );
+
+    await tester.tap(find.text('登録から外す'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '登録から外す'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Vaultの復旧操作を完了できませんでした'), findsOneWidget);
     expect(find.textContaining(secret), findsNothing);
   });
 
