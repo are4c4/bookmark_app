@@ -10,11 +10,13 @@ Primary lane: **G — Refactor & Architecture Health**. Object Core owns shared 
 ## Current checkpoint — 2026-09-07
 Latest verified `main` at branch creation: **`844f6b77e7b6947bceaaf6986e6ff8182212e71b`** after Refactor **#499**.
 
-Active branch for this checkpoint: `refactor/guardrail-help-handoff-225`.
+Active branch: `refactor/guardrail-help-handoff-225`.
+Active PR: **#510 — Refresh Refactor guardrail help and Lane G handoff**.
 
-Current Lane G commits:
+Current Lane G implementation/test commits before this handoff refresh:
 - `c933efe47bd2b28b81bd07fa231361d85ddfd030` — initially aligned stale `maintainability_report.sh --help` threshold examples with the then-current ceilings.
 - `268f678bf1243dc1afc635deefd32976f9c04f3e` — removed threshold literals from the help examples entirely and pointed users to the CI workflow as the single current-ceiling source, preventing the same documentation drift on future ratchets.
+- `399d45378a989fff8f86cbd99be3b411adccc5d1` — added a focused shell regression that requires `<N>` help placeholders, requires the CI workflow source-of-truth note, and fails if numeric `--max-*` threshold examples are reintroduced.
 
 Recent integrated architecture-health sequence:
 - **#474 merged** — guard temporary Database-presentation shim imports; migrated three test-only imports and ratcheted 22 → 19.
@@ -57,7 +59,7 @@ Current remaining shim-import distribution inferred from the current source/guar
 Do not reconstruct these large/shared hosts merely to lower a metric. Migrate imports when a host can be patched naturally and safely, then ratchet the ceiling in the same or immediately following slice.
 
 ### Guardrail help drift fixed in this run
-`tool/maintainability_report.sh` already accepted caller-supplied thresholds correctly, but its `--help` usage block embedded a stale historical checkpoint. This run changed the help examples to use `<N>` placeholders and names `.github/workflows/flutter_ci.yml` as the source for the current CI-owned ceilings. Report/threshold behavior is unchanged, and future ratchets no longer require updating example literals.
+`tool/maintainability_report.sh` already accepted caller-supplied thresholds correctly, but its `--help` usage block embedded a stale historical checkpoint. #510 changes the help examples to use `<N>` placeholders and names `.github/workflows/flutter_ci.yml` as the source for the current CI-owned ceilings. Report/threshold behavior is unchanged, future ratchets no longer require updating example literals, and `maintainability_report_test.sh` now guards that source-of-truth contract.
 
 ## Caller-zero cleanup series
 Merged behavior-preserving cleanup PRs:
@@ -148,7 +150,7 @@ Canonical implementations live under `lib/features/database/presentation/widgets
 The accepted ceiling is now 9. Known direct reach-through is concentrated in shared legacy/Database hosts. Do not introduce a page-specific wrapper merely to hide `workspaceStore.database`; the next reduction must move or delete real responsibility.
 
 ## Exact next actions
-1. Validate/merge the current Lane G PR for the guardrail-help drift fix plus this handoff refresh; fix only failures caused by this slice.
+1. Validate/merge #510; fix only failures caused by this slice.
 2. Re-run current-source caller-zero audits after parallel lane merges; delete only when production callers are zero and surviving behavior has independent coverage.
 3. After Object #503 merges, re-audit the plain-text Body chain before touching `ObjectInspectorPage`.
 4. Lower shim-import ceiling below 18 only when a production host can safely switch to canonical imports without whole-file reconstruction.
@@ -162,8 +164,8 @@ The accepted ceiling is now 9. Known direct reach-through is concentrated in sha
 - Current main guardrail values were verified directly from `.github/workflows/flutter_ci.yml`: **9 / 18 / 5**.
 - #499 diff was verified directly: canonical import migration for `BookmarkAttachmentSection`, CI/doc ceiling 19 → 18, and maintainability documentation.
 - #503 and #498 ownership were rechecked directly and are both open/mergeable at this checkpoint.
-- On PR #510's first head, both **Maintainability guardrail tests** and **Maintainability regression ceilings** passed before the help examples were generalized; the final head must rerun CI after `268f678b...`.
-- This run's tool change remains comment/help-text only; behavior of `maintainability_report.sh` is unchanged. CI should run the existing guardrail tests/current ceilings, Analyze and full Test on the final PR head.
+- On #510 head `399d4537...`, **Maintainability guardrail tests** passed with the new non-duplicated-help regression, and **Maintainability regression ceilings** also passed. Analyze/full Test were still running when this handoff update was written.
+- The tool behavior outside `--help` comments is unchanged; the new test protects the source-of-truth rule rather than changing debt counting.
 
 ## Risks / sequencing
 - parallel lanes can move `main` quickly; re-read open PR ownership before shared code changes;
@@ -177,4 +179,4 @@ The accepted ceiling is now 9. Known direct reach-through is concentrated in sha
 ## Stop/continuation state
 This pass did not prove another safe whole-module caller-zero deletion. The next obvious code cleanup (plain-text Body chain) is temporarily blocked by active Object #503 ownership of the shared Inspector, while the remaining shim-import reductions sit in large/shared hosts that should not be reconstructed through whole-file connector writes merely to change imports.
 
-A concrete architecture-health defect was fixed at its source: `maintainability_report.sh --help` no longer hard-codes historical threshold values, so future guardrail ratchets have one CI-owned source of truth instead of a second drifting example. Continue from the exact next actions above after checking the live repository state again.
+A concrete architecture-health defect was fixed at its source in #510: maintainability help no longer duplicates historical threshold values, and a focused guard prevents that duplication from returning. Continue from the exact next actions above after checking the live repository state again.
