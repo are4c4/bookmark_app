@@ -8,17 +8,22 @@ Issue #225 — reduce maintenance hotspots and retire duplicate/unused legacy pa
 Primary lane: **Refactor**. Object owns replacement product semantics and Relation owns canonical Relation semantics. Refactor owns measurable responsibility reduction, caller-zero retirement after proof, failure-policy/privacy cleanup, and maintainability guardrails.
 
 ## Current checkpoint — 2026-09-07
-Latest verified `main` for this handoff: **`5aacb98af79cb5387aa09b2abf2dd3f04f8da722`** after Refactor #455 and Object #447.
+Latest verified `main` for this handoff: **`3e53c2734137220913dd74c7d803d13d11415bb8`** after Refactor #458/#459 and Object handoff #461.
 
-The CI presentation/database boundary guard introduced by #443 is now enforced by #448 at a ceiling of **12** `workspaceStore.database` references. The local report remains non-blocking unless a threshold is supplied. Ratchet the CI ceiling downward whenever a Refactor slice actually removes a measured presentation reach-through.
+The CI presentation/database boundary guard introduced by #443 is enforced by #448 at a ceiling of **12** `workspaceStore.database` references. The local report remains non-blocking unless a threshold is supplied. Ratchet the CI ceiling downward only when a Refactor slice actually removes a measured presentation reach-through; do not add wrappers merely to hide the metric.
 
-This Refactor session completed four behavior-preserving cleanup PRs:
+### Latest caller-zero cleanup series
+Merged behavior-preserving cleanup PRs in the current series:
 - **#451 merged** — retired the caller-zero Object detail session composition chain (`ObjectDetailRelationContextLoader`, `ObjectDetailSessionLoader`, `ObjectTypeDefaultsService` and dead-only models/tests), **337 deletions / 0 additions**.
 - **#453 merged** — retired unused drag/drop intent payload/target hierarchy, **49 deletions / 0 additions**; Flutter CI #1577 green.
 - **#454 merged** — retired caller-zero `ObjectBodyReferenceIndex` and its dead-only test, **106 deletions / 0 additions**; Flutter CI #1578 green.
 - **#455 merged** — retired caller-zero `ObjectBodyBlockValidator` and removed only validator-specific assertions while preserving live Object Body factory/reference/round-trip coverage, **116 deletions / 1 addition**; Flutter CI #1582 green.
+- **#458 merged** — retired caller-zero `ObjectGroupMode` while preserving live `ObjectGroupRule` / `ObjectGroupBucket`, **4 deletions / 0 additions**; Flutter CI #1590 green.
+- **#459 merged** — retired caller-zero `ResolvedObjectTypeDefaults` / `ObjectTypeDefaultsResolver` and its dead-only test while preserving live `ObjectTypeDefaults` / `ObjectOpenMode` persistence and presentation consumers, **84 deletions / 0 additions**; Flutter CI #1591 green.
 
-Combined for #451/#453/#454/#455: **608 deletions / 1 addition, net -607 LOC**.
+Combined for #451/#453/#454/#455/#458/#459: **696 deletions / 1 addition, net -695 LOC**.
+
+**#456 merged** refreshed this handoff after the first cleanup batch. Its first CI attempt was externally cancelled during Flutter setup after both maintainability guards passed; rerun attempt 2 completed successfully before merge.
 
 Stale docs-only PR #452 was closed rather than force-merged after main moved.
 
@@ -26,13 +31,15 @@ Shared hotspots (`generic_database_page.dart`, `app_shell.dart`, `object_inspect
 
 ## Live cross-lane ownership at this checkpoint
 ### Object lane
-- **#447 merged** — canonical Image preview same-path refresh is now on main.
-- **#450 open** — canonical Image detail preview/edit composition. At this checkpoint its PR diff includes `object_image_detail_panel.dart`, `object_image_detail_preview.dart` and their focused tests.
+Current live open PRs were re-read after main moved:
+- **#457 open** — canonical Image detail preview/edit panel composition. Current diff is limited to `lib/features/object/presentation/widgets/object_image_detail_panel.dart` and `test/object_image_detail_panel_test.dart`.
+- **#460 open** — safe canonical Image crop presets. Current diff is limited to `lib/features/object/presentation/widgets/object_image_edit_actions.dart` and `test/object_image_edit_actions_test.dart`.
+- **#461 merged** — refreshed the Object handoff and accounts for the latest Refactor cleanup.
 
-Refactor must not alter Image edit/restore/file-ownership semantics, Photo mapping, or the active #450 files. #450's documented next step is a patch-sized `ObjectInspectorPage` wiring after its panel seam merges, so re-check ownership before touching the shared inspector host.
+Refactor must not alter Image edit/restore/file-ownership semantics, Photo mapping, or the active #457/#460 files. #457 still documents a later patch-sized `ObjectInspectorPage` wiring step, so re-check ownership before touching the shared inspector host even after these PRs move.
 
 ### Relation lane
-No open Relation production PR was present at the last live open-PR check in this session. Canonical Relation mutation/read/index/backlink/audit/reconcile semantics remain Relation-owned. Refactor must not create alternate Relation writes, indexes, repair paths, or presentation-side mutation.
+No open Relation production PR was present at the last live open-PR check in this Refactor pass. Canonical Relation mutation/read/index/backlink/audit/reconcile semantics remain Relation-owned. Refactor must not create alternate Relation writes, indexes, repair paths, or presentation-side mutation.
 
 Re-read live open PRs before every shared-host change because main moves quickly across lanes.
 
@@ -52,7 +59,7 @@ Re-read live open PRs before every shared-host change because main moves quickly
 - **#439 merged** — `NotionBookmarkCard` delegates URL resolver composition through `BookmarkPresentationResolverFactory`.
 - **#443 merged** — opt-in presentation/database reach-through regression threshold plus fixture regression test.
 - **#448 merged** — enforces the accepted repository boundary ceiling of 12 in Flutter CI.
-- **#451/#453/#454/#455 merged** — latest caller-zero retirement series described above.
+- **#451/#453/#454/#455/#458/#459 merged** — latest caller-zero retirement series described above.
 
 Issue #414 separately tracks possible FTS focused-refresh stale-token correctness. Do not turn that semantic question into behavior-preserving cleanup.
 
@@ -87,7 +94,7 @@ The originally inventoried direct Bookmark visual duplicates are canonicalized t
 
 #401 prevents new direct URL/visual resolver construction in presentation. #439 removed the remaining known direct Notion-card URL resolver construction.
 
-Whole-module caller-zero retirement is preferred to speculative compatibility wrappers. Current examples include #417, #431, #451, #453, #454 and #455.
+Whole-module caller-zero retirement is preferred to speculative compatibility wrappers. Current examples include #417, #431, #451, #453, #454, #455, #458 and #459.
 
 Legacy `bookmarks.url`, thumbnail, Photo and Bookmark tables remain live compatibility/import/export data until production caller-zero and migration/backup policy are proven. Presentation convergence alone is not permission to delete storage.
 
@@ -106,35 +113,47 @@ Presentation database reach-through is measured by `tool/maintainability_report.
 
 Known remaining reach-through is concentrated in `app_shell.dart`, People/Photo/Collection management, Stage1 and `generic_database_page.dart`. Photo management remains adjacent to Object-owned Image semantics.
 
-`CollectionManagementPage` was re-audited in this session: collection create/delete/membership already use `BookmarkRepository`, while rename and note persistence still update `database.collections` directly. There is no existing semantic update API. Do **not** add a one-caller wrapper merely to hide the access, and do not reconstruct `app_database.dart`/a large repository file through connector writes. Revisit only when a patch-sized existing boundary can own those mutations. Until then the CI ceiling remains 12.
+`DatabaseViewStore` composition was re-audited after #459. It has several genuine callers (`PhotoManagementPage`, `PeopleManagementPage`, `CollectionManagementPage`, Stage1, Object Inspector and GenericDatabasePage services), but there is no single existing boundary that can absorb the presentation constructors without either touching conflict-prone hosts or adding a factory/wrapper solely to lower the metric. `GenericDatabasePageServices` already owns its own composition. Do not introduce a new composition abstraction until at least two real callers can lose responsibility through the same meaningful boundary.
+
+`CollectionManagementPage` was also re-audited: collection create/delete/membership already use `BookmarkRepository`, while rename and note persistence still update `database.collections` directly. There is no existing semantic update API. Do **not** add a one-caller wrapper merely to hide the access, and do not reconstruct `app_database.dart`/a large repository file through connector writes. Revisit only when a patch-sized existing boundary can own those mutations. Until then the CI ceiling remains 12.
+
+People management has the same constraint: composing `PersonGroupStore` and `DatabaseViewStore` behind a page-specific wrapper would hide reach-through without deleting responsibility, so it was rejected.
 
 ## Caller-zero audit notes from this checkpoint
-Confirmed live and therefore **not** deletion candidates:
+Confirmed live and therefore **not** deletion candidates include:
 - `ObjectDetailContent` and its loader/editor/presentation path;
 - `ObjectBodyBlockIdAllocator` / `ObjectBodyBlockDuplicator`;
-- `ObjectBodyEditor`;
+- `ObjectBodyEditor` and Object Body action/position/reference helpers;
 - `DailyNoteDetailNavigationService`;
-- `DatabaseCollectionResolver` and collection loading path.
+- `DatabaseCollectionResolver` / `DatabaseCollectionConfigService` and collection loading path;
+- `GenericObjectViewCoordinator` / `ObjectViewProjection`;
+- `PdfAnnotationStore` / attachment viewer path;
+- `PhotoReadStore`;
+- `BookmarkAttachmentStore` / attachment UI, drop and deletion paths;
+- live `ObjectTypeDefaults` / `ObjectOpenMode` storage and open-presentation consumers.
 
-Confirmed dead and removed in this checkpoint:
+Confirmed dead and removed in this series:
 - Object detail session composition chain (#451);
 - drag/drop intent type hierarchy (#453);
 - `ObjectBodyReferenceIndex` (#454);
-- `ObjectBodyBlockValidator` (#455).
+- `ObjectBodyBlockValidator` (#455);
+- `ObjectGroupMode` (#458);
+- `ResolvedObjectTypeDefaults` / `ObjectTypeDefaultsResolver` (#459).
 
 Future caller-zero searches must re-run current-source and filename/import searches against latest main before deletion; stale GitHub search-index hits are not sufficient proof by themselves.
 
 ## Exact next actions
-1. Re-read live open PR ownership and latest main before any code edit.
+1. Re-read live open PR ownership and latest main before any code edit; #457/#460 currently own Image presentation files and Object Inspector remains a likely near-term Object hotspot.
 2. Continue current-source caller-zero auditing outside active Image/Relation ownership; delete only when production callers are zero and any still-live behavior has independent coverage.
 3. Prefer a real responsibility/LOC reduction over wrappers added solely to hide property access.
-4. If a presentation `workspaceStore.database` reference is removed, lower the CI ceiling from 12 in the same focused PR or an immediately following focused guardrail PR.
+4. If a presentation `workspaceStore.database` reference is genuinely removed, lower the CI ceiling from 12 in the same focused PR or an immediately following focused guardrail PR.
 5. Revisit Collection management rename/note persistence only when an existing meaningful Store/Repository boundary can absorb it through a patch-sized edit.
-6. Continue GenericDatabasePage P1 only when a safe extraction removes concrete schema/database action, Property workflow or layout-host responsibility.
-7. Revisit AppDatabase mutation responsibility only when `app_database.dart` can be patched safely without whole-file reconstruction.
-8. Follow Object-first storage retirement: prove production caller-zero plus import/export/backup handling before deleting Bookmark URL/thumbnail/Photo storage.
-9. Keep ProfileManager recovery-selection behavior deferred unless there is an explicit product/data-recovery decision.
-10. Treat Issue #414 as separate search correctness work.
+6. Revisit `DatabaseViewStore` presentation composition only when at least two callers can use one meaningful existing boundary without touching active/conflict-prone hosts merely for metric reduction.
+7. Continue GenericDatabasePage P1 only when a safe extraction removes concrete schema/database action, Property workflow or layout-host responsibility.
+8. Revisit AppDatabase mutation responsibility only when `app_database.dart` can be patched safely without whole-file reconstruction.
+9. Follow Object-first storage retirement: prove production caller-zero plus import/export/backup handling before deleting Bookmark URL/thumbnail/Photo storage.
+10. Keep ProfileManager recovery-selection behavior deferred unless there is an explicit product/data-recovery decision.
+11. Treat Issue #414 as separate search correctness work.
 
 ## Validation expectations
 - P0 tooling: focused shell fixture regression, actual repository report with CI ceiling, plus Flutter Analyze/Test baseline;
@@ -152,4 +171,4 @@ Future caller-zero searches must re-run current-source and filename/import searc
 - stale search-index results can lag main, so verify candidate files and callers against current-source content before deletion.
 
 ## Stop / continuation state
-Refactor remains actionable, but the obvious caller-zero Object Body/detail modules found in this pass have now been retired. The next safe work should either prove another true caller-zero module or perform a patch-sized responsibility move through an already meaningful boundary. Avoid active Image files in #450, Relation semantics, and large-host reconstruction; re-check `ObjectInspectorPage` ownership before any inspector edit.
+The obvious caller-zero Object Body/detail/defaults modules found in this pass have now been retired. Current live audits found real callers for the remaining small Object/data helpers, while the obvious database-reach-through reductions would require either active/conflict-prone hosts or wrapper-only abstractions. Safe next Refactor work should therefore begin from a fresh live ownership audit and proceed only when a true caller-zero module or patch-sized existing responsibility boundary is found. Avoid #457/#460 Image files, Relation semantics, and large-host reconstruction; re-check `ObjectInspectorPage` ownership before any inspector edit.
