@@ -166,6 +166,9 @@ class ProfileManager {
   String _legacyDatabaseName(DatabaseProfile profile) =>
       profile.isDefault ? 'bookmark_app' : 'bookmark_app_profile_${profile.id}';
 
+  bool _sameDirectory(String left, String right) =>
+      Directory(left).absolute.path == Directory(right).absolute.path;
+
   bool _usesAppManagedDirectory(DatabaseProfile profile) {
     final configured = Directory(profile.directoryPath).absolute.path;
     final managed =
@@ -233,6 +236,183 @@ class ProfileManager {
     await _writeProfileMetadata(profile);
     await _save();
     return profile;
+  }
+
+  Future<DatabaseProfile> createVault({
+    required String name,
+    required String directoryPath,
+  }) async {
+    final trimmedName = name.trim();
+    final trimmedPath = directoryPath.trim();
+    if (trimmedName.isEmpty) throw ArgumentError('Vault name is empty');
+    if (trimmedPath.isEmpty) throw ArgumentError('Vault directory is empty');
+
+    final directory = Directory(trimmedPath);
+    final existed = await directory.exists();
+    if (existed && !await directory.list().isEmpty) {
+      throw FileSystemException(
+        'Vault creation requires an empty directory.',
+        directory.path,
+      );
+    }
+    if (!existed) {
+      await directory.create(recursive: true);
+    }
+
+    final previousState = _state;
+    final id = DateTime.now().microsecondsSinceEpoch.toString();
+    final profile = DatabaseProfile(
+      id: id,
+      name: trimmedName,
+      databaseName: 'BookmarkApp/Profiles/$id/database',
+      directoryPath: directory.path,
+    );
+
+    try {
+      await Directory(profile.photoDirectoryPath).create(recursive: true);
+      await Directory('${profile.directoryPath}/attachments').create(recursive: true);
+      final database = AppDatabase(
+        databaseName: profile.databaseName,
+        profileDirectoryPath: profile.directoryPath,
+      );
+      try {
+        await database.customSelect('SELECT 1').get();
+      } finally {
+        await database.close();
+      }
+      await _writeProfileMetadata(profile);
+      _state = ProfileState(
+        profiles: [..._state.profiles, profile],
+        activeProfileId: _state.activeProfileId,
+      );
+      await _save();
+      return profile;
+    } catch (_) {
+      _state = previousState;
+      await _cleanupFailedVaultCreation(directory, removeRoot: !existed);
+      rethrow;
+    }
+  }
+
+  Future<DatabaseProfile> openVault(String directoryPath) async {
+    final trimmedPath = directoryPath.trim();
+    if (trimmedPath.isEmpty) throw ArgumentError('Vault directory is empty');
+
+    for (final profile in _state.profiles) {
+      if (_sameDirectory(profile.directoryPath, trimmedPath)) {
+        return profile;
+      }
+    }
+
+    final directory = Directory(trimmedPath);
+    if (!await directory.exists()) {
+      throw FileSystemException('Vault directory is unavailable.', trimmedPath);
+    }
+    final databaseFile = File('${directory.path}/database.sqlite');
+    if (!await databaseFile.exists()) {
+      throw FileSystemException(
+        'Vault database is unavailable.',
+        databaseFile.path,
+      );
+    }
+
+    final profile = await _readVaultProfile(directory);
+    final conflictingId = _state.profiles.any(
+      (candidate) => candidate.id == profile.id &&
+          !_sameDirectory(candidate.directoryPath, profile.directoryPath),
+    );
+    if (conflictingId) {
+      throw StateError('A different Vault with the same identifier is registered.');
+    }
+
+    final database = AppDatabase(
+      databaseName: profile.databaseName,
+      profileDirectoryPath: profile.directoryPath,
+    );
+    try {
+      await database.customSelect('SELECT 1').get();
+    } finally {
+      await database.close();
+    }
+
+    final previousState = _state;
+    _state = ProfileState(
+      profiles: [..._state.profiles, profile],
+      activeProfileId: _state.activeProfileId,
+    );
+    try {
+      await _save();
+    } catch (_) {
+      _state = previousState;
+      rethrow;
+    }
+    return profile;
+  }
+
+  Future<DatabaseProfile> _readVaultProfile(Directory directory) async {
+    final metadataFile = File('${directory.path}/profile.json');
+    if (!await metadataFile.exists()) {
+      throw FileSystemException(
+        'Vault metadata is unavailable.',
+        metadataFile.path,
+      );
+    }
+
+    final Object? decoded;
+    try {
+      decoded = jsonDecode(await metadataFile.readAsString());
+    } on FormatException {
+      throw const FormatException('Vault metadata is invalid.');
+    }
+    if (decoded is! Map) {
+      throw const FormatException('Vault metadata is invalid.');
+    }
+    final metadata = Map<String, Object?>.from(decoded);
+    final id = metadata['id'];
+    final name = metadata['name'];
+    final database = metadata['database'];
+    if (id is! String ||
+        id.trim().isEmpty ||
+        name is! String ||
+        name.trim().isEmpty ||
+        database != 'database.sqlite') {
+      throw const FormatException('Vault metadata is invalid.');
+    }
+
+    return DatabaseProfile(
+      id: id.trim(),
+      name: name.trim(),
+      databaseName: 'BookmarkApp/Profiles/${id.trim()}/database',
+      directoryPath: directory.path,
+    );
+  }
+
+  Future<void> _cleanupFailedVaultCreation(
+    Directory directory, {
+    required bool removeRoot,
+  }) async {
+    try {
+      if (!await directory.exists()) return;
+      if (removeRoot) {
+        await directory.delete(recursive: true);
+        return;
+      }
+      for (final fileName in const [
+        'database.sqlite',
+        'database.sqlite-wal',
+        'database.sqlite-shm',
+        'profile.json',
+      ]) {
+        final file = File('${directory.path}/$fileName');
+        if (await file.exists()) await file.delete();
+      }
+      for (final directoryName in const ['photos', 'attachments']) {
+        final managed = Directory('${directory.path}/$directoryName');
+        if (await managed.exists()) await managed.delete(recursive: true);
+      }
+    } catch (_, stackTrace) {
+      _debugFallbackFailure('failed Vault creation cleanup', stackTrace);
+    }
   }
 
   Future<void> _copyDirectoryContents(
@@ -392,6 +572,7 @@ class ProfileManager {
       activeProfileId: _state.activeProfileId,
     );
     await _save();
+    if (!_usesAppManagedDirectory(profile)) return;
     final directory = Directory(profile.directoryPath);
     if (await directory.exists()) {
       await directory.delete(recursive: true);
@@ -428,10 +609,12 @@ class ProfileManager {
     await file.parent.create(recursive: true);
     await file.writeAsString(
       const JsonEncoder.withIndent('  ').convert({
+        'formatVersion': 1,
         'id': profile.id,
         'name': profile.name,
         'database': 'database.sqlite',
         'photos': 'photos',
+        'attachments': 'attachments',
       }),
       flush: true,
     );
