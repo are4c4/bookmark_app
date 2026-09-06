@@ -139,9 +139,14 @@ class SystemObjectStore {
 
     for (final property in sourceType.properties) {
       if (property.name != name) continue;
+      final hasManagedPairMetadata =
+          property.config.containsKey('bidirectional') ||
+              property.config.containsKey('inversePropertyId') ||
+              property.config.containsKey('pairRole');
       if (!property.isRelation ||
           property.targetObjectTypeId != targetObjectTypeId ||
-          property.allowsMultipleRelations != multiple) {
+          property.allowsMultipleRelations != multiple ||
+          hasManagedPairMetadata) {
         throw StateError(
           'Existing system Property "$name" does not match the required Relation schema.',
         );
