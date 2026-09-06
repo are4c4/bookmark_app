@@ -118,6 +118,39 @@ void main() {
     expect(text, isNot(contains('2026-09-07')));
   });
 
+  test('owns hidden Weblink metadata so generic Properties can exclude it', () {
+    final base = definition();
+    final notes = property(id: 10, name: 'Notes', type: ObjectPropertyType.text);
+    final type = base.objectType.copyWith(
+      properties: <ObjectPropertyDefinition>[
+        ...base.objectType.properties,
+        notes,
+      ],
+    );
+    final projection = buildWeblinkSearchProjection(
+      object: weblink(<int, dynamic>{
+        1: 'https://example.com/articles/search',
+        2: 'example.com',
+        3: 'Canonical Search Architecture',
+        4: 'Example Research',
+        5: 'Description Token',
+        6: 'application/private-token',
+        7: '2099-12-31',
+        8: 'https://cdn.example.com/favicon-private-token.png',
+        9: 'https://cdn.example.com/preview-private-token.jpg',
+        10: 'User Notes Token',
+      }),
+      objectType: type,
+    );
+
+    expect(projection.consumedPropertyIds, <int>{1, 2, 3, 4, 5, 6, 7, 8, 9});
+    expect(projection.consumedPropertyIds, isNot(contains(notes.id)));
+    expect(projection.text, contains('Canonical Search Architecture'));
+    expect(projection.text, isNot(contains('private-token')));
+    expect(projection.text, isNot(contains('2099-12-31')));
+    expect(projection.text, isNot(contains('User Notes Token')));
+  });
+
   test('inherits explicit searchable false from metadata Property', () {
     final text = buildWeblinkSearchText(
       object: weblink(<int, dynamic>{
@@ -129,5 +162,24 @@ void main() {
 
     expect(text, 'https://example.com');
     expect(text, isNot(contains('PrivateDescriptionToken')));
+  });
+
+  test('rejects mismatched Object identity', () {
+    final base = definition();
+    final mismatched = AppObject(
+      id: 100,
+      objectTypeId: 999,
+      title: 'Wrong type',
+      createdAt: DateTime.utc(2026, 9, 7),
+      updatedAt: DateTime.utc(2026, 9, 7),
+    );
+
+    expect(
+      () => buildWeblinkSearchProjection(
+        object: mismatched,
+        objectType: base.objectType,
+      ),
+      throwsArgumentError,
+    );
   });
 }
