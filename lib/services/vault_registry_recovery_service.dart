@@ -30,17 +30,7 @@ class VaultRegistryRecoveryService {
     }
 
     final original = await registry.readAsString();
-    final Object? decoded;
-    try {
-      decoded = jsonDecode(original);
-    } on FormatException {
-      throw const FormatException('Vault registry is invalid.');
-    }
-    if (decoded is! Map) {
-      throw const FormatException('Vault registry is invalid.');
-    }
-
-    final root = Map<String, Object?>.from(decoded);
+    final root = _decodeRegistry(original);
     final rawProfiles = root['profiles'];
     if (rawProfiles is! List) {
       throw const FormatException('Vault registry is invalid.');
@@ -102,13 +92,82 @@ class VaultRegistryRecoveryService {
       };
     }).toList();
 
-    final replacement = const JsonEncoder.withIndent('  ').convert(root);
     await _replaceRegistryAtomically(
       registry: registry,
       original: original,
-      replacement: replacement,
+      replacement: const JsonEncoder.withIndent('  ').convert(root),
     );
     return validated;
+  }
+
+  /// Removes an unavailable inactive Vault from the registry only.
+  ///
+  /// No Vault directory or file is touched. Active and last remaining Vaults
+  /// fail closed so startup recovery cannot silently change the user's active
+  /// data set or leave the registry without any Vault.
+  Future<void> unregisterInactive(String profileId) async {
+    final trimmedId = profileId.trim();
+    if (trimmedId.isEmpty) throw ArgumentError('Vault id is empty');
+
+    final support = await (applicationSupportDirectoryProvider ??
+        getApplicationSupportDirectory)();
+    final registry = File('${support.path}/bookmark_profiles.json');
+    if (!await registry.exists()) {
+      throw FileSystemException('Vault registry is unavailable.', registry.path);
+    }
+
+    final original = await registry.readAsString();
+    final root = _decodeRegistry(original);
+    final rawProfiles = root['profiles'];
+    if (rawProfiles is! List) {
+      throw const FormatException('Vault registry is invalid.');
+    }
+    if (rawProfiles.length <= 1) {
+      throw StateError('At least one Vault must remain registered.');
+    }
+    if (root['activeProfileId'] == trimmedId) {
+      throw StateError('The active Vault cannot be unregistered during recovery.');
+    }
+
+    var found = false;
+    final remaining = <Object?>[];
+    for (final raw in rawProfiles) {
+      if (raw is! Map) {
+        throw const FormatException('Vault registry is invalid.');
+      }
+      final profile = Map<String, Object?>.from(raw);
+      if (profile['id'] == trimmedId) {
+        if (found) {
+          throw const FormatException('Vault registry is invalid.');
+        }
+        found = true;
+        continue;
+      }
+      remaining.add(profile);
+    }
+    if (!found) {
+      throw StateError('The requested Vault is not registered.');
+    }
+
+    root['profiles'] = remaining;
+    await _replaceRegistryAtomically(
+      registry: registry,
+      original: original,
+      replacement: const JsonEncoder.withIndent('  ').convert(root),
+    );
+  }
+
+  Map<String, Object?> _decodeRegistry(String original) {
+    final Object? decoded;
+    try {
+      decoded = jsonDecode(original);
+    } on FormatException {
+      throw const FormatException('Vault registry is invalid.');
+    }
+    if (decoded is! Map) {
+      throw const FormatException('Vault registry is invalid.');
+    }
+    return Map<String, Object?>.from(decoded);
   }
 
   Future<void> _replaceRegistryAtomically({
