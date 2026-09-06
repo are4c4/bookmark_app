@@ -81,12 +81,12 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await _pumpUntilFound(tester, find.text(image.title));
 
     await tester.tap(find.text(image.title).first);
-    await tester.pumpAndSettle();
+    await _pumpUntilFound(tester, find.byTooltip('削除'));
     await tester.tap(find.byTooltip('削除'));
-    await tester.pumpAndSettle();
+    await _pumpUntilFileMissing(tester, managedFile);
 
     expect(await managedFile.exists(), isFalse);
     expect(await backup.exists(), isFalse);
@@ -96,4 +96,20 @@ void main() {
       isNot(contains(image.id)),
     );
   });
+}
+
+Future<void> _pumpUntilFound(WidgetTester tester, Finder finder) async {
+  for (var attempt = 0; attempt < 100; attempt++) {
+    await tester.pump(const Duration(milliseconds: 50));
+    if (finder.evaluate().isNotEmpty) return;
+  }
+  throw TestFailure('Expected widget did not appear within 5 seconds.');
+}
+
+Future<void> _pumpUntilFileMissing(WidgetTester tester, File file) async {
+  for (var attempt = 0; attempt < 100; attempt++) {
+    await tester.pump(const Duration(milliseconds: 50));
+    if (!await file.exists()) return;
+  }
+  throw TestFailure('Managed image file was not deleted within 5 seconds.');
 }
