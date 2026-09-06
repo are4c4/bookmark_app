@@ -173,6 +173,10 @@ class _ObjectImageEditActionsState extends State<ObjectImageEditActions> {
                   value: 16 / 9,
                   child: Text('ワイド 16:9'),
                 ),
+                PopupMenuItem(
+                  value: 9 / 16,
+                  child: Text('縦長 9:16'),
+                ),
               ],
             ),
             OutlinedButton.icon(
