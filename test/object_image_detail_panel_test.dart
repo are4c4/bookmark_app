@@ -94,16 +94,19 @@ void main() {
       expect(condition(), isTrue);
     }
 
-    await pumpUntil(() {
+    bool rotateRightEnabled() {
       final finder = find.byKey(const ValueKey('object-image-rotate-right'));
       if (finder.evaluate().isEmpty) return false;
       return tester.widget<IconButton>(finder).onPressed != null;
-    });
+    }
+
+    await pumpUntil(rotateRightEnabled);
     expect(find.text(managedFile.path), findsOneWidget);
     expect(evicted, isEmpty);
 
     await tester.tap(find.byKey(const ValueKey('object-image-rotate-right')));
     await pumpUntil(() => evicted.length == 1);
+    await pumpUntil(rotateRightEnabled);
 
     expect(evicted, [managedFile.path]);
     final persisted = (await objectStore.listObjects(definition.objectType.id))
