@@ -1,0 +1,166 @@
+import 'package:flutter/material.dart';
+
+import '../../../../services/canonical_image_edit_service.dart';
+
+/// Small presentation seam for safe canonical Image edits.
+///
+/// The widget never resolves file paths itself and never calls [ImageEditService]
+/// directly. Availability and mutations stay behind [CanonicalImageEditService]
+/// so shared/ambiguous managed files continue to fail closed.
+class ObjectImageEditActions extends StatefulWidget {
+  const ObjectImageEditActions({
+    super.key,
+    required this.editService,
+    required this.workspaceId,
+    required this.objectId,
+    this.onChanged,
+    this.onError,
+  });
+
+  final CanonicalImageEditService editService;
+  final int workspaceId;
+  final int objectId;
+  final VoidCallback? onChanged;
+  final void Function(Object error)? onError;
+
+  @override
+  State<ObjectImageEditActions> createState() => _ObjectImageEditActionsState();
+}
+
+class _ObjectImageEditActionsState extends State<ObjectImageEditActions> {
+  late Future<_ImageEditAvailability> _availability;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _availability = _loadAvailability();
+  }
+
+  @override
+  void didUpdateWidget(covariant ObjectImageEditActions oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.editService != widget.editService ||
+        oldWidget.workspaceId != widget.workspaceId ||
+        oldWidget.objectId != widget.objectId) {
+      _availability = _loadAvailability();
+    }
+  }
+
+  Future<_ImageEditAvailability> _loadAvailability() async {
+    final values = await Future.wait<bool>([
+      widget.editService.canEdit(
+        workspaceId: widget.workspaceId,
+        objectId: widget.objectId,
+      ),
+      widget.editService.canRestoreOriginal(
+        workspaceId: widget.workspaceId,
+        objectId: widget.objectId,
+      ),
+    ]);
+    return _ImageEditAvailability(
+      canEdit: values[0],
+      canRestore: values[1],
+    );
+  }
+
+  Future<void> _run(Future<void> Function() action) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await action();
+      if (!mounted) return;
+      widget.onChanged?.call();
+      setState(() => _availability = _loadAvailability());
+    } catch (error) {
+      widget.onError?.call(error);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _rotate(int quarterTurns) => _run(() async {
+        await widget.editService.edit(
+          workspaceId: widget.workspaceId,
+          objectId: widget.objectId,
+          quarterTurns: quarterTurns,
+        );
+      });
+
+  Future<void> _flipHorizontal() => _run(() async {
+        await widget.editService.edit(
+          workspaceId: widget.workspaceId,
+          objectId: widget.objectId,
+          flipHorizontal: true,
+        );
+      });
+
+  Future<void> _restore() => _run(() async {
+        await widget.editService.restoreOriginal(
+          workspaceId: widget.workspaceId,
+          objectId: widget.objectId,
+        );
+      });
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<_ImageEditAvailability>(
+      future: _availability,
+      builder: (context, snapshot) {
+        final availability = snapshot.data;
+        final loading = snapshot.connectionState != ConnectionState.done;
+        final canEdit = !_busy && !loading && availability?.canEdit == true;
+        final canRestore =
+            !_busy && !loading && availability?.canRestore == true;
+
+        return Wrap(
+          key: ValueKey('object-image-edit-actions-${widget.objectId}'),
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            if (_busy || loading)
+              const SizedBox.square(
+                dimension: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            IconButton.outlined(
+              key: const ValueKey('object-image-rotate-left'),
+              tooltip: '左に90°回転',
+              onPressed: canEdit ? () => _rotate(3) : null,
+              icon: const Icon(Icons.rotate_left),
+            ),
+            IconButton.outlined(
+              key: const ValueKey('object-image-rotate-right'),
+              tooltip: '右に90°回転',
+              onPressed: canEdit ? () => _rotate(1) : null,
+              icon: const Icon(Icons.rotate_right),
+            ),
+            IconButton.outlined(
+              key: const ValueKey('object-image-flip-horizontal'),
+              tooltip: '左右反転',
+              onPressed: canEdit ? _flipHorizontal : null,
+              icon: const Icon(Icons.flip),
+            ),
+            OutlinedButton.icon(
+              key: const ValueKey('object-image-restore-original'),
+              onPressed: canRestore ? _restore : null,
+              icon: const Icon(Icons.restore),
+              label: const Text('元画像に戻す'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ImageEditAvailability {
+  const _ImageEditAvailability({
+    required this.canEdit,
+    required this.canRestore,
+  });
+
+  final bool canEdit;
+  final bool canRestore;
+}
