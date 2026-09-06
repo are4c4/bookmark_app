@@ -4,10 +4,21 @@ import 'package:file_selector/file_selector.dart';
 import 'package:path_provider/path_provider.dart';
 
 class ImportedPhoto {
-  const ImportedPhoto({required this.path, required this.originalName});
+  const ImportedPhoto({
+    required this.path,
+    required this.originalName,
+    this.createdNew = true,
+  });
 
   final String path;
   final String originalName;
+
+  /// Whether this import call created [path].
+  ///
+  /// Canonical Image import may reuse an existing byte-identical managed file.
+  /// Callers performing rollback cleanup must never delete that pre-existing
+  /// shared file when a later Object operation fails.
+  final bool createdNew;
 }
 
 class PhotoStorageService {
@@ -26,14 +37,19 @@ class PhotoStorageService {
     'heif',
   };
 
-  Future<List<ImportedPhoto>> importImages() async {
+  Future<List<ImportedPhoto>> importImages({
+    bool reuseIdentical = false,
+  }) async {
     final sourcePaths = Platform.isMacOS
         ? await _pickImagesOnMacOS()
         : await _pickImagesWithFileSelector();
-    return importPaths(sourcePaths);
+    return importPaths(sourcePaths, reuseIdentical: reuseIdentical);
   }
 
-  Future<List<ImportedPhoto>> importPaths(Iterable<String> sourcePaths) async {
+  Future<List<ImportedPhoto>> importPaths(
+    Iterable<String> sourcePaths, {
+    bool reuseIdentical = false,
+  }) async {
     final paths = sourcePaths.where((path) => _isSupportedImage(path)).toList();
     if (paths.isEmpty) return const [];
 
@@ -47,9 +63,28 @@ class PhotoStorageService {
       if (!await source.exists()) continue;
 
       final originalName = _fileName(source.path);
+      if (reuseIdentical) {
+        final existing = await _findIdenticalManagedFile(photoDir, source);
+        if (existing != null) {
+          imported.add(
+            ImportedPhoto(
+              path: existing.path,
+              originalName: originalName,
+              createdNew: false,
+            ),
+          );
+          continue;
+        }
+      }
+
       final targetPath = _nextManagedPath(photoDir, originalName, index++);
       final target = await source.copy(targetPath);
-      imported.add(ImportedPhoto(path: target.path, originalName: originalName));
+      imported.add(
+        ImportedPhoto(
+          path: target.path,
+          originalName: originalName,
+        ),
+      );
     }
     return imported;
   }
@@ -93,6 +128,51 @@ class PhotoStorageService {
     if (active != null && active.isNotEmpty) return Directory(active);
     final support = await getApplicationSupportDirectory();
     return Directory('${support.path}/photos');
+  }
+
+  Future<File?> _findIdenticalManagedFile(
+    Directory directory,
+    File source,
+  ) async {
+    final entries = await directory.list(followLinks: false).toList();
+    final candidates = entries
+        .whereType<File>()
+        .where((file) => _isSupportedImage(file.path))
+        .toList()
+      ..sort((left, right) => left.path.compareTo(right.path));
+    final sourcePath = source.absolute.path;
+    for (final candidate in candidates) {
+      if (candidate.absolute.path == sourcePath) return candidate;
+      if (await _sameFileContent(source, candidate)) return candidate;
+    }
+    return null;
+  }
+
+  Future<bool> _sameFileContent(File left, File right) async {
+    RandomAccessFile? leftHandle;
+    RandomAccessFile? rightHandle;
+    try {
+      if (await left.length() != await right.length()) return false;
+      leftHandle = await left.open();
+      rightHandle = await right.open();
+      const chunkSize = 64 * 1024;
+      while (true) {
+        final leftBytes = await leftHandle.read(chunkSize);
+        final rightBytes = await rightHandle.read(chunkSize);
+        if (leftBytes.length != rightBytes.length) return false;
+        if (leftBytes.isEmpty) return true;
+        for (var index = 0; index < leftBytes.length; index++) {
+          if (leftBytes[index] != rightBytes[index]) return false;
+        }
+      }
+    } on FileSystemException {
+      // A candidate may disappear while scanning. Treat it as a cache miss and
+      // continue with a normal managed copy rather than failing the import.
+      return false;
+    } finally {
+      if (leftHandle != null) await leftHandle.close();
+      if (rightHandle != null) await rightHandle.close();
+    }
   }
 
   String _nextManagedPath(Directory directory, String originalName, int index) {
