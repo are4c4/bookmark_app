@@ -62,6 +62,52 @@ void main() {
       expect(fileCalls, 1);
     });
 
+    test('content signature routes disguised MP4 to File only', () async {
+      final source = File('${tempDirectory.path}/movie.png');
+      await source.writeAsBytes(<int>[
+        0, 0, 0, 24,
+        ...'ftyp'.codeUnits,
+        ...'mp42'.codeUnits,
+      ]);
+
+      var imageCalls = 0;
+      var fileCalls = 0;
+      String? forwardedContentType;
+      final service = PrimitiveObjectImportService(
+        importImage: ({
+          required databaseId,
+          required sourcePath,
+          contentType,
+        }) async {
+          imageCalls++;
+          return 25;
+        },
+        importFile: ({
+          required databaseId,
+          required sourcePath,
+          contentType,
+        }) async {
+          fileCalls++;
+          forwardedContentType = contentType;
+          return 26;
+        },
+      );
+
+      final result = await service.importPath(
+        databaseId: 8,
+        sourcePath: source.path,
+        declaredContentType: 'image/png',
+      );
+
+      expect(result.objectId, 26);
+      expect(result.target, PrimitiveFileImportTarget.file);
+      expect(result.evidence, PrimitiveFileImportEvidence.content);
+      expect(result.contentType, 'video/mp4');
+      expect(forwardedContentType, 'video/mp4');
+      expect(imageCalls, 0);
+      expect(fileCalls, 1);
+    });
+
     test('content signature routes disguised PNG to Image only', () async {
       final source = File('${tempDirectory.path}/document.pdf');
       await source.writeAsBytes(const <int>[
