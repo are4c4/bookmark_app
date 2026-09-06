@@ -45,6 +45,13 @@ void main() {
       pixelHeight: 2,
     );
 
+    Future<void> pumpUntil(bool Function() condition) async {
+      for (var i = 0; i < 100 && !condition(); i++) {
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+      expect(condition(), isTrue);
+    }
+
     final evicted = <String>[];
     var changed = 0;
     await tester.pumpWidget(
@@ -66,7 +73,15 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+
+    final rotateRight = find.byKey(const ValueKey('object-image-rotate-right'));
+    await pumpUntil(() {
+      if (find.text(managedFile.path).evaluate().isEmpty ||
+          rotateRight.evaluate().isEmpty) {
+        return false;
+      }
+      return tester.widget<IconButton>(rotateRight).onPressed != null;
+    });
 
     expect(
       find.byKey(ValueKey('object-image-detail-section-${managedImage.id}')),
@@ -75,10 +90,9 @@ void main() {
     expect(find.text(managedFile.path), findsOneWidget);
     expect(evicted, isEmpty);
 
-    await tester.tap(find.byKey(const ValueKey('object-image-rotate-right')));
-    await tester.pumpAndSettle();
+    await tester.tap(rotateRight);
+    await pumpUntil(() => changed == 1 && evicted.length == 1);
 
-    expect(changed, 1);
     expect(evicted, [managedFile.path]);
     final edited = image.decodeImage(await managedFile.readAsBytes());
     expect(edited, isNotNull);
@@ -93,5 +107,9 @@ void main() {
       find.byKey(const ValueKey('object-image-restore-original')),
       findsOneWidget,
     );
+
+    // Tear down the stateful preview/actions before DB and filesystem cleanup.
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
   });
 }
