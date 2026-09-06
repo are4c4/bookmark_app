@@ -145,7 +145,7 @@ class AutoOrganizeService {
   Future<void> deleteRule(int id) async {
     await initialize();
     await _database.customStatement(
-      'DELETE FROM auto_organize_rules SET enabled = ? WHERE id = ?',
+      'DELETE FROM auto_organize_rules WHERE id = ?',
       [id],
     );
   }
