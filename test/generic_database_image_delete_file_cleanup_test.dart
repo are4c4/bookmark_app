@@ -8,6 +8,7 @@ import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/object_type_defaults_store.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
+import 'package:bookmark_app/domain/object_model.dart';
 import 'package:bookmark_app/services/photo_storage_service.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -35,6 +36,74 @@ void main() {
 
     expect(await managedFile.exists(), isFalse);
     expect(await backup.exists(), isFalse);
+    expect(
+      await fixture.objectStore.listObjects(imageType.objectType.id),
+      isEmpty,
+    );
+  });
+
+  test('legacy-owned mirrored Image cannot be deleted from generic Images',
+      () async {
+    final fixture = await _DeleteFixture.create();
+    addTearDown(fixture.dispose);
+    final managedFile = await fixture.createManagedFile('legacy-owned.png');
+    final photoId = await fixture.database.addPhoto(path: managedFile.path);
+    final image = await fixture.images.findOrCreateManaged(
+      workspaceId: fixture.workspaceId,
+      filePath: managedFile.path,
+      title: 'Legacy mirror',
+    );
+    final imageType = await fixture.images.ensureDefinition(fixture.workspaceId);
+    final legacyPhotoId = await fixture.ensureLegacyPhotoIdProperty();
+    await fixture.objectStore.setPropertyValue(
+      objectId: image.id,
+      property: legacyPhotoId,
+      value: photoId,
+    );
+
+    await expectLater(
+      fixture.services.relationMutations.deleteObject(
+        workspaceId: fixture.workspaceId,
+        objectTypeId: imageType.objectType.id,
+        objectId: image.id,
+      ),
+      throwsA(isA<LegacyOwnedImageDeletionException>()),
+    );
+
+    expect(await managedFile.exists(), isTrue);
+    expect(
+      (await fixture.objectStore.listObjects(imageType.objectType.id))
+          .map((object) => object.id),
+      contains(image.id),
+    );
+    expect(
+      await fixture.database.customSelect(
+        'SELECT id FROM photos WHERE id = $photoId',
+      ).get(),
+      hasLength(1),
+    );
+  });
+
+  test('native Image stays deletable when legacy mirror property is unset',
+      () async {
+    final fixture = await _DeleteFixture.create();
+    addTearDown(fixture.dispose);
+    final managedFile = await fixture.createManagedFile('native-with-schema.png');
+    final image = await fixture.images.findOrCreateManaged(
+      workspaceId: fixture.workspaceId,
+      filePath: managedFile.path,
+      title: 'Native image',
+    );
+    final imageType = await fixture.images.ensureDefinition(fixture.workspaceId);
+    await fixture.ensureLegacyPhotoIdProperty();
+
+    await fixture.services.relationMutations.deleteObject(
+      workspaceId: fixture.workspaceId,
+      objectTypeId: imageType.objectType.id,
+      objectId: image.id,
+    );
+
+    expect(await managedFile.exists(), isFalse);
     expect(
       await fixture.objectStore.listObjects(imageType.objectType.id),
       isEmpty,
@@ -178,6 +247,7 @@ class _DeleteFixture {
     required this.workspaceStore,
     required this.workspaceId,
     required this.objectStore,
+    required this.systemObjects,
     required this.images,
     required this.services,
   });
@@ -188,6 +258,7 @@ class _DeleteFixture {
   final WorkspaceStore workspaceStore;
   final int workspaceId;
   final ObjectStore objectStore;
+  final SystemObjectStore systemObjects;
   final ImageObjectService images;
   final GenericDatabasePageServices services;
 
@@ -225,8 +296,19 @@ class _DeleteFixture {
       workspaceStore: workspaceStore,
       workspaceId: workspaceId,
       objectStore: objectStore,
+      systemObjects: systemObjects,
       images: images,
       services: services,
+    );
+  }
+
+  Future<ObjectPropertyDefinition> ensureLegacyPhotoIdProperty() async {
+    final imageType = await images.ensureDefinition(workspaceId);
+    return systemObjects.ensureProperty(
+      objectTypeId: imageType.objectType.id,
+      name: 'Legacy Photo ID',
+      type: ObjectPropertyType.number,
+      config: const {'system': true, 'hidden': true},
     );
   }
 
