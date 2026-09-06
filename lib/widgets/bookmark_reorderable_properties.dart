@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
 import '../data/person_roles.dart';
+import '../features/database/presentation/widgets/detail_property_row.dart';
 import '../features/database/presentation/widgets/property_add_popover.dart';
 import '../features/object/presentation/widgets/property_drag_handle.dart';
 import 'bookmark_attachment_section.dart';
-import 'detail_property_row.dart';
 import 'relation_database_picker.dart';
 
 const _statusLabels = <String, String>{
