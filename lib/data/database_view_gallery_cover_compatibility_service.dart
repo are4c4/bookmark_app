@@ -50,15 +50,15 @@ class DatabaseViewGalleryCoverCompatibilityService {
     GalleryCoverSource? imageRelation;
     GalleryCoverSource? weblinkRelation;
     for (final option in options) {
-      switch (option.source.kind) {
-        case GalleryCoverSourceKind.directImage:
-          return option.source;
-        case GalleryCoverSourceKind.imageRelation:
-          imageRelation ??= option.source;
-        case GalleryCoverSourceKind.weblinkRelationRepresentativeImage:
-          weblinkRelation ??= option.source;
-        case GalleryCoverSourceKind.none:
-          break;
+      final kind = option.source.kind;
+      if (kind == GalleryCoverSourceKind.directImage) {
+        return option.source;
+      }
+      if (kind == GalleryCoverSourceKind.imageRelation) {
+        imageRelation ??= option.source;
+      } else if (
+          kind == GalleryCoverSourceKind.weblinkRelationRepresentativeImage) {
+        weblinkRelation ??= option.source;
       }
     }
     return imageRelation ?? weblinkRelation ?? const GalleryCoverSource.none();
