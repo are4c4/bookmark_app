@@ -87,4 +87,44 @@ void main() {
     expect(find.text('canonical.example'), findsOneWidget);
     expect(find.text('legacy.example'), findsNothing);
   });
+
+  testWidgets('secondary metadata is visually separated above semantic chips',
+      (tester) async {
+    final bookmark = BookmarkItem(
+      id: 3,
+      url: 'https://example.com/article',
+      title: 'Readable list row',
+      createdAt: DateTime(2026, 9, 6),
+      favorite: false,
+      status: 'unread',
+      rating: 0,
+      openCount: 0,
+      tags: const [],
+      people: const [],
+      photos: const [],
+      collections: const [],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BookmarkListMetadata(
+            bookmark: bookmark,
+            assignments: const [],
+            propertyTokens: const ['url', 'status'],
+          ),
+        ),
+      ),
+    );
+
+    final secondary = find.byKey(
+      const ValueKey('bookmark-list-secondary-metadata'),
+    );
+    final chips = find.byKey(const ValueKey('bookmark-list-chip-metadata'));
+    expect(secondary, findsOneWidget);
+    expect(chips, findsOneWidget);
+    expect(tester.getTopLeft(secondary).dy, lessThan(tester.getTopLeft(chips).dy));
+    expect(find.text('example.com'), findsOneWidget);
+    expect(find.text('未読'), findsOneWidget);
+  });
 }
