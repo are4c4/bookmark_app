@@ -3,7 +3,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
-import '../services/bookmark_presentation_resolver_factory.dart';
 import '../services/bookmark_url_resolver.dart';
 import 'bookmark_visual_image.dart';
 
@@ -14,8 +13,11 @@ Future<void> showBookmarkReverseLookupDialog({
   required Stream<List<BookmarkItem>> bookmarks,
   BookmarkUrlResolve? resolveUrl,
 }) {
-  final resolver =
-      resolveUrl ?? BookmarkPresentationResolverFactory.urlFor(repository);
+  final resolver = resolveUrl ??
+      BookmarkUrlResolver(
+        database: repository.workspaceStore.database,
+        workspaceId: repository.workspaceId,
+      ).resolve;
   return showDialog<void>(
     context: context,
     builder: (dialogContext) => AlertDialog(
