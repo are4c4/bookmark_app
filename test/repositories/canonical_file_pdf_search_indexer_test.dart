@@ -7,13 +7,13 @@ import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/object_type_defaults_store.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
-import 'package:bookmark_app/repositories/object_search_repository.dart';
+import 'package:bookmark_app/repositories/object_global_search_service.dart';
 import 'package:bookmark_app/services/canonical_file_pdf_search_indexer.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('canonical PDF extraction replaces derived tokens and clears when no longer PDF',
+  test('global Object search reconciles PDF text and focused refresh clears stale tokens',
       () async {
     final root = await Directory.systemTemp.createTemp('pdf_search_pipeline_');
     addTearDown(() => root.delete(recursive: true));
@@ -55,28 +55,26 @@ void main() {
         return extractedText;
       },
     );
-    final search = ObjectSearchRepository(genericStore);
-
-    expect(
-      await indexer.refresh(
-        fileObjectTypeId: definition.objectType.id,
-        fileObjectId: fileObject.id,
-      ),
-      isTrue,
+    final globalSearch = ObjectGlobalSearchService(
+      genericStore,
+      pdfSearchIndexer: indexer,
     );
+
+    await globalSearch.rebuildWorkspace(workspaceId);
     expect(readerCalls, 1);
     expect(
-      (await search.search(
+      (await globalSearch.search(
         workspaceId: workspaceId,
         rawQuery: 'legacypdfsearchtoken',
       ))
-          .map((hit) => hit.objectId),
+          .map((hit) => hit.object.id),
       contains(fileObject.id),
+      reason: 'workspace rebuild must reconcile PDF-derived text automatically',
     );
 
     extractedText = 'CurrentPdfSearchToken';
     expect(
-      await indexer.refresh(
+      await globalSearch.refreshFilePdfText(
         fileObjectTypeId: definition.objectType.id,
         fileObjectId: fileObject.id,
       ),
@@ -84,7 +82,7 @@ void main() {
     );
     expect(readerCalls, 2);
     expect(
-      await search.search(
+      await globalSearch.search(
         workspaceId: workspaceId,
         rawQuery: 'legacypdfsearchtoken',
       ),
@@ -92,11 +90,11 @@ void main() {
       reason: 're-extraction must replace stale PDF-derived tokens',
     );
     expect(
-      (await search.search(
+      (await globalSearch.search(
         workspaceId: workspaceId,
         rawQuery: 'currentpdfsearchtoken',
       ))
-          .map((hit) => hit.objectId),
+          .map((hit) => hit.object.id),
       contains(fileObject.id),
     );
 
@@ -111,7 +109,7 @@ void main() {
       0x0a,
     ]);
     expect(
-      await indexer.refresh(
+      await globalSearch.refreshFilePdfText(
         fileObjectTypeId: definition.objectType.id,
         fileObjectId: fileObject.id,
       ),
@@ -123,7 +121,7 @@ void main() {
       reason: 'content-first classification must not invoke PDF reader for PNG',
     );
     expect(
-      await search.search(
+      await globalSearch.search(
         workspaceId: workspaceId,
         rawQuery: 'currentpdfsearchtoken',
       ),
@@ -131,8 +129,11 @@ void main() {
       reason: 'non-PDF refresh must clear the previous pdf-text contribution',
     );
     expect(
-      (await search.search(workspaceId: workspaceId, rawQuery: 'research'))
-          .map((hit) => hit.objectId),
+      (await globalSearch.search(
+        workspaceId: workspaceId,
+        rawQuery: 'research',
+      ))
+          .map((hit) => hit.object.id),
       contains(fileObject.id),
       reason: 'focused PDF refresh must preserve ordinary File metadata search',
     );
