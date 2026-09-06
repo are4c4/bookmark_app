@@ -54,40 +54,50 @@ class FullTextSearchRepository {
     _initialized = true;
   }
 
+  Future<void> _insertBookmarksIntoIndex({int? bookmarkId}) {
+    final whereClause = bookmarkId == null
+        ? "b.storage_state != 'trash'"
+        : "b.id = ? AND b.storage_state != 'trash'";
+    final arguments = bookmarkId == null
+        ? const <Object?>[]
+        : <Object?>[bookmarkId];
+    return _database.customStatement('''
+      INSERT INTO bookmark_fts(
+        bookmark_id, title, url, description, tags, people, collections
+      )
+      SELECT
+        b.id,
+        b.title,
+        b.url,
+        COALESCE(b.description, ''),
+        COALESCE((
+          SELECT GROUP_CONCAT(t.name, ' ')
+          FROM bookmark_tags bt
+          JOIN tags t ON t.id = bt.tag_id
+          WHERE bt.bookmark_id = b.id
+        ), ''),
+        COALESCE((
+          SELECT GROUP_CONCAT(p.name || ' ' || bp.role, ' ')
+          FROM bookmark_people bp
+          JOIN people p ON p.id = bp.person_id
+          WHERE bp.bookmark_id = b.id
+        ), ''),
+        COALESCE((
+          SELECT GROUP_CONCAT(c.name, ' ')
+          FROM bookmark_collections bc
+          JOIN collections c ON c.id = bc.collection_id
+          WHERE bc.bookmark_id = b.id
+        ), '')
+      FROM bookmarks b
+      WHERE $whereClause
+    ''', arguments);
+  }
+
   Future<void> rebuild() async {
     await initialize();
     await _database.transaction(() async {
       await _database.customStatement('DELETE FROM bookmark_fts');
-      await _database.customStatement('''
-        INSERT INTO bookmark_fts(
-          bookmark_id, title, url, description, tags, people, collections
-        )
-        SELECT
-          b.id,
-          b.title,
-          b.url,
-          COALESCE(b.description, ''),
-          COALESCE((
-            SELECT GROUP_CONCAT(t.name, ' ')
-            FROM bookmark_tags bt
-            JOIN tags t ON t.id = bt.tag_id
-            WHERE bt.bookmark_id = b.id
-          ), ''),
-          COALESCE((
-            SELECT GROUP_CONCAT(p.name || ' ' || bp.role, ' ')
-            FROM bookmark_people bp
-            JOIN people p ON p.id = bp.person_id
-            WHERE bp.bookmark_id = b.id
-          ), ''),
-          COALESCE((
-            SELECT GROUP_CONCAT(c.name, ' ')
-            FROM bookmark_collections bc
-            JOIN collections c ON c.id = bc.collection_id
-            WHERE bc.bookmark_id = b.id
-          ), '')
-        FROM bookmarks b
-        WHERE b.storage_state != 'trash'
-      ''');
+      await _insertBookmarksIntoIndex();
     });
   }
 
@@ -98,36 +108,7 @@ class FullTextSearchRepository {
         'DELETE FROM bookmark_fts WHERE bookmark_id = ?',
         [bookmarkId],
       );
-      await _database.customStatement('''
-        INSERT INTO bookmark_fts(
-          bookmark_id, title, url, description, tags, people, collections
-        )
-        SELECT
-          b.id,
-          b.title,
-          b.url,
-          COALESCE(b.description, ''),
-          COALESCE((
-            SELECT GROUP_CONCAT(t.name, ' ')
-            FROM bookmark_tags bt
-            JOIN tags t ON t.id = bt.tag_id
-            WHERE bt.bookmark_id = b.id
-          ), ''),
-          COALESCE((
-            SELECT GROUP_CONCAT(p.name || ' ' || bp.role, ' ')
-            FROM bookmark_people bp
-            JOIN people p ON p.id = bp.person_id
-            WHERE bp.bookmark_id = b.id
-          ), ''),
-          COALESCE((
-            SELECT GROUP_CONCAT(c.name, ' ')
-            FROM bookmark_collections bc
-            JOIN collections c ON c.id = bc.collection_id
-            WHERE bc.bookmark_id = b.id
-          ), '')
-        FROM bookmarks b
-        WHERE b.id = ? AND b.storage_state != 'trash'
-      ''', [bookmarkId]);
+      await _insertBookmarksIntoIndex(bookmarkId: bookmarkId);
     });
   }
 

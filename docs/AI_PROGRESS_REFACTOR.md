@@ -135,3 +135,13 @@ Canonical Relation mutation/read/index/backlink/audit/reconcile remains mature. 
 
 ## Stop / continuation state
 Refactor remains actionable, but the next work should return to responsibility/LOC reduction and Object-first legacy retirement. Small failure/privacy gaps have largely been exhausted; large shared-host error strings are intentionally deferred until a safe host slice owns them.
+
+## Latest run checkpoint — 2026-09-06
+- Re-read `AGENTS.md`, Issues #225/#56, repository/lane handoffs, architecture, open PR ownership and CI before editing.
+- Latest main used for this slice: `442804c8c15c65fd66ed95ccbfde9d20172c48bf` after Object #416.
+- Refactor #419 had Flutter CI #1492 green but became non-mergeable as main advanced. It must not be force-merged.
+- Rebuilt the same behavior-preserving FTS projection deduplication from latest main on `refactor/issue-225-fts-index-projection-dedup-v3`.
+- `FullTextSearchRepository` now owns one private Bookmark -> FTS projection implementation used by both full rebuild and focused refresh; transaction boundaries, trash filtering, FTS schema/ranking/prefix semantics are unchanged.
+- Added focused in-memory regression coverage for rebuild/focused refresh plus a source guard ensuring the FTS INSERT projection remains single-source.
+- Open concurrent ownership at this checkpoint: Relation #420 is handoff-only; no shared hotspot touched by this slice.
+- Next: open the replacement PR, let Analyze/Test validate it, merge only when green and mergeable; if main advances and the PR becomes stale again, rebuild the same two-file diff rather than force-merging.
