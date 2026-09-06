@@ -1,10 +1,12 @@
 import '../domain/object_model.dart';
+import 'bidirectional_relation_store.dart';
 import 'database_view_gallery_adapter.dart';
 import 'database_view_group_adapter.dart';
 import 'database_view_query_adapter.dart';
 import 'database_view_store.dart';
 import 'generic_database_store.dart';
 import 'object_store.dart';
+import 'relation_mutation_service.dart';
 
 enum DatabaseViewPropertyReferenceKind {
   visible,
@@ -48,6 +50,8 @@ class ObjectPropertyDeleteImpact {
 /// Rename changes only the persisted Property name. View references continue to
 /// use the stable Property id (`p:<id>` or numeric propertyId), so filters,
 /// sorts, groups, Gallery cover settings, and Object values remain attached.
+/// Relation renames delegate to the canonical Relation mutation facade so
+/// bidirectional metadata is validated before schema changes are written.
 /// Delete is intentionally inspection-only here: callers must surface this
 /// impact before choosing a canonical deletion/archive path.
 class DatabaseViewPropertySchemaService {
@@ -65,6 +69,15 @@ class DatabaseViewPropertySchemaService {
   static const _groupAdapter = DatabaseViewGroupAdapter();
   static const _galleryAdapter = DatabaseViewGalleryAdapter();
 
+  RelationMutationService get _relationMutations => RelationMutationService(
+        objectStore: objectStore,
+        bidirectionalStore: BidirectionalRelationStore(
+          genericStore: genericStore,
+          objectStore: objectStore,
+        ),
+        genericStore: genericStore,
+      );
+
   Future<ObjectPropertyDefinition> renameProperty({
     required int objectTypeId,
     required int propertyId,
@@ -79,6 +92,13 @@ class DatabaseViewPropertySchemaService {
       propertyId: propertyId,
     );
     if (property.name == nextName) return property;
+
+    if (property.isRelation) {
+      return _relationMutations.renameRelationProperty(
+        property: property,
+        name: nextName,
+      );
+    }
 
     await genericStore.updateProperty(
       GenericPropertyRecord(
