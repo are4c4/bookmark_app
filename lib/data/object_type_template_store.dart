@@ -5,9 +5,13 @@ import '../database/database_definition.dart';
 import '../domain/object_model.dart';
 import 'database_view_gallery_adapter.dart';
 import 'database_view_store.dart';
+import 'file_object_service.dart';
 import 'generic_database_store.dart';
+import 'image_object_service.dart';
 import 'object_store.dart';
-import 'system_object_store.dart';
+import 'object_type_template_primitive_target_resolver.dart';
+import 'tag_object_bridge.dart';
+import 'weblink_object_service.dart';
 
 class ObjectTypeTemplateProperty {
   const ObjectTypeTemplateProperty({
@@ -123,6 +127,50 @@ class ObjectTypeTemplateStore {
       ],
     ),
     ObjectTypeTemplate(
+      key: 'paper',
+      name: '論文',
+      icon: '📄',
+      description: 'Weblink、表紙、ファイル、タグを組み合わせる論文データベース',
+      properties: [
+        ObjectTypeTemplateProperty(
+          name: 'Weblink',
+          type: 'relation',
+          relationTargetSystemKey: WeblinkObjectService.systemKey,
+          relationMultiple: false,
+        ),
+        ObjectTypeTemplateProperty(
+          name: '表紙',
+          type: 'relation',
+          relationTargetSystemKey: ImageObjectService.systemKey,
+          relationMultiple: false,
+        ),
+        ObjectTypeTemplateProperty(
+          name: 'ファイル',
+          type: 'relation',
+          relationTargetSystemKey: FileObjectService.systemKey,
+          relationMultiple: true,
+        ),
+        ObjectTypeTemplateProperty(
+          name: 'タグ',
+          type: 'relation',
+          relationTargetSystemKey: TagObjectBridge.systemKey,
+          relationMultiple: true,
+        ),
+        ObjectTypeTemplateProperty(name: 'DOI', type: 'text'),
+        ObjectTypeTemplateProperty(name: '公開日', type: 'date'),
+        ObjectTypeTemplateProperty(name: 'メモ', type: 'text'),
+      ],
+      views: [
+        ObjectTypeTemplateView(
+          name: 'ライブラリ',
+          layoutType: 'gallery',
+          galleryCoverRelationPropertyName: '表紙',
+          galleryCoverKind: ObjectTypeTemplateGalleryCoverKind.imageRelation,
+        ),
+        ObjectTypeTemplateView(name: '一覧', layoutType: 'table'),
+      ],
+    ),
+    ObjectTypeTemplate(
       key: 'person',
       name: '人物',
       icon: '👤',
@@ -187,13 +235,13 @@ class ObjectTypeTemplateStore {
         ObjectTypeTemplateProperty(
           name: '写真',
           type: 'relation',
-          relationTargetSystemKey: 'image',
+          relationTargetSystemKey: ImageObjectService.systemKey,
           relationMultiple: true,
         ),
         ObjectTypeTemplateProperty(
           name: 'タグ',
           type: 'relation',
-          relationTargetSystemKey: 'tag',
+          relationTargetSystemKey: TagObjectBridge.systemKey,
           relationMultiple: true,
         ),
         ObjectTypeTemplateProperty(name: '購入日', type: 'date'),
@@ -260,8 +308,8 @@ class ObjectTypeTemplateStore {
   }) async {
     await _ensureInstanceSchema();
     final objectStore = ObjectStore(store);
-    final systemObjects = SystemObjectStore(
-      database: store.database,
+    final primitiveTargets = ObjectTypeTemplatePrimitiveTargetResolver(
+      genericStore: store,
       objectStore: objectStore,
     );
     final viewStore = DatabaseViewStore(store.database);
@@ -275,7 +323,7 @@ class ObjectTypeTemplateStore {
           'Relation template Property ${property.name} requires a target system key.',
         );
       }
-      final target = await systemObjects.getSystemObjectType(
+      final target = await primitiveTargets.resolveOrProvision(
         workspaceId: workspaceId,
         systemKey: systemKey,
       );
