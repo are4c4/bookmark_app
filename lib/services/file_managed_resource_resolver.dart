@@ -32,7 +32,7 @@ class FileManagedResource {
 /// portable path resolution and filesystem probing are delegated to the same
 /// [ManagedFileResolver] used by Image presentation.
 class FileManagedResourceResolver {
-  const FileManagedResourceResolver(
+  FileManagedResourceResolver(
     this._objectStore, {
     ProfilePathResolver? pathResolver,
   }) : _fileResolver = ManagedFileResolver(pathResolver: pathResolver);
