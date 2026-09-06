@@ -3,20 +3,6 @@ import 'package:drift/drift.dart';
 import '../domain/bookmark_state.dart';
 import 'app_database.dart';
 
-class BookmarkLifecycleState {
-  const BookmarkLifecycleState({
-    required this.bookmarkId,
-    required this.inbox,
-    required this.deleted,
-    this.deletedAt,
-  });
-
-  final int bookmarkId;
-  final bool inbox;
-  final bool deleted;
-  final DateTime? deletedAt;
-}
-
 class BookmarkLifecycleStore {
   BookmarkLifecycleStore(this.database);
 
@@ -104,38 +90,6 @@ class BookmarkLifecycleStore {
         );
       }
     }
-  }
-
-  Future<Map<int, BookmarkLifecycleState>> states() async {
-    final rows = await database.select(database.bookmarks).get();
-    return {
-      for (final bookmark in rows)
-        bookmark.id: BookmarkLifecycleState(
-          bookmarkId: bookmark.id,
-          inbox: bookmark.storageState == 'inbox',
-          deleted: bookmark.storageState == 'trash',
-          deletedAt: bookmark.deletedAt,
-        ),
-    };
-  }
-
-  Stream<Map<int, BookmarkLifecycleState>> watchStates() => database.select(database.bookmarks).watch().map(
-        (rows) => {
-          for (final bookmark in rows)
-            bookmark.id: BookmarkLifecycleState(
-              bookmarkId: bookmark.id,
-              inbox: bookmark.storageState == 'inbox',
-              deleted: bookmark.storageState == 'trash',
-              deletedAt: bookmark.deletedAt,
-            ),
-        },
-      );
-
-  Future<String> genre(int bookmarkId) async {
-    final row = await (database.select(database.bookmarks)
-          ..where((bookmark) => bookmark.id.equals(bookmarkId)))
-        .getSingleOrNull();
-    return row?.genre ?? '';
   }
 
   Stream<String> watchGenre(int bookmarkId) {
