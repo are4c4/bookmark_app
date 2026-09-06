@@ -125,7 +125,7 @@ class CanonicalImageEditService {
         workspaceId: workspaceId,
         objectId: objectId,
       );
-      return imageEdit.hasBackup(editablePath);
+      return await imageEdit.hasBackup(editablePath);
     } on CanonicalImageEditTargetException {
       return false;
     } on CanonicalImageEditOwnershipException {
