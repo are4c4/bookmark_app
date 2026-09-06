@@ -26,12 +26,12 @@ Cross-lane coordination:
 - No feature may introduce a parallel serialized-id Relation writer or alternate Relation edge/index store.
 - Low-level `ObjectStore.setRelation` remains storage-internal/test-facing rather than a normal product mutation path.
 
-## Current checkpoint — 2026-09-07 04:32 JST
+## Current checkpoint — 2026-09-07 05:11 JST
 Latest Relation lifecycle merge: `27b68985871e3d4180b8b07c369ebc0f8735b8a9` — PR `#430 Preserve Bookmark Relations when legacy Image deletion is blocked`.
 Latest Relation handoff merge: PR `#468 Refresh Relation handoff after Image crop audit`, merged as `fc15dc004f8c16873bd89c40d2d76bc7f03ddc9a` after Flutter CI `#1627` succeeded.
-Latest audited `main`: `fc15dc004f8c16873bd89c40d2d76bc7f03ddc9a`; its first parent is Refactor `#472 Retire unused Person role properties widget` at `5a7c5169a304af958ef12644d874774384ab33e7`.
+Latest audited `main`: `31be90e1dbbfd66592832273820b092cc3a0ce7d` after Refactor `#474 Guard legacy Database presentation shim imports`; Object `#475 Add edge handles to canonical Image free crop` is also merged on this main history.
 
-Since the prior Relation handoff `#445`, canonical Relation services/storage/index ownership were not changed. Relation-adjacent changes were caller-zero removals of old Object-detail Relation/session/value-editor composition and a caller-zero legacy Person-role widget; live `RelationReadService`, `RelationMutationService`, `ObjectStore` Relation storage/index ownership, integrity/reconcile services and current Object detail Relation paths remain independently used.
+Since Relation handoff `#468`, canonical Relation services/storage/index ownership were not changed. The six commits from `#468` to current `main` are Object Image edit/geometry presentation work, Object/Repository handoff documentation, and Refactor maintainability guardrails. None adds a Relation Property writer, direct serialized-id path, edge/index mutation path, or Person -> Image production contract.
 
 The production Bookmark -> Image Relation contract remains:
 - `CoreObjectBridge` mirrors legacy Bookmark photo attachments into canonical Bookmark `Images` multi-Relation;
@@ -41,20 +41,14 @@ The production Bookmark -> Image Relation contract remains:
 - `#430` proves the Object-owned compatibility deletion preflight leaves those Relations completely unchanged when deletion is rejected.
 
 ## Latest repository audit
-- Object `#447` is merged: same-path canonical Image preview refresh/cache eviction only; no Relation writes or ownership semantic changes.
-- Object `#457` is merged: canonical Image detail panel composes preview + edit actions; no Relation production path.
-- Object `#460` is merged: crop presets route through `CanonicalImageEditService`; no Relation mutation/read/index changes.
-- Object `#465` is merged: free-crop selector/dialog plus canonical crop-request validation. It changes Image bytes/geometry only and introduces no Relation Property, edge, backlink, detach, retarget or alternate writer.
-- Refactor `#451` removed only a caller-zero Object-detail Relation/session composition chain. Current `ObjectInspectorPage` still constructs/uses canonical `RelationReadService` and `RelationMutationService`; production Bookmark/Weblink/Image resolvers/bridges also retain canonical Relation service usage.
-- Refactor `#463` removed caller-zero `ObjectDetailValueEditor` / input codec, not the live Relation editor. The retained `ObjectDetailEditService` rejects Relation/Computed ordinary-value editing, while current Relation editing remains on the explicit canonical Relation path in `ObjectInspectorPage`.
-- Refactor `#453/#454/#455/#458/#459/#464/#466` are caller-zero/dead-layer cleanup outside Relation persistence/lifecycle.
-- Refactor `#467` is merged. Its production change is limited to debug-observable `ImageVisualResolver` file-probe failure while preserving fail-soft visual resolution; no Relation semantics or storage changed.
-- Refactor `#472` is merged. It deletes caller-zero `PersonRoleProperties` plus its dead architecture test. That widget used legacy `BookmarkRepository` person-role storage and a legacy people picker, not canonical Object Relation persistence; its removal does not establish a Person Object/Relation migration contract.
-- Open Object `#469 Add safe vertical flip to canonical Image actions` changes only `object_image_edit_actions.dart` plus its focused test and remains behind `CanonicalImageEditService`; no Relation/Photo/schema changes.
-- Open Object handoff `#471` is docs-only and explicitly records `Legacy Tags` as compatibility metadata rather than inventing a new Tag Relation producer.
-- Open Refactor handoff `#470` is docs-only.
-- Default-branch audit still finds product `objectStore.setRelation(...)` calls only inside canonical Relation internals (`RelationMutationService` / `BidirectionalRelationStore`); remaining direct uses are tests.
-- `object_relation_edges` production ownership remains in `ObjectStore`, with `ObjectGraphQueryStore` read-side; direct SQL mutation hits outside it remain corruption/reconcile tests.
+- Object `#473` is merged: `ImageVisualResolver` can resolve missing/partial geometry read-only from managed bytes while preserving persisted-geometry fast paths. This is read-only media metadata fallback and does not change Object identity, Relation values, edges, backlinks, mutation service ownership, or Photo mapping.
+- Object `#469` is merged: safe vertical flip remains behind `CanonicalImageEditService`; no Relation/Photo/schema changes.
+- Object `#475` is merged after Flutter CI `#1641` succeeded. It adds edge handles to the normalized free-crop selector; the selector remains presentation-only and final byte mutation still routes through `CanonicalImageEditService`. No Relation Property, target, edge, backlink, detach, retarget, or alternate writer is introduced.
+- Open Object `#476 Restore pan and zoom parity in canonical Image free crop` is mergeable on current main. Its diff adds a presentation-only pan/zoom crop selector and dialog toggle that emits only a normalized source `Rect`; final mutation remains behind `CanonicalImageEditService`. It explicitly does not touch Relation, Photo mapping, schema, `ObjectInspectorPage`, Stage1, or generic Database hosts. Flutter CI `#1650` is currently in progress.
+- Refactor `#474` is merged. It ratchets legacy Database presentation shim-import guardrails and adjusts CI/reporting only; no Relation persistence/lifecycle semantics changed.
+- Open Refactor handoff `#470` is docs-only and does not own Relation semantics.
+- Default-branch audit remains consistent with the established contract: no new product Relation writer or parallel Relation index appeared in the audited changes.
+- `object_relation_edges` production ownership remains in `ObjectStore`, with `ObjectGraphQueryStore` read-side; no new direct SQL mutation path appeared in the audited changes.
 - Person profile images remain legacy `profilePhotoId` / `PhotoRecord`; no first-class Person -> Image Relation producer exists yet.
 - `Related images` remains an existing schema/editor concept; no new production population producer or batch Relation writer appeared.
 
@@ -72,9 +66,10 @@ Important guardrails include:
 - Relation `#403`: green and merged as `c8f00b25f38e6bc3523fba524798b1f7200f326a`.
 - Relation `#430`: green and merged as `27b68985871e3d4180b8b07c369ebc0f8735b8a9`.
 - Relation `#445`: green and merged as `e2d4d6237b63c58a14699a0f031766f74c2a9e27`.
-- Relation `#468`: prior head passed CI `#1619`; refreshed head `a638015af08a1671cbc67bea84b100b1069395ee` passed Flutter CI `#1627` with maintainability guardrail, boundary ceiling, Drift generation, Analyze and full Test all successful, then merged as `fc15dc004f8c16873bd89c40d2d76bc7f03ddc9a`.
-- Object `#447/#457/#460/#465` are merged; their production diffs are Relation-neutral.
-- Refactor `#451/#463/#467/#472` are merged and do not alter canonical Relation persistence or lifecycle.
+- Relation `#468`: refreshed head `a638015af08a1671cbc67bea84b100b1069395ee` passed Flutter CI `#1627` with maintainability guardrail, boundary ceiling, Drift generation, Analyze and full Test all successful, then merged as `fc15dc004f8c16873bd89c40d2d76bc7f03ddc9a`.
+- Object `#475`: head `e2c81ecc858b009722a8457584c90d1eb32c9639` passed Flutter CI `#1641` and merged as `4e744193ee11556cc29d21722e090f4572caba7c`.
+- Open Object `#476`: head `1ed69a48d92656e5e37cfd63085bbd210ebe1897`; Flutter CI `#1650` is in progress at this checkpoint.
+- Refactor `#474` is merged on current main and is Relation-neutral.
 
 ## Exact next Relation actions
 1. If Object adds a distinct user-facing Bookmark `Cover Image` / `Images` editor-write path beyond compatibility bridge sync, cover the real host attach/retarget/detach/retry path only where generic Relation editor coverage is insufficient.
@@ -90,7 +85,7 @@ Important guardrails include:
 - Automatic repair of missing targets/cardinality conflicts remains prohibited.
 - Person profile Image migration remains deferred until Object lane establishes the first-class Person/Image product contract.
 - Image crop/edit UI is presentation/Object behavior even when the Image participates in Relations; do not add Relation tests unless edit semantics actually change Object identity or Relation targets.
-- Caller-zero removal of legacy Person-role UI does not establish a Person Object/Relation migration contract; do not infer one from Refactor cleanup.
+- Refactor presentation/import guardrails do not establish Relation product semantics; do not infer a new Relation workflow from maintainability-only changes.
 
 ## Stop reason
-Current `main` through merged Relation handoff `#468` and Refactor `#472`, plus open Object `#469`, Object handoff `#471` and Refactor handoff `#470`, does not introduce an uncovered Relation-producing workflow, canonical Relation storage/index/service change, or concrete lifecycle correctness regression. The Relation-adjacent Refactor removals (`#451/#463/#472`) are caller-zero/dead-layer cleanup while live canonical Relation read/mutation hosts remain intact. No further independent Relation implementation is justified without duplicating existing coverage or crossing into Object/Refactor ownership. Resume immediately for Person -> Image, a distinct Bookmark Image write/edit producer, explicit Related-images/batch writes, Relation storage/index/service changes, or a concrete lifecycle regression.
+Current `main` through Object `#473/#469/#475` and Refactor `#474`, plus open Object `#476` and Refactor handoff `#470`, does not introduce an uncovered Relation-producing workflow, canonical Relation storage/index/service change, or concrete lifecycle correctness regression. The new Image crop/geometry work changes presentation or managed-byte editing behind the existing canonical Image edit boundary without changing Image identity or Relation targets. No further independent Relation implementation is justified without duplicating existing coverage or crossing into Object/Refactor ownership. Resume immediately for Person -> Image, a distinct Bookmark Image write/edit producer, explicit Related-images/batch writes, Relation storage/index/service changes, or a concrete lifecycle regression.
