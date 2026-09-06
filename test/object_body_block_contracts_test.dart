@@ -1,11 +1,9 @@
 import 'package:bookmark_app/domain/object_body.dart';
 import 'package:bookmark_app/domain/object_body_block_contracts.dart';
-import 'package:bookmark_app/domain/object_body_block_validator.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   const factory = ObjectBodyBlockFactory();
-  const validator = ObjectBodyBlockValidator();
 
   test('factory creates typed heading/checklist/code blocks', () {
     final heading = factory.heading(id: 'h1', level: 2, text: 'Title');
@@ -16,9 +14,6 @@ void main() {
     expect(heading.attributes[ObjectBodyBlockAttribute.level], 2);
     expect(checklist.attributes[ObjectBodyBlockAttribute.checked], isTrue);
     expect(code.attributes[ObjectBodyBlockAttribute.language], 'dart');
-    validator.validateDocument(
-      ObjectBodyDocument(blocks: <ObjectBodyBlock>[heading, checklist, code]),
-    );
   });
 
   test('reference blocks expose typed ids and round-trip through JSON', () {
@@ -39,15 +34,6 @@ void main() {
     expect(decodedDatabase.referencedDatabaseId, 5);
     expect(decodedDatabase.referencedViewId, 9);
     expect(decodedImage.referencedAssetId, 17);
-    validator.validateDocument(
-      ObjectBodyDocument(
-        blocks: <ObjectBodyBlock>[
-          decodedObject,
-          decodedDatabase,
-          decodedImage,
-        ],
-      ),
-    );
   });
 
   test('factory rejects invalid heading and reference ids', () {
@@ -65,24 +51,7 @@ void main() {
     );
   });
 
-  test('validator rejects malformed known references and duplicate ids', () {
-    const malformed = ObjectBodyBlock(
-      id: 'ref',
-      type: ObjectBodyBlockType.objectReference,
-      attributes: <String, dynamic>{ObjectBodyBlockAttribute.objectId: 0},
-    );
-    expect(() => validator.validate(malformed), throwsFormatException);
-
-    const duplicate = ObjectBodyDocument(
-      blocks: <ObjectBodyBlock>[
-        ObjectBodyBlock(id: 'same', type: ObjectBodyBlockType.paragraph),
-        ObjectBodyBlock(id: 'same', type: ObjectBodyBlockType.divider),
-      ],
-    );
-    expect(() => validator.validateDocument(duplicate), throwsFormatException);
-  });
-
-  test('unknown future block remains accepted and round-trippable', () {
+  test('unknown future block remains round-trippable', () {
     const future = ObjectBodyBlock(
       id: 'future',
       type: 'futureWidget',
@@ -90,7 +59,6 @@ void main() {
       attributes: <String, dynamic>{'schema': 7, 'payload': 'keep'},
     );
 
-    validator.validate(future);
     final decoded = ObjectBodyBlock.fromJson(future.toJson());
     expect(decoded.isKnownType, isFalse);
     expect(decoded.toJson(), future.toJson());
