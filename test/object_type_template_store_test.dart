@@ -20,6 +20,7 @@ void main() {
       'person',
       'project',
       'note',
+      'plant',
     });
     expect(templates.every((template) => template.version == 1), isTrue);
     expect(templates.every((template) => template.views.isNotEmpty), isTrue);
@@ -28,6 +29,12 @@ void main() {
           .map((property) => property.name),
       containsAll(['著者', '状態', '評価', 'URL', 'メモ']),
     );
+    final plant = templates.firstWhere((item) => item.key == 'plant');
+    expect(
+      plant.properties.map((property) => property.name),
+      ['写真', 'タグ', '購入日', '育成メモ'],
+    );
+    expect(plant.views.single.layoutType, 'gallery');
   });
 
   test('createFromTemplate creates user-owned schema and default View atomically', () async {
@@ -170,6 +177,52 @@ void main() {
     expect(customized?.name, 'My Papers');
     expect(customized?.icon, '🧪');
     expect((await templateStore.instanceForObjectType(objectTypeId))?.templateVersion, 3);
+  });
+
+  test('Plant template composes Image and Tag primitives without domain-specific code', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final systemObjects = SystemObjectStore(
+      database: database,
+      objectStore: objectStore,
+    );
+    final imageType = await systemObjects.ensureSystemObjectType(
+      workspaceId: workspaceId,
+      systemKey: 'image',
+      name: 'Images',
+      icon: '🖼️',
+    );
+    final tagType = await systemObjects.ensureSystemObjectType(
+      workspaceId: workspaceId,
+      systemKey: 'tag',
+      name: 'Tags',
+      icon: '🏷️',
+    );
+    final templateStore = ObjectTypeTemplateStore(genericStore);
+
+    final objectTypeId = await templateStore.createFromTemplate(
+      workspaceId: workspaceId,
+      template: templateStore.templateByKey('plant')!,
+    );
+
+    final created = await objectStore.getObjectType(objectTypeId);
+    expect(created?.kind, ObjectTypeKind.custom);
+    final photo = created!.properties.firstWhere((property) => property.name == '写真');
+    final tags = created.properties.firstWhere((property) => property.name == 'タグ');
+    expect(photo.targetObjectTypeId, imageType.id);
+    expect(photo.allowsMultipleRelations, isTrue);
+    expect(tags.targetObjectTypeId, tagType.id);
+    expect(tags.allowsMultipleRelations, isTrue);
+
+    final views = await DatabaseViewStore(database).listViews(
+      workspaceId: workspaceId,
+      databaseKey: 'custom:$objectTypeId',
+    );
+    expect(views.single.name, '一覧');
+    expect(views.single.layoutType, 'gallery');
   });
 
   test('missing primitive Relation target fails before creating user schema', () async {
