@@ -1,5 +1,7 @@
 import 'dart:developer' as developer;
 
+import 'package:drift/drift.dart' show Variable;
+
 import '../services/bookmark_metadata_service.dart';
 import '../services/generic_database_image_import_service.dart';
 import '../services/image_managed_file_deletion_policy.dart';
@@ -229,6 +231,16 @@ class GenericDatabasePageServices {
   final ObjectBoardMoveService boardMoveService;
 }
 
+/// Stable user-facing boundary when a generic Images host tries to delete an
+/// Image still participating in the legacy Photo compatibility lifecycle.
+class LegacyPhotoCompatibilityImageDeletionException implements Exception {
+  const LegacyPhotoCompatibilityImageDeletionException();
+
+  @override
+  String toString() =>
+      'この画像は従来の写真との互換同期で使用されています。写真管理から削除してください。';
+}
+
 /// Keeps the generic page's existing Relation-safe Object deletion API while
 /// layering Object-owned managed-Image file cleanup at the composition boundary.
 /// Relation semantics stay delegated to [RelationMutationService].
@@ -256,6 +268,12 @@ class _GenericDatabaseRelationMutationService extends RelationMutationService {
     required int objectTypeId,
     required int objectId,
   }) async {
+    await _ensureImageDeletionAllowed(
+      workspaceId: workspaceId,
+      objectTypeId: objectTypeId,
+      objectId: objectId,
+    );
+
     String? managedFileToDelete;
     try {
       managedFileToDelete = await _managedImageCleanupCandidate(
@@ -289,6 +307,71 @@ class _GenericDatabaseRelationMutationService extends RelationMutationService {
         );
         return true;
       }());
+    }
+  }
+
+  Future<void> _ensureImageDeletionAllowed({
+    required int workspaceId,
+    required int objectTypeId,
+    required int objectId,
+  }) async {
+    final objectType = await objectStore.getObjectType(objectTypeId);
+    if (objectType == null || objectType.workspaceId != workspaceId) return;
+    final systemKey = await systemObjects.systemKeyForObjectType(objectTypeId);
+    if (systemKey != ImageObjectService.systemKey) return;
+
+    if (await _isActiveLegacyPhotoTarget(
+      workspaceId: workspaceId,
+      objectId: objectId,
+    )) {
+      throw const LegacyPhotoCompatibilityImageDeletionException();
+    }
+
+    final legacyIdProperties = objectType.properties
+        .where((property) => property.name == 'Legacy Photo ID')
+        .toList(growable: false);
+    if (legacyIdProperties.length > 1) {
+      throw const LegacyPhotoCompatibilityImageDeletionException();
+    }
+    if (legacyIdProperties.isEmpty) return;
+
+    final objects = await objectStore.listObjects(objectTypeId);
+    for (final object in objects) {
+      if (object.id != objectId) continue;
+      if (object.values[legacyIdProperties.single.id] != null) {
+        throw const LegacyPhotoCompatibilityImageDeletionException();
+      }
+      return;
+    }
+  }
+
+  Future<bool> _isActiveLegacyPhotoTarget({
+    required int workspaceId,
+    required int objectId,
+  }) async {
+    try {
+      final table = await systemObjects.database.customSelect(
+        '''SELECT 1 AS present
+           FROM sqlite_master
+           WHERE type = 'table' AND name = ?
+           LIMIT 1''',
+        variables: const [Variable<String>('photo_object_links')],
+      ).getSingleOrNull();
+      if (table == null) return false;
+
+      final mapping = await systemObjects.database.customSelect(
+        '''SELECT 1 AS present
+           FROM photo_object_links
+           WHERE workspace_id = ? AND object_id = ?
+           LIMIT 1''',
+        variables: [Variable<int>(workspaceId), Variable<int>(objectId)],
+      ).getSingleOrNull();
+      return mapping != null;
+    } catch (_) {
+      // This audit protects a destructive user action. If compatibility
+      // ownership cannot be read safely, retain the Image and expose the same
+      // stable product boundary rather than leaking a database exception.
+      return true;
     }
   }
 
