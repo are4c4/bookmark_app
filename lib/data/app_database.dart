@@ -148,13 +148,6 @@ class AppDatabase extends _$AppDatabase {
     return query.map((row) => row.readTable(tags)).get();
   }
 
-  Future<List<Person>> _peopleForBookmark(int bookmarkId) {
-    final query = select(people).join([innerJoin(bookmarkPeople, bookmarkPeople.personId.equalsExp(people.id))])
-      ..where(bookmarkPeople.bookmarkId.equals(bookmarkId))
-      ..orderBy([OrderingTerm.asc(people.name)]);
-    return query.map((row) => row.readTable(people)).get();
-  }
-
   Stream<List<Tag>> watchAllTags() => (select(tags)..orderBy([(t) => OrderingTerm.asc(t.name)])).watch();
   Stream<List<Person>> watchAllPeople() => (select(people)..orderBy([(p) => OrderingTerm.asc(p.name)])).watch();
   Stream<List<CollectionRecord>> watchAllCollections() =>
@@ -272,21 +265,6 @@ class AppDatabase extends _$AppDatabase {
         for (final bookmarkId in bookmarkIds.toSet()) {
           final current = await _tagsForBookmark(bookmarkId);
           await setBookmarkTags(bookmarkId, current.map((e) => e.name).where((e) => !removing.contains(e.toLowerCase())));
-        }
-      });
-
-  Future<void> addPeopleToBookmarks(Iterable<int> bookmarkIds, Iterable<String> names) => transaction(() async {
-        for (final bookmarkId in bookmarkIds.toSet()) {
-          final current = await _peopleForBookmark(bookmarkId);
-          await setBookmarkPeople(bookmarkId, [...current.map((e) => e.name), ...names]);
-        }
-      });
-
-  Future<void> removePeopleFromBookmarks(Iterable<int> bookmarkIds, Iterable<String> names) => transaction(() async {
-        final removing = _normalizeNames(names).map((e) => e.toLowerCase()).toSet();
-        for (final bookmarkId in bookmarkIds.toSet()) {
-          final current = await _peopleForBookmark(bookmarkId);
-          await setBookmarkPeople(bookmarkId, current.map((e) => e.name).where((e) => !removing.contains(e.toLowerCase())));
         }
       });
 
