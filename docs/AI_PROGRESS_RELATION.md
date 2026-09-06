@@ -26,15 +26,16 @@ Cross-lane coordination:
 - No feature may introduce a parallel serialized-id Relation writer or alternate Relation edge/index store.
 - Low-level `ObjectStore.setRelation` remains storage-internal/test-facing rather than a normal product mutation path.
 
-## Current checkpoint — 2026-09-06 20:19 JST
+## Current checkpoint — 2026-09-06 21:14 JST
 Latest Relation merge: `27b68985871e3d4180b8b07c369ebc0f8735b8a9` — PR `#430 Preserve Bookmark Relations when legacy Image deletion is blocked`.
+Latest audited `main`: `704bc63021a554f0537815d2329049cd66ec144a` after Refactor `#431`; Object `#432` is merged and open Object `#434` is mergeable.
 
 The production Bookmark -> Image Relation contract remains:
 - `CoreObjectBridge` mirrors legacy Bookmark photo attachments into canonical Bookmark `Images` multi-Relation;
 - legacy explicit cover mirrors into canonical Bookmark `Cover Image` single Relation;
 - writes use canonical `RelationMutationService`;
 - `#403` proves attach/retry/idempotency/retarget/edge/backlink/delete/integrity lifecycle while preserving the multi-Relation;
-- `#430` now proves the Object-owned compatibility deletion preflight leaves those Relations completely unchanged when deletion is rejected.
+- `#430` proves the Object-owned compatibility deletion preflight leaves those Relations completely unchanged when deletion is rejected.
 
 ## Completed Relation slice — #430
 Object `#423 Guard Images participating in legacy Photo sync from deletion` introduced a user-facing preflight before `super.deleteObject(...)` for system Images. It rejects deletion while an Image is an active `photo_object_links` target, is a legacy-owned mirror with non-null `Legacy Photo ID`, or compatibility ownership cannot be proven safely.
@@ -63,11 +64,13 @@ Recent Object/Refactor changes were classified as follows:
 - `#409/#415/#416` — canonical Image detail edit/read-only/preview presentation; no Relation writes.
 - `#413` — managed Image file cleanup still performs canonical `RelationMutationService.deleteObject(...)` before physical cleanup.
 - `#418` — tests-only canonical Image backlink/reverse-lookup parity; no new Relation producer.
-- `#423` — Relation lifecycle trigger because its new compatibility preflight can reject the user-facing Image deletion path before canonical detach; now covered by #430.
+- `#423` — Relation lifecycle trigger because its new compatibility preflight can reject the user-facing Image deletion path before canonical detach; covered by #430.
 - `#426` — canonical Image geometry mutation only; no Relation semantics.
 - `#427/#431` and nearby Refactor caller-zero/FTS/docs work do not alter canonical Relation behavior.
 - Object `#428` is handoff-only.
-- Open Object `#432 Coordinate safe canonical Image edits` adds an ownership-safe Image edit coordinator and geometry refresh/rollback; its stated diff has no Relation/Photo mapping/schema changes and no Relation producer.
+- Object `#432 Coordinate safe canonical Image edits` is now merged. It adds an ownership-safe Image edit coordinator and geometry refresh/rollback; no Relation value, Photo mapping, schema, edge/index or Relation producer changed.
+- Open Object `#434 Expose safe canonical Image edit availability` adds advisory edit preflight only. It explicitly leaves Relation behavior and Photo compatibility mapping unchanged and does not touch shared UI hosts.
+- Open Refactor `#433` is handoff documentation only.
 
 Default-branch audits found no new direct product use of low-level `ObjectStore.setRelation`, no alternate `object_relation_edges` writer, and no canonical Relation service bypass.
 
@@ -96,4 +99,4 @@ Important guardrails include:
 - Person profile Image migration remains deferred until Object lane establishes the first-class Person/Image product contract.
 
 ## Stop reason
-Relation #430 is merged and green. Current open Object/Refactor work does not introduce an uncovered Relation-producing workflow or change canonical Relation storage/index semantics. No further independent Relation implementation is currently justified without duplicating coverage or crossing into Object/Refactor ownership. Resume immediately for Person -> Image, a distinct Bookmark Image write/edit producer, Relation storage/index/service changes, or a concrete lifecycle correctness regression.
+Relation #430 remains merged and green. The latest main through #431, merged Object #432, open Object #434 and open Refactor #433 do not introduce an uncovered Relation-producing workflow or change canonical Relation storage/index semantics. No further independent Relation implementation is currently justified without duplicating coverage or crossing into Object/Refactor ownership. Resume immediately for Person -> Image, a distinct Bookmark Image write/edit producer, Relation storage/index/service changes, or a concrete lifecycle correctness regression.
