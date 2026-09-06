@@ -189,24 +189,52 @@ class CoreObjectBridge {
       final title = photo.title?.trim().isNotEmpty == true
           ? photo.title!.trim()
           : '画像 ${photo.id}';
-      final objectId = await _ensureLinkedObject(
+      final link = await _ensurePhotoLinkedObject(
         workspaceId: workspaceId,
-        table: 'photo_object_links',
-        legacyColumn: 'photo_id',
         legacyId: photo.id,
-        objectTypeId: photoType.id,
+        filePath: photo.path,
         title: title,
+        photoType: photoType,
+        legacyIdProperty: legacyId,
       );
-      await objectStore.renameObject(objectId, title);
-      await objectStore.setPropertyValue(objectId: objectId, property: legacyId, value: photo.id);
-      await objectStore.setPropertyValue(objectId: objectId, property: file, value: photo.path);
-      await objectStore.setPropertyValue(objectId: objectId, property: note, value: photo.note);
-      await objectStore.setPropertyValue(
-        objectId: objectId,
-        property: originalFilename,
-        value: _fileName(photo.path),
-      );
-      await objectStore.setPropertyValue(objectId: objectId, property: legacyTags, value: photo.tags);
+      if (link.legacyOwned) {
+        await objectStore.renameObject(link.object.id, title);
+        await objectStore.setPropertyValue(
+          objectId: link.object.id,
+          property: legacyId,
+          value: photo.id,
+        );
+        await objectStore.setPropertyValue(
+          objectId: link.object.id,
+          property: file,
+          value: photo.path,
+        );
+        await objectStore.setPropertyValue(
+          objectId: link.object.id,
+          property: note,
+          value: photo.note,
+        );
+        await objectStore.setPropertyValue(
+          objectId: link.object.id,
+          property: originalFilename,
+          value: _fileName(photo.path),
+        );
+        await objectStore.setPropertyValue(
+          objectId: link.object.id,
+          property: legacyTags,
+          value: photo.tags,
+        );
+      } else {
+        // Reusing a pre-existing canonical Image must not turn that Image into a
+        // legacy-owned mirror. Preserve its user metadata and ownership while
+        // filling only canonical metadata that is currently absent.
+        await _setStringIfMissing(link.object, note, photo.note);
+        await _setStringIfMissing(
+          link.object,
+          originalFilename,
+          _fileName(photo.path),
+        );
+      }
     }
 
     await _removeOrphanObjects(
@@ -312,6 +340,22 @@ class CoreObjectBridge {
     return slash < 0 ? normalized : normalized.substring(slash + 1);
   }
 
+  Future<void> _setStringIfMissing(
+    AppObject object,
+    ObjectPropertyDefinition property,
+    String? value,
+  ) async {
+    final candidate = value?.trim();
+    if (candidate == null || candidate.isEmpty) return;
+    final current = '${object.values[property.id] ?? ''}'.trim();
+    if (current.isNotEmpty) return;
+    await objectStore.setPropertyValue(
+      objectId: object.id,
+      property: property,
+      value: candidate,
+    );
+  }
+
   Future<void> _removeOrphanObjects({
     required int workspaceId,
     required AppObjectType objectType,
@@ -333,6 +377,55 @@ class CoreObjectBridge {
         objectId: object.id,
       );
     }
+  }
+
+  Future<_PhotoObjectLink> _ensurePhotoLinkedObject({
+    required int workspaceId,
+    required int legacyId,
+    required String filePath,
+    required String title,
+    required AppObjectType photoType,
+    required ObjectPropertyDefinition legacyIdProperty,
+  }) async {
+    final existing = await _linkedObjectId(
+      workspaceId: workspaceId,
+      table: 'photo_object_links',
+      legacyColumn: 'photo_id',
+      legacyId: legacyId,
+    );
+    if (existing != null) {
+      final objects = await objectStore.listObjects(photoType.id);
+      for (final object in objects) {
+        if (object.id != existing) continue;
+        return _PhotoObjectLink(
+          object: object,
+          legacyOwned: object.values[legacyIdProperty.id] != null,
+        );
+      }
+      throw StateError('Linked Image Object $existing does not exist.');
+    }
+
+    final existingIds = (await objectStore.listObjects(photoType.id))
+        .map((object) => object.id)
+        .toSet();
+
+    // First promotion may reuse an already-managed Image with the exact same
+    // canonical File identity. Once linked, the stable mapping is authoritative;
+    // no path heuristic is consulted on subsequent compatibility syncs.
+    final image = await _images.findOrCreateManaged(
+      workspaceId: workspaceId,
+      filePath: filePath,
+      title: title,
+      originalFilename: _fileName(filePath),
+    );
+    await database.customStatement(
+      'INSERT INTO photo_object_links(workspace_id, photo_id, object_id) VALUES (?, ?, ?)',
+      [workspaceId, legacyId, image.id],
+    );
+    return _PhotoObjectLink(
+      object: image,
+      legacyOwned: !existingIds.contains(image.id),
+    );
   }
 
   Future<int> _ensureLinkedObject({
@@ -371,4 +464,11 @@ class CoreObjectBridge {
     ).getSingleOrNull();
     return row?.read<int>('object_id');
   }
+}
+
+class _PhotoObjectLink {
+  const _PhotoObjectLink({required this.object, required this.legacyOwned});
+
+  final AppObject object;
+  final bool legacyOwned;
 }
