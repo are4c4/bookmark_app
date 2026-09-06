@@ -108,23 +108,32 @@ class DailyNoteService {
     if (registered != null) return registered;
 
     // Adopt a matching Object that predates the registry before creating a new
-    // one. This keeps the migration path backward-compatible.
+    // one. If another caller claims the date during adoption, return that
+    // canonical winner rather than the now-unregistered legacy candidate.
     final existingObjects = await objectStore.listObjects(definition.objectType.id);
     for (final object in existingObjects) {
       if ('${object.values[definition.dateProperty.id] ?? ''}' == dateKey) {
-        await _register(
+        final claimed = await _tryRegister(
           workspaceId: workspaceId,
           dateKey: dateKey,
           objectId: object.id,
         );
-        return object;
+        if (claimed) return object;
+        final winner = await _registeredObject(
+          workspaceId: workspaceId,
+          dateKey: dateKey,
+          objectTypeId: definition.objectType.id,
+        );
+        if (winner != null) return winner;
+        throw StateError('Daily Note registry claim was lost without a winner.');
       }
     }
 
-    // Object identity, its required Date value, the optional Body template
-    // applied by ObjectStore, and the registry claim are one creation unit.
-    // If any write fails, do not leave a partially initialized Daily Note.
-    final createdId = await genericStore.database.transaction(() async {
+    // Object identity, its required Date value, the optional Body template,
+    // registry claim and same-date loser cleanup are one creation unit. If a
+    // concurrent caller wins the claim, delete this caller's duplicate before
+    // committing. A cleanup failure then rolls the whole creation back.
+    final createdId = await genericStore.database.transaction<int?>(() async {
       final objectId = await objectStore.createObject(
         objectTypeId: definition.objectType.id,
         title: dateKey,
@@ -134,11 +143,15 @@ class DailyNoteService {
         property: definition.dateProperty,
         value: dateKey,
       );
-      await _register(
+      final claimed = await _tryRegister(
         workspaceId: workspaceId,
         dateKey: dateKey,
         objectId: objectId,
       );
+      if (!claimed) {
+        await objectStore.deleteObject(objectId);
+        return null;
+      }
       return objectId;
     });
 
@@ -150,15 +163,13 @@ class DailyNoteService {
     if (winner == null) {
       throw StateError('Daily Note registry did not retain an Object.');
     }
-    if (winner.id != createdId) {
-      // Another caller won the same-date registration. Remove only the
-      // duplicate Object created by this call.
-      await objectStore.deleteObject(createdId);
+    if (createdId != null && winner.id != createdId) {
+      throw StateError('Daily Note registry changed after a successful claim.');
     }
     return winner;
   }
 
-  Future<void> _register({
+  Future<bool> _tryRegister({
     required int workspaceId,
     required String dateKey,
     required int objectId,
@@ -168,6 +179,10 @@ class DailyNoteService {
          VALUES (?, ?, ?)''',
       [workspaceId, dateKey, objectId],
     );
+    final row = await genericStore.database.customSelect(
+      'SELECT changes() AS changed',
+    ).getSingle();
+    return row.read<int>('changed') == 1;
   }
 
   Future<AppObject?> _registeredObject({
@@ -189,6 +204,14 @@ class DailyNoteService {
     for (final object in objects) {
       if (object.id == objectId) return object;
     }
+
+    // A stale or corrupt registry claim must not reserve a date forever. Match
+    // object_id as well so a concurrent replacement cannot be removed here.
+    await genericStore.database.customStatement(
+      '''DELETE FROM daily_note_registry
+         WHERE workspace_id = ? AND note_date = ? AND object_id = ?''',
+      [workspaceId, dateKey, objectId],
+    );
     return null;
   }
 
