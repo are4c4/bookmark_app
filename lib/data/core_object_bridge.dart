@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:drift/drift.dart';
 
 import '../domain/object_model.dart';
@@ -203,6 +205,7 @@ class CoreObjectBridge {
         photoType: photoType,
         legacyIdProperty: legacyId,
       );
+      if (link == null) continue;
       if (link.legacyOwned) {
         await objectStore.renameObject(link.object.id, title);
         await objectStore.setPropertyValue(
@@ -403,6 +406,28 @@ class CoreObjectBridge {
     return slash < 0 ? normalized : normalized.substring(slash + 1);
   }
 
+  Future<bool> _storedPhotoFileExists(String storedPath) async {
+    final candidate = storedPath.trim();
+    if (candidate.isEmpty) return false;
+    final isAbsolute = candidate.startsWith('/') ||
+        RegExp(r'^[A-Za-z]:[\\/]').hasMatch(candidate);
+
+    // A relative legacy path without a profile/Vault root is only a logical
+    // compatibility identity. Its filesystem location is indeterminate here,
+    // so preserve the established bridge behavior instead of treating the
+    // current process working directory as authoritative.
+    if (!isAbsolute && database.profileDirectoryPath == null) return true;
+
+    try {
+      final resolved = database.pathResolver.resolveStoredPath(candidate);
+      return await File(resolved).exists();
+    } catch (_) {
+      // File-system lookup is a compatibility gate only. Keep the legacy Photo
+      // row untouched and retry promotion on a later sync if media reappears.
+      return false;
+    }
+  }
+
   Future<void> _setStringIfMissing(
     AppObject object,
     ObjectPropertyDefinition property,
@@ -442,7 +467,7 @@ class CoreObjectBridge {
     }
   }
 
-  Future<_PhotoObjectLink> _ensurePhotoLinkedObject({
+  Future<_PhotoObjectLink?> _ensurePhotoLinkedObject({
     required int workspaceId,
     required int legacyId,
     required String filePath,
@@ -467,6 +492,11 @@ class CoreObjectBridge {
       }
       throw StateError('Linked Image Object $existing does not exist.');
     }
+
+    // A first promotion must not mint a canonical Image around a broken legacy
+    // file reference when that reference resolves to a concrete filesystem
+    // location. Unrooted relative paths remain compatibility identities.
+    if (!await _storedPhotoFileExists(filePath)) return null;
 
     final existingIds = (await objectStore.listObjects(photoType.id))
         .map((object) => object.id)
