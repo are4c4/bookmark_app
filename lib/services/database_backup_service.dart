@@ -4,9 +4,13 @@ import 'dart:io';
 import 'package:file_selector/file_selector.dart';
 
 import '../data/app_database.dart';
+import '../data/bookmark_repository.dart';
 
 class DatabaseBackupService {
   const DatabaseBackupService(this.database);
+
+  factory DatabaseBackupService.fromRepository(BookmarkRepository repository) =>
+      DatabaseBackupService(repository.workspaceStore.database);
 
   final AppDatabase database;
 
@@ -138,14 +142,19 @@ class DatabaseBackupService {
       return value;
     }
     if (value is DateTime) {
-      return <String, Object?>{'__type': 'datetime', 'value': value.toIso8601String()};
+      return <String, Object?>{
+        '__type': 'datetime',
+        'value': value.toIso8601String(),
+      };
     }
     return value.toString();
   }
 
   Object? _restoreValue(Object? value) {
     if (value is Map && value['__type'] == 'datetime') {
-      return DateTime.tryParse(value['value']?.toString() ?? '')?.millisecondsSinceEpoch;
+      return DateTime.tryParse(
+        value['value']?.toString() ?? '',
+      )?.millisecondsSinceEpoch;
     }
     return value;
   }

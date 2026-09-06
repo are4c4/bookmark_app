@@ -8,6 +8,9 @@ void main() {
     final backup = File(
       'lib/views/database_backup_settings_section.dart',
     ).readAsStringSync();
+    final service = File(
+      'lib/services/database_backup_service.dart',
+    ).readAsStringSync();
 
     expect(page, contains('DatabaseBackupSettingsSection('));
     expect(page, isNot(contains('DatabaseBackupService(')));
@@ -15,7 +18,8 @@ void main() {
     expect(page, isNot(contains('_exportBackup(')));
     expect(page, isNot(contains('_restoreBackup(')));
 
-    expect(backup, contains('DatabaseBackupService('));
+    expect(backup, contains('DatabaseBackupService.fromRepository(repository)'));
+    expect(backup, isNot(contains('workspaceStore.database')));
     expect(backup, contains('_exportBackup('));
     expect(backup, contains('_restoreBackup('));
     expect(backup, contains("name: 'bookmark_app.settings_backup'"));
@@ -27,5 +31,8 @@ void main() {
       backup,
       contains('バックアップを復元できませんでした。ファイルを確認して、もう一度お試しください。'),
     );
+
+    expect(service, contains('factory DatabaseBackupService.fromRepository('));
+    expect(service, contains('repository.workspaceStore.database'));
   });
 }
