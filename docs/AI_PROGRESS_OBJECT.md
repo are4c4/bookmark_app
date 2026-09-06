@@ -30,30 +30,42 @@ Keep the reusable Object/ObjectType core coherent while making Body and Object d
 
 ## Current core state
 - Object/ObjectType persistence, generic Object records, aliases, shared detail content and typed Property presentation are integrated.
-- Body is already versioned/block-oriented and supports text/checklist/reference-style blocks plus Object and Database/View references.
+- Body is versioned/block-oriented and supports text/checklist/reference-style blocks plus Object and Database/View references.
 - Daily Note uses the shared Object model with unique-by-date workflow semantics.
-- Shared Object opening modes and detail content are integrated in side/center/full-page hosts.
+- Center peek and full-page generic openings already reuse `ObjectInspectorPage`; side peek remains a Database/View-owned alternate presentation surface.
 
-## Current gap — #481
-The shared inspector historically restricted Body editing for most system ObjectTypes while allowing ordinary types and Daily Note. Product direction now treats Body as universal Object content:
+## Active #481 implementation
+PR #503 — `feature/object-universal-body-481`.
 
-```text
-Object
-├ typed Properties
-└ Body
-```
+Production change:
+- `ObjectInspectorPage._canEditBody(...)` is universal instead of gating system ObjectTypes;
+- system title/Property/create identity guards remain unchanged;
+- no Relation, primitive identity, search, storage, or Database/View presentation behavior changes.
 
-Weblink/Image/File/Tag identity rules remain intact; enabling Body must not weaken their canonical creation/identity semantics.
+Validation history:
+- earlier CI runs caught only test issues (missing/unused imports), then reached Analyze green;
+- CI #1839 on head `cfa6856d...` again passed maintainability, generation, and Analyze, then failed during Test;
+- the widget regression had been reusing the same stateful Inspector identity while switching Object ids and depended on popup/scroll interactions;
+- commit `57501d2031d524b7464934d309f9717629e9e8bb` stabilizes the regression: each Weblink/Image mount uses a fresh keyed Inspector, verifies the empty Body insert affordance, seeds one canonical paragraph through `ObjectBodyStore`, edits it through the real Inspector, and verifies persistence;
+- Flutter CI #1861 is running for that head.
 
-## Initial next actions
-1. Re-read #481 and current `ObjectInspectorPage` before editing; check hotspot ownership first.
-2. Remove only the system-type Body-edit restriction through a patch-sized change or focused seam.
-3. Add regression proving Body create/edit persists for at least Weblink and Image system Objects while ordinary/custom Objects and Daily Note retain behavior.
-4. Verify side peek / center peek / full page consume the same Body content through the shared detail contract.
-5. Coordinate Body indexing with Search lane rather than adding search logic here.
+Hotspot ownership:
+- open PR audit on 2026-09-07 found no other lane currently editing `object_inspector_page.dart`; #503 itself is the only current hotspot lease holder;
+- avoid broad Inspector rewrites; the production hunk remains one line.
 
-## Shared hotspot rule
-`object_inspector_page.dart` requires an open-PR ownership check. If it is leased by Primitive/Refactor/Database-View work, choose domain/service/test slices or sequence the patch rather than reconstructing the whole host.
+Cross-lane dependency:
+- side peek still uses `GenericDatabasePage._detail` and does not render Body;
+- generic Database/View presentation belongs to Lane C, so Lane A should not broaden #503 into `generic_database_page.dart`;
+- Lane C should reuse the canonical Body/detail contract rather than create another persistence/editor path.
 
-## Handoff checklist
-Record active Issue, branch/commit/PR, core semantic change, validation, hotspot lease, cross-lane dependencies, next actions, and stop reason before ending a run.
+## Other Lane A WIP
+PR #550 — preserve source Property order while duplicating ObjectTypes (#56/#484). Its latest CI reached Analyze green and failed during Test. Keep it independent from #503; do not mix schema-duplication work into universal Body.
+
+## Next actions
+1. Process Flutter CI #1861 for #503; if green and mergeable, squash merge.
+2. If #503 remains non-mergeable because its old branch has diverged heavily from main, refresh/recreate the same patch from latest main without reconstructing unrelated shared-host content.
+3. After #503 integration, verify ordinary/custom and Daily Note regressions remain green and leave side-peek composition to Lane C.
+4. Then return to independent ObjectType core work such as #550 or another #56/#484 service/domain slice, avoiding Primitive/Database-View/Search/Storage/Refactor ownership.
+
+## Stop condition for this checkpoint
+CI #1861 is in progress for the stabilized #503 test. No unrelated speculative core abstraction was added while waiting; next execution should process that result first.
