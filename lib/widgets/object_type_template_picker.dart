@@ -35,45 +35,48 @@ class ObjectTypeTemplatePickerDialog extends StatelessWidget {
       title: const Text('データベースを追加'),
       content: SizedBox(
         width: 520,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _ChoiceTile(
-              icon: '＋',
-              title: '空のデータベース',
-              subtitle: 'プロパティを自分で追加して一から作成します',
-              onTap: () => Navigator.pop(
-                context,
-                const EmptyObjectTypeChoice(),
-              ),
-            ),
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: Divider(height: 1),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(left: 4, bottom: 6),
-              child: Text(
-                'テンプレート',
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w600,
-                    ),
-              ),
-            ),
-            ...ObjectTypeTemplateStore.templates.map(
-              (template) => _ChoiceTile(
-                icon: template.icon,
-                title: template.name,
-                subtitle: template.description,
+        child: SingleChildScrollView(
+          key: const ValueKey('object-type-template-picker-scroll'),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _ChoiceTile(
+                icon: '＋',
+                title: '空のデータベース',
+                subtitle: 'プロパティを自分で追加して一から作成します',
                 onTap: () => Navigator.pop(
                   context,
-                  TemplateObjectTypeChoice(template),
+                  const EmptyObjectTypeChoice(),
                 ),
               ),
-            ),
-          ],
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Divider(height: 1),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(left: 4, bottom: 6),
+                child: Text(
+                  'テンプレート',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ),
+              ...ObjectTypeTemplateStore.templates.map(
+                (template) => _ChoiceTile(
+                  icon: template.icon,
+                  title: template.name,
+                  subtitle: template.description,
+                  onTap: () => Navigator.pop(
+                    context,
+                    TemplateObjectTypeChoice(template),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
       actions: [

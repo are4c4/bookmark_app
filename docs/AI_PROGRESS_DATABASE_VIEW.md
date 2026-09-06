@@ -13,29 +13,36 @@ Make generic ObjectType/Database/View configuration expressive enough that new d
 - #249 — remaining Bookmark presentation parity only where it is a generic Database/View contract.
 - #56 / #484 — umbrella product architecture.
 
-## Owns
-- Database collection semantics and View persistence.
-- Table/List/Gallery/Board generic presentation contracts.
-- Filter/Sort/Group/Layout/visible Properties.
-- Property-add/schema-authoring UX.
-- User-owned template/domain schema instantiation.
-- Generic View media/cover configuration.
+## Current checkpoint — 2026-09-07
+Open Lane C work observed before this slice:
+- PR #520 — Relation schema-change impact confirmation UX, independent from `generic_database_page.dart`.
+- PR #524 — generic Gallery Relation cover-target resolver, with host wiring intentionally deferred.
 
-## Does not own
-- Weblink/Image/File native product behavior: Primitive lane.
-- Relation mutation/index/integrity internals: Relation/Data Integrity lane.
-- Search index implementation: Search lane.
-- Vault/filesystem lifecycle: Storage lane.
-- Behavior-preserving cleanup only: Refactor lane.
+Current slice branch: `feature/database-view-plant-template-490`.
+Latest branch commit: `c728285290142e351d32422f6ba4c600fbd6fada`.
 
-## Initial next actions
-1. Audit current Property-add flow and Relation Property schema-creation path for #491; prefer a patch-sized generic UX slice.
-2. Define persisted generic Gallery cover-source settings for #492 without Bookmark-only fields.
-3. Audit current template/default infrastructure and design user-owned instantiation for #490.
-4. Split #493 changes into UI/configuration versus integrity/migration responsibilities before implementation.
+Completed in this slice:
+- added a built-in `Plant` domain template as the unrelated #490 architecture-success example;
+- Plant is a normal user-owned custom ObjectType, not a system type or dedicated management page;
+- its `写真` and `タグ` Properties resolve Image/Tag system ObjectTypes through the existing generic Relation-template path;
+- it creates an ordinary generic Gallery View and ordinary Date/Text Properties;
+- added regression coverage proving Image/Tag target resolution, multi cardinality, custom ObjectType kind and generic Gallery creation.
+
+This intentionally adds no Plant-specific page/service/persistence path and does not modify Relation integrity internals, primitive behavior, search, Vault or shared presentation hotspots.
+
+## Validation
+- No local Flutter/Dart runtime was available through this connector execution path; repository PR CI is required for executable validation.
+- The slice is limited to `object_type_template_store.dart`, its focused test, and this handoff.
+
+## Exact next actions
+1. Let #520/#524 clear or refresh before composing any shared-host schema/Gallery wiring.
+2. Continue #490 with template-owned default View/property configuration only where generic APIs are insufficient; do not add domain pages.
+3. For #491, prefer a focused Relation Property authoring widget/service seam rather than broad `generic_database_page.dart` edits while other Lane C PRs are open.
+4. After Lane D lands canonical File primitive availability, add a Bookmark/Paper template using Weblink/Image/File/Tag Relations without hard-coded domain behavior.
+5. Keep #493 migration correctness in Lane B; Lane C only owns explicit impact/confirmation UX.
 
 ## Shared hotspot rule
 `generic_database_page.dart`, `bookmark_unified_stage1_page.dart`, and `object_inspector_page.dart` require an open-PR ownership check before edits. Prefer focused widgets/services/settings adapters while a hotspot is leased by another lane.
 
-## Handoff checklist
-Record active Issue, branch/commit/PR, completed slices, validation, hotspot lease, cross-lane dependencies, next actions, and stop reason before ending a run.
+## Stop reason
+A coherent, non-conflicting #490 template-composition slice is complete and ready for PR/CI. Further host composition should be sequenced behind currently open Lane C PRs rather than creating overlapping broad edits.
