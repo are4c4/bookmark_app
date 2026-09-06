@@ -3,6 +3,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
+import '../services/bookmark_presentation_resolver_factory.dart';
 import '../services/bookmark_url_resolver.dart';
 import '../widgets/bookmark_create_dialog.dart';
 import '../widgets/bookmark_visual_image.dart';
@@ -45,10 +46,7 @@ class BookmarkLifecyclePage extends StatelessWidget {
   Future<BookmarkUrlSource?> _resolveUrl(BookmarkItem bookmark) {
     final injected = resolveUrl;
     if (injected != null) return injected(bookmark);
-    return BookmarkUrlResolver(
-      database: repository.workspaceStore.database,
-      workspaceId: repository.workspaceId,
-    ).resolve(bookmark);
+    return BookmarkPresentationResolverFactory.urlFor(repository)(bookmark);
   }
 
   Stream<List<BookmarkItem>> _stream() => switch (mode) {
