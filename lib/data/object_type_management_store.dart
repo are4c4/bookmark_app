@@ -61,16 +61,18 @@ class ObjectTypeManagementStore {
         final duplicatedTargetId = sourceTargetId == source.id
             ? duplicatedId
             : sourceTargetId;
-        final config = Map<String, dynamic>.from(property.config)
-          ..['targetObjectTypeId'] = duplicatedTargetId
+        final metadata = Map<String, dynamic>.from(property.config)
+          ..remove('targetObjectTypeId')
+          ..remove('multiple')
           ..remove('inversePropertyId')
           ..remove('bidirectional')
           ..remove('pairRole');
-        final duplicatedPropertyId = await objectStore.createProperty(
+        final duplicatedPropertyId = await objectStore.createRelationProperty(
           objectTypeId: duplicatedId,
           name: property.name,
-          type: ObjectPropertyType.objectRelation,
-          config: config,
+          targetObjectTypeId: duplicatedTargetId,
+          multiple: property.allowsMultipleRelations,
+          metadata: metadata,
         );
         duplicatedPropertyIds[property.id] = duplicatedPropertyId;
       }
