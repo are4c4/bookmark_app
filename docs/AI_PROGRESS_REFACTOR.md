@@ -8,7 +8,7 @@ Issue #225 — reduce maintenance hotspots and retire duplicate/unused legacy pa
 Primary lane: **Refactor**. Object owns replacement product semantics and Relation owns canonical Relation semantics. Refactor owns measurable responsibility reduction, caller-zero retirement after proof, failure-policy/privacy cleanup, maintainability guardrails, and incremental legacy shim retirement.
 
 ## Current checkpoint — 2026-09-07
-Latest verified `main`: **`f39f5e04d63795796cff8b25af3d06fd13518454`** after Refactor **#488**.
+Latest verified `main`: **`f0484b6137002b9a1886087b7253c69c21306ffe`** after Object **#496**, directly on top of Refactor **#488**.
 
 Recent Refactor sequence:
 - **#472 merged** — caller-zero `PersonRoleProperties` + dead-only test retired.
@@ -19,9 +19,9 @@ Recent Refactor sequence:
 - Stale/non-mergeable **#478** and duplicate replacement **#487** were closed instead of force-merging.
 
 Current Object/Relation ownership at this checkpoint:
-- **Object #496** — active List-thumbnail performance work around `ImageVisualResolver` / generic system Object list media. Refactor must avoid those files and Image product semantics.
-- **Object #486** — docs-only handoff refresh.
-- **Relation #477** — docs-only handoff refresh.
+- **Object #496 merged** — List thumbnails can resolve managed Image identity/path without decoding missing geometry. This is Object-owned product/performance behavior and does not change Refactor guardrails.
+- **Object #486** — docs-only handoff refresh if still open; re-read live state before relying on this entry.
+- **Relation #477** — docs-only handoff refresh if still open.
 
 Re-read live PR ownership before every shared-host edit because parallel lanes move `main` quickly.
 
@@ -108,7 +108,7 @@ Recent current-source audits found real production callers for:
 - `DatabaseViewGalleryAdapter`, `DatabaseViewGroupAdapter`, `DatabaseViewCreationService`, `DatabaseViewOpenModeService`;
 - `ObjectOpenPresentationService` and current hosts;
 - `PdfAnnotationStore`, `PhotoReadStore`, `BookmarkAttachmentStore`;
-- `BookmarkResolvedUrlText`, `BookmarkVisualImage`, Bookmark lifecycle/state and current Bookmark detail/list/reverse-lookup/property/relation widgets;
+- `BookmarkResolvedUrlText`, `BookmarkVisualImage`, `AppEmptyState`, `InlineRenameText`, Bookmark lifecycle/state and current Bookmark detail/list/reverse-lookup/property/relation widgets;
 - legacy `person_roles.dart` persistence and `BookmarkRepository.watchPersonRoles(...)`;
 - legacy `ImageEditorPage` / `ImageEditService` while Photo management still invokes raw-path editing;
 - `ObjectBoardCreatePlanner` via production `ObjectBoardCreateService`;
@@ -126,18 +126,17 @@ Fully retiring the chain should remove the now-unneeded body-store/adapter depen
 Canonical implementations already live under `lib/features/database/presentation/widgets/`. #474/#482 prevent both dependency growth and creation of additional shim files. Remove each shim only after every production caller has naturally moved to the canonical feature path.
 
 ### Presentation/database reach-through
-The ceiling is now **9**. Do not introduce page-specific wrappers merely to hide `workspaceStore.database`. Revisit Collection/People/Photo/Stage1/GenericDatabase composition only when an existing meaningful boundary can absorb actual responsibility.
+The ceiling is now **9**. Current presentation debt is concentrated in `app_shell.dart`, People/Photo/Collection management, GenericDatabasePage and Stage1. Existing audits found no meaningful Repository/Service boundary that can absorb these remaining constructors/operations without either adding a metric-hiding wrapper or reconstructing a large host. Revisit only when real responsibility can move.
 
 ## Exact next actions
 1. Re-read latest `main` and open PR ownership before every code edit.
-2. Keep Object #496's Image/List-media files Object-owned until it merges/closes.
-3. Continue current-source caller-zero auditing outside active Object/Relation ownership; delete only when production callers are zero and still-live behavior has independent coverage.
-4. Lower any of the **9 / 19 / 5** ceilings when a real cleanup reduces the corresponding measured debt.
-5. Retire the plain-text Body chain only when `ObjectInspectorPage` can be patched narrowly.
-6. Continue GenericDatabasePage P1 only via patch-sized extraction of concrete schema/database action, Property workflow, or layout-host responsibility.
-7. Revisit AppDatabase mutation responsibility only when `app_database.dart` can be patched safely without whole-file reconstruction.
-8. Follow Object-first storage retirement: prove production caller-zero plus import/export/backup handling before deleting Bookmark URL/thumbnail/Photo storage.
-9. Treat Issue #414 as separate search-correctness work.
+2. Continue current-source caller-zero auditing outside active Object/Relation ownership; delete only when production callers are zero and still-live behavior has independent coverage.
+3. Lower any of the **9 / 19 / 5** ceilings when a real cleanup reduces the corresponding measured debt.
+4. Retire the plain-text Body chain only when `ObjectInspectorPage` can be patched narrowly.
+5. Continue GenericDatabasePage P1 only via patch-sized extraction of concrete schema/database action, Property workflow, or layout-host responsibility.
+6. Revisit AppDatabase mutation responsibility only when `app_database.dart` can be patched safely without whole-file reconstruction.
+7. Follow Object-first storage retirement: prove production caller-zero plus import/export/backup handling before deleting Bookmark URL/thumbnail/Photo storage.
+8. Treat Issue #414 as separate search-correctness work.
 
 ## Validation
 - #474 Flutter CI #1646 green before merge.
