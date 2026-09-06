@@ -86,16 +86,16 @@ void main() {
   });
 
   test('rejects blank source keys and missing Objects', () async {
-    expect(
-      () => derivedText.replace(
+    await expectLater(
+      derivedText.replace(
         objectId: objectId,
         sourceKey: '   ',
         text: 'text',
       ),
       throwsArgumentError,
     );
-    expect(
-      () => derivedText.replace(
+    await expectLater(
+      derivedText.replace(
         objectId: 999999,
         sourceKey: 'pdf-text',
         text: 'text',
