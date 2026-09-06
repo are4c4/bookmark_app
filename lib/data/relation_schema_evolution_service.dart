@@ -161,8 +161,8 @@ class RelationSchemaEvolutionService {
       );
     }
 
-    final hasPairMetadata = storedProperty.config['bidirectional'] == true ||
-        storedProperty.config['inversePropertyId'] != null;
+    final hasPairMetadata = relationMutations.bidirectionalStore
+        .hasManagedPairMetadata(storedProperty);
     final pair = hasPairMetadata
         ? await relationMutations.bidirectionalStore.pairFor(storedProperty)
         : null;
