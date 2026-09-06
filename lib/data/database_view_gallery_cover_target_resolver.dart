@@ -104,6 +104,9 @@ class DatabaseViewGalleryCoverTargetResolver {
       sourceObject.values[property.id],
     );
     if (relation.isEmpty) return null;
+    if (!property.allowsMultipleRelations && relation.objectIds.length > 1) {
+      return null;
+    }
 
     // A View is a reader, never an index repair path. Require the normalized
     // edges to exactly preserve the serialized Relation order before resolving.
