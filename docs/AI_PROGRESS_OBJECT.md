@@ -19,7 +19,7 @@ Completed/closed during current convergence:
 - #156 — generic fixed/masonry Gallery support is complete/closed.
 
 ## Current merged state — 2026-09-06
-Latest main observed before PR #379 work: `701a87b491c7b09afb57f8e5cce871555c21d063` after #370/#371/#375.
+Latest main observed during PR #379 work: `d2ea6499e58720de8f90e385f455e0aae784e8fc` after Object #378.
 
 - canonical Bookmark -> Weblink -> managed Representative Image flows are live;
 - Weblinks / Images / Daily Notes use generic Database/sidebar hosts;
@@ -38,11 +38,12 @@ Latest main observed before PR #379 work: `701a87b491c7b09afb57f8e5cce871555c21d
 - Bookmark List metadata is split into description, compact secondary metadata and semantic-chip rows (#352/#370);
 - Bookmark List semantic chips are width-bounded and long labels ellipsize (#354);
 - Bookmark List URL metadata no longer directly reads legacy `bookmark.url` (#360);
-- generic Image Gallery file resolution now honors profile-relative managed paths (#375).
+- generic Image Gallery file resolution now honors profile-relative managed paths (#375);
+- legacy Photo mirrors now reuse the canonical `ImageObjectService.ensureDefinition()` Image schema while retaining legacy-only compatibility Properties (#378).
 
 ## Work in progress — PR #379
 Branch: `feature/object-image-file-identity-dedupe-245`
-Latest implementation commit: `9292d4433ac1d691de49ed3d0429962f298009e6` before this documentation commit.
+Latest implementation commit: `9292d4433ac1d691de49ed3d0429962f298009e6` before handoff documentation commits.
 
 PR #379 `Deduplicate managed Images by stable file identity`:
 - keeps normalized source URL as the preferred Image reuse identity;
@@ -51,18 +52,18 @@ PR #379 `Deduplicate managed Images by stable file identity`:
 - keeps URL query/fragment distinctions meaningful when managed files differ;
 - adds regression coverage proving one managed file cannot fan out into duplicate Image Objects across provenance changes.
 
-This directly advances #245 Phase 1/2 duplicate-control requirements without changing Relation behavior, deleting legacy Photo data, or moving files.
-
-Concurrent Object PR #378 `Converge legacy Photo mirrors on canonical Image definition` is also open on a separate non-overlapping branch. It changes `core_object_bridge.dart` / its focused test and reuses `ImageObjectService.ensureDefinition()` instead of maintaining a second partial Image schema. Sequence merges normally; #379 does not edit those files.
+This directly advances #245 Phase 1/2 duplicate-control requirements without changing Relation behavior, deleting legacy Photo data, or moving files. It is file-disjoint from merged #378 production changes: #378 changed `core_object_bridge.dart`, while #379 changes `image_object_service.dart` and its focused test.
 
 ## #245 audit note
-`CoreObjectBridge` already provides the legacy Photo -> Image Object compatibility bridge with `photo_object_links` and the canonical system Image key. Do not build a second bridge. Remaining #245 work is product-semantic convergence: deterministic reimport/storage identity, Bookmark cover/image semantics, generic Images parity, Person profile image migration, path/dedup safety where needed, and eventual legacy `写真` caller retirement.
+`CoreObjectBridge` already provides the legacy Photo -> Image Object compatibility bridge with `photo_object_links` and the canonical system Image key. #378 now makes that bridge reuse the same canonical Image definition instead of maintaining a partial duplicate schema. Do not build a second bridge.
 
-`PhotoStorageService.importPaths()` currently copies every selected source to a timestamped managed path before Image creation. Therefore #379 prevents duplicate Objects for the same already-managed file, but re-importing the same external source can still create a new managed copy/path. Treat deterministic reimport as a separate storage/import slice; do not silently change legacy Photo storage semantics without focused tests.
+Remaining #245 work is product-semantic convergence: deterministic reimport/storage identity, Bookmark cover/image semantics, generic Images parity, Person profile image migration, path/dedup safety where needed, and eventual legacy `写真` caller retirement.
+
+`PhotoStorageService.importPaths()` currently copies every selected source to a timestamped managed path before Image creation. Therefore #379 prevents duplicate Objects for the same already-managed file, but re-importing the same external source can still create a new managed copy/path. Treat deterministic reimport as a separate storage/import slice; do not silently change legacy Photo storage semantics without focused tests because the same storage service is still used by legacy Photo workflows.
 
 ## Exact next actions
-1. Check #378 and #379 Flutter CI. Merge each only after green/current and recheck base compatibility; they are file-disjoint at this checkpoint.
-2. Continue #245 with a focused deterministic reimport/import-storage identity design and regression. Prefer a content/source-safe policy that does not collapse unrelated files or leak absolute external paths into user-facing metadata.
+1. Check PR #379 Flutter CI on the latest documentation-updated head. If green and mergeable against current main, merge it; if main advances with overlapping Image service files, refresh/rebuild rather than force-merging stale work.
+2. Continue #245 with a focused deterministic reimport/import-storage identity design and regression. Prefer a content/source-safe policy that does not collapse unrelated files, break legacy unique-path assumptions, or leak absolute external paths into user-facing metadata.
 3. Continue #249 with a separate Stage1 List host slice for stable vertical padding/minimum height/title max-lines+ellipsis/trailing alignment after rechecking hotspot ownership.
 4. Continue #249 Bookmark Gallery parity: reuse the existing generic `DatabaseViewGalleryAdapter` / `ObjectGalleryView` fixed/masonry contract and persisted `galleryMode`; do not create Bookmark-only settings.
 5. Add/retain Bookmark real-host/widget regression for fixed/masonry switching and independent per-View persistence.
@@ -83,14 +84,15 @@ Open Refactor PRs at this checkpoint are #376/#377 and do not own `image_object_
 - identity-sensitive Weblink/Image creation must never fall back to raw title-only creation;
 - ambiguous Relation state must fail closed; presentation must not repair it;
 - Gallery parity should reuse generic persisted `galleryMode` and renderer contracts rather than fork a Bookmark-only variant;
-- timestamped legacy image import paths mean external reimport dedupe is not solved solely by Image Object file-path fallback identity.
+- timestamped legacy image import paths mean external reimport dedupe is not solved solely by Image Object file-path fallback identity;
+- changing `PhotoStorageService` reuse semantics can affect the still-live legacy Photo table's unique-path assumptions, so that next slice needs focused compatibility coverage.
 
 ## Validation checkpoint
 - #341/#344/#346/#348/#349/#350/#352/#354/#360/#366/#370/#371/#375 are merged after green Flutter CI.
+- #378 full Flutter CI #1392 passed and the PR merged as `d2ea6499e58720de8f90e385f455e0aae784e8fc`.
 - #149/#247 real-host behavior was subsequently validated by the user and both issues are closed.
 - #252 is closed after #366 converged the remaining reorderable person-role add path.
-- PR #378 Flutter CI #1392 was in progress at the latest check; Analyze had passed and Test was running.
-- PR #379 Flutter CI #1393 was in progress after opening.
+- PR #379 latest Flutter CI is pending/running after the handoff refresh.
 
 ## Stop / continuation condition
-This run has active safe #245 slices under CI. Do not stop solely because CI is pending: continue with independent audits/documentation or another non-conflicting Object slice. Stop only if the next meaningful implementation requires editing a currently owned shared hotspot, requires unsafe whole-file reconstruction, requires an unresolved product/storage identity decision, or external CI/infrastructure becomes the only remaining dependency.
+This run has an active safe #245 slice under CI. Do not stop solely because CI is pending: continue with independent audits/documentation or another non-conflicting Object slice. Stop only if the next meaningful implementation requires editing a currently owned shared hotspot, requires unsafe whole-file reconstruction, requires an unresolved product/storage identity decision, or external CI/infrastructure becomes the only remaining dependency.
