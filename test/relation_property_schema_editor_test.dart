@@ -30,17 +30,6 @@ RelationSchemaEvolutionService _evolution(
   );
 }
 
-Widget _host({required VoidCallback onOpen}) => MaterialApp(
-      home: Scaffold(
-        body: Builder(
-          builder: (_) => TextButton(
-            onPressed: onOpen,
-            child: const Text('open'),
-          ),
-        ),
-      ),
-    );
-
 void main() {
   testWidgets('target edit previews impact then applies through canonical service',
       (tester) async {
