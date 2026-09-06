@@ -46,11 +46,6 @@ enum GalleryCoverSourceKind {
 /// persistence adapter so both fixed and masonry Gallery layouts can consume
 /// the same configuration contract.
 class GalleryCoverSource {
-  const GalleryCoverSource._({
-    required this.kind,
-    this.relationPropertyId,
-  });
-
   const GalleryCoverSource.none()
       : kind = GalleryCoverSourceKind.none,
         relationPropertyId = null;
@@ -60,11 +55,13 @@ class GalleryCoverSource {
         relationPropertyId = null;
 
   const GalleryCoverSource.imageRelation(int propertyId)
-      : kind = GalleryCoverSourceKind.imageRelation,
+      : assert(propertyId > 0),
+        kind = GalleryCoverSourceKind.imageRelation,
         relationPropertyId = propertyId;
 
   const GalleryCoverSource.weblinkRelationRepresentativeImage(int propertyId)
-      : kind = GalleryCoverSourceKind.weblinkRelationRepresentativeImage,
+      : assert(propertyId > 0),
+        kind = GalleryCoverSourceKind.weblinkRelationRepresentativeImage,
         relationPropertyId = propertyId;
 
   final GalleryCoverSourceKind kind;
