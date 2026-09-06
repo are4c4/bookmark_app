@@ -67,6 +67,17 @@ class ObjectAliasStore {
     final canonical = canonicalizeObjectAliases(aliases);
     await _genericStore.database.transaction(() async {
       await _requireObject(objectId);
+      final current = await listEntries(objectId);
+      final unchanged = current.length == canonical.length &&
+          Iterable<int>.generate(canonical.length).every((index) {
+            final entry = current[index];
+            final alias = canonical[index];
+            return entry.alias == alias &&
+                entry.normalizedAlias == normalizeObjectAlias(alias) &&
+                entry.position == index;
+          });
+      if (unchanged) return;
+
       await _genericStore.database.customStatement(
         'DELETE FROM object_aliases WHERE object_id = ?',
         [objectId],
@@ -80,6 +91,7 @@ class ObjectAliasStore {
           [objectId, alias, normalizeObjectAlias(alias), index],
         );
       }
+      await _touchObject(objectId);
     });
   }
 
@@ -121,6 +133,7 @@ class ObjectAliasStore {
            ) VALUES (?, ?, ?, ?)''',
         [objectId, cleaned, normalized, (maxPosition ?? -1) + 1],
       );
+      await _touchObject(objectId);
       return true;
     });
   }
@@ -132,20 +145,29 @@ class ObjectAliasStore {
     await ensureSchema();
     final normalized = normalizeObjectAlias(alias);
     if (normalized.isEmpty) return;
-    await _genericStore.database.customStatement(
-      '''DELETE FROM object_aliases
-         WHERE object_id = ? AND normalized_alias = ?''',
-      [objectId, normalized],
-    );
-    await _compactPositions(objectId);
+    await _genericStore.database.transaction(() async {
+      await _genericStore.database.customStatement(
+        '''DELETE FROM object_aliases
+           WHERE object_id = ? AND normalized_alias = ?''',
+        [objectId, normalized],
+      );
+      if (await _affectedRows() == 0) return;
+
+      await _compactPositions(objectId);
+      await _touchObject(objectId);
+    });
   }
 
   Future<void> clear(int objectId) async {
     await ensureSchema();
-    await _genericStore.database.customStatement(
-      'DELETE FROM object_aliases WHERE object_id = ?',
-      [objectId],
-    );
+    await _genericStore.database.transaction(() async {
+      await _genericStore.database.customStatement(
+        'DELETE FROM object_aliases WHERE object_id = ?',
+        [objectId],
+      );
+      if (await _affectedRows() == 0) return;
+      await _touchObject(objectId);
+    });
   }
 
   Future<void> _requireObject(int objectId) async {
@@ -158,18 +180,30 @@ class ObjectAliasStore {
     }
   }
 
+  Future<int> _affectedRows() async {
+    final row = await _genericStore.database.customSelect(
+      'SELECT changes() AS affected',
+    ).getSingle();
+    return row.read<int>('affected');
+  }
+
+  Future<void> _touchObject(int objectId) async {
+    await _genericStore.database.customStatement(
+      'UPDATE generic_records SET updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [objectId],
+    );
+  }
+
   Future<void> _compactPositions(int objectId) async {
     final entries = await listEntries(objectId);
-    await _genericStore.database.transaction(() async {
-      for (var index = 0; index < entries.length; index++) {
-        final entry = entries[index];
-        if (entry.position == index) continue;
-        await _genericStore.database.customStatement(
-          '''UPDATE object_aliases SET position = ?
-             WHERE object_id = ? AND normalized_alias = ?''',
-          [index, objectId, entry.normalizedAlias],
-        );
-      }
-    });
+    for (var index = 0; index < entries.length; index++) {
+      final entry = entries[index];
+      if (entry.position == index) continue;
+      await _genericStore.database.customStatement(
+        '''UPDATE object_aliases SET position = ?
+           WHERE object_id = ? AND normalized_alias = ?''',
+        [index, objectId, entry.normalizedAlias],
+      );
+    }
   }
 }
