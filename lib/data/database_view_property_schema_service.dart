@@ -139,9 +139,9 @@ class DatabaseViewPropertySchemaService {
 
     ObjectPropertyDefinition? pairedRelationProperty;
     if (property.isRelation) {
-      final hasPairMetadata = property.config['bidirectional'] == true ||
-          property.config['inversePropertyId'] != null ||
-          property.config['pairRole'] != null;
+      final hasPairMetadata = property.config.containsKey('bidirectional') ||
+          property.config.containsKey('inversePropertyId') ||
+          property.config.containsKey('pairRole');
       if (hasPairMetadata) {
         final pair = await _bidirectionalStore.pairFor(property);
         if (pair == null) {
