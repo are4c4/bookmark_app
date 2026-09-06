@@ -164,11 +164,8 @@ void main() {
     expect(provenance?.templateKey, 'paper');
     expect(provenance?.templateVersion, 3);
 
-    await genericStore.updateDatabase(
-      id: objectTypeId,
-      name: 'My Papers',
-      icon: '🧪',
-    );
+    await objectStore.renameObjectType(objectTypeId, 'My Papers');
+    await genericStore.setDatabaseIcon(objectTypeId, '🧪');
     final customized = await genericStore.getDatabase(objectTypeId);
     expect(customized?.name, 'My Papers');
     expect(customized?.icon, '🧪');
