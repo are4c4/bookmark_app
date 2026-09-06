@@ -88,6 +88,13 @@ void main() {
     final images = await objectStore.listObjects(imageType!.id);
     final bookmarks = await objectStore.listObjects(bookmarkType!.id);
     expect(images.single.title, '表紙');
+    final fileProperty = imageType.properties.firstWhere((p) => p.name == 'File');
+    final noteProperty = imageType.properties.firstWhere((p) => p.name == 'Note');
+    final filenameProperty =
+        imageType.properties.firstWhere((p) => p.name == 'Original filename');
+    expect(images.single.values[fileProperty.id], 'photo/a.jpg');
+    expect(images.single.values[noteProperty.id], 'メモ');
+    expect(images.single.values[filenameProperty.id], 'a.jpg');
     expect(bookmarks.single.title, '数学資料');
 
     final imageRelation = bookmarkType.properties.firstWhere((p) => p.name == 'Images');
