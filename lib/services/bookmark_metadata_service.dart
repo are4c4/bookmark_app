@@ -56,7 +56,10 @@ class BookmarkMetadataService {
             },
           )
           .timeout(const Duration(seconds: 10));
-      final resourceUri = response.request?.url ?? uri;
+      final resourceUri = switch (response) {
+        http.BaseResponseWithUrl(:final url) => url,
+        _ => response.request?.url ?? uri,
+      };
 
       if (response.statusCode < 200 || response.statusCode >= 400) {
         return _fallback(uri);
