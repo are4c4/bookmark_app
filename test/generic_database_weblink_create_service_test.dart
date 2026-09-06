@@ -142,6 +142,40 @@ void main() {
     );
   });
 
+  test('optional Weblink enrichment failure keeps canonical creation', () async {
+    final definition = await weblinks.ensureDefinition(workspaceId);
+    var enrichmentAttempts = 0;
+    final failingEnrichmentService = GenericDatabaseObjectCreateService(
+      pageLoader: service.pageLoader,
+      objectStore: service.objectStore,
+      boardCreate: service.boardCreate,
+      systemObjects: service.systemObjects,
+      dailyNotes: service.dailyNotes,
+      weblinks: service.weblinks,
+      images: service.images,
+      weblinkCreateEnricher: ({
+        required int workspaceId,
+        required int objectId,
+        required String url,
+      }) async {
+        enrichmentAttempts += 1;
+        throw StateError('sensitive enrichment failure detail');
+      },
+    );
+
+    final objectId = await failingEnrichmentService.createWeblinkFromUrl(
+      databaseId: definition.objectType.id,
+      url: 'https://example.com/enrichment-failure',
+      title: 'Keep me',
+    );
+
+    expect(enrichmentAttempts, 1);
+    final objects = await objectStore.listObjects(definition.objectType.id);
+    expect(objects, hasLength(1));
+    expect(objects.single.id, objectId);
+    expect(objects.single.title, 'Keep me');
+  });
+
   test('URL Weblink creation rejects a non-Weblink collection before mutation', () async {
     final customTypeId = await objectStore.createObjectType(
       workspaceId: workspaceId,
