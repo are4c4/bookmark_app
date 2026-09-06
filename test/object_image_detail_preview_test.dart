@@ -63,16 +63,18 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
-
-    expect(
+    await _pumpUntilFound(
+      tester,
       find.byKey(ValueKey('object-image-preview-${image.id}')),
-      findsOneWidget,
     );
+
     expect(find.byKey(const ValueKey('resolved-image-path')), findsOneWidget);
     expect(find.text(file.path), findsOneWidget);
     final ratio = tester.widget<AspectRatio>(find.byType(AspectRatio));
     expect(ratio.aspectRatio, 2);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
   });
 
   testWidgets('Image detail preview surfaces a missing managed file safely',
@@ -115,12 +117,22 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
-
-    expect(
+    await _pumpUntilFound(
+      tester,
       find.byKey(ValueKey('object-image-preview-missing-${image.id}')),
-      findsOneWidget,
     );
+
     expect(find.text('画像ファイルを表示できません'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
   });
+}
+
+Future<void> _pumpUntilFound(WidgetTester tester, Finder finder) async {
+  for (var attempt = 0; attempt < 100; attempt++) {
+    await tester.pump(const Duration(milliseconds: 50));
+    if (finder.evaluate().isNotEmpty) return;
+  }
+  throw TestFailure('Expected Image detail preview within 5 seconds.');
 }
