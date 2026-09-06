@@ -2,8 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../../data/database_property_authoring_service.dart';
-import '../../../domain/object_model.dart';
+import '../../../../data/database_property_authoring_service.dart';
+import '../../../../domain/object_model.dart';
 import 'property_add_popover.dart';
 
 typedef DatabasePropertyCreated = FutureOr<void> Function(int propertyId);
