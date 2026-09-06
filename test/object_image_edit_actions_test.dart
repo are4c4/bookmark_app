@@ -69,6 +69,15 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('object-image-crop-aspect-ratio')));
     await tester.pumpAndSettle();
+    for (final label in const [
+      '正方形 1:1',
+      '横 4:3',
+      '縦 3:4',
+      'ワイド 16:9',
+      '縦長 9:16',
+    ]) {
+      expect(find.text(label), findsOneWidget);
+    }
     await tester.tap(find.text('正方形 1:1'));
     await tester.pumpAndSettle();
     expect(service.lastCropAspectRatio, 1.0);
