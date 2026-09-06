@@ -74,7 +74,10 @@ class _ImageGalleryMediaState extends State<ImageGalleryMedia> {
       systemKey: ImageObjectService.systemKey,
     );
     if (imageType == null || imageType.id != widget.objectTypeId) return null;
-    return ImageVisualResolver(widget.objectStore).resolveManaged(
+    return ImageVisualResolver(
+      widget.objectStore,
+      pathResolver: widget.database.pathResolver,
+    ).resolveManaged(
       imageObjectTypeId: widget.objectTypeId,
       imageObjectId: widget.objectId,
     );
