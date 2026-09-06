@@ -61,6 +61,9 @@ void main() {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
     final workspaceId = await WorkspaceStore(database).initialize();
+    final sync = ObjectSyncService(database);
+    addTearDown(sync.dispose);
+    await sync.syncWorkspace(workspaceId);
     final store = BookmarkObjectLinkReadStore(database);
     await database.customStatement('DROP TABLE bookmark_object_links');
 
