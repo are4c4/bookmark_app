@@ -35,8 +35,8 @@ class WeblinkCreateEnrichmentService {
     BookmarkMetadata? metadata;
     try {
       metadata = await metadataFetch(url);
-    } catch (error, stackTrace) {
-      _debugFailure('metadata fetch', error, stackTrace);
+    } catch (_, stackTrace) {
+      _debugFailure('metadata fetch', stackTrace);
     }
 
     if (metadata != null) {
@@ -67,8 +67,8 @@ class WeblinkCreateEnrichmentService {
             contentType: metadata.contentType,
             publishedDate: metadata.publishedDate,
           );
-        } catch (error, stackTrace) {
-          _debugFailure('metadata persistence', error, stackTrace);
+        } catch (_, stackTrace) {
+          _debugFailure('metadata persistence', stackTrace);
         }
       }
     }
@@ -80,8 +80,8 @@ class WeblinkCreateEnrichmentService {
         workspaceId: workspaceId,
         weblinkObjectId: objectId,
       );
-    } catch (error, stackTrace) {
-      _debugFailure('preview ingestion', error, stackTrace);
+    } catch (_, stackTrace) {
+      _debugFailure('preview ingestion', stackTrace);
     }
   }
 
@@ -95,16 +95,11 @@ class WeblinkCreateEnrichmentService {
     return title == fallbackTitle ? null : title;
   }
 
-  void _debugFailure(
-    String stage,
-    Object error,
-    StackTrace stackTrace,
-  ) {
+  void _debugFailure(String stage, StackTrace stackTrace) {
     assert(() {
       developer.log(
         'Optional Weblink create $stage failed; canonical Weblink is kept.',
         name: 'bookmark_app.weblink_create_enrichment',
-        error: error,
         stackTrace: stackTrace,
       );
       return true;
