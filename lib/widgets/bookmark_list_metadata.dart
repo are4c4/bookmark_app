@@ -40,9 +40,7 @@ class BookmarkListMetadata extends StatelessWidget {
       switch (token) {
         case 'url':
           final resolver = resolveUrl;
-          if (resolver == null) {
-            secondary.add(_PlainMeta(text: _compactUrl(bookmark.url)));
-          } else {
+          if (resolver != null) {
             secondary.add(
               ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 320),
@@ -133,12 +131,6 @@ class BookmarkListMetadata extends StatelessWidget {
           ),
       ],
     );
-  }
-
-  static String _compactUrl(String value) {
-    final uri = Uri.tryParse(value);
-    if (uri == null || uri.host.isEmpty) return value;
-    return uri.host.startsWith('www.') ? uri.host.substring(4) : uri.host;
   }
 
   static String _formatDate(DateTime value) {
