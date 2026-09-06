@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import '../domain/object_group.dart';
 import '../domain/object_model.dart';
 import 'daily_note_service.dart';
+import 'file_object_service.dart';
 import 'generic_database_collection_page_data.dart';
 import 'image_object_service.dart';
 import 'object_board_create_service.dart';
@@ -21,6 +22,7 @@ enum GenericDatabaseCreateMode {
   dailyNote,
   weblinkUrl,
   managedImage,
+  managedFile,
 }
 
 /// Object creation facade for collection-backed Database pages.
@@ -38,6 +40,7 @@ class GenericDatabaseObjectCreateService {
     this.dailyNotes,
     this.weblinks,
     this.images,
+    this.files,
     this.weblinkCreateEnricher,
   });
 
@@ -48,14 +51,16 @@ class GenericDatabaseObjectCreateService {
   final DailyNoteService? dailyNotes;
   final WeblinkObjectService? weblinks;
   final ImageObjectService? images;
+  final FileObjectService? files;
   final GenericDatabaseWeblinkCreateEnricher? weblinkCreateEnricher;
 
   /// Returns the user-facing creation contract for an ObjectType.
   ///
   /// Generic hosts can use this to choose the correct affordance without
   /// duplicating system-key knowledge. Identity-sensitive system collections
-  /// stay explicit: Weblinks require URL input and Images require managed file
-  /// input, while Daily Notes keep their date-keyed open-or-create behavior.
+  /// stay explicit: Weblinks require URL input, Images/File require managed
+  /// file input, while Daily Notes keep their date-keyed open-or-create
+  /// behavior.
   Future<GenericDatabaseCreateMode> createModeForObjectType(
     int objectTypeId,
   ) async {
@@ -66,6 +71,7 @@ class GenericDatabaseObjectCreateService {
       DailyNoteService.systemKey => GenericDatabaseCreateMode.dailyNote,
       WeblinkObjectService.systemKey => GenericDatabaseCreateMode.weblinkUrl,
       ImageObjectService.systemKey => GenericDatabaseCreateMode.managedImage,
+      FileObjectService.systemKey => GenericDatabaseCreateMode.managedFile,
       _ => GenericDatabaseCreateMode.generic,
     };
   }
@@ -176,6 +182,44 @@ class GenericDatabaseObjectCreateService {
     return object.id;
   }
 
+  /// Creates or reuses a canonical File from an app-managed file for a
+  /// collection whose target ObjectType is the system File type.
+  ///
+  /// File copying/classification belongs to the import boundary. This keeps
+  /// title-only creation fail-closed so managed stored-path identity and
+  /// metadata cannot be bypassed by generic hosts.
+  Future<int> createFileFromManagedFile({
+    required int databaseId,
+    required String filePath,
+    String? title,
+    String? originalFilename,
+    String? contentType,
+    int? sizeBytes,
+    DateTime? importedAt,
+  }) async {
+    final page = await _load(databaseId);
+    final systemKey = await _systemKey(page);
+    if (systemKey != FileObjectService.systemKey) {
+      throw UnsupportedError(
+        'Managed File creation requires a Database collection targeting the system File ObjectType.',
+      );
+    }
+    final service = files;
+    if (service == null) {
+      throw StateError('Managed File creation requires FileObjectService.');
+    }
+    final object = await service.findOrCreateManaged(
+      workspaceId: page.objectType.workspaceId,
+      filePath: filePath,
+      title: title,
+      originalFilename: originalFilename,
+      contentType: contentType,
+      sizeBytes: sizeBytes,
+      importedAt: importedAt,
+    );
+    return object.id;
+  }
+
   Future<int> createInGroup({
     required int databaseId,
     required String title,
@@ -222,6 +266,11 @@ class GenericDatabaseObjectCreateService {
     if (systemKey == ImageObjectService.systemKey) {
       throw UnsupportedError(
         'Images must be created from managed image/file input so canonical file identity is preserved.',
+      );
+    }
+    if (systemKey == FileObjectService.systemKey) {
+      throw UnsupportedError(
+        'Files must be created from managed file input so canonical stored-path identity is preserved.',
       );
     }
   }
