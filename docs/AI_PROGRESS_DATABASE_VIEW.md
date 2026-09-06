@@ -14,35 +14,81 @@ Make generic ObjectType/Database/View configuration expressive enough that new d
 - #56 / #484 — umbrella product architecture.
 
 ## Current checkpoint — 2026-09-07
-Open Lane C work observed before this slice:
-- PR #520 — Relation schema-change impact confirmation UX, independent from `generic_database_page.dart`.
-- PR #524 — generic Gallery Relation cover-target resolver, with host wiring intentionally deferred.
+All seven lanes are active and `main` moves frequently. Recheck live PR ownership immediately before touching a shared hotspot.
 
-Current slice branch: `feature/database-view-plant-template-490`.
-Latest branch commit: `c728285290142e351d32422f6ba4c600fbd6fada`.
+### #490 — user-owned domain templates
+Integrated:
+- #516 generic template instantiation through ordinary Object/Relation/View APIs.
+- #526 Plant proves an unrelated domain can be a normal custom ObjectType with no dedicated management page.
+- #563 template-local Relation Properties can configure the ordinary per-View `galleryCoverSource` contract transactionally.
+- #592 provisions missing Tag/Weblink/Image/File primitive targets only through canonical ensure paths and adds a user-owned Paper template composed from those four primitives plus ordinary DOI/date/text Properties and generic Gallery/Table Views. CI run 1907 was green before merge.
 
-Completed in this slice:
-- added a built-in `Plant` domain template as the unrelated #490 architecture-success example;
-- Plant is a normal user-owned custom ObjectType, not a system type or dedicated management page;
-- its `写真` and `タグ` Properties resolve Image/Tag system ObjectTypes through the existing generic Relation-template path;
-- it creates an ordinary generic Gallery View and ordinary Date/Text Properties;
-- added regression coverage proving Image/Tag target resolution, multi cardinality, custom ObjectType kind and generic Gallery creation.
+Remaining:
+- keep empty custom ObjectType creation a first-class user path;
+- continue replacing domain-specific defaults with ordinary schema/View/template configuration rather than new domain pages.
 
-This intentionally adds no Plant-specific page/service/persistence path and does not modify Relation integrity internals, primitive behavior, search, Vault or shared presentation hotspots.
+### #491 — Relation Property authoring / inline target creation
+Integrated:
+- #515 compact Property-add UI: searchable Relation target ObjectTypes, built-in/custom distinction, explicit single/multi.
+- #538 `DatabasePropertyAuthoringService`: ordinary Properties use `ObjectStore.createProperty`; Relations use canonical `ObjectStore.createRelationProperty`.
+- #552 read-only `RelationTargetQuickCreatePolicy`: custom Object / Tag / URL Weblink / managed Image / managed File / unavailable.
+- #567 existing Relation Property target/cardinality editing composes the transactional schema-evolution service and explicit impact/choice UX.
+- #595 `RelationTargetQuickCreateAction`: presentation-only mode-specific quick-create affordance. Unavailable or missing canonical writer exposes no title-only fallback. Flutter CI run 1916 completed successfully before squash merge (`eaa18d4f`).
 
-## Validation
-- No local Flutter/Dart runtime was available through this connector execution path; repository PR CI is required for executable validation.
-- The slice is limited to `object_type_template_store.dart`, its focused test, and this handoff.
+Remaining:
+- patch-size real-host wiring of `DatabasePropertyAuthoringService` + `PropertyAddPopover` into the generic Database page;
+- wire quick-create policy/action into the existing Relation value picker and delegate execution to canonical custom Object/Tag/Weblink/Image/File creation/import callbacks;
+- keep Weblink/Image/File title-only creation impossible.
+
+### #492 — generic Gallery cover source
+Integrated:
+- #507 per-View cover-source contract and schema-derived source discovery.
+- #524 fail-closed Relation target resolver with deterministic persisted Relation order.
+- #542 shared cover media dispatcher for canonical Image/Weblink targets and stable fixed/masonry fallback geometry.
+- #556 unconfigured-system compatibility versus explicit `none`.
+- #563 template cover configuration; #592 Paper exercises it on a fresh workspace.
+
+Remaining:
+- replace the real generic Gallery host's current unconditional Weblink media path with compatibility resolution + `DatabaseGalleryCoverMedia` for both fixed and masonry cards;
+- expose schema-derived cover choices through the real Gallery toolbar;
+- preserve Bookmark compatibility until generic parity is proven.
+
+### #493 — safe schema-editing UX
+Integrated:
+- #520 Relation schema-change impact confirmation and explicit multi -> single choices.
+- #530 stable-id rename and read-only Property delete impact inspection across stored values and View references.
+- #547 destructive delete confirmation is blocked when data/View configuration would be lost.
+- #567 Relation schema editor uses canonical transactional evolution.
+- #568 bidirectional inverse-Property impact is surfaced and deletion remains fail-closed.
+
+Remaining:
+- reversible Property archive/delete execution semantics (no archive state exists yet);
+- explicit Value-type conversion inspect/plan/confirm/apply contract with rollback;
+- patch-size real-host action wiring for rename/delete/Relation schema editing.
+
+## Validation this run
+- #592: Flutter CI run 1907 completed successfully; PR merged.
+- #595: Flutter CI run 1916 completed successfully; PR squash-merged as `eaa18d4fb37f0d56c065b31da89f85880087188c`.
+- No local Flutter checkout is available through the connector execution path; GitHub Actions is the executable validation source.
+
+## Shared hotspot / concurrency status
+During this run, open-PR searches found no broad owner for `generic_database_page.dart`, `object_inspector_page.dart`, or `generic_database_page_services.dart`. Recheck immediately before any edit.
+
+Shared hotspots include `generic_database_page.dart`, `bookmark_unified_stage1_page.dart`, `object_inspector_page.dart`, `app_shell.dart`, `settings_page.dart`, `profile_manager.dart`, and `app_database.dart`. Do not reconstruct a whole hotspot for a small integration; use patch-sized edits after ownership verification.
 
 ## Exact next actions
-1. Let #520/#524 clear or refresh before composing any shared-host schema/Gallery wiring.
-2. Continue #490 with template-owned default View/property configuration only where generic APIs are insufficient; do not add domain pages.
-3. For #491, prefer a focused Relation Property authoring widget/service seam rather than broad `generic_database_page.dart` edits while other Lane C PRs are open.
-4. After Lane D lands canonical File primitive availability, add a Bookmark/Paper template using Weblink/Image/File/Tag Relations without hard-coded domain behavior.
-5. Keep #493 migration correctness in Lane B; Lane C only owns explicit impact/confirmation UX.
+1. Wire `DatabasePropertyAuthoringService` + `PropertyAddPopover` into the real generic Database Property-add host without direct Relation config writes.
+2. Wire `RelationTargetQuickCreatePolicy` + `RelationTargetQuickCreateAction` into the real Relation value picker, delegating to canonical target creation/import services.
+3. Wire `DatabaseViewGalleryCoverCompatibilityService` + `DatabaseGalleryCoverMedia` into fixed/masonry real Gallery cards, then expose source options in the toolbar.
+4. Wire #567 and #547/#568 schema-edit/delete-impact actions into Property management UX without bypassing canonical schema/Relation services.
+5. Continue #490 only through user-owned ObjectType/Property/Relation/Database/View configuration; no Paper/Plant/Bookmark-specific management pages.
 
-## Shared hotspot rule
-`generic_database_page.dart`, `bookmark_unified_stage1_page.dart`, and `object_inspector_page.dart` require an open-PR ownership check before edits. Prefer focused widgets/services/settings adapters while a hotspot is leased by another lane.
+## Cross-lane boundaries / risks
+- Lane B owns Relation mutation/data-integrity and destructive target/cardinality correctness.
+- Lane D owns Tag/Weblink/Image/File identity and canonical creation/import semantics; Lane C only presents/dispatches those actions.
+- Lane E owns search/indexing; Lane F owns Vault/filesystem lifecycle.
+- Refactor lane is reducing `AppDatabase` reach-through; Lane C must not add new direct presentation dependencies on it.
+- No destructive Property archive/delete migration is approved; fail-closed behavior remains correct until a reversible storage contract exists.
 
-## Stop reason
-A coherent, non-conflicting #490 template-composition slice is complete and ready for PR/CI. Further host composition should be sequenced behind currently open Lane C PRs rather than creating overlapping broad edits.
+## Stop reason for this run
+Two independent non-hotspot product slices were completed and integrated (#592 and #595), stale docs PRs were retired, and this handoff was rebuilt from current `main`. The next high-value slices are real-host integrations in shared files; they should start from a fresh ownership check and a fresh branch rather than stacking a broad hotspot edit onto now-merged implementation branches.
