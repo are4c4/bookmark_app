@@ -22,7 +22,8 @@ class BookmarkListMetadata extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final widgets = <Widget>[];
+    final secondary = <Widget>[];
+    final chips = <Widget>[];
     for (final token in propertyTokens) {
       if (token == 'image') continue;
       if (token.startsWith('role:')) {
@@ -32,7 +33,7 @@ class BookmarkListMetadata extends StatelessWidget {
             .map((assignment) => assignment.person)
             .toList();
         if (people.isNotEmpty) {
-          widgets.add(_RoleGroup(role: role, people: people));
+          chips.add(_RoleGroup(role: role, people: people));
         }
         continue;
       }
@@ -40,9 +41,9 @@ class BookmarkListMetadata extends StatelessWidget {
         case 'url':
           final resolver = resolveUrl;
           if (resolver == null) {
-            widgets.add(_PlainMeta(text: _compactUrl(bookmark.url)));
+            secondary.add(_PlainMeta(text: _compactUrl(bookmark.url)));
           } else {
-            widgets.add(
+            secondary.add(
               ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 320),
                 child: BookmarkResolvedUrlText(
@@ -58,7 +59,7 @@ class BookmarkListMetadata extends StatelessWidget {
             );
           }
         case 'tags':
-          widgets.addAll(
+          chips.addAll(
             bookmark.tags.map(
               (tag) => _MetaChip(
                 icon: Icons.sell_outlined,
@@ -67,7 +68,7 @@ class BookmarkListMetadata extends StatelessWidget {
             ),
           );
         case 'people':
-          widgets.addAll(
+          chips.addAll(
             bookmark.people.map(
               (person) => _MetaChip(
                 icon: Icons.person_outline,
@@ -77,18 +78,18 @@ class BookmarkListMetadata extends StatelessWidget {
           );
         case 'description':
           if (bookmark.description?.trim().isNotEmpty == true) {
-            widgets.add(_PlainMeta(text: bookmark.description!));
+            secondary.add(_PlainMeta(text: bookmark.description!));
           }
         case 'createdAt':
-          widgets.add(_PlainMeta(text: _formatDate(bookmark.createdAt)));
+          secondary.add(_PlainMeta(text: _formatDate(bookmark.createdAt)));
         case 'favorite':
           if (bookmark.favorite) {
-            widgets.add(
+            chips.add(
               const _MetaChip(icon: Icons.star, label: 'お気に入り'),
             );
           }
         case 'status':
-          widgets.add(
+          chips.add(
             _MetaChip(
               icon: Icons.flag_outlined,
               label: bookmarkStatusLabels[bookmark.status] ?? bookmark.status,
@@ -96,10 +97,10 @@ class BookmarkListMetadata extends StatelessWidget {
           );
         case 'rating':
           if (bookmark.rating > 0) {
-            widgets.add(_PlainMeta(text: '★' * bookmark.rating));
+            secondary.add(_PlainMeta(text: '★' * bookmark.rating));
           }
         case 'history':
-          widgets.add(
+          secondary.add(
             _PlainMeta(
               text: bookmark.lastOpenedAt == null
                   ? '${bookmark.openCount}回 · 未閲覧'
@@ -108,12 +109,29 @@ class BookmarkListMetadata extends StatelessWidget {
           );
       }
     }
-    if (widgets.isEmpty) return const SizedBox.shrink();
-    return Wrap(
-      spacing: 6,
-      runSpacing: 5,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: widgets,
+    if (secondary.isEmpty && chips.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (secondary.isNotEmpty)
+          Wrap(
+            key: const ValueKey('bookmark-list-secondary-metadata'),
+            spacing: 9,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: secondary,
+          ),
+        if (secondary.isNotEmpty && chips.isNotEmpty) const SizedBox(height: 7),
+        if (chips.isNotEmpty)
+          Wrap(
+            key: const ValueKey('bookmark-list-chip-metadata'),
+            spacing: 6,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: chips,
+          ),
+      ],
     );
   }
 
