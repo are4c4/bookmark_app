@@ -61,7 +61,7 @@ void main() {
 
     expect(
       await planner.forObjectLabelChange(person),
-      <int>[person, firstBook, secondBook]..sortRange(1, 3),
+      <int>[person, firstBook, secondBook],
     );
     expect(await planner.forObjectLabelChange(firstBook), <int>[firstBook]);
   });
