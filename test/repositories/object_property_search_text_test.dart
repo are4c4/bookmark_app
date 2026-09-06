@@ -4,14 +4,18 @@ import 'package:flutter_test/flutter_test.dart';
 
 ObjectPropertyDefinition property(
   ObjectPropertyType type, {
+  int id = 1,
+  int objectTypeId = 1,
+  int sortOrder = 0,
+  String name = 'Value',
   Map<String, dynamic> config = const <String, dynamic>{},
 }) =>
     ObjectPropertyDefinition(
-      id: 1,
-      objectTypeId: 1,
-      name: 'Value',
+      id: id,
+      objectTypeId: objectTypeId,
+      name: name,
       type: type,
-      sortOrder: 0,
+      sortOrder: sortOrder,
       config: config,
     );
 
@@ -122,6 +126,119 @@ void main() {
         value: const {'raw': 'do not stringify maps'},
       ),
       isEmpty,
+    );
+  });
+
+  test('whole-Object projection follows schema order and contributor boundaries',
+      () {
+    final title = property(
+      ObjectPropertyType.title,
+      id: 10,
+      sortOrder: 0,
+      name: 'Title',
+    );
+    final multi = property(
+      ObjectPropertyType.multiSelect,
+      id: 20,
+      sortOrder: 1,
+      name: 'Topics',
+    );
+    final text = property(
+      ObjectPropertyType.text,
+      id: 30,
+      sortOrder: 2,
+      name: 'Summary',
+    );
+    final relation = property(
+      ObjectPropertyType.objectRelation,
+      id: 40,
+      sortOrder: 3,
+      name: 'Person',
+      config: const <String, dynamic>{
+        'targetObjectTypeId': 2,
+        'multiple': true,
+      },
+    );
+    final file = property(
+      ObjectPropertyType.file,
+      id: 50,
+      sortOrder: 4,
+      name: 'Attachment',
+    );
+    final hidden = property(
+      ObjectPropertyType.text,
+      id: 60,
+      sortOrder: 5,
+      name: 'Hidden from search',
+      config: const <String, dynamic>{'searchable': false},
+    );
+    final objectType = AppObjectType(
+      id: 1,
+      workspaceId: 1,
+      name: 'Knowledge item',
+      icon: '🧠',
+      kind: ObjectTypeKind.custom,
+      sortOrder: 0,
+      properties: <ObjectPropertyDefinition>[
+        hidden,
+        text,
+        relation,
+        multi,
+        file,
+        title,
+      ],
+    );
+    final object = AppObject(
+      id: 100,
+      objectTypeId: 1,
+      title: 'Canonical title bucket',
+      createdAt: DateTime.utc(2026, 9, 7),
+      updatedAt: DateTime.utc(2026, 9, 7),
+      values: <int, dynamic>{
+        title.id: 'Do not duplicate title here',
+        multi.id: const <String>['First topic', 'Second topic'],
+        text.id: 'Later summary',
+        relation.id: const <String, dynamic>{'objectIds': <int>[999999]},
+        file.id: '/private/asset/secret.bin',
+        hidden.id: 'PrivateSearchToken',
+      },
+    );
+
+    final projected = buildObjectPropertiesSearchText(
+      object: object,
+      objectType: objectType,
+    );
+
+    expect(projected, 'First topic\nSecond topic\nLater summary');
+    expect(projected, isNot(contains('Do not duplicate title here')));
+    expect(projected, isNot(contains('999999')));
+    expect(projected, isNot(contains('/private/asset')));
+    expect(projected, isNot(contains('PrivateSearchToken')));
+  });
+
+  test('whole-Object projection rejects a mismatched ObjectType', () {
+    final object = AppObject(
+      id: 100,
+      objectTypeId: 1,
+      title: 'Object',
+      createdAt: DateTime.utc(2026, 9, 7),
+      updatedAt: DateTime.utc(2026, 9, 7),
+    );
+    const otherType = AppObjectType(
+      id: 2,
+      workspaceId: 1,
+      name: 'Other',
+      icon: '📦',
+      kind: ObjectTypeKind.custom,
+      sortOrder: 0,
+    );
+
+    expect(
+      () => buildObjectPropertiesSearchText(
+        object: object,
+        objectType: otherType,
+      ),
+      throwsArgumentError,
     );
   });
 }
