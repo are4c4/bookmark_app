@@ -108,7 +108,8 @@ void main() {
     expect(
       (await objectStore.outgoingRelations(bookId))
           .where((edge) => edge.propertyId == relationId)
-          .map((edge) => edge.targetObjectId),
+          .map((edge) => edge.targetObjectId)
+          .toList(growable: false),
       <int>[personId],
     );
     expect(
@@ -347,7 +348,8 @@ void main() {
     expect(
       (await objectStore.outgoingRelations(bookId))
           .where((edge) => edge.propertyId == relationId)
-          .map((edge) => edge.targetObjectId),
+          .map((edge) => edge.targetObjectId)
+          .toList(growable: false),
       <int>[personId],
     );
   });
