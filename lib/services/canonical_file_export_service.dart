@@ -69,10 +69,14 @@ class CanonicalFileExportService {
     var createdDestination = false;
     try {
       source = await File(sourcePath).open(mode: FileMode.read);
-      destination = await File(destinationPath).open(
-        mode: FileMode.writeOnlyExclusive,
-      );
+
+      // Create atomically with exclusive semantics before opening for writes.
+      // This closes the race between the advisory existence check above and
+      // actual destination creation without truncating an existing user file.
+      final destinationFile = File(destinationPath);
+      await destinationFile.create(exclusive: true);
       createdDestination = true;
+      destination = await destinationFile.open(mode: FileMode.writeOnly);
 
       var written = 0;
       const chunkSize = 64 * 1024;
