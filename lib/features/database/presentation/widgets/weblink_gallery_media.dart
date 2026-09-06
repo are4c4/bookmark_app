@@ -156,8 +156,10 @@ class _WeblinkGalleryMediaState extends State<WeblinkGalleryMedia> {
       systemKey: WeblinkObjectService.systemKey,
     );
     if (weblinkType?.id == widget.objectTypeId) {
-      final visual = await WeblinkVisualResolver(widget.objectStore)
-          .resolveManagedRepresentative(
+      final visual = await WeblinkVisualResolver(
+        widget.objectStore,
+        pathResolver: widget.database.pathResolver,
+      ).resolveManagedRepresentative(
         weblinkObjectTypeId: widget.objectTypeId,
         weblinkObjectId: widget.objectId,
       );
