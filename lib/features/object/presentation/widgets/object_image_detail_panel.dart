@@ -17,6 +17,7 @@ class ObjectImageDetailPanel extends StatefulWidget {
     super.key,
     required this.database,
     required this.objectStore,
+    required this.workspaceId,
     required this.objectTypeId,
     required this.objectId,
     required this.editService,
@@ -28,6 +29,7 @@ class ObjectImageDetailPanel extends StatefulWidget {
 
   final AppDatabase database;
   final ObjectStore objectStore;
+  final int workspaceId;
   final int objectTypeId;
   final int objectId;
   final CanonicalImageEditService editService;
@@ -48,6 +50,7 @@ class _ObjectImageDetailPanelState extends State<ObjectImageDetailPanel> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.database != widget.database ||
         oldWidget.objectStore != widget.objectStore ||
+        oldWidget.workspaceId != widget.workspaceId ||
         oldWidget.objectTypeId != widget.objectTypeId ||
         oldWidget.objectId != widget.objectId) {
       _previewRefreshToken = 0;
@@ -77,7 +80,7 @@ class _ObjectImageDetailPanelState extends State<ObjectImageDetailPanel> {
         const SizedBox(height: 12),
         ObjectImageEditActions(
           editService: widget.editService,
-          workspaceId: widget.database.workspaceId,
+          workspaceId: widget.workspaceId,
           objectId: widget.objectId,
           onChanged: _handleChanged,
           onError: widget.onError,
