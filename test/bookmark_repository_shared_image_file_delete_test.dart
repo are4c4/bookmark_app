@@ -59,7 +59,7 @@ void main() {
     );
     final nativeImage = await images.findOrCreateManaged(
       workspaceId: fixture.workspaceId,
-      filePath: managedFile.path,
+      filePath: 'shared.jpg',
       title: 'Native owner',
     );
     final photoId = await fixture.repository.addPhoto(path: managedFile.path);
