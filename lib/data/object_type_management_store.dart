@@ -53,7 +53,11 @@ class ObjectTypeManagementStore {
         }
 
         final sourceTargetId = property.targetObjectTypeId;
-        if (sourceTargetId == null) continue;
+        if (sourceTargetId == null) {
+          throw StateError(
+            'Relation Property ${property.id} is missing target ObjectType metadata.',
+          );
+        }
         final duplicatedTargetId = sourceTargetId == source.id
             ? duplicatedId
             : sourceTargetId;
