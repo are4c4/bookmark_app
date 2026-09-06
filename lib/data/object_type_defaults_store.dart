@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:drift/drift.dart';
 
+import '../domain/object_body.dart';
 import '../domain/object_type_defaults.dart';
 import 'generic_database_store.dart';
 
@@ -63,6 +64,28 @@ class ObjectTypeDefaultsStore {
            defaults_json = excluded.defaults_json,
            updated_at = CURRENT_TIMESTAMP''',
       [objectTypeId, jsonEncode(defaults.toJson())],
+    );
+  }
+
+  /// Updates only the Object creation Body template.
+  ///
+  /// Presentation defaults remain intact so a future ObjectType template editor
+  /// cannot accidentally erase Property visibility/order or opening behavior.
+  /// Passing `null` removes the Body template; if no other ObjectType defaults
+  /// remain, the persisted defaults row is removed through [write].
+  Future<void> writeBodyTemplate({
+    required int objectTypeId,
+    required ObjectBodyDocument? bodyTemplate,
+  }) async {
+    final current = await read(objectTypeId) ?? const ObjectTypeDefaults();
+    await write(
+      objectTypeId: objectTypeId,
+      defaults: ObjectTypeDefaults(
+        visiblePropertyIds: current.visiblePropertyIds,
+        propertyOrder: current.propertyOrder,
+        openMode: current.openMode,
+        bodyTemplate: bodyTemplate,
+      ),
     );
   }
 
