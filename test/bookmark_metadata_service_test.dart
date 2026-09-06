@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:bookmark_app/services/bookmark_metadata_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -56,10 +58,10 @@ void main() {
     final requestedUrl = Uri.parse('https://resource.test/go');
     final finalUrl = Uri.parse('https://cdn.resource.test/articles/final/');
     final service = BookmarkMetadataService(
-      client: MockClient((request) async {
-        expect(request.url, requestedUrl);
-        return _ResponseWithUrl(
-          '''
+      client: _RedirectClient(
+        requestedUrl: requestedUrl,
+        finalUrl: finalUrl,
+        body: '''
 <html>
   <head>
     <meta property="og:title" content="Redirected article">
@@ -68,12 +70,7 @@ void main() {
   </head>
 </html>
 ''',
-          200,
-          url: finalUrl,
-          request: http.Request('GET', requestedUrl),
-          headers: const {'content-type': 'text/html; charset=utf-8'},
-        );
-      }),
+      ),
     );
 
     final metadata = await service.fetch(requestedUrl.toString());
@@ -135,10 +132,34 @@ void main() {
   });
 }
 
-class _ResponseWithUrl extends http.Response
+class _RedirectClient extends http.BaseClient {
+  _RedirectClient({
+    required this.requestedUrl,
+    required this.finalUrl,
+    required this.body,
+  });
+
+  final Uri requestedUrl;
+  final Uri finalUrl;
+  final String body;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    expect(request.url, requestedUrl);
+    return _StreamedResponseWithUrl(
+      Stream<List<int>>.value(utf8.encode(body)),
+      200,
+      url: finalUrl,
+      request: request,
+      headers: const {'content-type': 'text/html; charset=utf-8'},
+    );
+  }
+}
+
+class _StreamedResponseWithUrl extends http.StreamedResponse
     implements http.BaseResponseWithUrl {
-  _ResponseWithUrl(
-    super.body,
+  _StreamedResponseWithUrl(
+    super.stream,
     super.statusCode, {
     required this.url,
     super.request,
