@@ -66,11 +66,35 @@ Design:
 
 Validation:
 - focused tests cover ordinary pruning/preservation, Relation boundary enforcement, and fail-closed rollback when unrelated stale defaults remain;
-- Flutter CI #2074 was queued for head `736fd4d4f307f90019abdc9d128cf5207cdc9e20` at this checkpoint.
+- Flutter CI #2074 reached Analyze green and was running the full Test step for head `736fd4d4f307f90019abdc9d128cf5207cdc9e20` at this checkpoint.
+
+### #667 — Body clear updates Object mutation time consistently
+Branch: `fix-object-body-clear-updated-at-481`
+
+Design:
+- `ObjectBodyStore.clear()` removes Body and advances the parent Object `updated_at` in one transaction when content actually existed;
+- SQLite `changes()` keeps re-clearing an already-empty Body as a true no-op;
+- focused tests cover actual removal and no-op re-clear semantics.
+
+Validation:
+- Flutter CI #2087 was running for head `c7df3988e3c030d3f4446f651719c6c87c847ff7` at this checkpoint.
+
+### #670 — malformed Body document shapes fail closed
+Branch: `fix-object-body-document-shape-481`
+
+Design:
+- `{}` remains a valid empty Body document;
+- top-level `null`, array, string, number, boolean and other non-object shapes now throw `FormatException` instead of silently becoming an empty Body;
+- unknown/future block type strings and existing block-level validation remain unchanged;
+- focused tests include a persisted valid-JSON `[]` corruption case through `ObjectBodyStore.read()`.
+
+Validation:
+- Flutter CI #2095 was running for head `83e172f551f1fd6bdcb1ad45ea4ba0a2fb074809` at this checkpoint.
 
 ## Hotspot / ownership notes
 - Open-PR audit immediately before #660 found no temporary lease on `object_store.dart` or `object_type_defaults_store.dart`.
 - A direct whole-file change to `object_type_defaults_store.dart` was avoided; #660 uses a new narrow service and existing public APIs instead.
+- Open-PR audit before #667/#670 found no lease on `object_body_store.dart` or `object_body.dart`; the two Body PRs touch different production files.
 - Keep `object_store.dart`, `generic_database_store.dart`, `object_inspector_page.dart` and other semantic/shared hosts patch-sized and check leases again immediately before editing.
 - Current unrelated open PRs own Lane B Relation internals and Lane C schema-authoring presentation; do not absorb their responsibilities into Lane A.
 
@@ -80,10 +104,11 @@ Validation:
 - Schema-authoring buttons/dialogs that invoke the core deletion boundary remain Lane C.
 
 ## Next actions
-1. Process Flutter CI #2074 for #660; fix only focused service/test issues, and merge only after full CI green.
+1. Process CI for #660/#667/#670 and merge only after each full suite is green.
 2. After #660, coordinate adoption of the ordinary-Property deletion boundary without editing Lane C presentation or Lane B Relation lifecycle.
-3. Re-audit #56/#481/#484 for independent core/domain/test gaps: aliases, Body/reference semantics, Daily Note identity, typed non-Relation values, or user-defined ObjectType invariants.
-4. Do not invent primitive/search/storage/refactor work when Lane A has no safe core slice.
+3. After #670, consider deeper Body version/nested-field validation only if a concrete corruption case or Issue requires it; do not fold speculative format changes into the top-level-shape fix.
+4. Re-audit #56/#481/#484 for independent core/domain/test gaps: aliases, Body/reference semantics, Daily Note identity, typed non-Relation values, or user-defined ObjectType invariants.
+5. Do not invent primitive/search/storage/refactor work when Lane A has no safe core slice.
 
 ## Stop rule
 A green PR or one completed slice is not itself a stop condition. Continue to another independent Lane A core slice while safe work exists; stop rather than manufacture changes when only leased hotspots or other lanes' responsibilities remain.
