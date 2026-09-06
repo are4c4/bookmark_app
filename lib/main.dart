@@ -11,6 +11,8 @@ import 'services/object_sync_service.dart';
 import 'services/photo_storage_service.dart';
 import 'services/profile_manager.dart';
 import 'services/profile_storage_migrator.dart';
+import 'services/vault_lifecycle_controller.dart';
+import 'services/vault_lifecycle_scope.dart';
 import 'ui/ui_tokens.dart';
 import 'views/app_shell.dart';
 import 'widgets/global_file_drop_layer.dart';
@@ -420,23 +422,37 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
     } else if (manager == null || repository == null || _switching) {
       home = const Scaffold(body: Center(child: CircularProgressIndicator()));
     } else {
-      home = GlobalFileDropLayer(
-        repository: repository,
-        child: BookmarkAppShell(
-          key: ValueKey(
-            '${manager.state.activeProfile.id}:${repository.workspaceId}',
-          ),
+      final vaultLifecycle = VaultLifecycleController.fromManager(
+        manager: manager,
+        switchProfile: _switchProfile,
+      );
+      home = VaultLifecycleScope(
+        profileState: manager.state,
+        createVault: () async {
+          await vaultLifecycle.createVault();
+        },
+        openVault: () async {
+          await vaultLifecycle.openVault();
+        },
+        switchVault: vaultLifecycle.switchVault,
+        child: GlobalFileDropLayer(
           repository: repository,
-          profileState: manager.state,
-          themeMode: _themeMode,
-          onThemeModeChanged: _setThemeMode,
-          onSwitchProfile: _switchProfile,
-          onCreateProfile: _createProfile,
-          onRenameProfile: _renameProfile,
-          onDuplicateProfile: _duplicateProfile,
-          onImportProfileBackup: _importProfileBackup,
-          onDeleteProfile: _deleteProfile,
-          onSwitchWorkspace: _switchWorkspace,
+          child: BookmarkAppShell(
+            key: ValueKey(
+              '${manager.state.activeProfile.id}:${repository.workspaceId}',
+            ),
+            repository: repository,
+            profileState: manager.state,
+            themeMode: _themeMode,
+            onThemeModeChanged: _setThemeMode,
+            onSwitchProfile: _switchProfile,
+            onCreateProfile: _createProfile,
+            onRenameProfile: _renameProfile,
+            onDuplicateProfile: _duplicateProfile,
+            onImportProfileBackup: _importProfileBackup,
+            onDeleteProfile: _deleteProfile,
+            onSwitchWorkspace: _switchWorkspace,
+          ),
         ),
       );
     }
