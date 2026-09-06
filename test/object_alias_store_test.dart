@@ -110,6 +110,100 @@ void main() {
     );
   });
 
+  test('alias mutations advance Object freshness only when identity changes',
+      () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final aliasStore = ObjectAliasStore(genericStore);
+
+    final typeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Person',
+    );
+    final objectId = await objectStore.createObject(
+      objectTypeId: typeId,
+      title: 'Canonical',
+    );
+
+    await _setOldFreshness(database, objectId);
+    expect(await aliasStore.addAlias(objectId: objectId, alias: 'Alpha'), isTrue);
+    expect(await _updatedYear(objectStore, typeId, objectId), isNot(2000));
+
+    await _setOldFreshness(database, objectId);
+    expect(await aliasStore.addAlias(objectId: objectId, alias: 'ALPHA'), isFalse);
+    expect(await _updatedYear(objectStore, typeId, objectId), 2000);
+
+    await aliasStore.replaceAliases(objectId: objectId, aliases: ['Alpha']);
+    expect(await _updatedYear(objectStore, typeId, objectId), 2000);
+
+    await aliasStore.replaceAliases(
+      objectId: objectId,
+      aliases: ['Alpha', 'Beta'],
+    );
+    expect(await _updatedYear(objectStore, typeId, objectId), isNot(2000));
+
+    await _setOldFreshness(database, objectId);
+    await aliasStore.removeAlias(objectId: objectId, alias: 'Missing');
+    expect(await _updatedYear(objectStore, typeId, objectId), 2000);
+
+    await aliasStore.removeAlias(objectId: objectId, alias: 'Alpha');
+    expect(await aliasStore.listAliases(objectId), ['Beta']);
+    expect(await _updatedYear(objectStore, typeId, objectId), isNot(2000));
+
+    await _setOldFreshness(database, objectId);
+    await aliasStore.clear(objectId);
+    expect(await aliasStore.listAliases(objectId), isEmpty);
+    expect(await _updatedYear(objectStore, typeId, objectId), isNot(2000));
+
+    await _setOldFreshness(database, objectId);
+    await aliasStore.clear(objectId);
+    expect(await _updatedYear(objectStore, typeId, objectId), 2000);
+  });
+
+  test('alias removal rolls back when Object freshness update fails', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final aliasStore = ObjectAliasStore(genericStore);
+
+    final typeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Person',
+    );
+    final objectId = await objectStore.createObject(
+      objectTypeId: typeId,
+      title: 'Protected',
+    );
+    await aliasStore.replaceAliases(
+      objectId: objectId,
+      aliases: ['First', 'Second'],
+    );
+    await database.customStatement('''
+      CREATE TRIGGER fail_alias_parent_freshness_update
+      BEFORE UPDATE OF updated_at ON generic_records
+      WHEN OLD.id = $objectId
+      BEGIN
+        SELECT RAISE(ABORT, 'forced parent freshness failure');
+      END
+    ''');
+
+    await expectLater(
+      aliasStore.removeAlias(objectId: objectId, alias: 'First'),
+      throwsA(anything),
+    );
+
+    expect(await aliasStore.listAliases(objectId), ['First', 'Second']);
+    expect(
+      (await aliasStore.listEntries(objectId)).map((entry) => entry.position),
+      [0, 1],
+    );
+  });
+
   test('deleting Object cascades alias rows', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
@@ -136,3 +230,20 @@ void main() {
     expect(rows, isEmpty);
   });
 }
+
+Future<void> _setOldFreshness(AppDatabase database, int objectId) async {
+  await database.customStatement(
+    "UPDATE generic_records SET updated_at = '2000-01-01 00:00:00' WHERE id = ?",
+    [objectId],
+  );
+}
+
+Future<int> _updatedYear(
+  ObjectStore objectStore,
+  int objectTypeId,
+  int objectId,
+) async =>
+    (await objectStore.listObjects(objectTypeId))
+        .singleWhere((object) => object.id == objectId)
+        .updatedAt
+        .year;
