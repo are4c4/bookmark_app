@@ -1,4 +1,5 @@
 import 'package:bookmark_app/data/database_view_gallery_adapter.dart';
+import 'package:bookmark_app/data/database_view_gallery_cover_source_service.dart';
 import 'package:bookmark_app/data/database_view_store.dart';
 import 'package:bookmark_app/widgets/object_gallery_mode_menu.dart';
 import 'package:bookmark_app/widgets/object_view_toolbar.dart';
@@ -21,6 +22,17 @@ DatabaseViewConfig _view({
       settings: settings,
       sortOrder: 0,
     );
+
+const _coverSources = <GalleryCoverSourceOption>[
+  GalleryCoverSourceOption(
+    source: GalleryCoverSource.none(),
+    label: 'なし',
+  ),
+  GalleryCoverSourceOption(
+    source: GalleryCoverSource.imageRelation(12),
+    label: 'Cover · Image',
+  ),
+];
 
 void main() {
   testWidgets('Gallery toolbar persists fixed or masonry through View settings',
@@ -84,14 +96,48 @@ void main() {
     expect(changed!.layoutType, 'gallery');
   });
 
-  testWidgets('non-Gallery layouts do not show the Gallery geometry control',
+  testWidgets('Gallery toolbar exposes schema-derived cover source choices',
       (tester) async {
+    DatabaseViewConfig? changed;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ObjectViewToolbar(
+            view: _view(),
+            properties: const [],
+            galleryCoverSources: _coverSources,
+            onViewChanged: (next) => changed = next,
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('gallery-cover-source-menu')),
+      findsOneWidget,
+    );
+    expect(find.text('カバー: なし'), findsOneWidget);
+
+    await tester.tap(find.text('カバー: なし'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cover · Image'));
+    await tester.pumpAndSettle();
+
+    expect(changed, isNotNull);
+    expect(
+      const DatabaseViewGalleryAdapter().decodeCoverSource(changed!),
+      const GalleryCoverSource.imageRelation(12),
+    );
+  });
+
+  testWidgets('non-Gallery layouts do not show Gallery controls', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: ObjectViewToolbar(
             view: _view(layoutType: 'table'),
             properties: const [],
+            galleryCoverSources: _coverSources,
             onViewChanged: (_) {},
           ),
         ),
@@ -99,6 +145,10 @@ void main() {
     );
 
     expect(find.byKey(const ValueKey('gallery-mode-menu')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('gallery-cover-source-menu')),
+      findsNothing,
+    );
     expect(find.text('固定比率'), findsNothing);
     expect(find.text('メイソンリー'), findsNothing);
   });

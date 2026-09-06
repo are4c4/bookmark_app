@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../data/database_view_gallery_cover_source_service.dart';
 import '../data/database_view_group_adapter.dart';
 import '../data/database_view_query_adapter.dart';
 import '../data/database_view_store.dart';
 import '../domain/object_model.dart';
+import 'object_gallery_cover_source_menu.dart';
 import 'object_gallery_mode_menu.dart';
 import 'object_group_dialog.dart';
 import 'object_query_dialog.dart';
@@ -16,6 +18,7 @@ class ObjectViewToolbar extends StatelessWidget {
     required this.onViewChanged,
     this.supportedLayouts = const <String>['gallery', 'list', 'table', 'board'],
     this.showLayoutSelector = true,
+    this.galleryCoverSources = const <GalleryCoverSourceOption>[],
   });
 
   final DatabaseViewConfig view;
@@ -23,6 +26,13 @@ class ObjectViewToolbar extends StatelessWidget {
   final ValueChanged<DatabaseViewConfig> onViewChanged;
   final List<String> supportedLayouts;
   final bool showLayoutSelector;
+
+  /// Schema-derived generic cover choices for Gallery presentation.
+  ///
+  /// Hosts that do not provide discovery results keep the previous toolbar
+  /// behavior unchanged. Supplying even the explicit `none` option exposes the
+  /// selector so a stale persisted source can be cleared safely.
+  final List<GalleryCoverSourceOption> galleryCoverSources;
 
   static const _queryAdapter = DatabaseViewQueryAdapter();
   static const _groupAdapter = DatabaseViewGroupAdapter();
@@ -61,6 +71,12 @@ class ObjectViewToolbar extends StatelessWidget {
         if (view.layoutType == 'gallery')
           ObjectGalleryModeMenu(
             view: view,
+            onViewChanged: onViewChanged,
+          ),
+        if (view.layoutType == 'gallery' && galleryCoverSources.isNotEmpty)
+          ObjectGalleryCoverSourceMenu(
+            view: view,
+            options: galleryCoverSources,
             onViewChanged: onViewChanged,
           ),
       ],

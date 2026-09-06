@@ -44,4 +44,87 @@ void main() {
     expect(fixed.settings['openMode'], 'sidePeek');
     expect(adapter.decode(fixed), GalleryViewMode.fixed);
   });
+
+  test('Gallery cover source defaults to none for missing or malformed settings', () {
+    expect(adapter.decodeCoverSource(_view()), const GalleryCoverSource.none());
+    expect(
+      adapter.decodeCoverSource(
+        _view(
+          settings: const {
+            'galleryCoverSource': {'kind': 'imageRelation'},
+          },
+        ),
+      ),
+      const GalleryCoverSource.none(),
+    );
+    expect(
+      adapter.decodeCoverSource(
+        _view(
+          settings: const {
+            'galleryCoverSource': {
+              'kind': 'weblinkRelationRepresentativeImage',
+              'relationPropertyId': 0,
+            },
+          },
+        ),
+      ),
+      const GalleryCoverSource.none(),
+    );
+  });
+
+  test('Gallery cover source round-trips independently from Gallery geometry', () {
+    final initial = _view(
+      settings: const {
+        'galleryMode': 'masonry',
+        'openMode': 'sidePeek',
+      },
+    );
+
+    final imageRelation = adapter.encodeCoverSource(
+      initial,
+      source: const GalleryCoverSource.imageRelation(42),
+    );
+
+    expect(imageRelation.layoutType, 'gallery');
+    expect(imageRelation.settings['galleryMode'], 'masonry');
+    expect(imageRelation.settings['openMode'], 'sidePeek');
+    expect(
+      imageRelation.settings['galleryCoverSource'],
+      const {
+        'kind': 'imageRelation',
+        'relationPropertyId': 42,
+      },
+    );
+    expect(
+      adapter.decodeCoverSource(imageRelation),
+      const GalleryCoverSource.imageRelation(42),
+    );
+
+    final weblinkRelation = adapter.encodeCoverSource(
+      imageRelation,
+      source: const GalleryCoverSource.weblinkRelationRepresentativeImage(7),
+    );
+    expect(
+      adapter.decodeCoverSource(weblinkRelation),
+      const GalleryCoverSource.weblinkRelationRepresentativeImage(7),
+    );
+
+    final direct = adapter.encodeCoverSource(
+      weblinkRelation,
+      source: const GalleryCoverSource.directImage(),
+    );
+    expect(
+      adapter.decodeCoverSource(direct),
+      const GalleryCoverSource.directImage(),
+    );
+
+    final none = adapter.encodeCoverSource(
+      direct,
+      source: const GalleryCoverSource.none(),
+    );
+    expect(
+      adapter.decodeCoverSource(none),
+      const GalleryCoverSource.none(),
+    );
+  });
 }
