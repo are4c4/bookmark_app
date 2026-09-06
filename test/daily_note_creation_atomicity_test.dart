@@ -1,6 +1,7 @@
 import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/daily_note_service.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
+import 'package:bookmark_app/data/object_body_store.dart';
 import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/object_type_defaults_store.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
@@ -19,6 +20,7 @@ void main() {
     final genericStore = GenericDatabaseStore(database);
     final objectStore = ObjectStore(genericStore);
     final defaultsStore = ObjectTypeDefaultsStore(genericStore);
+    final bodyStore = ObjectBodyStore(genericStore);
     final service = DailyNoteService(
       genericStore: genericStore,
       objectStore: objectStore,
@@ -43,6 +45,10 @@ void main() {
         ],
       ),
     );
+    // Keep the Body table outside the failure transaction so this regression
+    // checks that the Body row is rolled back, rather than depending on whether
+    // lazy schema creation itself is also rolled back on a fresh database.
+    await bodyStore.ensureSchema();
     await database.customStatement('''
       CREATE TRIGGER fail_daily_note_registry_insert
       BEFORE INSERT ON daily_note_registry
