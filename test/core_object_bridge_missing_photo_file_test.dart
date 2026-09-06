@@ -73,4 +73,40 @@ void main() {
     expect(links, hasLength(1));
     expect(links.single.read<int>('object_id'), images.single.id);
   });
+
+  test('unrooted relative Photo path remains a compatibility identity', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+
+    const storedPath = 'photos/logical-only.jpg';
+    await database.customStatement(
+      'INSERT INTO photos(path, title) VALUES (?, ?)',
+      const <Object>[storedPath, 'Logical relative image'],
+    );
+    final photoId = (await database.customSelect(
+      'SELECT id FROM photos LIMIT 1',
+    ).getSingle())
+        .read<int>('id');
+
+    final sync = ObjectSyncService(database);
+    addTearDown(sync.dispose);
+    await sync.syncWorkspace(workspaceId);
+
+    final imageType = (await sync.systemObjectStore.getSystemObjectType(
+      workspaceId: workspaceId,
+      systemKey: CoreObjectBridge.photoSystemKey,
+    ))!;
+    final images = await sync.objectStore.listObjects(imageType.id);
+    expect(images, hasLength(1));
+    final fileProperty =
+        imageType.properties.singleWhere((property) => property.name == 'File');
+    expect(images.single.values[fileProperty.id], storedPath);
+    final links = await database.customSelect(
+      'SELECT object_id FROM photo_object_links '
+      'WHERE workspace_id = $workspaceId AND photo_id = $photoId',
+    ).get();
+    expect(links, hasLength(1));
+    expect(links.single.read<int>('object_id'), images.single.id);
+  });
 }
