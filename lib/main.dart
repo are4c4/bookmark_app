@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/material.dart';
 
 import 'data/app_database.dart';
@@ -16,6 +18,17 @@ import 'widgets/global_file_drop_layer.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const BookmarkBootstrap());
+}
+
+void _debugBootstrapFailure(String operation, StackTrace stackTrace) {
+  assert(() {
+    developer.log(
+      operation,
+      name: 'bookmark.bootstrap',
+      stackTrace: stackTrace,
+    );
+    return true;
+  }());
 }
 
 class BookmarkBootstrap extends StatefulWidget {
@@ -102,7 +115,8 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
         _database = database;
         _repository = repository;
       });
-    } catch (error) {
+    } catch (error, stackTrace) {
+      _debugBootstrapFailure('Bookmark bootstrap failed.', stackTrace);
       if (mounted) setState(() => _error = error);
     }
   }
@@ -145,7 +159,8 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
         _switching = false;
         _error = null;
       });
-    } catch (error) {
+    } catch (error, stackTrace) {
+      _debugBootstrapFailure('Profile switch failed.', stackTrace);
       try {
         final fallbackDatabase = AppDatabase(
           databaseName: previous.databaseName,
@@ -164,7 +179,11 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
           _switching = false;
           _error = error;
         });
-      } catch (_) {
+      } catch (_, fallbackStackTrace) {
+        _debugBootstrapFailure(
+          'Profile switch rollback failed.',
+          fallbackStackTrace,
+        );
         if (mounted) {
           setState(() {
             _switching = false;
@@ -388,11 +407,13 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
     final repository = _repository;
     Widget home;
     if (_error != null && repository == null) {
-      home = Scaffold(
+      home = const Scaffold(
         body: Center(
           child: Padding(
-            padding: const EdgeInsets.all(UiTokens.space24),
-            child: Text('起動またはProfile切替に失敗しました:\n$_error'),
+            padding: EdgeInsets.all(UiTokens.space24),
+            child: Text(
+              '起動またはProfile切替に失敗しました。\nアプリを再起動して、もう一度お試しください。',
+            ),
           ),
         ),
       );
