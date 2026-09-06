@@ -150,9 +150,10 @@ class ImageObjectService {
 
   /// Finds or creates one native Image Object for an app-managed asset.
   ///
-  /// [sourceUrl] is the preferred reuse key when present, while an exact
-  /// managed [filePath] remains a stable fallback identity so one stored asset
-  /// cannot fan out into duplicate Image Objects when provenance changes.
+  /// [sourceUrl] is the preferred reuse key when present, while the canonical
+  /// stored-path form of [filePath] remains a stable fallback identity so one
+  /// stored asset cannot fan out into duplicate Image Objects when provenance
+  /// changes or callers use absolute versus profile-relative path forms.
   /// Safe URL-equivalent source variants reuse one Image while query and
   /// fragment distinctions remain identity-significant across different files.
   /// Existing non-empty metadata is preserved so retries or another Weblink
@@ -168,14 +169,7 @@ class ImageObjectService {
     int? pixelWidth,
     int? pixelHeight,
   }) async {
-    final path = filePath.trim();
-    if (path.isEmpty) {
-      throw ArgumentError.value(
-        filePath,
-        'filePath',
-        'Managed Image file path must not be empty.',
-      );
-    }
+    final path = _canonicalStoredPath(filePath);
     final source = _validatedSourceUrl(sourceUrl);
     final width = _validatedDimension(pixelWidth, 'pixelWidth');
     final height = _validatedDimension(pixelHeight, 'pixelHeight');
@@ -189,10 +183,26 @@ class ImageObjectService {
           '${object.values[definition.sourceUrlProperty.id] ?? ''}'.trim();
       final storedFile =
           '${object.values[definition.fileProperty.id] ?? ''}'.trim();
+      final canonicalStoredFile =
+          storedFile.isEmpty ? null : _canonicalStoredPath(storedFile);
       final matchesSource =
           source != null && _sourceUrlsMatch(storedSource, source);
-      final matchesFile = storedFile == path;
+      final matchesFile = canonicalStoredFile == path;
       if (!matchesSource && !matchesFile) continue;
+
+      // Older native Images may still hold an absolute path inside the active
+      // profile/Vault. Converge only that equivalent representation to the same
+      // portable stored identity; an unrelated file selected by source URL is
+      // never retargeted to the caller's new path.
+      if (storedFile.isNotEmpty &&
+          canonicalStoredFile != null &&
+          canonicalStoredFile != storedFile) {
+        await systemObjects.objectStore.setPropertyValue(
+          objectId: object.id,
+          property: definition.fileProperty,
+          value: canonicalStoredFile,
+        );
+      }
       await _setIfMissing(object, definition.fileProperty, path);
       await _setIfMissing(object, definition.sourceUrlProperty, source);
       await _setIfMissing(
@@ -328,6 +338,20 @@ class ImageObjectService {
       if (left[index] != right[index]) return false;
     }
     return true;
+  }
+
+  String _canonicalStoredPath(String path) {
+    final candidate = path.trim();
+    if (candidate.isEmpty) {
+      throw ArgumentError.value(
+        path,
+        'filePath',
+        'Managed Image file path must not be empty.',
+      );
+    }
+    final resolver = systemObjects.database.pathResolver;
+    final resolved = resolver.resolveStoredPath(candidate);
+    return resolver.toStoredPath(resolved);
   }
 
   String? _validatedSourceUrl(String? value) {
