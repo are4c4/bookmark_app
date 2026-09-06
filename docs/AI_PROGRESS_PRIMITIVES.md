@@ -1,97 +1,116 @@
 # AI Progress — Primitive Objects & Media Lane
 
-> Lane D handoff. Read `AGENTS.md`, the active Issue, and `docs/AI_PROGRESS.md` first. Recheck current Object/Storage/Refactor PR ownership before editing shared media/storage code.
+> Lane D handoff. Read `AGENTS.md`, `docs/AI_PROGRESS.md`, the active issues, and current open PR/CI state before editing. Recheck Object/Relation/Database/Storage/Refactor ownership before touching shared hotspots.
 
 ## Lane goal
-Provide built-in primitive ObjectTypes whose irreducible native behavior can be composed by user-defined domain schemas.
+Provide a small set of built-in primitive ObjectTypes whose irreducible native behavior can be composed by user-defined domain schemas without introducing parallel persistence systems.
 
 ## Primary active issues
-- #155 — Weblink reusable Object and legacy Bookmark URL/media convergence.
+- #155 — Weblink reusable Object, URL identity/normalization and legacy Bookmark URL/media convergence.
 - #245 — legacy Photos -> canonical Image Objects.
 - #484 — built-in primitive boundary and canonical File Object.
 - #489 — capability-oriented shared native behavior.
 - #495 — MIME/content-aware import routing to Image or File.
 
 ## Product contract / lane boundary
-Built-in primitive targets are Weblink, Image, File and Tag. Image and File remain distinct ObjectTypes while sharing managed-file/native capability infrastructure. PDF is a File Object with optional MIME/content-derived capabilities, never a separate persistence/storage model.
+Built-in primitive targets are Weblink, Image, File and Tag. Image and File remain distinct ObjectTypes while sharing managed-file/native capability infrastructure. PDF is a File Object with optional MIME/content-derived preview/metadata/page-count/text capabilities, never a separate persistence or storage model.
 
-Lane D owns Weblink identity/enrichment, Image identity/provenance/import/editing and Photo compatibility migration, canonical File product semantics, primitive-native capability services, MIME/content routing and PDF/File preview/metadata/text extraction behavior. Lane C owns generic Database/View configuration; Lane B owns Relation lifecycle integrity; Lane F owns Vault/profile filesystem lifecycle, portability, backup/restore and storage-location switching.
+Lane D owns Weblink identity/enrichment, Image identity/provenance/import/editing and Photo compatibility migration, canonical File product semantics, primitive-native capability services, MIME/content routing and PDF/File preview/metadata/text extraction behavior. Lane C owns generic Database/View settings and host UX. Lane B owns Relation lifecycle integrity. Lane F owns Vault/profile filesystem lifecycle, managed-copy ownership, backup/restore and storage-location switching. Lane E owns search indexing; Lane D only supplies File/PDF derived text capability.
 
-Do not create a second generic managed-file root. Existing profile attachment storage and Storage-owned Vault lifecycle are the coordination boundary for future canonical File managed copying.
+Do not create a second generic managed-file root. Do not infer File byte ownership from a path such as `attachments/`; a Storage-owned explicit managed-copy/ownership contract is required before generic File deletion can remove physical bytes.
 
 ## Current implementation checkpoint — 2026-09-07
 
+### Weblink
+Canonical `WeblinkObjectService` owns URL normalization/reuse and missing-only metadata enrichment. Normalization remains intentionally conservative: scheme/host case, default HTTP(S) ports, dot path segments and empty HTTP(S) root paths are canonicalized while query and fragment content remain identity-significant.
+
+Merged #634 resolves relative OpenGraph/favicon resources against the final redirected response URL while keeping Weblink/Bookmark creation identity anchored to the normalized requested URL. Metadata fetch failures remain best-effort/fail-soft.
+
+### Image / Photo migration
+Canonical Image import, source provenance, geometry, Gallery/detail presentation, edit/restore ownership checks and managed-file delete safety are established. Legacy Photo mirroring remains compatibility-only and continues to use the canonical Image ObjectType.
+
+Merged #652 canonicalizes legacy Photo paths through the active profile/Vault path resolver during Photo -> Image promotion. Managed absolute legacy paths therefore converge with relative canonical Image identity while external absolute paths remain external.
+
+Merged #675 (`08d46d599c717b57f608159c5b106e836034e911`) extends the same contract to native Image creation/reimport:
+- new profile-managed Images persist portable profile-relative File paths;
+- absolute and relative representations of the same managed file reuse one Image Object;
+- older non-empty absolute Image File values are not opportunistically rewritten but still match relative reimports;
+- external absolute references remain absolute;
+- Image Object identity, Source URL identity, editing/deletion ownership and Relation behavior remain unchanged.
+
+#675 CI #2114 passed maintainability guardrails, Drift generation, `flutter analyze` and full `flutter test` before squash merge.
+
 ### Canonical File / shared file-backed foundation
-Merged PR #512 (`29cc878f8b13b4795506ca6a3d28fd192780b618`) established:
-- canonical system File ObjectType identity and metadata;
-- portable stored-path normalization through `ProfilePathResolver`;
-- deterministic managed File reimport reuse;
-- shared read-only `ManagedFileResolver` used by File and Image presentation;
-- `FileManagedResourceResolver` for canonical File file-backed capability;
-- `PrimitiveFileImportClassifier` with precedence `content signature > meaningful MIME > extension fallback`;
-- content-aware routing of supported JPEG/PNG/GIF/WebP/HEIC/HEIF to Image and PDF/ZIP/unknown content to File;
-- diagnostics that do not log raw user paths.
+Canonical system File Object identity and metadata are implemented through `FileObjectService`; title-only generic creation is rejected and managed-path reimport is deterministic. `FileManagedResourceResolver` exposes existing-file metadata through the shared path resolver. `CanonicalFileActionService` provides open/reveal behavior and merged #641 adds export/copy-out behavior without rewriting canonical File identity.
 
-PR #528 (`Add exclusive Image/File primitive import router`) is merged. `PrimitiveObjectImportService` now validates/classifies each source and delegates exactly once to one injected canonical Image or File importer; selected-importer failure never falls through to the other primitive. Mixed multi-file actions preserve source order and one-delegation-per-source semantics.
+Merged #671 (`26600dbafb119b35f5e33ceb48217a8535603714`) fixes the current destructive-safety boundary with production-path regressions: deleting a canonical File Object removes the Object but preserves physical bytes, including paths under the historical `attachments/` directory, until Storage supplies an explicit ownership grant. External File references are also preserved. CI #2105 passed guardrails, Drift generation, analyze and full tests.
 
-The canonical Image path has also gained content-first classified import support, so image bytes with misleading filename extensions can still enter the canonical Image identity/provenance path without creating both Image and File Objects.
+Active #679 (`feature/primitives-canonical-stored-path-capability-489`, head `5dddb2704a06091d63112fd1f31ee86f40aa2768`) centralizes portable path identity:
+- `ProfilePathResolver.canonicalStoredPath(...)` composes stored-path resolution and portable re-storage once;
+- absolute/relative profile-managed paths converge;
+- external absolute paths remain absolute;
+- `ManagedFileResolver.canonicalStoredPath(...)` exposes the contract through the shared file-backed capability facade;
+- existing `toStoredPath(...)` remains for callers already holding a resolved path.
+
+#679 is infrastructure-only and does not move/copy/delete bytes or change Object identity. CI #2126 is running at this handoff.
+
+### MIME/content import routing
+`PrimitiveObjectImportService` validates each source, classifies it once and invokes exactly one canonical Image or File importer; selected-importer failure never falls through to the other primitive.
+
+Merged #665 (`7b34fbd9be85b5586626b36103339b5b45ec8da0`) hardens the content-first classifier so misleading image filenames do not redirect known non-Image or unsupported-Image content into Image. Strong signatures now cover common audio/video/archive containers (WAV/AVI/Ogg/FLAC/MP3, MP4/QuickTime/M4V/M4A/3GPP, ZIP/gzip/7z/RAR) plus unsupported AVIF/BMP/TIFF/ICO, all routing to File. Supported JPEG/PNG/WebP/GIF/HEIC/HEIF remain Image. A router regression proves a `.png`-named MP4 calls File exactly once and never Image. CI #2097 passed guardrails, Drift generation, analyze and full tests.
+
+Known follow-up under #495: when content probing succeeds but no known signature is recognized, the current classifier may still use a supported image extension as fallback. All currently supported Image formats have positive signatures, so a future small hardening slice should treat non-empty unknown probe bytes conservatively as File rather than trusting `.jpg/.png/...`.
 
 ### PDF-on-File optional capabilities
-Merged PR #557 (`Add PDF metadata capability on canonical File`) exposes content-verified PDF metadata through `CanonicalFilePdfMetadataService`; it reuses the existing PDF metadata reader while preserving canonical File identity.
+PDF remains canonical File throughout. Current production-capable services include:
+- `CanonicalFilePdfMetadataService` for content-verified metadata;
+- `CanonicalFilePdfPreviewService` for transient macOS Quick Look PNG preview bytes;
+- `CanonicalFilePdfTextService` for optional macOS Spotlight text extraction;
+- `CanonicalFilePdfPageCountService`, merged in #645, for optional positive page count;
+- `CanonicalFilePdfSearchIndexer`, which projects extracted text into Search-owned derived text/FTS without creating PDF persistence;
+- canonical File open/reveal/export behavior.
 
-PR #609 (`Expose canonical File PDF extracted-text capability`) is open on `feature/primitives-pdf-text-489`. It was rebased onto the latest main as commit `c24eb77a78c6e497a83f8d99dc197cc89f164212`; refreshed Flutter CI is running. The service:
-- resolves the canonical managed File first;
-- reclassifies with the content-first classifier before enabling PDF behavior;
-- returns trimmed derived text keyed by canonical File Object id;
-- treats blank/unsupported extraction as unavailable;
-- uses macOS Spotlight `kMDItemTextContent` as the production reader;
-- does not write a search index or introduce PDF persistence.
+All PDF services resolve the managed File and reclassify content before enabling PDF-specific behavior. Preview/text/page count fail soft when unavailable and do not persist a separate PDF model.
 
-### Current run — transient PDF preview capability
-Active branch: `feature/primitives-pdf-preview-bytes-489`
-Latest code/test commit before this handoff update: `a4758d10bb47808d5a84ea3f276941e4e2108203`.
-
-Implemented `CanonicalFilePdfPreviewService`:
-- resolves a canonical managed File through `FileManagedResourceResolver`;
-- verifies `application/pdf` with the shared content-first classifier before native preview work;
-- derives a transient PNG preview on macOS through `/usr/bin/qlmanage`;
-- returns immutable PNG bytes instead of persisting a preview file or creating a PDF Object/storage model;
-- creates only an OS-temp output directory and removes it in `finally` on success/failure;
-- treats unsupported platform, renderer failure, empty output and ambiguous Quick Look output as unavailable;
-- does not log raw user file paths or exception text.
-
-Focused tests added in `test/canonical_file_pdf_preview_service_test.dart` cover:
-- disguised PDF bytes exposing preview despite generic stored MIME;
-- conflicting PNG content with stored PDF MIME never invoking the PDF renderer;
-- empty native preview being treated as unavailable.
-
-This slice touches only a primitive capability service, its focused test and this handoff. It does not touch shared UI hotspots, Relation internals, Vault switching/storage roots, `app_database.dart`, or generic Database/View UX.
+### Tag
+`TagObjectBridge` keeps the built-in `tag` system ObjectType on canonical Object storage. Parent hierarchy is a normal self-Relation written through `RelationMutationService`; there is no parallel tag-edge engine. Legacy Tag ids/groups remain compatibility metadata. Do not invent native Tag name-based identity/uniqueness until the product rule is explicit.
 
 ## Validation / CI
-- #512 and merged predecessor slices passed maintainability guardrails, Drift generation, `flutter analyze`, and full `flutter test` before merge.
-- #609 refreshed-head Flutter CI is currently running.
-- The PDF preview branch requires Flutter CI after PR creation; local Flutter/Dart execution is unavailable in the connector-only environment used for this run.
+Recent Lane D verification:
+- #634 Weblink redirect metadata: merged after green full CI.
+- #641 File export: merged after green full CI.
+- #645 PDF page count: merged after green full CI.
+- #652 Photo path canonicalization: merged after green full CI.
+- #665 import signature routing: CI #2097 green, merged as `7b34fbd9...`.
+- #671 File byte-preservation deletion boundary: CI #2105 green, merged as `26600dba...`.
+- #675 Image stored-path identity: CI #2114 green, merged as `08d46d59...`.
+- #679 shared canonical stored-path capability: CI #2126 running at this handoff.
 
 ## Hotspot / concurrency state
-No shared hotspot lease is required for the active PDF capability slices. Open Lane A/C/F/G PRs own their respective service/UI/schema/storage work; this run intentionally stayed in primitive service/domain/test files. File managed-copy composition remains sequenced behind the Storage-owned managed-copy/Vault boundary rather than inventing duplicate filesystem infrastructure.
+No shared hotspot lease was used for the Lane D work above. Changes stayed in primitive data/service/test files and this handoff. `generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, `main.dart` and Relation internals were deliberately avoided while other lanes are active.
+
+Do not add a File `managedFile` generic create-mode by itself: `GenericDatabaseCreateMode` is consumed by `generic_database_page.dart` presentation switches, so end-to-end generic File import UX must coordinate with Lane C and the Storage-owned managed-copy boundary rather than partially changing the UI contract.
 
 ## Exact next actions
-1. Open the PDF preview PR and require green Flutter CI; fix only failures caused by this slice.
-2. Merge #609 after refreshed CI is green and mergeability is restored; do not block independent primitive work on its CI.
-3. After preview/text capabilities are stable, compose them into a File presentation host only when a patch-sized host lease is available; generic View configuration remains Lane C.
-4. Coordinate the Storage-owned canonical managed-copy callback for generic File imports, reusing/evolving the existing profile/Vault attachment boundary rather than adding another generic file root.
-5. Compose `PrimitiveObjectImportService` with the canonical Image importer and Storage-backed File managed-copy/create callback; add duplicate/reimport/rollback coverage proving one user action creates exactly one primitive.
-6. Continue #245 Image real-host parity / legacy Photo retirement and #155 Weblink legacy retirement only where replacement parity is proven and hotspot ownership is clear.
-7. Evaluate Tag built-in quick-create/default semantics as an independent Lane D slice if File work is blocked; keep hierarchy edges on canonical Relation APIs.
+1. Finish #679: require green guardrails/Drift/analyze/full tests; merge only the verified head.
+2. Adopt `ProfilePathResolver.canonicalStoredPath(...)` in `FileObjectService` and `ImageObjectService` in patch-sized follow-ups, removing their duplicate `resolveStoredPath -> toStoredPath` composition while preserving concrete primitive identity.
+3. Harden #495 unknown-probed-content routing: if non-empty bytes have no recognized supported Image signature, route conservatively to File instead of trusting an image extension; keep no-content/MIME fallback behavior for unavailable probes.
+4. Strengthen `FileManagedResourceResolver` so native File/PDF capabilities fail closed unless the ObjectType is the canonical system File type; today its low-level resolver expects callers to verify this boundary.
+5. Coordinate with Lane F on a canonical File managed-copy + explicit ownership seam. Only after that, compose `PrimitiveObjectImportService` with the Storage-backed File importer and enable end-to-end generic File import/delete lifecycle.
+6. Coordinate with Lane C for the generic File import/create affordance and File presentation host; avoid unilateral edits to `generic_database_page.dart`.
+7. Continue #245 real-host Image parity / legacy Photo retirement and #155 legacy Weblink retirement only where replacement parity is proven and hotspot ownership is clear.
+8. Keep Tag hierarchy on canonical Relation APIs; defer native Tag uniqueness/quick-create semantics until explicitly defined.
 
 ## Cross-lane dependencies / blockers
-- Lane F must own canonical managed-copy/Vault filesystem lifecycle before Lane D wires generic File import copying end-to-end.
-- Lane E owns indexing of File/PDF derived text; Lane D only exposes the extraction capability.
-- Lane C owns generic Database/View presentation settings and host UX; Lane D may supply primitive-specific preview/open/reveal behavior through capability services.
-- Lane B owns Relation integrity for any new primitive-producing Relation workflows.
+- Lane F: canonical File managed-copy location, ownership grant, delete/move semantics, Vault portability and recovery.
+- Lane C: generic Database/View presentation and File import/create host UX.
+- Lane B: Relation lifecycle correctness for any primitive-producing Relation workflow.
+- Lane E: Search owns index persistence/reconciliation; Lane D owns PDF text extraction only.
+
+These dependencies block only their specific integration surfaces. Independent primitive service/domain/test slices remain available.
 
 ## Stop reason
-This run should stop only if execution/tool limits are reached or no independent safe Lane D slice remains. CI pending by itself is not a stop condition.
+Stop only for an actual execution/tool limit, unresolved safety/ownership ambiguity, or when no independent safe Lane D slice remains. Pending CI alone is not a stop condition.
 
 ## Handoff checklist
-Record active Issue, branch/PR/commit, tests, native capability/storage dependencies, hotspot ownership, exact next actions, and the actual stop reason.
+Record active Issue, branch/PR/commit, tests/CI, native capability/storage dependencies, hotspot ownership, exact next actions and actual stop reason.
