@@ -34,14 +34,17 @@ class ObjectPropertyDeleteImpact {
     required this.property,
     required this.objectsWithStoredValue,
     required this.viewReferences,
+    this.pairedRelationProperty,
   });
 
   final ObjectPropertyDefinition property;
   final int objectsWithStoredValue;
   final List<DatabaseViewPropertyReference> viewReferences;
+  final ObjectPropertyDefinition? pairedRelationProperty;
 
   bool get hasStoredValues => objectsWithStoredValue > 0;
   bool get isReferencedByViews => viewReferences.isNotEmpty;
+  bool get hasPairedRelationImpact => pairedRelationProperty != null;
 }
 
 /// Schema-UX helpers that preserve stable Property identity and expose impact
@@ -53,7 +56,9 @@ class ObjectPropertyDeleteImpact {
 /// Relation renames delegate to the canonical Relation mutation facade so
 /// bidirectional metadata is validated before schema changes are written.
 /// Delete is intentionally inspection-only here: callers must surface this
-/// impact before choosing a canonical deletion/archive path.
+/// impact before choosing a canonical deletion/archive path. Managed
+/// bidirectional Relations also surface their inverse Property because the
+/// canonical Relation delete lifecycle removes both schema Properties.
 class DatabaseViewPropertySchemaService {
   const DatabaseViewPropertySchemaService({
     required this.objectStore,
@@ -69,12 +74,14 @@ class DatabaseViewPropertySchemaService {
   static const _groupAdapter = DatabaseViewGroupAdapter();
   static const _galleryAdapter = DatabaseViewGalleryAdapter();
 
+  BidirectionalRelationStore get _bidirectionalStore => BidirectionalRelationStore(
+        genericStore: genericStore,
+        objectStore: objectStore,
+      );
+
   RelationMutationService get _relationMutations => RelationMutationService(
         objectStore: objectStore,
-        bidirectionalStore: BidirectionalRelationStore(
-          genericStore: genericStore,
-          objectStore: objectStore,
-        ),
+        bidirectionalStore: _bidirectionalStore,
         genericStore: genericStore,
       );
 
@@ -130,6 +137,21 @@ class DatabaseViewPropertySchemaService {
         .where((object) => object.values.containsKey(property.id))
         .length;
 
+    ObjectPropertyDefinition? pairedRelationProperty;
+    if (property.isRelation) {
+      final hasPairMetadata = property.config['bidirectional'] == true ||
+          property.config['inversePropertyId'] != null;
+      if (hasPairMetadata) {
+        final pair = await _bidirectionalStore.pairFor(property);
+        if (pair == null) {
+          throw StateError(
+            'Relation Property ${property.name} has inconsistent bidirectional metadata.',
+          );
+        }
+        pairedRelationProperty = pair.inverseProperty;
+      }
+    }
+
     final views = await viewStore.listViews(
       workspaceId: type.workspaceId,
       databaseKey: 'custom:$objectTypeId',
@@ -175,6 +197,7 @@ class DatabaseViewPropertySchemaService {
       viewReferences: List<DatabaseViewPropertyReference>.unmodifiable(
         references,
       ),
+      pairedRelationProperty: pairedRelationProperty,
     );
   }
 
