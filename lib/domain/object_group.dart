@@ -1,7 +1,3 @@
-enum ObjectGroupMode {
-  property,
-}
-
 class ObjectGroupRule {
   const ObjectGroupRule({
     required this.propertyId,
