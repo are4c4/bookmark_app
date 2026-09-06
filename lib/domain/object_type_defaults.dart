@@ -65,42 +65,6 @@ class ObjectTypeDefaults {
       };
 }
 
-class ResolvedObjectTypeDefaults {
-  const ResolvedObjectTypeDefaults({
-    required this.visiblePropertyIds,
-    required this.propertyOrder,
-    required this.openMode,
-  });
-
-  final List<int> visiblePropertyIds;
-  final List<int> propertyOrder;
-  final ObjectOpenMode openMode;
-}
-
-class ObjectTypeDefaultsResolver {
-  const ObjectTypeDefaultsResolver();
-
-  ResolvedObjectTypeDefaults resolve({
-    required ObjectTypeDefaults appFallback,
-    ObjectTypeDefaults? objectTypeDefaults,
-  }) {
-    final type = objectTypeDefaults ?? const ObjectTypeDefaults();
-    final fallbackVisible = appFallback.visiblePropertyIds ?? const <int>[];
-    final fallbackOrder = appFallback.propertyOrder ?? const <int>[];
-    final fallbackOpenMode = appFallback.openMode ?? ObjectOpenMode.sidePeek;
-
-    return ResolvedObjectTypeDefaults(
-      visiblePropertyIds: List<int>.unmodifiable(
-        type.visiblePropertyIds ?? fallbackVisible,
-      ),
-      propertyOrder: List<int>.unmodifiable(
-        type.propertyOrder ?? fallbackOrder,
-      ),
-      openMode: type.openMode ?? fallbackOpenMode,
-    );
-  }
-}
-
 extension _FirstOrNull<T> on Iterable<T> {
   T? get firstOrNull {
     final iterator = this.iterator;
