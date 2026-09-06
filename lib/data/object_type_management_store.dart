@@ -112,17 +112,32 @@ class ObjectTypeManagementStore {
       }
 
       if (sourceDefaults != null) {
-        List<int>? remapPropertyIds(List<int>? ids) => ids
-            ?.map((id) => duplicatedPropertyIds[id])
-            .whereType<int>()
-            .toList(growable: false);
+        List<int>? remapPropertyIds(List<int>? ids, String fieldName) {
+          if (ids == null) return null;
+          final remapped = <int>[];
+          for (final id in ids) {
+            final duplicatedPropertyId = duplicatedPropertyIds[id];
+            if (duplicatedPropertyId == null) {
+              throw StateError(
+                'ObjectType defaults $fieldName references missing Property $id.',
+              );
+            }
+            remapped.add(duplicatedPropertyId);
+          }
+          return remapped;
+        }
 
         await defaultsStore.write(
           objectTypeId: duplicatedId,
           defaults: ObjectTypeDefaults(
-            visiblePropertyIds:
-                remapPropertyIds(sourceDefaults.visiblePropertyIds),
-            propertyOrder: remapPropertyIds(sourceDefaults.propertyOrder),
+            visiblePropertyIds: remapPropertyIds(
+              sourceDefaults.visiblePropertyIds,
+              'visiblePropertyIds',
+            ),
+            propertyOrder: remapPropertyIds(
+              sourceDefaults.propertyOrder,
+              'propertyOrder',
+            ),
             openMode: sourceDefaults.openMode,
             bodyTemplate: sourceDefaults.bodyTemplate,
           ),
