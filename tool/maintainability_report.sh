@@ -91,16 +91,26 @@ scan_presentation_database_reachthrough() {
 
 scan_legacy_presentation_shim_imports() {
   local shim_names='database_page_toolbar|database_view_tabs|database_create_tiles|resizable_detail_pane|detail_property_row'
-  local import_pattern="^[[:space:]]*import[[:space:]]+['\"]((package:bookmark_app/widgets/|(\.\./)+widgets/)?)((${shim_names}))\\.dart['\"]"
+  local qualified_pattern="^[[:space:]]*import[[:space:]]+['\"](package:bookmark_app/widgets/|(\.\./)+widgets/)((${shim_names}))\\.dart['\"]"
+  local bare_pattern="^[[:space:]]*import[[:space:]]+['\"](\\./)?((${shim_names}))\\.dart['\"]"
 
   for root in lib test; do
     [[ -d "$root" ]] || continue
     find "$root" -type f -name '*.dart' -print | while IFS= read -r file; do
-      count="$(
-        { grep -E "$import_pattern" "$file" 2>/dev/null || true; } |
+      qualified_count="$(
+        { grep -E "$qualified_pattern" "$file" 2>/dev/null || true; } |
           wc -l |
           tr -d ' '
       )"
+      bare_count=0
+      if [[ "$file" == lib/widgets/* ]]; then
+        bare_count="$(
+          { grep -E "$bare_pattern" "$file" 2>/dev/null || true; } |
+            wc -l |
+            tr -d ' '
+        )"
+      fi
+      count=$((qualified_count + bare_count))
       if [[ "$count" -gt 0 ]]; then
         printf '%08d\t%s\n' "$count" "$file"
       fi
