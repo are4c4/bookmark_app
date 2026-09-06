@@ -61,9 +61,9 @@ void main() {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
     final objectStore = ObjectStore(GenericDatabaseStore(database));
-    int? workspaceId;
-    int? objectTypeId;
-    int? objectId;
+    int? capturedWorkspaceId;
+    int? capturedObjectTypeId;
+    int? capturedObjectId;
     String? resolvedPath;
 
     await tester.pumpWidget(
@@ -75,13 +75,12 @@ void main() {
           objectTypeId: 6,
           objectId: 12,
           visualResolver: (
-              {required workspaceId,
-              required objectTypeId,
-              required objectId}) async {
-            // Assign through local aliases so the callback contract itself is
-            // covered without opening a real database/file resolution chain.
-            // ignore: parameter_assignments
-            workspaceId = workspaceId;
+              {required int workspaceId,
+              required int objectTypeId,
+              required int objectId}) async {
+            capturedWorkspaceId = workspaceId;
+            capturedObjectTypeId = objectTypeId;
+            capturedObjectId = objectId;
             return const SystemObjectListMediaResolution(
               kind: SystemObjectListMediaKind.image,
               filePath: '/managed/example.png',
@@ -96,44 +95,10 @@ void main() {
     );
     await tester.pump();
 
-    // Re-run with non-shadowing captures to verify all ids explicitly.
-    await tester.pumpWidget(
-      host(
-        SystemObjectListMedia(
-          database: database,
-          objectStore: objectStore,
-          workspaceId: 4,
-          objectTypeId: 6,
-          objectId: 12,
-          visualResolver: (
-              {required int workspaceId,
-              required int objectTypeId,
-              required int objectId}) async {
-            // Store the forwarded canonical identity.
-            // ignore: unnecessary_statements
-            workspaceId;
-            return SystemObjectListMediaResolution(
-              kind: SystemObjectListMediaKind.image,
-              filePath: '$workspaceId:$objectTypeId:$objectId',
-            );
-          },
-          imageBuilder: (context, filePath, errorFallback) {
-            final parts = filePath.split(':');
-            workspaceId = int.parse(parts[0]);
-            objectTypeId = int.parse(parts[1]);
-            objectId = int.parse(parts[2]);
-            resolvedPath = filePath;
-            return const ColoredBox(color: Colors.black12);
-          },
-        ),
-      ),
-    );
-    await tester.pump();
-
-    expect(workspaceId, 4);
-    expect(objectTypeId, 6);
-    expect(objectId, 12);
-    expect(resolvedPath, '4:6:12');
+    expect(capturedWorkspaceId, 4);
+    expect(capturedObjectTypeId, 6);
+    expect(capturedObjectId, 12);
+    expect(resolvedPath, '/managed/example.png');
     expect(
       find.byKey(const ValueKey('system-object-list-media-image-12')),
       findsOneWidget,
