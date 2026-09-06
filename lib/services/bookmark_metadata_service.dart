@@ -56,9 +56,10 @@ class BookmarkMetadataService {
             },
           )
           .timeout(const Duration(seconds: 10));
+      final resourceUri = response.request?.url ?? uri;
 
       if (response.statusCode < 200 || response.statusCode >= 400) {
-        return _fallback(uri);
+        return _fallback(resourceUri);
       }
 
       final document = html_parser.parse(response.body);
@@ -90,21 +91,23 @@ class BookmarkMetadataService {
       );
 
       return BookmarkMetadata(
-        url: uri.toString(),
+        url: resourceUri.toString(),
         title: _firstNonEmpty([
               ogTitle,
               twitterTitle,
               htmlTitle,
             ]) ??
-            _fallbackTitle(uri),
+            _fallbackTitle(resourceUri),
         description: _firstNonEmpty([
           ogDescription,
           metaDescription,
         ]),
-        thumbnail: rawImage == null ? null : uri.resolve(rawImage).toString(),
+        thumbnail:
+            rawImage == null ? null : resourceUri.resolve(rawImage).toString(),
         siteName: siteName,
-        faviconUrl:
-            faviconHref == null ? null : uri.resolve(faviconHref).toString(),
+        faviconUrl: faviconHref == null
+            ? null
+            : resourceUri.resolve(faviconHref).toString(),
         contentType: _contentType(response.headers['content-type']),
         publishedDate: publishedDate,
       );
