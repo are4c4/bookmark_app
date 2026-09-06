@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import '../../../../data/app_database.dart';
 import '../../../../data/object_store.dart';
 import '../../../../services/image_visual_resolver.dart';
-import 'object_image_crop_pan_zoom_selector.dart';
 import 'object_image_crop_selector.dart';
 import 'object_image_detail_preview.dart';
 
@@ -170,18 +169,6 @@ class _ObjectImageFreeCropDialogState extends State<ObjectImageFreeCropDialog> {
           ),
         );
 
-    final selector = _moveImageMode
-        ? ObjectImageCropPanZoomSelector(
-            initialRect: _selection,
-            onChanged: (value) => _selection = value,
-            child: image,
-          )
-        : ObjectImageCropSelector(
-            initialRect: _selection,
-            onChanged: (value) => _selection = value,
-            child: image,
-          );
-
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -214,7 +201,14 @@ class _ObjectImageFreeCropDialogState extends State<ObjectImageFreeCropDialog> {
           key: const ValueKey('object-image-free-crop-surface'),
           width: width,
           height: height,
-          child: selector,
+          child: ObjectImageCropSelector(
+            initialRect: _selection,
+            mode: _moveImageMode
+                ? ObjectImageCropInteractionMode.panZoomImage
+                : ObjectImageCropInteractionMode.adjustFrame,
+            onChanged: (value) => _selection = value,
+            child: image,
+          ),
         ),
       ],
     );
