@@ -49,4 +49,46 @@ void main() {
       throwsFormatException,
     );
   });
+
+  test('duplicate block identities are rejected on load and persistence', () {
+    expect(
+      () => ObjectBodyDocument.fromJson(<String, dynamic>{
+        'blocks': <Map<String, dynamic>>[
+          <String, dynamic>{'id': 'same', 'type': 'paragraph'},
+          <String, dynamic>{'id': 'same', 'type': 'futureWidget'},
+        ],
+      }),
+      throwsFormatException,
+    );
+
+    const document = ObjectBodyDocument(
+      blocks: <ObjectBodyBlock>[
+        ObjectBodyBlock(id: 'same', type: 'paragraph'),
+        ObjectBodyBlock(id: 'same', type: 'futureWidget'),
+      ],
+    );
+    expect(document.toJson, throwsFormatException);
+  });
+
+  test('direct block values cannot serialize lossy id or type whitespace', () {
+    const blankId = ObjectBodyDocument(
+      blocks: <ObjectBodyBlock>[
+        ObjectBodyBlock(id: '   ', type: 'paragraph'),
+      ],
+    );
+    const blankType = ObjectBodyDocument(
+      blocks: <ObjectBodyBlock>[
+        ObjectBodyBlock(id: 'b1', type: '   '),
+      ],
+    );
+    const paddedIdentity = ObjectBodyDocument(
+      blocks: <ObjectBodyBlock>[
+        ObjectBodyBlock(id: ' b1 ', type: 'paragraph'),
+      ],
+    );
+
+    expect(blankId.toJson, throwsFormatException);
+    expect(blankType.toJson, throwsFormatException);
+    expect(paddedIdentity.toJson, throwsFormatException);
+  });
 }

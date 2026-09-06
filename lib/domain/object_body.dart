@@ -18,21 +18,26 @@ class ObjectBodyDocument {
     if (value is! Map) return const ObjectBodyDocument();
     final rawVersion = value['version'];
     final rawBlocks = value['blocks'];
+    final blocks = rawBlocks is List
+        ? rawBlocks
+            .map(ObjectBodyBlock.fromJson)
+            .whereType<ObjectBodyBlock>()
+            .toList(growable: false)
+        : const <ObjectBodyBlock>[];
+    _validateBlockStructure(blocks);
     return ObjectBodyDocument(
       version: rawVersion is int ? rawVersion : currentVersion,
-      blocks: rawBlocks is List
-          ? rawBlocks
-              .map(ObjectBodyBlock.fromJson)
-              .whereType<ObjectBodyBlock>()
-              .toList(growable: false)
-          : const <ObjectBodyBlock>[],
+      blocks: blocks,
     );
   }
 
-  Map<String, dynamic> toJson() => <String, dynamic>{
-        'version': version,
-        'blocks': blocks.map((block) => block.toJson()).toList(growable: false),
-      };
+  Map<String, dynamic> toJson() {
+    _validateBlockStructure(blocks);
+    return <String, dynamic>{
+      'version': version,
+      'blocks': blocks.map((block) => block.toJson()).toList(growable: false),
+    };
+  }
 
   bool get isEmpty => blocks.isEmpty;
 
@@ -44,6 +49,29 @@ class ObjectBodyDocument {
       version: version ?? this.version,
       blocks: blocks ?? this.blocks,
     );
+  }
+
+  static void _validateBlockStructure(List<ObjectBodyBlock> blocks) {
+    final ids = <String>{};
+    for (final block in blocks) {
+      final normalizedId = block.id.trim();
+      final normalizedType = block.type.trim();
+      if (normalizedId.isEmpty || normalizedType.isEmpty) {
+        throw const FormatException(
+          'Object body block requires non-empty id and type.',
+        );
+      }
+      if (normalizedId != block.id || normalizedType != block.type) {
+        throw const FormatException(
+          'Object body block id and type must already be normalized.',
+        );
+      }
+      if (!ids.add(normalizedId)) {
+        throw FormatException(
+          'Object body block id $normalizedId is duplicated.',
+        );
+      }
+    }
   }
 }
 
