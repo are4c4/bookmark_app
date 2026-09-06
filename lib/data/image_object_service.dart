@@ -126,11 +126,14 @@ class ImageObjectService {
 
   /// Finds or creates one native Image Object for an app-managed asset.
   ///
-  /// [sourceUrl] is the preferred reuse key when present. Otherwise [filePath]
-  /// is used. Safe URL-equivalent source variants reuse one Image while query
-  /// and fragment distinctions remain identity-significant. Existing non-empty
-  /// metadata is preserved so retries or another Weblink cannot silently
-  /// replace the managed file already owned by an Image.
+  /// [sourceUrl] is the preferred reuse key when present, while an exact
+  /// managed [filePath] remains a stable fallback identity so one stored asset
+  /// cannot fan out into duplicate Image Objects when provenance changes.
+  /// Safe URL-equivalent source variants reuse one Image while query and
+  /// fragment distinctions remain identity-significant across different files.
+  /// Existing non-empty metadata is preserved so retries or another Weblink
+  /// cannot silently replace the managed file or provenance already owned by
+  /// an Image.
   Future<AppObject> findOrCreateManaged({
     required int workspaceId,
     required String filePath,
@@ -162,10 +165,10 @@ class ImageObjectService {
           '${object.values[definition.sourceUrlProperty.id] ?? ''}'.trim();
       final storedFile =
           '${object.values[definition.fileProperty.id] ?? ''}'.trim();
-      final matches = source != null
-          ? _sourceUrlsMatch(storedSource, source)
-          : storedFile == path;
-      if (!matches) continue;
+      final matchesSource =
+          source != null && _sourceUrlsMatch(storedSource, source);
+      final matchesFile = storedFile == path;
+      if (!matchesSource && !matchesFile) continue;
       await _setIfMissing(object, definition.fileProperty, path);
       await _setIfMissing(object, definition.sourceUrlProperty, source);
       await _setIfMissing(
