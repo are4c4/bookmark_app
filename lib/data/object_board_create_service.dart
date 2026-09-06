@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import '../domain/object_group.dart';
 import '../domain/object_model.dart';
 import 'object_board_move_service.dart';
@@ -99,8 +101,25 @@ class ObjectBoardCreateService {
     } catch (_) {
       // This Object was created by this operation and has not been exposed to
       // the caller yet. Roll it back if the grouped preset cannot be written.
-      await _objectStore.deleteObject(objectId);
+      // Cleanup is best-effort: a secondary delete failure must not replace the
+      // original preset-write failure reported to the caller.
+      try {
+        await _objectStore.deleteObject(objectId);
+      } catch (_, stackTrace) {
+        _debugRollbackCleanupFailure(stackTrace);
+      }
       rethrow;
     }
+  }
+
+  void _debugRollbackCleanupFailure(StackTrace stackTrace) {
+    assert(() {
+      developer.log(
+        'Board Object rollback cleanup failed.',
+        name: 'bookmark_app.object_board_create',
+        stackTrace: stackTrace,
+      );
+      return true;
+    }());
   }
 }
