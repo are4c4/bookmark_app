@@ -1,7 +1,7 @@
+import 'package:bookmark_app/features/database/presentation/widgets/database_create_tiles.dart';
 import 'package:bookmark_app/features/database/presentation/widgets/database_page_toolbar.dart';
-import 'package:bookmark_app/widgets/database_create_tiles.dart';
-import 'package:bookmark_app/widgets/detail_property_row.dart';
-import 'package:bookmark_app/widgets/resizable_detail_pane.dart';
+import 'package:bookmark_app/features/database/presentation/widgets/detail_property_row.dart';
+import 'package:bookmark_app/features/database/presentation/widgets/resizable_detail_pane.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

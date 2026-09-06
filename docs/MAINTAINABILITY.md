@@ -52,21 +52,37 @@ bash tool/maintainability_report.sh
 Use `--top N` to change the number of files shown. The report includes:
 - total Dart LOC under `lib/` and `test/`;
 - the largest Dart files by LOC;
-- direct `workspaceStore.database` reach-through occurrences under `lib/views/` and `lib/widgets/`, grouped by file.
+- direct `workspaceStore.database` reach-through occurrences under `lib/views/` and `lib/widgets/`, grouped by file;
+- imports of the five temporary Database-presentation re-export shims under `lib/widgets/`, grouped by caller file.
 
 The presentation/database metric is intentionally narrow. It does not claim every existing occurrence is currently removable; it makes composition debt visible so responsibility-moving PRs can show an actual reduction instead of only adding another wrapper.
 
-The report remains non-blocking by default so existing debt does not make unrelated local runs fail. For regression-only validation, a caller may provide the accepted current ceiling explicitly:
+The temporary-shim metric tracks these legacy import surfaces:
+- `lib/widgets/database_page_toolbar.dart`;
+- `lib/widgets/database_view_tabs.dart`;
+- `lib/widgets/database_create_tiles.dart`;
+- `lib/widgets/resizable_detail_pane.dart`;
+- `lib/widgets/detail_property_row.dart`.
+
+Their canonical implementations live under `lib/features/database/presentation/widgets/`. Existing callers remain temporarily valid because several are large legacy/shared hosts that should not be reconstructed merely to change one import. The metric therefore prevents **new** shim dependencies while allowing the current migration debt to ratchet down naturally.
+
+The report remains non-blocking by default so existing debt does not make unrelated local runs fail. For regression-only validation, callers may provide accepted ceilings explicitly:
 
 ```bash
-bash tool/maintainability_report.sh --max-boundary-refs 12
+bash tool/maintainability_report.sh \
+  --max-boundary-refs 12 \
+  --max-legacy-shim-imports 19
 ```
 
-With `--max-boundary-refs N`, the command exits with status 1 only when the measured presentation `workspaceStore.database` reference count exceeds `N`. The threshold is deliberately caller-supplied by the script so it can ratchet downward as Refactor slices remove debt.
+`--max-boundary-refs N` exits with status 1 only when measured presentation `workspaceStore.database` references exceed `N`.
 
-Flutter CI now invokes the report with the accepted ceiling of **12**. This converts the metric into a regression guard without requiring existing presentation/database debt to be eliminated immediately. When Refactor removes reach-through references, lower the CI ceiling in the same or a follow-up focused PR so the improvement cannot silently regress.
+`--max-legacy-shim-imports N` exits with status 1 only when imports of the five legacy Database-presentation shims exceed `N`. It counts package imports through `package:bookmark_app/widgets/...`, relative imports through `../widgets/...`, and same-directory imports within `lib/widgets/`; canonical `features/database/presentation/widgets/...` imports are not counted.
 
-`tool/maintainability_report_test.sh` exercises both the passing ceiling and regression-failure path against an isolated fixture.
+The initial repository baseline was **22** legacy shim imports. Refactor #474 immediately migrated the three test-only imports in `test/database_interaction_widgets_test.dart` to canonical feature imports, so the accepted ceiling is now **19** without touching a production host.
+
+Flutter CI enforces the accepted current ceilings of **12** direct presentation/database references and **19** legacy shim imports. When Refactor removes one or more of either category, lower the corresponding CI ceiling in the same or an immediately following focused PR so the improvement cannot silently regress.
+
+`tool/maintainability_report_test.sh` exercises both passing ceilings and both regression-failure paths against an isolated fixture, including relative, package, and same-directory shim imports.
 
 ## Progress measures
 
@@ -77,4 +93,5 @@ For Issue #225, prefer these measures over abstraction count:
 3. `AppDatabase` responsibilities moved behind existing Repository/Store ownership without semantic changes;
 4. large-file LOC and responsibility count reduced;
 5. broad silent catches replaced with explicit best-effort/error policy plus tests where practical;
-6. direct presentation -> database reach-through references reduced where a focused Store/Service/composition boundary already exists.
+6. direct presentation -> database reach-through references reduced where a focused Store/Service/composition boundary already exists;
+7. temporary Database-presentation re-export imports reduced until each shim can be deleted.
