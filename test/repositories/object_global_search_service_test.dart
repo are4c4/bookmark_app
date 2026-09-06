@@ -100,4 +100,79 @@ void main() {
       reason: 'resolver must not return a deleted Object from a stale FTS row',
     );
   });
+
+  test('label-dependent refresh updates Relation source rows incrementally',
+      () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final search = ObjectGlobalSearchService(genericStore);
+
+    final personTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Person',
+    );
+    final bookTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Book',
+    );
+    final authorPropertyId = await objectStore.createRelationProperty(
+      objectTypeId: bookTypeId,
+      name: 'Author',
+      targetObjectTypeId: personTypeId,
+      multiple: false,
+    );
+    final bookType = (await objectStore.getObjectType(bookTypeId))!;
+    final authorProperty = bookType.properties.firstWhere(
+      (property) => property.id == authorPropertyId,
+    );
+    final authorId = await objectStore.createObject(
+      objectTypeId: personTypeId,
+      title: 'LegacyDependentLabel',
+    );
+    final bookId = await objectStore.createObject(
+      objectTypeId: bookTypeId,
+      title: 'Dependent source book',
+    );
+    final unrelatedId = await objectStore.createObject(
+      objectTypeId: bookTypeId,
+      title: 'UnrelatedRefreshToken',
+    );
+    await objectStore.setRelation(
+      objectId: bookId,
+      property: authorProperty,
+      targetObjectIds: <int>[authorId],
+    );
+    await search.rebuildWorkspace(workspaceId);
+
+    await objectStore.renameObject(authorId, 'CurrentDependentLabel');
+    await search.refreshObjectLabelDependents(authorId);
+
+    expect(
+      (await search.search(
+        workspaceId: workspaceId,
+        rawQuery: 'currentdependent',
+      ))
+          .map((item) => item.object.id),
+      contains(bookId),
+    );
+    expect(
+      (await search.search(
+        workspaceId: workspaceId,
+        rawQuery: 'legacydependent',
+      ))
+          .map((item) => item.object.id),
+      isNot(contains(bookId)),
+    );
+    expect(
+      (await search.search(
+        workspaceId: workspaceId,
+        rawQuery: 'unrelatedrefresh',
+      ))
+          .map((item) => item.object.id),
+      contains(unrelatedId),
+    );
+  });
 }
