@@ -56,7 +56,15 @@ Use `--top N` to change the number of files shown. The report includes:
 
 The presentation/database metric is intentionally narrow. It does not claim every existing occurrence is currently removable; it makes composition debt visible so responsibility-moving PRs can show an actual reduction instead of only adding another wrapper.
 
-The report is deliberately non-blocking at first. Existing debt should not make unrelated PRs fail. Once the baseline has stabilized, CI may add regression-only thresholds that tolerate current hotspots but reject major new growth.
+The report remains non-blocking by default so existing debt does not make unrelated PRs fail. For regression-only validation, a caller may provide the accepted current ceiling explicitly:
+
+```bash
+bash tool/maintainability_report.sh --max-boundary-refs 12
+```
+
+With `--max-boundary-refs N`, the command exits with status 1 only when the measured presentation `workspaceStore.database` reference count exceeds `N`. The threshold is deliberately supplied by the caller rather than hard-coded into the script, so it can ratchet downward as Refactor slices remove debt without turning historical hotspots into an immediate repository-wide failure.
+
+`tool/maintainability_report_test.sh` exercises both the passing ceiling and regression-failure path against an isolated fixture.
 
 ## Progress measures
 
