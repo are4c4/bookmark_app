@@ -22,6 +22,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Maintainability guardrail tests
+        run: bash tool/maintainability_report_test.sh
+
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
