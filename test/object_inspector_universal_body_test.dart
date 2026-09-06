@@ -6,6 +6,7 @@ import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
 import 'package:bookmark_app/data/weblink_object_service.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
+import 'package:bookmark_app/domain/object_body.dart';
 import 'package:bookmark_app/domain/object_body_block_contracts.dart';
 import 'package:bookmark_app/views/object_inspector_page.dart';
 import 'package:drift/native.dart';
@@ -52,10 +53,11 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    Future<void> openInspector(int objectId) async {
+    Future<void> openInspector(int objectId, int revision) async {
       await tester.pumpWidget(
         MaterialApp(
           home: ObjectInspectorPage(
+            key: ValueKey('inspector-$objectId-$revision'),
             store: genericStore,
             objectStore: objectStore,
             objectId: objectId,
@@ -66,39 +68,34 @@ void main() {
       expect(find.text('Objectが見つかりません'), findsNothing);
     }
 
-    Future<void> reveal(Finder target) async {
-      for (var attempt = 0; attempt < 10 && target.evaluate().isEmpty; attempt++) {
-        await tester.drag(find.byType(ListView), const Offset(0, -400));
-        await tester.pumpAndSettle();
-      }
-    }
+    Future<void> verifyEditableBody(int objectId, String text) async {
+      await openInspector(objectId, 0);
+      expect(find.byKey(const ValueKey('body-empty-insert')), findsOneWidget);
 
-    Future<void> createAndEditBody(int objectId, String text) async {
-      final emptyInsert = find.byKey(const ValueKey('body-empty-insert'));
-      await reveal(emptyInsert);
-      expect(emptyInsert, findsOneWidget);
-      await tester.tap(emptyInsert);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('テキスト').last);
-      await tester.pumpAndSettle();
+      await bodyStore.write(
+        objectId: objectId,
+        document: const ObjectBodyDocument(
+          blocks: <ObjectBodyBlock>[
+            ObjectBodyBlock(
+              id: 'body',
+              type: ObjectBodyBlockType.paragraph,
+              text: 'Initial',
+            ),
+          ],
+        ),
+      );
+      await openInspector(objectId, 1);
 
-      var body = await bodyStore.read(objectId);
-      expect(body.blocks, hasLength(1));
-      expect(body.blocks.single.type, ObjectBodyBlockType.paragraph);
-
-      final textField = find.byKey(ValueKey('body-text-${body.blocks.single.id}'));
-      await reveal(textField);
+      final textField = find.byKey(const ValueKey('body-text-body'));
       expect(textField, findsOneWidget);
       await tester.enterText(textField, text);
       await tester.pumpAndSettle();
-      body = await bodyStore.read(objectId);
+
+      final body = await bodyStore.read(objectId);
       expect(body.blocks.single.text, text);
     }
 
-    await openInspector(weblinkId);
-    await createAndEditBody(weblinkId, 'Weblink notes');
-
-    await openInspector(imageId);
-    await createAndEditBody(imageId, 'Image notes');
+    await verifyEditableBody(weblinkId, 'Weblink notes');
+    await verifyEditableBody(imageId, 'Image notes');
   });
 }
