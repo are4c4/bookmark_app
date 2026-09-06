@@ -80,9 +80,14 @@ class ProfileManager {
     }());
   }
 
-  static Future<ProfileManager> load() async {
-    final support = await getApplicationSupportDirectory();
-    final documents = await getApplicationDocumentsDirectory();
+  static Future<ProfileManager> load({
+    Future<Directory> Function()? applicationSupportDirectoryProvider,
+    Future<Directory> Function()? applicationDocumentsDirectoryProvider,
+  }) async {
+    final support = await (applicationSupportDirectoryProvider ??
+        getApplicationSupportDirectory)();
+    final documents = await (applicationDocumentsDirectoryProvider ??
+        getApplicationDocumentsDirectory)();
     final root = Directory('${documents.path}/BookmarkApp/Profiles');
     await root.create(recursive: true);
     final file = File('${support.path}/bookmark_profiles.json');
@@ -118,9 +123,12 @@ class ProfileManager {
         }
 
         profiles = profiles.map((profile) {
+          final defaultDirectoryPath = '${root.path}/${profile.id}';
           return profile.copyWith(
             databaseName: 'BookmarkApp/Profiles/${profile.id}/database',
-            directoryPath: '${root.path}/${profile.id}',
+            directoryPath: profile.directoryPath.trim().isEmpty
+                ? defaultDirectoryPath
+                : profile.directoryPath,
           );
         }).toList();
 
@@ -158,15 +166,35 @@ class ProfileManager {
   String _legacyDatabaseName(DatabaseProfile profile) =>
       profile.isDefault ? 'bookmark_app' : 'bookmark_app_profile_${profile.id}';
 
+  bool _usesAppManagedDirectory(DatabaseProfile profile) {
+    final configured = Directory(profile.directoryPath).absolute.path;
+    final managed =
+        Directory('${_profilesRoot.path}/${profile.id}').absolute.path;
+    return configured == managed;
+  }
+
   Future<void> _prepareProfileFolders() async {
     for (final profile in _state.profiles) {
       final directory = Directory(profile.directoryPath);
-      final photos = Directory(profile.photoDirectoryPath);
-      await directory.create(recursive: true);
-      await photos.create(recursive: true);
+      final usesAppManagedDirectory = _usesAppManagedDirectory(profile);
+      if (!await directory.exists()) {
+        if (!usesAppManagedDirectory) {
+          throw FileSystemException(
+            'Configured Vault directory is unavailable.',
+            profile.directoryPath,
+          );
+        }
+        await directory.create(recursive: true);
+      }
 
       final targetDb = File(profile.databasePath);
       if (!await targetDb.exists()) {
+        if (!usesAppManagedDirectory) {
+          throw FileSystemException(
+            'Configured Vault database is unavailable.',
+            targetDb.path,
+          );
+        }
         final legacyDb = File('${_documentsRoot.path}/${_legacyDatabaseName(profile)}.sqlite');
         if (await legacyDb.exists()) {
           await legacyDb.copy(targetDb.path);
@@ -178,6 +206,9 @@ class ProfileManager {
           }
         }
       }
+
+      final photos = Directory(profile.photoDirectoryPath);
+      await photos.create(recursive: true);
       await _writeProfileMetadata(profile);
     }
   }

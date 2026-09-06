@@ -42,7 +42,17 @@ class AppDatabase extends _$AppDatabase {
     String databaseName = 'bookmark_app',
     this.profileDirectoryPath,
   })  : pathResolver = ProfilePathResolver(profileDirectoryPath),
-        super(driftDatabase(name: databaseName));
+        super(
+          driftDatabase(
+            name: databaseName,
+            native: profileDirectoryPath == null
+                ? null
+                : DriftNativeOptions(
+                    databasePath: () async =>
+                        '$profileDirectoryPath/database.sqlite',
+                  ),
+          ),
+        );
 
   AppDatabase.forTesting(
     QueryExecutor executor, {

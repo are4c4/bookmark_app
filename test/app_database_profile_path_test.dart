@@ -1,0 +1,44 @@
+import 'dart:io';
+
+import 'package:bookmark_app/data/app_database.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('profileDirectoryPath is authoritative for the native database file',
+      () async {
+    final sandbox = await Directory.systemTemp.createTemp(
+      'bookmark_app_database_profile_path_',
+    );
+    const pathProviderChannel = MethodChannel('plugins.flutter.io/path_provider');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(pathProviderChannel, (call) async {
+      if (call.method == 'getTemporaryDirectory') return sandbox.path;
+      return null;
+    });
+    addTearDown(() async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(pathProviderChannel, null);
+      if (await sandbox.exists()) {
+        await sandbox.delete(recursive: true);
+      }
+    });
+
+    final vault = Directory('${sandbox.path}/Custom Vault');
+    await vault.create(recursive: true);
+    final database = AppDatabase(
+      databaseName: 'name_must_not_choose_the_physical_location',
+      profileDirectoryPath: vault.path,
+    );
+
+    try {
+      await database.customSelect('SELECT 1').get();
+    } finally {
+      await database.close();
+    }
+
+    expect(File('${vault.path}/database.sqlite').existsSync(), isTrue);
+  });
+}
