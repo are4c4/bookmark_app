@@ -142,4 +142,66 @@ void main() {
     );
     expect(await objectStore.backlinks(parentObjectId!), isEmpty);
   });
+
+  test('Tag built-in schema stays ordinary Object plus canonical self Relation', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final objectStore = ObjectStore(GenericDatabaseStore(database));
+    final systemStore = SystemObjectStore(database: database, objectStore: objectStore);
+    final bridge = TagObjectBridge(
+      database: database,
+      objectStore: objectStore,
+      systemObjectStore: systemStore,
+    );
+
+    final schema = await bridge.ensureTagObjectType(workspaceId);
+
+    expect(schema.objectType.kind, ObjectTypeKind.system);
+    expect(
+      await systemStore.systemKeyForObjectType(schema.objectType.id),
+      TagObjectBridge.systemKey,
+    );
+    expect(schema.parentProperty.isRelation, isTrue);
+    expect(schema.parentProperty.targetObjectTypeId, schema.objectType.id);
+    expect(schema.parentProperty.allowsMultipleRelations, isFalse);
+    expect(schema.legacyTagIdProperty.config['system'], isTrue);
+    expect(schema.legacyTagIdProperty.config['hidden'], isTrue);
+    expect(schema.groupIdProperty.config['system'], isTrue);
+    expect(schema.groupIdProperty.config['hidden'], isTrue);
+  });
+
+  test('Tag schema provisioning fails closed on incompatible Parent Property', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final objectStore = ObjectStore(GenericDatabaseStore(database));
+    final systemStore = SystemObjectStore(database: database, objectStore: objectStore);
+    final type = await systemStore.ensureSystemObjectType(
+      workspaceId: workspaceId,
+      systemKey: TagObjectBridge.systemKey,
+      name: 'タグ',
+      icon: '🏷️',
+    );
+    await objectStore.createProperty(
+      objectTypeId: type.id,
+      name: 'Parent',
+      type: ObjectPropertyType.text,
+      allowSystemMutation: true,
+    );
+    final bridge = TagObjectBridge(
+      database: database,
+      objectStore: objectStore,
+      systemObjectStore: systemStore,
+    );
+
+    await expectLater(bridge.ensureTagObjectType(workspaceId), throwsStateError);
+
+    final refreshed = (await objectStore.getObjectType(type.id))!;
+    expect(refreshed.properties.where((property) => property.name == 'Parent'), hasLength(1));
+    expect(
+      refreshed.properties.singleWhere((property) => property.name == 'Parent').type,
+      ObjectPropertyType.text,
+    );
+  });
 }
