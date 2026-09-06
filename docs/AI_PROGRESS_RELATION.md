@@ -53,7 +53,7 @@ Important merged guardrails include:
 - `#307` direct generic Weblink creation enrichment -> managed Representative Image Relation composition-root lifecycle.
 - `#351` indirectly exercises canonical target ObjectType validation during Board grouped-preset failure and confirms cleanup failure does not replace the original Relation validation error; it does not change Relation semantics.
 
-## Latest repository audit — 2026-09-06 14:35 JST
+## Latest repository audit — 2026-09-06 14:37 JST
 Latest `main`, current issues and open PRs were re-audited.
 
 Recent merged Object/Refactor changes relevant to Relation boundaries:
@@ -66,7 +66,7 @@ Recent merged Object/Refactor changes relevant to Relation boundaries:
 - `#362` — profile restore cleanup preserves the primary failure; profile/backup-only and unrelated to Relation semantics.
 
 Current open non-Relation PRs:
-- `#357` — ProfileManager diagnostic privacy.
+- `#363` — ProfileManager diagnostic privacy rebuilt from current main; explicitly no Object/Relation behavior change and supersedes stale #357.
 - `#355` — stable bootstrap failure boundary.
 - `#336` — attachment failure handling.
 
