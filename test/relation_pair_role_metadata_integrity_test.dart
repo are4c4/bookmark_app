@@ -12,11 +12,9 @@ import 'package:bookmark_app/domain/object_model.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-void main() {
-  test('pairRole-only metadata fails closed across canonical Relation boundaries',
-      () async {
-    final database = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(database.close);
+Future<void> _exerciseCorruptPairMetadata(Map<String, dynamic> metadata) async {
+  final database = AppDatabase.forTesting(NativeDatabase.memory());
+  try {
     final workspaceId = await WorkspaceStore(database).initialize();
     final genericStore = GenericDatabaseStore(database);
     final objectStore = ObjectStore(genericStore);
@@ -67,9 +65,8 @@ void main() {
       title: 'Target',
     );
 
-    // Simulate historical/corrupt schema that retained only one managed pair
-    // key. Canonical Relation Property creation reserves this key and can never
-    // create this state.
+    // Simulate historical/corrupt schema that retained a reserved pair key but
+    // no valid managed pair. Canonical Relation creation cannot create this.
     final stored = (await genericStore.listProperties(sourceTypeId))
         .singleWhere((property) => property.id == relationId);
     await genericStore.updateProperty(
@@ -78,7 +75,7 @@ void main() {
         databaseId: stored.databaseId,
         name: stored.name,
         type: stored.type,
-        config: <String, dynamic>{...stored.config, 'pairRole': 'source'},
+        config: <String, dynamic>{...stored.config, ...metadata},
         sortOrder: stored.sortOrder,
       ),
     );
@@ -92,6 +89,7 @@ void main() {
           .issuesOf(RelationIntegrityIssueKind.invalidBidirectionalPair)
           .map((issue) => issue.propertyId),
       contains(relationId),
+      reason: '$metadata',
     );
 
     await expectLater(
@@ -101,6 +99,7 @@ void main() {
         targetObjectIds: <int>[targetId],
       ),
       throwsStateError,
+      reason: 'canonical mutation $metadata',
     );
     await expectLater(
       bidirectionalStore.setRelation(
@@ -109,6 +108,7 @@ void main() {
         targetObjectIds: <int>[targetId],
       ),
       throwsStateError,
+      reason: 'direct bidirectional mutation $metadata',
     );
     await expectLater(
       schemaEvolution.inspectChange(
@@ -117,6 +117,7 @@ void main() {
         multiple: false,
       ),
       throwsStateError,
+      reason: 'schema evolution $metadata',
     );
     await expectLater(
       propertySchema.inspectDelete(
@@ -124,20 +125,41 @@ void main() {
         propertyId: relationId,
       ),
       throwsStateError,
+      reason: 'delete impact $metadata',
     );
 
     final source = (await objectStore.listObjects(sourceTypeId)).single;
     expect(
       ObjectRelationValue.fromJson(source.values[relationId]).objectIds,
       isEmpty,
+      reason: '$metadata',
     );
-    expect(await objectStore.backlinks(targetId), isEmpty);
+    expect(await objectStore.backlinks(targetId), isEmpty, reason: '$metadata');
 
     final unchangedRelation = (await objectStore.getObjectType(sourceTypeId))!
         .properties
         .singleWhere((property) => property.id == relationId);
     expect(unchangedRelation.targetObjectTypeId, targetTypeId);
     expect(unchangedRelation.allowsMultipleRelations, isFalse);
-    expect(unchangedRelation.config['pairRole'], 'source');
+    for (final entry in metadata.entries) {
+      expect(unchangedRelation.config.containsKey(entry.key), isTrue);
+      expect(unchangedRelation.config[entry.key], entry.value);
+    }
+  } finally {
+    await database.close();
+  }
+}
+
+void main() {
+  test('reserved pair metadata key presence fails closed across Relation boundaries',
+      () async {
+    for (final metadata in <Map<String, dynamic>>[
+      <String, dynamic>{'bidirectional': false},
+      <String, dynamic>{'inversePropertyId': null},
+      <String, dynamic>{'pairRole': null},
+      <String, dynamic>{'pairRole': 'source'},
+    ]) {
+      await _exerciseCorruptPairMetadata(metadata);
+    }
   });
 }
