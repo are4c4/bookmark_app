@@ -3,10 +3,15 @@ import 'dart:ui';
 
 import 'package:image/image.dart' as image;
 
+import '../data/generic_database_store.dart';
 import '../data/image_object_service.dart';
+import '../data/object_store.dart';
+import '../data/object_type_defaults_store.dart';
+import '../data/system_object_store.dart';
 import '../domain/object_model.dart';
 import 'image_edit_service.dart';
 import 'image_managed_file_deletion_policy.dart';
+import 'photo_storage_service.dart';
 
 typedef CanonicalImageStoredFileResolver = Future<String?> Function({
   required int workspaceId,
@@ -80,6 +85,38 @@ class CanonicalImageEditService {
         pixelWidth: pixelWidth,
         pixelHeight: pixelHeight,
       ),
+      imageEdit: imageEdit,
+    );
+  }
+
+  /// Production composition helper for shared Object-detail hosts.
+  ///
+  /// This builds the same canonical Image service + exclusive managed-file
+  /// ownership policy used by [fromServices] directly from the stores already
+  /// owned by generic Object hosts. It does not introduce another edit path;
+  /// callers still pass only canonical workspace/Object identity into this
+  /// service, and every mutation repeats the same ownership/format checks.
+  factory CanonicalImageEditService.fromStores({
+    required GenericDatabaseStore genericStore,
+    required ObjectStore objectStore,
+    PhotoStorageService photoStorage = const PhotoStorageService(),
+    ImageEditService imageEdit = const ImageEditService(),
+  }) {
+    final systemObjects = SystemObjectStore(
+      database: genericStore.database,
+      objectStore: objectStore,
+    );
+    final images = ImageObjectService(
+      systemObjects: systemObjects,
+      defaultsStore: ObjectTypeDefaultsStore(genericStore),
+    );
+    return CanonicalImageEditService.fromServices(
+      ownershipPolicy: ImageManagedFileDeletionPolicy(
+        database: genericStore.database,
+        objectStore: objectStore,
+        photoStorage: photoStorage,
+      ),
+      images: images,
       imageEdit: imageEdit,
     );
   }
