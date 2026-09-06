@@ -6,8 +6,10 @@ import '../domain/object_model.dart';
 import 'database_view_gallery_adapter.dart';
 import 'database_view_store.dart';
 import 'generic_database_store.dart';
+import 'image_object_service.dart';
 import 'object_store.dart';
 import 'system_object_store.dart';
+import 'weblink_object_service.dart';
 
 class ObjectTypeTemplateProperty {
   const ObjectTypeTemplateProperty({
@@ -287,6 +289,44 @@ class ObjectTypeTemplateStore {
       relationTargets[property] = target.id;
     }
 
+    final galleryCoverRelations =
+        <ObjectTypeTemplateView, ObjectTypeTemplateProperty>{};
+    for (final view in template.views) {
+      final coverPropertyName = view.galleryCoverRelationPropertyName;
+      final coverKind = view.galleryCoverKind;
+      if ((coverPropertyName == null) != (coverKind == null)) {
+        throw StateError(
+          'Template View ${view.name} Gallery cover requires both a Relation Property and cover kind.',
+        );
+      }
+      if (coverPropertyName == null || coverKind == null) continue;
+
+      final matchingProperties = template.properties
+          .where((property) => property.name == coverPropertyName)
+          .toList(growable: false);
+      if (matchingProperties.length != 1 ||
+          matchingProperties.single.type != 'relation') {
+        throw StateError(
+          'Template View ${view.name} Gallery cover must reference exactly one Relation Property.',
+        );
+      }
+      final relationProperty = matchingProperties.single;
+      final expectedSystemKey = switch (coverKind) {
+        ObjectTypeTemplateGalleryCoverKind.imageRelation =>
+          ImageObjectService.systemKey,
+        ObjectTypeTemplateGalleryCoverKind.weblinkRelationRepresentativeImage =>
+          WeblinkObjectService.systemKey,
+      };
+      final actualSystemKey =
+          relationProperty.relationTargetSystemKey?.trim() ?? '';
+      if (actualSystemKey != expectedSystemKey) {
+        throw StateError(
+          'Template View ${view.name} Gallery cover kind requires a Relation targeting "$expectedSystemKey", not "$actualSystemKey".',
+        );
+      }
+      galleryCoverRelations[view] = relationProperty;
+    }
+
     return store.database.transaction(() async {
       final objectTypeId = await objectStore.createObjectType(
         workspaceId: workspaceId,
@@ -328,16 +368,13 @@ class ObjectTypeTemplateStore {
         final coverPropertyName = view.galleryCoverRelationPropertyName;
         final coverKind = view.galleryCoverKind;
         if (coverPropertyName != null && coverKind != null) {
-          final templateProperties = template.properties
-              .where((property) => property.name == coverPropertyName)
-              .toList(growable: false);
-          if (templateProperties.length != 1 ||
-              templateProperties.single.type != 'relation') {
+          final relationProperty = galleryCoverRelations[view];
+          if (relationProperty == null) {
             throw StateError(
-              'Template View ${view.name} Gallery cover must reference exactly one Relation Property.',
+              'Template View ${view.name} Gallery cover Relation was not validated.',
             );
           }
-          final propertyId = createdPropertyIds[coverPropertyName];
+          final propertyId = createdPropertyIds[relationProperty.name];
           if (propertyId == null) {
             throw StateError(
               'Template View ${view.name} Gallery cover Property was not created.',
