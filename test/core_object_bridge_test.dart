@@ -67,6 +67,24 @@ void main() {
     expect(imageType, isNotNull);
     expect(bookmarkType, isNotNull);
 
+    for (final propertyName in <String>[
+      'File',
+      'Note',
+      'Source URL',
+      'Original filename',
+      'Content type',
+      'Pixel width',
+      'Pixel height',
+      'Legacy Photo ID',
+      'Legacy Tags',
+    ]) {
+      expect(
+        imageType!.properties.where((property) => property.name == propertyName),
+        hasLength(1),
+        reason: 'Photo mirrors should share the canonical Image definition.',
+      );
+    }
+
     final images = await objectStore.listObjects(imageType!.id);
     final bookmarks = await objectStore.listObjects(bookmarkType!.id);
     expect(images.single.title, '表紙');
