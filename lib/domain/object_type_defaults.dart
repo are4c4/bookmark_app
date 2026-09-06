@@ -1,3 +1,5 @@
+import 'object_body.dart';
+
 enum ObjectOpenMode {
   sidePeek,
   centerPeek,
@@ -6,22 +8,31 @@ enum ObjectOpenMode {
 
 /// Reusable defaults owned by an ObjectType.
 ///
-/// Database and View layers may override these values, but those overrides are
-/// intentionally not stored here. This keeps ObjectType defaults reusable while
-/// preserving the resolution order `View > Database > ObjectType > app`.
+/// Database and View layers may override presentation values, but those
+/// overrides are intentionally not stored here. This keeps ObjectType defaults
+/// reusable while preserving the resolution order
+/// `View > Database > ObjectType > app`.
+///
+/// [bodyTemplate] is different: it is an Object creation default. New Objects
+/// receive a copy of the document while existing Objects keep their own Body.
 class ObjectTypeDefaults {
   const ObjectTypeDefaults({
     this.visiblePropertyIds,
     this.propertyOrder,
     this.openMode,
+    this.bodyTemplate,
   });
 
   final List<int>? visiblePropertyIds;
   final List<int>? propertyOrder;
   final ObjectOpenMode? openMode;
+  final ObjectBodyDocument? bodyTemplate;
 
   bool get hasOverrides =>
-      visiblePropertyIds != null || propertyOrder != null || openMode != null;
+      visiblePropertyIds != null ||
+      propertyOrder != null ||
+      openMode != null ||
+      bodyTemplate != null;
 
   factory ObjectTypeDefaults.fromJson(dynamic value) {
     if (value is! Map) return const ObjectTypeDefaults();
@@ -50,10 +61,15 @@ class ObjectTypeDefaults {
       }
     }
 
+    final bodyTemplate = value.containsKey('bodyTemplate')
+        ? ObjectBodyDocument.fromJson(value['bodyTemplate'])
+        : null;
+
     return ObjectTypeDefaults(
       visiblePropertyIds: readIds('visiblePropertyIds'),
       propertyOrder: readIds('propertyOrder'),
       openMode: openMode,
+      bodyTemplate: bodyTemplate,
     );
   }
 
@@ -62,6 +78,7 @@ class ObjectTypeDefaults {
           'visiblePropertyIds': visiblePropertyIds,
         if (propertyOrder != null) 'propertyOrder': propertyOrder,
         if (openMode != null) 'openMode': openMode!.name,
+        if (bodyTemplate != null) 'bodyTemplate': bodyTemplate!.toJson(),
       };
 }
 
