@@ -1,5 +1,6 @@
+import 'dart:io';
+
 import 'package:drift/drift.dart';
-import 'package:path/path.dart' as p;
 
 import '../data/app_database.dart';
 import '../data/image_object_service.dart';
@@ -36,14 +37,21 @@ class ImageManagedFileDeletionPolicy {
     try {
       final resolvedCandidate = database.pathResolver.resolveStoredPath(candidate);
       final managedRoot = _managedPhotoRoot();
-      if (managedRoot == null || !_isManagedPath(resolvedCandidate, managedRoot)) {
-        return null;
-      }
+      if (managedRoot == null) return null;
+
+      final candidateFile = File(resolvedCandidate);
+      if (!await candidateFile.exists()) return null;
+      final canonicalCandidate = await candidateFile.resolveSymbolicLinks();
+      final canonicalRoot =
+          await Directory(managedRoot).resolveSymbolicLinks();
+      if (!_isWithinManagedRoot(canonicalCandidate, canonicalRoot)) return null;
 
       final photos = await database.select(database.photos).get();
       for (final photo in photos) {
         final resolvedPhoto = database.pathResolver.resolveStoredPath(photo.path);
-        if (_samePath(resolvedPhoto, resolvedCandidate)) return null;
+        if (await _samePhysicalFile(resolvedPhoto, canonicalCandidate)) {
+          return null;
+        }
       }
 
       final systemTable = await database.customSelect(
@@ -78,11 +86,13 @@ class ImageManagedFileDeletionPolicy {
               '${object.values[fileProperties.single.id] ?? ''}'.trim();
           if (storedFile.isEmpty) continue;
           final resolvedStored = database.pathResolver.resolveStoredPath(storedFile);
-          if (_samePath(resolvedStored, resolvedCandidate)) return null;
+          if (await _samePhysicalFile(resolvedStored, canonicalCandidate)) {
+            return null;
+          }
         }
       }
 
-      return resolvedCandidate;
+      return canonicalCandidate;
     } catch (_) {
       // Retaining an orphan file is recoverable. Deleting a shared or external
       // user file is not, so any audit/read/path failure must fail closed.
@@ -100,12 +110,20 @@ class ImageManagedFileDeletionPolicy {
     return null;
   }
 
-  bool _isManagedPath(String candidate, String managedRoot) {
-    final normalizedCandidate = p.normalize(p.absolute(candidate));
-    final normalizedRoot = p.normalize(p.absolute(managedRoot));
-    return p.isWithin(normalizedRoot, normalizedCandidate);
+  Future<bool> _samePhysicalFile(String path, String canonicalCandidate) async {
+    final file = File(path);
+    if (!await file.exists()) return false;
+    return FileSystemEntity.identical(path, canonicalCandidate);
   }
 
-  bool _samePath(String left, String right) =>
-      p.normalize(p.absolute(left)) == p.normalize(p.absolute(right));
+  bool _isWithinManagedRoot(String candidate, String root) {
+    final normalizedCandidate = _normalizedPath(candidate);
+    final normalizedRoot = _normalizedPath(root);
+    return normalizedCandidate.startsWith('$normalizedRoot/');
+  }
+
+  String _normalizedPath(String value) {
+    final normalized = value.replaceAll('\\', '/').replaceAll(RegExp(r'/+$'), '');
+    return Platform.isWindows ? normalized.toLowerCase() : normalized;
+  }
 }
