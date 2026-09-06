@@ -52,11 +52,11 @@ bash tool/maintainability_report.sh
 Use `--top N` to change the number of files shown. The report includes:
 - total Dart LOC under `lib/` and `test/`;
 - the largest Dart files by LOC;
-- direct `workspaceStore.database` reach-through occurrences under `lib/views/` and `lib/widgets/`, grouped by file;
+- direct `workspaceStore.database` reach-through occurrences under legacy `lib/views/` / `lib/widgets/` and canonical `lib/features/**/presentation/` trees, grouped by file;
 - imports of the five temporary Database-presentation re-export shims under `lib/widgets/`, grouped by caller file;
 - the number and paths of Database-presentation re-export shim files themselves.
 
-The presentation/database metric is intentionally narrow. It does not claim every existing occurrence is currently removable; it makes composition debt visible so responsibility-moving PRs can show an actual reduction instead of only adding another wrapper.
+The presentation/database metric is intentionally narrow. It does not claim every existing occurrence is currently removable; it makes composition debt visible so responsibility-moving PRs can show an actual reduction instead of only adding another wrapper. Refactor #522 extended the same ceiling to canonical feature-presentation trees so moving code from a legacy host into `lib/features/**/presentation` cannot hide direct database reach-through.
 
 The temporary-shim metrics track these legacy surfaces:
 - `lib/widgets/database_page_toolbar.dart`;
@@ -72,7 +72,7 @@ The report remains non-blocking by default so existing debt does not make unrela
 ```bash
 bash tool/maintainability_report.sh \
   --max-boundary-refs 9 \
-  --max-legacy-shim-imports 18 \
+  --max-legacy-shim-imports 17 \
   --max-legacy-shims 5
 ```
 
@@ -82,11 +82,11 @@ bash tool/maintainability_report.sh \
 
 `--max-legacy-shims N` exits with status 1 only when the number of `lib/widgets/**/*.dart` files that re-export `../features/database/presentation/widgets/*.dart` exceeds `N`. This closes the loophole where a new compatibility shim could be introduced under a new filename and therefore bypass the known-import-name ceiling.
 
-The initial repository baseline was **22** legacy shim imports across **5** shim files. Refactor #474 migrated the three test-only imports in `test/database_interaction_widgets_test.dart` to canonical feature imports, lowering the accepted import ceiling to **19** without touching a production host. The next patch-sized cleanup moved `BookmarkAttachmentSection` directly to the canonical `DetailPropertyRow`, lowering the accepted import ceiling again to **18**. The shim-file ceiling remains **5** until an existing shim reaches production caller-zero and can be deleted.
+The initial repository baseline was **22** legacy shim imports across **5** shim files. Refactor #474 migrated the three test-only imports in `test/database_interaction_widgets_test.dart` to canonical feature imports, lowering the accepted import ceiling to **19** without touching a production host. Refactor #499 moved `BookmarkAttachmentSection` directly to the canonical `DetailPropertyRow`, lowering the accepted import ceiling to **18**. The current patch moves `BookmarkReorderableProperties` to the same canonical `DetailPropertyRow`, lowering the accepted import ceiling again to **17**. The shim-file ceiling remains **5** until an existing shim reaches production caller-zero and can be deleted.
 
 The presentation/database reach-through ceiling was initially enforced at **12**. Later cleanup in adjacent responsibility-moving slices reduced the measured production presentation baseline to **9 references across 6 files** without adding a replacement wrapper, so the accepted ceiling is now **9** and must not regress to the older 12-reference state.
 
-Flutter CI enforces the accepted current ceilings of **9** direct presentation/database references, **18** legacy shim imports, and **5** Database-presentation re-export shim files. When Refactor removes one or more of any category, lower the corresponding CI ceiling in the same or an immediately following focused PR so the improvement cannot silently regress.
+Flutter CI enforces the accepted current ceilings of **9** direct presentation/database references, **17** legacy shim imports, and **5** Database-presentation re-export shim files. When Refactor removes one or more of any category, lower the corresponding CI ceiling in the same or an immediately following focused PR so the improvement cannot silently regress.
 
 `tool/maintainability_report_test.sh` exercises passing ceilings and each regression-failure path against an isolated fixture, including relative, package, and same-directory shim imports plus detection of newly-added shim files. Canonical feature imports do not count as legacy shim imports.
 
