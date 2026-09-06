@@ -7,6 +7,10 @@ import '../../../../data/object_store.dart';
 import '../../../../services/image_visual_resolver.dart';
 
 typedef ObjectImagePreviewCacheEvictor = Future<void> Function(String filePath);
+typedef ObjectImagePreviewVisualResolver = Future<ImageManagedVisual?> Function({
+  required int objectTypeId,
+  required int objectId,
+});
 
 /// Read-only managed Image preview for the shared Object detail surface.
 ///
@@ -25,6 +29,7 @@ class ObjectImageDetailPreview extends StatefulWidget {
     this.refreshToken = 0,
     this.imageBuilder,
     this.cacheEvictor,
+    this.visualResolver,
   });
 
   final AppDatabase database;
@@ -39,6 +44,10 @@ class ObjectImageDetailPreview extends StatefulWidget {
 
   final Widget Function(BuildContext context, String filePath)? imageBuilder;
   final ObjectImagePreviewCacheEvictor? cacheEvictor;
+
+  /// Test/presentation seam for the asynchronous visual read. Production hosts
+  /// leave this null and continue using [ImageVisualResolver].
+  final ObjectImagePreviewVisualResolver? visualResolver;
 
   @override
   State<ObjectImageDetailPreview> createState() =>
@@ -60,7 +69,8 @@ class _ObjectImageDetailPreviewState extends State<ObjectImageDetailPreview> {
     final identityChanged = oldWidget.database != widget.database ||
         oldWidget.objectStore != widget.objectStore ||
         oldWidget.objectTypeId != widget.objectTypeId ||
-        oldWidget.objectId != widget.objectId;
+        oldWidget.objectId != widget.objectId ||
+        oldWidget.visualResolver != widget.visualResolver;
     final refreshRequested = oldWidget.refreshToken != widget.refreshToken;
     if (identityChanged || refreshRequested) {
       _visual = _resolve(evictCachedFile: refreshRequested && !identityChanged);
@@ -68,13 +78,19 @@ class _ObjectImageDetailPreviewState extends State<ObjectImageDetailPreview> {
   }
 
   Future<ImageManagedVisual?> _resolve({bool evictCachedFile = false}) async {
-    final visual = await ImageVisualResolver(
-      widget.objectStore,
-      pathResolver: widget.database.pathResolver,
-    ).resolveManaged(
-      imageObjectTypeId: widget.objectTypeId,
-      imageObjectId: widget.objectId,
-    );
+    final customResolver = widget.visualResolver;
+    final visual = customResolver != null
+        ? await customResolver(
+            objectTypeId: widget.objectTypeId,
+            objectId: widget.objectId,
+          )
+        : await ImageVisualResolver(
+            widget.objectStore,
+            pathResolver: widget.database.pathResolver,
+          ).resolveManaged(
+            imageObjectTypeId: widget.objectTypeId,
+            imageObjectId: widget.objectId,
+          );
     if (evictCachedFile && visual != null) {
       await _evict(visual.filePath);
     }
