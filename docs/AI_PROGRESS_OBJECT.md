@@ -15,16 +15,17 @@ Object/ObjectType architecture, Property value semantics, Object-centric Databas
 Completed/closed for current scope: #247 Bookmark opening modes, #149 Property handle, #252 Property-add UX, #156 generic fixed/masonry Gallery, #166 aliases.
 
 ## Current merged state — 2026-09-06
-Latest main observed in this run: `442804c8c15c65fd66ed95ccbfde9d20172c48bf` after Object #416.
+Latest main observed in this run: `a8c39f6941a9959791b7d36305e921b4e5d0784f` after Object #423.
 
 Recent Object checkpoints:
 - #394 merged as `1f26ec2b949fd5960ae719b47bdf0d5731ceee48`: legacy Photo deletion preserves a managed file when a surviving canonical Image owns/shares it while retaining legacy-only cleanup.
 - #396 merged as `720c5781b181f92ca4c0a06bb491a2dced052984`: first Photo -> Image promotion skips filesystem-resolvable missing media and retries naturally if the file returns.
 - #409 merged as `1024ef2cec5ffa30b9b5abaf60b9327b53021688`: native canonical Image detail can edit Object title and Image `Note` while identity/provenance fields stay protected.
 - #415 merged: legacy-owned mirrored Images with `Legacy Photo ID` stay read-only so compatibility sync cannot silently overwrite user edits.
-- #413 merged after Flutter CI #1489 green: generic Image deletion keeps canonical `RelationMutationService.deleteObject(...)` first and then performs fail-closed best-effort managed-file cleanup only when ownership is unambiguous.
-- #418 merged: test-only real-host coverage proves canonical Image backlinks already replace the legacy Photo reverse-lookup concept for Bookmark `Images` + `Cover Image` Relations.
-- #416 merged in this run as `442804c8c15c65fd66ed95ccbfde9d20172c48bf` after Flutter CI #1498 green: reusable canonical Image detail preview presentation now resolves managed media through `ImageVisualResolver`, uses persisted geometry, resolves profile-relative paths, and fails visibly/safely for missing files.
+- #413 merged after green CI: generic Image deletion keeps canonical `RelationMutationService.deleteObject(...)` first and then performs fail-closed best-effort managed-file cleanup only when ownership is unambiguous.
+- #418 merged: real-host regression proves canonical Image backlinks cover the legacy Photo reverse-lookup concept for Bookmark `Images` + `Cover Image` Relations.
+- #416 merged as `442804c8c15c65fd66ed95ccbfde9d20172c48bf` after Flutter CI #1498 green: reusable canonical Image detail preview resolves managed media through `ImageVisualResolver`, uses persisted geometry, resolves profile-relative paths, and fails safely for missing files.
+- #423 merged as `a8c39f6941a9959791b7d36305e921b4e5d0784f` after Flutter CI #1512 passed Analyze + the full 708-test suite: generic Images now block user-facing deletion while an Image participates in legacy Photo compatibility ownership, either through non-null `Legacy Photo ID` or as the active `photo_object_links` target. This prevents delete-then-recreate/re-promote loops while leaving `CoreObjectBridge` stale-mirror cleanup intact after the legacy Photo is actually removed.
 
 Broader merged product state remains:
 - canonical Bookmark -> Weblink -> managed Representative Image flows are live;
@@ -48,43 +49,52 @@ Canonical Image identity/import/reimport and Photo -> Image promotion safety are
 - native canonical Image title + `Note` editing with mirrored-legacy read-only protection;
 - safe legacy Photo file deletion ownership;
 - safe canonical Image managed-file deletion ownership;
+- compatibility-aware generic Image deletion that blocks active legacy Photo mapping targets;
 - canonical Image backlinks covering the legacy Bookmark reverse-lookup concept;
 - a reusable canonical Image detail preview presentation component.
 
-The next product step is to wire the new #416 preview into the shared Object detail host in a small sequenced patch, then continue canonical Bookmark Image write/edit UX. Do not build a second Photo->Image bridge: `CoreObjectBridge` remains the compatibility mapping boundary. Do not bypass canonical Relation APIs. Preserve legacy explicit-cover/Photo compatibility until real-host write/edit parity and migration policy are proven.
+Current WIP: #426 `feature/object-image-geometry-refresh-245` adds `ImageObjectService.updateManagedGeometry(...)` so a future canonical Image editor can replace stale persisted `Pixel width` / `Pixel height` after crop/rotate without changing Image identity, File, title, provenance, Photo mapping, or Relations. The branch changes only `image_object_service.dart` and `image_object_dimensions_test.dart`; Flutter CI #1515 is running.
+
+The next editor integration must not simply open `ImageEditorPage` against every canonical Image. Managed files may be shared by another Image, another workspace, or a legacy Photo consumer. Define and test an ownership/copy-on-edit policy first. After editing bytes, re-probe geometry and persist it through the canonical Image geometry mutation. Do not build a second Photo->Image bridge: `CoreObjectBridge` remains the compatibility mapping boundary. Do not bypass canonical Relation APIs.
 
 Person profile image migration remains deferred because People UX is still legacy `profilePhotoId`/Photo-oriented and no first-class Person Object bridge/product contract is established.
 
 ## Exact next actions
-1. Wire #416's reusable canonical Image preview into `ObjectInspectorPage` with a patch-sized Object-lane change after rechecking live open-PR ownership; do not reconstruct the large shared host through whole-file replacement.
-2. Continue #245 canonical Bookmark Image write/edit UX without introducing a new Relation persistence representation; any genuinely new Relation-producing workflow requires Relation-lane lifecycle coverage.
-3. Continue #249 with a patch-sized Stage1 List host slice when a hunk-capable edit path is available: stable padding/minimum height, title max-lines + ellipsis, trailing alignment.
-4. Continue #249 Bookmark Gallery parity by reusing `DatabaseViewGalleryAdapter` / `ObjectGalleryView` and persisted `settings['galleryMode']`; do not create Bookmark-only Gallery settings.
-5. Continue #155 legacy presentation convergence only where a canonical replacement is already proven.
-6. Defer Person profile Image migration and broad #242 Vault work until prerequisite Object/product contracts are established.
+1. Finish #426 CI and merge it only after green checks and a latest-main non-overlap/mergeability check.
+2. Design the smallest canonical Image editor workflow around existing `ImageEditorPage`/`ImageEditService`: resolve the canonical managed file, fail closed or copy-on-edit when ownership is shared/ambiguous, then re-probe and persist Pixel width/height. Do not expose direct shared-file mutation first.
+3. Wire #416's reusable canonical Image preview into `ObjectInspectorPage` only through a patch-sized Object-lane change after rechecking live open-PR ownership; do not reconstruct the large shared host through whole-file replacement.
+4. Continue #245 canonical Bookmark Image write/edit UX only after deciding how legacy `bookmark_photos` authority is retired or write-through is handled; canonical-only writes are unsafe while compatibility sync can overwrite them.
+5. Continue #249 with a patch-sized Stage1 List host slice when a hunk-capable edit path is available: stable padding/minimum height, title max-lines + ellipsis, trailing alignment.
+6. Continue #249 Bookmark Gallery parity by reusing `DatabaseViewGalleryAdapter` / `ObjectGalleryView` and persisted `settings['galleryMode']`; do not create Bookmark-only Gallery settings.
+7. Continue #155 legacy presentation convergence only where a canonical replacement is already proven.
+8. Defer Person profile Image migration and broad #242 Vault work until prerequisite Object/product contracts are established.
 
 ## Cross-lane coordination
 ### Relation
-Canonical Relation behavior remains mature. #413 keeps canonical Relation-safe Object deletion ordering and adds only Object-owned filesystem cleanup afterward. #418 is tests-only coverage of existing canonical Bookmark Image Relations/backlinks. #416 is presentation-only and introduces no Relation mutation path. Current Relation PR #420 is handoff-only and does not own Object production files.
+Canonical Relation behavior remains mature. #413 preserves canonical Relation-safe Object deletion ordering and adds only Object-owned filesystem cleanup afterward. #418 is coverage of existing canonical Bookmark Image Relations/backlinks. #423 adds a pre-delete Object-owned compatibility guard in the generic Images adapter but does not alter Relation persistence/lifecycle; allowed deletions still delegate to `RelationMutationService.deleteObject(...)`. Current Relation PR #420 is handoff-only and does not own Object production files.
 
 ### Refactor
-Live Refactor PR #419 currently owns Bookmark FTS projection cleanup and does not overlap #416/Image detail presentation. Always recheck open PR ownership before editing shared hosts/resolvers. Do not absorb #225 cleanup into Object product PRs.
+Recent Refactor #422/#424 are FTS/docs work and do not overlap current Image production files. Always recheck open PR ownership before editing shared hosts/resolvers. Do not absorb #225 cleanup into Object product PRs.
 
 ## Validation in this run
-- Re-read latest `AGENTS.md`, Issue #56, `docs/AI_PROGRESS.md`, and this Object handoff before acting.
-- Rechecked open PR ownership: #420 Relation handoff-only, #419 Bookmark FTS refactor, #416 Object Image preview.
-- Confirmed #413 was already merged and its Flutter CI #1489 completed successfully.
-- Confirmed #416 was mergeable and Flutter CI #1498 completed successfully.
-- Squash-merged #416 as `442804c8c15c65fd66ed95ccbfde9d20172c48bf`.
+- Rechecked latest main and open PR ownership before production edits.
+- Confirmed #423 failure was a test-fixture path-identity mismatch, not production behavior: profile-backed `addPhoto()` stores profile-relative paths while the first fixture created the native Image with an absolute File identity.
+- Corrected the fixture to use `database.pathResolver.toStoredPath(...)` and reran the full PR merge-ref suite.
+- Flutter CI #1512 passed Analyze and all 708 tests on #423 head `db6313cc6076ca4c3d387b0cb7be151076db0ba1`.
+- Squash-merged #423 as `a8c39f6941a9959791b7d36305e921b4e5d0784f`.
+- Audited Image editor prerequisites: `ImageEditorPage` mutates file bytes directly while canonical Gallery/detail geometry comes from persisted pixel dimensions.
+- Created #426 with only the canonical geometry-refresh mutation and focused regression; no editor UI/file mutation/Relation changes are included.
 
 ## Risks / blockers
 - `bookmark_unified_stage1_page.dart` and `object_inspector_page.dart` are shared conflict-prone hotspots; changes must be patch-sized and sequenced after live ownership checks.
 - The current connector write path replaces complete existing files. Do not reconstruct large Stage1/Inspector/People hosts merely to make a small UI hunk change.
+- Generic Images List still uses generic document-icon presentation rather than Image thumbnails; fixing it currently requires the large generic host unless a smaller dispatch seam is introduced safely.
 - Legacy Bookmark URL/thumbnail and Photo storage remain compatibility data until caller-zero/migration policy is proven.
 - Identity-sensitive Weblink/Image creation must never fall back to raw title-only creation.
 - Ambiguous Relation/file ownership state must fail closed; presentation/filesystem cleanup must not repair it.
 - Gallery parity must reuse generic persisted `galleryMode` and renderer contracts rather than fork a Bookmark-only variant.
 - Destructive filesystem cleanup must retain fail-closed ownership checks; leaking an orphan managed file is preferable to deleting a shared/external user file.
+- Image editing has an additional shared-file hazard: an in-place edit can mutate another canonical Image or legacy Photo consumer even when Object metadata is separate. Resolve ownership/copy-on-edit before exposing the editor.
 
 ## Stop / continuation condition
-#416 is integrated. The next highest-value step is the small `ObjectInspectorPage` integration of the reusable Image preview, but the available connector only supports whole-file replacement for existing files; reconstructing a large shared host for a small hunk would violate the repository's patch-sized shared-hotspot rule. Resume that exact integration when a hunk-capable edit path is available. Meanwhile #249 Stage1 work has the same tooling constraint. Do not manufacture a parallel abstraction or broaden into Relation/Refactor ownership merely to keep a run busy.
+#423 is integrated and #426 is the active safe WIP. Continue #426 to green/merge. After that, prefer Image editor ownership/geometry work that stays in focused services/tests. Shared-host preview/List/Stage1 changes remain intentionally deferred until a hunk-capable edit path is available or another patch-sized seam appears. Do not manufacture parallel persistence/Relation abstractions merely to keep a run busy.
