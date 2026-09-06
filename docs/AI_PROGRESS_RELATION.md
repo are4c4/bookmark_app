@@ -26,10 +26,10 @@ Cross-lane coordination:
 - No feature may introduce a parallel serialized-id Relation writer or alternate Relation edge/index store.
 - Low-level `ObjectStore.setRelation` remains storage-internal/test-facing rather than a normal product mutation path.
 
-## Current checkpoint — 2026-09-07 02:17 JST
+## Current checkpoint — 2026-09-07 02:26 JST
 Latest Relation lifecycle merge: `27b68985871e3d4180b8b07c369ebc0f8735b8a9` — PR `#430 Preserve Bookmark Relations when legacy Image deletion is blocked`.
-Latest Relation handoff merge: PR `#440 Refresh Relation handoff after Image restore audit`, merged after Flutter CI `#1550` succeeded.
-Latest audited `main`: `f87b463b0991c8e2b4a3aa7e41db68a677b28aa3` after Object handoff `#446`; latest production Object change is `#442 Add safe canonical Image detail edit actions` at `340215ef530d00c577eb2fe3e5fca501d646773b`. Refactor `#443` is also merged and is maintainability-only.
+Latest Relation handoff merge: PR `#445 Refresh Relation handoff after Image edit actions audit`, merged as `e2d4d6237b63c58a14699a0f031766f74c2a9e27` after Flutter CI `#1566` succeeded.
+Latest audited production `main` before that handoff merge: `f87b463b0991c8e2b4a3aa7e41db68a677b28aa3` after Object handoff `#446`; latest production Object change is `#442 Add safe canonical Image detail edit actions` at `340215ef530d00c577eb2fe3e5fca501d646773b`. Refactor `#443` is also merged and is maintainability-only.
 
 The production Bookmark -> Image Relation contract remains:
 - `CoreObjectBridge` mirrors legacy Bookmark photo attachments into canonical Bookmark `Images` multi-Relation;
@@ -50,9 +50,9 @@ Object `#423 Guard Images participating in legacy Photo sync from deletion` intr
 - Object `#436`: Flutter CI `#1540` green; format-aware edit availability is Relation-neutral.
 - Object `#438`: Flutter CI `#1549` green; merged as `5724bdbf0cb3b8657548721c4c19d93d29076477`.
 - Relation `#440`: Flutter CI `#1550` green; merged successfully.
-- Stale Relation handoff `#441`: Flutter CI `#1554` green at its head, but subsequent main changes made it non-mergeable; superseded by the current handoff refresh.
+- Stale Relation handoff `#441`: Flutter CI `#1554` green at its head, but subsequent main changes made it non-mergeable; superseded.
 - Object `#442`: Flutter CI `#1555` green; merged as `340215ef530d00c577eb2fe3e5fca501d646773b`.
-- Relation handoff `#445`: Flutter CI `#1561` was green at prior head `a56680154d497c0cb33f2baf2e0d1605ad6511b9` including maintainability guardrail tests, Drift generation, Analyze and full Test. The current follow-up commit only refreshes this handoff through latest main/open-PR audit.
+- Relation handoff `#445`: prior head also passed CI `#1561`; refreshed head `90a3dd6c9a03995162c276214b5fe9ec04a7f162` passed Flutter CI `#1566` — maintainability guardrail tests, Drift generation, Analyze and full Test all succeeded — then merged as `e2d4d6237b63c58a14699a0f031766f74c2a9e27`.
 
 ## Repository audit since previous handoff
 - `#438` adds `CanonicalImageEditService.canRestoreOriginal(...)`, reusing canonical File lookup and exclusive managed-file ownership checks plus backup existence. It adds no Relation write, Photo mapping, schema, edge/index or shared-host mutation.
@@ -60,9 +60,13 @@ Object `#423 Guard Images participating in legacy Photo sync from deletion` intr
 - `#442` adds Image detail edit controls that route only through `CanonicalImageEditService.edit/restoreOriginal`; the production file imports only the canonical Image edit service and Flutter presentation APIs. It changes Image bytes/geometry under Object-owned safety policy but does not create, mutate, detach or retarget Relations, does not alter Photo mappings, and does not bypass canonical Relation APIs.
 - `#443` adds an opt-in maintainability reach-through regression threshold; it is Refactor-lane guardrail work and does not change Relation semantics.
 - `#446` is Object handoff documentation only; it changes no production Relation, Object persistence or index behavior.
-- Open Object `#447 Refresh canonical Image preview after same-path edits` changes only `object_image_detail_preview.dart` plus its focused widget regression. It evicts/reloads same-path managed image presentation after Object-owned edits and explicitly introduces no Relation write or ownership semantic change.
+- Open Object `#447 Refresh canonical Image preview after same-path edits` changes only `object_image_detail_preview.dart` plus its focused widget regression. Its production patch re-resolves geometry and evicts Flutter's same-path `FileImage` cache after Object-owned edits; it introduces no Relation write or ownership semantic change.
 - Open Refactor `#448 Enforce presentation database reach-through ceiling in CI` changes only Flutter CI plus Refactor/maintainability docs; it introduces no Relation semantics or production path.
-- Default-branch/open-PR audits found no new direct product use of low-level `ObjectStore.setRelation`, no alternate `object_relation_edges` writer, no new Bookmark/Weblink/Image/Person Relation producer, and no canonical Relation service bypass.
+- Comparing Relation handoff merge `#440` through audited production main shows no Relation source file changes: only Object Image edit/restore presentation/service work, Refactor maintainability files, tests and docs changed.
+- Default-branch audits found low-level `objectStore.setRelation(...)` production use only inside canonical Relation internals (`RelationMutationService` / `BidirectionalRelationStore`); remaining hits are tests/docs.
+- `object_relation_edges` production ownership remains `ObjectStore`, with `ObjectGraphQueryStore` read-side; direct SQL mutations outside it remain corruption/reconcile tests.
+- Person profile images remain legacy `profilePhotoId` / `PhotoRecord` in production; no first-class Person -> Image Relation producer exists yet.
+- `Related images` has schema and existing generic editor/lifecycle coverage, but no new production population producer appeared; current direct population hits are tests.
 
 ## Stable Relation coverage
 Important guardrails include:
@@ -90,4 +94,4 @@ Important guardrails include:
 - Open `#447/#448` do not own Relation production files; re-audit their actual diffs only if scope expands before merge.
 
 ## Stop reason
-Latest main through Object handoff `#446`, plus open Object `#447` and Refactor `#448`, does not introduce an uncovered Relation-producing workflow, canonical Relation storage/index/service change, or concrete lifecycle correctness regression. No further independent Relation implementation is justified without duplicating existing coverage or crossing into Object/Refactor ownership. Resume immediately for Person -> Image, a distinct Bookmark Image write/edit producer, explicit Related-images/batch writes, Relation storage/index/service changes, or a concrete lifecycle regression.
+Latest audited production main through Object handoff `#446`, plus open Object `#447` and Refactor `#448`, does not introduce an uncovered Relation-producing workflow, canonical Relation storage/index/service change, or concrete lifecycle correctness regression. Relation handoff `#445` is merged and green. No further independent Relation implementation is justified without duplicating existing coverage or crossing into Object/Refactor ownership. Resume immediately for Person -> Image, a distinct Bookmark Image write/edit producer, explicit Related-images/batch writes, Relation storage/index/service changes, or a concrete lifecycle regression.
