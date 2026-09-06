@@ -105,26 +105,17 @@ void main() {
 
       final bookmarkObjectId = (await database.customSelect(
         'SELECT object_id FROM bookmark_object_links WHERE workspace_id = ? AND bookmark_id = ?',
-        variables: <Variable<Object>>[
-          Variable<int>(workspaceId),
-          Variable<int>(bookmarkId),
-        ],
+        variables: [Variable<int>(workspaceId), Variable<int>(bookmarkId)],
       ).getSingle())
           .read<int>('object_id');
       final imageAId = (await database.customSelect(
         'SELECT object_id FROM photo_object_links WHERE workspace_id = ? AND photo_id = ?',
-        variables: <Variable<Object>>[
-          Variable<int>(workspaceId),
-          Variable<int>(photoAId),
-        ],
+        variables: [Variable<int>(workspaceId), Variable<int>(photoAId)],
       ).getSingle())
           .read<int>('object_id');
       final imageBId = (await database.customSelect(
         'SELECT object_id FROM photo_object_links WHERE workspace_id = ? AND photo_id = ?',
-        variables: <Variable<Object>>[
-          Variable<int>(workspaceId),
-          Variable<int>(photoBId),
-        ],
+        variables: [Variable<int>(workspaceId), Variable<int>(photoBId)],
       ).getSingle())
           .read<int>('object_id');
 
