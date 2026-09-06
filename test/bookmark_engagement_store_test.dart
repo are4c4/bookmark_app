@@ -14,7 +14,7 @@ void main() {
 
   tearDown(() => database.close());
 
-  Future<BookmarkItem> readBookmark(int id) =>
+  Future<Bookmark> readBookmark(int id) =>
       (database.select(database.bookmarks)..where((row) => row.id.equals(id)))
           .getSingle();
 
