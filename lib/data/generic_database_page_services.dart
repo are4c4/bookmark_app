@@ -349,23 +349,30 @@ class _GenericDatabaseRelationMutationService extends RelationMutationService {
     required int workspaceId,
     required int objectId,
   }) async {
-    final table = await systemObjects.database.customSelect(
-      '''SELECT 1 AS present
-         FROM sqlite_master
-         WHERE type = 'table' AND name = ?
-         LIMIT 1''',
-      variables: const [Variable<String>('photo_object_links')],
-    ).getSingleOrNull();
-    if (table == null) return false;
+    try {
+      final table = await systemObjects.database.customSelect(
+        '''SELECT 1 AS present
+           FROM sqlite_master
+           WHERE type = 'table' AND name = ?
+           LIMIT 1''',
+        variables: const [Variable<String>('photo_object_links')],
+      ).getSingleOrNull();
+      if (table == null) return false;
 
-    final mapping = await systemObjects.database.customSelect(
-      '''SELECT 1 AS present
-         FROM photo_object_links
-         WHERE workspace_id = ? AND object_id = ?
-         LIMIT 1''',
-      variables: [Variable<int>(workspaceId), Variable<int>(objectId)],
-    ).getSingleOrNull();
-    return mapping != null;
+      final mapping = await systemObjects.database.customSelect(
+        '''SELECT 1 AS present
+           FROM photo_object_links
+           WHERE workspace_id = ? AND object_id = ?
+           LIMIT 1''',
+        variables: [Variable<int>(workspaceId), Variable<int>(objectId)],
+      ).getSingleOrNull();
+      return mapping != null;
+    } catch (_) {
+      // This audit protects a destructive user action. If compatibility
+      // ownership cannot be read safely, retain the Image and expose the same
+      // stable product boundary rather than leaking a database exception.
+      return true;
+    }
   }
 
   Future<String?> _managedImageCleanupCandidate({
