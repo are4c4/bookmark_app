@@ -166,6 +166,12 @@ class CoreObjectBridge {
     );
     await systemObjectStore.ensureRelationProperty(
       objectTypeId: type.id,
+      name: 'Cover Image',
+      targetObjectTypeId: photoTypeId,
+      multiple: false,
+    );
+    await systemObjectStore.ensureRelationProperty(
+      objectTypeId: type.id,
       name: 'Tags',
       targetObjectTypeId: tagTypeId,
       multiple: true,
@@ -263,6 +269,7 @@ class CoreObjectBridge {
     final genre = _property(bookmarkType, 'Genre');
     final rating = _property(bookmarkType, 'Rating');
     final images = _property(bookmarkType, 'Images');
+    final coverImage = _property(bookmarkType, 'Cover Image');
     final tags = _property(bookmarkType, 'Tags');
 
     for (final bookmark in bookmarks) {
@@ -275,33 +282,89 @@ class CoreObjectBridge {
         title: bookmark.title,
       );
       await objectStore.renameObject(objectId, bookmark.title);
-      await objectStore.setPropertyValue(objectId: objectId, property: legacyId, value: bookmark.id);
-      await objectStore.setPropertyValue(objectId: objectId, property: url, value: bookmark.url);
-      await objectStore.setPropertyValue(objectId: objectId, property: description, value: bookmark.description);
-      await objectStore.setPropertyValue(objectId: objectId, property: favorite, value: bookmark.favorite);
-      await objectStore.setPropertyValue(objectId: objectId, property: readingStatus, value: bookmark.readingStatus);
-      await objectStore.setPropertyValue(objectId: objectId, property: storageState, value: bookmark.storageState);
-      await objectStore.setPropertyValue(objectId: objectId, property: genre, value: bookmark.genre);
-      await objectStore.setPropertyValue(objectId: objectId, property: rating, value: bookmark.rating);
+      await objectStore.setPropertyValue(
+        objectId: objectId,
+        property: legacyId,
+        value: bookmark.id,
+      );
+      await objectStore.setPropertyValue(
+        objectId: objectId,
+        property: url,
+        value: bookmark.url,
+      );
+      await objectStore.setPropertyValue(
+        objectId: objectId,
+        property: description,
+        value: bookmark.description,
+      );
+      await objectStore.setPropertyValue(
+        objectId: objectId,
+        property: favorite,
+        value: bookmark.favorite,
+      );
+      await objectStore.setPropertyValue(
+        objectId: objectId,
+        property: readingStatus,
+        value: bookmark.readingStatus,
+      );
+      await objectStore.setPropertyValue(
+        objectId: objectId,
+        property: storageState,
+        value: bookmark.storageState,
+      );
+      await objectStore.setPropertyValue(
+        objectId: objectId,
+        property: genre,
+        value: bookmark.genre,
+      );
+      await objectStore.setPropertyValue(
+        objectId: objectId,
+        property: rating,
+        value: bookmark.rating,
+      );
 
       final photoRows = await database.customSelect(
-        'SELECT photo_id FROM bookmark_photos WHERE bookmark_id = ? ORDER BY is_cover DESC, photo_id',
+        'SELECT photo_id, is_cover FROM bookmark_photos '
+        'WHERE bookmark_id = ? ORDER BY is_cover DESC, photo_id',
         variables: [Variable<int>(bookmark.id)],
       ).get();
       final photoObjectIds = <int>[];
+      var coverPhotoCount = 0;
+      int? coverImageObjectId;
       for (final row in photoRows) {
+        final isCover = row.read<int>('is_cover') != 0;
+        if (isCover) coverPhotoCount += 1;
         final linked = await _linkedObjectId(
           workspaceId: workspaceId,
           table: 'photo_object_links',
           legacyColumn: 'photo_id',
           legacyId: row.read<int>('photo_id'),
         );
-        if (linked != null) photoObjectIds.add(linked);
+        if (linked == null) continue;
+        photoObjectIds.add(linked);
+        if (isCover) coverImageObjectId = linked;
+      }
+      if (coverPhotoCount > 1) {
+        throw StateError(
+          'Legacy Bookmark ${bookmark.id} has multiple cover photos.',
+        );
+      }
+      if (coverPhotoCount == 1 && coverImageObjectId == null) {
+        throw StateError(
+          'Legacy Bookmark ${bookmark.id} cover photo has no linked Image Object.',
+        );
       }
       await _relationMutations.setRelation(
         objectId: objectId,
         property: images,
         targetObjectIds: photoObjectIds,
+      );
+      await _relationMutations.setRelation(
+        objectId: objectId,
+        property: coverImage,
+        targetObjectIds: coverImageObjectId == null
+            ? const <int>[]
+            : <int>[coverImageObjectId],
       );
 
       final tagRows = await database.customSelect(
@@ -443,7 +506,10 @@ class CoreObjectBridge {
       legacyId: legacyId,
     );
     if (existing != null) return existing;
-    final objectId = await objectStore.createObject(objectTypeId: objectTypeId, title: title);
+    final objectId = await objectStore.createObject(
+      objectTypeId: objectTypeId,
+      title: title,
+    );
     await database.customStatement(
       'INSERT INTO $table(workspace_id, $legacyColumn, object_id) VALUES (?, ?, ?)',
       [workspaceId, legacyId, objectId],
