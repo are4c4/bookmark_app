@@ -86,7 +86,14 @@ scan_root() {
 }
 
 scan_presentation_database_reachthrough() {
-  for root in lib/views lib/widgets; do
+  local presentation_roots=(lib/views lib/widgets)
+  if [[ -d lib/features ]]; then
+    while IFS= read -r feature_presentation; do
+      presentation_roots+=("$feature_presentation")
+    done < <(find lib/features -type d -name presentation -print | sort)
+  fi
+
+  for root in "${presentation_roots[@]}"; do
     [[ -d "$root" ]] || continue
     find "$root" -type f -name '*.dart' -print | while IFS= read -r file; do
       count="$(
