@@ -98,6 +98,49 @@ void main() {
     expect(stored.values[definition.pixelHeightProperty.id], isNull);
   });
 
+  test('path-only visual skips missing geometry fallback', () async {
+    final directory =
+        await Directory.systemTemp.createTemp('image_visual_path_only_');
+    addTearDown(() => directory.delete(recursive: true));
+    final managedFile = File('${directory.path}/managed.png');
+    await managedFile.writeAsBytes(
+      image.encodePng(image.Image(width: 11, height: 6)),
+    );
+
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final service = ImageObjectService(
+      systemObjects: SystemObjectStore(
+        database: database,
+        objectStore: objectStore,
+      ),
+      defaultsStore: ObjectTypeDefaultsStore(genericStore),
+    );
+    final definition = await service.ensureDefinition(workspaceId);
+    final imageObject = await service.findOrCreateManaged(
+      workspaceId: workspaceId,
+      filePath: managedFile.path,
+      originalFilename: 'managed.png',
+    );
+
+    final visual = await ImageVisualResolver(
+      objectStore,
+      probeMissingGeometry: false,
+    ).resolveManaged(
+      imageObjectTypeId: definition.objectType.id,
+      imageObjectId: imageObject.id,
+    );
+
+    expect(visual?.imageObjectId, imageObject.id);
+    expect(visual?.filePath, managedFile.path);
+    expect(visual?.pixelWidth, isNull);
+    expect(visual?.pixelHeight, isNull);
+    expect(visual?.aspectRatio, isNull);
+  });
+
   test('profile-relative Image file resolves against the active profile root',
       () async {
     final directory =
