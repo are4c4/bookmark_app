@@ -54,6 +54,63 @@ void main() {
     expect(defaults?.visiblePropertyIds, isNot(contains(definition.pixelHeightProperty.id)));
   });
 
+  test('managed Image geometry refresh overwrites only persisted dimensions',
+      () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final service = ImageObjectService(
+      systemObjects: SystemObjectStore(
+        database: database,
+        objectStore: objectStore,
+      ),
+      defaultsStore: ObjectTypeDefaultsStore(genericStore),
+    );
+
+    final created = await service.findOrCreateManaged(
+      workspaceId: workspaceId,
+      filePath: '/managed/editable.jpg',
+      sourceUrl: 'https://cdn.example.com/editable.jpg',
+      title: 'Editable image',
+      pixelWidth: 400,
+      pixelHeight: 800,
+    );
+    final updated = await service.updateManagedGeometry(
+      workspaceId: workspaceId,
+      objectId: created.id,
+      pixelWidth: 1200,
+      pixelHeight: 600,
+    );
+    final definition = await service.ensureDefinition(workspaceId);
+
+    expect(updated.id, created.id);
+    expect(updated.title, 'Editable image');
+    expect(updated.values[definition.fileProperty.id], '/managed/editable.jpg');
+    expect(
+      updated.values[definition.sourceUrlProperty.id],
+      'https://cdn.example.com/editable.jpg',
+    );
+    expect(updated.values[definition.pixelWidthProperty.id], 1200);
+    expect(updated.values[definition.pixelHeightProperty.id], 600);
+    expect(definition.aspectRatioFor(updated), 2);
+
+    await expectLater(
+      service.updateManagedGeometry(
+        workspaceId: workspaceId,
+        objectId: created.id,
+        pixelWidth: 0,
+        pixelHeight: 600,
+      ),
+      throwsArgumentError,
+    );
+    final unchanged =
+        (await objectStore.listObjects(definition.objectType.id)).single;
+    expect(unchanged.values[definition.pixelWidthProperty.id], 1200);
+    expect(unchanged.values[definition.pixelHeightProperty.id], 600);
+  });
+
   test('managed Image rejects non-positive dimensions before mutation', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
