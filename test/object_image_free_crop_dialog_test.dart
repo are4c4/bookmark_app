@@ -53,6 +53,60 @@ void main() {
     expect(_applyButton(tester).onPressed, isNotNull);
   });
 
+  testWidgets('free crop can switch to moving and zooming the image',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ObjectImageFreeCropDialog(
+            database: database,
+            objectStore: objectStore,
+            objectTypeId: 3,
+            objectId: 11,
+            visualResolver: ({required objectTypeId, required objectId}) async =>
+                const ImageManagedVisual(
+              imageObjectId: 11,
+              filePath: '/managed/image.png',
+              pixelWidth: 400,
+              pixelHeight: 200,
+            ),
+            imageBuilder: (_, __) => const ColoredBox(color: Colors.grey),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('object-image-free-crop-move-image-toggle')),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('object-image-free-crop-pan-zoom-selector')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('object-image-free-crop-selector')),
+      findsNothing,
+    );
+    expect(find.textContaining('ホイールで拡大・縮小'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('object-image-free-crop-move-image-toggle')),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('object-image-free-crop-selector')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('object-image-free-crop-pan-zoom-selector')),
+      findsNothing,
+    );
+  });
+
   testWidgets('missing Image geometry fails closed before free crop',
       (tester) async {
     await tester.pumpWidget(
