@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import '../data/object_store.dart';
+import '../data/profile_path_resolver.dart';
 import '../data/relation_read_service.dart';
 import '../data/weblink_image_schema_service.dart';
 import '../domain/object_model.dart';
@@ -36,12 +37,18 @@ class WeblinkManagedVisual {
 /// and legacy Bookmark presentation can therefore share one fail-closed path.
 /// Persisted Image dimensions are exposed as optional presentation metadata so
 /// masonry hosts can preserve media geometry without decoding image bytes.
+/// Profile-relative Image File values are resolved only at this read boundary,
+/// preserving the stored identity while allowing a profile/Vault root to move.
 class WeblinkVisualResolver {
-  WeblinkVisualResolver(ObjectStore objectStore)
-      : _objectStore = objectStore,
+  WeblinkVisualResolver(
+    ObjectStore objectStore, {
+    ProfilePathResolver? pathResolver,
+  })  : _objectStore = objectStore,
+        _pathResolver = pathResolver,
         _relationReads = RelationReadService(objectStore);
 
   final ObjectStore _objectStore;
+  final ProfilePathResolver? _pathResolver;
   final RelationReadService _relationReads;
 
   Future<WeblinkManagedVisual?> resolveManagedRepresentative({
@@ -76,10 +83,12 @@ class WeblinkVisualResolver {
         .toList(growable: false);
     if (fileProperties.length != 1) return null;
 
-    final path = _nonEmpty(
+    final storedPath = _nonEmpty(
       representative.targetObject.values[fileProperties.single.id]?.toString(),
     );
-    if (path == null || !await _existingFile(path)) return null;
+    if (storedPath == null) return null;
+    final path = _pathResolver?.resolveStoredPath(storedPath) ?? storedPath;
+    if (!await _existingFile(path)) return null;
 
     final width = _dimensionValue(
       imageType.properties
