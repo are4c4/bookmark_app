@@ -43,6 +43,14 @@ class _BookmarkAttachmentSectionState extends State<BookmarkAttachmentSection> {
     super.dispose();
   }
 
+  void _debugFailure(String operation, StackTrace stackTrace) {
+    assert(() {
+      debugPrint('BookmarkAttachmentSection: $operation failed.');
+      debugPrintStack(stackTrace: stackTrace);
+      return true;
+    }());
+  }
+
   String _size(int bytes) {
     if (bytes < 1024) return '$bytes B';
     final kb = bytes / 1024;
@@ -95,7 +103,11 @@ class _BookmarkAttachmentSectionState extends State<BookmarkAttachmentSection> {
       for (final author in metadata.authors) {
         try {
           await widget.repository.createPerson(author);
-        } catch (_) {}
+        } catch (_, stackTrace) {
+          // Author enrichment is optional. Keep the bookmark metadata update
+          // while exposing a fixed privacy-safe diagnostic during development.
+          _debugFailure('best-effort PDF author creation', stackTrace);
+        }
       }
       final allPeople = await widget.repository.watchPeople().first;
       final names = metadata.authors.map((e) => e.trim().toLowerCase()).toSet();
@@ -119,8 +131,13 @@ class _BookmarkAttachmentSectionState extends State<BookmarkAttachmentSection> {
         final pdfs = added.where((attachment) => attachment.isPdf).toList();
         if (pdfs.length == 1) await _offerPdfMetadata(pdfs.first);
       }
-    } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('ファイルを添付できませんでした: $error')));
+    } catch (_, stackTrace) {
+      _debugFailure('attachment import', stackTrace);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('ファイルを添付できませんでした。もう一度お試しください。')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _importing = false);
     }
