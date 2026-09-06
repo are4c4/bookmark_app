@@ -1,6 +1,5 @@
-import '../domain/object_model.dart';
-import '../services/image_object_service.dart';
 import 'database_view_gallery_adapter.dart';
+import 'image_object_service.dart';
 import 'object_store.dart';
 import 'system_object_store.dart';
 import 'weblink_object_service.dart';
@@ -73,13 +72,15 @@ class DatabaseViewGalleryCoverSourceService {
         continue;
       }
 
-      final targetSystemKey = targetSystemKeys.putIfAbsent(
-        targetTypeId,
-        () => null,
-      );
-      final resolvedSystemKey = targetSystemKey ??
-          await systemObjects.systemKeyForObjectType(targetTypeId);
-      targetSystemKeys[targetTypeId] = resolvedSystemKey;
+      String? resolvedSystemKey;
+      if (targetSystemKeys.containsKey(targetTypeId)) {
+        resolvedSystemKey = targetSystemKeys[targetTypeId];
+      } else {
+        resolvedSystemKey = await systemObjects.systemKeyForObjectType(
+          targetTypeId,
+        );
+        targetSystemKeys[targetTypeId] = resolvedSystemKey;
+      }
 
       if (resolvedSystemKey == ImageObjectService.systemKey) {
         options.add(
