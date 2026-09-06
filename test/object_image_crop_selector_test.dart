@@ -61,6 +61,48 @@ void main() {
     expect(resized.bottom, closeTo(0.7, 0.0001));
   });
 
+  test('pan moves source opposite to image drag under a fixed frame', () {
+    const source = Rect.fromLTWH(0.2, 0.2, 0.5, 0.5);
+    final moved = ObjectImageCropGeometry.panSource(
+      source,
+      source,
+      const Offset(-20, 10),
+      const Size(200, 100),
+    );
+
+    expect(moved.left, closeTo(0.3, 0.0001));
+    expect(moved.top, closeTo(0.1, 0.0001));
+    expect(moved.width, closeTo(0.5, 0.0001));
+    expect(moved.height, closeTo(0.5, 0.0001));
+  });
+
+  test('wheel zoom preserves source aspect ratio and normalized bounds', () {
+    const source = Rect.fromLTWH(0.2, 0.25, 0.5, 0.4);
+    final zoomed = ObjectImageCropGeometry.zoomSource(source, -100);
+
+    expect(zoomed.width, lessThan(source.width));
+    expect(zoomed.height, lessThan(source.height));
+    expect(
+      zoomed.width / zoomed.height,
+      closeTo(source.width / source.height, 0.0001),
+    );
+    expect(zoomed.left, greaterThanOrEqualTo(0));
+    expect(zoomed.top, greaterThanOrEqualTo(0));
+    expect(zoomed.right, lessThanOrEqualTo(1));
+    expect(zoomed.bottom, lessThanOrEqualTo(1));
+  });
+
+  test('zoom refuses to shrink either source axis below minimum size', () {
+    final zoomed = ObjectImageCropGeometry.zoomSource(
+      const Rect.fromLTWH(0.2, 0.2, 0.2, 0.1),
+      -10000,
+      minCropSize: 0.08,
+    );
+
+    expect(zoomed.width, greaterThanOrEqualTo(0.08));
+    expect(zoomed.height, greaterThanOrEqualTo(0.08));
+  });
+
   test('invalid initial geometry falls back to a safe normalized rectangle', () {
     final normalized = ObjectImageCropGeometry.normalize(
       Rect.fromLTRB(double.nan, 0, 1, 1),
@@ -162,5 +204,48 @@ void main() {
     expect(changed!.top, closeTo(0.08, 0.001));
     expect(changed!.bottom, closeTo(0.92, 0.001));
     expect(changed!.height, closeTo(0.84, 0.001));
+  });
+
+  testWidgets('pan zoom mode drags image beneath a fixed crop frame',
+      (tester) async {
+    Rect? changed;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Center(
+          child: SizedBox(
+            width: 200,
+            height: 100,
+            child: ObjectImageCropSelector(
+              initialRect: const Rect.fromLTWH(0.2, 0.2, 0.5, 0.5),
+              mode: ObjectImageCropInteractionMode.panZoomImage,
+              onChanged: (value) => changed = value,
+              child: const ColoredBox(color: Colors.grey),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('object-image-free-crop-pan-zoom-selector')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('object-image-free-crop-handle-right')),
+      findsNothing,
+    );
+
+    await tester.drag(
+      find.byKey(const ValueKey('object-image-free-crop-pan-zoom-frame')),
+      const Offset(-20, 0),
+    );
+    await tester.pump();
+
+    expect(changed, isNotNull);
+    expect(changed!.left, closeTo(0.3, 0.02));
+    expect(changed!.top, closeTo(0.2, 0.001));
+    expect(changed!.width, closeTo(0.5, 0.001));
+    expect(changed!.height, closeTo(0.5, 0.001));
   });
 }
