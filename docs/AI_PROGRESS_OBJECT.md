@@ -1,100 +1,59 @@
-# AI Progress — Object Lane
+# AI Progress — Object Core & Body Lane
 
-> Durable handoff for the Object implementation lane. Always re-read live GitHub Issue/PR/CI state before acting; PR numbers below are checkpoints, not substitutes for current ownership.
+> Lane A durable handoff. Read `AGENTS.md`, the active Issue, and `docs/AI_PROGRESS.md` before implementation. This file no longer owns Weblink/Image/File product work or generic Database/View presentation.
 
-## Lane scope
-Object/ObjectType architecture, Property value semantics, Object-centric Database/View integration, Object detail/opening presentation, Body/block model, Daily Notes, reusable system Object types, system-collection product UX, and Object-owned presentation. Relation persistence/integrity stays in the Relation lane; behavior-preserving cleanup stays in Refactor #225.
+## Lane goal
+Keep the reusable Object/ObjectType core coherent while making Body and Object detail capabilities universal across built-in and user-defined ObjectTypes.
 
-## Active issues
-- #56 — generic Object/Database/View daily-use integration.
-- #155 — reusable Weblink + managed Image presentation and legacy compatibility retirement.
-- #245 — legacy Photos -> canonical Image Objects and Image product-semantic convergence.
-- #249 — Bookmark Gallery/List parity; Stage1 List density/alignment and fixed/masonry host wiring remain.
-- #242 — Vault folders remain lower priority while Image/presentation parity remains actionable.
+## Primary active issues
+- #481 — universal Body/note surface for every ObjectType.
+- #56 — Object/ObjectType/detail/opening portions of the generic architecture umbrella.
+- #484 — core user-defined ObjectType semantics and built-in-vs-user-defined boundary only; primitive implementation belongs to the Primitive lane.
 
-Completed/closed for current implementation scope: #247 Bookmark opening modes, #149 Property handle, #252 Property-add UX, #156 generic fixed/masonry Gallery, #166 aliases.
+## Owns
+- Object/ObjectType identity and core schema semantics.
+- Typed Property value semantics that are not presentation-host-specific.
+- Versioned Body/block/reference persistence and editing contracts.
+- Universal Body capability across ordinary/system ObjectTypes.
+- Aliases/shared Object identity metadata contracts.
+- Daily Note identity/navigation and time-based Object patterns.
+- Shared Object detail/opening semantics.
+- User-defined ObjectType core behavior.
 
-## Current merged state — 2026-09-07
-Latest verified `main` in this run: `1d4775530b4c1646cb4a88d719e96f48b6bec39b` after Object #469.
+## Does not own anymore
+- Weblink/Image/File/Tag primitive product behavior -> `docs/AI_PROGRESS_PRIMITIVES.md`.
+- Database/View/Table/List/Gallery/Board/schema-authoring UX -> `docs/AI_PROGRESS_DATABASE_VIEW.md`.
+- Relation lifecycle/data-integrity internals -> `docs/AI_PROGRESS_RELATION.md`.
+- Search/FTS/indexing -> `docs/AI_PROGRESS_SEARCH.md`.
+- Vault/filesystem/delivery -> `docs/AI_PROGRESS_STORAGE.md`.
+- behavior-preserving cleanup -> `docs/AI_PROGRESS_REFACTOR.md`.
 
-Recent Image/Object checkpoints now merged:
-- #416 — canonical Image detail preview using `ImageVisualResolver`, profile-relative paths and persisted geometry.
-- #423 — generic Image deletion blocked while legacy Photo compatibility still owns/maps the Image.
-- #426 — `ImageObjectService.updateManagedGeometry(...)` for post-edit pixel metadata refresh.
-- #432 — `CanonicalImageEditService` with exclusive managed-file ownership, backup/restore, geometry refresh and byte rollback on metadata failure.
-- #434 / #436 / #438 — conservative `canEdit(...)` / format support / `canRestoreOriginal(...)` presentation preflights.
-- #442 — safe Image edit actions behind `CanonicalImageEditService`.
-- #447 — explicit same-path preview refresh and `FileImage` cache eviction.
-- #457 — `ObjectImageDetailPanel`, composing preview + safe edit actions and refreshing same-path media after mutation.
-- #460 — safe centered crop presets: 1:1, 4:3, 3:4, 16:9 and 9:16.
-- #465 — normalized free-crop selector/dialog with draggable frame and corner handles; selected `Rect` is routed through `CanonicalImageEditService.edit(normalizedCropRect: ...)` without exposing raw file paths to mutation UI. Invalid crop requests are rejected before target/ownership resolution.
-- #469 — safe vertical flip action, composed from existing supported edit primitives and protected by the same immediate ownership/format recheck as other canonical Image mutations.
-- #473 — `ImageVisualResolver` now probes managed bytes read-only only when persisted Pixel width/height is missing/partial; complete persisted geometry remains the no-decode fast path. Fallback geometry is never written back to the Object and partial metadata is replaced by one coherent decoded width/height pair.
+## Current core state
+- Object/ObjectType persistence, generic Object records, aliases, shared detail content and typed Property presentation are integrated.
+- Body is already versioned/block-oriented and supports text/checklist/reference-style blocks plus Object and Database/View references.
+- Daily Note uses the shared Object model with unique-by-date workflow semantics.
+- Shared Object opening modes and detail content are integrated in side/center/full-page hosts.
 
-Broader merged product state:
-- canonical Bookmark -> Weblink -> managed Representative Image flow is live;
-- Weblinks / Images / Daily Notes use generic Database/sidebar hosts;
-- canonical Weblink URL entry and managed Image import are live;
-- Image import uses app-managed storage, persists geometry where available, and reuses byte-identical managed files deterministically on reimport;
-- Image creation remains identity-sensitive and never falls back to title-only creation;
-- legacy Photo rows mirror idempotently to canonical Images with stable mapping/provenance; native Images are not owned/deleted by legacy cleanup;
-- Bookmark legacy photo attachments mirror through canonical Bookmark `Images` multi-Relation and explicit cover through canonical `Cover Image` single Relation;
-- Bookmark cover presentation reads canonical `Cover Image` before legacy explicit-cover fallback;
-- canonical Image deletion/backlinks are Relation-safe, and legacy Photo deletion preserves shared canonical Image files;
-- canonical Image managed-file cleanup is ownership-aware and fail-closed for shared/external/ambiguous files;
-- native canonical Image title/Note editing is enabled; legacy-owned mirrors remain read-only while Photo is authoritative;
-- Image reverse lookup is available through canonical Object/Relation backlinks.
+## Current gap — #481
+The shared inspector historically restricted Body editing for most system ObjectTypes while allowing ordinary types and Daily Note. Product direction now treats Body as universal Object content:
 
-## Current product position
-#245 Phase 1 (canonical Image import/create) and Phase 2 (legacy Photo -> Image bridge) are functionally implemented in production. Phase 3 Bookmark `Images` / `Cover Image` canonical Relation semantics and lifecycle are also implemented, while legacy Bookmark write paths still remain compatibility authority for some user-facing flows.
+```text
+Object
+├ typed Properties
+└ Body
+```
 
-The reusable Image detail/edit panel now covers preview, rotate, horizontal/vertical flip, restore, crop presets, and free crop while remaining behind `CanonicalImageEditService` ownership/rollback rules. Older/native Images without complete persisted geometry can still obtain read-only presentation geometry from managed bytes through #473.
+Weblink/Image/File/Tag identity rules remain intact; enabling Body must not weaken their canonical creation/identity semantics.
 
-The major remaining gap is **host integration and legacy UI retirement**, not another Image persistence subsystem.
+## Initial next actions
+1. Re-read #481 and current `ObjectInspectorPage` before editing; check hotspot ownership first.
+2. Remove only the system-type Body-edit restriction through a patch-sized change or focused seam.
+3. Add regression proving Body create/edit persists for at least Weblink and Image system Objects while ordinary/custom Objects and Daily Note retain behavior.
+4. Verify side peek / center peek / full page consume the same Body content through the shared detail contract.
+5. Coordinate Body indexing with Search lane rather than adding search logic here.
 
-## Exact next actions
-1. Re-read live open PR ownership and latest main before any shared-host edit. Current non-Object WIP is docs/cleanup oriented; do not assume ownership remains free.
-2. Highest-value Object step: wire `ObjectImageDetailPanel` into canonical Image detail in `ObjectInspectorPage` using a genuinely patch-sized edit. Route `onError` to the existing SnackBar/error affordance and `onChanged` to `_load()` or equivalent persisted-detail refresh. Do not reconstruct the whole Inspector merely to insert the panel.
-3. Keep all byte edits behind `CanonicalImageEditService`; never pass raw file paths from presentation into `ImageEditService`.
-4. Continue #245 Phase 4 generic Images parity:
-   - generic Images List still uses a generic document icon rather than Image thumbnails;
-   - Image Table/List daily-use media parity should reuse existing `ImageVisualResolver`/generic media contracts rather than an Image-specific page;
-   - canonical backlinks already replace legacy Bookmark reverse lookup;
-   - do not hide/remove legacy `写真` until remaining Bookmark/People/write-path parity is proven.
-5. Continue #245 Bookmark image write/edit UX only after legacy `bookmark_photos` authority/write-through semantics are explicit; canonical-only writes can still be overwritten by compatibility sync.
-6. Legacy Photo tags currently mirror as compatibility `Legacy Tags`. Converting them into canonical Tag Relations would be a new Relation-producing product decision; do not do that from Object lane alone.
-7. Continue #249 Stage1 List polish only through a patch-sized host change: stable row padding/minimum height, bounded title lines with ellipsis, stable trailing-action alignment.
-8. Continue #249 Bookmark Gallery parity by reusing `DatabaseViewGalleryAdapter` / `ObjectGalleryView` and persisted `settings['galleryMode']`; do not create Bookmark-only Gallery settings.
-9. Continue #155 legacy presentation convergence only where canonical replacement is already proven. Do not remove query/import/export compatibility reads merely for caller-count reduction.
-10. Defer Person profile Image migration until a first-class Person Object/image relationship contract exists; current People UX still depends on legacy `profilePhotoId`.
+## Shared hotspot rule
+`object_inspector_page.dart` requires an open-PR ownership check. If it is leased by Primitive/Refactor/Database-View work, choose domain/service/test slices or sequence the patch rather than reconstructing the whole host.
 
-## Cross-lane coordination
-### Relation
-Canonical Relation behavior is mature. Bookmark `Images` / `Cover Image` lifecycle is covered. Current Image geometry/edit presentation is Relation-neutral. Resume Relation implementation only if a new production workflow creates/retargets Relations or a concrete lifecycle regression appears.
-
-### Refactor
-Refactor may retire legacy code only after Object replacement behavior is live and caller-zero is proven. #467 merged a privacy-safe diagnostic around Image file existence probing without changing presentation semantics. Shared hotspots remain `generic_database_page.dart`, `object_inspector_page.dart`, `bookmark_unified_stage1_page.dart`, `people_management_page.dart`, `app_database.dart`.
-
-## Validation in this run
-- #460: Flutter CI #1604 green; merged as `3ead07fba966261aafaab1bc825d1d98a881623d`.
-- #465: Flutter CI #1613 green; merged as `2b25c55bd621ad438290923995c24756827beb53`.
-- #469: Flutter CI #1620 green; merged as `1d4775530b4c1646cb4a88d719e96f48b6bec39b`.
-- #473: Flutter CI #1631 green; merged as `a1ea19391f07412c4117d9543f395d79f7f1f8da` immediately before #469.
-- #473 coverage proves complete persisted geometry avoids byte decoding, missing geometry can be read from valid managed bytes, partial invalid metadata becomes one coherent decoded geometry pair, profile-relative paths still resolve, and missing files remain fail-closed.
-- Audited managed Image reimport: `GenericDatabaseImageImportService` already uses `PhotoStorageService.importImages/importPaths(reuseIdentical: true)` and returns canonical Object ids without uncontrolled duplicate managed copies.
-- Audited Photo tags: bridge already preserves them as `Legacy Tags`; no new Tag Relation semantics introduced.
-- Audited Object opening: `GenericDatabasePage` still constructs `ObjectInspectorPage` directly, so panel integration still requires a small shared-host edit; no smaller route factory currently exists.
-- Audited Images defaults: visible daily-use properties already omit internal File/Pixel metadata; adding Image-specific View persistence just to force Gallery would widen responsibilities and was not introduced.
-- Audited legacy `photo_database_picker.dart`: production callers remain Bookmark create/detail and People profile-photo workflows, all still bound to legacy write authority, so no unsafe canonical-only picker swap was made.
-
-## Risks / blockers
-- The current connector replaces complete existing files; there is no hunk-sized write. Do not reconstruct large shared hosts solely to add a few lines.
-- `object_inspector_page.dart` and `bookmark_unified_stage1_page.dart` remain conflict-prone hotspots.
-- Byte edits preserve managed file paths; any host integration must retain #447/#457 explicit refresh behavior.
-- Generic Images List media parity still requires either a safe small dispatch seam or a patch-sized generic host edit.
-- Legacy Bookmark photo writes and People `profilePhotoId` remain production compatibility dependencies.
-- Ambiguous Relation/file ownership must fail closed; cleanup/edit code must not repair or guess ownership.
-- Destructive filesystem cleanup must prefer leaking an orphan file over deleting a shared/external user file.
-
-## Stop / continuation condition
-The reusable canonical Image panel itself is no longer the blocker. The next highest-value product work is its patch-sized `ObjectInspectorPage` integration, followed by #249 Stage1 and generic Images List media parity. If only whole-file reconstruction is available for those large hosts, do not manufacture a broad rewrite or parallel persistence abstraction merely to keep a run busy; continue only with independent, product-relevant Object slices or durable handoff/verification work.
+## Handoff checklist
+Record active Issue, branch/commit/PR, core semantic change, validation, hotspot lease, cross-lane dependencies, next actions, and stop reason before ending a run.
