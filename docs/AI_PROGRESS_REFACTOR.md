@@ -8,24 +8,28 @@ Issue #225 — reduce maintenance hotspots and retire duplicate legacy paths whi
 Primary lane: **Refactor**. Object owns replacement product semantics and Relation owns canonical Relation semantics. Refactor owns measurable responsibility reduction, legacy retirement after parity, failure-policy/privacy cleanup, and maintainability guardrails.
 
 ## Current checkpoint — 2026-09-06
-Latest `main` observed at this checkpoint: `217437e440b40532c9a84c3566f365a9dcdb0cf0` after Refactor #406.
+Latest `main` verified in this checkpoint: **`8355c86e8d18804a61661df5055156615120f724`** after Refactor #422.
 
 Recent Refactor convergence:
-- **#373 merged** — `BookmarkVisualImage` and Bookmark lifecycle URL presentation delegate low-level resolver construction to `BookmarkPresentationResolverFactory`.
-- **#374 merged** — backup workflow moved out of `SettingsPage` into `DatabaseBackupSettingsSection`, removing about 108 lines of workflow responsibility from the shell.
-- **#377 merged** — maintainability report now shows presentation `workspaceStore.database` reach-through counts/files without failing on existing debt.
-- **#383 merged** — duplicate legacy Bookmark -> mirrored Object lookup SQL/catch logic is centralized in `BookmarkObjectLinkReadStore` and reused by Bookmark URL/visual resolvers.
-- **#393 merged** — optional `WeblinkCreateEnrichmentService` diagnostics no longer attach raw exception objects.
-- **#395 merged** — reverse-lookup URL resolver composition delegates to `BookmarkPresentationResolverFactory`.
-- **#400 merged** — `DatabaseBackupSettingsSection` no longer reaches through `BookmarkRepository` to `workspaceStore.database`; `DatabaseBackupService.fromRepository(...)` owns that composition.
-- **#401 merged** — tests-only architecture guard prevents new direct `BookmarkUrlResolver` / `BookmarkVisualResolver` construction in presentation; only Stage1 and `NotionBookmarkCard` are currently allowlisted legacy hosts.
-- **#404 merged** — optional remote-image dimension-probe diagnostics keep fixed message + stack but omit the raw exception object; undecodable image bytes still import successfully.
-- **#406 merged** — optional post-create Weblink enrichment in `GenericDatabaseObjectCreateService` keeps canonical creation fail-soft, omits raw exception objects from diagnostics, and has a real behavior regression proving enrichment failure does not roll back the canonical Weblink.
+- **#373 merged** — Bookmark visual/lifecycle URL presentation delegates low-level resolver composition to `BookmarkPresentationResolverFactory`.
+- **#374 merged** — backup workflow moved out of `SettingsPage` into `DatabaseBackupSettingsSection`.
+- **#377 merged** — maintainability reporting exposes presentation `workspaceStore.database` reach-through without failing on existing debt.
+- **#383 merged** — duplicate Bookmark -> mirrored Object lookup SQL/catch logic centralized in `BookmarkObjectLinkReadStore`.
+- **#395 merged** — reverse-lookup resolver composition delegates to the shared factory.
+- **#400 merged** — backup section no longer reaches through `BookmarkRepository` to `workspaceStore.database`.
+- **#401 merged** — architecture guard prevents new direct Bookmark URL/visual resolver construction in presentation.
+- **#404 merged** — optional remote-image dimension diagnostics omit raw exception objects while preserving fail-soft import.
+- **#406 merged** — optional generic Weblink enrichment diagnostics are privacy-safe; canonical creation remains fail-soft.
+- **#408 merged** — `BacklinkRepository` delegates focused relation reads through `BookmarkRepository.watchRelationsForBookmark(...)` instead of reaching through to `AppDatabase` and watching the whole legacy relation table.
+- **#417 merged** — retired caller-zero `saved_view_extensions.dart` and its dead-API-only regression: 25 production LOC + 59 test LOC removed, no replacement wrapper added.
+- **#422 merged** — deduplicated complete Bookmark -> FTS projection SQL behind one private insert implementation shared by rebuild and focused refresh. Flutter CI #1503 Analyze/Test green.
 
-Current parallel ownership observed at the checkpoint:
-- Object #402 is active on canonical Image managed-file deletion/cleanup safety;
-- Relation #403 has merged the Bookmark Cover Image Relation lifecycle regression;
-- no open Refactor production PR remains after #406.
+During #410/#422 validation, a possible pre-existing focused-refresh stale-token behavior was observed. It was deliberately kept out of behavior-preserving Refactor work and is tracked separately as **Issue #414**. Do not silently turn that correctness question into a Refactor semantic change.
+
+Current parallel ownership at this checkpoint:
+- **Object #423 open** — generic Image deletion guard for legacy-owned mirrors; avoid overlapping Image/Object deletion paths.
+- **Relation #420 open** — handoff-only and currently stale/non-mergeable; Refactor must not redesign canonical Relation semantics.
+- no open Refactor production PR remains after #422 at the time of this checkpoint.
 
 ## Major completed checkpoints
 
@@ -40,7 +44,7 @@ Merged guardrails include:
 
 New Object/Database/View code must not deepen `BookmarkItem` / legacy-table coupling unless it is an explicit compatibility or migration boundary.
 
-### AppDatabase migration extraction / responsibility reduction
+### AppDatabase responsibility reduction
 Historical migration bodies v2-v16 are extracted behind migration helpers. `AppDatabase.migration` is sequencing/wiring rather than the home of historical bodies.
 
 Merged responsibility moves include:
@@ -49,99 +53,83 @@ Merged responsibility moves include:
 - #283 `SavedViewReadStore`;
 - #289 `PhotoReadStore`.
 
-A concrete next AppDatabase candidate exists: favorite/status/rating/open-count plus the three batch state updates are still near-passthrough calls from `BookmarkRepository` into the database root. A focused `BookmarkStateMutationStore` would remove real application mutation responsibility. **Do not implement this while the available write path requires reconstructing the large `app_database.dart` file wholesale.** Wait for a safe patch-sized edit path or another sequenced change that already owns that file.
+A concrete next AppDatabase candidate remains: favorite/status/rating/open-count plus three batch state updates are near-passthrough calls from `BookmarkRepository` into the database root. A focused `BookmarkStateMutationStore` would remove real mutation responsibility. **Do not implement this while the available write path requires reconstructing `app_database.dart` wholesale.**
 
-### Legacy Bookmark visual / URL presentation retirement
-All four direct visual duplicates from the original inventory are canonicalized through `BookmarkVisualImage` (Notion card, reverse lookup, lifecycle rows, Stage1 List/Table). Canonical Bookmark URL presentation covers lifecycle, reverse lookup, Notion card, Stage1 and Bookmark List metadata.
+### Legacy Bookmark presentation / retirement
+All four originally inventoried direct Bookmark visual duplicates are canonicalized through `BookmarkVisualImage` (Notion card, reverse lookup, lifecycle rows, Stage1 List/Table). Canonical Bookmark URL presentation covers lifecycle, reverse lookup, Notion card, Stage1 and Bookmark List metadata.
 
-Resolver composition has also converged through #373/#395. #401 prevents new presentation-side direct resolver construction. The remaining allowlisted direct construction hosts are:
-- `lib/views/bookmark_unified_stage1_page.dart`;
-- `lib/widgets/notion_bookmark_card.dart`.
+#401 still prevents new direct URL/visual resolver construction in presentation. Remaining allowlisted direct construction must be re-audited from current source before editing; do not relax the guard for new callers.
 
-Migrating either host away should shrink the allowlist; do not relax the guard for new callers.
+#417 is the first recent whole-module caller-zero retirement: `saved_view_extensions.dart` is deleted instead of retained as a speculative compatibility wrapper.
 
-Legacy `bookmarks.url`, thumbnail, Photo and Bookmark tables remain compatibility/import/export/live-host data until production caller-zero and migration policy are proven. Presentation convergence alone is not permission to delete storage.
+Legacy `bookmarks.url`, thumbnail, Photo and Bookmark tables remain live compatibility/import/export data until production caller-zero and migration/backup policy are proven. Presentation convergence alone is not permission to delete storage.
 
 ### GenericDatabasePage decomposition
 Merged focused slices:
 - #310 `GenericDatabasePageStateLoader` owns read/projection loading and computed projection;
 - #323 `GenericDatabasePageServices.fromWorkspaceStore(...)` owns the low-level Store/Service composition graph.
 
-Remaining high-value responsibilities include schema/database actions, Property-create/edit workflows and layout-specific host code. Continue only through patch-sized moves that measurably remove Widget responsibility/LOC. Do not reconstruct the large host wholesale.
+Remaining high-value responsibilities include schema/database actions, Property-create/edit workflows and layout-specific host code. Continue only through patch-sized moves that measurably remove Widget responsibility/LOC. The Property-create dialog extraction remains a good target only when a safe patch-sized edit path exists and Object does not own the host.
 
 ### Failure policy / diagnostic privacy
-Broad high-value boundaries are now covered across search/settings/bootstrap/profile/attachments/rollback/malformed persisted data and optional Weblink/Image enrichment.
-
-Recent additions:
-- #393 — Weblink create enrichment diagnostics;
-- #404 — remote image dimension probe diagnostics;
-- #406 — generic Database Weblink post-create enrichment diagnostics plus behavior regression.
+Broad high-value boundaries are covered across search/settings/bootstrap/profile/attachments/rollback/malformed persisted data and optional Weblink/Image enrichment.
 
 Policy remains:
 - intentional fail-soft behavior stays fail-soft;
 - rollback cleanup never replaces the primary failure;
 - user-visible failures use stable retry/domain messages instead of raw implementation strings;
-- debug diagnostics use fixed operation labels + stack traces and avoid raw names, URLs, paths, JSON, bytes, response bodies, and exception text;
-- changing `ProfileManager` corrupt-registry fallback selection remains a product/data-safety decision, not routine cleanup.
+- debug diagnostics use fixed operation labels + stack traces and avoid raw names, URLs, paths, JSON, bytes, response bodies and exception text;
+- `ProfileManager` corrupt-registry fallback selection remains a product/data-safety decision, not routine cleanup.
 
-Remaining raw user-visible exception interpolation is concentrated in large/shared legacy hosts such as Photo management, Tag management and Stage1. Do not create more micro logging PRs merely to chase strings in those files; address them only as part of a safe, owned, testable host slice.
+Remaining raw user-visible exception interpolation is concentrated in large/shared legacy hosts such as Photo management, Tag management and Stage1. Do not create micro logging PRs merely to chase strings in those files; address them only as part of a safe owned host slice.
+
+### Search/index responsibility
+#422 centralizes the duplicated Bookmark -> FTS projection used by full rebuild and focused refresh. FTS schema, ranking, prefix-query semantics, trash filtering and transaction boundaries remain unchanged.
+
+**Issue #414 is separate correctness work.** Reproduce and fix stale focused-refresh tokens there if confirmed; do not conflate it with #225 cleanup.
 
 ## Dependency-composition state
-#377 makes presentation database reach-through visible. Recent reductions include resolver composition (#373/#395) and backup service composition (#400).
+#377 makes presentation database reach-through visible. Confirmed reductions include resolver composition (#373/#395), backup composition (#400) and focused Bookmark backlink reads (#408).
 
-Known remaining presentation reach-through includes large/shared hosts such as:
-- `app_shell.dart`;
-- `people_management_page.dart`;
-- `photo_management_page.dart`;
-- `collection_management_page.dart`;
-- `bookmark_unified_stage1_page.dart`;
-- `generic_database_page.dart`.
+Known remaining reach-through is concentrated in large/shared hosts including `app_shell.dart`, People/Photo/Collection management, Stage1 and `generic_database_page.dart`. Some low-level DB access inside dedicated Store/Service factories is intentional. Prefer a real responsibility move with two or more callers, or an existing focused boundary, over a wrapper created solely to hide one property access.
 
-Some low-level database access inside dedicated composition/service factories is intentional and should not be counted as presentation debt. Prefer a real responsibility move with two or more callers, or an existing focused boundary, over a wrapper created solely to hide one property access.
+Attachment presentation still constructs `BookmarkAttachmentStore` in multiple hosts. Do not solve this by making `BookmarkRepository` a broader service locator; only change it when an existing focused boundary removes actual responsibility.
 
 ## Cross-lane coordination
 
 ### Object lane
-Object owns #56/#155/#245/#249 product/presentation convergence and currently #402 Image managed-file deletion safety. Re-check live PRs before touching Bookmark/generic/media hosts because Object advances quickly.
+Object owns #56/#155/#245/#249 product/presentation convergence. Re-check live PRs before touching Bookmark/generic/media hosts because Object advances quickly. At this checkpoint #423 owns legacy-mirrored Image deletion safety.
 
 ### Relation lane
-Canonical Relation mutation/read/index/backlink/audit/reconcile remains mature. #403 covers the new Bookmark Cover Image production Relation lifecycle. Refactor must not create alternate serialized-id Relation writes, indexes, repair paths, or presentation-side mutation.
+Canonical Relation mutation/read/index/backlink/audit/reconcile remains mature. Refactor may narrow legacy Bookmark callers (as #408 did) but must not create alternate serialized-id Relation writes, indexes, repair paths or presentation-side mutation.
 
 ## Exact next actions
 1. Re-read live open PR ownership before every shared-host change.
-2. Prefer the next **measurable responsibility reduction** over another diagnostic micro-PR.
-3. When a safe patch-sized edit path is available, migrate `NotionBookmarkCard` to `BookmarkPresentationResolverFactory.urlFor(repository)` and shrink the #401 allowlist. Stage1 remains a large shared hotspot and should be sequenced separately.
-4. Continue reducing `workspaceStore.database` presentation reach-through only in small/owned hosts with an existing meaningful Store/Service boundary. Do not mass-wrap every occurrence.
-5. Continue GenericDatabasePage P1 only when a safe extraction removes concrete schema/database action, Property workflow, or layout-host responsibility.
+2. Prefer the next **measurable responsibility/LOC reduction or caller-zero deletion** over another diagnostic micro-PR.
+3. Re-audit small compatibility modules for true production caller-zero; delete only when tests/import/export/migration expectations are independently covered.
+4. Continue reducing presentation `workspaceStore.database` reach-through only in small/owned hosts with an existing meaningful Store/Service boundary. Do not mass-wrap occurrences.
+5. Continue GenericDatabasePage P1 only when a safe extraction removes concrete schema/database action, Property workflow or layout-host responsibility.
 6. Revisit `BookmarkStateMutationStore` only when `app_database.dart` can be patched safely without whole-file reconstruction.
-7. Follow Object-first legacy retirement: prove production caller-zero plus import/export/backup handling before deleting Bookmark URL/thumbnail/Photo storage.
+7. Follow Object-first storage retirement: prove production caller-zero plus import/export/backup handling before deleting Bookmark URL/thumbnail/Photo storage.
 8. Keep ProfileManager recovery-selection behavior deferred unless there is an explicit product/data-recovery decision.
-9. Issue #225 checklist is historically stale. Update it only in a dedicated admin pass that preserves concurrent issue edits; do not replace the large body opportunistically from a feature branch.
+9. Treat Issue #414 as separate search correctness work, not behavior-preserving cleanup.
+10. Issue #225 checklist is historically stale. Update it only in a dedicated admin pass that preserves concurrent issue edits; do not replace the large body opportunistically from a feature branch.
 
 ## Validation expectations
 - responsibility moves: focused regression + `flutter analyze` + full tests before merge;
+- caller-zero deletion: current production code search plus independent coverage for any still-live behavior;
 - migration work: historical fixture coverage and exact schema/order/default preservation;
 - failure-policy work: preserve fail-soft/fail-closed semantics and privacy-safe diagnostics;
-- legacy deletion: prove production caller-zero and import/export/backup handling first.
+- legacy storage deletion: prove production caller-zero and import/export/backup handling first.
 
 ## Risks / blockers
-- parallel lanes move `main` quickly; small diffs may be rebuilt on latest main, but do not force-merge stale branches;
+- parallel lanes move `main` quickly; rebuild small diffs on latest main rather than force-merging stale branches;
 - large shared hosts are conflict-prone and must remain patch-sized;
 - current connector file writes replace complete files, so do not hand-reconstruct a large shared host for a small hunk;
-- local/container git still cannot reliably resolve GitHub in this environment, so do not invent maintainability-report numbers that were not actually measured;
+- local/container git cannot be relied on for GitHub access here, so do not invent maintainability-report numbers that were not actually measured;
 - legacy Bookmark URL/thumbnail/Photo storage remains live compatibility data while replacement parity is incomplete;
 - test lifecycle hangs must not be solved by changing production semantics or merely raising global timeouts;
 - abstractions that add wrappers without removing responsibility should be rejected.
 
 ## Stop / continuation state
-Refactor remains actionable, but the next work should return to responsibility/LOC reduction and Object-first legacy retirement. Small failure/privacy gaps have largely been exhausted; large shared-host error strings are intentionally deferred until a safe host slice owns them.
-
-## Latest run checkpoint — 2026-09-06
-- Re-read `AGENTS.md`, Issues #225/#56, repository/lane handoffs, architecture, open PR ownership and CI before editing.
-- Latest main used for this slice: `442804c8c15c65fd66ed95ccbfde9d20172c48bf` after Object #416.
-- Refactor #419 had Flutter CI #1492 green but became non-mergeable as main advanced. It must not be force-merged.
-- Rebuilt the same behavior-preserving FTS projection deduplication from latest main on `refactor/issue-225-fts-index-projection-dedup-v3`.
-- `FullTextSearchRepository` now owns one private Bookmark -> FTS projection implementation used by both full rebuild and focused refresh; transaction boundaries, trash filtering, FTS schema/ranking/prefix semantics are unchanged.
-- Added focused in-memory regression coverage for rebuild/focused refresh plus a source guard ensuring the FTS INSERT projection remains single-source.
-- Open concurrent ownership at this checkpoint: Relation #420 is handoff-only; no shared hotspot touched by this slice.
-- Next: open the replacement PR, let Analyze/Test validate it, merge only when green and mergeable; if main advances and the PR becomes stale again, rebuild the same two-file diff rather than force-merging.
+Refactor remains actionable. The recent sequence has moved from privacy micro-fixes back to responsibility reduction: #408 narrowed a read boundary, #417 deleted caller-zero code, and #422 removed duplicate FTS projection ownership. Continue in that direction while avoiding Object #423 and canonical Relation redesign.
