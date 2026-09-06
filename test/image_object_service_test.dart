@@ -148,6 +148,44 @@ void main() {
     expect(await objectStore.listObjects(definition.objectType.id), hasLength(3));
   });
 
+  test('managed Image reuses the same managed file across provenance changes',
+      () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final service = ImageObjectService(
+      systemObjects: SystemObjectStore(
+        database: database,
+        objectStore: objectStore,
+      ),
+      defaultsStore: ObjectTypeDefaultsStore(genericStore),
+    );
+
+    final first = await service.findOrCreateManaged(
+      workspaceId: workspaceId,
+      filePath: '/managed/shared.jpg',
+      sourceUrl: 'https://cdn.example.com/first.jpg?sig=1',
+    );
+    final second = await service.findOrCreateManaged(
+      workspaceId: workspaceId,
+      filePath: ' /managed/shared.jpg ',
+      sourceUrl: 'https://cdn.example.com/second.jpg?sig=2',
+      originalFilename: 'second.jpg',
+    );
+    final definition = await service.ensureDefinition(workspaceId);
+    final stored = (await objectStore.listObjects(definition.objectType.id)).single;
+
+    expect(second.id, first.id);
+    expect(stored.values[definition.fileProperty.id], '/managed/shared.jpg');
+    expect(
+      stored.values[definition.sourceUrlProperty.id],
+      'https://cdn.example.com/first.jpg?sig=1',
+    );
+    expect(await objectStore.listObjects(definition.objectType.id), hasLength(1));
+  });
+
   test('managed Image matches older non-canonical source metadata safely',
       () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
