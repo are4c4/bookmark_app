@@ -8,10 +8,11 @@ trap 'rm -rf "$fixture"' EXIT
 
 help_output="$(bash "$script" --help)"
 grep -Fq -- '--max-boundary-refs <N>' <<<"$help_output"
+grep -Fq -- '--max-feature-presentation-db-imports <N>' <<<"$help_output"
 grep -Fq -- '--max-legacy-shim-imports <N>' <<<"$help_output"
 grep -Fq -- '--max-legacy-shims <N>' <<<"$help_output"
 grep -Fq 'Current CI-owned ceilings live in .github/workflows/flutter_ci.yml.' <<<"$help_output"
-if grep -Eq -- '--max-(boundary-refs|legacy-shim-imports|legacy-shims) [0-9]+' <<<"$help_output"; then
+if grep -Eq -- '--max-(boundary-refs|feature-presentation-db-imports|legacy-shim-imports|legacy-shims) [0-9]+' <<<"$help_output"; then
   echo "Threshold help examples must not duplicate CI-owned numeric ceilings" >&2
   exit 1
 fi
@@ -32,6 +33,7 @@ import 'detail_property_row.dart';
 final database = repository.workspaceStore.database;
 EOF
 cat > "$fixture/lib/features/object/presentation/example_feature.dart" <<'EOF'
+import '../../../data/app_database.dart';
 final featureDatabase = repository.workspaceStore.database;
 EOF
 cat > "$fixture/test/example_test.dart" <<'EOF'
@@ -51,12 +53,15 @@ output="$(
     bash "$script" \
       --top 1 \
       --max-boundary-refs 4 \
+      --max-feature-presentation-db-imports 1 \
       --max-legacy-shim-imports 3 \
       --max-legacy-shims 2
 )"
 grep -Fq '4 workspaceStore.database reference(s) across 3 file(s)' <<<"$output"
 grep -Fq 'lib/features/object/presentation/example_feature.dart' <<<"$output"
 grep -Fq 'Boundary regression threshold: 4 reference(s) maximum' <<<"$output"
+grep -Fq '1 direct AppDatabase import(s) across 1 file(s)' <<<"$output"
+grep -Fq 'Feature presentation AppDatabase import regression threshold: 1 import(s) maximum' <<<"$output"
 grep -Fq '3 legacy shim import(s) across 3 file(s)' <<<"$output"
 grep -Fq 'Legacy shim import regression threshold: 3 import(s) maximum' <<<"$output"
 grep -Fq '2 legacy shim file(s)' <<<"$output"
@@ -67,6 +72,7 @@ boundary_failure="$(
   cd "$fixture" &&
     bash "$script" \
       --max-boundary-refs 3 \
+      --max-feature-presentation-db-imports 1 \
       --max-legacy-shim-imports 3 \
       --max-legacy-shims 2 \
       2>&1
@@ -81,10 +87,30 @@ fi
 grep -Fq 'Maintainability regression: 4 presentation database reach-through references exceed maximum 3.' <<<"$boundary_failure"
 
 set +e
+feature_database_failure="$(
+  cd "$fixture" &&
+    bash "$script" \
+      --max-boundary-refs 4 \
+      --max-feature-presentation-db-imports 0 \
+      --max-legacy-shim-imports 3 \
+      --max-legacy-shims 2 \
+      2>&1
+)"
+feature_database_status=$?
+set -e
+
+if [[ "$feature_database_status" -ne 1 ]]; then
+  echo "Expected feature presentation AppDatabase import breach to exit 1, got $feature_database_status" >&2
+  exit 1
+fi
+grep -Fq 'Maintainability regression: 1 canonical feature presentation AppDatabase imports exceed maximum 0.' <<<"$feature_database_failure"
+
+set +e
 shim_import_failure="$(
   cd "$fixture" &&
     bash "$script" \
       --max-boundary-refs 4 \
+      --max-feature-presentation-db-imports 1 \
       --max-legacy-shim-imports 2 \
       --max-legacy-shims 2 \
       2>&1
@@ -103,6 +129,7 @@ shim_file_failure="$(
   cd "$fixture" &&
     bash "$script" \
       --max-boundary-refs 4 \
+      --max-feature-presentation-db-imports 1 \
       --max-legacy-shim-imports 3 \
       --max-legacy-shims 1 \
       2>&1
