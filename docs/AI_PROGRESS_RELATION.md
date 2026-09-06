@@ -75,7 +75,7 @@ Important guardrails include:
 - Relation `#445`: green and merged as `e2d4d6237b63c58a14699a0f031766f74c2a9e27`.
 - Object `#447/#457/#460/#465` are merged; their production diffs are Relation-neutral.
 - Refactor `#451/#463` are merged caller-zero cleanup; live canonical Relation read/mutation paths remain on default branch.
-- Relation handoff `#468` prior head `2157299fc4da568dbc012f011a5fc7fc673f42c7` passed Flutter CI `#1619`: maintainability guardrail, boundary ceiling, Drift generation, Analyze and full Test all succeeded. This follow-up commit only refreshes the handoff through merged `#467` and current open-PR audit; recheck its own CI before integration.
+- Relation handoff `#468` prior head `2157299fc4da568dbc012f011a5fc7fc673f42c7` passed Flutter CI `#1619`: maintainability guardrail, boundary ceiling, Drift generation, Analyze and full Test all succeeded. The refreshed handoff commits after it change documentation only; recheck the latest head CI before integration.
 
 ## Exact next Relation actions
 1. If Object adds a distinct user-facing Bookmark `Cover Image` / `Images` editor-write path beyond compatibility bridge sync, cover the real host attach/retarget/detach/retry path only where generic Relation editor coverage is insufficient.
