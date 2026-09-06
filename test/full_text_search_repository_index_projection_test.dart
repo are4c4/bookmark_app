@@ -57,7 +57,7 @@ void main() {
     );
     await search.refreshBookmark(alphaId);
 
-    expect(await search.search('Alpha'), isEmpty);
+    expect(await search.search('Flutter'), isEmpty);
     expect(
       (await search.search('Gamma')).map((hit) => hit.bookmarkId),
       contains(alphaId),
