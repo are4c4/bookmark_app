@@ -243,9 +243,9 @@ class RelationMutationService {
   Future<BidirectionalRelationPair?> _pairIfManaged(
     ObjectPropertyDefinition property,
   ) async {
-    final hasPairMetadata = property.config['bidirectional'] == true ||
-        property.config['inversePropertyId'] != null ||
-        property.config['pairRole'] != null;
+    final hasPairMetadata = property.config.containsKey('bidirectional') ||
+        property.config.containsKey('inversePropertyId') ||
+        property.config.containsKey('pairRole');
     if (!hasPairMetadata) return null;
 
     final pair = await bidirectionalStore.pairFor(property);
