@@ -115,7 +115,10 @@ class PrimitiveFileImportClassifier {
           : PrimitiveFileImportTarget.file;
 
   String? _contentTypeFromHeader(List<int> bytes) {
-    if (_startsWith(bytes, const <int>[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) {
+    if (_startsWith(
+      bytes,
+      const <int>[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+    )) {
       return 'image/png';
     }
     if (_startsWith(bytes, const <int>[0xff, 0xd8, 0xff])) {
@@ -124,8 +127,18 @@ class PrimitiveFileImportClassifier {
     if (_asciiAt(bytes, 0, 'GIF87a') || _asciiAt(bytes, 0, 'GIF89a')) {
       return 'image/gif';
     }
-    if (_asciiAt(bytes, 0, 'RIFF') && _asciiAt(bytes, 8, 'WEBP')) {
-      return 'image/webp';
+    if (_startsWith(bytes, const <int>[0x42, 0x4d])) return 'image/bmp';
+    if (_startsWith(bytes, const <int>[0x49, 0x49, 0x2a, 0x00]) ||
+        _startsWith(bytes, const <int>[0x4d, 0x4d, 0x00, 0x2a])) {
+      return 'image/tiff';
+    }
+    if (_startsWith(bytes, const <int>[0x00, 0x00, 0x01, 0x00])) {
+      return 'image/x-icon';
+    }
+    if (_asciiAt(bytes, 0, 'RIFF')) {
+      if (_asciiAt(bytes, 8, 'WEBP')) return 'image/webp';
+      if (_asciiAt(bytes, 8, 'WAVE')) return 'audio/wav';
+      if (_asciiAt(bytes, 8, 'AVI ')) return 'video/x-msvideo';
     }
     if (_asciiAt(bytes, 0, '%PDF-')) return 'application/pdf';
     if (_startsWith(bytes, const <int>[0x50, 0x4b, 0x03, 0x04]) ||
@@ -133,6 +146,21 @@ class PrimitiveFileImportClassifier {
         _startsWith(bytes, const <int>[0x50, 0x4b, 0x07, 0x08])) {
       return 'application/zip';
     }
+    if (_startsWith(bytes, const <int>[0x1f, 0x8b])) {
+      return 'application/gzip';
+    }
+    if (_startsWith(
+      bytes,
+      const <int>[0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c],
+    )) {
+      return 'application/x-7z-compressed';
+    }
+    if (_startsWith(bytes, const <int>[0x52, 0x61, 0x72, 0x21, 0x1a, 0x07])) {
+      return 'application/vnd.rar';
+    }
+    if (_asciiAt(bytes, 0, 'OggS')) return 'application/ogg';
+    if (_asciiAt(bytes, 0, 'fLaC')) return 'audio/flac';
+    if (_asciiAt(bytes, 0, 'ID3')) return 'audio/mpeg';
     if (_asciiAt(bytes, 4, 'ftyp') && bytes.length >= 12) {
       final brand = String.fromCharCodes(bytes.sublist(8, 12)).toLowerCase();
       if (<String>{'heic', 'heix', 'hevc', 'hevx'}.contains(brand)) {
@@ -140,6 +168,23 @@ class PrimitiveFileImportClassifier {
       }
       if (<String>{'heif', 'mif1', 'msf1'}.contains(brand)) {
         return 'image/heif';
+      }
+      if (<String>{'avif', 'avis'}.contains(brand)) return 'image/avif';
+      if (<String>{
+        'isom',
+        'iso2',
+        'mp41',
+        'mp42',
+        'avc1',
+        'dash',
+      }.contains(brand)) {
+        return 'video/mp4';
+      }
+      if (brand == 'qt  ') return 'video/quicktime';
+      if (brand == 'm4v ') return 'video/x-m4v';
+      if (brand == 'm4a ') return 'audio/mp4';
+      if (<String>{'3gp4', '3gp5', '3ge6', '3gg6'}.contains(brand)) {
+        return 'video/3gpp';
       }
     }
     return null;

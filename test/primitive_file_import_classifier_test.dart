@@ -96,6 +96,116 @@ void main() {
     expect(zip.contentType, 'application/zip');
   });
 
+  test('common archives beat misleading image names', () {
+    final gzip = classifier.classify(
+      filename: 'backup.png',
+      headerBytes: const <int>[0x1f, 0x8b, 0x08, 0x00],
+    );
+    final sevenZip = classifier.classify(
+      filename: 'bundle.jpg',
+      headerBytes: const <int>[0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c, 0, 4],
+    );
+    final rar = classifier.classify(
+      filename: 'archive.webp',
+      headerBytes: const <int>[0x52, 0x61, 0x72, 0x21, 0x1a, 0x07, 0x01, 0x00],
+    );
+
+    for (final classification in <PrimitiveFileImportClassification>[
+      gzip,
+      sevenZip,
+      rar,
+    ]) {
+      expect(classification.target, PrimitiveFileImportTarget.file);
+      expect(classification.evidence, PrimitiveFileImportEvidence.content);
+    }
+    expect(gzip.contentType, 'application/gzip');
+    expect(sevenZip.contentType, 'application/x-7z-compressed');
+    expect(rar.contentType, 'application/vnd.rar');
+  });
+
+  test('common audio and video signatures beat misleading image names', () {
+    final mp4 = classifier.classify(
+      filename: 'movie.png',
+      declaredContentType: 'image/png',
+      headerBytes: <int>[
+        0, 0, 0, 24,
+        ...'ftyp'.codeUnits,
+        ...'mp42'.codeUnits,
+      ],
+    );
+    final quickTime = classifier.classify(
+      filename: 'clip.jpg',
+      headerBytes: <int>[
+        0, 0, 0, 24,
+        ...'ftyp'.codeUnits,
+        ...'qt  '.codeUnits,
+      ],
+    );
+    final wav = classifier.classify(
+      filename: 'audio.gif',
+      headerBytes: <int>[
+        ...'RIFF'.codeUnits,
+        0, 0, 0, 0,
+        ...'WAVE'.codeUnits,
+      ],
+    );
+    final mp3 = classifier.classify(
+      filename: 'track.webp',
+      headerBytes: <int>[...'ID3'.codeUnits, 4, 0, 0],
+    );
+
+    for (final classification in <PrimitiveFileImportClassification>[
+      mp4,
+      quickTime,
+      wav,
+      mp3,
+    ]) {
+      expect(classification.target, PrimitiveFileImportTarget.file);
+      expect(classification.evidence, PrimitiveFileImportEvidence.content);
+    }
+    expect(mp4.contentType, 'video/mp4');
+    expect(quickTime.contentType, 'video/quicktime');
+    expect(wav.contentType, 'audio/wav');
+    expect(mp3.contentType, 'audio/mpeg');
+  });
+
+  test('unsupported image content never falls through to png extension', () {
+    final avif = classifier.classify(
+      filename: 'future.png',
+      headerBytes: <int>[
+        0, 0, 0, 24,
+        ...'ftyp'.codeUnits,
+        ...'avif'.codeUnits,
+      ],
+    );
+    final bmp = classifier.classify(
+      filename: 'bitmap.png',
+      headerBytes: const <int>[0x42, 0x4d, 0, 0, 0, 0],
+    );
+    final tiff = classifier.classify(
+      filename: 'scan.png',
+      headerBytes: const <int>[0x49, 0x49, 0x2a, 0x00, 8, 0, 0, 0],
+    );
+    final icon = classifier.classify(
+      filename: 'icon.png',
+      headerBytes: const <int>[0x00, 0x00, 0x01, 0x00, 1, 0],
+    );
+
+    for (final classification in <PrimitiveFileImportClassification>[
+      avif,
+      bmp,
+      tiff,
+      icon,
+    ]) {
+      expect(classification.target, PrimitiveFileImportTarget.file);
+      expect(classification.evidence, PrimitiveFileImportEvidence.content);
+    }
+    expect(avif.contentType, 'image/avif');
+    expect(bmp.contentType, 'image/bmp');
+    expect(tiff.contentType, 'image/tiff');
+    expect(icon.contentType, 'image/x-icon');
+  });
+
   test('path classifier reads only enough bytes to identify content', () async {
     final root = await Directory.systemTemp.createTemp('primitive_classifier_');
     addTearDown(() => root.delete(recursive: true));
