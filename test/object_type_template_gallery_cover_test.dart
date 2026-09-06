@@ -120,4 +120,60 @@ void main() {
       isEmpty,
     );
   });
+
+  test('Gallery cover kind must match the Relation target primitive', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final systemObjects = SystemObjectStore(
+      database: database,
+      objectStore: objectStore,
+    );
+    await systemObjects.ensureSystemObjectType(
+      workspaceId: workspaceId,
+      systemKey: TagObjectBridge.systemKey,
+      name: 'Tag',
+      icon: '🏷️',
+    );
+    final templateStore = ObjectTypeTemplateStore(genericStore);
+
+    const invalid = ObjectTypeTemplate(
+      key: 'mismatched-cover-target-test',
+      name: 'Mismatched cover target',
+      icon: 'X',
+      description: 'test',
+      properties: [
+        ObjectTypeTemplateProperty(
+          name: 'Tags',
+          type: 'relation',
+          relationTargetSystemKey: TagObjectBridge.systemKey,
+          relationMultiple: true,
+        ),
+      ],
+      views: [
+        ObjectTypeTemplateView(
+          name: 'Gallery',
+          layoutType: 'gallery',
+          galleryCoverRelationPropertyName: 'Tags',
+          galleryCoverKind: ObjectTypeTemplateGalleryCoverKind.imageRelation,
+        ),
+      ],
+    );
+
+    await expectLater(
+      templateStore.createFromTemplate(
+        workspaceId: workspaceId,
+        template: invalid,
+      ),
+      throwsStateError,
+    );
+
+    final types = await objectStore.listObjectTypes(workspaceId);
+    expect(
+      types.where((type) => type.name == 'Mismatched cover target'),
+      isEmpty,
+    );
+  });
 }
