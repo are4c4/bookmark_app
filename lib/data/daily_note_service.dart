@@ -204,6 +204,14 @@ class DailyNoteService {
     for (final object in objects) {
       if (object.id == objectId) return object;
     }
+
+    // Recover only the exact stale claim we observed. Matching object_id keeps
+    // a concurrent replacement for the same date intact.
+    await genericStore.database.customStatement(
+      '''DELETE FROM daily_note_registry
+         WHERE workspace_id = ? AND note_date = ? AND object_id = ?''',
+      [workspaceId, dateKey, objectId],
+    );
     return null;
   }
 
