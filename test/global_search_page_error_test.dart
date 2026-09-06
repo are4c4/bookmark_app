@@ -1,8 +1,12 @@
 import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/bookmark_lifecycle_store.dart';
 import 'package:bookmark_app/data/bookmark_repository.dart';
+import 'package:bookmark_app/data/generic_database_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
+import 'package:bookmark_app/repositories/object_global_search_service.dart';
+import 'package:bookmark_app/repositories/object_search_result_resolver.dart';
 import 'package:bookmark_app/views/global_search_page.dart';
+import 'package:bookmark_app/views/object_global_search_page.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -20,34 +24,69 @@ Future<BookmarkRepository> _repository(AppDatabase database) async {
   );
 }
 
+class _FakeSearchService extends ObjectGlobalSearchService {
+  _FakeSearchService(
+    GenericDatabaseStore store, {
+    required this.onRebuild,
+    required this.onSearch,
+  }) : super(store);
+
+  final Future<void> Function(int workspaceId) onRebuild;
+  final Future<List<ResolvedObjectSearchHit>> Function(
+    int workspaceId,
+    String rawQuery,
+    int? objectTypeId,
+    int limit,
+  ) onSearch;
+
+  @override
+  Future<void> rebuildWorkspace(int workspaceId) => onRebuild(workspaceId);
+
+  @override
+  Future<List<ResolvedObjectSearchHit>> search({
+    required int workspaceId,
+    required String rawQuery,
+    int? objectTypeId,
+    int limit = 100,
+  }) =>
+      onSearch(workspaceId, rawQuery, objectTypeId, limit);
+}
+
 void main() {
-  testWidgets('index failure hides raw exception text and retries successfully',
+  testWidgets('compatibility page routes to Object search and retries index failure',
       (tester) async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
     final repository = await _repository(database);
+    final genericStore = GenericDatabaseStore(database);
     var rebuildAttempts = 0;
+    final searchService = _FakeSearchService(
+      genericStore,
+      onRebuild: (_) async {
+        rebuildAttempts++;
+        if (rebuildAttempts == 1) {
+          throw StateError('private index detail /Users/example/profile.db');
+        }
+      },
+      onSearch: (_, __, ___, ____) async => const <ResolvedObjectSearchHit>[],
+    );
 
     await tester.pumpWidget(
       MaterialApp(
         home: GlobalSearchPage(
           repository: repository,
-          rebuildSearchIndex: () async {
-            rebuildAttempts++;
-            if (rebuildAttempts == 1) {
-              throw StateError('private index detail /Users/example/profile.db');
-            }
-          },
+          searchService: searchService,
         ),
       ),
     );
     await tester.pump();
     await tester.pump();
 
+    expect(find.byType(ObjectGlobalSearchPage), findsOneWidget);
     expect(rebuildAttempts, 1);
     expect(find.text('全文検索を準備できませんでした'), findsOneWidget);
     expect(
-      find.text('検索処理で問題が発生しました。検索インデックスを再構築して、もう一度お試しください。'),
+      find.text('検索インデックスを再構築して、もう一度お試しください。'),
       findsOneWidget,
     );
     expect(find.textContaining('private index detail'), findsNothing);
@@ -58,36 +97,42 @@ void main() {
     await tester.pump();
 
     expect(rebuildAttempts, 2);
-    expect(find.text('ブックマークを横断検索'), findsOneWidget);
+    expect(find.text('オブジェクトを横断検索'), findsOneWidget);
+    expect(find.text('ブックマークを横断検索'), findsNothing);
     expect(find.text('全文検索を準備できませんでした'), findsNothing);
   });
 
-  testWidgets('query failure uses the same stable retryable error boundary',
+  testWidgets('Object query failure keeps stable retryable error boundary',
       (tester) async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
     final repository = await _repository(database);
+    final genericStore = GenericDatabaseStore(database);
     var rebuildAttempts = 0;
     var searchAttempts = 0;
+    final searchService = _FakeSearchService(
+      genericStore,
+      onRebuild: (_) async {
+        rebuildAttempts++;
+      },
+      onSearch: (_, __, ___, ____) async {
+        searchAttempts++;
+        throw StateError('private query detail token=should-not-render');
+      },
+    );
 
     await tester.pumpWidget(
       MaterialApp(
         home: GlobalSearchPage(
           repository: repository,
-          rebuildSearchIndex: () async {
-            rebuildAttempts++;
-          },
-          searchBookmarks: (query, limit) async {
-            searchAttempts++;
-            throw StateError('private query detail token=should-not-render');
-          },
+          searchService: searchService,
         ),
       ),
     );
     await tester.pump();
     await tester.pump();
 
-    expect(find.text('ブックマークを横断検索'), findsOneWidget);
+    expect(find.text('オブジェクトを横断検索'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField), 'example');
     await tester.pump(const Duration(milliseconds: 221));
@@ -105,7 +150,7 @@ void main() {
     await tester.pump();
 
     expect(rebuildAttempts, 2);
-    expect(find.text('ブックマークを横断検索'), findsOneWidget);
+    expect(find.text('オブジェクトを横断検索'), findsOneWidget);
     expect(find.text('全文検索を準備できませんでした'), findsNothing);
   });
 }
