@@ -4,6 +4,7 @@ import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/core_object_bridge.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
 import 'package:bookmark_app/data/object_store.dart';
+import 'package:bookmark_app/data/profile_path_resolver.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
 import 'package:bookmark_app/data/tag_object_bridge.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
@@ -43,6 +44,10 @@ void main() {
         systemObjectStore: systemStore,
       ),
     );
+    final visualResolver = ImageVisualResolver(
+      objectStore,
+      pathResolver: ProfilePathResolver(directory.path),
+    );
     await database.customStatement(
       "INSERT INTO photos(path, title) VALUES ('photos/stable.jpg', 'Stable legacy')",
     );
@@ -77,7 +82,7 @@ void main() {
     ).getSingle();
     expect(stableLink.read<int>('object_id'), promoted.id);
     expect(
-      await ImageVisualResolver(objectStore).resolveManaged(
+      await visualResolver.resolveManaged(
         imageObjectTypeId: imageType.id,
         imageObjectId: promoted.id,
       ),
@@ -90,7 +95,7 @@ void main() {
     final recovered = await objectStore.listObjects(imageType.id);
     expect(recovered, hasLength(1));
     expect(recovered.single.id, promoted.id);
-    final visual = await ImageVisualResolver(objectStore).resolveManaged(
+    final visual = await visualResolver.resolveManaged(
       imageObjectTypeId: imageType.id,
       imageObjectId: promoted.id,
     );
