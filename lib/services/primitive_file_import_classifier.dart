@@ -127,6 +127,14 @@ class PrimitiveFileImportClassifier {
     if (_asciiAt(bytes, 0, 'GIF87a') || _asciiAt(bytes, 0, 'GIF89a')) {
       return 'image/gif';
     }
+    if (_startsWith(bytes, const <int>[0x42, 0x4d])) return 'image/bmp';
+    if (_startsWith(bytes, const <int>[0x49, 0x49, 0x2a, 0x00]) ||
+        _startsWith(bytes, const <int>[0x4d, 0x4d, 0x00, 0x2a])) {
+      return 'image/tiff';
+    }
+    if (_startsWith(bytes, const <int>[0x00, 0x00, 0x01, 0x00])) {
+      return 'image/x-icon';
+    }
     if (_asciiAt(bytes, 0, 'RIFF')) {
       if (_asciiAt(bytes, 8, 'WEBP')) return 'image/webp';
       if (_asciiAt(bytes, 8, 'WAVE')) return 'audio/wav';
