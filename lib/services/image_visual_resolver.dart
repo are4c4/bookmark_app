@@ -35,19 +35,24 @@ class ImageManagedVisual {
 /// The caller is responsible for verifying that [imageObjectTypeId] is the
 /// canonical system Image ObjectType. This reader never ensures schema or
 /// mutates Object values. Persisted Pixel width/height are preferred layout
-/// metadata. If either persisted dimension is unavailable/invalid, the resolver
-/// may probe the existing managed file read-only and use the decoded dimension
-/// pair for this presentation result without writing metadata back to storage.
-/// Profile-relative File values are resolved only at this read boundary so the
-/// stored Image identity remains portable across profile/Vault moves.
+/// metadata. If either persisted dimension is unavailable/invalid and
+/// [probeMissingGeometry] is true, the resolver may probe the existing managed
+/// file read-only and use the decoded dimension pair for this presentation
+/// result without writing metadata back to storage. Path-only consumers such as
+/// small List thumbnails can disable that probe to avoid decoding full image
+/// bytes when geometry is irrelevant. Profile-relative File values are resolved
+/// only at this read boundary so stored Image identity remains portable across
+/// profile/Vault moves.
 class ImageVisualResolver {
   const ImageVisualResolver(
     this._objectStore, {
     ProfilePathResolver? pathResolver,
+    this.probeMissingGeometry = true,
   }) : _pathResolver = pathResolver;
 
   final ObjectStore _objectStore;
   final ProfilePathResolver? _pathResolver;
+  final bool probeMissingGeometry;
 
   Future<ImageManagedVisual?> resolveManaged({
     required int imageObjectTypeId,
@@ -90,7 +95,7 @@ class ImageVisualResolver {
           .toList(growable: false),
       imageObject.values,
     );
-    if (width == null || height == null) {
+    if (probeMissingGeometry && (width == null || height == null)) {
       final probed = await _probeGeometry(path);
       if (probed != null) {
         // Use one coherent decoded pair rather than mixing persisted and probed
