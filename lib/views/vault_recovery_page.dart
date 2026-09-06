@@ -43,7 +43,7 @@ class _VaultRecoveryPageState extends State<VaultRecoveryPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Vaultの保存場所を更新できませんでした。選択したフォルダを確認してください。',
+            'Vaultの復旧操作を完了できませんでした。保存場所または登録情報を確認してください。',
           ),
         ),
       );
