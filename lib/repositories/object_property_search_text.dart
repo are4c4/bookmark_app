@@ -37,6 +37,42 @@ String buildObjectPropertySearchText({
   return _scalarSearchText(value);
 }
 
+/// Builds the selected typed-Property contribution for one canonical Object.
+///
+/// Property definitions are ordered by schema order then id so rebuild and
+/// focused refresh produce the same token stream regardless of map iteration
+/// order. Object title remains a dedicated search bucket and Relation/File/
+/// Image/computed values continue through their own canonical contributors.
+String buildObjectPropertiesSearchText({
+  required AppObject object,
+  required AppObjectType objectType,
+}) {
+  if (object.objectTypeId != objectType.id) {
+    throw ArgumentError(
+      'Object ${object.id} belongs to ObjectType ${object.objectTypeId}, '
+      'not ${objectType.id}.',
+    );
+  }
+
+  final ordered = objectType.properties.toList(growable: false)
+    ..sort((left, right) {
+      final sortOrder = left.sortOrder.compareTo(right.sortOrder);
+      if (sortOrder != 0) return sortOrder;
+      return left.id.compareTo(right.id);
+    });
+
+  return ordered
+      .where((property) => property.type != ObjectPropertyType.title)
+      .map(
+        (property) => buildObjectPropertySearchText(
+          property: property,
+          value: object.values[property.id],
+        ),
+      )
+      .where((text) => text.isNotEmpty)
+      .join('\n');
+}
+
 String _scalarSearchText(dynamic value) {
   if (value is String) return value.trim();
   if (value is num) return '$value';
