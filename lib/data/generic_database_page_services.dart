@@ -1,5 +1,8 @@
+import 'dart:developer' as developer;
+
 import '../services/bookmark_metadata_service.dart';
 import '../services/generic_database_image_import_service.dart';
+import '../services/image_managed_file_deletion_policy.dart';
 import '../services/photo_storage_service.dart';
 import '../services/remote_image_storage_service.dart';
 import '../services/weblink_create_enrichment_service.dart';
@@ -100,22 +103,29 @@ class GenericDatabasePageServices {
       genericStore: genericStore,
       collectionResolver: collectionResolver,
     );
-    final relationMutations = RelationMutationService(
+    final systemObjects = SystemObjectStore(
+      database: genericStore.database,
+      objectStore: objectStore,
+    );
+    final relationMutations = _GenericDatabaseRelationMutationService(
       objectStore: objectStore,
       bidirectionalStore: BidirectionalRelationStore(
         genericStore: genericStore,
         objectStore: objectStore,
       ),
       genericStore: genericStore,
+      systemObjects: systemObjects,
+      photoStorage: photoStorage,
+      imageDeletionPolicy: ImageManagedFileDeletionPolicy(
+        database: genericStore.database,
+        objectStore: objectStore,
+        photoStorage: photoStorage,
+      ),
     );
     final viewStore = DatabaseViewStore(genericStore.database);
     final identitySearch = ObjectIdentitySearchService(
       objectStore: objectStore,
       aliasStore: ObjectAliasStore(genericStore),
-    );
-    final systemObjects = SystemObjectStore(
-      database: genericStore.database,
-      objectStore: objectStore,
     );
     final defaultsStore = ObjectTypeDefaultsStore(genericStore);
     final dailyNotes = DailyNoteService(
@@ -217,4 +227,95 @@ class GenericDatabasePageServices {
   final ObjectGraphQueryStore graphStore;
   final DatabaseViewStore viewStore;
   final ObjectBoardMoveService boardMoveService;
+}
+
+/// Keeps the generic page's existing Relation-safe Object deletion API while
+/// layering Object-owned managed-Image file cleanup at the composition boundary.
+/// Relation semantics stay delegated to [RelationMutationService].
+class _GenericDatabaseRelationMutationService extends RelationMutationService {
+  _GenericDatabaseRelationMutationService({
+    required ObjectStore objectStore,
+    required BidirectionalRelationStore bidirectionalStore,
+    required GenericDatabaseStore genericStore,
+    required this.systemObjects,
+    required this.photoStorage,
+    required this.imageDeletionPolicy,
+  }) : super(
+          objectStore: objectStore,
+          bidirectionalStore: bidirectionalStore,
+          genericStore: genericStore,
+        );
+
+  final SystemObjectStore systemObjects;
+  final PhotoStorageService photoStorage;
+  final ImageManagedFileDeletionPolicy imageDeletionPolicy;
+
+  @override
+  Future<void> deleteObject({
+    required int workspaceId,
+    required int objectTypeId,
+    required int objectId,
+  }) async {
+    String? managedFileToDelete;
+    try {
+      managedFileToDelete = await _managedImageCleanupCandidate(
+        workspaceId: workspaceId,
+        objectTypeId: objectTypeId,
+        objectId: objectId,
+      );
+    } catch (_) {
+      // File ownership is an optional destructive-cleanup audit. Never make an
+      // otherwise valid Object deletion fail because ownership cannot be proven.
+      managedFileToDelete = null;
+    }
+
+    await super.deleteObject(
+      workspaceId: workspaceId,
+      objectTypeId: objectTypeId,
+      objectId: objectId,
+    );
+
+    if (managedFileToDelete == null) return;
+    try {
+      await photoStorage.deleteManagedPhoto(managedFileToDelete);
+    } catch (_, stackTrace) {
+      // The canonical Object is already deleted successfully. A secondary file
+      // cleanup failure must not turn that completed deletion into a UI error.
+      assert(() {
+        developer.log(
+          'Managed Image file cleanup failed after Object deletion.',
+          name: 'bookmark_app.generic_database_delete',
+          stackTrace: stackTrace,
+        );
+        return true;
+      }());
+    }
+  }
+
+  Future<String?> _managedImageCleanupCandidate({
+    required int workspaceId,
+    required int objectTypeId,
+    required int objectId,
+  }) async {
+    final objectType = await objectStore.getObjectType(objectTypeId);
+    if (objectType == null || objectType.workspaceId != workspaceId) return null;
+    final systemKey = await systemObjects.systemKeyForObjectType(objectTypeId);
+    if (systemKey != ImageObjectService.systemKey) return null;
+
+    final fileProperties = objectType.properties
+        .where((property) => property.name == 'File')
+        .toList(growable: false);
+    if (fileProperties.length != 1) return null;
+    final objects = await objectStore.listObjects(objectTypeId);
+    for (final object in objects) {
+      if (object.id != objectId) continue;
+      final filePath = '${object.values[fileProperties.single.id] ?? ''}'.trim();
+      if (filePath.isEmpty) return null;
+      return imageDeletionPolicy.deletableManagedPath(
+        deletingObjectId: objectId,
+        filePath: filePath,
+      );
+    }
+    return null;
+  }
 }
