@@ -129,8 +129,8 @@ class GenericDatabaseObjectCreateService {
           objectId: object.id,
           url: url,
         );
-      } catch (error, stackTrace) {
-        _debugWeblinkEnrichmentFailure(error, stackTrace);
+      } catch (_, stackTrace) {
+        _debugWeblinkEnrichmentFailure(stackTrace);
       }
     }
     return object.id;
@@ -244,15 +244,11 @@ class GenericDatabaseObjectCreateService {
     return page;
   }
 
-  void _debugWeblinkEnrichmentFailure(
-    Object error,
-    StackTrace stackTrace,
-  ) {
+  void _debugWeblinkEnrichmentFailure(StackTrace stackTrace) {
     assert(() {
       developer.log(
         'Optional post-create Weblink enrichment failed; canonical Weblink is kept.',
         name: 'bookmark_app.generic_database_create',
-        error: error,
         stackTrace: stackTrace,
       );
       return true;
