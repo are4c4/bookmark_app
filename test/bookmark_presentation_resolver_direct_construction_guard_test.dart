@@ -6,7 +6,6 @@ void main() {
   test('Bookmark resolver direct construction does not spread in presentation', () {
     const allowedLegacyHosts = <String>{
       'lib/views/bookmark_unified_stage1_page.dart',
-      'lib/widgets/notion_bookmark_card.dart',
     };
 
     final offenders = <String>{};

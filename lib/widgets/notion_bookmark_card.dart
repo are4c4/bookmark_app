@@ -3,6 +3,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
+import '../services/bookmark_presentation_resolver_factory.dart';
 import '../services/bookmark_url_resolver.dart';
 import 'bookmark_visual_image.dart';
 
@@ -81,10 +82,7 @@ class _NotionBookmarkCardState extends State<NotionBookmarkCard> {
   Future<BookmarkUrlSource?> _resolveUrl(BookmarkItem bookmark) {
     final injected = widget.resolveUrl;
     if (injected != null) return injected(bookmark);
-    return BookmarkUrlResolver(
-      database: widget.repository.workspaceStore.database,
-      workspaceId: widget.repository.workspaceId,
-    ).resolve(bookmark);
+    return BookmarkPresentationResolverFactory.urlFor(widget.repository)(bookmark);
   }
 
   @override
