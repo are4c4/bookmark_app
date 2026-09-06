@@ -8,6 +8,11 @@ import '../domain/object_model.dart';
 import 'image_edit_service.dart';
 import 'image_managed_file_deletion_policy.dart';
 
+typedef CanonicalImageStoredFileResolver = Future<String?> Function({
+  required int workspaceId,
+  required int objectId,
+});
+
 typedef ExclusiveManagedImagePathResolver = Future<String?> Function({
   required int objectId,
   required String filePath,
@@ -23,13 +28,19 @@ typedef CanonicalImageGeometryUpdater = Future<AppObject> Function({
 /// Coordinates byte edits for a canonical Image without allowing an editor to
 /// mutate a file that may still be shared by another Image or legacy Photo.
 ///
-/// The existing managed-file deletion audit is intentionally reused as the
-/// exclusive-ownership proof: a file that could not be removed after deleting
-/// this Image also must not be edited in place for this Image. Shared/ambiguous
-/// ownership therefore fails closed until an explicit copy-on-edit workflow is
-/// introduced.
+/// The stored File identity is resolved from the canonical Image itself rather
+/// than accepted from the presentation caller. The existing managed-file
+/// deletion audit is intentionally reused as the exclusive-ownership proof: a
+/// file that could not be removed after deleting this Image also must not be
+/// edited in place for this Image. Shared/ambiguous ownership therefore fails
+/// closed until an explicit copy-on-edit workflow is introduced.
+///
+/// Both edit and restore keep persisted pixel geometry synchronized. If that
+/// metadata update fails after bytes have changed, the pre-operation bytes are
+/// restored so the Image Object cannot be left with silently stale geometry.
 class CanonicalImageEditService {
   CanonicalImageEditService({
+    required this.resolveStoredFile,
     required this.resolveExclusiveManagedPath,
     required this.geometryUpdater,
     this.imageEdit = const ImageEditService(),
@@ -41,6 +52,19 @@ class CanonicalImageEditService {
     ImageEditService imageEdit = const ImageEditService(),
   }) {
     return CanonicalImageEditService(
+      resolveStoredFile: ({required workspaceId, required objectId}) async {
+        final definition = await images.ensureDefinition(workspaceId);
+        final objects = await images.systemObjects.objectStore.listObjects(
+          definition.objectType.id,
+        );
+        for (final object in objects) {
+          if (object.id != objectId) continue;
+          final stored =
+              '${object.values[definition.fileProperty.id] ?? ''}'.trim();
+          return stored.isEmpty ? null : stored;
+        }
+        return null;
+      },
       resolveExclusiveManagedPath: ({required objectId, required filePath}) =>
           ownershipPolicy.deletableManagedPath(
         deletingObjectId: objectId,
@@ -62,6 +86,7 @@ class CanonicalImageEditService {
     );
   }
 
+  final CanonicalImageStoredFileResolver resolveStoredFile;
   final ExclusiveManagedImagePathResolver resolveExclusiveManagedPath;
   final CanonicalImageGeometryUpdater geometryUpdater;
   final ImageEditService imageEdit;
@@ -69,20 +94,15 @@ class CanonicalImageEditService {
   Future<AppObject> edit({
     required int workspaceId,
     required int objectId,
-    required String filePath,
     int quarterTurns = 0,
     bool flipHorizontal = false,
     double? cropAspectRatio,
     Rect? normalizedCropRect,
   }) async {
-    final editablePath = await resolveExclusiveManagedPath(
+    final editablePath = await _editablePath(
+      workspaceId: workspaceId,
       objectId: objectId,
-      filePath: filePath,
     );
-    if (editablePath == null) {
-      throw const CanonicalImageEditOwnershipException();
-    }
-
     final file = File(editablePath);
     final beforeBytes = await file.readAsBytes();
     final backup = File(imageEdit.backupPath(editablePath));
@@ -96,15 +116,10 @@ class CanonicalImageEditService {
         cropAspectRatio: cropAspectRatio,
         normalizedCropRect: normalizedCropRect,
       );
-      final decoded = image.decodeImage(await file.readAsBytes());
-      if (decoded == null) {
-        throw StateError('編集後の画像サイズを取得できませんでした。');
-      }
-      return await geometryUpdater(
+      return await _refreshGeometry(
         workspaceId: workspaceId,
         objectId: objectId,
-        pixelWidth: decoded.width,
-        pixelHeight: decoded.height,
+        file: file,
       );
     } catch (_) {
       await file.writeAsBytes(beforeBytes, flush: true);
@@ -114,6 +129,75 @@ class CanonicalImageEditService {
       rethrow;
     }
   }
+
+  Future<AppObject> restoreOriginal({
+    required int workspaceId,
+    required int objectId,
+  }) async {
+    final editablePath = await _editablePath(
+      workspaceId: workspaceId,
+      objectId: objectId,
+    );
+    final file = File(editablePath);
+    final beforeBytes = await file.readAsBytes();
+
+    try {
+      await imageEdit.restoreOriginal(editablePath);
+      return await _refreshGeometry(
+        workspaceId: workspaceId,
+        objectId: objectId,
+        file: file,
+      );
+    } catch (_) {
+      await file.writeAsBytes(beforeBytes, flush: true);
+      rethrow;
+    }
+  }
+
+  Future<String> _editablePath({
+    required int workspaceId,
+    required int objectId,
+  }) async {
+    final storedFile = await resolveStoredFile(
+      workspaceId: workspaceId,
+      objectId: objectId,
+    );
+    if (storedFile == null || storedFile.trim().isEmpty) {
+      throw const CanonicalImageEditTargetException();
+    }
+    final editablePath = await resolveExclusiveManagedPath(
+      objectId: objectId,
+      filePath: storedFile,
+    );
+    if (editablePath == null) {
+      throw const CanonicalImageEditOwnershipException();
+    }
+    return editablePath;
+  }
+
+  Future<AppObject> _refreshGeometry({
+    required int workspaceId,
+    required int objectId,
+    required File file,
+  }) async {
+    final decoded = image.decodeImage(await file.readAsBytes());
+    if (decoded == null || decoded.width <= 0 || decoded.height <= 0) {
+      throw StateError('編集後の画像サイズを取得できませんでした。');
+    }
+    return geometryUpdater(
+      workspaceId: workspaceId,
+      objectId: objectId,
+      pixelWidth: decoded.width,
+      pixelHeight: decoded.height,
+    );
+  }
+}
+
+class CanonicalImageEditTargetException implements Exception {
+  const CanonicalImageEditTargetException();
+
+  @override
+  String toString() => '編集対象の画像ファイルを確認できませんでした。';
 }
 
 class CanonicalImageEditOwnershipException implements Exception {
