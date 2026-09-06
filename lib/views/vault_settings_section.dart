@@ -11,6 +11,7 @@ class VaultSettingsSection extends StatelessWidget {
     this.onCreateVault,
     this.onOpenVault,
     this.onSwitchVault,
+    this.onMoveVault,
   });
 
   final String directoryPath;
@@ -18,6 +19,7 @@ class VaultSettingsSection extends StatelessWidget {
   final VoidCallback? onCreateVault;
   final VoidCallback? onOpenVault;
   final VoidCallback? onSwitchVault;
+  final VoidCallback? onMoveVault;
 
   static const _directoryService = VaultDirectoryService();
 
@@ -49,8 +51,10 @@ class VaultSettingsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final hasManagementActions =
-        onCreateVault != null || onOpenVault != null || onSwitchVault != null;
+    final hasManagementActions = onCreateVault != null ||
+        onOpenVault != null ||
+        onSwitchVault != null ||
+        onMoveVault != null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -112,12 +116,18 @@ class VaultSettingsSection extends StatelessWidget {
                 icon: const Icon(Icons.swap_horiz),
                 label: const Text('Vaultを切り替える'),
               ),
+            if (onMoveVault != null)
+              OutlinedButton.icon(
+                onPressed: onMoveVault,
+                icon: const Icon(Icons.drive_file_move_outline),
+                label: const Text('Vaultを移動'),
+              ),
           ],
         ),
         if (hasManagementActions) ...[
           const SizedBox(height: UiTokens.space8),
           Text(
-            'Vaultの作成・オープン・切り替えでは、現在のデータベースを安全に閉じてから既存の起動経路で読み込み直します。',
+            'Vaultの作成・オープン・切り替え・移動では、既存の安全な起動経路を使います。移動元は移動先のコピーと再オープンが確認されても自動削除しません。',
             style: TextStyle(
               fontSize: UiTokens.textXs,
               color: scheme.onSurfaceVariant,
