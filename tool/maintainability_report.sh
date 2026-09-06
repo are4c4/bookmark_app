@@ -3,15 +3,18 @@ set -euo pipefail
 
 # Reports Dart LOC and selected dependency-boundary debt without changing the
 # repository. Existing hotspots stay non-blocking by default; callers may opt
-# into a regression-only presentation/database reach-through threshold.
+# into regression-only thresholds for presentation/database reach-through and
+# legacy Database-presentation re-export imports.
 #
 # Usage:
 #   bash tool/maintainability_report.sh
 #   bash tool/maintainability_report.sh --top 30
 #   bash tool/maintainability_report.sh --max-boundary-refs 12
+#   bash tool/maintainability_report.sh --max-legacy-shim-imports 22
 
 TOP=20
 MAX_BOUNDARY_REFS=""
+MAX_LEGACY_SHIM_IMPORTS=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -31,8 +34,16 @@ while [[ $# -gt 0 ]]; do
       MAX_BOUNDARY_REFS="$2"
       shift 2
       ;;
+    --max-legacy-shim-imports)
+      if [[ $# -lt 2 || ! "$2" =~ ^[0-9]+$ ]]; then
+        echo "--max-legacy-shim-imports requires a non-negative integer" >&2
+        exit 2
+      fi
+      MAX_LEGACY_SHIM_IMPORTS="$2"
+      shift 2
+      ;;
     -h|--help)
-      sed -n '3,11p' "$0"
+      sed -n '3,13p' "$0"
       exit 0
       ;;
     *)
@@ -49,7 +60,8 @@ fi
 
 tmp_file="$(mktemp "${TMPDIR:-/tmp}/bookmark-maintainability.XXXXXX")"
 boundary_file="$(mktemp "${TMPDIR:-/tmp}/bookmark-boundaries.XXXXXX")"
-trap 'rm -f "$tmp_file" "$boundary_file"' EXIT
+legacy_shim_file="$(mktemp "${TMPDIR:-/tmp}/bookmark-legacy-shims.XXXXXX")"
+trap 'rm -f "$tmp_file" "$boundary_file" "$legacy_shim_file"' EXIT
 
 scan_root() {
   local root="$1"
@@ -77,12 +89,32 @@ scan_presentation_database_reachthrough() {
   done
 }
 
+scan_legacy_presentation_shim_imports() {
+  local shim_names='database_page_toolbar|database_view_tabs|database_create_tiles|resizable_detail_pane|detail_property_row'
+  local import_pattern="^[[:space:]]*import[[:space:]]+['\"]((package:bookmark_app/widgets/|(\.\./)+widgets/)?)((${shim_names}))\\.dart['\"]"
+
+  for root in lib test; do
+    [[ -d "$root" ]] || continue
+    find "$root" -type f -name '*.dart' -print | while IFS= read -r file; do
+      count="$(
+        { grep -E "$import_pattern" "$file" 2>/dev/null || true; } |
+          wc -l |
+          tr -d ' '
+      )"
+      if [[ "$count" -gt 0 ]]; then
+        printf '%08d\t%s\n' "$count" "$file"
+      fi
+    done
+  done
+}
+
 {
   scan_root lib
   scan_root test
 } | sort -r > "$tmp_file"
 
 scan_presentation_database_reachthrough | sort -r > "$boundary_file"
+scan_legacy_presentation_shim_imports | sort -r > "$legacy_shim_file"
 
 lib_files="$(awk -F '\t' '$2 ~ /^lib\// { count++ } END { print count + 0 }' "$tmp_file")"
 lib_loc="$(awk -F '\t' '$2 ~ /^lib\// { sum += $1 } END { print sum + 0 }' "$tmp_file")"
@@ -90,6 +122,8 @@ test_files="$(awk -F '\t' '$2 ~ /^test\// { count++ } END { print count + 0 }' "
 test_loc="$(awk -F '\t' '$2 ~ /^test\// { sum += $1 } END { print sum + 0 }' "$tmp_file")"
 boundary_files="$(awk -F '\t' 'END { print NR + 0 }' "$boundary_file")"
 boundary_refs="$(awk -F '\t' '{ sum += $1 } END { print sum + 0 }' "$boundary_file")"
+legacy_shim_files="$(awk -F '\t' 'END { print NR + 0 }' "$legacy_shim_file")"
+legacy_shim_imports="$(awk -F '\t' '{ sum += $1 } END { print sum + 0 }' "$legacy_shim_file")"
 
 echo "Dart maintainability report"
 echo "==========================="
@@ -132,6 +166,26 @@ if [[ "$boundary_files" -gt 0 ]]; then
   done < "$boundary_file"
 fi
 
+echo
+echo "Legacy Database presentation re-export imports:"
+printf '  %s legacy shim import(s) across %s file(s)\n' \
+  "$legacy_shim_imports" "$legacy_shim_files"
+if [[ "$legacy_shim_files" -gt 0 ]]; then
+  printf '%8s  %s\n' 'imports' 'path'
+  printf '%8s  %s\n' '--------' '----'
+  while IFS=$'\t' read -r imports file; do
+    imports="${imports#0000000}"
+    imports="${imports#000000}"
+    imports="${imports#00000}"
+    imports="${imports#0000}"
+    imports="${imports#000}"
+    imports="${imports#00}"
+    imports="${imports#0}"
+    [[ -n "$imports" ]] || imports=0
+    printf '%8s  %s\n' "$imports" "$file"
+  done < "$legacy_shim_file"
+fi
+
 if [[ -n "$MAX_BOUNDARY_REFS" ]]; then
   echo
   echo "Boundary regression threshold: $MAX_BOUNDARY_REFS reference(s) maximum"
@@ -141,8 +195,17 @@ if [[ -n "$MAX_BOUNDARY_REFS" ]]; then
   fi
 fi
 
+if [[ -n "$MAX_LEGACY_SHIM_IMPORTS" ]]; then
+  echo
+  echo "Legacy shim import regression threshold: $MAX_LEGACY_SHIM_IMPORTS import(s) maximum"
+  if [[ "$legacy_shim_imports" -gt "$MAX_LEGACY_SHIM_IMPORTS" ]]; then
+    echo "Maintainability regression: $legacy_shim_imports legacy Database presentation shim imports exceed maximum $MAX_LEGACY_SHIM_IMPORTS." >&2
+    exit 1
+  fi
+fi
+
 echo
 echo "Policy: this report is non-blocking unless an explicit regression threshold is supplied."
-echo "Existing hotspots and boundary debt must not be hidden by moving code without reducing"
-echo "responsibility or duplication. Review major LOC/boundary growth against"
-echo "docs/MAINTAINABILITY.md and Issue #225."
+echo "Existing hotspots, boundary debt, and temporary shim imports must not be hidden by moving"
+echo "code without reducing responsibility or duplication. Review major LOC/boundary growth"
+echo "against docs/MAINTAINABILITY.md and Issue #225."
