@@ -10,7 +10,7 @@ Object/ObjectType architecture, Property value semantics, Object-centric Databas
 - #155 — reusable Weblink + managed Image presentation and legacy compatibility retirement.
 - #247 — Bookmark opening-mode implementation #344 merged; real-host validation remains.
 - #249 — Bookmark Gallery/List parity; one-Person-per-chip is merged, List readability is actively converging, Bookmark fixed/masonry remains.
-- #252 — Notion-like Property-add UX; shared popover + generic Table/detail + Bookmark person-role convergence are merged.
+- #252 — Notion-like Property-add UX; shared popover + generic Table/detail + one Bookmark person-role surface are merged; `BookmarkReorderableProperties` still has a second legacy person-role add modal.
 - #149 — Bookmark Property handle convergence #348 merged; real-host visual confirmation remains.
 - #245 — legacy Photos -> canonical Image Objects; managed import and Photo->Image bridge exist, broader product migration remains.
 - #242 — Vault folders designed but lower priority while presentation parity is actionable.
@@ -31,10 +31,11 @@ Object/ObjectType architecture, Property value semantics, Object-centric Databas
 - one semantic chip per Bookmark Person role assignment is merged (#301);
 - shared anchored `PropertyAddPopover` is merged (#346);
 - generic Table and side-detail use the shared anchored add flow (#349);
-- Bookmark person-role Property addition now reuses that same shared popover (#350);
-- Bookmark List metadata is split into secondary metadata and semantic-chip rows (#352).
+- `PersonRoleProperties` reuses that same shared popover (#350);
+- Bookmark List metadata is split into secondary metadata and semantic-chip rows (#352);
+- Bookmark List semantic chips are width-bounded and long labels ellipsize instead of stretching rows (#354).
 
-## Completed this run — #350 / #252
+## Completed — #350 / #252
 PR #350 `Use shared Property add popover for Bookmark person roles` passed Flutter CI run #1331 and was squash-merged as `399bad597d33de7e35ece5468ebffe010041f71d`.
 
 Merged behavior:
@@ -44,7 +45,7 @@ Merged behavior:
 - actual Person picker/create and role assignment remain on existing repository paths;
 - no Relation persistence moved into the popover.
 
-## Completed this run — #352 / #249
+## Completed — #352 / #249
 PR #352 `Separate Bookmark List secondary metadata from chips` passed Flutter CI run #1330 and was squash-merged as `5095d4d7a65214ad8af4fc46621dec0e28abbc43`.
 
 Merged behavior:
@@ -53,26 +54,28 @@ Merged behavior:
 - explicit vertical separation replaces the previous single dense Wrap;
 - canonical URL and one-Person-per-chip behavior are preserved.
 
-## In progress — #354 / #249 bounded semantic chips
-Branch: `feature/object-bookmark-list-chip-width-249`
-Head before this handoff commit: `2559cf38855087e955863c6fd406c3eae5ffe807`
-PR: #354 `Bound Bookmark List semantic chip width`
-CI: Flutter CI #1336 queued at handoff.
+## Completed this run — #354 / #249 bounded semantic chips
+PR #354 `Bound Bookmark List semantic chip width` passed Flutter CI run #1337 and was squash-merged as `20a37c31e330d5806c6505c6d1d4746aee4331a1`.
 
-Implemented:
+Merged behavior:
 - semantic Bookmark List chips are capped at 190px;
 - long Person/Tag/status/favorite labels ellipsize inside the chip rather than stretching the whole row;
 - wrapping, icons and one-Person-per-chip semantics are unchanged;
 - focused widget regression covers a deliberately long Person label and verifies bounded width.
 
+## #252 follow-up audit
+`PersonRoleProperties` is converged, but `lib/widgets/bookmark_reorderable_properties.dart` still contains a second `showDialog<String>` / `AlertDialog` path titled `人物プロパティを追加`. The safe next #252 slice is to reuse the existing `PropertyAddPopover` there as well, preserving `_selectPeople`, `normalizePersonRole`, property-order insertion, and repository-owned Person assignment semantics.
+
+Do not duplicate Relation persistence or person-picking semantics inside the popover.
+
 ## #245 audit note
 `CoreObjectBridge` already provides the legacy Photo -> Image Object compatibility bridge with `photo_object_links` and the canonical system Image key. Do not build a second bridge. Remaining #245 work is product-semantic convergence: Bookmark cover/image semantics, generic Images parity, Person profile image migration, path/dedup safety where needed, and eventual legacy `写真` caller retirement.
 
 ## Exact next actions
-1. Resolve #354 CI; merge only after Generate + Analyze + full Test are green. Fix only scoped widget/layout failures.
+1. Continue #252 by replacing the remaining `BookmarkReorderableProperties._addRole()` modal with the already-merged shared `PropertyAddPopover`; preserve property-order insertion and existing repository picker/write paths.
 2. Continue #249 with a separate Stage1 List host slice for stable vertical padding/minimum height/title ellipsis/trailing alignment after rechecking hotspot ownership.
 3. Continue #249 Bookmark Gallery parity: reuse the existing `DatabaseViewGalleryAdapter` / `ObjectGalleryView` fixed/masonry contract; do not create Bookmark-only settings.
-4. Reassess #252 acceptance after #350. Only add advanced compact types where existing canonical Relation/computed services can be reused without duplicating semantics.
+4. Reassess #252 acceptance after both Bookmark person-role add surfaces converge. Only add advanced compact types where existing canonical Relation/computed services can be reused without duplicating semantics.
 5. Validate #247 and #149 in the actual Bookmark host before closing those issues.
 6. Continue #155 legacy URL/thumbnail retirement only after proven canonical replacement and caller-zero; keep import/export compatibility data meanwhile.
 7. Continue #245 from the existing bridge; no destructive Photo table removal.
@@ -83,11 +86,12 @@ Implemented:
 Current Object slices are presentation/interaction only. Person role assignment continues through existing repository/canonical behavior; do not move Relation storage/index/backlink logic into UI widgets.
 
 ### Refactor
-At the latest ownership check open Refactor PRs are focused rollback/failure/privacy work (#336/#340/#342/#351/#353) and do not own `bookmark_unified_stage1_page.dart` or `bookmark_list_metadata.dart`. Recheck before any shared-host edit. Refactor owns behavior-preserving extraction/deletion after Object parity is proven.
+At the latest ownership check open Refactor PRs are #336/#353/#355/#356/#357, focused on failure/privacy/rollback behavior. They do not own `bookmark_unified_stage1_page.dart`, `bookmark_list_metadata.dart`, or `bookmark_reorderable_properties.dart`. Recheck before edits because the shared-host ownership can change between runs. Refactor owns behavior-preserving extraction/deletion after Object parity is proven.
 
 ## Risks / blockers
 - large shared hosts are conflict-prone; keep Stage1 changes patch-sized and sequence them;
-- #354 is CI-gated and must not merge while checks are pending/failing;
+- `BookmarkReorderableProperties` is a several-hundred-line existing Widget; do not hand-reconstruct the whole file merely because the available GitHub write action is full-file replacement. Use a patch-capable edit path when available;
+- the next #249 Stage1 row geometry slice also belongs in the large `bookmark_unified_stage1_page.dart` hotspot and must remain patch-sized;
 - legacy Bookmark URL/thumbnail and Photo storage remain compatibility data;
 - identity-sensitive Weblink/Image creation must never fall back to raw title-only creation;
 - ambiguous Relation state must fail closed; presentation must not repair it;
@@ -101,7 +105,7 @@ At the latest ownership check open Refactor PRs are focused rollback/failure/pri
 - #349 CI #1325 green, merged.
 - #350 CI #1331 green, merged as `399bad597d33de7e35ece5468ebffe010041f71d`.
 - #352 CI #1330 green, merged as `5095d4d7a65214ad8af4fc46621dec0e28abbc43`.
-- #354 CI #1336 queued at handoff.
+- #354 CI #1337 green, merged as `20a37c31e330d5806c6505c6d1d4746aee4331a1`.
 
 ## Stop / continuation condition
-This run merged two already-green Object slices (#350/#352), continued #249 with a new bounded-chip PR (#354), and refreshed the durable handoff. Continue from #354 CI, then move to the Stage1 row padding/title/trailing slice or Bookmark fixed/masonry parity depending on current PR ownership. No product clarification is required.
+This run verified #354 full CI green and integrated it. The next concrete Object slices are identified (#252 remaining Bookmark add-modal convergence, then #249 Stage1 row geometry / Gallery parity), and current Refactor ownership does not conflict. This run stops because those edits require patch-sized changes to existing several-hundred/1500-line Widgets while the current GitHub write path available here only replaces complete files; hand-reconstructing those shared files would violate the repository's safe-edit guidance. Resume with a patch-capable edit path rather than broad whole-file replacement.
