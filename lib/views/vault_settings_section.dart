@@ -8,10 +8,16 @@ class VaultSettingsSection extends StatelessWidget {
     super.key,
     required this.directoryPath,
     this.revealDirectory,
+    this.onCreateVault,
+    this.onOpenVault,
+    this.onSwitchVault,
   });
 
   final String directoryPath;
   final Future<void> Function(String path)? revealDirectory;
+  final VoidCallback? onCreateVault;
+  final VoidCallback? onOpenVault;
+  final VoidCallback? onSwitchVault;
 
   static const _directoryService = VaultDirectoryService();
 
@@ -43,6 +49,8 @@ class VaultSettingsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final hasManagementActions =
+        onCreateVault != null || onOpenVault != null || onSwitchVault != null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -77,11 +85,45 @@ class VaultSettingsSection extends StatelessWidget {
           ),
         ),
         const SizedBox(height: UiTokens.space12),
-        OutlinedButton.icon(
-          onPressed: () => _reveal(context),
-          icon: const Icon(Icons.folder_open_outlined),
-          label: const Text('Finderで表示'),
+        Wrap(
+          spacing: UiTokens.space8,
+          runSpacing: UiTokens.space8,
+          children: [
+            OutlinedButton.icon(
+              onPressed: () => _reveal(context),
+              icon: const Icon(Icons.folder_open_outlined),
+              label: const Text('Finderで表示'),
+            ),
+            if (onCreateVault != null)
+              FilledButton.tonalIcon(
+                onPressed: onCreateVault,
+                icon: const Icon(Icons.create_new_folder_outlined),
+                label: const Text('新しいVaultを作成'),
+              ),
+            if (onOpenVault != null)
+              OutlinedButton.icon(
+                onPressed: onOpenVault,
+                icon: const Icon(Icons.folder_copy_outlined),
+                label: const Text('既存のVaultを開く'),
+              ),
+            if (onSwitchVault != null)
+              OutlinedButton.icon(
+                onPressed: onSwitchVault,
+                icon: const Icon(Icons.swap_horiz),
+                label: const Text('Vaultを切り替える'),
+              ),
+          ],
         ),
+        if (hasManagementActions) ...[
+          const SizedBox(height: UiTokens.space8),
+          Text(
+            'Vaultの作成・オープン・切り替えでは、現在のデータベースを安全に閉じてから既存の起動経路で読み込み直します。',
+            style: TextStyle(
+              fontSize: UiTokens.textXs,
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+        ],
       ],
     );
   }
