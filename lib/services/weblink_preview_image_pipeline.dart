@@ -104,8 +104,8 @@ class WeblinkPreviewImagePipeline {
       return null;
     }
 
-    final existingImage = await _findImageBySourceUrl(
-      imageDefinition: imageDefinition,
+    final existingImage = await _images.findBySourceUrl(
+      workspaceId: workspaceId,
       sourceUrl: previewUrl,
     );
     if (existingImage != null) {
@@ -156,19 +156,6 @@ class WeblinkPreviewImagePipeline {
       throw StateError('Representative image Relation verification failed.');
     }
     return image.id;
-  }
-
-  Future<AppObject?> _findImageBySourceUrl({
-    required ImageObjectDefinition imageDefinition,
-    required String sourceUrl,
-  }) async {
-    for (final image
-        in await objectStore.listObjects(imageDefinition.objectType.id)) {
-      final stored =
-          '${image.values[imageDefinition.sourceUrlProperty.id] ?? ''}'.trim();
-      if (stored == sourceUrl) return image;
-    }
-    return null;
   }
 
   Future<void> _attachRepresentative({
