@@ -229,6 +229,34 @@ class ImageObjectService {
     return _reload(definition.objectType.id, objectId);
   }
 
+  /// Replaces persisted layout geometry after the managed image bytes change.
+  ///
+  /// This deliberately updates only hidden pixel metadata. Image identity,
+  /// managed File, title and provenance remain untouched so an editor can
+  /// refresh Gallery/detail geometry without creating or retargeting an Image.
+  Future<AppObject> updateManagedGeometry({
+    required int workspaceId,
+    required int objectId,
+    required int pixelWidth,
+    required int pixelHeight,
+  }) async {
+    final width = _validatedDimension(pixelWidth, 'pixelWidth')!;
+    final height = _validatedDimension(pixelHeight, 'pixelHeight')!;
+    final definition = await ensureDefinition(workspaceId);
+    await _reload(definition.objectType.id, objectId);
+    await systemObjects.objectStore.setPropertyValue(
+      objectId: objectId,
+      property: definition.pixelWidthProperty,
+      value: width,
+    );
+    await systemObjects.objectStore.setPropertyValue(
+      objectId: objectId,
+      property: definition.pixelHeightProperty,
+      value: height,
+    );
+    return _reload(definition.objectType.id, objectId);
+  }
+
   Future<void> _ensureDefaults({
     required int objectTypeId,
     required ObjectPropertyDefinition fileProperty,
