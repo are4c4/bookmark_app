@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:bookmark_app/services/bookmark_metadata_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -51,6 +53,40 @@ void main() {
     expect(metadata.publishedDate, '2026-09-05T12:34:56+09:00');
   });
 
+  test('redirect uses final URL for relative media without retargeting identity',
+      () async {
+    final requestedUrl = Uri.parse('https://resource.test/go');
+    final finalUrl = Uri.parse('https://cdn.resource.test/articles/final/');
+    final service = BookmarkMetadataService(
+      client: _RedirectClient(
+        requestedUrl: requestedUrl,
+        finalUrl: finalUrl,
+        body: '''
+<html>
+  <head>
+    <meta property="og:title" content="Redirected article">
+    <meta property="og:image" content="preview.jpg">
+    <link rel="icon" href="../favicon.ico">
+  </head>
+</html>
+''',
+      ),
+    );
+
+    final metadata = await service.fetch(requestedUrl.toString());
+
+    expect(metadata.url, requestedUrl.toString());
+    expect(metadata.title, 'Redirected article');
+    expect(
+      metadata.thumbnail,
+      'https://cdn.resource.test/articles/final/preview.jpg',
+    );
+    expect(
+      metadata.faviconUrl,
+      'https://cdn.resource.test/articles/favicon.ico',
+    );
+  });
+
   test('itemprop published date is used and malformed dates are ignored', () async {
     var responseIndex = 0;
     final service = BookmarkMetadataService(
@@ -94,4 +130,42 @@ void main() {
     expect(metadata.contentType, isNull);
     expect(metadata.publishedDate, isNull);
   });
+}
+
+class _RedirectClient extends http.BaseClient {
+  _RedirectClient({
+    required this.requestedUrl,
+    required this.finalUrl,
+    required this.body,
+  });
+
+  final Uri requestedUrl;
+  final Uri finalUrl;
+  final String body;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    expect(request.url, requestedUrl);
+    return _StreamedResponseWithUrl(
+      Stream<List<int>>.value(utf8.encode(body)),
+      200,
+      url: finalUrl,
+      request: request,
+      headers: const {'content-type': 'text/html; charset=utf-8'},
+    );
+  }
+}
+
+class _StreamedResponseWithUrl extends http.StreamedResponse
+    implements http.BaseResponseWithUrl {
+  _StreamedResponseWithUrl(
+    super.stream,
+    super.statusCode, {
+    required this.url,
+    super.request,
+    super.headers,
+  });
+
+  @override
+  final Uri url;
 }
