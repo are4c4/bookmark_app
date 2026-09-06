@@ -7,7 +7,7 @@ import '../domain/object_body_block_contracts.dart';
 /// Search text intentionally follows persisted block order, includes text from
 /// unknown/future block kinds, and includes asset captions. Structural ids and
 /// other machine-only attributes are never emitted.
-String buildObjectBodySearchText(ObjectBody body) {
+String buildObjectBodySearchText(ObjectBodyDocument body) {
   final fragments = <String>[];
   for (final block in body.blocks) {
     _appendSearchFragment(fragments, block.text);
