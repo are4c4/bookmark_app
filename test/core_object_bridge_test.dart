@@ -67,6 +67,8 @@ void main() {
     );
     expect(imageType, isNotNull);
     expect(bookmarkType, isNotNull);
+    final resolvedImageType = imageType!;
+    final resolvedBookmarkType = bookmarkType!;
 
     for (final propertyName in <String>[
       'File',
@@ -80,28 +82,28 @@ void main() {
       'Legacy Tags',
     ]) {
       expect(
-        imageType!.properties.where((property) => property.name == propertyName),
+        resolvedImageType.properties.where((property) => property.name == propertyName),
         hasLength(1),
         reason: 'Photo mirrors should share the canonical Image definition.',
       );
     }
 
-    final images = await objectStore.listObjects(imageType!.id);
-    final bookmarks = await objectStore.listObjects(bookmarkType!.id);
+    final images = await objectStore.listObjects(resolvedImageType.id);
+    final bookmarks = await objectStore.listObjects(resolvedBookmarkType.id);
     expect(images, hasLength(1));
     expect(bookmarks, hasLength(1));
     expect(images.single.title, '表紙');
-    final fileProperty = imageType.properties.firstWhere((p) => p.name == 'File');
-    final noteProperty = imageType.properties.firstWhere((p) => p.name == 'Note');
+    final fileProperty = resolvedImageType.properties.firstWhere((p) => p.name == 'File');
+    final noteProperty = resolvedImageType.properties.firstWhere((p) => p.name == 'Note');
     final filenameProperty =
-        imageType.properties.firstWhere((p) => p.name == 'Original filename');
+        resolvedImageType.properties.firstWhere((p) => p.name == 'Original filename');
     expect(images.single.values[fileProperty.id], 'photo/a.jpg');
     expect(images.single.values[noteProperty.id], 'メモ');
     expect(images.single.values[filenameProperty.id], 'a.jpg');
     expect(bookmarks.single.title, '数学資料');
 
-    final imageRelation = bookmarkType.properties.firstWhere((p) => p.name == 'Images');
-    final tagRelation = bookmarkType.properties.firstWhere((p) => p.name == 'Tags');
+    final imageRelation = resolvedBookmarkType.properties.firstWhere((p) => p.name == 'Images');
+    final tagRelation = resolvedBookmarkType.properties.firstWhere((p) => p.name == 'Tags');
     expect(
       ObjectRelationValue.fromJson(bookmarks.single.values[imageRelation.id]).objectIds,
       [images.single.id],
@@ -113,8 +115,8 @@ void main() {
       [tagObjectId],
     );
 
-    final urlProperty = bookmarkType.properties.firstWhere((p) => p.name == 'URL');
-    final favoriteProperty = bookmarkType.properties.firstWhere((p) => p.name == 'Favorite');
+    final urlProperty = resolvedBookmarkType.properties.firstWhere((p) => p.name == 'URL');
+    final favoriteProperty = resolvedBookmarkType.properties.firstWhere((p) => p.name == 'Favorite');
     expect(bookmarks.single.values[urlProperty.id], 'https://example.com');
     expect(bookmarks.single.values[favoriteProperty.id], true);
   });
