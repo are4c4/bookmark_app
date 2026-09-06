@@ -1,0 +1,204 @@
+import 'package:flutter/material.dart';
+
+/// Presentation model for one Relation target ObjectType.
+///
+/// [isBuiltIn] is intentionally presentation-only. Persistence and validation
+/// remain owned by the canonical Object/Relation schema services.
+class RelationPropertyTargetOption {
+  const RelationPropertyTargetOption({
+    required this.objectTypeId,
+    required this.name,
+    required this.icon,
+    required this.isBuiltIn,
+  });
+
+  final int objectTypeId;
+  final String name;
+  final String icon;
+  final bool isBuiltIn;
+
+  String get kindLabel => isBuiltIn ? '組み込み' : 'カスタム';
+}
+
+/// Compact, reusable Relation-specific portion of the generic Property authoring
+/// flow.
+///
+/// This widget owns only target discovery/presentation and explicit cardinality
+/// choice. It performs no schema mutation. The host must pass the selected target
+/// and cardinality to the canonical Relation Property creation/update boundary.
+class RelationPropertyAuthoringFields extends StatefulWidget {
+  const RelationPropertyAuthoringFields({
+    super.key,
+    required this.targets,
+    required this.selectedTargetObjectTypeId,
+    required this.multiple,
+    required this.onTargetChanged,
+    required this.onMultipleChanged,
+  });
+
+  final List<RelationPropertyTargetOption> targets;
+  final int? selectedTargetObjectTypeId;
+  final bool multiple;
+  final ValueChanged<int?> onTargetChanged;
+  final ValueChanged<bool> onMultipleChanged;
+
+  @override
+  State<RelationPropertyAuthoringFields> createState() =>
+      _RelationPropertyAuthoringFieldsState();
+}
+
+class _RelationPropertyAuthoringFieldsState
+    extends State<RelationPropertyAuthoringFields> {
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocus = FocusNode();
+  bool _showResults = false;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _searchFocus.dispose();
+    super.dispose();
+  }
+
+  RelationPropertyTargetOption? get _selectedTarget {
+    final selectedId = widget.selectedTargetObjectTypeId;
+    if (selectedId == null) return null;
+    for (final target in widget.targets) {
+      if (target.objectTypeId == selectedId) return target;
+    }
+    return null;
+  }
+
+  List<RelationPropertyTargetOption> get _filteredTargets {
+    final query = _searchController.text.trim().toLowerCase();
+    if (query.isEmpty) return widget.targets;
+    return widget.targets.where((target) {
+      final haystack = '${target.name} ${target.kindLabel}'.toLowerCase();
+      return haystack.contains(query);
+    }).toList(growable: false);
+  }
+
+  void _select(RelationPropertyTargetOption target) {
+    widget.onTargetChanged(target.objectTypeId);
+    _searchController.clear();
+    _searchFocus.unfocus();
+    setState(() => _showResults = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = _selectedTarget;
+    final filtered = _filteredTargets;
+    final scheme = Theme.of(context).colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextField(
+          key: const ValueKey('relation-property-target-search'),
+          controller: _searchController,
+          focusNode: _searchFocus,
+          decoration: InputDecoration(
+            labelText: '関連先 ObjectType',
+            hintText: selected == null
+                ? '名前で検索'
+                : '${selected.icon} ${selected.name} · ${selected.kindLabel}',
+            prefixIcon: const Icon(Icons.search, size: 18),
+            suffixIcon: selected == null
+                ? null
+                : IconButton(
+                    key: const ValueKey('relation-property-target-clear'),
+                    tooltip: '関連先をクリア',
+                    onPressed: () {
+                      widget.onTargetChanged(null);
+                      _searchController.clear();
+                      setState(() => _showResults = true);
+                      _searchFocus.requestFocus();
+                    },
+                    icon: const Icon(Icons.close, size: 18),
+                  ),
+          ),
+          onTap: () => setState(() => _showResults = true),
+          onChanged: (_) => setState(() => _showResults = true),
+        ),
+        if (_showResults) ...[
+          const SizedBox(height: 6),
+          Container(
+            key: const ValueKey('relation-property-target-results'),
+            constraints: const BoxConstraints(maxHeight: 220),
+            decoration: BoxDecoration(
+              border: Border.all(color: scheme.outlineVariant),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: filtered.isEmpty
+                ? const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Text('一致するObjectTypeがありません'),
+                  )
+                : ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: filtered.length,
+                    itemBuilder: (context, index) {
+                      final target = filtered[index];
+                      final isSelected = target.objectTypeId ==
+                          widget.selectedTargetObjectTypeId;
+                      return ListTile(
+                        key: ValueKey(
+                          'relation-property-target-${target.objectTypeId}',
+                        ),
+                        dense: true,
+                        leading: Text(
+                          target.icon,
+                          style: const TextStyle(fontSize: 18),
+                        ),
+                        title: Text(target.name),
+                        subtitle: Text(target.kindLabel),
+                        trailing: isSelected
+                            ? const Icon(Icons.check, size: 18)
+                            : null,
+                        onTap: () => _select(target),
+                      );
+                    },
+                  ),
+          ),
+        ],
+        const SizedBox(height: 12),
+        Text(
+          'Cardinality',
+          style: Theme.of(context).textTheme.labelMedium,
+        ),
+        const SizedBox(height: 6),
+        SegmentedButton<bool>(
+          key: const ValueKey('relation-property-cardinality'),
+          segments: const [
+            ButtonSegment<bool>(
+              value: false,
+              icon: Icon(Icons.looks_one_outlined, size: 17),
+              label: Text('single'),
+            ),
+            ButtonSegment<bool>(
+              value: true,
+              icon: Icon(Icons.library_add_outlined, size: 17),
+              label: Text('multi'),
+            ),
+          ],
+          selected: {widget.multiple},
+          onSelectionChanged: (selection) {
+            if (selection.isNotEmpty) {
+              widget.onMultipleChanged(selection.first);
+            }
+          },
+        ),
+        const SizedBox(height: 4),
+        Text(
+          widget.multiple
+              ? '複数のObjectを関連付けできます'
+              : '1つのObjectだけ関連付けます',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+        ),
+      ],
+    );
+  }
+}
