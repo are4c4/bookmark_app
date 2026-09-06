@@ -162,6 +162,17 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
   bool get _isDailyNote => _systemKey == DailyNoteService.systemKey;
   bool get _isImage => _systemKey == ImageObjectService.systemKey;
 
+  bool get _isEditableImage {
+    final content = _content;
+    if (!_isImage || content == null) return false;
+    final legacyIdProperties = content.objectType.properties
+        .where((property) => property.name == 'Legacy Photo ID')
+        .toList(growable: false);
+    if (legacyIdProperties.isEmpty) return true;
+    if (legacyIdProperties.length != 1) return false;
+    return content.object.values[legacyIdProperties.single.id] == null;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -487,7 +498,7 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
     ObjectGraphNodeRecord node,
     ObjectDetailContent content,
   ) async {
-    if (node.isSystemType && !_isImage) return;
+    if (node.isSystemType && !_isEditableImage) return;
     var value = content.object.title;
     final result = await showDialog<String>(
       context: context,
@@ -535,7 +546,7 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
   ) {
     if (!property.isValue) return false;
     if (node.isSystemType) {
-      return _isImage &&
+      return _isEditableImage &&
           property.name == 'Note' &&
           property.type == ObjectPropertyType.text;
     }
@@ -731,7 +742,7 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
                       ),
                 ),
               ),
-              if (!node.isSystemType || _isImage)
+              if (!node.isSystemType || _isEditableImage)
                 IconButton(
                   key: const ValueKey('object-title-edit-button'),
                   tooltip: 'Object名を変更',
