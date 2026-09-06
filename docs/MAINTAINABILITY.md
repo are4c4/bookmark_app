@@ -71,14 +71,16 @@ The report remains non-blocking by default so existing debt does not make unrela
 ```bash
 bash tool/maintainability_report.sh \
   --max-boundary-refs 12 \
-  --max-legacy-shim-imports 22
+  --max-legacy-shim-imports 19
 ```
 
 `--max-boundary-refs N` exits with status 1 only when measured presentation `workspaceStore.database` references exceed `N`.
 
 `--max-legacy-shim-imports N` exits with status 1 only when imports of the five legacy Database-presentation shims exceed `N`. It counts package imports through `package:bookmark_app/widgets/...`, relative imports through `../widgets/...`, and same-directory imports within `lib/widgets/`; canonical `features/database/presentation/widgets/...` imports are not counted.
 
-Flutter CI enforces the accepted current ceilings of **12** direct presentation/database references and **22** legacy shim imports. When Refactor removes one or more of either category, lower the corresponding CI ceiling in the same or an immediately following focused PR so the improvement cannot silently regress.
+The initial repository baseline was **22** legacy shim imports. Refactor #474 immediately migrated the three test-only imports in `test/database_interaction_widgets_test.dart` to canonical feature imports, so the accepted ceiling is now **19** without touching a production host.
+
+Flutter CI enforces the accepted current ceilings of **12** direct presentation/database references and **19** legacy shim imports. When Refactor removes one or more of either category, lower the corresponding CI ceiling in the same or an immediately following focused PR so the improvement cannot silently regress.
 
 `tool/maintainability_report_test.sh` exercises both passing ceilings and both regression-failure paths against an isolated fixture, including relative, package, and same-directory shim imports.
 
