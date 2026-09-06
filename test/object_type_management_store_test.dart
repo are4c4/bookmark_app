@@ -204,6 +204,39 @@ void main() {
     expect(relation.config['pairRole'], isNull);
   });
 
+  test('duplicateSchema rolls back when Relation target metadata is missing',
+      () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final management = ObjectTypeManagementStore(
+      genericStore: genericStore,
+      objectStore: objectStore,
+    );
+
+    final sourceId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Broken relation source',
+    );
+    await genericStore.createProperty(
+      databaseId: sourceId,
+      name: 'Broken relation',
+      type: 'objectRelation',
+      config: const <String, dynamic>{'multiple': true},
+    );
+
+    await expectLater(
+      management.duplicateSchema(objectTypeId: sourceId),
+      throwsStateError,
+    );
+
+    final remainingTypes = await objectStore.listObjectTypes(workspaceId);
+    expect(remainingTypes.map((type) => type.id).toList(), <int>[sourceId]);
+    expect(remainingTypes.single.name, 'Broken relation source');
+  });
+
   test('identity editing and deletion reject system ObjectTypes', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
