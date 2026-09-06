@@ -61,24 +61,30 @@ void main() {
       await tester.pumpAndSettle();
     }
 
+    Future<void> createAndEditBody(int objectId, String text) async {
+      expect(find.byKey(const ValueKey('body-empty-insert')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('body-empty-insert')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('テキスト').last);
+      await tester.pumpAndSettle();
+
+      var body = await bodyStore.read(objectId);
+      expect(body.blocks, hasLength(1));
+      expect(body.blocks.single.type, ObjectBodyBlockType.paragraph);
+
+      await tester.enterText(
+        find.byKey(ValueKey('body-text-${body.blocks.single.id}')),
+        text,
+      );
+      await tester.pumpAndSettle();
+      body = await bodyStore.read(objectId);
+      expect(body.blocks.single.text, text);
+    }
+
     await openInspector(weblinkId);
-    expect(find.byKey(const ValueKey('body-empty-insert')), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('body-empty-insert')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('テキスト').last);
-    await tester.pumpAndSettle();
-    var body = await bodyStore.read(weblinkId);
-    expect(body.blocks, hasLength(1));
-    expect(body.blocks.single.type, ObjectBodyBlockType.paragraph);
+    await createAndEditBody(weblinkId, 'Weblink notes');
 
     await openInspector(imageId);
-    expect(find.byKey(const ValueKey('body-empty-insert')), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('body-empty-insert')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('テキスト').last);
-    await tester.pumpAndSettle();
-    body = await bodyStore.read(imageId);
-    expect(body.blocks, hasLength(1));
-    expect(body.blocks.single.type, ObjectBodyBlockType.paragraph);
+    await createAndEditBody(imageId, 'Image notes');
   });
 }
