@@ -7,11 +7,13 @@ class ImportedPhoto {
   const ImportedPhoto({
     required this.path,
     required this.originalName,
+    this.contentType,
     this.createdNew = true,
   });
 
   final String path;
   final String originalName;
+  final String? contentType;
 
   /// Whether this import call created [path].
   ///
@@ -35,6 +37,14 @@ class PhotoStorageService {
     'gif',
     'heic',
     'heif',
+  };
+  static const _extensionByContentType = <String, String>{
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'image/gif': 'gif',
+    'image/heic': 'heic',
+    'image/heif': 'heif',
   };
 
   Future<List<ImportedPhoto>> importImages({
@@ -63,6 +73,7 @@ class PhotoStorageService {
       if (!await source.exists()) continue;
 
       final originalName = _fileName(source.path);
+      final contentType = _contentTypeForName(originalName);
       if (reuseIdentical) {
         final existing = await _findIdenticalManagedFile(photoDir, source);
         if (existing != null) {
@@ -70,6 +81,7 @@ class PhotoStorageService {
             ImportedPhoto(
               path: existing.path,
               originalName: originalName,
+              contentType: contentType,
               createdNew: false,
             ),
           );
@@ -83,10 +95,61 @@ class PhotoStorageService {
         ImportedPhoto(
           path: target.path,
           originalName: originalName,
+          contentType: contentType,
         ),
       );
     }
     return imported;
+  }
+
+  /// Imports one source already classified as a supported Image by content/MIME.
+  ///
+  /// The source filename is preserved as provenance even when its extension is
+  /// misleading. The managed copy receives an extension derived from the
+  /// canonical Image content type so downstream image codecs/editors never
+  /// depend on the untrusted source extension.
+  Future<ImportedPhoto?> importClassifiedImagePath({
+    required String sourcePath,
+    required String contentType,
+    bool reuseIdentical = false,
+  }) async {
+    final normalizedContentType = contentType.trim().toLowerCase();
+    final managedExtension = _extensionByContentType[normalizedContentType];
+    if (managedExtension == null) {
+      throw ArgumentError.value(
+        contentType,
+        'contentType',
+        'Unsupported managed Image content type.',
+      );
+    }
+
+    final source = File(sourcePath);
+    if (!await source.exists()) return null;
+    final stat = await source.stat();
+    if (stat.type != FileSystemEntityType.file) return null;
+
+    final photoDir = await _resolvePhotoDirectory();
+    await photoDir.create(recursive: true);
+    final originalName = _fileName(source.path);
+    if (reuseIdentical) {
+      final existing = await _findIdenticalManagedFile(photoDir, source);
+      if (existing != null) {
+        return ImportedPhoto(
+          path: existing.path,
+          originalName: originalName,
+          contentType: normalizedContentType,
+          createdNew: false,
+        );
+      }
+    }
+
+    final managedName = _managedImageName(originalName, managedExtension);
+    final target = await source.copy(_nextManagedPath(photoDir, managedName, 0));
+    return ImportedPhoto(
+      path: target.path,
+      originalName: originalName,
+      contentType: normalizedContentType,
+    );
   }
 
   /// Persists already-downloaded image bytes into the same app-managed photo
@@ -110,7 +173,11 @@ class PhotoStorageService {
     await photoDir.create(recursive: true);
     final target = File(_nextManagedPath(photoDir, name, 0));
     await target.writeAsBytes(bytes, flush: true);
-    return ImportedPhoto(path: target.path, originalName: name);
+    return ImportedPhoto(
+      path: target.path,
+      originalName: name,
+      contentType: _contentTypeForName(name),
+    );
   }
 
   Future<void> deleteManagedPhoto(String path) async {
@@ -180,6 +247,14 @@ class PhotoStorageService {
     return '${directory.path}/${DateTime.now().microsecondsSinceEpoch}_${index}_$safeName';
   }
 
+  String _managedImageName(String originalName, String managedExtension) {
+    final name = _fileName(originalName);
+    final dot = name.lastIndexOf('.');
+    final stem = dot > 0 ? name.substring(0, dot) : name;
+    final safeStem = stem.trim().isEmpty ? 'image' : stem;
+    return '$safeStem.$managedExtension';
+  }
+
   Future<List<String>> _pickImagesWithFileSelector() async {
     const imageTypes = XTypeGroup(
       label: '画像',
@@ -231,6 +306,17 @@ return output
     final dot = path.lastIndexOf('.');
     if (dot < 0 || dot == path.length - 1) return false;
     return _allowedExtensions.contains(path.substring(dot + 1).toLowerCase());
+  }
+
+  String? _contentTypeForName(String filename) {
+    final lower = filename.toLowerCase();
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+    if (lower.endsWith('.png')) return 'image/png';
+    if (lower.endsWith('.webp')) return 'image/webp';
+    if (lower.endsWith('.gif')) return 'image/gif';
+    if (lower.endsWith('.heic')) return 'image/heic';
+    if (lower.endsWith('.heif')) return 'image/heif';
+    return null;
   }
 
   String _fileName(String path) {
