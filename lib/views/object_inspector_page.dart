@@ -256,10 +256,10 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
         return;
       }
       await _refreshAliases();
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('別名を追加できませんでした: $error')),
+        const SnackBar(content: Text('別名を追加できませんでした。')),
       );
     }
   }
@@ -271,10 +271,10 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
         alias: alias,
       );
       await _refreshAliases();
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('別名を削除できませんでした: $error')),
+        const SnackBar(content: Text('別名を削除できませんでした。')),
       );
     }
   }
@@ -301,10 +301,10 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
       final target = await open(_dailyNoteNavigation);
       if (!mounted || target.object.id == widget.objectId) return;
       await _openObject(target.object.id);
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Daily Noteを開けませんでした: $error')),
+        const SnackBar(content: Text('Daily Noteを開けませんでした。')),
       );
     } finally {
       if (mounted) setState(() => _dailyNoteNavigating = false);
@@ -348,10 +348,10 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
   ) async {
     try {
       _applyBodyDocument(await mutation());
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Bodyを更新できませんでした: $error')),
+        const SnackBar(content: Text('Bodyを更新できませんでした。')),
       );
     }
   }
@@ -433,10 +433,10 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
               request: request,
             );
       _applyBodyDocument(result.document);
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Object参照を追加できませんでした: $error')),
+        const SnackBar(content: Text('Object参照を追加できませんでした。')),
       );
     }
   }
@@ -470,10 +470,10 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
               request: request,
             );
       _applyBodyDocument(result.document);
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Database / View参照を追加できませんでした: $error')),
+        const SnackBar(content: Text('Database / View参照を追加できませんでした。')),
       );
     }
   }
@@ -506,10 +506,10 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
         sourceBlockId: block.id,
       );
       _applyBodyDocument(result.document);
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Bodyを更新できませんでした: $error')),
+        const SnackBar(content: Text('Bodyを更新できませんでした。')),
       );
     }
   }
@@ -552,10 +552,10 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
         title: result,
       );
       if (mounted) setState(() => _content = updated);
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Object名を変更できませんでした: $error')),
+        const SnackBar(content: Text('Object名を変更できませんでした。')),
       );
     }
   }
@@ -633,10 +633,10 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
         value: parsed,
       );
       if (mounted) setState(() => _content = updated);
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${property.name}を更新できませんでした: $error')),
+        SnackBar(content: Text('${property.name}を更新できませんでした。')),
       );
     }
   }
@@ -675,10 +675,10 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
           content: Text('「${result.targetObject.title}」をWeblinkとして関連付けました'),
         ),
       );
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Weblinkに昇格できませんでした: $error')),
+        const SnackBar(content: Text('Weblinkに昇格できませんでした。')),
       );
     } finally {
       if (mounted) {
