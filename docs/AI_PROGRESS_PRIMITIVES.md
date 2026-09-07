@@ -26,10 +26,14 @@ Do not infer File byte ownership from path location. Generic File physical delet
 
 Merged #693 (`335a9c49fcbe4cba875aa31d3b84e59f92a00430`) keeps `WeblinkVisualResolver` responsible only for fail-closed, read-only Representative Image Relation selection and delegates the target Image's managed path/existence/persisted geometry read to the existing `ImageVisualResolver`. It uses `probeMissingGeometry: false`, preserving Weblink cards' previous persisted-metadata-only behavior without introducing image-byte decoding. Flutter CI #2169 passed guardrails, Drift generation, Analyze and the full test suite before merge.
 
+Merged #711 (`92e7166a9075c61df7f947d5fa9891041f7970b2`) closes a missing-only Weblink MIME poisoning gap. `WeblinkObjectService` now rejects malformed non-MIME content-type strings before persistence while preserving lowercase/parameter stripping and non-empty existing metadata. A focused regression proves `not-a-mime` stays missing and a later valid `Text/HTML; charset=UTF-8` enrichment fills the same Weblink as `text/html`. Flutter CI #2247 passed guardrails, Drift generation, Analyze and the full test suite before merge.
+
 ### Image / Photo migration
 Canonical Image import/provenance/geometry/editing/deletion safety is established. Merged #652 canonicalized legacy Photo paths through the active profile/Vault resolver. Merged #675 (`08d46d599c717b57f608159c5b106e836034e911`) aligned native Image creation/reimport with the same portable stored-path identity while preserving historical non-empty absolute values and external absolute references.
 
 Merged #692 (`91824121156fbfebfa260b09d80e604d5923d8ab`) adopted the shared `ProfilePathResolver.canonicalStoredPath(...)` operation inside `ImageObjectService`, removing its remaining duplicate `resolveStoredPath -> toStoredPath` composition while preserving Image-specific empty-path validation, managed absolute/relative convergence, external absolute references, source provenance and concrete Image identity. Flutter CI #2159 passed maintainability guardrails, legacy dependency guard, Drift generation, Analyze and the full test suite before merge.
+
+Current PR #718 (`fix/primitives-image-mime-enrichment-495`) closes the Image counterpart of the missing-only MIME poisoning gap. It normalizes `contentType` before persistence with trim/lowercase/parameter stripping and a basic MIME slash check, matching canonical File behavior without restricting values to `image/*` or changing routing/identity. The focused regression proves `not-a-mime` remains missing, equivalent managed-path reimport reuses the same Image Object, and later `Image/PNG; charset=binary` enriches to `image/png`. Production/test were refreshed onto latest main as `9ff851ced0c8c01d4799af5587a75e9f8aec53ae`; this handoff commit follows that refresh.
 
 Legacy Photo migration remains compatibility-sensitive. `CoreObjectBridge` intentionally retains its special relative-path/no-profile-root gate; replacing it mechanically with `ManagedFileResolver.resolveExisting(...)` would change migration semantics. Refactor #695 merged as `a2d22e89792ea4d46abe030bc56e1c7910c5fe60`, retiring four temporary Photo Database-presentation shim imports and ratcheting the legacy-import guardrail. Do not hide/remove legacy Photo persistence or navigation until Bookmark/People authority and write parity are proven.
 
@@ -48,17 +52,14 @@ Merged #702 (`bd0ec996ce87f8e01e9834c6e57b7e2b3c7a42c2`) requires `CanonicalFile
 
 Merged #704 (`c7055cff8e8ffd2e5b68191efd753cb6c7959284`) extends the same canonical File identity gate to PDF metadata/preview/page-count/text services. The four PDF-native services now require `CanonicalFileManagedResourceResolver`; content-first classification and derived read-only behavior are unchanged. Flutter CI #2218 passed guardrails, Drift generation, Analyze and the full test suite before merge.
 
-Current PR #709: `fix/primitives-file-mime-enrichment-495`.
-Production+test head after refresh onto latest main: `5e011c3a890a7d05140d472a1e35ec2bdc74e50f`.
-
-#709 closes a concrete missing-only File metadata poisoning gap. `FileObjectService` previously persisted any non-empty normalized content-type string, while `PrimitiveFileImportClassifier` rejects values that are not MIME-shaped. A malformed value such as `not-a-mime` could therefore become permanent non-empty File metadata and block a later valid MIME from filling the field. The service now applies the same basic slash check before persistence. The focused regression proves invalid MIME stays missing, equivalent-path reimport reuses the same File Object, and a later parameterized `Application/PDF` enriches to `application/pdf`.
+Merged #709 (`b0e5852cc5cd4b14e0b5b97ca07c12c79a19e176`) closes the File counterpart of the missing-only MIME poisoning gap. `FileObjectService` now applies the same basic MIME-shape check used by the classifier after trim/lowercase/parameter stripping. Malformed input stays missing so a later equivalent-path reimport can enrich the same File Object with a valid MIME. Flutter CI #2239 passed guardrails, Drift generation, Analyze and the full test suite before merge.
 
 ### MIME/content import routing
 `PrimitiveObjectImportService` validates a real regular-file source, classifies it content-first and delegates exactly once to Image or File; selected-importer failures never fall through.
 
 Merged #665 expanded strong signatures for common non-Image/unsupported-Image formats. Merged #684 (`aa0eefe5be1da730a7af94f0b26c7a6cdd58659f`) closes the existing-path extension-only gap: if real source bytes do not identify a supported Image and routing evidence falls back only to filename extension, production path import fails closed to generic File. Direct classifier extension fallback remains available when content is genuinely unavailable. #684 CI #2134 passed before merge.
 
-The #709 metadata normalization change does not alter routing targets or classification precedence. It only prevents malformed declared MIME from becoming durable canonical File metadata.
+#709, #711 and current #718 harden durable primitive metadata only; none changes routing target selection or content-first classification precedence.
 
 End-to-end generic File import remains intentionally blocked on a Lane F-owned managed-copy + explicit ownership seam for arbitrary source files. Lane F PR #691 changes Vault move/reopen migration behavior and does not provide that seam. Lane D must not duplicate attachment/Vault copy/delete lifecycle or create a second managed-file root.
 
@@ -73,20 +74,20 @@ Merged #704 makes the canonical File identity gate mandatory at the PDF capabili
 Refactor #705 removed the duplicate legacy `AppDatabase` tag-hierarchy mutation path in favor of `TagGroupStore.moveTag(...)`; this does not change Lane D Tag Object identity or Relation semantics.
 
 ## Validation / CI
-Recent Lane D merges #665, #671, #675, #679, #682, #684, #688, #692, #693, #697, #702 and #704 passed normal Flutter CI before integration. #688 CI #2147, #692 CI #2159, #693 CI #2169, #697 CI #2180, #702 CI #2202 and #704 CI #2218 passed guardrails, Drift generation, Analyze and full tests.
+Recent Lane D merges #665, #671, #675, #679, #682, #684, #688, #692, #693, #697, #702, #704, #709 and #711 passed normal Flutter CI before integration. #688 CI #2147, #692 CI #2159, #693 CI #2169, #697 CI #2180, #702 CI #2202, #704 CI #2218, #709 CI #2239 and #711 CI #2247 passed guardrails, Drift generation, Analyze and full tests.
 
-Local Flutter/Dart execution is unavailable in the connector-only runtime. #709 has been refreshed onto current main after unrelated Object/View merges. Require normal Flutter CI on the final #709 head including this handoff update before integration; any pre-refresh or pre-handoff run is obsolete.
+Local Flutter/Dart execution is unavailable in the connector-only runtime. #718's pre-refresh CI was green, but the refreshed final head requires normal Flutter CI including this handoff commit before integration. No local test result is claimed.
 
 ## Hotspot / concurrency state
-No shared hotspot lease is required for #709. Current work stays in `FileObjectService`, focused primitive test, and this lane handoff.
+No shared hotspot lease is required for #718. The current slice touches only `ImageObjectService`, its focused test and this lane handoff. The latest open-PR audit found no competing owner for `ImageObjectService`; shared presentation hosts remain active cross-lane territory.
 
-`SystemObjectListMedia` already provides reusable canonical Image/Weblink leading media, but the live `GenericDatabasePage` List host still uses a fixed document icon. Lane D intentionally does not reconstruct that large shared file through the connector merely to replace one leading widget; coordinate a patch-sized host integration with Lane C when the hotspot is safely writable.
+`SystemObjectListMedia` already provides reusable canonical Image/Weblink leading media, but the live `GenericDatabasePage` List host still uses a fixed document icon. Lane D should coordinate a patch-sized host integration with Lane C rather than broadly rewriting that shared page. `ObjectImageDetailPanel` likewise remains reusable but live `ObjectInspectorPage` integration is a shared Object hotspot and needs a fresh ownership audit before editing.
 
-Latest open-PR audit found no competing owner for `FileObjectService`. Lane F #691 remains storage-migration-only. Lane C #696/#703 and other active Object/Relation/Refactor PRs do not overlap #709's files. Avoid `generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, `people_management_page.dart`, `photo_management_page.dart`, Relation internals and Vault lifecycle code unless a fresh ownership audit proves a patch is safe.
+Lane F #691 remains storage-migration-only and still does not provide the generic managed-copy/ownership seam. Lane C and active Object/Relation/Refactor work do not own primitive data services. Avoid `generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, `people_management_page.dart`, `photo_management_page.dart`, Relation internals and Vault lifecycle code unless a fresh ownership audit proves a patch is safe.
 
 ## Exact next actions
-1. Require green Flutter CI on the final #709 head and merge only that verified head.
-2. After #709, re-audit canonical File metadata/native capability consumers for another concrete fail-open or missing-only enrichment defect; do not add speculative abstractions.
+1. Require green normal Flutter CI on final #718 head; if green and mergeable, integrate it.
+2. After #718, re-audit primitive metadata/native capability consumers only for another concrete fail-open or missing-only enrichment defect; do not add speculative abstractions.
 3. Continue #495 only for concrete classification ambiguities. End-to-end File import waits for the Lane F managed-copy/ownership contract.
 4. Coordinate with Lane F on File managed-copy + explicit ownership before generic File import/delete lifecycle.
 5. Coordinate with Lane C for generic File import/create UX and File/Image/Weblink presentation hosts rather than reconstructing Database/View hotspots from Lane D.

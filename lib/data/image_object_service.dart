@@ -175,6 +175,7 @@ class ImageObjectService {
   }) async {
     final path = _canonicalStoredPath(filePath);
     final source = _validatedSourceUrl(sourceUrl);
+    final normalizedContentType = _normalizedContentType(contentType);
     final width = _validatedDimension(pixelWidth, 'pixelWidth');
     final height = _validatedDimension(pixelHeight, 'pixelHeight');
     final definition = await ensureDefinition(workspaceId);
@@ -198,7 +199,11 @@ class ImageObjectService {
         definition.originalFilenameProperty,
         originalFilename,
       );
-      await _setIfMissing(object, definition.contentTypeProperty, contentType);
+      await _setIfMissing(
+        object,
+        definition.contentTypeProperty,
+        normalizedContentType,
+      );
       await _setNumberIfMissing(object, definition.pixelWidthProperty, width);
       await _setNumberIfMissing(object, definition.pixelHeightProperty, height);
       return _reload(definition.objectType.id, object.id);
@@ -221,7 +226,11 @@ class ImageObjectService {
       definition.originalFilenameProperty,
       originalFilename,
     );
-    await _setIfMissing(created, definition.contentTypeProperty, contentType);
+    await _setIfMissing(
+      created,
+      definition.contentTypeProperty,
+      normalizedContentType,
+    );
     await _setNumberIfMissing(created, definition.pixelWidthProperty, width);
     await _setNumberIfMissing(created, definition.pixelHeightProperty, height);
     return _reload(definition.objectType.id, objectId);
@@ -416,6 +425,17 @@ class ImageObjectService {
     } on ArgumentError {
       return false;
     }
+  }
+
+  String? _normalizedContentType(String? value) {
+    final candidate = value?.trim().toLowerCase();
+    if (candidate == null || candidate.isEmpty) return null;
+    final separator = candidate.indexOf(';');
+    final mime = separator < 0
+        ? candidate
+        : candidate.substring(0, separator).trim();
+    if (mime.isEmpty || !mime.contains('/')) return null;
+    return mime;
   }
 
   int? _validatedDimension(int? value, String name) {
