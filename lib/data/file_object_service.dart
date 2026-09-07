@@ -1,3 +1,4 @@
+import '../domain/managed_file_ownership.dart';
 import '../domain/mime_type_normalizer.dart';
 import '../domain/object_model.dart';
 import '../domain/object_type_defaults.dart';
@@ -14,6 +15,7 @@ class FileObjectDefinition {
     required this.sizeBytesProperty,
     required this.sha256Property,
     required this.importedAtProperty,
+    required this.storageOwnershipProperty,
   });
 
   final AppObjectType objectType;
@@ -24,6 +26,7 @@ class FileObjectDefinition {
   final ObjectPropertyDefinition sizeBytesProperty;
   final ObjectPropertyDefinition sha256Property;
   final ObjectPropertyDefinition importedAtProperty;
+  final ObjectPropertyDefinition storageOwnershipProperty;
 }
 
 /// Canonical generic File primitive.
@@ -89,6 +92,12 @@ class FileObjectService {
       type: ObjectPropertyType.date,
       config: const <String, dynamic>{'system': true},
     );
+    final storageOwnership = await systemObjects.ensureProperty(
+      objectTypeId: type.id,
+      name: 'Storage ownership',
+      type: ObjectPropertyType.text,
+      config: const <String, dynamic>{'system': true},
+    );
     type = (await systemObjects.getSystemObjectType(
       workspaceId: workspaceId,
       systemKey: systemKey,
@@ -103,6 +112,7 @@ class FileObjectService {
       sizeBytesProperty: sizeBytes,
       sha256Property: sha256,
       importedAtProperty: importedAt,
+      storageOwnershipProperty: storageOwnership,
     );
 
     return FileObjectDefinition(
@@ -114,6 +124,7 @@ class FileObjectService {
       sizeBytesProperty: sizeBytes,
       sha256Property: sha256,
       importedAtProperty: importedAt,
+      storageOwnershipProperty: storageOwnership,
     );
   }
 
@@ -122,7 +133,9 @@ class FileObjectService {
   /// Reimport is deterministic by canonical stored path. Existing non-empty
   /// metadata is preserved; a retry may only fill fields that were previously
   /// missing. SHA-256 is optional metadata and does not replace stored-path
-  /// identity or silently merge independently managed files.
+  /// identity or silently merge independently managed files. Physical-byte
+  /// ownership is persisted only from the closed [ManagedFileOwnership] type;
+  /// path location alone never manufactures delete authority.
   Future<AppObject> findOrCreateManaged({
     required int workspaceId,
     required String filePath,
@@ -132,6 +145,7 @@ class FileObjectService {
     int? sizeBytes,
     String? sha256,
     DateTime? importedAt,
+    ManagedFileOwnership? storageOwnership,
   }) async {
     final storedPath = _canonicalStoredPath(filePath);
     final validatedSize = _validatedSize(sizeBytes);
@@ -144,6 +158,7 @@ class FileObjectService {
     final extension = _extension(filename ?? storedPath);
     final importedAtValue =
         (importedAt ?? DateTime.now()).toUtc().toIso8601String();
+    final ownershipStorageKey = storageOwnership?.storageKey;
     final definition = await ensureDefinition(workspaceId);
     final objects = await systemObjects.objectStore.listObjects(
       definition.objectType.id,
@@ -177,6 +192,11 @@ class FileObjectService {
         object,
         definition.importedAtProperty,
         importedAtValue,
+      );
+      await _setIfMissing(
+        object,
+        definition.storageOwnershipProperty,
+        ownershipStorageKey,
       );
       return _reload(definition.objectType.id, object.id);
     }
@@ -214,6 +234,11 @@ class FileObjectService {
       definition.importedAtProperty,
       importedAtValue,
     );
+    await _setIfMissing(
+      created,
+      definition.storageOwnershipProperty,
+      ownershipStorageKey,
+    );
     return _reload(definition.objectType.id, objectId);
   }
 
@@ -226,6 +251,7 @@ class FileObjectService {
     required ObjectPropertyDefinition sizeBytesProperty,
     required ObjectPropertyDefinition sha256Property,
     required ObjectPropertyDefinition importedAtProperty,
+    required ObjectPropertyDefinition storageOwnershipProperty,
   }) async {
     final desiredVisible = <int>[
       originalFilenameProperty.id,
@@ -234,12 +260,21 @@ class FileObjectService {
       sizeBytesProperty.id,
       importedAtProperty.id,
     ];
-    final previousOrder = <int>[
+    final preHashOrder = <int>[
       originalFilenameProperty.id,
       contentTypeProperty.id,
       extensionProperty.id,
       sizeBytesProperty.id,
       importedAtProperty.id,
+      fileProperty.id,
+    ];
+    final preOwnershipOrder = <int>[
+      originalFilenameProperty.id,
+      contentTypeProperty.id,
+      extensionProperty.id,
+      sizeBytesProperty.id,
+      importedAtProperty.id,
+      sha256Property.id,
       fileProperty.id,
     ];
     final desiredOrder = <int>[
@@ -249,6 +284,7 @@ class FileObjectService {
       sizeBytesProperty.id,
       importedAtProperty.id,
       sha256Property.id,
+      storageOwnershipProperty.id,
       fileProperty.id,
     ];
     final current = await defaultsStore.read(objectTypeId);
@@ -264,11 +300,15 @@ class FileObjectService {
       return;
     }
 
-    // Upgrade only the exact generated order from the pre-hash File schema.
-    // A user-customized order remains authoritative and is never rewritten just
-    // because the built-in primitive gained optional system metadata.
+    // Upgrade only exact generated orders from earlier File schemas. A user-
+    // customized order remains authoritative when hidden ownership metadata is
+    // added to the built-in primitive.
     final order = current.propertyOrder;
-    if (order == null || !_sameIds(order, previousOrder)) return;
+    if (order == null ||
+        (!_sameIds(order, preHashOrder) &&
+            !_sameIds(order, preOwnershipOrder))) {
+      return;
+    }
     await defaultsStore.write(
       objectTypeId: objectTypeId,
       defaults: ObjectTypeDefaults(
