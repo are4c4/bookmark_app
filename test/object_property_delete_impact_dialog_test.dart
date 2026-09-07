@@ -60,7 +60,7 @@ void main() {
 
     expect(find.text('「Cover」を削除'), findsOneWidget);
     expect(find.text('値を保存しているObject'), findsOneWidget);
-    expect(find.text('0件'), findsNWidgets(2));
+    expect(find.text('0件'), findsNWidgets(3));
     final deleteButton = tester.widget<FilledButton>(
       find.byKey(const ValueKey('property-delete-confirm')),
     );
