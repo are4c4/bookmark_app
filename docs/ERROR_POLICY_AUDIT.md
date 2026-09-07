@@ -9,7 +9,7 @@ Issue #225 requires reducing silent failure without breaking intentional best-ef
 - **rollback / fail-closed** — catch exists to restore invariants and then rethrow/translate. Preserve the primary failure even when cleanup also fails.
 - **user-visible failure** — catch already surfaces an error to UI. Prefer a stable domain/retry message over raw implementation exceptions.
 
-## Production audit — refreshed 2026-09-07
+## Production audit — refreshed 2026-09-08
 
 | Path | Current pattern | Classification | Refactor action |
 | --- | --- | --- | --- |
@@ -34,9 +34,10 @@ Issue #225 requires reducing silent failure without breaking intentional best-ef
 | `lib/services/profile_manager.dart` | corrupt registry can fail soft to default Profile; imported metadata is advisory | fallback is the contract, **higher risk** | #363 removes raw exception interpolation from fallback diagnostics while leaving selection/recovery semantics unchanged. Changing which Profile/data location is selected still requires explicit product/data-safety policy. |
 | `lib/views/global_search_page.dart` | search/index failures use a stable retry-oriented state | user-visible failure | #331 replaced raw caught-Object rendering while preserving rebuild retry behavior. |
 | `lib/views/settings_page.dart` / backup section | backup/settings operation failures use stable messages | user-visible failure | #332/#333/#335 stabilize backup, AutoOrganize and malformed View-opening settings; #374 extracts backup workflow and #400 moves database composition behind `DatabaseBackupService.fromRepository(...)` without changing error behavior. |
+| `lib/views/generic_database_page.dart` | Database/collection/Property/Object/Board/Relation failures are user-visible | user-visible failure | Final Issue #225 privacy slice maps all 11 remaining raw exception surfaces to stable operation messages and ratchets the legacy presentation allowlist from 1 to 0 while keeping the stale-Relation fail-closed regression. |
 | `lib/main.dart` | bootstrap/Profile-switch failure remains fail-closed; rollback to previous Profile is preserved | user-visible / fail-closed initialization | #368 replaced raw fatal-screen exception interpolation with one stable retry-oriented message and fixed debug operation labels + stack traces. Original error state and rollback semantics remain unchanged; Profile/path/exception text is not logged. |
 | `lib/features/database/presentation/widgets/database_property_add_popover_host.dart` | Property authoring failure is user-visible and must not expose storage/domain exception text | user-visible failure | #701 adds a real widget failure regression, replaces raw exception interpolation with a stable retry message, and keeps debug observability to a fixed operation label + stack trace. Property/Relation persistence stays on the existing canonical authoring service. |
-| canonical `lib/features/**/presentation/` | caught errors may be handled or forwarded, but must not be directly converted into rendered/interpolated exception text | user-visible failure guardrail | #745 adds `feature_presentation_error_privacy_guard.sh`, fixture coverage and CI enforcement. Typed forwarding such as `onError(error)` remains valid; `$error` / `${error...}` interpolation of the caught variable is rejected. |
+| presentation roots | caught errors may be handled or forwarded, but must not be directly converted into rendered/interpolated exception text | user-visible failure guardrail | #745 introduced the canonical guard; Issue #225 then ratcheted the legacy host allowlist from eight entries to zero. Typed forwarding such as `onError(error)` remains valid. |
 
 ## Current policy
 
@@ -46,18 +47,18 @@ Issue #225 requires reducing silent failure without breaking intentional best-ef
 4. **Debug observability must be privacy-safe.** Prefer fixed operation/stage labels plus stack traces. Avoid raw names, URLs, file paths, JSON, response bodies, bytes, credentials and exception text when those may echo user content.
 5. **Normal compatibility fallbacks should remain quiet** unless there is evidence of a debugging gap. File-not-found/no-media fallback is not automatically an error.
 6. **Recovery semantics are separate from diagnostic cleanup.** In particular, `ProfileManager` corrupt-registry fallback selection affects data-location recovery and must not be changed as a routine catch cleanup.
-7. **Canonical feature presentation must not regress to raw caught-error rendering.** CI now enforces this at the `lib/features/**/presentation/` boundary; keep legacy cleanup separate so old hosts do not block unrelated canonical work.
+7. **Presentation must not regress to raw caught-error rendering.** CI now enforces the zero-allowlist boundary across canonical feature presentation and legacy `lib/views` / `lib/widgets` presentation.
 
 ## Refactor order
 
 The highest-value small silent/privacy boundaries have largely been covered. New failure-policy work should therefore be selective:
 
 1. prefer measurable responsibility/LOC reduction or real legacy caller retirement over another isolated logging PR;
-2. fix remaining raw user-visible implementation exception interpolation when it is in a small, independently testable/owned host;
+2. treat any new presentation raw caught-error interpolation as a regression rather than reopening the old allowlist;
 3. replace repeated exception parsing only when a real typed/domain boundary deletes caller duplication;
 4. address genuinely silent failures when they can hide corruption while the product safely continues.
 
-Canonical feature presentation is protected from new caught-error interpolation by #745. Current raw user-visible exception interpolation is therefore legacy debt concentrated in larger/shared hosts such as Photo management, Tag management, Stage1, `GenericDatabasePage`, `AppShell`, `ObjectInspectorPage`, Image editor and `BookmarkDetailPanel`. Do not rewrite those hosts merely to remove one string. Handle the error boundary when a safe, focused host slice already owns the file and can add a real regression.
+The former legacy presentation debt is no longer a standing exception: the #812 allowlist has been ratcheted from eight hosts to zero. Future Issue #225 work should focus on responsibility reduction, typed boundaries, caller-zero deletion and genuinely silent corruption/fallback risks rather than repeatedly revisiting already-stabilized user messages.
 
 ## Diagnostic privacy rule
 
@@ -74,7 +75,7 @@ Debug/test observability must not create a secondary user-data leak. Prefer:
 - Prefer debug-only visibility for expected best-effort failure when user action does not need to fail.
 - Prefer typed/domain errors for actionable user failures.
 - Do not display raw database/HTTP/filesystem exception strings when a stable domain message exists.
-- Under canonical `lib/features/**/presentation/`, do not interpolate the caught exception variable directly into a string; #745 enforces this in CI.
+- In presentation code, do not interpolate the caught exception variable directly into a string; the CI privacy guard now has no legacy host exceptions.
 - Do not add noisy logs to ordinary file-not-found / no-media compatibility fallbacks simply to make every catch observable.
 - When rollback itself fails, preserve the original operation failure and treat cleanup failure as secondary diagnostics unless recovery semantics require otherwise.
 - Do not add public production constructor/test seams solely to force a Widget failure-path regression when a smaller deterministic contract guard can prove the policy without lifecycle instability.

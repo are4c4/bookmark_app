@@ -41,18 +41,28 @@ output="$(cd "$fixture" && bash "$script")"
 grep -Fq 'feature_presentation_error_privacy_guard: PASS' <<<"$output"
 
 cat > "$fixture/lib/views/generic_database_page.dart" <<'EOF'
-Future<void> knownLegacyHost() async {
+Future<void> formerLegacyHost() async {
   try {
     throw StateError('legacy-private-value');
   } catch (error) {
-    final message = 'Known legacy debt: $error';
+    final message = 'Former legacy debt: $error';
     if (message.isEmpty) return;
   }
 }
 EOF
 
-legacy_allowed_output="$(cd "$fixture" && bash "$script")"
-grep -Fq 'feature_presentation_error_privacy_guard: PASS' <<<"$legacy_allowed_output"
+set +e
+former_legacy_failure="$(cd "$fixture" && bash "$script" 2>&1)"
+former_legacy_status=$?
+set -e
+
+if [[ "$former_legacy_status" -ne 1 ]]; then
+  echo "Expected former Generic legacy host to exit 1, got $former_legacy_status" >&2
+  exit 1
+fi
+grep -Fq 'Caught exception interpolation spread into a new legacy presentation host:' <<<"$former_legacy_failure"
+grep -Fq 'lib/views/generic_database_page.dart' <<<"$former_legacy_failure"
+rm "$fixture/lib/views/generic_database_page.dart"
 
 cat > "$fixture/lib/views/new_legacy_page.dart" <<'EOF'
 Future<void> newLegacyHost() async {
@@ -77,30 +87,6 @@ fi
 grep -Fq 'Caught exception interpolation spread into a new legacy presentation host:' <<<"$legacy_spread_failure"
 grep -Fq 'lib/views/new_legacy_page.dart' <<<"$legacy_spread_failure"
 rm "$fixture/lib/views/new_legacy_page.dart"
-
-cat > "$fixture/lib/views/generic_database_page.dart" <<'EOF'
-Future<void> cleanedLegacyHost() async {
-  try {
-    throw StateError('legacy-private-value');
-  } catch (_) {
-    const message = 'Stable user-safe message';
-    if (message.isEmpty) return;
-  }
-}
-EOF
-
-set +e
-stale_allowlist_failure="$(cd "$fixture" && bash "$script" 2>&1)"
-stale_allowlist_status=$?
-set -e
-
-if [[ "$stale_allowlist_status" -ne 1 ]]; then
-  echo "Expected cleaned allowlisted host to require ratchet, got $stale_allowlist_status" >&2
-  exit 1
-fi
-grep -Fq 'Legacy error privacy allowlist is stale after debt removal:' <<<"$stale_allowlist_failure"
-grep -Fq 'lib/views/generic_database_page.dart' <<<"$stale_allowlist_failure"
-rm "$fixture/lib/views/generic_database_page.dart"
 
 cat > "$fixture/lib/features/object/presentation/widgets/unsafe_simple.dart" <<'EOF'
 Future<void> runUnsafe() async {

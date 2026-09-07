@@ -254,10 +254,10 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
       );
       widget.onDatabaseChanged();
       await _reload();
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('データベースを更新できませんでした: $error')),
+        SnackBar(content: Text('データベースを更新できませんでした。')),
       );
     }
   }
@@ -272,10 +272,10 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('「${database.name}」の構造を複製しました')),
       );
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('データベースを複製できませんでした: $error')),
+        SnackBar(content: Text('データベースを複製できませんでした。')),
       );
     }
   }
@@ -302,10 +302,10 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
         _query = '';
       });
       await _reload();
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('コレクション設定を保存できませんでした: $error')),
+        SnackBar(content: Text('コレクション設定を保存できませんでした。')),
       );
     }
   }
@@ -355,10 +355,10 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
         _selectedRecordId = null;
       });
       widget.onDatabaseChanged();
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('データベースを削除できませんでした: $error')),
+        SnackBar(content: Text('データベースを削除できませんでした。')),
       );
     }
   }
@@ -549,10 +549,10 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
             ? null
             : [...active.visibleProperties, key],
       );
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('プロパティを追加できませんでした: $error')),
+        SnackBar(content: Text('プロパティを追加できませんでした。')),
       );
     }
   }
@@ -739,10 +739,10 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
           ),
         );
       }
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Objectを作成できませんでした: $error')),
+        SnackBar(content: Text('Objectを作成できませんでした。')),
       );
     }
   }
@@ -1026,10 +1026,10 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
           config: options.isEmpty ? const {} : {'options': options},
         );
       }
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('プロパティを追加できませんでした: $error')),
+        SnackBar(content: Text('プロパティを追加できませんでした。')),
       );
       return;
     }
@@ -1288,10 +1288,10 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                   targetGroup: targetGroup,
                 );
                 await _reload();
-              } catch (error) {
+              } catch (_) {
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('カードを移動できませんでした: $error')),
+                  SnackBar(content: Text('カードを移動できませんでした。')),
                 );
               }
             },
@@ -1318,10 +1318,10 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                     ),
                   );
                 }
-              } catch (error) {
+              } catch (_) {
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Objectを作成できませんでした: $error')),
+                  SnackBar(content: Text('Objectを作成できませんでした。')),
                 );
               }
             },
@@ -1420,10 +1420,10 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
         selectedObjectIds: result.selectedObjectIds,
       );
       await _reload();
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Relationを更新できませんでした: $error')),
+        SnackBar(content: Text('Relationを更新できませんでした。')),
       );
     }
   }
@@ -1777,11 +1777,11 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                               setState(() => _selectedRecordId = null);
                             }
                             await _reload();
-                          } catch (error) {
+                          } catch (_) {
                             if (!mounted) return;
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text('Objectを削除できませんでした: $error'),
+                                content: Text('Objectを削除できませんでした。'),
                               ),
                             );
                           }

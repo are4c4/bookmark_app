@@ -1,6 +1,6 @@
 # Feature presentation error privacy
 
-Canonical feature presentation under `lib/features/**/presentation/` must not turn raw caught exceptions into interpolated strings.
+Presentation code must not turn raw caught exceptions into interpolated user-visible strings.
 
 This is a regression boundary, not a blanket ban on exception handling. Code may still:
 
@@ -9,14 +9,21 @@ This is a regression boundary, not a blanket ban on exception handling. Code may
 - emit privacy-safe diagnostics that do not interpolate exception text;
 - use raw strings or escaped dollar signs when they are literal text rather than Dart interpolation.
 
-`tool/feature_presentation_error_privacy_guard.sh` scans catch bodies in canonical feature presentation and fails when the caught variable is interpolated as `$error`, `${error...}`, or the equivalent for another catch variable.
+`tool/feature_presentation_error_privacy_guard.sh` scans catch bodies in canonical `lib/features/**/presentation/` and legacy `lib/views/` / `lib/widgets/` presentation. It fails when the caught variable is interpolated as `$error`, `${error...}`, or the equivalent for another catch variable.
 
-Legacy `lib/views/` / `lib/widgets/` still contain Issue #225 debt, but that debt is now frozen to an explicit host allowlist rather than left unguarded. Raw caught-error interpolation may temporarily remain only in this existing host:
+Issue #225 originally froze legacy raw-error debt to an explicit allowlist of eight hosts. Focused cleanup retired every entry:
 
+- `lib/views/image_editor_page.dart`;
+- `lib/widgets/bookmark_detail_panel.dart`;
+- `lib/views/photo_management_page.dart`;
+- `lib/views/bookmark_unified_stage1_page.dart`;
+- `lib/views/object_inspector_page.dart`;
+- `lib/views/app_shell.dart`;
+- `lib/views/tag_management_page.dart`;
 - `lib/views/generic_database_page.dart`.
 
-`lib/views/image_editor_page.dart`, `lib/widgets/bookmark_detail_panel.dart`, `lib/views/photo_management_page.dart`, `lib/views/bookmark_unified_stage1_page.dart`, `lib/views/object_inspector_page.dart`, `lib/views/app_shell.dart`, and `lib/views/tag_management_page.dart` were removed from the allowlist after their failure presentation switched to stable user-safe messages. The guard fails if the pattern spreads to another legacy presentation host. It also fails when an existing allowlisted file is cleaned but left on the allowlist, forcing the boundary to ratchet smaller in the same change. This deliberately avoids rewriting large shared hosts just to satisfy the policy while ensuring new legacy presentation code cannot repeat the debt.
+The legacy allowlist is now **empty**. Raw caught-error interpolation is therefore rejected in both canonical feature presentation and the legacy presentation roots. Do not add a host back to the allowlist to land unrelated work; map failures to a stable domain/retry message or move typed handling to the appropriate Store/Service boundary.
 
-The guard is wired into Flutter CI and has isolated fixture coverage in `tool/feature_presentation_error_privacy_guard_test.sh` for canonical rejection, safe forwarding/escaping, legacy no-spread behavior, and stale-allowlist ratcheting.
+The guard remains wired into Flutter CI. `tool/feature_presentation_error_privacy_guard_test.sh` covers safe forwarding/escaping, canonical rejection, rejection of the former Generic Database host after the zero-ratchet, and rejection of any new legacy host.
 
-Legacy raw-error surfaces remain Issue #225 cleanup candidates. Migrate them only as focused, independently tested slices with current ownership checks; do not rewrite shared hotspots simply to satisfy this policy.
+Stable user messages should remain operation-oriented rather than exposing database, HTTP, filesystem, persisted-value, URL, path, or other implementation exception text. Diagnostic observability is a separate concern and should remain privacy-safe.

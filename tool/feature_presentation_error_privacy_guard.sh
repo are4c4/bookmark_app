@@ -1,15 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Canonical feature presentation must not turn raw caught exceptions into
+# Presentation code must not turn raw caught exceptions into
 # user-visible/interpolated strings. Typed forwarding such as onError(error)
 # remains valid: this guard targets string interpolation inside the same catch
 # body, not the existence of catches or error callbacks themselves.
 #
-# Legacy presentation still has a small, explicit set of known hosts carrying
-# this debt. Those hosts may remain temporarily, but the debt must not spread to
-# another lib/views or lib/widgets file. Once a listed host is cleaned while the
-# file still exists, this guard also forces removal of its stale allowlist entry.
+# Legacy presentation debt has been ratcheted to zero. Keep the allowlist data
+# structure empty so any future lib/views or lib/widgets regression fails closed.
 
 if [[ ! -d lib/features ]]; then
   echo "Run this script from the repository root (lib/features was not found)." >&2
@@ -30,9 +28,7 @@ feature_root = Path('lib/features')
 identifier = r'[A-Za-z_$][A-Za-z0-9_$]*'
 catch_pattern = re.compile(r'\bcatch\s*\(\s*(' + identifier + r')\s*(?:,|\))')
 
-legacy_allowed_hosts = {
-    'lib/views/generic_database_page.dart',
-}
+legacy_allowed_hosts = set()
 
 
 def _identifier_char(value: str) -> bool:
@@ -287,11 +283,11 @@ if unexpected_legacy:
         )
     print(file=sys.stderr)
     print(
-        'Legacy debt is temporarily allowlisted only in existing Issue #225 hosts.',
+        'Legacy raw-error interpolation has no remaining allowlisted hosts.',
         file=sys.stderr,
     )
     print(
-        'Use a stable user-safe message instead of extending raw-error presentation debt.',
+        'Use a stable user-safe message instead of reintroducing presentation debt.',
         file=sys.stderr,
     )
     sys.exit(1)
