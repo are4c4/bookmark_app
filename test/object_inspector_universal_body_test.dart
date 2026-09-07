@@ -1,4 +1,5 @@
 import 'package:bookmark_app/data/app_database.dart';
+import 'package:bookmark_app/data/daily_note_service.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
 import 'package:bookmark_app/data/image_object_service.dart';
 import 'package:bookmark_app/data/object_body_store.dart';
@@ -14,7 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('system Weblink and Image Objects expose the shared Body editor',
+  testWidgets('system, custom, and Daily Note Objects share the Body editor',
       (tester) async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
@@ -39,6 +40,18 @@ void main() {
       name: 'Image',
       icon: '🖼️',
     );
+    final dailyNoteType = await systemStore.ensureSystemObjectType(
+      workspaceId: workspaceId,
+      systemKey: DailyNoteService.systemKey,
+      name: 'Daily Note',
+      icon: '📅',
+    );
+    final personTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Person',
+      icon: '👤',
+    );
+
     final weblinkId = await objectStore.createObject(
       objectTypeId: weblinkType.id,
       title: 'Example Weblink',
@@ -46,6 +59,14 @@ void main() {
     final imageId = await objectStore.createObject(
       objectTypeId: imageType.id,
       title: 'Example Image',
+    );
+    final dailyNoteId = await objectStore.createObject(
+      objectTypeId: dailyNoteType.id,
+      title: '2026-09-07',
+    );
+    final personId = await objectStore.createObject(
+      objectTypeId: personTypeId,
+      title: 'Ada Lovelace',
     );
 
     tester.view.physicalSize = const Size(1200, 1000);
@@ -97,5 +118,7 @@ void main() {
 
     await verifyEditableBody(weblinkId, 'Weblink notes');
     await verifyEditableBody(imageId, 'Image notes');
+    await verifyEditableBody(personId, 'Person notes');
+    await verifyEditableBody(dailyNoteId, 'Daily notes');
   });
 }
