@@ -160,6 +160,93 @@ class ObjectTypeTemplateStore {
 
   static const templates = <ObjectTypeTemplate>[
     ObjectTypeTemplate(
+      key: 'bookmark',
+      name: 'ブックマーク',
+      icon: '🔖',
+      description: 'Weblink、タグ、カバー、ファイル、評価を組み合わせる汎用ブックマークデータベース',
+      properties: [
+        ObjectTypeTemplateProperty(
+          name: 'Weblink',
+          type: 'relation',
+          relationTargetSystemKey: WeblinkObjectService.systemKey,
+          relationMultiple: false,
+        ),
+        ObjectTypeTemplateProperty(
+          name: 'タグ',
+          type: 'relation',
+          relationTargetSystemKey: TagObjectBridge.systemKey,
+          relationMultiple: true,
+        ),
+        ObjectTypeTemplateProperty(
+          name: 'カバー',
+          type: 'relation',
+          relationTargetSystemKey: ImageObjectService.systemKey,
+          relationMultiple: false,
+        ),
+        ObjectTypeTemplateProperty(
+          name: 'ファイル',
+          type: 'relation',
+          relationTargetSystemKey: FileObjectService.systemKey,
+          relationMultiple: true,
+        ),
+        ObjectTypeTemplateProperty(name: '評価', type: 'rating'),
+        ObjectTypeTemplateProperty(
+          name: '状態',
+          type: 'select',
+          config: {
+            'options': ['あとで読む', '読了'],
+          },
+        ),
+        ObjectTypeTemplateProperty(name: 'お気に入り', type: 'checkbox'),
+      ],
+      views: [
+        ObjectTypeTemplateView(
+          name: 'すべて',
+          layoutType: 'gallery',
+          visiblePropertyNames: ['状態', 'お気に入り', '評価', 'タグ'],
+          propertyOrderNames: [
+            'Weblink',
+            '状態',
+            'お気に入り',
+            '評価',
+            'タグ',
+            'カバー',
+            'ファイル',
+          ],
+          galleryCoverRelationPropertyName: 'カバー',
+          galleryCoverKind: ObjectTypeTemplateGalleryCoverKind.imageRelation,
+        ),
+        ObjectTypeTemplateView(
+          name: 'あとで読む',
+          layoutType: 'gallery',
+          propertyFilters: [
+            ObjectTypeTemplateFilter(
+              propertyName: '状態',
+              operator: ObjectFilterOperator.equals,
+              value: 'あとで読む',
+            ),
+          ],
+          visiblePropertyNames: ['評価', 'タグ'],
+          galleryCoverRelationPropertyName: 'カバー',
+          galleryCoverKind: ObjectTypeTemplateGalleryCoverKind.imageRelation,
+        ),
+        ObjectTypeTemplateView(
+          name: 'お気に入り',
+          layoutType: 'gallery',
+          propertyFilters: [
+            ObjectTypeTemplateFilter(
+              propertyName: 'お気に入り',
+              operator: ObjectFilterOperator.equals,
+              value: true,
+            ),
+          ],
+          visiblePropertyNames: ['状態', '評価', 'タグ'],
+          galleryCoverRelationPropertyName: 'カバー',
+          galleryCoverKind: ObjectTypeTemplateGalleryCoverKind.imageRelation,
+        ),
+      ],
+    ),
+    ObjectTypeTemplate(
       key: 'book',
       name: '書籍',
       icon: '📚',
