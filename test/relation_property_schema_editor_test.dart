@@ -87,9 +87,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Relation Propertyを編集'), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('relation-property-target-type')));
+    final search = find.byKey(const ValueKey('relation-property-target-search'));
+    await tester.ensureVisible(search);
+    await tester.tap(search);
+    await tester.enterText(search, 'Company');
     await tester.pumpAndSettle();
-    await tester.tap(find.textContaining('Company').last);
+    final companyTarget =
+        find.byKey(ValueKey('relation-property-target-$companyTypeId'));
+    await tester.ensureVisible(companyTarget);
+    await tester.tap(companyTarget);
     await tester.pumpAndSettle();
     await tester.tap(find.text('変更内容を確認'));
     await tester.pumpAndSettle();
@@ -187,9 +193,10 @@ void main() {
 
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('relation-property-multiple')));
+    final singleChoice = find.text('single');
+    await tester.ensureVisible(singleChoice);
+    await tester.tap(singleChoice);
     await tester.pumpAndSettle();
-    expect(find.text('single'), findsOneWidget);
     await tester.tap(find.text('変更内容を確認'));
     await tester.pumpAndSettle();
 
