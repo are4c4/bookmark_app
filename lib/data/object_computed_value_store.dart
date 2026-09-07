@@ -1,5 +1,6 @@
 import '../domain/object_model.dart';
 import 'object_store.dart';
+import 'relation_read_service.dart';
 
 class ObjectComputedValueStore {
   ObjectComputedValueStore(this.objectStore);
@@ -191,10 +192,29 @@ class ObjectComputedValueStore {
     }
     if (relationProperty == null || !relationProperty.isRelation) return null;
 
-    final related = await objectStore.resolveRelation(
-      relationProperty,
-      object.values[relationProperty.id],
-    );
+    final propertyEdges = (await objectStore.outgoingRelations(object.id))
+        .where((edge) => edge.propertyId == relationProperty!.id)
+        .toList(growable: false);
+    if (!relationStoredValueMatchesEdges(
+      source: object,
+      property: relationProperty,
+      edges: propertyEdges,
+    )) {
+      return null;
+    }
+
+    final resolvedRelations = (await RelationReadService(objectStore).outgoing(
+      sourceObjectTypeId: object.objectTypeId,
+      sourceObjectId: object.id,
+    ))
+        .where((relation) => relation.property.id == relationProperty!.id)
+        .toList(growable: false);
+    if (resolvedRelations.length != propertyEdges.length) {
+      return null;
+    }
+    final related = resolvedRelations
+        .map((relation) => relation.targetObject)
+        .toList(growable: false);
     final aggregation = '${property.config['aggregation'] ?? 'count'}';
     if (aggregation == 'count') return related.length;
 
