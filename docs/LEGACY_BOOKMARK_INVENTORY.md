@@ -64,6 +64,11 @@ PR #654 passed maintainability guards, Drift generation, Analyze and full Test. 
 
 Do not recreate a Bookmark-only FTS index as a compatibility layer. If a search capability is missing, add it to the canonical Object search path under Search ownership.
 
+### `lib/widgets/detail_property_row.dart` re-export shim — #672
+The legacy `DetailPropertyRow` shim reached zero production/test imports after Bookmark callers and widget tests moved to `lib/features/database/presentation/widgets/detail_property_row.dart`.
+
+#672 removed the one-line re-export and lowered the CI shim-file ceiling from **5 to 4**. The historical `detail_property_row` name remains in the guard scanner intentionally so a future reintroduction is detected rather than silently recreating compatibility debt.
+
 ## Retired AppDatabase responsibilities
 
 These architecture-cleanup candidates are complete:
@@ -78,12 +83,12 @@ These architecture-cleanup candidates are complete:
 Do not reintroduce these responsibilities into the database root.
 
 ### Current AppDatabase audit seam
-At the #637 audit, `AppDatabase.updateBookmarkFields(... personNames ...)` had one production caller and that caller always passed null; live Person updates already use role-aware `setPeopleForRole(...)`. Re-audit latest main before removing the optional parameter/branch because parallel work may add a caller.
+At the latest audit, `AppDatabase.updateBookmarkFields(... personNames ...)` had one production caller and that caller passed null; live Person updates already use role-aware `setPeopleForRole(...)`. The seam appears behavior-preserving-dead, but removing the caller argument requires editing the large `bookmark_repository.dart` host. Re-audit and use a safe patch-sized mechanism rather than reconstructing that file for one argument.
 
 ## Retired Bookmark lifecycle read remnants
 #642 removed caller-zero `BookmarkLifecycleState`, `states()`, `watchStates()` and synchronous `genre()`. Live lifecycle mutations and `watchGenre()` remain.
 
-`BookmarkLifecycleStore.remove()` was observed as a no-op called by permanent deletion. It is a candidate only if current-source audit still proves the same contract; preserve attachment cleanup and actual Bookmark deletion ordering when removing it.
+`BookmarkLifecycleStore.remove()` remains an empty method with one production call from permanent deletion at the latest audit. It is a cleanup candidate in principle, but the caller is in large `bookmark_repository.dart`; preserve attachment cleanup and actual Bookmark deletion ordering and do not reconstruct the host for a one-line deletion.
 
 ## Superseded duplicate visual presentation paths — original inventory complete
 
@@ -127,9 +132,13 @@ Several consumers still obtain lower-level capabilities through `BookmarkReposit
 Attachment UI still has lower-level store/service composition tied to Bookmark hosts. Do not solve this by making `BookmarkRepository` broader; wait for a focused boundary that removes responsibility.
 
 ### Temporary Database-presentation re-export shims
-Current legacy re-export shims remain under `lib/widgets/`; canonical implementations live under `lib/features/database/presentation/widgets/`.
+Four legacy re-export shim files remain under `lib/widgets/`:
+- `database_page_toolbar.dart`;
+- `database_view_tabs.dart`;
+- `database_create_tiles.dart`;
+- `resizable_detail_pane.dart`.
 
-CI currently permits **17** shim imports and **5** shim files. Existing callers are concentrated in large/shared hosts. Do not reconstruct those hosts solely to change imports. Retire each shim only when all callers can be moved naturally through patch-sized edits.
+Canonical implementations live under `lib/features/database/presentation/widgets/`. CI currently permits **17** shim imports and **4** shim files. The remaining callers are concentrated in large/shared hosts such as Photo/People/Collection management, `GenericDatabasePage`, and Stage1. Do not reconstruct those hosts solely to change imports. Retire each shim only when all callers can be moved naturally through patch-sized edits.
 
 ### GenericDatabasePage hotspot
 Refactor progress includes:
@@ -156,10 +165,9 @@ Before merging new Object/Database/View work, search the diff for newly added pr
 A match is not automatically wrong, but the PR must classify it and state the retirement condition. `lib/features/**` is additionally protected by the feature legacy-dependency guard.
 
 ## Next removal order
-1. Re-audit the dead `updateBookmarkFields.personNames` seam and remove it only if caller behavior remains null-only.
-2. Re-audit the no-op `BookmarkLifecycleStore.remove()` call/method; delete only if still semantically empty.
-3. Continue true production caller-zero audits and delete whole modules only when independent canonical coverage exists.
-4. Retire temporary Database-presentation shims opportunistically when caller imports can change without whole-file host reconstruction.
-5. Re-audit remaining Bookmark URL/detail/backlink presentation only where Object/Database/Relation parity is proven.
-6. Continue GenericDatabasePage P1 decomposition as measurable responsibility/LOC reductions, coordinated with Database/View lane ownership.
-7. Continue Object-first Photo/Image and Bookmark/Image convergence through existing bridges; do not destructively remove legacy Photo storage.
+1. Keep the two audited dead Bookmark API seams (`updateBookmarkFields.personNames`, `BookmarkLifecycleStore.remove()`) deferred until the large repository host can be patched safely.
+2. Continue true production caller-zero audits and delete whole modules/shims only when independent canonical coverage exists.
+3. Retire the four remaining Database-presentation shims opportunistically when caller imports can change without whole-file host reconstruction.
+4. Re-audit remaining Bookmark URL/detail/backlink presentation only where Object/Database/Relation parity is proven.
+5. Continue GenericDatabasePage P1 decomposition as measurable responsibility/LOC reductions, coordinated with Database/View lane ownership.
+6. Continue Object-first Photo/Image and Bookmark/Image convergence through existing bridges; do not destructively remove legacy Photo storage.

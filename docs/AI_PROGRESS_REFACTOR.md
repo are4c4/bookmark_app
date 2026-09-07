@@ -8,9 +8,9 @@ Issue #225 — reduce maintenance hotspots and retire duplicate/unused legacy pa
 Primary lane: **G — Refactor & Architecture Health**. Object Core owns Object/Body semantics, Relations owns canonical Relation semantics, Database/View owns Database presentation semantics, Primitive Objects & Media owns Weblink/Image/File/etc. behavior, Search owns indexing/query semantics, and Storage/Vault owns storage/delivery behavior. Lane G owns measurable responsibility reduction, proven caller-zero retirement, failure-policy/privacy cleanup, maintainability guardrails, architecture-health audits, and incremental legacy shim retirement.
 
 ## Current checkpoint — 2026-09-07
-Latest verified `main` at this handoff: **`c2d4bd082e1e88c6781db4f51b2c12998a6ff85f`** — **#654 Retire legacy Bookmark FTS implementation**.
+Latest Lane G integration at this handoff: **`bc99da762996083a317440fe8cf81efecd2dad60`** — **#672 Retire caller-zero DetailPropertyRow re-export shim**.
 
-Parallel lanes move `main` quickly. Re-read `AGENTS.md`, Issue #225, open PRs and current `main` before every shared-host edit or merge.
+The repository `main` may already be newer because parallel lanes move quickly. Re-read `AGENTS.md`, Issue #225, open PRs and current `main` before every shared-host edit or merge.
 
 ### Most recent Lane G integrated sequence
 - **#504** `34a4ac24...` — forbid new `BookmarkItem` / `BookmarkRepository` dependencies under `lib/features/**`.
@@ -21,9 +21,11 @@ Parallel lanes move `main` quickly. Re-read `AGENTS.md`, Issue #225, open PRs an
 - **#637** `e47ce709...` — remove dead Bookmark People batch mutations and `_peopleForBookmark` from `AppDatabase` (-22 LOC).
 - **#642** `a7918569...` — remove dead Bookmark lifecycle read remnants (`BookmarkLifecycleState`, `states`, `watchStates`, synchronous `genre`) (-46 LOC).
 - **#654** `c2d4bd08...` — retire the caller-zero legacy Bookmark-only FTS repository and dedicated tests after Search #629 routed live Global Search through canonical Objects (-369 LOC, +1).
+- **#668** `bea40b1c...` — refresh Lane G handoff and legacy Bookmark inventory after FTS retirement.
+- **#672** `bc99da76...` — remove caller-zero `lib/widgets/detail_property_row.dart` re-export shim and ratchet the shim-file ceiling **5 → 4**.
 
-### #654 validation
-PR #654 passed:
+### Recent validation
+PR #654 and PR #672 both passed:
 - Maintainability guardrail tests;
 - Maintainability regression ceilings;
 - feature legacy dependency guard;
@@ -31,15 +33,15 @@ PR #654 passed:
 - `flutter analyze`;
 - full `flutter test`.
 
-Before merge, commits added after the branch base were compared and none touched the removed legacy FTS files or its remaining integrity-test hunk.
+Before each merge, commits added after the branch base were compared and no overlapping ownership was found in the changed files.
 
 ## Current measurable guardrails
 `.github/workflows/flutter_ci.yml` is the source of truth. At this checkpoint CI enforces:
 
 1. presentation direct `workspaceStore.database` reach-through: **9 maximum**;
 2. direct `AppDatabase` imports under canonical feature presentation: **8 maximum**;
-3. temporary Database-presentation re-export shim imports: **17 maximum**;
-4. temporary Database-presentation re-export shim files: **5 maximum**.
+3. temporary Database-presentation legacy shim imports: **17 maximum**;
+4. temporary Database-presentation re-export shim files: **4 maximum**.
 
 Do not copy numeric ceilings into script help text as defaults. Ratchet a ceiling downward only when real debt is removed; never relax one merely to land unrelated feature work.
 
@@ -59,7 +61,8 @@ The lane has now removed multiple whole modules or obsolete API chains rather th
 - #586 plain-text Body mutation path;
 - #637 dead AppDatabase People batch APIs;
 - #642 dead Bookmark lifecycle read model APIs;
-- #654 legacy Bookmark-only FTS repository and tests.
+- #654 legacy Bookmark-only FTS repository and tests;
+- #672 caller-zero `DetailPropertyRow` legacy re-export shim.
 
 Key rule: tests dedicated only to a caller-zero implementation do not make that implementation live. Before deletion, prove production callers are zero and that surviving behavior is covered independently by the canonical path.
 
@@ -88,28 +91,36 @@ Major completed narrowing:
 `AppDatabase` still contains legitimate CRUD/compatibility operations. Continue narrowing only when a real responsibility can be deleted/moved without introducing a pass-through wrapper.
 
 ### Audited near-term AppDatabase candidate
-At the #637 checkpoint, `AppDatabase.updateBookmarkFields(... personNames ...)` had one production caller (`BookmarkRepository.update`) and that caller always passed `personNames: null`; live Person updates already use role-aware `setPeopleForRole(...)`. This makes the optional parameter/branch a likely behavior-preserving dead API seam.
+At the latest audit, `AppDatabase.updateBookmarkFields(... personNames ...)` still had one production caller (`BookmarkRepository.update`) and that caller passed `personNames: null`; live Person updates already use role-aware `setPeopleForRole(...)`. This remains a likely behavior-preserving dead API seam.
 
-**Re-audit on latest main before editing.** Do not assume the earlier caller count is still current.
+However, applying it requires editing the large `bookmark_repository.dart` host. With connector whole-file replacement semantics, do not take that risk merely to delete one argument; wait for a safe patch mechanism or a naturally overlapping host edit, and re-audit callers then.
 
 ## BookmarkLifecycleStore state
 Live mutations such as inbox/archive/trash/restore and `watchGenre()` remain in use. #642 removed caller-zero aggregate state readers and synchronous `genre()`.
 
-`BookmarkLifecycleStore.remove()` was observed as a no-op called from permanent deletion. It may be removable together with its caller, but re-audit current source and open PR ownership first. `dispose()` is also a no-op but has broad test/host call sites; removing it purely for a metric is low priority.
+The latest audit still found `BookmarkLifecycleStore.remove()` implemented as an empty method with a single production call from `BookmarkRepository.permanentDelete`. It is behavior-preserving dead API in principle, but removing the call also requires editing the large repository host. Preserve attachment cleanup and actual Bookmark deletion ordering; do not reconstruct the file for a one-line cleanup.
+
+`dispose()` is also a no-op but has broad test/host call sites; removing it purely for a metric is low priority.
 
 ## GenericDatabasePage / shared hotspots
 Focused extractions already integrated include:
 - #310 `GenericDatabasePageStateLoader`;
 - #323 `GenericDatabasePageServices.fromWorkspaceStore(...)`.
 
-Remaining high-value responsibility includes schema/database actions, Property create/edit workflows and layout-specific host code. Keep changes patch-sized and avoid reconstructing `generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, or `bookmark_unified_stage1_page.dart` merely to change an import or constructor.
+Remaining high-value responsibility includes schema/database actions, Property create/edit workflows and layout-specific host code. Keep changes patch-sized and avoid reconstructing `generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, `bookmark_unified_stage1_page.dart`, or `bookmark_repository.dart` merely to change an import, constructor or dead argument.
 
 Database/View lane is actively landing Property authoring and Gallery/View composition slices. Always inspect open PRs before touching those hosts.
 
 ## Temporary Database-presentation re-export shims
-Five legacy shim files remain guarded. Their canonical implementations live under `lib/features/database/presentation/widgets/`.
+Four legacy shim files remain:
+- `lib/widgets/database_page_toolbar.dart`;
+- `lib/widgets/database_view_tabs.dart`;
+- `lib/widgets/database_create_tiles.dart`;
+- `lib/widgets/resizable_detail_pane.dart`.
 
-The shim-import ceiling is currently **17**. Migrate imports opportunistically when a real host is already safely modified; do not open large-file rewrites solely to decrease this count. Delete a shim only after all production/test callers have naturally moved.
+`lib/widgets/detail_property_row.dart` reached true caller-zero after `BookmarkAttachmentSection`, `BookmarkReorderableProperties`, and tests moved to the canonical feature import; #672 removed the shim and lowered the shim-file ceiling to **4**. The historical `detail_property_row` name intentionally remains guarded by the import scanner so reintroducing it is still detected.
+
+The shim-import ceiling remains **17** because #672 removed a definition with no callers rather than another import. The four surviving shims still have real callers concentrated in large/shared hosts such as Photo/People/Collection management, `GenericDatabasePage`, and Stage1. Do not rewrite those hosts solely to decrease a metric.
 
 ## Failure-policy state
 High-value user-visible raw-error boundaries have largely been stabilized. Intentional compatibility/best-effort failures may stay fail-soft, but unexpected failures should be observable through privacy-safe debug/test diagnostics where useful.
@@ -130,20 +141,20 @@ Recent audits confirmed these still have production callers and are **not** call
 - `ObjectDetailPropertyPresentation`;
 - `ObjectValuePromotion`;
 - `BacklinkRepository`;
-- canonical Object search repositories/services.
+- canonical Object search repositories/services;
+- the four remaining Database-presentation re-export shims, which still have real callers.
 
 `tool/performance_probe.dart` is an intentional standalone CLI and must not be classified caller-zero merely because production Dart does not import it.
 
 ## Exact next actions
-1. Re-read current `main` and open PRs after this docs slice lands.
-2. Re-audit `AppDatabase.updateBookmarkFields.personNames`; if the only caller still always passes null, remove the parameter and dead branch in a small PR with focused CRUD regressions/full CI.
-3. Re-audit `BookmarkLifecycleStore.remove()`; if it remains a no-op with only the permanent-delete call, remove both without changing deletion ordering/attachment cleanup.
-4. Continue true production caller-zero audits; prefer deletion over wrapper creation.
-5. Opportunistically ratchet temporary shim imports below 17 only when a real host can switch safely to canonical imports.
-6. Lower presentation/database or feature-presentation AppDatabase ceilings only after a real boundary move removes references.
-7. Continue GenericDatabasePage responsibility extraction only in small slices coordinated with Database/View ownership.
-8. Do not touch Relation semantics, canonical Object search semantics, primitive storage semantics, or Vault lifecycle under Refactor.
-9. Do not destructively remove Bookmark URL/thumbnail/Photo storage until production caller-zero and portability/migration contracts are proven.
+1. Re-read current `main` and open PRs before choosing the next slice.
+2. Keep the two proven dead Bookmark API seams (`updateBookmarkFields.personNames`, `BookmarkLifecycleStore.remove()`) deferred until `bookmark_repository.dart` can be patched safely rather than reconstructed.
+3. Continue true production caller-zero audits; prefer whole-module/shim deletion over wrapper creation.
+4. Opportunistically ratchet temporary shim imports below 17 only when a real host is already safely modified and can switch to canonical imports.
+5. Lower presentation/database or feature-presentation AppDatabase ceilings only after a real boundary move removes references.
+6. Continue GenericDatabasePage responsibility extraction only in small slices coordinated with Database/View ownership.
+7. Do not touch Relation semantics, canonical Object search semantics, primitive storage semantics, or Vault lifecycle under Refactor.
+8. Do not destructively remove Bookmark URL/thumbnail/Photo storage until production caller-zero and portability/migration contracts are proven.
 
 ## Risks / sequencing
 - parallel lanes move `main` quickly;
@@ -153,4 +164,4 @@ Recent audits confirmed these still have production callers and are **not** call
 - a falling reference/LOC metric is useful only when real responsibility disappears.
 
 ## Stop / continuation state
-As of `c2d4bd08...`, no known Search duplicate remains after #654. The next useful Lane G work is narrow caller/API cleanup or an opportunistic boundary/shim ratchet, not a fabricated abstraction. If the two explicitly audited API seams above have gained callers or become concurrently owned, re-run the caller-zero audit and choose another small deletion rather than forcing a hotspot edit.
+As of Lane G #672, the obvious whole-file caller-zero cleanup in Search and the `DetailPropertyRow` shim are retired. The remaining audited dead API seams require a large-host edit, while the four remaining presentation shims have real callers. The next safe Lane G slice should come from a new caller-zero audit or a naturally patch-sized responsibility move created by parallel lane progress; do not manufacture an abstraction or reconstruct a hotspot merely to keep the lane busy.
