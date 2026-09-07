@@ -1,0 +1,68 @@
+name: Temporary Lane D Native Bookmark Image Patch
+
+on:
+  push:
+    branches:
+      - feature/primitives-bookmark-native-image-survival-245
+
+permissions:
+  contents: write
+
+jobs:
+  apply-patch:
+    if: ${{ !contains(github.event.head_commit.message, '[lane-d-native-image-applied]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/primitives-bookmark-native-image-survival-245
+          fetch-depth: 0
+      - name: Apply deterministic migration-safe bridge patch
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          host = Path('lib/data/core_object_bridge.dart')
+          source = host.read_text()
+
+          old_import = "import 'relation_mutation_service.dart';\n"
+          if source.count(old_import) != 1:
+              raise SystemExit('Expected one relation mutation import')
+          source = source.replace(
+              old_import,
+              old_import + "import 'relation_read_service.dart';\n",
+              1,
+          )
+
+          old_fields = '''  late final RelationMutationService _relationMutations = RelationMutationService(\n        objectStore: objectStore,\n        genericStore: _genericStore,\n        bidirectionalStore: BidirectionalRelationStore(\n          genericStore: _genericStore,\n          objectStore: objectStore,\n        ),\n      );\n'''
+          new_fields = old_fields + '''  late final RelationReadService _relationReads =\n      RelationReadService(objectStore);\n'''
+          if source.count(old_fields) != 1:
+              raise SystemExit('Expected one relation mutation field block')
+          source = source.replace(old_fields, new_fields, 1)
+
+          old_properties = '''    final coverImage = _property(bookmarkType, 'Cover Image');\n    final tags = _property(bookmarkType, 'Tags');\n\n    for (final bookmark in bookmarks) {\n'''
+          new_properties = '''    final coverImage = _property(bookmarkType, 'Cover Image');\n    final tags = _property(bookmarkType, 'Tags');\n    final legacyImageObjectIds = (await database.customSelect(\n      'SELECT object_id FROM photo_object_links WHERE workspace_id = ?',\n      variables: [Variable<int>(workspaceId)],\n    ).get())\n        .map((row) => row.read<int>('object_id'))\n        .toSet();\n\n    for (final bookmark in bookmarks) {\n'''
+          if source.count(old_properties) != 1:
+              raise SystemExit('Expected one Bookmark relation property block')
+          source = source.replace(old_properties, new_properties, 1)
+
+          old_relations = '''      await _relationMutations.setRelation(\n        objectId: objectId,\n        property: images,\n        targetObjectIds: photoObjectIds,\n      );\n      await _relationMutations.setRelation(\n        objectId: objectId,\n        property: coverImage,\n        targetObjectIds: coverImageObjectId == null\n            ? const <int>[]\n            : <int>[coverImageObjectId],\n      );\n'''
+          new_relations = '''      // During Photo -> Image migration, legacy rows still own only the subset\n      // of Image Relations they can represent. Preserve native Image targets\n      // that have no photo_object_links mapping so a later compatibility sync\n      // cannot erase first-class canonical Image writes.\n      final existingRelations = await _relationReads.outgoing(\n        sourceObjectTypeId: bookmarkType.id,\n        sourceObjectId: objectId,\n      );\n      final nativeImageObjectIds = existingRelations\n          .where(\n            (relation) =>\n                relation.property.id == images.id &&\n                !legacyImageObjectIds.contains(relation.targetObject.id),\n          )\n          .map((relation) => relation.targetObject.id)\n          .toList(growable: false);\n      final mergedImageObjectIds = <int>[\n        ...photoObjectIds,\n        ...nativeImageObjectIds.where(\n          (objectId) => !photoObjectIds.contains(objectId),\n        ),\n      ];\n\n      int? nativeCoverImageObjectId;\n      for (final relation in existingRelations) {\n        if (relation.property.id != coverImage.id ||\n            legacyImageObjectIds.contains(relation.targetObject.id)) {\n          continue;\n        }\n        nativeCoverImageObjectId = relation.targetObject.id;\n        break;\n      }\n      final resolvedCoverImageObjectId =\n          nativeCoverImageObjectId ?? coverImageObjectId;\n\n      await _relationMutations.setRelation(\n        objectId: objectId,\n        property: images,\n        targetObjectIds: mergedImageObjectIds,\n      );\n      await _relationMutations.setRelation(\n        objectId: objectId,\n        property: coverImage,\n        targetObjectIds: resolvedCoverImageObjectId == null\n            ? const <int>[]\n            : <int>[resolvedCoverImageObjectId],\n      );\n'''
+          if source.count(old_relations) != 1:
+              raise SystemExit('Expected one Bookmark Image relation sync block')
+          host.write_text(source.replace(old_relations, new_relations, 1))
+
+          test = Path('test/core_object_bridge_native_bookmark_image_survival_test.dart')
+          if test.exists():
+              raise SystemExit(f'{test} already exists')
+          test.write_text('''import 'package:bookmark_app/data/app_database.dart';\nimport 'package:bookmark_app/data/bidirectional_relation_store.dart';\nimport 'package:bookmark_app/data/core_object_bridge.dart';\nimport 'package:bookmark_app/data/generic_database_store.dart';\nimport 'package:bookmark_app/data/image_object_service.dart';\nimport 'package:bookmark_app/data/object_store.dart';\nimport 'package:bookmark_app/data/object_type_defaults_store.dart';\nimport 'package:bookmark_app/data/relation_mutation_service.dart';\nimport 'package:bookmark_app/data/relation_read_service.dart';\nimport 'package:bookmark_app/data/system_object_store.dart';\nimport 'package:bookmark_app/data/tag_object_bridge.dart';\nimport 'package:bookmark_app/data/workspace_store.dart';\nimport 'package:drift/drift.dart';\nimport 'package:drift/native.dart';\nimport 'package:flutter_test/flutter_test.dart';\n\nvoid main() {\n  test('native Bookmark Image Relations survive legacy compatibility sync',\n      () async {\n    final database = AppDatabase.forTesting(NativeDatabase.memory());\n    addTearDown(database.close);\n    final workspaceId = await WorkspaceStore(database).initialize();\n    final genericStore = GenericDatabaseStore(database);\n    final objectStore = ObjectStore(genericStore);\n    final systemStore = SystemObjectStore(\n      database: database,\n      objectStore: objectStore,\n    );\n    final bridge = CoreObjectBridge(\n      database: database,\n      objectStore: objectStore,\n      systemObjectStore: systemStore,\n      tagBridge: TagObjectBridge(\n        database: database,\n        objectStore: objectStore,\n        systemObjectStore: systemStore,\n      ),\n    );\n    final mutations = RelationMutationService(\n      objectStore: objectStore,\n      genericStore: genericStore,\n      bidirectionalStore: BidirectionalRelationStore(\n        genericStore: genericStore,\n        objectStore: objectStore,\n      ),\n    );\n    final reads = RelationReadService(objectStore);\n\n    await database.customStatement(\n      "INSERT INTO photos(path, title) VALUES ('photo/legacy.jpg', 'Legacy')",\n    );\n    final legacyPhotoId = (await database.customSelect(\n      "SELECT id FROM photos WHERE path = 'photo/legacy.jpg'",\n    ).getSingle())\n        .read<int>('id');\n    await database.customStatement(\n      "INSERT INTO bookmarks(url, title) VALUES ('https://native-image.example', 'Bookmark')",\n    );\n    final bookmarkId = (await database.customSelect(\n      "SELECT id FROM bookmarks WHERE url = 'https://native-image.example'",\n    ).getSingle())\n        .read<int>('id');\n    await database.customStatement(\n      'INSERT INTO bookmark_workspace(bookmark_id, workspace_id) VALUES (?, ?)',\n      <Object>[bookmarkId, workspaceId],\n    );\n    await database.customStatement(\n      'INSERT INTO bookmark_photos(bookmark_id, photo_id, is_cover) VALUES (?, ?, 1)',\n      <Object>[bookmarkId, legacyPhotoId],\n    );\n\n    await bridge.syncAll(workspaceId);\n\n    final bookmarkType = (await systemStore.getSystemObjectType(\n      workspaceId: workspaceId,\n      systemKey: CoreObjectBridge.bookmarkSystemKey,\n    ))!;\n    final imageType = (await systemStore.getSystemObjectType(\n      workspaceId: workspaceId,\n      systemKey: CoreObjectBridge.photoSystemKey,\n    ))!;\n    final imagesProperty = bookmarkType.properties.singleWhere(\n      (property) => property.name == 'Images',\n    );\n    final coverProperty = bookmarkType.properties.singleWhere(\n      (property) => property.name == 'Cover Image',\n    );\n    final bookmarkObjectId = (await database.customSelect(\n      'SELECT object_id FROM bookmark_object_links WHERE workspace_id = ? AND bookmark_id = ?',\n      variables: [Variable<int>(workspaceId), Variable<int>(bookmarkId)],\n    ).getSingle())\n        .read<int>('object_id');\n    final legacyImageObjectId = (await database.customSelect(\n      'SELECT object_id FROM photo_object_links WHERE workspace_id = ? AND photo_id = ?',\n      variables: [\n        Variable<int>(workspaceId),\n        Variable<int>(legacyPhotoId),\n      ],\n    ).getSingle())\n        .read<int>('object_id');\n\n    final nativeImage = await ImageObjectService(\n      systemObjects: systemStore,\n      defaultsStore: ObjectTypeDefaultsStore(genericStore),\n    ).findOrCreateManaged(\n      workspaceId: workspaceId,\n      filePath: 'images/native-only.png',\n      title: 'Native image',\n      originalFilename: 'native-only.png',\n    );\n    expect(nativeImage.databaseId, imageType.id);\n\n    await mutations.setRelation(\n      objectId: bookmarkObjectId,\n      property: imagesProperty,\n      targetObjectIds: <int>[legacyImageObjectId, nativeImage.id],\n    );\n    await mutations.setRelation(\n      objectId: bookmarkObjectId,\n      property: coverProperty,\n      targetObjectIds: <int>[nativeImage.id],\n    );\n\n    // A compatibility sync may refresh the legacy-mapped subset, but it must\n    // not erase first-class Image targets that legacy BookmarkPhotos cannot\n    // represent. Native Cover Image is likewise canonical once selected.\n    await bridge.syncAll(workspaceId);\n\n    Future<List<ResolvedOutgoingRelation>> outgoing() => reads.outgoing(\n          sourceObjectTypeId: bookmarkType.id,\n          sourceObjectId: bookmarkObjectId,\n        );\n\n    var relations = await outgoing();\n    expect(\n      relations\n          .where((item) => item.property.id == imagesProperty.id)\n          .map((item) => item.targetObject.id)\n          .toSet(),\n      <int>{legacyImageObjectId, nativeImage.id},\n    );\n    expect(\n      relations\n          .where((item) => item.property.id == coverProperty.id)\n          .single\n          .targetObject\n          .id,\n      nativeImage.id,\n    );\n\n    // Removing a legacy BookmarkPhoto removes only that mapped subset on the\n    // next sync. The native relation and cover remain intact.\n    await database.customStatement(\n      'DELETE FROM bookmark_photos WHERE bookmark_id = ? AND photo_id = ?',\n      <Object>[bookmarkId, legacyPhotoId],\n    );\n    await bridge.syncAll(workspaceId);\n\n    relations = await outgoing();\n    expect(\n      relations\n          .where((item) => item.property.id == imagesProperty.id)\n          .map((item) => item.targetObject.id)\n          .toList(growable: false),\n      <int>[nativeImage.id],\n    );\n    expect(\n      relations\n          .where((item) => item.property.id == coverProperty.id)\n          .single\n          .targetObject\n          .id,\n      nativeImage.id,\n    );\n  });\n}\n''')
+          PY
+      - name: Commit patch result
+        shell: bash
+        run: |
+          git config user.name 'Are'
+          git config user.email '235915091+are4c4@users.noreply.github.com'
+          git add lib/data/core_object_bridge.dart test/core_object_bridge_native_bookmark_image_survival_test.dart
+          git commit -m 'Preserve native Bookmark Image Relations during Photo sync [lane-d-native-image-applied]'
+          git push origin HEAD:feature/primitives-bookmark-native-image-survival-245
