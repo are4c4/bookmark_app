@@ -85,22 +85,26 @@ void main() {
       ),
     );
 
-    final media = find.byKey(
-      ValueKey('system-object-list-media-image-$objectId'),
-    );
-    await pumpUntilVisible(media);
-    expect(media, findsOneWidget);
-    expect(find.text('Canonical Image row'), findsOneWidget);
-
+    // The Images system collection can briefly expose its default Table while
+    // the persisted List View is loading. Wait for the List-specific 36px host
+    // instead of accepting the same Object's Table media at 32px.
     final host = find.byWidgetPredicate(
       (widget) =>
           widget is SystemObjectListMedia &&
           widget.workspaceId == workspaceId &&
           widget.objectTypeId == definition.objectType.id &&
-          widget.objectId == objectId,
+          widget.objectId == objectId &&
+          widget.size == 36,
       description: 'canonical Image List media host',
     );
+    await pumpUntilVisible(host);
     expect(host, findsOneWidget);
+    expect(
+      find.byKey(ValueKey('system-object-list-media-image-$objectId')),
+      findsOneWidget,
+    );
+    expect(find.text('Canonical Image row'), findsOneWidget);
+
     final hostedMedia = tester.widget<SystemObjectListMedia>(host);
     expect(hostedMedia.database, same(database));
     expect(hostedMedia.size, 36);
