@@ -11,6 +11,7 @@ import 'package:bookmark_app/data/object_type_defaults_store.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/database/database_definition.dart';
+import 'package:bookmark_app/features/database/presentation/widgets/system_object_list_media.dart';
 import 'package:bookmark_app/views/generic_database_page.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
@@ -21,6 +22,7 @@ void main() {
   testWidgets('real Images List hosts canonical Image leading media',
       (tester) async {
     Future<void> pumpUntilVisible(Finder finder) async {
+      if (finder.evaluate().isNotEmpty) return;
       for (var attempt = 0; attempt < 30; attempt += 1) {
         await tester.pump(const Duration(milliseconds: 50));
         if (finder.evaluate().isNotEmpty) return;
@@ -103,14 +105,51 @@ void main() {
       ),
     );
 
-    final media = find.byKey(
-      ValueKey('system-object-list-media-image-${object.id}'),
+    final mediaHost = find.byWidgetPredicate(
+      (widget) =>
+          widget is SystemObjectListMedia &&
+          widget.workspaceId == workspaceId &&
+          widget.objectTypeId == definition.objectType.id &&
+          widget.objectId == object.id,
+      description: 'canonical Image List media host',
     );
-    await pumpUntilVisible(media);
-    expect(media, findsOneWidget);
+    await pumpUntilVisible(mediaHost);
+    expect(mediaHost, findsOneWidget);
+    final hostedMedia = tester.widget<SystemObjectListMedia>(mediaHost);
+    expect(hostedMedia.database, same(database));
+    expect(hostedMedia.size, 36);
     expect(find.text(object.title), findsOneWidget);
 
+    // Dispose the real page before allowing its FutureBuilder to advance into
+    // platform image decoding. The focused host below still exercises the
+    // production canonical Image resolver, but intercepts Image.file itself.
     await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
+
+    String? resolvedPath;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SystemObjectListMedia(
+          database: database,
+          objectStore: objectStore,
+          workspaceId: workspaceId,
+          objectTypeId: definition.objectType.id,
+          objectId: object.id,
+          imageBuilder: (context, filePath, errorFallback) {
+            resolvedPath = filePath;
+            return const ColoredBox(color: Colors.black12);
+          },
+        ),
+      ),
+    );
+
+    final resolvedMedia = find.byKey(
+      ValueKey('system-object-list-media-image-${object.id}'),
+    );
+    await pumpUntilVisible(resolvedMedia);
+    expect(resolvedMedia, findsOneWidget);
+    expect(resolvedPath, isNotNull);
+    expect(await File(resolvedPath!).exists(), isTrue);
+
+    await tester.pumpWidget(const SizedBox.shrink());
   });
 }
