@@ -2,14 +2,16 @@ import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/bookmark_lifecycle_store.dart';
 import 'package:bookmark_app/data/bookmark_object_link_read_store.dart';
 import 'package:bookmark_app/data/bookmark_repository.dart';
+import 'package:bookmark_app/data/core_object_bridge.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
 import 'package:bookmark_app/data/object_body_store.dart';
 import 'package:bookmark_app/data/object_store.dart';
+import 'package:bookmark_app/data/system_object_store.dart';
+import 'package:bookmark_app/data/tag_object_bridge.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/domain/object_body.dart';
 import 'package:bookmark_app/domain/object_body_block_contracts.dart';
 import 'package:bookmark_app/features/object/presentation/widgets/object_body_editor_section.dart';
-import 'package:bookmark_app/services/object_sync_service.dart';
 import 'package:bookmark_app/widgets/bookmark_relation_section.dart';
 import 'package:drift/drift.dart' show Variable;
 import 'package:drift/native.dart';
@@ -26,6 +28,29 @@ Future<void> _pumpUntil(
     if (finder.evaluate().isNotEmpty) return;
   }
   expect(finder, findsOneWidget);
+}
+
+Future<void> _mirrorLegacyObjectsOnce({
+  required AppDatabase database,
+  required int workspaceId,
+}) async {
+  final genericStore = GenericDatabaseStore(database);
+  final objectStore = ObjectStore(genericStore);
+  final systemObjects = SystemObjectStore(
+    database: database,
+    objectStore: objectStore,
+  );
+  final tagBridge = TagObjectBridge(
+    database: database,
+    objectStore: objectStore,
+    systemObjectStore: systemObjects,
+  );
+  await CoreObjectBridge(
+    database: database,
+    objectStore: objectStore,
+    systemObjectStore: systemObjects,
+    tagBridge: tagBridge,
+  ).syncAll(workspaceId);
 }
 
 void main() {
@@ -51,9 +76,13 @@ void main() {
     final bookmark = (await repository.watchAll().first)
         .singleWhere((item) => item.id == bookmarkId);
 
-    final sync = ObjectSyncService(database);
-    addTearDown(sync.dispose);
-    await sync.syncWorkspace(workspaceId);
+    // This regression needs a real Bookmark -> Object mirror, but not the
+    // app-level live watcher. CoreObjectBridge performs the canonical one-shot
+    // mirror without leaving a long-lived Rx subscription in the widget test.
+    await _mirrorLegacyObjectsOnce(
+      database: database,
+      workspaceId: workspaceId,
+    );
     final objectId = await BookmarkObjectLinkReadStore(database)
         .objectIdForBookmark(
       workspaceId: workspaceId,
