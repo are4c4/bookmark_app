@@ -1,15 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../data/app_database.dart';
-import '../../../../data/file_object_service.dart';
-import '../../../../data/object_store.dart';
-import '../../../../data/system_object_store.dart';
-import '../../../../services/canonical_file_action_service.dart';
-import '../../../../services/canonical_file_export_service.dart';
-import '../../../../services/canonical_file_pdf_metadata_service.dart';
-import '../../../../services/canonical_file_pdf_page_count_service.dart';
-import '../../../../services/canonical_file_pdf_preview_service.dart';
-import '../../../../services/file_managed_resource_resolver.dart';
+import '../../../../services/canonical_file_detail_capabilities.dart';
 import 'object_file_detail_panel.dart';
 
 typedef ObjectFileDetailPanelHostBuilder = Widget Function(
@@ -20,15 +11,14 @@ typedef ObjectFileDetailPanelHostBuilder = Widget Function(
 
 /// Turn-key canonical File detail adapter for shared Object-detail hosts.
 ///
-/// The adapter verifies the registered system File identity before exposing any
-/// native capability. Shared hosts therefore do not need to duplicate system-key
-/// checks or construct filesystem/PDF services themselves. A custom ObjectType
-/// that merely contains a File Property renders nothing here.
+/// Native File/PDF composition and primitive identity live in the service-layer
+/// [CanonicalFileDetailCapabilities] bundle. Presentation therefore does not
+/// reach through to AppDatabase, and custom ObjectTypes that merely contain a
+/// File Property still fail closed to no native File panel.
 class ObjectFileDetailPanelHost extends StatefulWidget {
   const ObjectFileDetailPanelHost({
     super.key,
-    required this.database,
-    required this.objectStore,
+    required this.capabilities,
     required this.fileObjectTypeId,
     required this.fileObjectId,
     this.maxPreviewHeight = 420,
@@ -36,8 +26,7 @@ class ObjectFileDetailPanelHost extends StatefulWidget {
     this.panelBuilder,
   });
 
-  final AppDatabase database;
-  final ObjectStore objectStore;
+  final CanonicalFileDetailCapabilities capabilities;
   final int fileObjectTypeId;
   final int fileObjectId;
   final double maxPreviewHeight;
@@ -45,7 +34,7 @@ class ObjectFileDetailPanelHost extends StatefulWidget {
 
   /// Focused presentation seam. Production hosts leave this null and receive
   /// the fully composed canonical File panel. Widget tests may inject a cheap
-  /// builder while keeping system-identity gating real.
+  /// builder while keeping system-identity gating real in [capabilities].
   final ObjectFileDetailPanelHostBuilder? panelBuilder;
 
   @override
@@ -65,25 +54,17 @@ class _ObjectFileDetailPanelHostState extends State<ObjectFileDetailPanelHost> {
   @override
   void didUpdateWidget(covariant ObjectFileDetailPanelHost oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.database != widget.database ||
-        oldWidget.objectStore != widget.objectStore ||
-        oldWidget.fileObjectTypeId != widget.fileObjectTypeId) {
+    if (oldWidget.capabilities != widget.capabilities ||
+        oldWidget.fileObjectTypeId != widget.fileObjectTypeId ||
+        oldWidget.fileObjectId != widget.fileObjectId) {
       _isCanonicalFile = _resolveIdentity();
     }
   }
 
-  SystemObjectStore _systemObjects() => SystemObjectStore(
-        database: widget.database,
-        objectStore: widget.objectStore,
+  Future<bool> _resolveIdentity() => widget.capabilities.supports(
+        fileObjectTypeId: widget.fileObjectTypeId,
+        fileObjectId: widget.fileObjectId,
       );
-
-  Future<bool> _resolveIdentity() async {
-    if (widget.fileObjectTypeId <= 0 || widget.fileObjectId <= 0) return false;
-    final systemKey = await _systemObjects().systemKeyForObjectType(
-      widget.fileObjectTypeId,
-    );
-    return systemKey == FileObjectService.systemKey;
-  }
 
   Widget _buildCanonicalPanel(BuildContext context) {
     final injected = widget.panelBuilder;
@@ -95,17 +76,12 @@ class _ObjectFileDetailPanelHostState extends State<ObjectFileDetailPanelHost> {
       );
     }
 
-    final resources = CanonicalFileManagedResourceResolver(
-      objectStore: widget.objectStore,
-      systemObjects: _systemObjects(),
-      pathResolver: widget.database.pathResolver,
-    );
     return ObjectFileDetailPanel(
-      actions: CanonicalFileActionService(resources: resources),
-      exporter: CanonicalFileExportService(resources: resources),
-      previewService: CanonicalFilePdfPreviewService(resources: resources),
-      pdfMetadataService: CanonicalFilePdfMetadataService(resources: resources),
-      pdfPageCountService: CanonicalFilePdfPageCountService(resources: resources),
+      actions: widget.capabilities.actions,
+      exporter: widget.capabilities.exporter,
+      previewService: widget.capabilities.preview,
+      pdfMetadataService: widget.capabilities.pdfMetadata,
+      pdfPageCountService: widget.capabilities.pdfPageCount,
       fileObjectTypeId: widget.fileObjectTypeId,
       fileObjectId: widget.fileObjectId,
       maxPreviewHeight: widget.maxPreviewHeight,
