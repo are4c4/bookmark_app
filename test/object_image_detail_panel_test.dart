@@ -40,7 +40,7 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: ObjectImageDetailPanel(
-            database: database,
+            pathResolver: database.pathResolver,
             objectStore: objectStore,
             workspaceId: 1,
             objectTypeId: 3,
