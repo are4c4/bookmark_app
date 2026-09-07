@@ -112,7 +112,7 @@ class BookmarkRelationSection extends StatelessWidget {
     );
   }
 
-  Widget _legacyRelations(ColorScheme scheme) {
+  Widget _legacyRelations(BuildContext context, ColorScheme scheme) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -185,7 +185,7 @@ class BookmarkRelationSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _legacyRelations(scheme),
+        _legacyRelations(context, scheme),
         BookmarkObjectBodySection(
           repository: repository,
           bookmarkId: bookmark.id,
