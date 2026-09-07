@@ -19,13 +19,13 @@ class CanonicalFilePdfPreview {
 
 /// Optional visual-preview capability layered on the canonical File primitive.
 ///
-/// PDF remains a File Object. The canonical managed resource is resolved and
-/// classified with the shared content-first policy before native preview work
-/// runs. Preview bytes are derived transiently and are not persisted as a
-/// parallel PDF storage model.
+/// PDF remains a File Object. The canonical managed resource is resolved through
+/// the system-identity-gated resolver and classified with the shared
+/// content-first policy before native preview work runs. Preview bytes are
+/// derived transiently and are not persisted as a parallel PDF storage model.
 class CanonicalFilePdfPreviewService {
   CanonicalFilePdfPreviewService({
-    required FileManagedResourceResolver resources,
+    required CanonicalFileManagedResourceResolver resources,
     PrimitiveFileImportClassifier classifier =
         const PrimitiveFileImportClassifier(),
     CanonicalPdfPreviewRenderer? renderPreview,
@@ -33,7 +33,7 @@ class CanonicalFilePdfPreviewService {
         _classifier = classifier,
         _renderPreview = renderPreview ?? _renderQuickLookPreview;
 
-  final FileManagedResourceResolver _resources;
+  final CanonicalFileManagedResourceResolver _resources;
   final PrimitiveFileImportClassifier _classifier;
   final CanonicalPdfPreviewRenderer _renderPreview;
 

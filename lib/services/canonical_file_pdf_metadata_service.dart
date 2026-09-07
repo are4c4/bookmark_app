@@ -20,13 +20,13 @@ class CanonicalFilePdfMetadata {
 
 /// Optional PDF metadata capability layered on the canonical File primitive.
 ///
-/// PDF is never a separate Object identity here. The existing managed File is
-/// resolved first, then classified by content/MIME using the same canonical
-/// routing policy as imports. Metadata extraction runs only when that evidence
-/// identifies `application/pdf`.
+/// PDF is never a separate Object identity here. The canonical File resource is
+/// resolved through the system-identity-gated resolver, then classified by
+/// content/MIME using the same routing policy as imports. Metadata extraction
+/// runs only when that evidence identifies `application/pdf`.
 class CanonicalFilePdfMetadataService {
   CanonicalFilePdfMetadataService({
-    required FileManagedResourceResolver resources,
+    required CanonicalFileManagedResourceResolver resources,
     PrimitiveFileImportClassifier classifier =
         const PrimitiveFileImportClassifier(),
     CanonicalPdfMetadataReader? readMetadata,
@@ -34,7 +34,7 @@ class CanonicalFilePdfMetadataService {
         _classifier = classifier,
         _readMetadata = readMetadata ?? const PdfMetadataService().read;
 
-  final FileManagedResourceResolver _resources;
+  final CanonicalFileManagedResourceResolver _resources;
   final PrimitiveFileImportClassifier _classifier;
   final CanonicalPdfMetadataReader _readMetadata;
 

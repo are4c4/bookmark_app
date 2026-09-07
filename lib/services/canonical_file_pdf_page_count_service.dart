@@ -17,12 +17,13 @@ class CanonicalFilePdfPageCount {
 
 /// Optional page-count capability layered on the canonical File primitive.
 ///
-/// The managed resource is resolved and classified through the same
-/// content-first boundary as the other PDF capabilities. PDF remains a File
-/// Object; page count is derived read-only and is not a second persistence path.
+/// The managed resource is resolved through the system-identity-gated canonical
+/// File resolver and classified through the same content-first boundary as the
+/// other PDF capabilities. PDF remains a File Object; page count is derived
+/// read-only and is not a second persistence path.
 class CanonicalFilePdfPageCountService {
   CanonicalFilePdfPageCountService({
-    required FileManagedResourceResolver resources,
+    required CanonicalFileManagedResourceResolver resources,
     PrimitiveFileImportClassifier classifier =
         const PrimitiveFileImportClassifier(),
     CanonicalPdfPageCountReader? readPageCount,
@@ -30,7 +31,7 @@ class CanonicalFilePdfPageCountService {
         _classifier = classifier,
         _readPageCount = readPageCount ?? _readSpotlightPageCount;
 
-  final FileManagedResourceResolver _resources;
+  final CanonicalFileManagedResourceResolver _resources;
   final PrimitiveFileImportClassifier _classifier;
   final CanonicalPdfPageCountReader _readPageCount;
 
