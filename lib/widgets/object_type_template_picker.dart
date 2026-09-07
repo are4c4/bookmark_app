@@ -25,12 +25,54 @@ Future<ObjectTypeCreationChoice?> showObjectTypeTemplatePicker(
   );
 }
 
-class ObjectTypeTemplatePickerDialog extends StatelessWidget {
+class ObjectTypeTemplatePickerDialog extends StatefulWidget {
   const ObjectTypeTemplatePickerDialog({super.key});
+
+  @override
+  State<ObjectTypeTemplatePickerDialog> createState() =>
+      _ObjectTypeTemplatePickerDialogState();
+}
+
+class _ObjectTypeTemplatePickerDialogState
+    extends State<ObjectTypeTemplatePickerDialog> {
+  final TextEditingController _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<ObjectTypeTemplate> get _visibleTemplates {
+    final query = _query.trim().toLowerCase();
+    if (query.isEmpty) return ObjectTypeTemplateStore.templates;
+    return ObjectTypeTemplateStore.templates.where((template) {
+      final propertySearchText = template.properties.map((property) {
+        return [
+          property.name,
+          property.type,
+          property.relationTargetSystemKey ?? '',
+        ].join(' ');
+      }).join(' ');
+      final viewSearchText = template.views
+          .map((view) => '${view.name} ${view.layoutType}')
+          .join(' ');
+      final searchText = [
+        template.key,
+        template.name,
+        template.description,
+        propertySearchText,
+        viewSearchText,
+      ].join(' ').toLowerCase();
+      return searchText.contains(query);
+    }).toList(growable: false);
+  }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final visibleTemplates = _visibleTemplates;
     return AlertDialog(
       title: const Text('データベースを追加'),
       content: SizedBox(
@@ -54,27 +96,62 @@ class ObjectTypeTemplatePickerDialog extends StatelessWidget {
                 padding: EdgeInsets.symmetric(vertical: 8),
                 child: Divider(height: 1),
               ),
+              TextField(
+                key: const ValueKey('object-type-template-search'),
+                controller: _searchController,
+                decoration: InputDecoration(
+                  labelText: 'テンプレートを検索',
+                  hintText: '名前・用途・プロパティ',
+                  prefixIcon: const Icon(Icons.search, size: 18),
+                  suffixIcon: _query.isEmpty
+                      ? null
+                      : IconButton(
+                          key: const ValueKey('object-type-template-search-clear'),
+                          tooltip: '検索をクリア',
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _query = '');
+                          },
+                          icon: const Icon(Icons.close, size: 18),
+                        ),
+                ),
+                onChanged: (value) => setState(() => _query = value),
+              ),
+              const SizedBox(height: 10),
               Padding(
                 padding: const EdgeInsets.only(left: 4, bottom: 6),
                 child: Text(
-                  'テンプレート',
+                  _query.trim().isEmpty
+                      ? 'テンプレート'
+                      : 'テンプレート · ${visibleTemplates.length}件',
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
                         color: scheme.onSurfaceVariant,
                         fontWeight: FontWeight.w600,
                       ),
                 ),
               ),
-              ...ObjectTypeTemplateStore.templates.map(
-                (template) => _ChoiceTile(
-                  icon: template.icon,
-                  title: template.name,
-                  subtitle: template.description,
-                  onTap: () => Navigator.pop(
-                    context,
-                    TemplateObjectTypeChoice(template),
+              if (visibleTemplates.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 20),
+                  child: Text(
+                    '一致するテンプレートがありません。空のデータベースから作成することもできます。',
+                    key: ValueKey('object-type-template-empty-result'),
+                    textAlign: TextAlign.center,
+                  ),
+                )
+              else
+                ...visibleTemplates.map(
+                  (template) => _ChoiceTile(
+                    key: ValueKey('object-type-template-${template.key}'),
+                    icon: template.icon,
+                    title: template.name,
+                    subtitle: template.description,
+                    onTap: () => Navigator.pop(
+                      context,
+                      TemplateObjectTypeChoice(template),
+                    ),
                   ),
                 ),
-              ),
             ],
           ),
         ),
@@ -91,6 +168,7 @@ class ObjectTypeTemplatePickerDialog extends StatelessWidget {
 
 class _ChoiceTile extends StatelessWidget {
   const _ChoiceTile({
+    super.key,
     required this.icon,
     required this.title,
     required this.subtitle,
