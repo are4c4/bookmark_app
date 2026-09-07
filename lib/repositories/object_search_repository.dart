@@ -96,6 +96,17 @@ class ObjectSearchRepository {
     return terms.map((term) => '"$term"*').join(' AND ');
   }
 
+  Future<String> _readBodySearchText(int objectId) async {
+    try {
+      return buildObjectBodySearchText(await _bodyStore.read(objectId));
+    } on FormatException {
+      // Body parsing intentionally fails closed. Search isolates that corruption
+      // to the Body bucket so valid Object identity/Property/Relation text can
+      // still be rebuilt, and a focused refresh removes any stale Body tokens.
+      return '';
+    }
+  }
+
   Future<void> _insertObjects({
     int? workspaceId,
     int? objectId,
@@ -166,9 +177,7 @@ class ObjectSearchRepository {
         excludedPropertyIds:
             weblinkProjection?.consumedPropertyIds ?? const <int>{},
       );
-      final body = buildObjectBodySearchText(
-        await _bodyStore.read(currentObjectId),
-      );
+      final body = await _readBodySearchText(currentObjectId);
       final relationLabels = buildObjectRelationSearchText(
         await _relationReads.outgoing(
           sourceObjectTypeId: objectTypeId,
