@@ -51,6 +51,48 @@ void main() {
     );
   });
 
+  test('known checklist semantics fail closed without constraining future blocks',
+      () {
+    const malformedChecklist = ObjectBodyDocument(
+      blocks: <ObjectBodyBlock>[
+        ObjectBodyBlock(
+          id: 'check',
+          type: ObjectBodyBlockType.checklist,
+          attributes: <String, dynamic>{ObjectBodyBlockAttribute.checked: 'true'},
+        ),
+      ],
+    );
+    const legacyChecklistWithoutState = ObjectBodyDocument(
+      blocks: <ObjectBodyBlock>[
+        ObjectBodyBlock(id: 'legacy-check', type: ObjectBodyBlockType.checklist),
+      ],
+    );
+    const future = ObjectBodyDocument(
+      blocks: <ObjectBodyBlock>[
+        ObjectBodyBlock(
+          id: 'future',
+          type: 'futureWidget',
+          attributes: <String, dynamic>{ObjectBodyBlockAttribute.checked: 'opaque'},
+        ),
+      ],
+    );
+
+    expect(
+      () => ObjectBodyBlockContractValidator.validateDocument(malformedChecklist),
+      throwsFormatException,
+    );
+    expect(
+      () => ObjectBodyBlockContractValidator.validateDocument(
+        legacyChecklistWithoutState,
+      ),
+      returnsNormally,
+    );
+    expect(
+      () => ObjectBodyBlockContractValidator.validateDocument(future),
+      returnsNormally,
+    );
+  });
+
   test('unknown future block remains round-trippable', () {
     const future = ObjectBodyBlock(
       id: 'future',
