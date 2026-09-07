@@ -107,7 +107,7 @@ void main() {
     await objectStore.setPropertyValue(
       objectId: winnerId,
       property: definition.dateProperty,
-      value: '2026-09-09',
+      value: '2026-09-10',
     );
     await defaultsStore.writeBodyTemplate(
       objectTypeId: definition.objectType.id,
@@ -129,6 +129,10 @@ void main() {
       WHEN NEW.database_id = ${definition.objectType.id}
         AND NEW.id <> $winnerId
       BEGIN
+        UPDATE generic_values
+        SET value_json = '"2026-09-09"'
+        WHERE record_id = $winnerId
+          AND property_id = ${definition.dateProperty.id};
         INSERT OR IGNORE INTO daily_note_registry(workspace_id, note_date, object_id)
         VALUES ($workspaceId, '2026-09-09', $winnerId);
       END
