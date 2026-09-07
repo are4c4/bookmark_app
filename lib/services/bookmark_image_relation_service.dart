@@ -122,6 +122,65 @@ class BookmarkImageRelationService {
         query: query,
       );
 
+  /// Compatibility entry point for legacy Photo hosts during #245 migration.
+  ///
+  /// The Photo must already have a stable `photo_object_links` mapping. Missing
+  /// mappings or malformed canonical Relation state fail closed rather than
+  /// recreating a second Photo-based write authority.
+  Future<void> attachLegacyPhoto({
+    required int workspaceId,
+    required int bookmarkId,
+    required int photoId,
+    bool asCover = false,
+  }) async {
+    final state = await load(
+      workspaceId: workspaceId,
+      bookmarkId: bookmarkId,
+    );
+    if (state == null) {
+      throw StateError(
+        'Bookmark must be mirrored before a legacy Photo can attach canonically.',
+      );
+    }
+    if (state.hasDiagnostics) {
+      throw StateError(
+        'Cannot attach a legacy Photo while Bookmark Image Relations are malformed.',
+      );
+    }
+
+    final imageObjectId = await _imageObjectIdForLegacyPhoto(
+      workspaceId: workspaceId,
+      photoId: photoId,
+    );
+    if (imageObjectId == null) {
+      throw StateError(
+        'Legacy Photo must be mirrored to a canonical Image before attachment.',
+      );
+    }
+    if (!state.images.candidates.any((image) => image.id == imageObjectId)) {
+      throw StateError(
+        'Legacy Photo mapping does not target a canonical Image in this workspace.',
+      );
+    }
+
+    if (asCover) {
+      await setCover(
+        state: state,
+        imageObjectId: imageObjectId,
+      );
+      return;
+    }
+
+    await saveImages(
+      state: state,
+      selectedObjectIds: <int>[
+        ...state.images.selectedObjectIds,
+        if (!state.images.selectedObjectIds.contains(imageObjectId))
+          imageObjectId,
+      ],
+    );
+  }
+
   /// Saves the explicit multi-image selection. If the current valid cover is
   /// removed, the cover is cleared in the same database transaction so the
   /// canonical model keeps the legacy invariant that a cover is also related.
@@ -309,6 +368,24 @@ class BookmarkImageRelationService {
     ).get();
     if (rows.isEmpty) return null;
     return rows.single.read<int>('photo_id');
+  }
+
+  Future<int?> _imageObjectIdForLegacyPhoto({
+    required int workspaceId,
+    required int photoId,
+  }) async {
+    final rows = await database.customSelect(
+      '''SELECT object_id
+         FROM photo_object_links
+         WHERE workspace_id = ? AND photo_id = ?
+         LIMIT 1''',
+      variables: <Variable<int>>[
+        Variable<int>(workspaceId),
+        Variable<int>(photoId),
+      ],
+    ).get();
+    if (rows.isEmpty) return null;
+    return rows.single.read<int>('object_id');
   }
 
   ObjectPropertyDefinition _relationProperty(

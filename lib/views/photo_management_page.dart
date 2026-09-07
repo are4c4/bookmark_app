@@ -13,6 +13,7 @@ import '../features/database/presentation/widgets/database_create_tiles.dart';
 import '../features/database/presentation/widgets/database_page_toolbar.dart';
 import '../features/database/presentation/widgets/database_view_tabs.dart';
 import '../features/database/presentation/widgets/resizable_detail_pane.dart';
+import '../services/bookmark_image_relation_service_factory.dart';
 import '../services/photo_storage_service.dart';
 import '../ui/ui_tokens.dart';
 import '../widgets/app_empty_state.dart';
@@ -182,6 +183,7 @@ class _PhotoManagementPageState extends State<PhotoManagementPage> {
   Future<void> _attach(PhotoRecord photo) async {
     final bookmarks = await repository.watchAll().first;
     if (!mounted || bookmarks.isEmpty) return;
+    final imageRelations = createBookmarkImageRelationService(repository);
     BookmarkItem? selected = bookmarks.first;
     var asCover = true;
     await showDialog<void>(
@@ -229,12 +231,24 @@ class _PhotoManagementPageState extends State<PhotoManagementPage> {
               onPressed: selected == null
                   ? null
                   : () async {
-                      await repository.attachPhoto(
-                        selected!,
-                        photo,
-                        asCover: asCover,
-                      );
-                      if (dialogContext.mounted) Navigator.pop(dialogContext);
+                      try {
+                        await imageRelations.attachLegacyPhoto(
+                          workspaceId: repository.workspaceId,
+                          bookmarkId: selected!.id,
+                          photoId: photo.id,
+                          asCover: asCover,
+                        );
+                        if (dialogContext.mounted) {
+                          Navigator.pop(dialogContext);
+                        }
+                      } catch (_) {
+                        if (!dialogContext.mounted) return;
+                        showAppToast(
+                          dialogContext,
+                          'ブックマークに画像を追加できませんでした。',
+                          error: true,
+                        );
+                      }
                     },
               child: const Text('追加'),
             ),
