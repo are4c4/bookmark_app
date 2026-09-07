@@ -4,6 +4,7 @@ import 'package:bookmark_app/data/object_body_store.dart';
 import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/domain/object_body.dart';
+import 'package:bookmark_app/domain/object_body_block_contracts.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -89,6 +90,52 @@ void main() {
     expect(restored.blocks, hasLength(1));
     expect(restored.blocks.single.id, 'safe');
     expect(restored.blocks.single.text, 'keep me');
+  });
+
+  test('malformed persisted checklist state fails closed without rewriting Body',
+      () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final bodyStore = ObjectBodyStore(genericStore);
+
+    final typeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Checklist host',
+    );
+    final objectId = await objectStore.createObject(
+      objectTypeId: typeId,
+      title: 'Malformed checklist',
+    );
+    await bodyStore.ensureSchema();
+    const malformedJson =
+        '{"version":1,"blocks":[{"id":"check","type":"checklist","attributes":{"checked":"true"}}]}';
+    await database.customStatement(
+      '''INSERT INTO object_bodies(object_id, document_json, updated_at)
+         VALUES (?, ?, CURRENT_TIMESTAMP)''',
+      [objectId, malformedJson],
+    );
+
+    await expectLater(bodyStore.read(objectId), throwsFormatException);
+
+    final row = await database.customSelect(
+      'SELECT document_json FROM object_bodies WHERE object_id = $objectId',
+    ).getSingle();
+    expect(row.read<String>('document_json'), malformedJson);
+
+    const valid = ObjectBodyDocument(
+      blocks: <ObjectBodyBlock>[
+        ObjectBodyBlock(
+          id: 'check',
+          type: ObjectBodyBlockType.checklist,
+          attributes: <String, dynamic>{ObjectBodyBlockAttribute.checked: false},
+        ),
+      ],
+    );
+    await bodyStore.write(objectId: objectId, document: valid);
+    expect((await bodyStore.read(objectId)).blocks.single.attributes['checked'], false);
   });
 
   test('deleting an Object cascades its Body row', () async {
