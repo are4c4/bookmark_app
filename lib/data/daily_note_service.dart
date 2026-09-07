@@ -104,6 +104,7 @@ class DailyNoteService {
       workspaceId: workspaceId,
       dateKey: dateKey,
       objectTypeId: definition.objectType.id,
+      datePropertyId: definition.dateProperty.id,
     );
     if (registered != null) return registered;
 
@@ -123,6 +124,7 @@ class DailyNoteService {
           workspaceId: workspaceId,
           dateKey: dateKey,
           objectTypeId: definition.objectType.id,
+          datePropertyId: definition.dateProperty.id,
         );
         if (winner != null) return winner;
         throw StateError('Daily Note registry claim was lost without a winner.');
@@ -159,6 +161,7 @@ class DailyNoteService {
       workspaceId: workspaceId,
       dateKey: dateKey,
       objectTypeId: definition.objectType.id,
+      datePropertyId: definition.dateProperty.id,
     );
     if (winner == null) {
       throw StateError('Daily Note registry did not retain an Object.');
@@ -189,6 +192,7 @@ class DailyNoteService {
     required int workspaceId,
     required String dateKey,
     required int objectTypeId,
+    required int datePropertyId,
   }) async {
     final row = await genericStore.database.customSelect(
       '''SELECT object_id FROM daily_note_registry
@@ -202,11 +206,13 @@ class DailyNoteService {
     final objectId = row.read<int>('object_id');
     final objects = await objectStore.listObjects(objectTypeId);
     for (final object in objects) {
-      if (object.id == objectId) return object;
+      if (object.id != objectId) continue;
+      if ('${object.values[datePropertyId] ?? ''}' == dateKey) return object;
+      break;
     }
 
-    // Recover only the exact stale claim we observed. Matching object_id keeps
-    // a concurrent replacement for the same date intact.
+    // Recover only the exact stale/corrupt claim we observed. Matching
+    // object_id keeps a concurrent replacement for the same date intact.
     await genericStore.database.customStatement(
       '''DELETE FROM daily_note_registry
          WHERE workspace_id = ? AND note_date = ? AND object_id = ?''',
