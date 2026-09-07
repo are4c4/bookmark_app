@@ -248,8 +248,6 @@ class BookmarkRepository {
 
   Future<void> setBookmarkTagsFromDatabase(BookmarkItem bookmark, Iterable<Tag> selectedTags) =>
       _database.setBookmarkTags(bookmark.id, selectedTags.map((tag) => tag.name));
-  Future<void> setBookmarkPeopleFromDatabase(BookmarkItem bookmark, Iterable<Person> selectedPeople) =>
-      _database.setPeopleForRole(bookmark.id, '出演者', selectedPeople);
   Future<void> setPeopleForRole(BookmarkItem bookmark, String role, Iterable<Person> selectedPeople) =>
       _database.setPeopleForRole(bookmark.id, role, selectedPeople);
   Future<void> removePersonFromBookmark(BookmarkItem bookmark, Person person, {String? role}) =>
@@ -279,7 +277,6 @@ class BookmarkRepository {
     for (final attachment in attachments) {
       await attachmentStorage.deleteAttachment(attachment, attachmentStore);
     }
-    await lifecycleStore.remove(bookmark.id);
     await _database.deleteBookmark(bookmark.id);
   }
   Future<void> delete(int id) => lifecycleStore.moveToTrash(id);
