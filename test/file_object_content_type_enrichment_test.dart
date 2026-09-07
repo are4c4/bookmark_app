@@ -31,25 +31,40 @@ void main() {
       defaultsStore: ObjectTypeDefaultsStore(genericStore),
     );
     final definition = await service.ensureDefinition(workspaceId);
+    const malformedValues = <String>[
+      'not-a-mime',
+      'application/',
+      '/pdf',
+      'application/pdf/extra',
+      'application / pdf',
+    ];
 
-    final first = await service.findOrCreateManaged(
-      workspaceId: workspaceId,
-      filePath: '${root.path}/files/report.pdf',
-      contentType: 'not-a-mime',
-    );
+    for (var index = 0; index < malformedValues.length; index++) {
+      final filename = 'report-$index.pdf';
+      final first = await service.findOrCreateManaged(
+        workspaceId: workspaceId,
+        filePath: '${root.path}/files/$filename',
+        contentType: malformedValues[index],
+      );
 
-    expect(first.values[definition.contentTypeProperty.id], isNull);
+      expect(
+        first.values[definition.contentTypeProperty.id],
+        isNull,
+        reason: malformedValues[index],
+      );
 
-    final enriched = await service.findOrCreateManaged(
-      workspaceId: workspaceId,
-      filePath: 'files/report.pdf',
-      contentType: ' Application/PDF; charset=UTF-8 ',
-    );
+      final enriched = await service.findOrCreateManaged(
+        workspaceId: workspaceId,
+        filePath: 'files/$filename',
+        contentType: ' Application/PDF; charset=UTF-8 ',
+      );
 
-    expect(enriched.id, first.id);
-    expect(
-      enriched.values[definition.contentTypeProperty.id],
-      'application/pdf',
-    );
+      expect(enriched.id, first.id, reason: malformedValues[index]);
+      expect(
+        enriched.values[definition.contentTypeProperty.id],
+        'application/pdf',
+        reason: malformedValues[index],
+      );
+    }
   });
 }
