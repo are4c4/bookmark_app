@@ -5,6 +5,7 @@ import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/features/object/presentation/widgets/object_file_detail_panel_host.dart';
+import 'package:bookmark_app/services/canonical_file_detail_capabilities.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -40,14 +41,17 @@ void main() {
       objectTypeId: customTypeId,
       title: 'Custom file-like Object',
     );
+    final capabilities = CanonicalFileDetailCapabilities.fromDatabase(
+      database: database,
+      objectStore: objectStore,
+    );
 
     final requests = <String>[];
     Widget host({required int typeId, required int objectId}) => MaterialApp(
           home: Scaffold(
             body: ObjectFileDetailPanelHost(
               key: const ValueKey('host'),
-              database: database,
-              objectStore: objectStore,
+              capabilities: capabilities,
               fileObjectTypeId: typeId,
               fileObjectId: objectId,
               panelBuilder: (
@@ -92,14 +96,17 @@ void main() {
     addTearDown(database.close);
     final genericStore = GenericDatabaseStore(database);
     final objectStore = ObjectStore(genericStore);
+    final capabilities = CanonicalFileDetailCapabilities.fromDatabase(
+      database: database,
+      objectStore: objectStore,
+    );
     var built = false;
 
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: ObjectFileDetailPanelHost(
-            database: database,
-            objectStore: objectStore,
+            capabilities: capabilities,
             fileObjectTypeId: 0,
             fileObjectId: -1,
             panelBuilder: (
