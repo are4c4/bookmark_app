@@ -23,6 +23,16 @@ ObjectPropertyDeleteImpact _impact({
       viewReferences: viewReferences,
     );
 
+const _viewReference = DatabaseViewPropertyReference(
+  viewId: 12,
+  viewName: 'お気に入り',
+  kinds: {
+    DatabaseViewPropertyReferenceKind.filter,
+    DatabaseViewPropertyReferenceKind.sort,
+    DatabaseViewPropertyReferenceKind.galleryCover,
+  },
+);
+
 void main() {
   testWidgets('unused Property can be explicitly confirmed for deletion',
       (tester) async {
@@ -69,17 +79,7 @@ void main() {
           body: ObjectPropertyDeleteImpactDialog(
             impact: _impact(
               storedValues: 4,
-              viewReferences: const [
-                DatabaseViewPropertyReference(
-                  viewId: 12,
-                  viewName: 'お気に入り',
-                  kinds: {
-                    DatabaseViewPropertyReferenceKind.filter,
-                    DatabaseViewPropertyReferenceKind.sort,
-                    DatabaseViewPropertyReferenceKind.galleryCover,
-                  },
-                ),
-              ],
+              viewReferences: const [_viewReference],
             ),
           ),
         ),
@@ -128,6 +128,103 @@ void main() {
     );
 
     expect(find.text('表示 / プロパティ順 / グループ'), findsOneWidget);
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const ValueKey('property-delete-confirm')),
+          )
+          .onPressed,
+      isNull,
+    );
+  });
+
+  testWidgets('explicit View detach refreshes impact and unlocks deletion',
+      (tester) async {
+    bool? result;
+    var detachCalls = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () async {
+                result = await showObjectPropertyDeleteImpactDialog(
+                  context,
+                  impact: _impact(viewReferences: const [_viewReference]),
+                  onDetachViewReferences: () async {
+                    detachCalls += 1;
+                    return _impact();
+                  },
+                );
+              },
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('お気に入り'), findsOneWidget);
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const ValueKey('property-delete-confirm')),
+          )
+          .onPressed,
+      isNull,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('property-delete-detach-views')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(detachCalls, 1);
+    expect(find.text('お気に入り'), findsNothing);
+    expect(find.textContaining('このPropertyを削除できます'), findsOneWidget);
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const ValueKey('property-delete-confirm')),
+          )
+          .onPressed,
+      isNotNull,
+    );
+
+    await tester.tap(find.text('削除する'));
+    await tester.pumpAndSettle();
+    expect(result, isTrue);
+  });
+
+  testWidgets('failed View detach stays blocked and hides raw error details',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ObjectPropertyDeleteImpactDialog(
+            impact: _impact(viewReferences: const [_viewReference]),
+            onDetachViewReferences: () async {
+              throw StateError('secret database implementation detail');
+            },
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('property-delete-detach-views')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('property-delete-detach-error')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('secret database'), findsNothing);
+    expect(find.text('お気に入り'), findsOneWidget);
     expect(
       tester
           .widget<FilledButton>(
