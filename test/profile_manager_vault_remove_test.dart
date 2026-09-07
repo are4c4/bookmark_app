@@ -65,4 +65,26 @@ void main() {
     expect(Directory(profile.directoryPath).existsSync(), isTrue);
     expect(await marker.readAsString(), 'still here');
   });
+
+  test('removeProfile rolls registry state back when persistence fails', () async {
+    final manager = await loadManager();
+    final profile = await manager.createProfile('Rollback Vault');
+    final marker = File('${profile.directoryPath}/keep.txt');
+    await marker.writeAsString('do not lose me');
+
+    await supportDirectory.delete(recursive: true);
+    await File(supportDirectory.path).writeAsString('blocks registry parent');
+
+    await expectLater(
+      manager.removeProfile(profile),
+      throwsA(isA<FileSystemException>()),
+    );
+
+    expect(
+      manager.state.profiles.any((candidate) => candidate.id == profile.id),
+      isTrue,
+    );
+    expect(Directory(profile.directoryPath).existsSync(), isTrue);
+    expect(await marker.readAsString(), 'do not lose me');
+  });
 }
