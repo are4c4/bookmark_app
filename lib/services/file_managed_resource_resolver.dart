@@ -15,6 +15,7 @@ class FileManagedResource {
     this.contentType,
     this.extension,
     this.persistedSizeBytes,
+    this.sha256,
   });
 
   final int fileObjectId;
@@ -23,6 +24,7 @@ class FileManagedResource {
   final String? contentType;
   final String? extension;
   final int? persistedSizeBytes;
+  final String? sha256;
   final int actualSizeBytes;
   final DateTime modifiedAt;
 }
@@ -73,6 +75,7 @@ class FileManagedResourceResolver {
     final contentType = _valueFor(type, object, 'Content type');
     final extension = _valueFor(type, object, 'Extension');
     final persistedSize = _integerValueFor(type, object, 'Size bytes');
+    final sha256 = _sha256ValueFor(type, object);
 
     return FileManagedResource(
       fileObjectId: object.id,
@@ -81,6 +84,7 @@ class FileManagedResourceResolver {
       contentType: contentType,
       extension: extension,
       persistedSizeBytes: persistedSize,
+      sha256: sha256,
       actualSizeBytes: reference.sizeBytes,
       modifiedAt: reference.modifiedAt,
     );
@@ -105,6 +109,14 @@ class FileManagedResourceResolver {
     if (value is! num || !value.isFinite || value < 0) return null;
     final integer = value.toInt();
     return integer.toDouble() == value.toDouble() ? integer : null;
+  }
+
+  String? _sha256ValueFor(AppObjectType type, AppObject object) {
+    final candidate = _valueFor(type, object, 'SHA-256')?.toLowerCase();
+    if (candidate == null || !RegExp(r'^[0-9a-f]{64}$').hasMatch(candidate)) {
+      return null;
+    }
+    return candidate;
   }
 
   String? _stringValue(dynamic value) {
