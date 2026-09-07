@@ -156,6 +156,38 @@ def _string_literals(source: str):
         index += 1
 
 
+def _has_caught_interpolation(literal: str, variable: str) -> bool:
+    cursor = 0
+    while True:
+        dollar = literal.find('$', cursor)
+        if dollar < 0:
+            return False
+
+        slash_count = 0
+        before = dollar - 1
+        while before >= 0 and literal[before] == '\\':
+            slash_count += 1
+            before -= 1
+        if slash_count % 2 == 1:
+            cursor = dollar + 1
+            continue
+
+        after = literal[dollar + 1:]
+        if after.startswith(variable):
+            boundary_index = len(variable)
+            if boundary_index == len(after) or not _identifier_char(after[boundary_index]):
+                return True
+
+        if after.startswith('{'):
+            expression = after[1:].lstrip()
+            if expression.startswith(variable):
+                boundary_index = len(variable)
+                if boundary_index == len(expression) or not _identifier_char(expression[boundary_index]):
+                    return True
+
+        cursor = dollar + 1
+
+
 violations: list[tuple[str, int, str]] = []
 for path in sorted(root.rglob('*.dart')):
     if 'presentation' not in path.parts:
@@ -176,17 +208,10 @@ for path in sorted(root.rglob('*.dart')):
             continue
 
         body = source[open_index + 1:close_index]
-        simple_interpolation = re.compile(
-            r'\$' + re.escape(variable) + r'(?![A-Za-z0-9_$])'
-        )
-        braced_interpolation = re.compile(
-            r'\$\{\s*' + re.escape(variable) + r'\b'
-        )
-
         for local_start, literal, raw in _string_literals(body):
             if raw:
                 continue
-            if simple_interpolation.search(literal) or braced_interpolation.search(literal):
+            if _has_caught_interpolation(literal, variable):
                 absolute = open_index + 1 + local_start
                 line = source.count('\n', 0, absolute) + 1
                 violations.append((path.as_posix(), line, variable))
