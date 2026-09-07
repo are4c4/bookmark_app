@@ -19,7 +19,31 @@ class ObjectStore {
   final GenericDatabaseStore _genericStore;
   Future<void>? _relationSchemaReady;
 
-  Future<void> ensureRelationIndexSchema() => _relationSchemaReady ??=
+  Future<void> ensureRelationIndexSchema() async {
+    while (true) {
+      final ready = _relationSchemaReady ??= _createRelationIndexSchema();
+      try {
+        await ready;
+      } catch (_) {
+        if (identical(_relationSchemaReady, ready)) {
+          _relationSchemaReady = null;
+        }
+        rethrow;
+      }
+
+      // Relation schema creation can be nested inside a larger transaction.
+      // If that outer transaction later rolls back, the completed Future above
+      // survives even though SQLite rolled the table back. Re-check the actual
+      // schema before trusting the cache so the next Relation read/write can
+      // safely recreate it.
+      if (await _relationIndexSchemaExists()) return;
+      if (identical(_relationSchemaReady, ready)) {
+        _relationSchemaReady = null;
+      }
+    }
+  }
+
+  Future<void> _createRelationIndexSchema() =>
       _genericStore.database.transaction(() async {
         await _genericStore.ensureSchema();
         await _genericStore.database.customStatement('''
@@ -43,6 +67,13 @@ class ObjectStore {
           'ON object_relation_edges(source_object_id, property_id, position)',
         );
       });
+
+  Future<bool> _relationIndexSchemaExists() async {
+    final row = await _genericStore.database.customSelect(
+      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'object_relation_edges' LIMIT 1",
+    ).getSingleOrNull();
+    return row != null;
+  }
 
   Future<List<AppObjectType>> listObjectTypes(int workspaceId) async {
     final definitions = await _genericStore.listAllDatabases(workspaceId);

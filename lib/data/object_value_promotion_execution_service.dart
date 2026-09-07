@@ -25,7 +25,9 @@ class ObjectValuePromotionExecutionResult {
 /// allowed when the plan requests it and the caller explicitly confirms it.
 /// Relation writes are delegated to [RelationMutationService] so canonical
 /// source/target validation and bidirectional lifecycle rules remain centralized
-/// in the Relation lane.
+/// in the Relation lane. All database-side promotion changes run inside one
+/// outer transaction so a late failure cannot leave a target Object, Relation
+/// schema/value, or source clear only partially applied.
 class ObjectValuePromotionExecutionService {
   const ObjectValuePromotionExecutionService({
     required this.objectStore,
@@ -49,72 +51,72 @@ class ObjectValuePromotionExecutionService {
       );
     }
 
-    final sourceType = await objectStore.getObjectType(
-      plan.sourceProperty.objectTypeId,
-    );
-    final targetType = await objectStore.getObjectType(plan.targetObjectTypeId);
-    if (sourceType == null || targetType == null) {
-      throw ArgumentError('Promotion source and target ObjectTypes must exist.');
-    }
-    if (sourceType.workspaceId != targetType.workspaceId) {
-      throw ArgumentError(
-        'Promotion source and target ObjectTypes must belong to the same workspace.',
+    return relationMutations.genericStore.database.transaction(() async {
+      final sourceType = await objectStore.getObjectType(
+        plan.sourceProperty.objectTypeId,
       );
-    }
-
-    final canonicalSourceProperty = _propertyById(
-      sourceType.properties,
-      plan.sourceProperty.id,
-    );
-    if (canonicalSourceProperty == null || !canonicalSourceProperty.isValue) {
-      throw ArgumentError.value(
-        plan.sourceProperty.id,
-        'plan',
-        'Promotion source Property is no longer a persisted Value Property.',
-      );
-    }
-
-    final sourceObject = await _objectById(sourceType.id, sourceObjectId);
-    if (sourceObject == null) {
-      throw ArgumentError.value(
-        sourceObjectId,
-        'sourceObjectId',
-        'Promotion source Object does not exist in the source ObjectType.',
-      );
-    }
-    if (!_valuesEqual(
-      sourceObject.values[canonicalSourceProperty.id],
-      plan.sourceValue,
-    )) {
-      throw StateError(
-        'Promotion plan is stale because the source Value changed after planning.',
-      );
-    }
-
-    var createdTargetObject = false;
-    AppObject targetObject;
-    if (targetObjectId == null) {
-      final id = await objectStore.createObject(
-        objectTypeId: targetType.id,
-        title: plan.targetObjectTitle,
-      );
-      createdTargetObject = true;
-      targetObject = (await _objectById(targetType.id, id))!;
-    } else {
-      final existingTarget = await _objectById(targetType.id, targetObjectId);
-      if (existingTarget == null) {
-        throw ArgumentError.value(
-          targetObjectId,
-          'targetObjectId',
-          'Promotion target Object does not belong to the target ObjectType.',
+      final targetType = await objectStore.getObjectType(plan.targetObjectTypeId);
+      if (sourceType == null || targetType == null) {
+        throw ArgumentError('Promotion source and target ObjectTypes must exist.');
+      }
+      if (sourceType.workspaceId != targetType.workspaceId) {
+        throw ArgumentError(
+          'Promotion source and target ObjectTypes must belong to the same workspace.',
         );
       }
-      targetObject = existingTarget;
-    }
 
-    var createdRelationProperty = false;
-    ObjectPropertyDefinition? relation = relationProperty;
-    try {
+      final canonicalSourceProperty = _propertyById(
+        sourceType.properties,
+        plan.sourceProperty.id,
+      );
+      if (canonicalSourceProperty == null || !canonicalSourceProperty.isValue) {
+        throw ArgumentError.value(
+          plan.sourceProperty.id,
+          'plan',
+          'Promotion source Property is no longer a persisted Value Property.',
+        );
+      }
+
+      final sourceObject = await _objectById(sourceType.id, sourceObjectId);
+      if (sourceObject == null) {
+        throw ArgumentError.value(
+          sourceObjectId,
+          'sourceObjectId',
+          'Promotion source Object does not exist in the source ObjectType.',
+        );
+      }
+      if (!_valuesEqual(
+        sourceObject.values[canonicalSourceProperty.id],
+        plan.sourceValue,
+      )) {
+        throw StateError(
+          'Promotion plan is stale because the source Value changed after planning.',
+        );
+      }
+
+      var createdTargetObject = false;
+      AppObject targetObject;
+      if (targetObjectId == null) {
+        final id = await objectStore.createObject(
+          objectTypeId: targetType.id,
+          title: plan.targetObjectTitle,
+        );
+        createdTargetObject = true;
+        targetObject = (await _objectById(targetType.id, id))!;
+      } else {
+        final existingTarget = await _objectById(targetType.id, targetObjectId);
+        if (existingTarget == null) {
+          throw ArgumentError.value(
+            targetObjectId,
+            'targetObjectId',
+            'Promotion target Object does not belong to the target ObjectType.',
+          );
+        }
+        targetObject = existingTarget;
+      }
+
+      var createdRelationProperty = false;
+      ObjectPropertyDefinition? relation = relationProperty;
       relation ??= _matchingRelation(
         sourceType.properties,
         plan.relationPropertyName,
@@ -158,35 +160,26 @@ class ObjectValuePromotionExecutionService {
         property: linkedRelation,
         targetObjectIds: nextIds,
       );
-    } catch (_) {
-      if (createdRelationProperty && relation != null) {
-        await objectStore.deleteProperty(relation.id);
-      }
-      if (createdTargetObject) {
-        await objectStore.deleteObject(targetObject.id);
-      }
-      rethrow;
-    }
 
-    final linkedRelation = relation;
-    var sourceValueCleared = false;
-    if (plan.sourceDisposition ==
-        ObjectValuePromotionSourceDisposition.clearAfterLink) {
-      await objectStore.setPropertyValue(
-        objectId: sourceObjectId,
-        property: canonicalSourceProperty,
-        value: null,
+      var sourceValueCleared = false;
+      if (plan.sourceDisposition ==
+          ObjectValuePromotionSourceDisposition.clearAfterLink) {
+        await objectStore.setPropertyValue(
+          objectId: sourceObjectId,
+          property: canonicalSourceProperty,
+          value: null,
+        );
+        sourceValueCleared = true;
+      }
+
+      return ObjectValuePromotionExecutionResult(
+        targetObject: targetObject,
+        relationProperty: linkedRelation,
+        createdTargetObject: createdTargetObject,
+        createdRelationProperty: createdRelationProperty,
+        sourceValueCleared: sourceValueCleared,
       );
-      sourceValueCleared = true;
-    }
-
-    return ObjectValuePromotionExecutionResult(
-      targetObject: targetObject,
-      relationProperty: linkedRelation,
-      createdTargetObject: createdTargetObject,
-      createdRelationProperty: createdRelationProperty,
-      sourceValueCleared: sourceValueCleared,
-    );
+    });
   }
 
   Future<AppObject?> _objectById(int objectTypeId, int objectId) async {
