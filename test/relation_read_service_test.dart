@@ -238,4 +238,95 @@ void main() {
     expect(edges, hasLength(1));
     expect(edges.single.targetObjectId, personId);
   });
+
+  test('canonical reads fail closed when one Relation target has the wrong ObjectType', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final readService = RelationReadService(objectStore);
+
+    final bookTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Book',
+    );
+    final personTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Person',
+    );
+    final imageTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Image',
+    );
+    final relationId = await objectStore.createRelationProperty(
+      objectTypeId: bookTypeId,
+      name: 'Authors',
+      targetObjectTypeId: personTypeId,
+      multiple: true,
+    );
+    final relation = (await objectStore.getObjectType(bookTypeId))!
+        .properties
+        .singleWhere((property) => property.id == relationId);
+    final bookId = await objectStore.createObject(
+      objectTypeId: bookTypeId,
+      title: 'Book',
+    );
+    final personId = await objectStore.createObject(
+      objectTypeId: personTypeId,
+      title: 'Author',
+    );
+    final imageId = await objectStore.createObject(
+      objectTypeId: imageTypeId,
+      title: 'Cover',
+    );
+    await objectStore.setRelation(
+      objectId: bookId,
+      property: relation,
+      targetObjectIds: [personId],
+    );
+
+    await genericStore.setValue(
+      recordId: bookId,
+      propertyId: relationId,
+      value: <int>[personId, imageId],
+    );
+    await database.customStatement(
+      '''INSERT INTO object_relation_edges(
+           source_object_id, property_id, target_object_id, position
+         ) VALUES (?, ?, ?, ?)''',
+      <Object?>[bookId, relationId, imageId, 1],
+    );
+
+    expect(
+      await readService.outgoing(
+        sourceObjectTypeId: bookTypeId,
+        sourceObjectId: bookId,
+      ),
+      isEmpty,
+    );
+    expect(
+      await readService.backlinks(
+        workspaceId: workspaceId,
+        targetObjectId: personId,
+      ),
+      isEmpty,
+    );
+    expect(
+      await readService.backlinks(
+        workspaceId: workspaceId,
+        targetObjectId: imageId,
+      ),
+      isEmpty,
+    );
+
+    final edges = (await objectStore.outgoingRelations(bookId))
+        .where((edge) => edge.propertyId == relationId)
+        .toList(growable: false);
+    expect(edges.map((edge) => edge.targetObjectId), [personId, imageId]);
+    expect(
+      (await genericStore.getRecord(bookId))!.values[relationId],
+      <int>[personId, imageId],
+    );
+  });
 }
