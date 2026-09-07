@@ -30,7 +30,6 @@ void main() {
   });
 
   tearDown(() async {
-    await lifecycleStore.dispose();
     await database.close();
   });
 
