@@ -12,7 +12,8 @@ Keep one canonical Object-level search/index architecture correct, stale-safe, p
 - **#769 closed.** Search omits Relation labels for a malformed persisted Relation Property even when stale normalized edges remain; implemented by #774 (`c36315706b45bbfb73185c6a69c64993bf71e64b`).
 - **Relation #773 merged** as `66d3da4d80f2a8b071410dff0d86cbf62e92ddbb`. `RelationReadService` now fails closed when persisted Relation values and normalized edges disagree on target ids, cardinality, order/position, or target-workspace/type validity.
 - **#782 closed.** Search regression proves `relation_labels` inherits #773's read-side consistency boundary and focused refresh/workspace rebuild remove stale labels for well-formed serialized/index disagreement; implemented by #785 (`34604856d81852bf3058502c59689e7f2c23462c`).
-- Latest verified Search implementation checkpoint: **main `34604856d81852bf3058502c59689e7f2c23462c`**.
+- **#797 closed.** Generic typed Property search now fails closed for `system: true` metadata unless explicitly opted in with `searchable: true`; implemented by #799 (`4e685bccafdfa3fde47aadee0e6dfe424bba85c6`). Real File regression proves user-facing filename/MIME/extension remain searchable while managed path, SHA-256, and Storage ownership lifecycle metadata do not leak.
+- Latest verified Search implementation checkpoint: **main `4e685bccafdfa3fde47aadee0e6dfe424bba85c6`**.
 - Refactor #654 removed the caller-zero legacy Bookmark-only `FullTextSearchRepository`; do not recreate a parallel Bookmark/domain-specific search product.
 
 ## Canonical Object search architecture
@@ -34,7 +35,7 @@ object_search_fts
 
 Contributors:
 - **title / aliases** — canonical Object identity and aliases;
-- **properties** — deterministic searchable typed values; Relation/File/Image/computed/internal identity values are excluded;
+- **properties** — deterministic searchable typed values; Relation/File/Image/computed/internal identity values are excluded. System-maintained metadata (`config['system'] == true`) is default-deny and contributes only with explicit `searchable: true`;
 - **body** — universal Body blocks through the Body-owned parsed text projection, never serialized block JSON;
 - **relation labels** — trustworthy resolved target Object display titles only, never raw Relation/Object ids;
 - **Weblink metadata** — URL, Domain, Page title, Site name and Description in a dedicated bucket; hidden/system media metadata is consumed but not searchable;
@@ -56,7 +57,8 @@ Major merged slices include:
 - Refactor #654 — legacy Bookmark-only FTS implementation and legacy-only tests retired after replacement parity;
 - #757 — malformed Body isolation after Object Core strict parsing changes;
 - Relation #758 + Search #774 — strict persisted Relation inspection is reused by Search so malformed source values cannot leave stale Relation labels searchable;
-- Relation #773 + Search #782/#785 — canonical Relation reads now require persisted/index agreement, and Search regression proves stale relation labels are removed without duplicating integrity logic in Search production code.
+- Relation #773 + Search #782/#785 — canonical Relation reads now require persisted/index agreement, and Search regression proves stale relation labels are removed without duplicating integrity logic in Search production code;
+- Primitive #788 + Search #797/#799 — generic typed Property search now defaults system-maintained metadata to non-searchable, with explicit `searchable: true` opt-in and a real File privacy regression.
 
 ## Fail-closed source contracts
 ### Body
@@ -70,6 +72,8 @@ Object Core owns Body persistence/parsing. Search does not reinterpret corrupt B
 - valid future Body versions and unknown block kinds continue through the normal Body projection.
 
 Regression: `test/repositories/object_search_malformed_body_test.dart`.
+
+Object Core may add stricter semantic validation for known blocks (for example checklist state). As long as malformed persisted Body remains reported as `FormatException`, the same Search bucket boundary omits that source without a Search-side parser or repair path.
 
 ### Relation labels
 Relation owns persisted Relation inspection/integrity/mutation/read consistency. Search does not create a second Relation parser, edge authority model, or repair path.
@@ -90,6 +94,21 @@ Regressions:
 
 Search still applies the existing malformed-value guard after `RelationReadService.outgoing(...)`, but #773 is the canonical authority for broader serialized/index consistency. Do not duplicate #773 comparison rules in Search.
 
+### Typed Property metadata
+Generic typed Property search is for user-facing values, not internal lifecycle/identity/geometry bookkeeping.
+
+Current trust/privacy boundary:
+- `searchable: false` always opts a Property out;
+- `system: true` is default-deny in the generic `properties` contributor;
+- a system-maintained Property contributes only when it explicitly declares `searchable: true`;
+- ordinary non-system supported typed Properties keep their existing default-searchable behavior;
+- Search production code does not hard-code primitive Property names, lifecycle keys, hash formats, legacy ids, or geometry field names;
+- dedicated native contributors may own selected searchable metadata without weakening the generic default-deny rule.
+
+Regressions:
+- `test/repositories/object_property_search_system_metadata_test.dart` — system text/number/date omission plus explicit opt-in;
+- `test/repositories/file_object_search_integration_test.dart` — File Original filename / Content type / Extension remain searchable while managed path, SHA-256, and Storage ownership remain non-searchable.
+
 ## Incremental / stale-token contracts
 - focused Object refresh removes the previous FTS row by FTS `rowid` and inserts the current projection;
 - removed/changed title, alias, Property, Body, Relation, Weblink and derived-text tokens must disappear;
@@ -108,11 +127,12 @@ There is no live Bookmark-only FTS repository after #654. New domains participat
 Global Search workspace rebuild also reconciles optional canonical File/PDF extracted text before rebuilding FTS.
 
 ## Validation
-Recent correctness slices #757, #774 and #785 passed repository Flutter CI before merge, including:
+Recent correctness slices #757, #774, #785 and #799 passed repository Flutter CI before merge, including:
 - maintainability guardrail tests;
 - maintainability regression ceilings;
 - feature legacy-dependency guard;
 - feature presentation error-privacy guard;
+- Drift generation;
 - `flutter analyze`;
 - full Flutter test suite.
 
@@ -126,25 +146,33 @@ Recent correctness slices #757, #774 and #785 passed repository Flutter CI befor
 - workspace rebuild preserves the same fail-closed result;
 - persisted Relation values and normalized edges remain untouched by Search.
 
+#797/#799 regression proves that the generic Property contributor cannot leak newly added system-maintained metadata merely because its storage type is text/number/date:
+- default system metadata is omitted;
+- explicit `system: true, searchable: true` opt-in works;
+- ordinary user-facing typed Properties remain unchanged;
+- real File filename/MIME/extension remain searchable;
+- managed path, SHA-256, and the Storage ownership lifecycle key remain non-searchable.
+
 ## Cross-lane dependencies / ownership
 - Object Core owns Body persistence/parsing/editor semantics; Search consumes only its parsed search-text projection and isolates parse failure at its bucket boundary.
 - Relation owns Relation persistence, strict stored-value inspection, integrity, mutation, and canonical read consistency. **#773 is merged and is the authority for serialized/index agreement.** Search owns denormalized trustworthy label indexing and dependent refresh planning, with #785 locking the cross-lane contract in a Search regression.
-- Primitive owns File/PDF extraction and native behavior; Search owns derived-text persistence/index/reconciliation.
+- Primitive owns File/Image/Weblink metadata, File/PDF extraction and native behavior. Search owns which generic metadata is safe to expose as free text plus derived-text persistence/index/reconciliation. New primitive system metadata does not become searchable by default after #799.
 - Refactor owns behavior-preserving legacy retirement; Bookmark-only FTS retirement is complete.
 - Lane E currently holds no shared-hotspot lease.
 
 ## Next actions
-There is no remaining Search-owned actionable work in #414, #494, #753, #769, or #782.
+There is no remaining Search-owned actionable work in #414, #494, #753, #769, #782, or #797.
 
 For the next Lane E run:
 1. Re-read current `main`, open Issues/PRs, and recent cross-lane changes before creating work.
-2. Resume implementation only for a concrete Search/Indexing issue or a demonstrated cross-lane search correctness obligation.
+2. Resume implementation only for a concrete Search/Indexing issue or a demonstrated cross-lane search correctness/privacy obligation.
 3. Reuse canonical Object/Body/Relation/Primitive trust boundaries rather than duplicating their parsing/integrity semantics in Search.
 4. Prefer source-local fail-closed contribution boundaries over allowing one corrupt optional source to take down the canonical index.
-5. Do not swallow unrelated persistence/index errors and do not log raw user content, extracted text, private paths, malformed Body payloads, or malformed Relation payloads.
-6. Do not recreate domain-specific long-term search repositories.
+5. Treat newly introduced `system: true` typed metadata as non-searchable by default unless the owning contract deliberately marks it `searchable: true`; do not add primitive-name special cases in Search.
+6. Do not swallow unrelated persistence/index errors and do not log raw user content, extracted text, private paths, malformed Body payloads, or malformed Relation payloads.
+7. Do not recreate domain-specific long-term search repositories.
 
-Potential future work such as large-PDF rebuild caching, richer ranking/filter UX, or semantic/vector search requires a separately scoped Issue; it is not implied by completed #494/#753/#769/#782.
+Potential future work such as large-PDF rebuild caching, richer ranking/filter UX, or semantic/vector search requires a separately scoped Issue; it is not implied by completed #494/#753/#769/#782/#797.
 
 ## Stop reason
-**#753, #769 and #782 are complete with repository CI green; #757, #774 and #785 are merged, Relation #773's stronger read-consistency boundary is live on main, and no additional Search-owned issue is currently actionable. Lane E is idle under the `AGENTS.md` stopping criteria unless a new Search issue or concrete Search-specific regression appears.**
+**#753, #769, #782 and #797 are complete with repository CI green; #757, #774, #785 and #799 are merged; canonical Relation read consistency and system-metadata privacy boundaries are live on main; and no additional Search-owned issue is currently actionable. Lane E is idle under the `AGENTS.md` stopping criteria unless a new Search issue or concrete Search-specific regression/privacy obligation appears.**
