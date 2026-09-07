@@ -1,3 +1,4 @@
+import '../domain/mime_type_normalizer.dart';
 import '../domain/object_model.dart';
 import '../domain/object_type_defaults.dart';
 import '../domain/object_value_promotion.dart';
@@ -249,7 +250,7 @@ class WeblinkObjectService {
     await _setIfMissing(
       object: object,
       property: definition.contentTypeProperty,
-      value: _normalizedContentType(contentType),
+      value: MimeTypeNormalizer.normalize(contentType),
     );
     await _setIfMissing(
       object: object,
@@ -481,14 +482,6 @@ class WeblinkObjectService {
     } on ArgumentError {
       return null;
     }
-  }
-
-  String? _normalizedContentType(String? value) {
-    final candidate = value?.split(';').first.trim().toLowerCase();
-    if (candidate == null || candidate.isEmpty || !candidate.contains('/')) {
-      return null;
-    }
-    return candidate;
   }
 
   String? _normalizedOptionalDate(String? value) {
