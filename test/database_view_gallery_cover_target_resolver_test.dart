@@ -202,6 +202,56 @@ void main() {
     expect(await objectStore.outgoingRelations(source), isEmpty);
   });
 
+  test('malformed persisted Relation fails closed without repairing its edge',
+      () async {
+    final sourceTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Book',
+    );
+    final relationId = await objectStore.createRelationProperty(
+      objectTypeId: sourceTypeId,
+      name: 'Cover',
+      targetObjectTypeId: imageType.id,
+      multiple: true,
+    );
+    final source = await objectStore.createObject(
+      objectTypeId: sourceTypeId,
+      title: 'Book A',
+    );
+    final image = await objectStore.createObject(
+      objectTypeId: imageType.id,
+      title: 'Cover',
+    );
+    final property = (await objectStore.getObjectType(sourceTypeId))!
+        .properties
+        .firstWhere((item) => item.id == relationId);
+
+    await objectStore.setRelation(
+      objectId: source,
+      property: property,
+      targetObjectIds: [image],
+    );
+    await genericStore.setValue(
+      recordId: source,
+      propertyId: relationId,
+      value: <dynamic>[image, 'broken'],
+    );
+
+    expect(
+      await resolver.resolve(
+        sourceObjectTypeId: sourceTypeId,
+        sourceObjectId: source,
+        source: GalleryCoverSource.imageRelation(relationId),
+      ),
+      isNull,
+    );
+    final edges = (await objectStore.outgoingRelations(source))
+        .where((edge) => edge.propertyId == relationId)
+        .toList(growable: false);
+    expect(edges, hasLength(1));
+    expect(edges.single.targetObjectId, image);
+  });
+
   test('configured source kind must still match Relation target system type',
       () async {
     final sourceTypeId = await objectStore.createObjectType(
