@@ -310,7 +310,7 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
 
   Future<void> _handleProfileAction(String value) async {
     if (value == '__create__') {
-      final name = await _askName('Profileを追加', hint: '例: 実験');
+      final name = await _askName('Vaultを追加', hint: '例: 実験');
       if (name?.isNotEmpty == true) await widget.onCreateProfile(name!);
       return;
     }
@@ -341,14 +341,14 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
         );
         if (!mounted || path == null) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Profileバックアップを保存しました: $path')),
+          SnackBar(content: Text('Vaultバックアップを保存しました: $path')),
         );
       } else if (value == 'profile_import') {
         final archivePath = await _profileBackup.pickBackupFile();
         if (!mounted || archivePath == null) return;
         final name = await _askName(
-          '復元するProfile名',
-          initial: '復元したProfile',
+          '復元するVault名',
+          initial: '復元したVault',
         );
         if (name?.isNotEmpty != true) return;
         await widget.onImportProfileBackup(archivePath, name!);
@@ -361,7 +361,7 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
   Widget _profileHeader() {
     final active = widget.profileState.activeProfile;
     return PopupMenuButton<String>(
-      tooltip: 'Profileを切り替え',
+      tooltip: 'Vaultを切り替え',
       onSelected: _handleProfileAction,
       itemBuilder: (_) => [
         ...widget.profileState.profiles.map((profile) => PopupMenuItem(
@@ -373,8 +373,8 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
           ]),
         )),
         const PopupMenuDivider(),
-        const PopupMenuItem(value: '__create__', child: Text('＋ Profileを追加')),
-        const PopupMenuItem(value: '__manage__', child: Text('Profileを管理')),
+        const PopupMenuItem(value: '__create__', child: Text('＋ Vaultを追加')),
+        const PopupMenuItem(value: '__manage__', child: Text('Vaultを管理')),
       ],
       child: SizedBox(
         height: 42,
@@ -608,7 +608,7 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
               const Padding(padding: EdgeInsets.symmetric(horizontal: UiTokens.space12, vertical: UiTokens.space6), child: Divider(height: 1)),
               _sectionHeader('管理'),
               _navTile(4, Icons.delete_outline, 'ゴミ箱'),
-              _navTile(9, Icons.manage_accounts_outlined, 'Profile管理'),
+              _navTile(9, Icons.manage_accounts_outlined, 'Vault管理'),
               _navTile(10, Icons.settings_outlined, '設定'),
             ]),
           ),
@@ -622,11 +622,11 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
               PopupMenuDivider(),
               PopupMenuItem(
                 value: 'profile_export',
-                child: Text('Profileを完全バックアップ'),
+                child: Text('Vaultを完全バックアップ'),
               ),
               PopupMenuItem(
                 value: 'profile_import',
-                child: Text('バックアップからProfileを復元'),
+                child: Text('バックアップからVaultを復元'),
               ),
             ],
             child: const Padding(
@@ -686,7 +686,7 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
       ('コレクション', Icons.collections_bookmark_outlined, 8),
       ('全文検索', Icons.search, 1),
       ('ゴミ箱', Icons.delete_outline, 4),
-      ('Profile管理', Icons.manage_accounts_outlined, 9),
+      ('Vault管理', Icons.manage_accounts_outlined, 9),
       ('設定', Icons.settings_outlined, 10),
     ];
 
