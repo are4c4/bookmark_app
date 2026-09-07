@@ -1,6 +1,7 @@
 import '../domain/object_group.dart';
 import '../domain/object_model.dart';
 import 'object_store.dart';
+import 'relation_mutation_service.dart';
 
 class ObjectBoardMovePlanner {
   const ObjectBoardMovePlanner();
@@ -87,10 +88,12 @@ class ObjectBoardMovePlanner {
 class ObjectBoardMoveService {
   ObjectBoardMoveService(
     this._objectStore, {
+    RelationMutationService? relationMutations,
     this.planner = const ObjectBoardMovePlanner(),
-  });
+  }) : _relationMutations = relationMutations;
 
   final ObjectStore _objectStore;
+  final RelationMutationService? _relationMutations;
   final ObjectBoardMovePlanner planner;
 
   Future<void> move({
@@ -106,6 +109,25 @@ class ObjectBoardMoveService {
       sourceGroup: sourceGroup,
       targetGroup: targetGroup,
     );
+
+    if (property.isRelation) {
+      final relationMutations = _relationMutations;
+      if (relationMutations == null) {
+        throw StateError(
+          'Relation Board moves require the canonical Relation mutation service.',
+        );
+      }
+      final relation = value is ObjectRelationValue
+          ? value
+          : ObjectRelationValue.fromJson(value);
+      await relationMutations.setRelation(
+        objectId: object.id,
+        property: property,
+        targetObjectIds: relation.objectIds,
+      );
+      return;
+    }
+
     await _objectStore.setPropertyValue(
       objectId: object.id,
       property: property,
