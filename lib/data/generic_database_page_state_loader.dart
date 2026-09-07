@@ -5,6 +5,8 @@ import 'generic_database_collection_page_data.dart';
 import 'generic_database_object_create_service.dart';
 import 'generic_database_store.dart';
 import 'object_computed_value_store.dart';
+import 'object_store.dart';
+import 'relation_read_service.dart';
 
 typedef GenericDatabaseCreateModeResolver = Future<GenericDatabaseCreateMode>
     Function(int objectTypeId);
@@ -103,6 +105,16 @@ class GenericDatabasePageStateLoader {
           await genericStore.listRecords(targetObjectTypeId);
     }
 
+    final records = objectType == null
+        ? page?.records ?? const <GenericRecord>[]
+        : await _projectRelationValues(
+            objectType: objectType,
+            objects: objects,
+            records: page?.records ?? const <GenericRecord>[],
+            availableObjectTypeIds: availableObjectTypeIds,
+            recordsByType: recordsByType,
+          );
+
     final computedValues = <int, Map<int, dynamic>>{};
     if (objectType != null) {
       final computedProperties = objectType.properties
@@ -139,11 +151,85 @@ class GenericDatabasePageStateLoader {
       objectType: objectType,
       objects: objects,
       properties: page?.properties ?? const <GenericPropertyRecord>[],
-      records: page?.records ?? const <GenericRecord>[],
+      records: records,
       objectTypes: objectTypes,
       recordsByType: recordsByType,
       computedValues: computedValues,
       createMode: createMode,
     );
+  }
+
+  Future<List<GenericRecord>> _projectRelationValues({
+    required AppObjectType objectType,
+    required List<AppObject> objects,
+    required List<GenericRecord> records,
+    required Set<int> availableObjectTypeIds,
+    required Map<int, List<GenericRecord>> recordsByType,
+  }) async {
+    final relationProperties = objectType.properties
+        .where((property) => property.isRelation)
+        .toList(growable: false);
+    if (relationProperties.isEmpty || records.isEmpty) return records;
+
+    final objectsById = <int, AppObject>{
+      for (final object in objects) object.id: object,
+    };
+    final objectStore = ObjectStore(genericStore);
+    final projected = <GenericRecord>[];
+
+    for (final record in records) {
+      final source = objectsById[record.id];
+      final edges = source == null
+          ? const <ObjectRelationEdge>[]
+          : await objectStore.outgoingRelations(source.id);
+      final edgesByProperty = <int, List<ObjectRelationEdge>>{};
+      for (final edge in edges) {
+        (edgesByProperty[edge.propertyId] ??= <ObjectRelationEdge>[]).add(edge);
+      }
+
+      final values = Map<int, dynamic>.from(record.values);
+      for (final property in relationProperties) {
+        final targetTypeId = property.targetObjectTypeId;
+        var targetIds = const <int>[];
+        if (source != null &&
+            targetTypeId != null &&
+            availableObjectTypeIds.contains(targetTypeId)) {
+          final propertyEdges = edgesByProperty[property.id] ??
+              const <ObjectRelationEdge>[];
+          if (relationStoredValueMatchesEdges(
+            source: source,
+            property: property,
+            edges: propertyEdges,
+          )) {
+            final knownTargetIds = (recordsByType[targetTypeId] ??
+                    const <GenericRecord>[])
+                .map((target) => target.id)
+                .toSet();
+            final persistedTargetIds = propertyEdges
+                .map((edge) => edge.targetObjectId)
+                .toList(growable: false);
+            if (persistedTargetIds.every(knownTargetIds.contains)) {
+              targetIds = persistedTargetIds;
+            }
+          }
+        }
+        values[property.id] = <String, dynamic>{
+          'objectIds': List<int>.unmodifiable(targetIds),
+        };
+      }
+
+      projected.add(
+        GenericRecord(
+          id: record.id,
+          databaseId: record.databaseId,
+          title: record.title,
+          createdAt: record.createdAt,
+          updatedAt: record.updatedAt,
+          values: Map<int, dynamic>.unmodifiable(values),
+        ),
+      );
+    }
+
+    return List<GenericRecord>.unmodifiable(projected);
   }
 }
