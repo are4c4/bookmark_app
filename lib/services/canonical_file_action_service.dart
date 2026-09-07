@@ -7,19 +7,19 @@ typedef CanonicalFilePathAction = Future<bool> Function(String filePath);
 /// Open/reveal capability for one canonical File Object.
 ///
 /// Object identity and portable path resolution remain owned by the canonical
-/// File services. This capability resolves an existing managed resource first,
-/// then delegates only the final OS action. It never copies, moves, deletes, or
-/// rewrites the stored File identity.
+/// File services. This capability requires the system-identity-gated
+/// [CanonicalFileManagedResourceResolver] before delegating the final OS action.
+/// It never copies, moves, deletes, or rewrites the stored File identity.
 class CanonicalFileActionService {
   CanonicalFileActionService({
-    required FileManagedResourceResolver resources,
+    required CanonicalFileManagedResourceResolver resources,
     CanonicalFilePathAction? openPath,
     CanonicalFilePathAction? revealPath,
   })  : _resources = resources,
         _openPath = openPath ?? _defaultOpenPath,
         _revealPath = revealPath ?? _defaultRevealPath;
 
-  final FileManagedResourceResolver _resources;
+  final CanonicalFileManagedResourceResolver _resources;
   final CanonicalFilePathAction _openPath;
   final CanonicalFilePathAction _revealPath;
 
