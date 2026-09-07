@@ -6,6 +6,7 @@ import '../data/app_database.dart';
 import '../data/bookmark_attachment_store.dart';
 import '../data/bookmark_repository.dart';
 import '../services/attachment_storage_service.dart';
+import '../services/bookmark_image_relation_service_factory.dart';
 import '../services/bookmark_metadata_service.dart';
 import '../services/pdf_metadata_service.dart';
 import 'photo_database_picker.dart';
@@ -239,10 +240,12 @@ Future<void> showBookmarkCreateDialog({
               inbox: inbox,
             );
             if (selectedPhotos.isNotEmpty) {
-              await repository.attachPhotosByBookmarkId(
-                bookmarkId,
-                selectedPhotos,
-                coverPhoto: coverPhoto,
+              await createBookmarkImageRelationService(repository)
+                  .saveLegacyPhotosAfterCreate(
+                workspaceId: repository.workspaceId,
+                bookmarkId: bookmarkId,
+                photoIds: selectedPhotos.map((photo) => photo.id),
+                coverPhotoId: coverPhoto?.id,
               );
             }
             if (dialogContext.mounted) Navigator.pop(dialogContext);
