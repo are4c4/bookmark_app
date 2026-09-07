@@ -148,8 +148,8 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
   ) async {
     try {
       _applyDocument(await mutation());
-    } catch (error) {
-      _showError('Bodyを更新できませんでした: $error');
+    } catch (_) {
+      _showError('Bodyを更新できませんでした。');
     }
   }
 
@@ -221,8 +221,8 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
               request: request,
             );
       _applyDocument(result.document);
-    } catch (error) {
-      _showError('Object参照を追加できませんでした: $error');
+    } catch (_) {
+      _showError('Object参照を追加できませんでした。');
     }
   }
 
@@ -252,8 +252,8 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
               request: request,
             );
       _applyDocument(result.document);
-    } catch (error) {
-      _showError('Database / View参照を追加できませんでした: $error');
+    } catch (_) {
+      _showError('Database / View参照を追加できませんでした。');
     }
   }
 
@@ -285,8 +285,8 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
         sourceBlockId: block.id,
       );
       _applyDocument(result.document);
-    } catch (error) {
-      _showError('Bodyを更新できませんでした: $error');
+    } catch (_) {
+      _showError('Bodyを更新できませんでした。');
     }
   }
 
