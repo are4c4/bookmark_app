@@ -6,6 +6,7 @@ import '../data/object_alias_store.dart';
 import '../data/object_body_store.dart';
 import '../data/object_store.dart';
 import '../data/relation_read_service.dart';
+import '../data/relation_stored_value_inspector.dart';
 import '../data/system_object_store.dart';
 import '../data/weblink_object_service.dart';
 import '../domain/object_model.dart';
@@ -107,6 +108,19 @@ class ObjectSearchRepository {
     }
   }
 
+  String _buildRelationLabelsSearchText({
+    required AppObject object,
+    required Iterable<ResolvedOutgoingRelation> relations,
+  }) {
+    return buildObjectRelationSearchText(
+      relations.where(
+        (relation) => !inspectRelationStoredValue(
+          object.values[relation.property.id],
+        ).isMalformed,
+      ),
+    );
+  }
+
   Future<void> _insertObjects({
     int? workspaceId,
     int? objectId,
@@ -178,8 +192,9 @@ class ObjectSearchRepository {
             weblinkProjection?.consumedPropertyIds ?? const <int>{},
       );
       final body = await _readBodySearchText(currentObjectId);
-      final relationLabels = buildObjectRelationSearchText(
-        await _relationReads.outgoing(
+      final relationLabels = _buildRelationLabelsSearchText(
+        object: object,
+        relations: await _relationReads.outgoing(
           sourceObjectTypeId: objectTypeId,
           sourceObjectId: currentObjectId,
         ),
