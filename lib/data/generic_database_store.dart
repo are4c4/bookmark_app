@@ -237,15 +237,17 @@ class GenericDatabaseStore {
     final order = existing.isEmpty
         ? 0
         : existing.map((item) => item.sortOrder).reduce((a, b) => a > b ? a : b) + 1;
-    await database.customStatement(
+    final normalizedName =
+        name.trim().isEmpty ? '新しいデータベース' : name.trim();
+    return database.customInsert(
       'INSERT INTO generic_databases(workspace_id, name, icon, sort_order) VALUES (?, ?, ?, ?)',
-      [workspaceId, name.trim().isEmpty ? '新しいデータベース' : name.trim(), icon, order],
+      variables: [
+        Variable<int>(workspaceId),
+        Variable<String>(normalizedName),
+        Variable<String>(icon),
+        Variable<int>(order),
+      ],
     );
-    final row = await database.customSelect(
-      'SELECT id FROM generic_databases WHERE workspace_id = ? ORDER BY id DESC LIMIT 1',
-      variables: [Variable<int>(workspaceId)],
-    ).getSingle();
-    return row.read<int>('id');
   }
 
   Future<void> renameDatabase(int id, String name) async {
@@ -311,16 +313,17 @@ class GenericDatabaseStore {
     final order = properties.isEmpty
         ? 0
         : properties.map((item) => item.sortOrder).reduce((a, b) => a > b ? a : b) + 1;
-    await database.customStatement(
+    return database.customInsert(
       '''INSERT INTO generic_properties(database_id, name, type, config_json, sort_order)
          VALUES (?, ?, ?, ?, ?)''',
-      [databaseId, name.trim(), type, jsonEncode(config), order],
+      variables: [
+        Variable<int>(databaseId),
+        Variable<String>(name.trim()),
+        Variable<String>(type),
+        Variable<String>(jsonEncode(config)),
+        Variable<int>(order),
+      ],
     );
-    final row = await database.customSelect(
-      'SELECT id FROM generic_properties WHERE database_id = ? ORDER BY id DESC LIMIT 1',
-      variables: [Variable<int>(databaseId)],
-    ).getSingle();
-    return row.read<int>('id');
   }
 
   Future<void> updateProperty(GenericPropertyRecord property) async {
@@ -390,15 +393,14 @@ class GenericDatabaseStore {
 
   Future<int> createRecord({required int databaseId, required String title}) async {
     await ensureSchema();
-    await database.customStatement(
+    final normalizedTitle = title.trim().isEmpty ? '新規ページ' : title.trim();
+    return database.customInsert(
       'INSERT INTO generic_records(database_id, title) VALUES (?, ?)',
-      [databaseId, title.trim().isEmpty ? '新規ページ' : title.trim()],
+      variables: [
+        Variable<int>(databaseId),
+        Variable<String>(normalizedTitle),
+      ],
     );
-    final row = await database.customSelect(
-      'SELECT id FROM generic_records WHERE database_id = ? ORDER BY id DESC LIMIT 1',
-      variables: [Variable<int>(databaseId)],
-    ).getSingle();
-    return row.read<int>('id');
   }
 
   Future<void> renameRecord(int id, String title) async {
