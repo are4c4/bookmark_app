@@ -20,18 +20,6 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as image;
 
-class _PickerPhotoStorageService extends PhotoStorageService {
-  _PickerPhotoStorageService({
-    required String photoDirectoryPath,
-    required this.paths,
-  }) : super(photoDirectoryPath: photoDirectoryPath);
-
-  final List<String> paths;
-
-  @override
-  Future<List<String>> pickImagePaths() async => paths;
-}
-
 void main() {
   late AppDatabase database;
   late ObjectStore objectStore;
@@ -103,11 +91,11 @@ void main() {
     );
     final definition = await images.ensureDefinition(workspaceId);
     final importer = GenericDatabaseImageImportService(
-      photoStorage: _PickerPhotoStorageService(
+      photoStorage: PhotoStorageService(
         photoDirectoryPath: managedDirectory.path,
-        paths: <String>[source.path],
       ),
       objectCreate: objectCreate,
+      filePicker: () async => <String>[source.path],
     );
 
     final ids = await importer.pickAndImport(
@@ -136,11 +124,11 @@ void main() {
     await pdf.writeAsBytes('%PDF-1.7\nbody'.codeUnits);
     final definition = await images.ensureDefinition(workspaceId);
     final importer = GenericDatabaseImageImportService(
-      photoStorage: _PickerPhotoStorageService(
+      photoStorage: PhotoStorageService(
         photoDirectoryPath: managedDirectory.path,
-        paths: <String>[png.path, pdf.path],
       ),
       objectCreate: objectCreate,
+      filePicker: () async => <String>[png.path, pdf.path],
     );
 
     await expectLater(
