@@ -45,6 +45,8 @@ class ObjectTypeTemplateView {
     this.layoutType = 'table',
     this.filters = const <String, dynamic>{},
     this.sorts = const <dynamic>[],
+    this.visiblePropertyNames = const <String>[],
+    this.propertyOrderNames = const <String>[],
     this.settings = const <String, dynamic>{},
     this.galleryCoverRelationPropertyName,
     this.galleryCoverKind,
@@ -57,6 +59,11 @@ class ObjectTypeTemplateView {
   final String layoutType;
   final Map<String, dynamic> filters;
   final List<dynamic> sorts;
+
+  /// Template-local Property names resolved to stable `p:<id>` View tokens
+  /// after this template has created its user-owned schema.
+  final List<String> visiblePropertyNames;
+  final List<String> propertyOrderNames;
   final Map<String, dynamic> settings;
 
   /// Template-local Relation name resolved to the newly-created stable
@@ -403,6 +410,30 @@ class ObjectTypeTemplateStore {
         createdPropertyIds[property.name] = propertyId;
       }
 
+      List<String> resolveViewProperties(
+        ObjectTypeTemplateView view,
+        List<String> propertyNames,
+        String fieldName,
+      ) {
+        final resolved = <String>[];
+        final seen = <String>{};
+        for (final propertyName in propertyNames) {
+          if (!seen.add(propertyName)) {
+            throw StateError(
+              'Template View ${view.name} $fieldName contains duplicate Property "$propertyName".',
+            );
+          }
+          final propertyId = createdPropertyIds[propertyName];
+          if (propertyId == null) {
+            throw StateError(
+              'Template View ${view.name} $fieldName references unknown Property "$propertyName".',
+            );
+          }
+          resolved.add('p:$propertyId');
+        }
+        return resolved;
+      }
+
       final definition = DatabaseDefinition(
         key: 'custom:$objectTypeId',
         label: name?.trim().isNotEmpty == true ? name!.trim() : template.name,
@@ -444,8 +475,16 @@ class ObjectTypeTemplateStore {
           layoutType: view.layoutType,
           filters: view.filters,
           sorts: view.sorts,
-          visibleProperties: const <String>[],
-          propertyOrder: const <String>[],
+          visibleProperties: resolveViewProperties(
+            view,
+            view.visiblePropertyNames,
+            'visible Properties',
+          ),
+          propertyOrder: resolveViewProperties(
+            view,
+            view.propertyOrderNames,
+            'Property order',
+          ),
           settings: settings,
         );
       }
