@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../data/database_view_property_clear_migration_service.dart';
 import '../data/database_view_property_type_conversion_service.dart';
 import '../data/database_view_property_type_migration_service.dart';
 import '../data/object_store.dart';
 import '../domain/object_model.dart';
+import 'property_type_clear_migration_dialog.dart';
 import 'property_type_conversion_impact_dialog.dart';
 
 class ValuePropertySchemaDraft {
@@ -15,9 +17,11 @@ class ValuePropertySchemaDraft {
 /// Runs the complete safe type-edit flow for one user-owned Value Property.
 ///
 /// The first dialog only collects the requested destination type. The merged
-/// read-only preflight then classifies current data, the impact dialog gathers
-/// any explicit narrowing choices, and the transactional migration service
-/// re-runs preflight while applying. Presentation never writes Property schema
+/// read-only preflight then classifies current data. Safe/choice-based changes
+/// use the normal impact dialog and transactional migration path. A migration-
+/// blocked Value change may proceed only after a separate destructive clear-
+/// values confirmation; that path clears values and re-runs the canonical
+/// migration inside one transaction. Presentation never writes Property schema
 /// or Object values directly.
 Future<ObjectPropertyDefinition?> showValuePropertySchemaEditor({
   required BuildContext context,
@@ -62,6 +66,22 @@ Future<ObjectPropertyDefinition?> showValuePropertySchemaEditor({
     propertyId: canonical.id,
     nextType: draft.type,
   );
+
+  if (impact.mode == PropertyTypeConversionMode.requiresMigration) {
+    if (!context.mounted) return null;
+    final confirmed = await showPropertyTypeClearMigrationDialog(
+      context: context,
+      impact: impact,
+    );
+    if (!confirmed) return null;
+    final result = await migration.applyChangeClearingStoredValues(
+      objectTypeId: sourceType.id,
+      propertyId: canonical.id,
+      nextType: draft.type,
+    );
+    return result.property;
+  }
+
   final objectLabels = <int, String>{
     for (final object in await objectStore.listObjects(sourceType.id))
       object.id: object.title,
@@ -163,7 +183,7 @@ class _ValuePropertySchemaEditorDialogState
             ),
             const SizedBox(height: 10),
             Text(
-              '既存値は次の確認画面で検査されます。変換できない値がある場合は変更できません。',
+              '既存値は次の確認画面で検査されます。安全に変換できない場合は、値を削除する明示確認が必要です。',
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
