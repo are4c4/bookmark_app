@@ -27,10 +27,12 @@ class ObjectFilePdfPreview extends StatefulWidget {
     required this.fileObjectTypeId,
     required this.fileObjectId,
     this.maxHeight = 420,
+    this.bottomSpacing = 0,
     this.previewResolver,
     this.imageBuilder,
     this.onError,
-  }) : assert(
+  })  : assert(bottomSpacing >= 0),
+        assert(
           previewService != null || previewResolver != null,
           'Provide a canonical PDF preview service or an injected resolver.',
         );
@@ -41,6 +43,10 @@ class ObjectFilePdfPreview extends StatefulWidget {
   final int fileObjectTypeId;
   final int fileObjectId;
   final double maxHeight;
+
+  /// Optional space following a successfully rendered preview. Missing,
+  /// non-PDF, and unavailable previews still occupy no layout space at all.
+  final double bottomSpacing;
 
   /// Test/presentation seam for the asynchronous capability read. Production
   /// hosts leave this null and continue using [previewService].
@@ -122,7 +128,7 @@ class _ObjectFilePdfPreviewState extends State<ObjectFilePdfPreview> {
               ),
             );
 
-        return ConstrainedBox(
+        final frame = ConstrainedBox(
           key: ValueKey('object-file-pdf-preview-${widget.fileObjectId}'),
           constraints: BoxConstraints(maxHeight: widget.maxHeight),
           child: DecoratedBox(
@@ -140,6 +146,11 @@ class _ObjectFilePdfPreviewState extends State<ObjectFilePdfPreview> {
               ),
             ),
           ),
+        );
+        if (widget.bottomSpacing == 0) return frame;
+        return Padding(
+          padding: EdgeInsets.only(bottom: widget.bottomSpacing),
+          child: frame,
         );
       },
     );
