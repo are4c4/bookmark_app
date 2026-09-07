@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 ObjectPropertyDeleteImpact _impact({
   int storedValues = 0,
   List<DatabaseViewPropertyReference> viewReferences = const [],
+  List<DatabaseCollectionPropertyReference> collectionReferences = const [],
 }) => ObjectPropertyDeleteImpact(
       property: const ObjectPropertyDefinition(
         id: 7,
@@ -21,6 +22,7 @@ ObjectPropertyDeleteImpact _impact({
       ),
       objectsWithStoredValue: storedValues,
       viewReferences: viewReferences,
+      collectionReferences: collectionReferences,
     );
 
 const _viewReference = DatabaseViewPropertyReference(
@@ -60,7 +62,8 @@ void main() {
 
     expect(find.text('「Cover」を削除'), findsOneWidget);
     expect(find.text('値を保存しているObject'), findsOneWidget);
-    expect(find.text('0件'), findsNWidgets(3));
+    expect(find.text('参照しているCollection filter'), findsOneWidget);
+    expect(find.text('0件'), findsNWidgets(4));
     final deleteButton = tester.widget<FilledButton>(
       find.byKey(const ValueKey('property-delete-confirm')),
     );
@@ -138,6 +141,36 @@ void main() {
     );
   });
 
+  testWidgets('a Collection filter reference blocks deletion', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ObjectPropertyDeleteImpactDialog(
+            impact: _impact(
+              collectionReferences: const [
+                DatabaseCollectionPropertyReference(
+                  databaseId: 20,
+                  databaseName: 'Plant Dashboard',
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Collection参照'), findsOneWidget);
+    expect(find.text('Plant Dashboard'), findsOneWidget);
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const ValueKey('property-delete-confirm')),
+          )
+          .onPressed,
+      isNull,
+    );
+  });
+
   testWidgets('explicit View detach refreshes impact and unlocks deletion',
       (tester) async {
     bool? result;
@@ -177,9 +210,9 @@ void main() {
       isNull,
     );
 
-    await tester.tap(
-      find.byKey(const ValueKey('property-delete-detach-views')),
-    );
+    final detach = find.byKey(const ValueKey('property-delete-detach-views'));
+    await tester.ensureVisible(detach);
+    await tester.tap(detach);
     await tester.pumpAndSettle();
 
     expect(detachCalls, 1);
@@ -214,9 +247,9 @@ void main() {
       ),
     );
 
-    await tester.tap(
-      find.byKey(const ValueKey('property-delete-detach-views')),
-    );
+    final detach = find.byKey(const ValueKey('property-delete-detach-views'));
+    await tester.ensureVisible(detach);
+    await tester.tap(detach);
     await tester.pumpAndSettle();
 
     expect(
