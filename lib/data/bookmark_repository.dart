@@ -53,11 +53,8 @@ class BookmarkRepository {
       workspaceStore.createWorkspace(name, icon: icon, colorValue: colorValue);
   Future<void> updateWorkspace(WorkspaceInfo workspace, {String? name, String? icon, int? colorValue}) =>
       workspaceStore.updateWorkspace(workspace.id, name: name, icon: icon, colorValue: colorValue);
-  Future<void> renameWorkspace(WorkspaceInfo workspace, String name) =>
-      workspaceStore.renameWorkspace(workspace.id, name);
   Future<void> reorderWorkspaces(List<int> orderedIds) => workspaceStore.reorderWorkspaces(orderedIds);
   Future<void> deleteWorkspace(WorkspaceInfo workspace) => workspaceStore.deleteWorkspace(workspace.id);
-  Future<void> setActiveWorkspace(WorkspaceInfo workspace) => workspaceStore.setActiveWorkspace(workspace.id);
   Future<void> moveBookmarksToWorkspace(Iterable<int> ids, WorkspaceInfo workspace) =>
       workspaceStore.moveBookmarks(ids, workspace.id);
 
@@ -366,19 +363,6 @@ class BookmarkRepository {
     }
     return id;
   }
-
-  Future<void> renameTag(Tag tag, String newName) =>
-      TagGroupStore(_database).renameTag(tag.id, newName);
-
-  Future<void> setTagParent(Tag tag, Tag? parent) =>
-      TagGroupStore(_database).moveTag(
-        tagId: tag.id,
-        parentTagId: parent?.id,
-        groupId: parent == null ? tag.groupId : null,
-      );
-
-  Future<void> deleteTag(Tag tag) =>
-      TagGroupStore(_database).deleteTag(tag.id);
 
   Future<int> createSavedView({
     required String name,
