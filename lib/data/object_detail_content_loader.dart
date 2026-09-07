@@ -49,7 +49,7 @@ class ObjectDetailContentLoader {
     late final ObjectBodyDocument body;
     try {
       body = await bodyStore.read(object.id);
-    } catch (error, stackTrace) {
+    } catch (_, stackTrace) {
       Error.throwWithStackTrace(
         const ObjectBodyContentLoadException(),
         stackTrace,
