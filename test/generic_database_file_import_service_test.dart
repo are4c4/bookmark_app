@@ -27,6 +27,7 @@ void main() {
   late AppDatabase database;
   late ObjectStore objectStore;
   late FileObjectService files;
+  late GenericDatabaseObjectCreateService objectCreate;
   late GenericDatabaseFileImportService fileImports;
   late int workspaceId;
 
@@ -60,7 +61,7 @@ void main() {
         objectStore: objectStore,
       ),
     );
-    final objectCreate = GenericDatabaseObjectCreateService(
+    objectCreate = GenericDatabaseObjectCreateService(
       pageLoader: GenericDatabaseCollectionPageLoader(
         genericStore: genericStore,
         collectionResolver: DatabaseCollectionResolver(
@@ -144,12 +145,46 @@ void main() {
       await source.length(),
     );
     expect(
+      objects.single.values[definition.sha256Property.id],
+      '3f972854841afd236b04b5d7435b73216bc5fa6e39a86aff6e492b744086189c',
+    );
+    expect(
       objects.single.values[definition.storageOwnershipProperty.id],
       VaultManagedFileOwnership.vaultManagedCopy.storageKey,
     );
     final storedPath = objects.single.values[definition.fileProperty.id] as String;
     expect(storedPath, startsWith('attachments/'));
     expect(await File('${vault.path}/$storedPath').exists(), isTrue);
+  });
+
+  test('SHA-256 probe failure does not fail an otherwise valid File import',
+      () async {
+    final source = File('${sources.path}/notes.txt');
+    await source.writeAsString('portable notes');
+    final definition = await files.ensureDefinition(workspaceId);
+    final failSoftImports = GenericDatabaseFileImportService(
+      managedFiles: VaultManagedFileCopyService(),
+      objectCreate: objectCreate,
+      vaultDirectoryPath: vault.path,
+      sha256Reader: (_) async => throw StateError('hash unavailable'),
+    );
+
+    final objectId = await failSoftImports.importClassifiedPath(
+      databaseId: definition.objectType.id,
+      sourcePath: source.path,
+      contentType: 'text/plain',
+    );
+
+    final object = (await objectStore.listObjects(definition.objectType.id))
+        .singleWhere((candidate) => candidate.id == objectId);
+    expect(object.values[definition.sha256Property.id], isNull);
+    expect(
+      object.values[definition.storageOwnershipProperty.id],
+      VaultManagedFileOwnership.vaultManagedCopy.storageKey,
+    );
+    final storedPath = object.values[definition.fileProperty.id] as String;
+    expect(await File('${vault.path}/$storedPath').exists(), isTrue);
+    expect(await source.exists(), isTrue);
   });
 
   test('File Object failure rolls back only the new Vault copy', () async {
