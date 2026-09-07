@@ -68,10 +68,11 @@ class PrimitiveObjectImportService {
       throw StateError('Primitive import source is not an available file.');
     }
 
-    final classification = await classifier.classifyPath(
+    final classified = await classifier.classifyPath(
       path: path,
       declaredContentType: declaredContentType,
     );
+    final classification = _failClosedPathClassification(classified);
 
     final importer = switch (classification.target) {
       PrimitiveFileImportTarget.image => importImage,
@@ -92,6 +93,24 @@ class PrimitiveObjectImportService {
       target: classification.target,
       evidence: classification.evidence,
       contentType: classification.contentType,
+    );
+  }
+
+  /// An existing source path has already been offered to the content probe.
+  /// Extension-only Image routing at this point means no supported Image
+  /// signature and no meaningful MIME identified the bytes. Treat that state as
+  /// generic File instead of manufacturing Image identity from an untrusted
+  /// filename. Direct classifier callers may still use extension fallback when
+  /// bytes are genuinely unavailable.
+  PrimitiveFileImportClassification _failClosedPathClassification(
+    PrimitiveFileImportClassification classification,
+  ) {
+    if (classification.evidence != PrimitiveFileImportEvidence.extension) {
+      return classification;
+    }
+    return const PrimitiveFileImportClassification(
+      target: PrimitiveFileImportTarget.file,
+      evidence: PrimitiveFileImportEvidence.fallback,
     );
   }
 
