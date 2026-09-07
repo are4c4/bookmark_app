@@ -17,22 +17,16 @@ The focused composability/schema Issues owned by this lane are complete:
 
 #56 remains open as the broader product umbrella, but its remaining concrete implementation is currently routed outside Lane C or requires real-host validation rather than speculative Database/View work.
 
-## Current coordination checkpoint — 2026-09-08
-A fresh GitHub audit found one safe Lane C coordination task even though no product slice was available: repository-wide `docs/AI_PROGRESS.md` had become stale and still listed completed architecture Issues as active while telling Lane C to continue completed work.
+## Coordination checkpoint — 2026-09-08
+PR #873 refreshes repository-wide routing because `docs/AI_PROGRESS.md` had become stale after the composability milestone set completed.
 
-PR #873 — `Refresh repository-wide routing after composability completion`
-Branch: `docs/database-view-repo-handoff-refresh-20260908`
-Live head changes during the docs refresh; always read current PR head/CI before acting.
-
-The PR is docs-only and refreshes repository-wide routing so future lanes do not re-enter completed work. It records:
+The docs refresh records:
 - #484/#489/#490/#491/#492/#493/#494/#495/#501 as completed/closed;
 - #856 as the generic Bookmark template/operation proof;
+- exactly eight current open umbrella/product Issues: #56/#155/#218/#225/#242/#245/#249/#481;
 - Lane C as intentionally idle until a concrete Database/View/schema/template gap appears;
-- the current eight open umbrella/product Issues as #56/#155/#218/#225/#242/#245/#249/#481;
-- #481/#249 as Object-owned, #155/#245 as Primitive/Object, #225 as Refactor, #242/#218 as real-macOS validation;
-- the remaining product edge as presentation/migration/consolidation rather than generic schema composability or import-routing architecture.
-
-Recent Primitive host work (#862 File collection import, #866 content-aware Image picker, #869 canonical List media) is already merged; #495 is completed/closed. Those changes remain evidence that primitive-specific composition in generic hosts belongs to D, not a current C hotspot lease.
+- #481/#249 as Object-owned product work, #155/#245 as Primitive/Object migration/presentation work, #225 as Refactor, and #242/#218 as final real-macOS validation;
+- the remaining product edge as presentation/migration/consolidation rather than missing generic schema composition.
 
 No runtime behavior changes are included.
 
@@ -65,23 +59,21 @@ Together with Paper/Plant regressions, version/ownership tests, searchable templ
 
 ## Remaining open work and ownership
 Do not take these merely to keep Lane C busy:
-- #249 Bookmark presentation parity — **Object lane**; current remaining gap is primarily real-host Gallery convergence.
-- #481 universal Body — **Object lane**; core Body capability is integrated and remaining work is shared real-host composition parity such as Generic Database side peek.
-- #155 Weblink/Image product presentation and legacy convergence — primarily **Primitive/Object** according to current routing.
+- #249 Bookmark presentation parity — **Object lane**; the primary remaining gap is real Stage1 fixed/masonry Gallery wiring.
+- #481 universal Body — **Object lane**; core universal Body is integrated, remaining gap is real-host composition parity such as Generic Database side peek.
+- #155 Weblink/Image product presentation and legacy convergence — primarily **Primitive/Object**.
 - #245 Photo -> Image migration — **Primitive/Object**, with Refactor cleanup after parity.
 - #225 maintainability / legacy retirement / broad host extraction — **Refactor lane**.
-- #149 final Property-handle close step — requires real-host visual validation on the user machine/theme.
-- #156 is already completed/closed; do not reopen based on stale prose in #56.
-- #242/#218 are held for real-macOS validation, not Lane C implementation.
+- #242/#218 are held for final real-macOS validation, not Lane C implementation.
 
-#495 content-aware Image/File import routing is completed/closed; future import regressions remain Primitive correctness work rather than Lane C work.
+#495 content-aware Image/File import routing is complete/closed. #149 and #156 are also closed; do not resurrect them from stale umbrella prose.
 
 Manual Database membership include/exclude remains explicitly deferred in #56 until real use demonstrates a need; do not invent it speculatively.
 
 ## Shared hotspot lease
 Lane C currently holds **no shared-hotspot lease**.
 
-Recent Primitive work has touched `GenericDatabasePage` in patch-sized primitive-specific composition. It is merged at this checkpoint, but future C changes must still re-audit open PR files before touching the host.
+At this checkpoint Primitive PR #869 is still open and owns a patch-sized `GenericDatabasePage` canonical List-media composition slice. Future C work must re-audit open PR files before touching that host.
 
 Before future C work, re-audit open PRs for:
 - `lib/views/generic_database_page.dart`
@@ -95,7 +87,7 @@ Before future C work, re-audit open PRs for:
 - `lib/data/app_database.dart`
 
 ## Cross-lane boundaries
-- Lane B owns Relation mutation/index/backlink/audit/reconcile and destructive target/cardinality correctness; C consumes canonical services.
+- Lane B owns Relation mutation/index/backlink/audit/reconcile and fail-closed read correctness; C consumes canonical services.
 - Lane A owns Object/ObjectType/Body/core identity and Object-owned presentation work.
 - Lane D owns Weblink/Image/File/Tag primitive product semantics and import/media behavior.
 - Lane F owns Vault/filesystem lifecycle and managed-byte placement/ownership boundaries.
@@ -107,9 +99,9 @@ GitHub Flutter CI is the validation gate because local Flutter/Dart execution is
 Latest functional Lane C checkpoint #856 passed maintainability guards, Drift generation, Flutter Analyze and the complete Flutter Test suite before merge. #861 was docs-only and also passed full Flutter Analyze/Test before merge.
 
 ## Exact next actions
-1. Read live PR #873 head and Flutter CI after the latest handoff commit.
-2. If red, fix only the concrete documentation/guard failure; if green, re-check main/open PR overlap and squash-merge #873.
-3. Re-audit open Issues/PRs once more after #873 merge.
+1. Read live PR #873 head and CI after the latest docs commits.
+2. If red, fix only the concrete documentation/guard failure; if green, re-check main/open PR overlap and merge #873.
+3. Re-audit open Issues/PRs after #873 merge.
 4. If no new focused Database/View/schema/template obligation exists, stop under the AGENTS idle criterion instead of inventing product work.
 
 ## Stop reason / resume triggers
@@ -118,7 +110,7 @@ After #873 is merged, the expected stop reason remains: **the active lane has no
 Resume Lane C when any of the following occurs:
 1. a new focused Database/View/schema/template Issue is opened or explicitly assigned to C;
 2. #56 gains a concrete Database/View acceptance gap not already routed elsewhere;
-3. another lane lands a capability that creates a specific C-owned View/schema composition obligation;
+3. another lane lands a new capability that creates a specific C-owned View/schema composition obligation;
 4. ownership of #249 or another presentation slice is explicitly reassigned to C.
 
 On resume, start from live GitHub state; do not assume this checkpoint is still current.
