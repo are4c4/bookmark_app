@@ -8,13 +8,7 @@ New Object / ObjectType / Database / View / Relation product work must not intro
 
 In particular, do not add a new production dependency on `BookmarkItem`, `BookmarkRepository`, `bookmarks.*` compatibility columns, or Bookmark-specific presentation when the operation can be expressed through the canonical Object/Database/View/Relation APIs.
 
-An exception is allowed only when the dependency is explicitly one of these:
-
-- a compatibility bridge required by a still-live Bookmark host;
-- migration/import/export code that must understand historical storage;
-- a staged replacement where the PR names the existing consumer being retired and does not create a second permanent path.
-
-When an exception is necessary, keep it narrow and leave enough context in the PR or code comment to explain the retirement condition. Do not create new Relation serialization/index logic outside the canonical Relation subsystem.
+An exception is allowed only for a still-live compatibility bridge, migration/import/export code, or a staged replacement with an explicit retirement condition. Relation behavior remains behind the canonical Relation subsystem.
 
 ## Refactor boundaries
 
@@ -23,11 +17,11 @@ When an exception is necessary, keep it narrow and leave enough context in the P
 - Do not move large folders simply to improve aesthetics.
 - Do not rewrite historical migration semantics for style.
 - Do not split a hotspot while another active PR owns the same large file; sequence the work instead.
-- Treat `generic_database_page.dart`, `app_shell.dart`, and `object_inspector_page.dart` as coordination hotspots. Check open PRs before editing them.
+- Treat `generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, `bookmark_unified_stage1_page.dart`, and other AGENTS-listed hosts as coordination hotspots.
 
 ## Hotspot baseline — 2026-09-05
 
-Issue #225 recorded the following approximate source sizes before this refactor lane started:
+Issue #225 recorded these approximate source sizes before the lane started:
 
 | File | Approx. size | Refactor note |
 | --- | ---: | --- |
@@ -39,65 +33,61 @@ Issue #225 recorded the following approximate source sizes before this refactor 
 | `lib/views/object_inspector_page.dart` | 33 KB | Object presentation hotspot. |
 | `lib/views/photo_management_page.dart` | 29 KB | Legacy/feature-specific presentation hotspot. |
 
-These are a baseline, not hard limits. A refactor should reduce responsibility, duplicate production references, or source size rather than merely relocate the same complexity.
+A refactor should reduce responsibility, duplicate production references, or source size rather than merely relocate the same complexity.
 
 ## Maintainability report
 
-Run from the repository root:
+Run:
 
 ```bash
 bash tool/maintainability_report.sh
 ```
 
-Use `--top N` to change the number of files shown. The report includes:
-- total Dart LOC under `lib/` and `test/`;
-- the largest Dart files by LOC;
-- direct `workspaceStore.database` reach-through occurrences under legacy `lib/views/` / `lib/widgets/` and canonical `lib/features/**/presentation/` trees, grouped by file;
-- direct imports of `data/app_database.dart` from canonical `lib/features/**/presentation/`, grouped by file;
-- imports of the guarded historical Database-presentation shim names under `lib/widgets/`, grouped by caller file;
-- the number and paths of Database-presentation re-export shim files themselves.
+The report measures total Dart LOC, largest Dart files, presentation `workspaceStore.database` reach-through, direct canonical feature-presentation `AppDatabase` imports, guarded historical Database-presentation shim imports, and re-export shim files.
 
-The presentation/database metrics are intentionally regression-oriented. They do not claim every existing occurrence is currently removable; they make composition debt visible so responsibility-moving PRs can show an actual reduction instead of only adding another wrapper. Refactor #522 extended the `workspaceStore.database` ceiling to canonical feature-presentation trees so moving code from a legacy host into `lib/features/**/presentation` cannot hide direct database reach-through.
-
-Canonical feature presentation currently has **8 files** that import `app_database.dart` directly. Those existing dependencies are not being removed by fiat: several widgets still receive `AppDatabase` as part of their current contract. The import metric therefore prevents a ninth direct database import from being added while those dependencies are classified and migrated behind meaningful application-facing boundaries. Do not introduce a wrapper solely to lower this count.
-
-### Temporary Database-presentation shims
-
-The current re-export shim files are:
-- `lib/widgets/database_page_toolbar.dart`;
-- `lib/widgets/database_view_tabs.dart`;
-- `lib/widgets/database_create_tiles.dart`;
-- `lib/widgets/resizable_detail_pane.dart`.
-
-`lib/widgets/detail_property_row.dart` reached caller-zero after production/test consumers moved to the canonical feature import and has been retired. Its historical name intentionally remains in the import scanner so reintroducing the old shim/import path is still detected as legacy dependency growth.
-
-Canonical implementations live under `lib/features/database/presentation/widgets/`. Existing callers of the four remaining shims remain temporarily valid because several are large legacy/shared hosts that should not be reconstructed merely to change one import. The metrics prevent both new shim dependencies and new shim files while allowing current migration debt to ratchet down naturally.
-
-The report remains non-blocking by default so existing debt does not make unrelated local runs fail. For regression-only validation, callers may provide accepted ceilings explicitly:
+The report is non-blocking by default. CI supplies accepted regression ceilings explicitly:
 
 ```bash
 bash tool/maintainability_report.sh \
   --max-boundary-refs 9 \
   --max-feature-presentation-db-imports 8 \
   --max-legacy-shim-imports 5 \
-  --max-legacy-shims 4
+  --max-legacy-shims 3
 ```
 
-`--max-boundary-refs N` exits with status 1 only when measured presentation `workspaceStore.database` references exceed `N`.
+Current accepted ceilings are therefore:
+- presentation direct `workspaceStore.database`: **9**;
+- canonical feature-presentation direct `AppDatabase` imports: **8**;
+- legacy Database-presentation shim imports: **5**;
+- Database-presentation re-export shim files: **3**.
 
-`--max-feature-presentation-db-imports N` exits with status 1 only when direct `app_database.dart` imports from canonical `lib/features/**/presentation` exceed `N`. Application/data/service code outside presentation is intentionally not counted.
+Ratchet a ceiling downward only when real debt is removed. Never relax one merely to land unrelated work.
 
-`--max-legacy-shim-imports N` exits with status 1 only when imports of guarded historical Database-presentation shim names exceed `N`. It counts package imports through `package:bookmark_app/widgets/...`, relative imports through `../widgets/...`, and same-directory imports within `lib/widgets/`; canonical `features/database/presentation/widgets/...` imports are not counted. Retired shim names remain guarded to prevent regression.
+### Temporary Database-presentation shims
 
-`--max-legacy-shims N` exits with status 1 only when the number of `lib/widgets/**/*.dart` files that re-export `../features/database/presentation/widgets/*.dart` exceeds `N`. This closes the loophole where a new compatibility shim could be introduced under a new filename and therefore bypass a known-import-name ceiling.
+Canonical implementations live under `lib/features/database/presentation/widgets/`.
 
-The initial repository baseline was **22** legacy shim imports across **5** shim files. Refactor #474 migrated the three test-only imports in `test/database_interaction_widgets_test.dart` to canonical feature imports, lowering the accepted import ceiling to **19** without touching a production host. Refactor #499 moved `BookmarkAttachmentSection` directly to the canonical `DetailPropertyRow`, lowering the import ceiling to **18**. Refactor #541 moved `BookmarkReorderableProperties` to the same canonical `DetailPropertyRow`, lowering it again to **17**. The final `detail_property_row.dart` re-export then reached true caller-zero and was removed, lowering the shim-file ceiling **5 → 4** without changing the import ceiling. Collection management moved its four shared Database presentation widgets directly to the canonical feature package in #687, lowering the accepted shim-import ceiling **17 → 13** without changing UI behavior. Photo management did the same for its four shared Database presentation imports in #695, lowering the accepted ceiling **13 → 9** while leaving Photo behavior unchanged. The People management host now uses the same canonical imports directly, lowering the accepted ceiling **9 → 5** without changing People behavior.
+The remaining re-export shim files are:
+- `lib/widgets/database_view_tabs.dart`;
+- `lib/widgets/database_create_tiles.dart`;
+- `lib/widgets/resizable_detail_pane.dart`.
 
-The presentation/database reach-through ceiling was initially enforced at **12**. Later cleanup in adjacent responsibility-moving slices reduced the measured production presentation baseline to **9 references across 6 files** without adding a replacement wrapper, so the accepted ceiling is now **9** and must not regress to the older 12-reference state.
+Retired shim names remain guarded by the import scanner so they cannot be silently reintroduced.
 
-Flutter CI enforces the accepted current ceilings of **9** direct presentation/database reach-through references, **8** canonical feature-presentation `AppDatabase` imports, **5** legacy shim imports, and **4** Database-presentation re-export shim files. When Refactor removes one or more of any category, lower the corresponding CI ceiling in the same or an immediately following focused PR so the improvement cannot silently regress.
+Shim retirement history:
+- initial baseline: **22 imports / 5 shim files**;
+- #474 moved three test-only imports to canonical feature imports: **22 → 19** imports;
+- #499 moved `BookmarkAttachmentSection` to canonical `DetailPropertyRow`: **19 → 18**;
+- #541 moved `BookmarkReorderableProperties`: **18 → 17**;
+- #672 deleted caller-zero `detail_property_row.dart`: shim files **5 → 4**;
+- #687 moved Collection management off four shims: imports **17 → 13**;
+- #695 moved Photo management off four shims: **13 → 9**;
+- #707 moved People management off four shims: **9 → 5**;
+- after #707, `database_page_toolbar.dart` had no remaining production caller and was deleted in the following Refactor slice: shim files **4 → 3**.
 
-`tool/maintainability_report_test.sh` exercises passing ceilings and each regression-failure path against an isolated fixture, including canonical feature presentation reach-through, direct `AppDatabase` import detection, relative/package/same-directory shim imports, and detection of newly-added shim files. Canonical feature imports do not count as legacy shim imports. The fixture may use a retired shim name to prove the denylist remains effective; it is not a production caller.
+The five remaining legacy shim imports are concentrated in shared hotspots: `GenericDatabasePage` uses `database_create_tiles`, `database_view_tabs`, and `resizable_detail_pane`; Stage1 uses `database_create_tiles` and `database_view_tabs`. Do not reconstruct those large hosts solely to lower a metric.
+
+`tool/maintainability_report_test.sh` exercises passing ceilings and each regression-failure path, including canonical feature presentation reach-through, direct `AppDatabase` import detection, relative/package/same-directory shim imports, and detection of newly added shim files.
 
 ## Progress measures
 
@@ -108,7 +98,7 @@ For Issue #225, prefer these measures over abstraction count:
 3. `AppDatabase` responsibilities moved behind existing Repository/Store ownership without semantic changes;
 4. large-file LOC and responsibility count reduced;
 5. broad silent catches replaced with explicit best-effort/error policy plus tests where practical;
-6. direct presentation -> database reach-through references reduced where a focused Store/Service/composition boundary already exists;
-7. canonical feature-presentation direct `AppDatabase` imports reduced when meaningful application-facing boundaries replace them;
-8. temporary Database-presentation re-export imports reduced until each shim can be deleted;
-9. temporary Database-presentation re-export shim files reduced from the current four without introducing replacements under new filenames.
+6. direct presentation -> database reach-through reduced where a meaningful boundary already exists;
+7. canonical feature-presentation direct `AppDatabase` imports reduced through real responsibility moves;
+8. temporary re-export imports reduced until their shims reach caller-zero;
+9. caller-zero shim files deleted rather than retained as speculative compatibility layers.
