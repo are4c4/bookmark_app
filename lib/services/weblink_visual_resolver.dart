@@ -1,10 +1,8 @@
-import 'dart:io';
-
 import '../data/object_store.dart';
 import '../data/profile_path_resolver.dart';
 import '../data/relation_read_service.dart';
 import '../data/weblink_image_schema_service.dart';
-import '../domain/object_model.dart';
+import 'image_visual_resolver.dart';
 
 class WeblinkManagedVisual {
   const WeblinkManagedVisual({
@@ -35,20 +33,23 @@ class WeblinkManagedVisual {
 /// [RelationReadService]. It never ensures schema, mutates Relation state, or
 /// tries to repair ambiguous/missing data. Generic Weblink detail/Gallery hosts
 /// and legacy Bookmark presentation can therefore share one fail-closed path.
-/// Persisted Image dimensions are exposed as optional presentation metadata so
-/// masonry hosts can preserve media geometry without decoding image bytes.
-/// Profile-relative Image File values are resolved only at this read boundary,
-/// preserving the stored identity while allowing a profile/Vault root to move.
+/// Managed Image path/existence/geometry reads delegate to [ImageVisualResolver]
+/// so Weblink presentation does not maintain a parallel file-backed capability.
+/// Geometry probing is disabled here to preserve the persisted-metadata-only
+/// behavior of Weblink cards while still resolving profile-relative Image File
+/// values at the read boundary.
 class WeblinkVisualResolver {
   WeblinkVisualResolver(
     ObjectStore objectStore, {
     ProfilePathResolver? pathResolver,
-  })  : _objectStore = objectStore,
-        _pathResolver = pathResolver,
+  })  : _imageVisuals = ImageVisualResolver(
+          objectStore,
+          pathResolver: pathResolver,
+          probeMissingGeometry: false,
+        ),
         _relationReads = RelationReadService(objectStore);
 
-  final ObjectStore _objectStore;
-  final ProfilePathResolver? _pathResolver;
+  final ImageVisualResolver _imageVisuals;
   final RelationReadService _relationReads;
 
   Future<WeblinkManagedVisual?> resolveManagedRepresentative({
@@ -76,63 +77,17 @@ class WeblinkVisualResolver {
     final imageTypeId = representative.property.targetObjectTypeId!;
     if (representative.targetObject.objectTypeId != imageTypeId) return null;
 
-    final imageType = await _objectStore.getObjectType(imageTypeId);
-    if (imageType == null) return null;
-    final fileProperties = imageType.properties
-        .where((property) => property.name == 'File')
-        .toList(growable: false);
-    if (fileProperties.length != 1) return null;
-
-    final storedPath = _nonEmpty(
-      representative.targetObject.values[fileProperties.single.id]?.toString(),
+    final visual = await _imageVisuals.resolveManaged(
+      imageObjectTypeId: imageTypeId,
+      imageObjectId: representative.targetObject.id,
     );
-    if (storedPath == null) return null;
-    final path = _pathResolver?.resolveStoredPath(storedPath) ?? storedPath;
-    if (!await _existingFile(path)) return null;
-
-    final width = _dimensionValue(
-      imageType.properties
-          .where((property) => property.name == 'Pixel width')
-          .toList(growable: false),
-      representative.targetObject.values,
-    );
-    final height = _dimensionValue(
-      imageType.properties
-          .where((property) => property.name == 'Pixel height')
-          .toList(growable: false),
-      representative.targetObject.values,
-    );
+    if (visual == null) return null;
 
     return WeblinkManagedVisual(
-      imageObjectId: representative.targetObject.id,
-      filePath: path,
-      pixelWidth: width,
-      pixelHeight: height,
+      imageObjectId: visual.imageObjectId,
+      filePath: visual.filePath,
+      pixelWidth: visual.pixelWidth,
+      pixelHeight: visual.pixelHeight,
     );
-  }
-
-  int? _dimensionValue(
-    List<ObjectPropertyDefinition> properties,
-    Map<int, dynamic> values,
-  ) {
-    if (properties.length != 1) return null;
-    final value = values[properties.single.id];
-    if (value is! num || !value.isFinite || value <= 0) return null;
-    final integer = value.toInt();
-    if (integer.toDouble() != value.toDouble()) return null;
-    return integer;
-  }
-
-  Future<bool> _existingFile(String path) async {
-    try {
-      return await File(path).exists();
-    } catch (_) {
-      return false;
-    }
-  }
-
-  String? _nonEmpty(String? value) {
-    final trimmed = value?.trim();
-    return trimmed == null || trimmed.isEmpty ? null : trimmed;
   }
 }
