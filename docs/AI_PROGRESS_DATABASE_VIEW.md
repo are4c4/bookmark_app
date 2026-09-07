@@ -6,7 +6,7 @@
 Make ObjectType / Database / View / schema configuration expressive and safe enough that new domains normally require configuration/templates rather than dedicated management pages.
 
 ## Current status
-**Lane C currently has no independent actionable implementation issue.**
+**Lane C has no independent product implementation issue.**
 
 The focused composability/schema Issues owned by this lane are complete:
 - #490 — completed/closed after generic Bookmark template proof.
@@ -15,7 +15,23 @@ The focused composability/schema Issues owned by this lane are complete:
 - #493 — completed/closed after safe migration/delete UX and real-host Property schema management.
 - #484 umbrella — completed/closed after primitive-vs-domain boundary plus Bookmark composability proof.
 
-#56 remains open as the broader product umbrella, but its remaining concrete work is currently routed outside Lane C or requires real-host validation rather than speculative Database/View implementation.
+#56 remains open as the broader product umbrella, but its remaining concrete implementation is currently routed outside Lane C or requires real-host validation rather than speculative Database/View work.
+
+## Current coordination checkpoint — 2026-09-08
+A fresh GitHub audit found one safe Lane C coordination task even though no product slice was available: repository-wide `docs/AI_PROGRESS.md` had become stale and still listed #484/#490/#491/#492/#493 as active while telling Lane C to continue completed work.
+
+PR #873 — `Refresh repository-wide routing after composability completion`
+Branch: `docs/database-view-repo-handoff-refresh-20260908`
+Current meaningful head before this handoff update: `6c5ead6d…`; always read the live PR head/CI after this documentation commit.
+
+The PR is docs-only and refreshes repository-wide routing so future lanes do not re-enter completed work. It records:
+- #484/#490/#491/#492/#493/#494 as completed/closed;
+- #856 as the generic Bookmark template/operation proof;
+- Lane C as intentionally idle until a concrete Database/View/schema/template gap appears;
+- #481/#249 as Object-owned, #155/#245/#495 as Primitive/Object, #225 as Refactor, #242/#218 as real-macOS validation;
+- the remaining product edge as presentation/migration/consolidation rather than generic schema composability.
+
+No runtime behavior changes are included.
 
 ## Latest completed checkpoints
 - #760 — failed Flutter Test runs retain diagnostic logs/artifacts.
@@ -30,6 +46,7 @@ The focused composability/schema Issues owned by this lane are complete:
 - #845 (`a320a5b8…`) — real `GenericDatabasePage` Property schema management; #493 closed.
 - #851 (`0ca36410…`) — template View Group defaults resolve template-local Property names to created canonical Property ids.
 - #856 (`7e103a02…`) — generic user-owned Bookmark template and generic-operation proof; full Flutter Analyze/Test green; #490 and #484 subsequently closed.
+- #861 (`87584453…`) — durable C-lane idle handoff after composability completion; full Flutter Analyze/Test green.
 
 ## What #856 proves
 The built-in `bookmark` starting experience is configuration, not a hard-coded domain engine:
@@ -60,6 +77,8 @@ Manual Database membership include/exclude remains explicitly deferred in #56 un
 ## Shared hotspot lease
 Lane C currently holds **no shared-hotspot lease**.
 
+Current open Primitive work may own patch-sized `GenericDatabasePage` composition (for example canonical File import entry points). Do not edit that host from C without a fresh PR-file overlap audit.
+
 Before future C work, re-audit open PRs for:
 - `lib/views/generic_database_page.dart`
 - `lib/views/app_shell.dart`
@@ -81,10 +100,16 @@ Before future C work, re-audit open PRs for:
 ## Validation
 GitHub Flutter CI is the validation gate because local Flutter/Dart execution is unavailable in this automation environment. Use the #760 diagnostic artifact path for Test failures rather than requesting pasted logs.
 
-Latest functional Lane C checkpoint #856 passed maintainability guards, Drift generation, Flutter Analyze and the complete Flutter Test suite before merge.
+Latest functional Lane C checkpoint #856 passed maintainability guards, Drift generation, Flutter Analyze and the complete Flutter Test suite before merge. #861 was docs-only and also passed full Flutter Analyze/Test before merge.
+
+## Exact next actions
+1. Read live PR #873 head and Flutter CI after this handoff commit.
+2. If red, fix only the concrete documentation/guard failure; if green, re-check main/open PR overlap and squash-merge #873.
+3. Re-audit open Issues/PRs once more after #873 merge.
+4. If no new focused Database/View/schema/template obligation exists, stop under the AGENTS idle criterion instead of inventing product work.
 
 ## Stop reason / resume triggers
-Current stop reason matches the AGENTS stopping criteria: **the active lane has no remaining independent actionable work**. Idle is preferable to inventing speculative abstractions or taking another lane's ownership.
+After #873 is merged, the expected stop reason remains: **the active lane has no remaining independent actionable product work**.
 
 Resume Lane C when any of the following occurs:
 1. a new focused Database/View/schema/template Issue is opened or explicitly assigned to C;
@@ -92,4 +117,4 @@ Resume Lane C when any of the following occurs:
 3. another lane lands a new capability that creates a specific C-owned View/schema composition obligation;
 4. ownership of #249 or another presentation slice is explicitly reassigned to C.
 
-On resume, start from live GitHub state; do not assume this idle checkpoint is still current.
+On resume, start from live GitHub state; do not assume this checkpoint is still current.
