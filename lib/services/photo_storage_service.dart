@@ -47,12 +47,20 @@ class PhotoStorageService {
     'image/heif': 'heif',
   };
 
+  /// Returns picker candidates before legacy extension filtering/copying.
+  ///
+  /// Canonical Image import uses this seam so primitive classification can run
+  /// before any managed-file mutation. Legacy [importImages] keeps its existing
+  /// extension-filtered behavior by delegating the returned paths to
+  /// [importPaths].
+  Future<List<String>> pickImagePaths() => Platform.isMacOS
+      ? _pickImagesOnMacOS()
+      : _pickImagesWithFileSelector();
+
   Future<List<ImportedPhoto>> importImages({
     bool reuseIdentical = false,
   }) async {
-    final sourcePaths = Platform.isMacOS
-        ? await _pickImagesOnMacOS()
-        : await _pickImagesWithFileSelector();
+    final sourcePaths = await pickImagePaths();
     return importPaths(sourcePaths, reuseIdentical: reuseIdentical);
   }
 
@@ -298,7 +306,6 @@ return output
         .split('\n')
         .map((path) => path.trim())
         .where((path) => path.isNotEmpty)
-        .where((path) => _isSupportedImage(path))
         .toList();
   }
 
