@@ -206,7 +206,5 @@ class BookmarkLifecycleStore {
     }
   }
 
-  Future<void> remove(int bookmarkId) async {}
-
   Future<void> dispose() async {}
 }
