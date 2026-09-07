@@ -98,6 +98,9 @@ void main() {
               repository: repository,
               bookmark: bookmark,
               onChanged: () => changeCount += 1,
+              canonicalThumbnailBuilder: (context, image) => SizedBox(
+                key: ValueKey('bookmark-image-test-thumbnail-${image.id}'),
+              ),
             ),
           ),
         ),
@@ -118,6 +121,10 @@ void main() {
     await _pumpUntil(
       tester,
       find.byKey(ValueKey('bookmark-image-relation-card-${image.id}')),
+    );
+    expect(
+      find.byKey(ValueKey('bookmark-image-test-thumbnail-${image.id}')),
+      findsOneWidget,
     );
 
     final state = await BookmarkImageRelationService(database).load(
