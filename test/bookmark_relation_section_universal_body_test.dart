@@ -2,12 +2,10 @@ import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/bookmark_lifecycle_store.dart';
 import 'package:bookmark_app/data/bookmark_object_link_read_store.dart';
 import 'package:bookmark_app/data/bookmark_repository.dart';
-import 'package:bookmark_app/data/core_object_bridge.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
 import 'package:bookmark_app/data/object_body_store.dart';
 import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
-import 'package:bookmark_app/data/tag_object_bridge.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/domain/object_body.dart';
 import 'package:bookmark_app/domain/object_body_block_contracts.dart';
@@ -44,9 +42,11 @@ void _closeDatabaseAfterUnmount(
   });
 }
 
-Future<void> _mirrorLegacyObjectsOnce({
+Future<int> _linkCanonicalBookmarkObject({
   required AppDatabase database,
   required int workspaceId,
+  required int bookmarkId,
+  required String title,
 }) async {
   final genericStore = GenericDatabaseStore(database);
   final objectStore = ObjectStore(genericStore);
@@ -54,17 +54,31 @@ Future<void> _mirrorLegacyObjectsOnce({
     database: database,
     objectStore: objectStore,
   );
-  final tagBridge = TagObjectBridge(
-    database: database,
-    objectStore: objectStore,
-    systemObjectStore: systemObjects,
+  final bookmarkType = await systemObjects.ensureSystemObjectType(
+    workspaceId: workspaceId,
+    systemKey: 'bookmark',
+    name: 'ブックマーク',
+    icon: '🔖',
   );
-  await CoreObjectBridge(
-    database: database,
-    objectStore: objectStore,
-    systemObjectStore: systemObjects,
-    tagBridge: tagBridge,
-  ).syncAll(workspaceId);
+  final objectId = await objectStore.createObject(
+    objectTypeId: bookmarkType.id,
+    title: title,
+  );
+  await database.customStatement('''
+    CREATE TABLE IF NOT EXISTS bookmark_object_links (
+      workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+      bookmark_id INTEGER NOT NULL REFERENCES bookmarks(id) ON DELETE CASCADE,
+      object_id INTEGER NOT NULL REFERENCES generic_records(id) ON DELETE CASCADE,
+      PRIMARY KEY(workspace_id, bookmark_id),
+      UNIQUE(workspace_id, object_id)
+    )
+  ''');
+  await database.customStatement(
+    '''INSERT INTO bookmark_object_links(workspace_id, bookmark_id, object_id)
+       VALUES (?, ?, ?)''',
+    <Object>[workspaceId, bookmarkId, objectId],
+  );
+  return objectId;
 }
 
 void main() {
@@ -90,24 +104,28 @@ void main() {
     final bookmark = (await repository.watchAll().first)
         .singleWhere((item) => item.id == bookmarkId);
 
-    // This regression needs a real Bookmark -> Object mirror, but not the
-    // app-level live watcher. CoreObjectBridge performs the canonical one-shot
-    // mirror without leaving a long-lived Rx subscription in the widget test.
-    await _mirrorLegacyObjectsOnce(
+    // This regression only needs the canonical Bookmark Object identity and
+    // compatibility link consumed by the detail. Avoid the heavyweight full
+    // legacy mirror, whose tag/photo/Relation synchronization is unrelated to
+    // the Body host contract and can leave a widget-test runner busy.
+    final objectId = await _linkCanonicalBookmarkObject(
       database: database,
       workspaceId: workspaceId,
-    );
-    final objectId = await BookmarkObjectLinkReadStore(database)
-        .objectIdForBookmark(
-      workspaceId: workspaceId,
       bookmarkId: bookmarkId,
+      title: bookmark.title,
     );
-    expect(objectId, isNotNull);
+    expect(
+      await BookmarkObjectLinkReadStore(database).objectIdForBookmark(
+        workspaceId: workspaceId,
+        bookmarkId: bookmarkId,
+      ),
+      objectId,
+    );
 
     final genericStore = GenericDatabaseStore(database);
     final bodyStore = ObjectBodyStore(genericStore);
     await bodyStore.write(
-      objectId: objectId!,
+      objectId: objectId,
       document: const ObjectBodyDocument(
         blocks: <ObjectBodyBlock>[
           ObjectBodyBlock(
