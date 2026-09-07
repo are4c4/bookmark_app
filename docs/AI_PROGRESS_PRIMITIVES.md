@@ -24,13 +24,15 @@ Do not infer File byte ownership from path location. Generic File physical delet
 ### Weblink
 `WeblinkObjectService` owns canonical URL normalization/reuse and missing-only metadata enrichment. Merged #634 resolves relative OpenGraph/favicon resources against the final redirected response URL while preserving requested-URL identity. Enrichment remains fail-soft.
 
+Current PR #693: `refactor/primitives-weblink-managed-file-resolver-489`
+Latest production commit rebased onto merged #692: `37033512ad85fbc56acd5b121c8840700c7ce246`
+
+#693 keeps `WeblinkVisualResolver` responsible only for fail-closed, read-only Representative Image Relation selection and delegates the target Image's managed path/existence/persisted geometry read to the existing `ImageVisualResolver`. It explicitly uses `probeMissingGeometry: false`, preserving Weblink cards' previous persisted-metadata-only behavior without introducing image-byte decoding. This removes a parallel Weblink implementation of Image File/dimension capability while preserving the resolved path, missing-file behavior and aspect ratio contract.
+
 ### Image / Photo migration
 Canonical Image import/provenance/geometry/editing/deletion safety is established. Merged #652 canonicalized legacy Photo paths through the active profile/Vault resolver. Merged #675 (`08d46d599c717b57f608159c5b106e836034e911`) aligned native Image creation/reimport with the same portable stored-path identity while preserving historical non-empty absolute values and external absolute references.
 
-Current PR #692: `refactor/primitives-image-canonical-stored-path-489`
-Latest production code commit rebased onto the merged File adoption: `1fda2d17cc8c017e94612635020fb8155d30a20d`
-
-#692 adopts the shared `ProfilePathResolver.canonicalStoredPath(...)` operation inside `ImageObjectService`, removing its remaining duplicate `resolveStoredPath -> toStoredPath` composition while preserving Image-specific empty-path validation, managed absolute/relative convergence, external absolute references, source provenance and concrete Image identity. Existing stored-path and Photo bridge regressions cover the behavior contract. No Image/File type collapse, Relation rewrite, ownership change or byte mutation is introduced.
+Merged #692 (`91824121156fbfebfa260b09d80e604d5923d8ab`) adopted the shared `ProfilePathResolver.canonicalStoredPath(...)` operation inside `ImageObjectService`, removing its remaining duplicate `resolveStoredPath -> toStoredPath` composition while preserving Image-specific empty-path validation, managed absolute/relative convergence, external absolute references, source provenance and concrete Image identity. Flutter CI #2159 passed maintainability guardrails, legacy dependency guard, Drift generation, Analyze and the full test suite before merge.
 
 ### Canonical File / shared managed-file capability
 Canonical File identity/metadata, open/reveal/export and deterministic path-based reimport are established. Merged #671 (`26600dbafb119b35f5e33ceb48217a8535603714`) proves File Object deletion preserves physical bytes without an explicit Storage ownership grant.
@@ -55,18 +57,18 @@ PDF remains canonical File. Available capability services cover content-verified
 `TagObjectBridge` keeps built-in Tag on canonical Object storage; parent hierarchy is a normal self-Relation through canonical Relation APIs. Native Tag name uniqueness/identity remains intentionally undefined until product semantics are explicit.
 
 ## Validation / CI
-Recent Lane D merges #665, #671, #675, #679, #682, #684 and #688 passed normal Flutter CI before integration. #688 CI #2147 passed all guardrails, Drift generation, Analyze and full tests.
+Recent Lane D merges #665, #671, #675, #679, #682, #684, #688 and #692 passed normal Flutter CI before integration. #688 CI #2147 and #692 CI #2159 both passed guardrails, Drift generation, Analyze and full tests.
 
-Local Flutter/Dart execution is unavailable in the connector-only runtime. PR #692 therefore relies on normal GitHub Actions for the same validation after its latest-main rebase; do not merge an obsolete pre-rebase CI result.
+Local Flutter/Dart execution is unavailable in the connector-only runtime. PR #693 has been cleanly rebased onto merged #692 and the durable handoff has been refreshed on that branch; require normal Flutter CI on the resulting current head before merge. CI from the pre-rebase #693 head is obsolete.
 
 ## Hotspot / concurrency state
-No shared hotspot lease is required. Current work stays in primitive data/service/test/docs. Avoid `generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, Relation internals and Vault lifecycle code while other lanes own those boundaries.
+No shared hotspot lease is required. Current work stays in primitive data/service/test/docs. Avoid `generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, `people_management_page.dart`, Relation internals and Vault lifecycle code while other lanes own those boundaries.
 
-Open-pr audit at this checkpoint showed no competing Lane D owner for `ImageObjectService`; #692 is intentionally limited to that service plus this durable handoff.
+Open-PR audit at this checkpoint found no competing Lane D owner for `ImageObjectService` or `WeblinkVisualResolver`. Lane F PR #691 is confined to Vault move/reopen and legacy storage migration and does not overlap the #693 service slice.
 
 ## Exact next actions
-1. Require green Flutter CI on the rebased #692 head and merge only that verified head.
-2. After #692, audit #489 managed-file capability consumers for another concrete duplication or fail-open boundary; prefer service/domain/test slices and do not add speculative abstractions.
+1. Require green Flutter CI on current #693 head and merge only that verified head.
+2. After #693, audit #489 managed-file/native capability consumers for another concrete duplication or fail-open boundary; do not add speculative abstractions.
 3. Continue #495 only for concrete classification ambiguities; do not create another routing service. End-to-end File import waits for the Lane F managed-copy/ownership contract.
 4. Coordinate with Lane F on File managed-copy + explicit ownership before generic File import/delete lifecycle.
 5. Coordinate with Lane C for generic File import/create UX and File/Image presentation hosts rather than editing Database/View hotspots from Lane D.
