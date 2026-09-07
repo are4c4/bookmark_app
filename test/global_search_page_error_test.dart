@@ -2,6 +2,7 @@ import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/bookmark_lifecycle_store.dart';
 import 'package:bookmark_app/data/bookmark_repository.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
+import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/repositories/object_global_search_service.dart';
 import 'package:bookmark_app/repositories/object_search_result_resolver.dart';
@@ -50,6 +51,17 @@ class _FakeSearchService extends ObjectGlobalSearchService {
     int limit = 100,
   }) =>
       onSearch(workspaceId, rawQuery, objectTypeId, limit);
+}
+
+class _RefreshFailingSearchService extends ObjectGlobalSearchService {
+  _RefreshFailingSearchService(GenericDatabaseStore store) : super(store);
+
+  @override
+  Future<void> refreshObjectLabelDependents(int objectId) async {
+    throw StateError(
+      'private refresh detail /Users/example/profile.db object=$objectId',
+    );
+  }
 }
 
 void main() {
@@ -152,5 +164,52 @@ void main() {
     expect(rebuildAttempts, 2);
     expect(find.text('オブジェクトを横断検索'), findsOneWidget);
     expect(find.text('全文検索を準備できませんでした'), findsNothing);
+  });
+
+  testWidgets('detail-return refresh failure keeps private errors out of UI',
+      (tester) async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final typeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Item',
+    );
+    final objectId = await objectStore.createObject(
+      objectTypeId: typeId,
+      title: 'RefreshFailureToken',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ObjectGlobalSearchPage(
+          store: genericStore,
+          workspaceId: workspaceId,
+          searchService: _RefreshFailingSearchService(genericStore),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'refreshfailure');
+    await tester.pump(const Duration(milliseconds: 221));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(ValueKey('object-global-search-result-$objectId')),
+    );
+    await tester.pumpAndSettle();
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    expect(find.text('全文検索を準備できませんでした'), findsOneWidget);
+    expect(
+      find.text('検索インデックスを再構築して、もう一度お試しください。'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('private refresh detail'), findsNothing);
+    expect(find.textContaining('/Users/example/profile.db'), findsNothing);
   });
 }
