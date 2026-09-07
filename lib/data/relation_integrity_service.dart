@@ -1,6 +1,7 @@
 import '../domain/object_model.dart';
 import 'bidirectional_relation_store.dart';
 import 'object_store.dart';
+import 'relation_stored_value_inspection.dart';
 
 enum RelationIntegrityIssueKind {
   missingTargetObjectType,
@@ -8,6 +9,7 @@ enum RelationIntegrityIssueKind {
   missingTargetObject,
   cardinalityViolation,
   duplicateTargetObject,
+  malformedStoredValue,
   missingIndexEdge,
   staleIndexEdge,
   indexOrderMismatch,
@@ -150,13 +152,25 @@ class RelationIntegrityService {
         }
 
         for (final source in sourceObjects) {
-          final rawStoredObjectIds = _rawPersistedRelationObjectIds(
+          final storedInspection = inspectRelationStoredValue(
             source.values[property.id],
           );
-          final storedValue = ObjectRelationValue.fromJson(
-            source.values[property.id],
-          );
-          final storedObjectIds = storedValue.objectIds;
+          if (storedInspection.isMalformed) {
+            issues.add(
+              RelationIntegrityIssue(
+                kind: RelationIntegrityIssueKind.malformedStoredValue,
+                objectTypeId: sourceType.id,
+                propertyId: property.id,
+                sourceObjectId: source.id,
+                message:
+                    'Object ${source.id} has a malformed persisted value for Relation ${property.name}.',
+              ),
+            );
+            continue;
+          }
+
+          final rawStoredObjectIds = storedInspection.rawObjectIds;
+          final storedObjectIds = storedInspection.objectIds;
           final storedIds = storedObjectIds.toSet();
           if (!property.allowsMultipleRelations && storedObjectIds.length > 1) {
             issues.add(
@@ -271,10 +285,11 @@ class RelationIntegrityService {
             };
             for (final targetId in storedIds.intersection(validTargetIds)) {
               final target = targetsById[targetId]!;
-              final inverseIds = ObjectRelationValue.fromJson(
+              final inverseInspection = inspectRelationStoredValue(
                 target.values[pair.inverseProperty.id],
-              ).objectIds;
-              if (!inverseIds.contains(source.id)) {
+              );
+              if (inverseInspection.isMalformed) continue;
+              if (!inverseInspection.objectIds.contains(source.id)) {
                 issues.add(
                   RelationIntegrityIssue(
                     kind: RelationIntegrityIssueKind.inverseValueMismatch,
@@ -328,19 +343,4 @@ bool _hasCanonicalIndexOrder({
     }
   }
   return true;
-}
-
-List<int> _rawPersistedRelationObjectIds(dynamic value) {
-  if (value is int) return <int>[value];
-  if (value is List) {
-    return value
-        .map((item) => item is int ? item : int.tryParse('$item'))
-        .whereType<int>()
-        .toList(growable: false);
-  }
-  if (value is Map) {
-    final raw = value['objectIds'];
-    if (raw is List) return _rawPersistedRelationObjectIds(raw);
-  }
-  return const <int>[];
 }
