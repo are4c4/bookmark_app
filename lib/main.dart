@@ -82,6 +82,7 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
       database,
       enableRemotePreviewImages: true,
       onPreviewImageIngested: search.refreshObjectLabelDependents,
+      onCanonicalObjectsMirrored: search.refreshObjectLabelDependentsFor,
     );
   }
 
