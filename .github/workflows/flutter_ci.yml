@@ -58,8 +58,34 @@ jobs:
         run: flutter analyze
 
       - name: Test
+        id: flutter-test
         timeout-minutes: 18
-        run: flutter test --timeout 2m
+        run: |
+          set -o pipefail
+          mkdir -p ci-artifacts
+          flutter test --timeout 2m --reporter expanded 2>&1 | tee ci-artifacts/flutter-test.log
+
+      - name: Summarize Flutter test failure
+        if: ${{ failure() && steps.flutter-test.outcome == 'failure' }}
+        run: |
+          {
+            echo '## Flutter Test failure'
+            echo
+            echo 'Last 200 log lines:'
+            echo
+            echo '```text'
+            tail -n 200 ci-artifacts/flutter-test.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Flutter test diagnostics
+        if: ${{ failure() && steps.flutter-test.outcome == 'failure' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-test-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ci-artifacts/flutter-test.log
+          if-no-files-found: warn
+          retention-days: 7
 
   build-macos:
     name: build-macos-release
