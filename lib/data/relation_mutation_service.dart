@@ -36,16 +36,6 @@ class RelationMutationService {
     }
 
     final storedProperty = await _canonicalRelationProperty(property);
-    final pair = await _pairIfManaged(storedProperty);
-    if (pair != null) {
-      await bidirectionalStore.setRelation(
-        objectId: objectId,
-        property: pair.sourceProperty,
-        targetObjectIds: targetObjectIds,
-      );
-      return;
-    }
-
     final source = await _objectById(storedProperty.objectTypeId, objectId);
     if (source == null) {
       throw ArgumentError.value(
@@ -54,10 +44,37 @@ class RelationMutationService {
         'Object does not belong to the Relation source ObjectType.',
       );
     }
-    assertRelationStoredValueWellFormed(
+    final sourceInspection = inspectRelationStoredValue(
       source.values[storedProperty.id],
-      context: 'Object $objectId / Relation Property ${storedProperty.id}',
     );
+    if (sourceInspection.isMalformed) {
+      throw StateError(
+        'Malformed persisted Relation value for Object $objectId / Relation Property ${storedProperty.id}.',
+      );
+    }
+
+    final pair = await _pairIfManaged(storedProperty);
+    if (pair != null) {
+      final relevantTargetIds = <int>{
+        ...sourceInspection.value.objectIds,
+        ...targetObjectIds,
+      };
+      final targetTypeId = pair.sourceProperty.targetObjectTypeId!;
+      for (final target in await objectStore.listObjects(targetTypeId)) {
+        if (!relevantTargetIds.contains(target.id)) continue;
+        assertRelationStoredValueWellFormed(
+          target.values[pair.inverseProperty.id],
+          context:
+              'Object ${target.id} / inverse Relation Property ${pair.inverseProperty.id}',
+        );
+      }
+      await bidirectionalStore.setRelation(
+        objectId: objectId,
+        property: pair.sourceProperty,
+        targetObjectIds: targetObjectIds,
+      );
+      return;
+    }
 
     await objectStore.setRelation(
       objectId: objectId,
