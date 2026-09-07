@@ -11,19 +11,28 @@ import 'package:bookmark_app/data/object_type_defaults_store.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
 import 'package:bookmark_app/data/tag_object_bridge.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
+import 'package:bookmark_app/services/photo_storage_service.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  setUp(() {
+    PhotoStorageService.activePhotoDirectoryPath = null;
+  });
+
+  tearDown(() {
+    PhotoStorageService.activePhotoDirectoryPath = null;
+  });
+
   test('legacy-only Photo deletion still removes its managed file', () async {
     final directory =
         await Directory.systemTemp.createTemp('legacy_photo_delete_');
     addTearDown(() => directory.delete(recursive: true));
-    final managedFile = File('${directory.path}/legacy-only.jpg');
-    await managedFile.writeAsBytes(const <int>[1, 2, 3]);
-
     final fixture = await _repositoryFixture(directory.path);
     addTearDown(fixture.database.close);
+    final managedFile = File('${directory.path}/photos/legacy-only.jpg');
+    await managedFile.writeAsBytes(const <int>[1, 2, 3]);
+
     final photoId = await fixture.repository.addPhoto(path: managedFile.path);
     final photo = (await fixture.repository.watchPhotos().first)
         .singleWhere((candidate) => candidate.id == photoId);
@@ -42,11 +51,11 @@ void main() {
     final directory =
         await Directory.systemTemp.createTemp('shared_image_delete_');
     addTearDown(() => directory.delete(recursive: true));
-    final managedFile = File('${directory.path}/shared.jpg');
-    await managedFile.writeAsBytes(const <int>[4, 5, 6]);
-
     final fixture = await _repositoryFixture(directory.path);
     addTearDown(fixture.database.close);
+    final managedFile = File('${directory.path}/photos/shared.jpg');
+    await managedFile.writeAsBytes(const <int>[4, 5, 6]);
+
     final genericStore = GenericDatabaseStore(fixture.database);
     final objectStore = ObjectStore(genericStore);
     final systemObjects = SystemObjectStore(
@@ -59,7 +68,7 @@ void main() {
     );
     final nativeImage = await images.findOrCreateManaged(
       workspaceId: fixture.workspaceId,
-      filePath: 'shared.jpg',
+      filePath: 'photos/shared.jpg',
       title: 'Native owner',
     );
     final photoId = await fixture.repository.addPhoto(path: managedFile.path);
@@ -103,6 +112,9 @@ void main() {
 }
 
 Future<_RepositoryFixture> _repositoryFixture(String profileDirectoryPath) async {
+  final photos = Directory('$profileDirectoryPath/photos');
+  await photos.create(recursive: true);
+  PhotoStorageService.activePhotoDirectoryPath = photos.path;
   final database = AppDatabase.forTesting(
     NativeDatabase.memory(),
     profileDirectoryPath: profileDirectoryPath,
