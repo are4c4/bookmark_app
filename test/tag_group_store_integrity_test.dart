@@ -24,13 +24,17 @@ void main() {
       (database.select(database.tags)..where((row) => row.id.equals(id)))
           .getSingle();
 
+  Future<int> createChildTag(String name, int parentTagId) async {
+    final id = await database.createTag(name);
+    await store.moveTag(tagId: id, parentTagId: parentTagId);
+    return id;
+  }
+
   test('usage counts distinguish direct and deduplicated descendants',
       () async {
     final parentId = await database.createTag('Parent');
-    final childId =
-        await database.createTag('Child', parentTagId: parentId);
-    final grandchildId =
-        await database.createTag('Grandchild', parentTagId: childId);
+    final childId = await createChildTag('Child', parentId);
+    final grandchildId = await createChildTag('Grandchild', childId);
     final first = await database.addBookmark(
       url: 'https://one.example',
       title: 'One',
@@ -74,8 +78,7 @@ void main() {
     final firstGroup = await store.createGroup('First');
     final secondGroup = await store.createGroup('Second');
     final parentId = await database.createTag('Parent');
-    final childId =
-        await database.createTag('Child', parentTagId: parentId);
+    final childId = await createChildTag('Child', parentId);
     await store.setTagGroup(parentId, firstGroup);
 
     final snapshot = await store.moveTag(
@@ -92,10 +95,8 @@ void main() {
 
   test('cycle creation is rejected in the store layer', () async {
     final parentId = await database.createTag('Parent');
-    final childId =
-        await database.createTag('Child', parentTagId: parentId);
-    final grandchildId =
-        await database.createTag('Grandchild', parentTagId: childId);
+    final childId = await createChildTag('Child', parentId);
+    final grandchildId = await createChildTag('Grandchild', childId);
 
     expect(
       () => store.moveTag(
@@ -110,12 +111,8 @@ void main() {
       () async {
     final sourceId = await database.createTag('Source');
     final targetId = await database.createTag('Target');
-    final childId =
-        await database.createTag('Source child', parentTagId: sourceId);
-    final grandchildId = await database.createTag(
-      'Source grandchild',
-      parentTagId: childId,
-    );
+    final childId = await createChildTag('Source child', sourceId);
+    final grandchildId = await createChildTag('Source grandchild', childId);
     final targetGroupId = await store.createGroup('Target group');
     await store.setTagGroup(targetId, targetGroupId);
     final bookmarkId = await database.addBookmark(
@@ -226,8 +223,7 @@ void main() {
 
   test('unused parent with a used descendant is protected', () async {
     final parentId = await database.createTag('Parent');
-    final childId =
-        await database.createTag('Child', parentTagId: parentId);
+    final childId = await createChildTag('Child', parentId);
     final unusedId = await database.createTag('Unused');
     await database.addBookmark(
       url: 'https://used.example',
