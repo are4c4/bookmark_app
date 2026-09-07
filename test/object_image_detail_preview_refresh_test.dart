@@ -37,7 +37,7 @@ void main() {
     Widget host(int refreshToken) => MaterialApp(
           home: Scaffold(
             body: ObjectImageDetailPreview(
-              database: database,
+              pathResolver: database.pathResolver,
               objectStore: objectStore,
               objectTypeId: 3,
               objectId: 7,
