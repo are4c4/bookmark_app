@@ -10,6 +10,8 @@ class ProfileStorageMigrator {
   Future<void> migratePhotos({
     required AppDatabase database,
     required String photoDirectoryPath,
+    String? previousProfileDirectoryPath,
+    bool importExternalFiles = true,
   }) async {
     final targetDir = Directory(photoDirectoryPath);
     await targetDir.create(recursive: true);
@@ -27,6 +29,24 @@ class ProfileStorageMigrator {
         }
         continue;
       }
+
+      final movedPath = _pathInsideMovedVault(
+        resolvedPath,
+        previousProfileDirectoryPath: previousProfileDirectoryPath,
+        targetProfileDirectoryPath: targetDir.parent.path,
+      );
+      if (movedPath != null && await File(movedPath).exists()) {
+        await (database.update(database.photos)
+              ..where((row) => row.id.equals(photo.id)))
+            .write(
+          PhotosCompanion(
+            path: Value(database.pathResolver.toStoredPath(movedPath)),
+          ),
+        );
+        continue;
+      }
+
+      if (!importExternalFiles) continue;
 
       final source = File(resolvedPath);
       if (!await source.exists()) continue;
@@ -55,12 +75,22 @@ class ProfileStorageMigrator {
       final resolvedPath = database.pathResolver.resolveStoredPath(attachment.path);
       var managedPath = resolvedPath;
       if (!_isInside(resolvedPath, profileDirectory.path)) {
-        final source = File(resolvedPath);
-        if (!await source.exists()) continue;
-        managedPath =
-            '${attachmentDirectory.path}/${attachment.id}_${_fileName(resolvedPath)}';
-        if (!await File(managedPath).exists()) {
-          await source.copy(managedPath);
+        final movedPath = _pathInsideMovedVault(
+          resolvedPath,
+          previousProfileDirectoryPath: previousProfileDirectoryPath,
+          targetProfileDirectoryPath: profileDirectory.path,
+        );
+        if (movedPath != null && await File(movedPath).exists()) {
+          managedPath = movedPath;
+        } else {
+          if (!importExternalFiles) continue;
+          final source = File(resolvedPath);
+          if (!await source.exists()) continue;
+          managedPath =
+              '${attachmentDirectory.path}/${attachment.id}_${_fileName(resolvedPath)}';
+          if (!await File(managedPath).exists()) {
+            await source.copy(managedPath);
+          }
         }
       }
       final relativePath = database.pathResolver.toStoredPath(managedPath);
@@ -74,10 +104,29 @@ class ProfileStorageMigrator {
     }
   }
 
+  String? _pathInsideMovedVault(
+    String originalPath, {
+    required String? previousProfileDirectoryPath,
+    required String targetProfileDirectoryPath,
+  }) {
+    if (previousProfileDirectoryPath == null) return null;
+    final normalizedPath = originalPath.replaceAll('\\', '/');
+    final previousRoot = previousProfileDirectoryPath
+        .replaceAll('\\', '/')
+        .replaceAll(RegExp(r'/+$'), '');
+    if (!normalizedPath.startsWith('$previousRoot/')) return null;
+    final targetRoot = targetProfileDirectoryPath
+        .replaceAll('\\', '/')
+        .replaceAll(RegExp(r'/+$'), '');
+    return '$targetRoot/${normalizedPath.substring(previousRoot.length + 1)}';
+  }
+
   bool _isInside(String path, String directory) {
     final normalizedPath = path.replaceAll('\\', '/');
-    final normalizedDirectory = directory.replaceAll('\\', '/').replaceAll(RegExp(r'/+$'), '');
-    return normalizedPath == normalizedDirectory || normalizedPath.startsWith('$normalizedDirectory/');
+    final normalizedDirectory =
+        directory.replaceAll('\\', '/').replaceAll(RegExp(r'/+$'), '');
+    return normalizedPath == normalizedDirectory ||
+        normalizedPath.startsWith('$normalizedDirectory/');
   }
 
   String _fileName(String path) {
