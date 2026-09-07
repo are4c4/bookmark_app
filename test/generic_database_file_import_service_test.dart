@@ -143,6 +143,10 @@ void main() {
       objects.single.values[definition.sizeBytesProperty.id],
       await source.length(),
     );
+    expect(
+      objects.single.values[definition.storageOwnershipProperty.id],
+      VaultManagedFileOwnership.vaultManagedCopy.storageKey,
+    );
     final storedPath = objects.single.values[definition.fileProperty.id] as String;
     expect(storedPath, startsWith('attachments/'));
     expect(await File('${vault.path}/$storedPath').exists(), isTrue);
