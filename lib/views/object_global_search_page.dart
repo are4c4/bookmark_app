@@ -158,7 +158,10 @@ class _ObjectGlobalSearchPageState extends State<ObjectGlobalSearchPage> {
     if (!mounted) return;
 
     try {
-      await _searchService.refreshObjectLabelDependents(result.object.id);
+      await _searchService.refreshDetailReturnAffected(
+        objectTypeId: result.objectType.id,
+        objectId: result.object.id,
+      );
     } catch (_, stackTrace) {
       _recordSearchFailure(
         'Object global search result refresh failed.',
