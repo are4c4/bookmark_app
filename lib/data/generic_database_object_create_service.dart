@@ -23,6 +23,7 @@ enum GenericDatabaseCreateMode {
   dailyNote,
   weblinkUrl,
   managedImage,
+  managedFile,
 }
 
 /// Object creation facade for collection-backed Database pages.
@@ -54,11 +55,11 @@ class GenericDatabaseObjectCreateService {
   final FileObjectService? files;
   final GenericDatabaseWeblinkCreateEnricher? weblinkCreateEnricher;
 
-  /// Returns the existing user-facing creation mode for an ObjectType.
+  /// Returns the user-facing creation mode for an ObjectType.
   ///
-  /// File import is exposed separately through [requiresManagedFileImport] so
-  /// adding the File primitive does not silently broaden the exhaustive enum
-  /// contract already consumed by Database/View presentation hosts.
+  /// Native primitive modes are granted only from the registered system key;
+  /// custom ObjectTypes that merely contain similarly typed Properties remain
+  /// generic.
   Future<GenericDatabaseCreateMode> createModeForObjectType(
     int objectTypeId,
   ) async {
@@ -69,21 +70,17 @@ class GenericDatabaseObjectCreateService {
       DailyNoteService.systemKey => GenericDatabaseCreateMode.dailyNote,
       WeblinkObjectService.systemKey => GenericDatabaseCreateMode.weblinkUrl,
       ImageObjectService.systemKey => GenericDatabaseCreateMode.managedImage,
+      FileObjectService.systemKey => GenericDatabaseCreateMode.managedFile,
       _ => GenericDatabaseCreateMode.generic,
     };
   }
 
-  /// Whether the target ObjectType requires the canonical managed-File import
-  /// affordance rather than generic title-only Object creation.
-  ///
-  /// Presentation hosts can consume this capability without duplicating the
-  /// system File key. A custom ObjectType that merely contains a File Property
-  /// does not gain native File creation behavior.
+  /// Backward-compatible capability query for hosts that have not yet consumed
+  /// [GenericDatabaseCreateMode.managedFile].
   Future<bool> requiresManagedFileImport(int objectTypeId) async {
-    final registry = systemObjects;
-    if (registry == null || objectTypeId <= 0) return false;
-    return await registry.systemKeyForObjectType(objectTypeId) ==
-        FileObjectService.systemKey;
+    if (objectTypeId <= 0) return false;
+    return await createModeForObjectType(objectTypeId) ==
+        GenericDatabaseCreateMode.managedFile;
   }
 
   Future<int> create({
