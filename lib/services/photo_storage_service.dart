@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:file_selector/file_selector.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../data/profile_path_resolver.dart';
+
 class ImportedPhoto {
   const ImportedPhoto({
     required this.path,
@@ -180,13 +182,132 @@ class PhotoStorageService {
     );
   }
 
+  /// Deletes only bytes proven to belong to the configured active `photos/`
+  /// storage boundary.
+  ///
+  /// Legacy Photo rows may contain historical absolute or relative paths. The
+  /// path is therefore resolved through [ProfilePathResolver] first, then
+  /// checked against the configured managed photo root. External paths,
+  /// traversal, symlinks, non-file entities and unavailable roots fail closed.
+  /// Missing managed files are idempotent and deletion never creates storage.
   Future<void> deleteManagedPhoto(String path) async {
-    final file = File(path);
-    if (await file.exists()) await file.delete();
+    final photoRoot = _configuredPhotoDirectoryForDeletion();
+    if (photoRoot == null) return;
 
-    final originalBackup = File('$path.bookmark_original');
-    if (await originalBackup.exists()) await originalBackup.delete();
+    final managedRoot = photoRoot.absolute;
+    final profileRoot = managedRoot.parent.absolute;
+    final profileType = await FileSystemEntity.type(
+      profileRoot.path,
+      followLinks: false,
+    );
+    if (profileType != FileSystemEntityType.directory) return;
+
+    final managedRootType = await FileSystemEntity.type(
+      managedRoot.path,
+      followLinks: false,
+    );
+    if (managedRootType != FileSystemEntityType.directory) return;
+
+    final candidate = path.trim();
+    if (candidate.isEmpty || _containsTraversal(candidate)) return;
+
+    final resolvedPath = ProfilePathResolver(
+      profileRoot.path,
+    ).resolveStoredPath(candidate);
+    if (!_isInsideManagedPhotoRoot(
+      resolvedPath: resolvedPath,
+      photoRootPath: managedRoot.path,
+    )) {
+      return;
+    }
+    if (!await _hasSafeManagedParents(
+      resolvedPath: resolvedPath,
+      photoRootPath: managedRoot.path,
+    )) {
+      return;
+    }
+
+    final originalBackupPath = '$resolvedPath.bookmark_original';
+    final targetType = await FileSystemEntity.type(
+      resolvedPath,
+      followLinks: false,
+    );
+    final backupType = await FileSystemEntity.type(
+      originalBackupPath,
+      followLinks: false,
+    );
+    if (!_isDeletableOrMissing(targetType) ||
+        !_isDeletableOrMissing(backupType)) {
+      return;
+    }
+
+    if (targetType == FileSystemEntityType.file) {
+      await File(resolvedPath).delete();
+    }
+    if (backupType == FileSystemEntityType.file) {
+      await File(originalBackupPath).delete();
+    }
   }
+
+  Directory? _configuredPhotoDirectoryForDeletion() {
+    final explicit = photoDirectoryPath?.trim();
+    if (explicit != null && explicit.isNotEmpty) {
+      return Directory(explicit);
+    }
+    final active = activePhotoDirectoryPath?.trim();
+    if (active != null && active.isNotEmpty) {
+      return Directory(active);
+    }
+    return null;
+  }
+
+  bool _containsTraversal(String path) => path
+      .replaceAll('\\', '/')
+      .split('/')
+      .any((segment) => segment == '.' || segment == '..');
+
+  bool _isInsideManagedPhotoRoot({
+    required String resolvedPath,
+    required String photoRootPath,
+  }) {
+    final target = _normalizedAbsolute(resolvedPath);
+    final root = _normalizedAbsolute(photoRootPath);
+    return target.startsWith('$root/');
+  }
+
+  Future<bool> _hasSafeManagedParents({
+    required String resolvedPath,
+    required String photoRootPath,
+  }) async {
+    final target = _normalizedAbsolute(resolvedPath);
+    final root = _normalizedAbsolute(photoRootPath);
+    if (!target.startsWith('$root/')) return false;
+    final relative = target.substring(root.length + 1);
+    final segments = relative.split('/');
+    if (segments.isEmpty ||
+        segments.any((segment) =>
+            segment.isEmpty || segment == '.' || segment == '..')) {
+      return false;
+    }
+
+    var current = root;
+    for (final segment in segments.take(segments.length - 1)) {
+      current = '$current/$segment';
+      final type = await FileSystemEntity.type(current, followLinks: false);
+      if (type != FileSystemEntityType.directory) return false;
+    }
+    return true;
+  }
+
+  bool _isDeletableOrMissing(FileSystemEntityType type) =>
+      type == FileSystemEntityType.file ||
+      type == FileSystemEntityType.notFound;
+
+  String _normalizedAbsolute(String path) => File(path)
+      .absolute
+      .path
+      .replaceAll('\\', '/')
+      .replaceAll(RegExp(r'/+$'), '');
 
   Future<Directory> _resolvePhotoDirectory() async {
     final explicit = photoDirectoryPath?.trim();
