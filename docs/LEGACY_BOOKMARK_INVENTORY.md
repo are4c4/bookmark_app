@@ -36,7 +36,7 @@ Re-run code search and inspect current files before deletion because parallel Ob
 | `lib/views/tag_management_page.dart` | canonical product behavior | Current management host still uses Bookmark capabilities; reverse-lookup image presentation is canonical. |
 | `lib/views/people_management_page.dart` | canonical product behavior | Large management hotspot combining People/Bookmark behavior. |
 | `lib/views/photo_management_page.dart` | canonical product behavior / legacy host | Photo management remains live; read/path aggregation has moved to `PhotoReadStore`. |
-| `lib/views/collection_management_page.dart` | canonical product behavior | Collection management still consumes Bookmark data. |
+| `lib/views/collection_management_page.dart` | canonical product behavior | Collection management still consumes Bookmark data; PR #687 removes only its temporary Database-presentation shim imports, not Bookmark behavior. |
 | `lib/views/app_shell.dart` | composition hotspot | Passes `BookmarkRepository` through multiple live/compatibility screens. Always check open PR ownership. |
 | `lib/main.dart` | composition root | Root Bookmark repository construction remains expected while live Bookmark features exist. |
 
@@ -138,7 +138,7 @@ Four legacy re-export shim files remain under `lib/widgets/`:
 - `database_create_tiles.dart`;
 - `resizable_detail_pane.dart`.
 
-Canonical implementations live under `lib/features/database/presentation/widgets/`. CI currently permits **17** shim imports and **4** shim files. The remaining callers are concentrated in large/shared hosts such as Photo/People/Collection management, `GenericDatabasePage`, and Stage1. Do not reconstruct those hosts solely to change imports. Retire each shim only when all callers can be moved naturally through patch-sized edits.
+Canonical implementations live under `lib/features/database/presentation/widgets/`. PR #687 moves all four `CollectionManagementPage` imports directly to those canonical implementations and ratchets the CI ceiling **17 → 13**. The remaining shim callers are concentrated in larger/shared hosts such as Photo/People management, `GenericDatabasePage`, and Stage1. Do not reconstruct those hosts solely to change imports. Retire each shim only when all callers can be moved naturally through patch-sized edits.
 
 ### GenericDatabasePage hotspot
 Refactor progress includes:
@@ -167,7 +167,7 @@ A match is not automatically wrong, but the PR must classify it and state the re
 ## Next removal order
 1. Keep the two audited dead Bookmark API seams (`updateBookmarkFields.personNames`, `BookmarkLifecycleStore.remove()`) deferred until the large repository host can be patched safely.
 2. Continue true production caller-zero audits and delete whole modules/shims only when independent canonical coverage exists.
-3. Retire the four remaining Database-presentation shims opportunistically when caller imports can change without whole-file host reconstruction.
+3. After #687, ratchet the remaining Database-presentation shim imports below **13** only through naturally patch-sized caller changes; delete a shim only at true caller-zero.
 4. Re-audit remaining Bookmark URL/detail/backlink presentation only where Object/Database/Relation parity is proven.
 5. Continue GenericDatabasePage P1 decomposition as measurable responsibility/LOC reductions, coordinated with Database/View lane ownership.
 6. Continue Object-first Photo/Image and Bookmark/Image convergence through existing bridges; do not destructively remove legacy Photo storage.

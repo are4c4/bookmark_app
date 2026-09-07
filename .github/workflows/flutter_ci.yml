@@ -32,7 +32,7 @@ jobs:
           bash tool/maintainability_report.sh
           --max-boundary-refs 9
           --max-feature-presentation-db-imports 8
-          --max-legacy-shim-imports 17
+          --max-legacy-shim-imports 13
           --max-legacy-shims 4
 
       - name: Feature legacy dependency guard
