@@ -37,7 +37,6 @@ legacy_allowed_hosts = {
     'lib/views/object_inspector_page.dart',
     'lib/views/photo_management_page.dart',
     'lib/views/tag_management_page.dart',
-    'lib/widgets/bookmark_detail_panel.dart',
 }
 
 
