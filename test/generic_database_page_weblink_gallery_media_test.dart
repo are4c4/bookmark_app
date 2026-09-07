@@ -10,32 +10,32 @@ import 'package:bookmark_app/data/weblink_image_schema_service.dart';
 import 'package:bookmark_app/data/weblink_object_service.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/database/database_definition.dart';
-import 'package:bookmark_app/features/database/presentation/widgets/weblink_gallery_media.dart';
 import 'package:bookmark_app/views/generic_database_page.dart';
+import 'package:bookmark_app/widgets/database_gallery_view_cover_media.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   testWidgets(
-      'real Weblinks masonry Gallery hosts managed media and preserves Object opening',
+      'real Weblinks masonry Gallery hosts View-aware media and preserves Object opening',
       (tester) async {
     await _exerciseWeblinkGalleryMode(
       tester,
       galleryMode: 'masonry',
       galleryKey: const ValueKey('object-gallery-masonry'),
-      firstMediaKeyPrefix: 'weblink-gallery-media-fallback',
+      firstMediaKeyPrefix: 'database-gallery-cover-fallback-masonry',
     );
   });
 
   testWidgets(
-      'real Weblinks fixed Gallery hosts managed media and preserves Object opening',
+      'real Weblinks fixed Gallery hosts View-aware media and preserves Object opening',
       (tester) async {
     await _exerciseWeblinkGalleryMode(
       tester,
       galleryMode: 'fixed',
       galleryKey: const ValueKey('object-gallery-fixed'),
-      firstMediaKeyPrefix: 'weblink-gallery-media-fixed',
+      firstMediaKeyPrefix: 'database-gallery-cover-fallback-fixed',
     );
   });
 }
@@ -138,11 +138,11 @@ Future<void> _exerciseWeblinkGalleryMode(
   expect(find.text('Second Weblink'), findsOneWidget);
   expect(find.text('Third Weblink'), findsOneWidget);
 
-  // This real-host layer intentionally has no managed files. Resolution and
-  // persisted portrait/landscape geometry are covered by a normal async test
-  // so OS file I/O does not run inside WidgetTester FakeAsync. Here we prove
-  // both real Gallery geometries wire the same shared media component.
-  expect(find.byType(WeblinkGalleryMedia), findsNWidgets(3));
+  // The real host now routes every Gallery card through the generic View-aware
+  // cover wrapper. This fixture intentionally has no Representative Image
+  // Relations, so the canonical system-Weblink compatibility source resolves
+  // safely to stable fallback geometry rather than bypassing the View contract.
+  expect(find.byType(DatabaseGalleryViewCoverMedia), findsNWidgets(3));
   final firstFrame = find.byKey(
     ValueKey('$firstMediaKeyPrefix-${first.id}'),
   );
