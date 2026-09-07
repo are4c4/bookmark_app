@@ -24,7 +24,7 @@ Own cross-Object correctness and fail-closed data integrity: canonical Relation 
 - No parallel serialized-id Relation writer or alternate edge/index store.
 
 ## Integrated integrity state — 2026-09-08
-Latest audited main at this handoff: `882166cc77ca649bfb0e6015d1cf306792c86816` (#854).
+Latest audited main at this handoff: `aa94499e73931438aa88992ec448b1578dd65018` (#865).
 
 Foundation already integrated:
 - #506: fail-closed Relation schema evolution foundation. Target changes validate every existing target; ambiguous multi -> single requires explicit choices; single -> multi preserves values; failed migration rolls back atomically; bidirectional target retargeting remains unsupported.
@@ -47,6 +47,7 @@ Recent Lane B checkpoints after the previous handoff:
 - #836: Generic Database Relation label projection now reuses the canonical stored-value/index consistency contract, so malformed, duplicate/cardinality-unsafe, missing-target, or index-drifted Relations do not leak partial labels into Table/List/Gallery/Board presentation. Squash merge `c9d03bb6b666eab62e382530874f7d9d6bf8f6f2`; Flutter CI #2526 green.
 - #850: `TagObjectBridge.syncLegacyTags(...)` now wraps Object create/link/rename, Legacy ID/Group ID refresh, Parent Relation mutation, and orphan cleanup in one outer transaction. A forced Parent Relation failure rolls back earlier mirrored Object changes while leaving legacy `tags` source rows untouched. Squash merge `96a43bcf3e9b815e4d9a62f8f223ea82d5c0fa56`; Flutter CI #2568 green.
 - #854: Relation target quick-create no longer creates a legacy Tag row outside the Tag projection transaction. `TagObjectBridge.createLegacyTagObject(...)` commits or rolls back the legacy Tag row, canonical Tag Object/link/metadata, and Parent Relation together. A forced Parent Relation failure leaves no newly-created legacy Tag/Object/link and Relation index readiness recovers after rollback. Squash merge `882166cc77ca649bfb0e6015d1cf306792c86816`; Flutter CI #2584 green.
+- #865: Relation-backed Rollups no longer evaluate through permissive `ObjectStore.resolveRelation(...)`. `ObjectComputedValueStore` first validates stored value/index agreement with `relationStoredValueMatchesEdges(...)`, then resolves targets through `RelationReadService`; corrupt or unresolved Relation state returns `null`, while a healthy empty Relation still yields `count == 0`. Read-time repair is forbidden and covered by regression. Squash merge `aa94499e73931438aa88992ec448b1578dd65018`; Flutter CI #2620 green.
 
 ## Cross-lane audit in this run
 - #491 real Relation quick-create/attach still reloads canonical selection context before save and routes Relation persistence through canonical mutation. Tag quick-create is additionally atomic after #854.
@@ -56,6 +57,7 @@ Recent Lane B checkpoints after the previous handoff:
 - #832 Property schema management routes Relation rename/delete through canonical lifecycle rather than ordinary schema writers; B audit found no blocker.
 - #849 Search corrupt-schema isolation catches canonical schema-decoding `FormatException` and omits only the optional Relation-label bucket; it continues to use `RelationReadService` and adds no raw-edge/parser fallback or repair path. B audit found no blocker and left a PR comment.
 - #852 deletes a caller-zero bidirectional Relation dialog/test only; canonical pair creation/mutation/read/index services are untouched. B audit found no blocker and left a PR comment.
+- #865 closes the concrete computed-value read bypass: production Rollup evaluation no longer consumes permissive Relation resolution when canonical stored/index state is unhealthy.
 - Production `BidirectionalRelationStore.setRelation(...)` remains called only through `RelationMutationService`; if a new direct production caller appears, add low-level strict stored-value validation before allowing that boundary to become feature-facing.
 - No shared hotspot lease is currently held by Lane B.
 
@@ -66,12 +68,13 @@ Recent Lane B checkpoints after the previous handoff:
 - #836 Flutter CI #2526: green.
 - #850 Flutter CI #2568: green.
 - #854 Flutter CI #2584: green.
+- #865 Flutter CI #2620: green.
 - Earlier integrity checkpoints #681/#678/#683/#694/#713/#730/#741/#758/#765/#773 were green before merge as recorded in their PRs/history.
 - Local Flutter execution is unavailable in this connector environment; GitHub Actions is the executable validation source.
 
 ## Work in progress / exact next actions
-1. Re-audit post-#854 #491 target quick-create paths for any new Relation-producing side effect that can occur before canonical validation or outside an ownership/transaction boundary.
-2. Re-scan production callers of low-level Relation writers/readers (`ObjectStore.setRelation`, Relation branch of `setPropertyValue`, raw `ObjectRelationValue.fromJson`, `BidirectionalRelationStore.setRelation`) and fix only concrete feature-level bypasses.
+1. Re-scan production callers of low-level Relation readers/writers (`ObjectStore.setRelation`, Relation branch of `setPropertyValue`, raw `ObjectRelationValue.fromJson`, `ObjectStore.resolveRelation`, `BidirectionalRelationStore.setRelation`) and fix only concrete feature-level bypasses. #865 is the Rollup example for `resolveRelation`.
+2. Re-audit post-#854 #491 target quick-create paths for any new Relation-producing side effect that can occur before canonical validation or outside an ownership/transaction boundary.
 3. Continue #493 integrity review when target/cardinality schema evolution changes land; bidirectional target retargeting remains unsupported until both sides can be validated before writes.
 4. Audit new #492 Relation-backed media/read resolvers for read-time repair or malformed/index disagreement assumptions.
 5. Audit new primitive/template/domain/Board workflows around their first Relation write for partial side effects and #678 relation-index rollback readiness.
@@ -86,4 +89,4 @@ Recent Lane B checkpoints after the previous handoff:
 - Relation-producing legacy/primitive bridges must define whether surrounding side effects are source-of-truth changes or projections and place transaction/rollback boundaries accordingly (#850/#854 are the Tag examples).
 
 ## Stop / resume rule
-This handoff was refreshed while the run was still active, after merging #850/#854 and auditing #827/#832/#849/#852. Continue with the exact next actions above. When no concrete feature-level Relation/data-integrity defect remains, stop under the `AGENTS.md` idle-is-acceptable rule and record the then-current main/open PR state rather than creating speculative work.
+This handoff was refreshed after merging #850/#854/#865 and auditing #827/#832/#849/#852. Continue with the exact next actions above. When no concrete feature-level Relation/data-integrity defect remains, stop under the `AGENTS.md` idle-is-acceptable rule and record the then-current main/open PR state rather than creating speculative work.
