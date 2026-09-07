@@ -8,6 +8,7 @@ import 'package:bookmark_app/data/system_object_store.dart';
 import 'package:bookmark_app/data/tag_object_bridge.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/services/bookmark_image_relation_service.dart';
+import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -116,9 +117,7 @@ void main() {
 
     final legacyLinkCount = (await database.customSelect(
       'SELECT COUNT(*) AS count FROM bookmark_photos WHERE bookmark_id = ?',
-      variables: [
-        driftVariableInt(bookmarkId),
-      ],
+      variables: [Variable<int>(bookmarkId)],
     ).getSingle())
         .read<int>('count');
     expect(legacyLinkCount, 0);
@@ -150,7 +149,3 @@ void main() {
     expect(state.validCoverImageObjectId, isNull);
   });
 }
-
-/// Keeps this focused regression independent from Drift's generated table APIs.
-/// `Variable<int>` is intentionally wrapped so the query remains easy to read.
-Variable<int> driftVariableInt(int value) => Variable<int>(value);
