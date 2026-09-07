@@ -163,7 +163,7 @@ class RelationReadService {
     final edges = await objectStore.outgoingRelations(sourceObjectId);
     if (edges.isEmpty) return const <ResolvedOutgoingRelation>[];
 
-    final validEdges = <ObjectRelationEdge>[];
+    final validPropertyIds = <int>{};
     final idsByTargetType = <int, Set<int>>{};
     for (final property in relationProperties.values) {
       final targetTypeId = property.targetObjectTypeId;
@@ -183,7 +183,7 @@ class RelationReadService {
       )) {
         continue;
       }
-      validEdges.addAll(propertyEdges);
+      validPropertyIds.add(property.id);
       for (final edge in propertyEdges) {
         idsByTargetType
             .putIfAbsent(targetTypeId, () => <int>{})
@@ -200,7 +200,8 @@ class RelationReadService {
     }
 
     final result = <ResolvedOutgoingRelation>[];
-    for (final edge in validEdges) {
+    for (final edge in edges) {
+      if (!validPropertyIds.contains(edge.propertyId)) continue;
       final property = relationProperties[edge.propertyId];
       final target = targetsById[edge.targetObjectId];
       if (property == null || target == null) continue;
