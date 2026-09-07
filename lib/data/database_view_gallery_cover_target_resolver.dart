@@ -2,6 +2,7 @@ import '../domain/object_model.dart';
 import 'database_view_gallery_adapter.dart';
 import 'image_object_service.dart';
 import 'object_store.dart';
+import 'relation_stored_value_inspector.dart';
 import 'system_object_store.dart';
 import 'weblink_object_service.dart';
 
@@ -100,9 +101,11 @@ class DatabaseViewGalleryCoverTargetResolver {
     );
     if (actualSystemKey != expectedSystemKey) return null;
 
-    final relation = ObjectRelationValue.fromJson(
+    final inspection = inspectRelationStoredValue(
       sourceObject.values[property.id],
     );
+    if (inspection.isMalformed) return null;
+    final relation = inspection.value;
     if (relation.isEmpty) return null;
     if (!property.allowsMultipleRelations && relation.objectIds.length > 1) {
       return null;
