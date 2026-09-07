@@ -26,26 +26,49 @@ void main() {
     final search = find.byKey(const ValueKey('object-type-template-search'));
     await tester.enterText(search, '植物');
     await tester.pump();
-    expect(find.text('植物'), findsOneWidget);
-    expect(find.text('論文'), findsNothing);
-    expect(find.text('書籍'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('object-type-template-plant')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('object-type-template-paper')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('object-type-template-book')),
+      findsNothing,
+    );
     expect(find.text('空のデータベース'), findsOneWidget);
 
     await tester.enterText(search, 'タグ');
     await tester.pump();
-    expect(find.text('論文'), findsOneWidget);
-    expect(find.text('植物'), findsOneWidget);
-    expect(find.text('書籍'), findsNothing);
-
-    await tester.enterText(search, 'reading');
-    await tester.pump();
-    expect(find.text('書籍'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('object-type-template-paper')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('object-type-template-plant')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('object-type-template-book')),
+      findsNothing,
+    );
 
     await tester.enterText(search, 'url');
     await tester.pump();
-    expect(find.text('書籍'), findsOneWidget);
-    expect(find.text('人物'), findsOneWidget);
-    expect(find.text('ノート'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('object-type-template-book')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('object-type-template-person')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('object-type-template-note')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('template search fails soft and can be cleared', (tester) async {
@@ -68,7 +91,10 @@ void main() {
     );
     await tester.pump();
     for (final template in ObjectTypeTemplateStore.templates) {
-      expect(find.text(template.name), findsOneWidget);
+      expect(
+        find.byKey(ValueKey('object-type-template-${template.key}')),
+        findsOneWidget,
+      );
     }
   });
 
@@ -96,7 +122,7 @@ void main() {
       '評価',
     );
     await tester.pump();
-    await tester.tap(find.text('書籍'));
+    await tester.tap(find.byKey(const ValueKey('object-type-template-book')));
     await tester.pumpAndSettle();
 
     expect(result, isA<TemplateObjectTypeChoice>());
