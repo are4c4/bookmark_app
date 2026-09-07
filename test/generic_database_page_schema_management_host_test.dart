@@ -96,8 +96,18 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('プロパティ設定'), findsOneWidget);
-      expect(find.text('Score'), findsOneWidget);
-      expect(find.text('Dashboard only'), findsNothing);
+      final scoreRow = find.byKey(
+        ValueKey('property-schema-management-$scorePropertyId'),
+      );
+      expect(scoreRow, findsOneWidget);
+      expect(
+        find.descendant(of: scoreRow, matching: find.text('Score')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(ValueKey('property-schema-management-$dashboardPropertyId')),
+        findsNothing,
+      );
 
       await tester.tap(
         find.byKey(ValueKey('property-schema-rename-$scorePropertyId')),
@@ -111,7 +121,15 @@ void main() {
         find.byKey(ValueKey('property-schema-rename-submit-$scorePropertyId')),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Priority'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(
+            ValueKey('property-schema-management-$scorePropertyId'),
+          ),
+          matching: find.text('Priority'),
+        ),
+        findsOneWidget,
+      );
 
       await tester.tap(find.text('閉じる'));
       await tester.pumpAndSettle();
