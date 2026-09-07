@@ -70,6 +70,47 @@ void main() {
     expect(find.text('Weblink'), findsNothing);
   });
 
+  testWidgets('search results work inside a scrollable compact dialog',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => showDialog<void>(
+                context: context,
+                builder: (_) => const AlertDialog(
+                  scrollable: true,
+                  content: SizedBox(
+                    width: 460,
+                    child: RelationPropertyAuthoringFields(
+                      targets: targets,
+                      selectedTargetObjectTypeId: 1,
+                      multiple: true,
+                      onTargetChanged: _ignoreTarget,
+                      onMultipleChanged: _ignoreMultiple,
+                      showResultsInitially: true,
+                    ),
+                  ),
+                ),
+              ),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('relation-property-target-results')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('selecting a target reports canonical ObjectType id',
       (tester) async {
     int? selected;
@@ -125,3 +166,6 @@ void main() {
     expect(changedTo, isFalse);
   });
 }
+
+void _ignoreTarget(int? _) {}
+void _ignoreMultiple(bool _) {}
