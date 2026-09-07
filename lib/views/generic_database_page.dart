@@ -25,6 +25,7 @@ import '../features/database/presentation/widgets/object_gallery_view.dart';
 import '../features/database/presentation/widgets/property_add_popover.dart';
 import '../features/database/presentation/widgets/system_object_list_media.dart';
 import '../features/object/presentation/object_open_presentation_host.dart';
+import '../features/object/presentation/widgets/object_body_editor_section.dart';
 import '../features/object/presentation/widgets/object_detail_property_view.dart';
 import '../widgets/database_collection_settings_dialog.dart';
 import '../widgets/database_create_tiles.dart';
@@ -1872,6 +1873,17 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                     buttonKey: ValueKey('detail-add-property-${record.id}'),
                     buttonLabel: 'プロパティを追加',
                   ),
+                ),
+                const SizedBox(height: 20),
+                Divider(height: 1, color: scheme.outlineVariant),
+                const SizedBox(height: 14),
+                ObjectBodyEditorSection(
+                  key: ValueKey('side-peek-object-body-${record.id}'),
+                  store: _store,
+                  objectStore: _objectStore,
+                  objectId: record.id,
+                  workspaceId: widget.repository.workspaceId,
+                  onOpenObject: (objectId) => _openObject(objectId),
                 ),
                 _backlinks(record),
               ],
