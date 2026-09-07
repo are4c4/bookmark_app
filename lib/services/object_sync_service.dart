@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:drift/drift.dart';
 import 'package:rxdart/rxdart.dart';
 
 import '../data/app_database.dart';
@@ -12,6 +13,7 @@ import '../data/generic_database_store.dart';
 import '../data/object_store.dart';
 import '../data/object_type_defaults_store.dart';
 import '../data/photo_read_store.dart';
+import '../data/relation_read_service.dart';
 import '../data/system_object_store.dart';
 import '../data/tag_object_bridge.dart';
 import '../data/weblink_object_service.dart';
@@ -25,8 +27,10 @@ class ObjectSyncService {
     this.enableRemotePreviewImages = false,
     RemoteImageStorageService? remoteImageStorage,
     Future<void> Function(int imageObjectId)? onPreviewImageIngested,
+    Future<void> Function(Iterable<int> objectIds)? onCanonicalObjectsMirrored,
   })  : _remoteImageStorage = remoteImageStorage,
         _onPreviewImageIngested = onPreviewImageIngested,
+        _onCanonicalObjectsMirrored = onCanonicalObjectsMirrored,
         objectStore = ObjectStore(GenericDatabaseStore(database)) {
     systemObjectStore = SystemObjectStore(
       database: database,
@@ -66,6 +70,18 @@ class ObjectSyncService {
   /// it does not know whether a caller uses Search, analytics, or no consumer.
   final Future<void> Function(int imageObjectId)? _onPreviewImageIngested;
 
+  /// Optional composition callback for a completed live legacy -> canonical
+  /// mirror pass. The ids are invalidation metadata only: current mapped
+  /// Tag/Image/Bookmark Objects, canonical Bookmark Weblink targets, plus ids
+  /// remembered from the preceding pass so deleted mirror rows can be cleared.
+  ///
+  /// Initial bootstrap/workspace activation records the baseline without
+  /// notifying. Later watcher-driven or explicit same-workspace syncs notify
+  /// only after canonical mutation has succeeded. Callback failure is isolated
+  /// from the already-committed Object sync.
+  final Future<void> Function(Iterable<int> objectIds)?
+      _onCanonicalObjectsMirrored;
+
   late final SystemObjectStore systemObjectStore;
   late final TagObjectBridge tagBridge;
   late final CoreObjectBridge coreBridge;
@@ -81,6 +97,7 @@ class ObjectSyncService {
   final Map<String, String> _attemptedPreviewUrls = <String, String>{};
   StreamSubscription<Object?>? _subscription;
   Future<void>? _previewSyncFuture;
+  Set<int>? _lastCanonicalMirrorObjectIds;
   int? _queuedPreviewWorkspaceId;
   int? _watchedWorkspaceId;
   bool _syncing = false;
@@ -91,6 +108,19 @@ class ObjectSyncService {
     assert(() {
       stderr.writeln(
         'ObjectSyncService: optional remote preview $stage failed; canonical sync continues.',
+      );
+      stderr.writeln(stackTrace);
+      return true;
+    }());
+  }
+
+  static void _debugCanonicalImpactFailure(
+    String stage,
+    StackTrace stackTrace,
+  ) {
+    assert(() {
+      stderr.writeln(
+        'ObjectSyncService: optional canonical sync impact $stage failed; canonical sync continues.',
       );
       stderr.writeln(stackTrace);
       return true;
@@ -119,7 +149,7 @@ class ObjectSyncService {
     _activeService = this;
 
     if (_watchedWorkspaceId == workspaceId && _subscription != null) {
-      await _syncNow(workspaceId);
+      await _syncNow(workspaceId, notifyCanonicalImpact: true);
       return;
     }
 
@@ -142,7 +172,10 @@ class ObjectSyncService {
     });
   }
 
-  Future<void> _syncNow(int workspaceId) async {
+  Future<void> _syncNow(
+    int workspaceId, {
+    bool notifyCanonicalImpact = false,
+  }) async {
     await coreBridge.syncAll(workspaceId);
     await bookmarkWeblinkBridge.syncWorkspace(workspaceId);
 
@@ -156,11 +189,108 @@ class ObjectSyncService {
       defaultsStore: ObjectTypeDefaultsStore(genericStore),
     ).ensureDefinition(workspaceId);
 
+    await _recordCanonicalSyncImpact(
+      workspaceId,
+      notify: notifyCanonicalImpact,
+    );
+
     if (enableRemotePreviewImages) {
       // Remote enrichment must never hold up the canonical Object mirror or app
       // startup. The queue below coalesces later syncs and contains failures.
       unawaited(syncRemotePreviewImages(workspaceId));
     }
+  }
+
+  Future<void> _recordCanonicalSyncImpact(
+    int workspaceId, {
+    required bool notify,
+  }) async {
+    Set<int> current;
+    try {
+      current = await _collectCanonicalMirrorObjectIds(workspaceId);
+    } catch (_, stackTrace) {
+      // Impact reporting is a derived notification seam. Never make a healthy
+      // canonical mirror fail because optional downstream invalidation metadata
+      // could not be collected. Keep the previous baseline for a later retry.
+      _debugCanonicalImpactFailure('collection', stackTrace);
+      return;
+    }
+
+    final previous = _lastCanonicalMirrorObjectIds;
+    _lastCanonicalMirrorObjectIds = Set<int>.unmodifiable(current);
+    final callback = _onCanonicalObjectsMirrored;
+    if (!notify || callback == null) return;
+
+    final affected = <int>{
+      ...?previous,
+      ...current,
+    };
+    if (affected.isEmpty) return;
+    final ordered = affected.toList()..sort();
+    try {
+      await callback(List<int>.unmodifiable(ordered));
+    } catch (_, stackTrace) {
+      // Canonical mirror mutation has already succeeded. Search/projection
+      // refresh is rebuildable and must not make the watcher retry or roll back
+      // legacy/Object authority. Do not include ids or user content in logs.
+      _debugCanonicalImpactFailure('notification', stackTrace);
+    }
+  }
+
+  Future<Set<int>> _collectCanonicalMirrorObjectIds(int workspaceId) async {
+    final result = <int>{};
+    List<int> bookmarkObjectIds = const <int>[];
+    for (final table in const <String>[
+      'tag_object_links',
+      'photo_object_links',
+      'bookmark_object_links',
+    ]) {
+      final rows = await database.customSelect(
+        'SELECT object_id FROM $table WHERE workspace_id = ? ORDER BY object_id',
+        variables: <Variable<Object>>[Variable<int>(workspaceId)],
+      ).get();
+      final ids = rows
+          .map((row) => row.read<int>('object_id'))
+          .toList(growable: false);
+      result.addAll(ids);
+      if (table == 'bookmark_object_links') bookmarkObjectIds = ids;
+    }
+
+    if (bookmarkObjectIds.isEmpty) return result;
+    final bookmarkType = await systemObjectStore.getSystemObjectType(
+      workspaceId: workspaceId,
+      systemKey: CoreObjectBridge.bookmarkSystemKey,
+    );
+    if (bookmarkType == null) return result;
+    final weblinkRelations = bookmarkType.properties
+        .where(
+          (property) =>
+              property.name == BookmarkWeblinkObjectBridge.relationName &&
+              property.isRelation,
+        )
+        .toList(growable: false);
+    if (weblinkRelations.length != 1) return result;
+
+    final relationId = weblinkRelations.single.id;
+    final relationReads = RelationReadService(objectStore);
+    for (final bookmarkObjectId in bookmarkObjectIds) {
+      try {
+        final outgoing = await relationReads.outgoing(
+          sourceObjectTypeId: bookmarkType.id,
+          sourceObjectId: bookmarkObjectId,
+        );
+        for (final relation in outgoing) {
+          if (relation.property.id == relationId) {
+            result.add(relation.targetObject.id);
+          }
+        }
+      } on FormatException {
+        // Relation owns persisted/index/schema trust. Corrupt optional relation
+        // state contributes no target invalidation instead of becoming a second
+        // raw-edge authority inside Object sync.
+      }
+    }
+    return result;
   }
 
   /// Runs the optional Weblink preview ingestion queue and can be awaited by
@@ -269,7 +399,7 @@ class ObjectSyncService {
     try {
       do {
         _syncQueued = false;
-        await _syncNow(workspaceId);
+        await _syncNow(workspaceId, notifyCanonicalImpact: true);
       } while (_syncQueued && !_disposed && _watchedWorkspaceId == workspaceId);
     } finally {
       _syncing = false;
@@ -280,6 +410,7 @@ class ObjectSyncService {
     _watchedWorkspaceId = null;
     _syncQueued = false;
     _queuedPreviewWorkspaceId = null;
+    _lastCanonicalMirrorObjectIds = null;
     final subscription = _subscription;
     _subscription = null;
     await subscription?.cancel();
