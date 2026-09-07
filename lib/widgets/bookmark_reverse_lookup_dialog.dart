@@ -26,6 +26,11 @@ Future<void> showBookmarkReverseLookupDialog({
         child: StreamBuilder<List<BookmarkItem>>(
           stream: bookmarks,
           builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return const Center(
+                child: Text('関連するブックマークを読み込めませんでした。'),
+              );
+            }
             if (!snapshot.hasData) {
               return const Center(child: CircularProgressIndicator());
             }
