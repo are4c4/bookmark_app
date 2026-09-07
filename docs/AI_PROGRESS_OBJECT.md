@@ -38,10 +38,11 @@ Keep the reusable Object/ObjectType core coherent while making Body and Object d
 - #677 enforces Record/Property ObjectType ownership at the low-level generic value boundary.
 - #685 merged as `6da5f027e4109c496e35f140118c4d6e207c0ca1`: generic value upsert and parent Object freshness touch are one transaction.
 - #699 is integrated: `ObjectStore.setPropertyValue(...)` resolves persisted Property semantics before mutation, rejects caller type drift/computed direct writes, and prevents a Relation Property from being disguised as a Value Property to bypass canonical Relation validation/index synchronization.
+- #712 merged as `cc6e34ca03fa23e12548c3d2c2a4a09f995999a7`: `GenericDatabaseStore.createDatabase/createProperty/createRecord` now return the row id from their exact Drift `customInsert(...)`, removing INSERT -> highest-id requery races; concurrency regression verifies every returned id resolves to the row created by that Future.
 - Alias mutations and Body writes/clears advance Object freshness atomically; malformed top-level Body documents fail closed instead of becoming an empty document.
 - Center peek and full-page generic openings reuse the canonical Object detail route. Generic Database/View side-peek composition remains Lane C ownership.
 
-## Active Lane A PRs at 2026-09-07
+## Active Lane A PR
 
 ### #698 — Bookmark universal Body parity
 `feature/object-bookmark-universal-body-481`
@@ -55,17 +56,6 @@ Current intent:
 - ignore stale asynchronous Body loads after the host switches Objects.
 
 The branch is being refreshed by another Lane A execution while CI runs. Always re-read the current PR head and require full green CI for that exact head before merge.
-
-### #712 — exact generic create id ownership
-`fix/object-create-returned-id-integrity-56`
-
-Current slice:
-- `GenericDatabaseStore.createDatabase/createProperty/createRecord` return the row id from Drift `customInsert(...)` for their exact INSERT;
-- removes INSERT -> `ORDER BY id DESC LIMIT 1` identity lookup, which can return a different concurrent creator's row;
-- focused concurrency regression verifies each returned id resolves to the name/title created by that specific Future;
-- no Relation, Database/View presentation, primitive, Search, Storage, or Refactor behavior change.
-
-Normal Flutter CI is required before merge.
 
 ## #481 close audit
 Already covered on main or active Lane A work:
@@ -88,10 +78,9 @@ Remaining cross-lane blocker:
 
 ## Next actions
 1. Process the latest exact-head CI for #698; merge only when the current head is green and mergeable. Do not close #481 afterward because the Lane C side-peek blocker remains.
-2. Process #712 CI. If green and non-overlapping with newer main, merge; if Analyze/Test exposes a problem, fix only the returned-id slice.
-3. After #698 integration, audit whether the shared Inspector can consume `ObjectBodyEditorSection` in a patch-sized, behavior-preserving Lane A follow-up without colliding with another hotspot owner.
-4. Continue #56/#484 Object core only when a concrete invariant is demonstrated. Avoid speculative abstractions and cross-lane schema/presentation work.
-5. Refresh this handoff after the active PRs settle so the next run does not resume from stale heads.
+2. After #698 integration, audit whether the shared Inspector can consume `ObjectBodyEditorSection` in a patch-sized, behavior-preserving Lane A follow-up without colliding with another hotspot owner.
+3. Continue #56/#484 Object core only when a concrete invariant is demonstrated. Concurrent `sort_order` allocation is a separate ordering-policy question from #712 and should be changed only if a product/integrity contract requires uniqueness.
+4. Refresh this handoff after #698 settles so the next run does not resume from a stale head.
 
 ## Stop condition for this checkpoint
 Do not stop merely because CI is running. Stop only when active Lane A PRs are integrated or have a concrete blocker, and no independent Object-core slice can safely proceed without crossing another lane's ownership.
