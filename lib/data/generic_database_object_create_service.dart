@@ -54,14 +54,11 @@ class GenericDatabaseObjectCreateService {
   final FileObjectService? files;
   final GenericDatabaseWeblinkCreateEnricher? weblinkCreateEnricher;
 
-  /// Returns the user-facing creation contract for an ObjectType.
+  /// Returns the existing user-facing creation mode for an ObjectType.
   ///
-  /// Generic hosts can use this to choose the correct affordance without
-  /// duplicating system-key knowledge. Identity-sensitive system collections
-  /// stay explicit: Weblinks require URL input and Images require managed file
-  /// input, while Daily Notes keep their date-keyed open-or-create behavior.
-  /// File import receives its own create mode when the generic import host is
-  /// wired; until then the File service itself remains the canonical boundary.
+  /// File import is exposed separately through [requiresManagedFileImport] so
+  /// adding the File primitive does not silently broaden the exhaustive enum
+  /// contract already consumed by Database/View presentation hosts.
   Future<GenericDatabaseCreateMode> createModeForObjectType(
     int objectTypeId,
   ) async {
@@ -74,6 +71,19 @@ class GenericDatabaseObjectCreateService {
       ImageObjectService.systemKey => GenericDatabaseCreateMode.managedImage,
       _ => GenericDatabaseCreateMode.generic,
     };
+  }
+
+  /// Whether the target ObjectType requires the canonical managed-File import
+  /// affordance rather than generic title-only Object creation.
+  ///
+  /// Presentation hosts can consume this capability without duplicating the
+  /// system File key. A custom ObjectType that merely contains a File Property
+  /// does not gain native File creation behavior.
+  Future<bool> requiresManagedFileImport(int objectTypeId) async {
+    final registry = systemObjects;
+    if (registry == null || objectTypeId <= 0) return false;
+    return await registry.systemKeyForObjectType(objectTypeId) ==
+        FileObjectService.systemKey;
   }
 
   Future<int> create({

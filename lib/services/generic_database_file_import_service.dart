@@ -2,32 +2,106 @@ import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
+import 'package:file_selector/file_selector.dart';
 
 import '../data/generic_database_object_create_service.dart';
+import 'primitive_file_import_classifier.dart';
 import 'vault_managed_file_copy_service.dart';
 
 typedef ManagedFileSha256Reader = Future<String> Function(String path);
+typedef GenericDatabaseFilePicker = Future<List<String>> Function();
 
-/// Imports one source file that the primitive router has already classified as
-/// canonical File content.
+/// Stable boundary when a File-collection picker receives content that belongs
+/// to the canonical Image primitive instead.
+class GenericDatabaseFileImportRequiresImageException implements Exception {
+  const GenericDatabaseFileImportRequiresImageException();
+
+  @override
+  String toString() =>
+      'Selected content belongs to the Image primitive and was not imported as File.';
+}
+
+/// Stable boundary when a picker/import source cannot be proven to be a regular
+/// file before any managed-copy side effect starts.
+class GenericDatabaseFileImportSourceUnavailableException implements Exception {
+  const GenericDatabaseFileImportSourceUnavailableException();
+
+  @override
+  String toString() => 'Selected file is not available for import.';
+}
+
+/// Imports source files into app-managed storage and then creates canonical File
+/// Objects for a Database collection.
 ///
-/// Filesystem placement and ownership come exclusively from
-/// [VaultManagedFileCopyService]. Canonical File identity and metadata remain
-/// owned by [GenericDatabaseObjectCreateService]. If Object creation fails, only
-/// the exact copy represented by the Storage-owned receipt is rolled back; the
-/// user-selected source file is never deleted or modified.
+/// The direct [importClassifiedPath] entry point is used after the shared
+/// primitive router has already selected File. [pickAndImport] and
+/// [importPickedPaths] perform their own mutation-free preflight first: every
+/// source must be a regular file and classify as File before any Vault copy is
+/// created. A supported Image in a mixed selection therefore fails the whole
+/// File-collection action without partial File imports.
 class GenericDatabaseFileImportService {
   GenericDatabaseFileImportService({
     required this.managedFiles,
     required this.objectCreate,
     required this.vaultDirectoryPath,
+    PrimitiveFileImportClassifier classifier =
+        const PrimitiveFileImportClassifier(),
+    GenericDatabaseFilePicker? filePicker,
     ManagedFileSha256Reader? sha256Reader,
-  }) : sha256Reader = sha256Reader ?? _readSha256;
+  })  : classifier = classifier,
+        filePicker = filePicker ?? _pickFiles,
+        sha256Reader = sha256Reader ?? _readSha256;
 
   final VaultManagedFileCopyService managedFiles;
   final GenericDatabaseObjectCreateService objectCreate;
   final String vaultDirectoryPath;
+  final PrimitiveFileImportClassifier classifier;
+  final GenericDatabaseFilePicker filePicker;
   final ManagedFileSha256Reader sha256Reader;
+
+  Future<List<int>> pickAndImport({required int databaseId}) async {
+    final sourcePaths = await filePicker();
+    return importPickedPaths(
+      databaseId: databaseId,
+      sourcePaths: sourcePaths,
+    );
+  }
+
+  /// Imports a File-collection selection only after every source passes
+  /// content-first primitive classification.
+  Future<List<int>> importPickedPaths({
+    required int databaseId,
+    required Iterable<String> sourcePaths,
+  }) async {
+    final prepared = <({
+      String path,
+      PrimitiveFileImportClassification classification,
+    })>[];
+
+    for (final rawPath in sourcePaths) {
+      final path = rawPath.trim();
+      if (path.isEmpty || !await _isRegularFile(path)) {
+        throw const GenericDatabaseFileImportSourceUnavailableException();
+      }
+      final classification = await classifier.classifyPath(path: path);
+      if (classification.target == PrimitiveFileImportTarget.image) {
+        throw const GenericDatabaseFileImportRequiresImageException();
+      }
+      prepared.add((path: path, classification: classification));
+    }
+
+    final objectIds = <int>[];
+    for (final item in prepared) {
+      objectIds.add(
+        await importClassifiedPath(
+          databaseId: databaseId,
+          sourcePath: item.path,
+          contentType: item.classification.contentType,
+        ),
+      );
+    }
+    return objectIds;
+  }
 
   Future<int> importClassifiedPath({
     required int databaseId,
@@ -53,6 +127,14 @@ class GenericDatabaseFileImportService {
     } catch (_) {
       await _rollbackBestEffort(copy);
       rethrow;
+    }
+  }
+
+  Future<bool> _isRegularFile(String path) async {
+    try {
+      return (await File(path).stat()).type == FileSystemEntityType.file;
+    } on FileSystemException {
+      return false;
     }
   }
 
@@ -92,6 +174,14 @@ class GenericDatabaseFileImportService {
       }());
     }
   }
+}
+
+Future<List<String>> _pickFiles() async {
+  const allFiles = XTypeGroup(label: 'ファイル');
+  final selected = await openFiles(
+    acceptedTypeGroups: const <XTypeGroup>[allFiles],
+  );
+  return selected.map((file) => file.path).toList(growable: false);
 }
 
 Future<String> _readSha256(String path) async {
