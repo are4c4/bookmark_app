@@ -2,6 +2,7 @@ import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
 import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
+import 'package:bookmark_app/domain/object_model.dart';
 import 'package:bookmark_app/repositories/object_search_repository.dart';
 import 'package:bookmark_app/repositories/object_search_result_resolver.dart';
 import 'package:drift/native.dart';
@@ -78,6 +79,62 @@ void main() {
     );
     expect(resolved.map((item) => item.objectType.id), <int>[bookType, personType]);
     expect(resolved.map((item) => item.hit.rank), <double>[-4, -3]);
+  });
+
+  test('corrupt ObjectType hit is dropped without losing healthy results', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final resolver = ObjectSearchResultResolver(objectStore);
+
+    final corruptTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Corruptible',
+    );
+    final corruptPropertyId = await objectStore.createProperty(
+      objectTypeId: corruptTypeId,
+      name: 'Notes',
+      type: ObjectPropertyType.text,
+    );
+    final healthyTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Healthy',
+    );
+    final corruptObjectId = await objectStore.createObject(
+      objectTypeId: corruptTypeId,
+      title: 'Corrupt stale hit',
+    );
+    final healthyObjectId = await objectStore.createObject(
+      objectTypeId: healthyTypeId,
+      title: 'Healthy current hit',
+    );
+
+    await database.customStatement(
+      'UPDATE generic_properties SET type = ? WHERE id = ?',
+      ['futureRichText', corruptPropertyId],
+    );
+
+    final resolved = await resolver.resolve(<ObjectSearchHit>[
+      ObjectSearchHit(
+        objectId: corruptObjectId,
+        objectTypeId: corruptTypeId,
+        workspaceId: workspaceId,
+        rank: -2,
+        snippet: 'corrupt',
+      ),
+      ObjectSearchHit(
+        objectId: healthyObjectId,
+        objectTypeId: healthyTypeId,
+        workspaceId: workspaceId,
+        rank: -1,
+        snippet: 'healthy',
+      ),
+    ]);
+
+    expect(resolved.map((item) => item.object.id), <int>[healthyObjectId]);
+    expect(resolved.single.hit.rank, -1);
   });
 
   test('empty hit list avoids ObjectStore work and resolves empty', () async {
