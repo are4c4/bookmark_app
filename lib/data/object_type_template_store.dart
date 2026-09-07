@@ -312,12 +312,23 @@ class ObjectTypeTemplateStore {
 
     final propertiesByName = <String, ObjectTypeTemplateProperty>{};
     for (final property in template.properties) {
-      if (propertiesByName.containsKey(property.name)) {
+      final canonicalName = property.name.trim();
+      if (canonicalName.isEmpty) {
         throw StateError(
-          'Template ${template.key} contains duplicate Property name "${property.name}".',
+          'Template ${template.key} contains a blank Property name.',
         );
       }
-      propertiesByName[property.name] = property;
+      if (propertiesByName.containsKey(canonicalName)) {
+        throw StateError(
+          'Template ${template.key} contains duplicate Property name "$canonicalName".',
+        );
+      }
+      if (canonicalName != property.name) {
+        throw StateError(
+          'Template ${template.key} Property name "${property.name}" is not canonical; leading or trailing whitespace would be removed on persistence.',
+        );
+      }
+      propertiesByName[canonicalName] = property;
 
       if (property.type == 'relation') {
         final systemKey = property.relationTargetSystemKey?.trim() ?? '';
@@ -360,14 +371,20 @@ class ObjectTypeTemplateStore {
     }) {
       final seen = <String>{};
       for (final propertyName in propertyNames) {
-        if (rejectDuplicates && !seen.add(propertyName)) {
+        final canonicalName = propertyName.trim();
+        if (canonicalName.isEmpty || canonicalName != propertyName) {
           throw StateError(
-            'Template View ${view.name} $fieldName contains duplicate Property "$propertyName".',
+            'Template View ${view.name} $fieldName must reference a canonical Property name, not "$propertyName".',
           );
         }
-        if (!propertiesByName.containsKey(propertyName)) {
+        if (rejectDuplicates && !seen.add(canonicalName)) {
           throw StateError(
-            'Template View ${view.name} $fieldName references unknown Property "$propertyName".',
+            'Template View ${view.name} $fieldName contains duplicate Property "$canonicalName".',
+          );
+        }
+        if (!propertiesByName.containsKey(canonicalName)) {
+          throw StateError(
+            'Template View ${view.name} $fieldName references unknown Property "$canonicalName".',
           );
         }
       }
@@ -382,7 +399,14 @@ class ObjectTypeTemplateStore {
         );
       }
       if (coverPropertyName != null && coverKind != null) {
-        final relationProperty = propertiesByName[coverPropertyName];
+        final canonicalCoverPropertyName = coverPropertyName.trim();
+        if (canonicalCoverPropertyName.isEmpty ||
+            canonicalCoverPropertyName != coverPropertyName) {
+          throw StateError(
+            'Template View ${view.name} Gallery cover must reference a canonical Property name, not "$coverPropertyName".',
+          );
+        }
+        final relationProperty = propertiesByName[canonicalCoverPropertyName];
         if (relationProperty == null || relationProperty.type != 'relation') {
           throw StateError(
             'Template View ${view.name} Gallery cover must reference exactly one Relation Property.',
