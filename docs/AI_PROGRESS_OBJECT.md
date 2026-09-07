@@ -96,6 +96,8 @@ Shared hotspots include `generic_database_page.dart`, `app_shell.dart`, `object_
 - #481 was re-audited after #874 and is completed/closed.
 - PR #885 merged to `main` as `38494512fc2ba119fecb3f94e6973577aa665f67` after Flutter CI #2712 full green.
 - #249 was audited against its live comments/close condition and closed as completed.
-- During #885 integration, main also advanced through Search #884 (`f1651ba1…`, #877 completed) and Primitive #881 (`47d31345…`, canonical Bookmark Image Relation editing); both were audited as non-overlapping with the Stage1 Gallery hunk.
-- Work in progress: docs/handoff only; no Lane A production code remains open.
-- Stop reason after handoff: no remaining actionable independent Lane A-only acceptance item is known. Resume only for a concrete #56/Object-core/detail regression or explicit new Lane A routing.
+- Search #884 (`f1651ba1…`) completed #877, and new Search issue #888 is Lane E-owned rather than a Lane A reopening.
+- Primitive #881 (`47d31345…`) moved Bookmark detail image editing onto canonical Image Relations; #889 (`fcd0eb34…`) subsequently routed legacy Photo Management Bookmark attachment through the same canonical Image Relation authority. Both are Lane D/#245 work and do not create Lane A ownership.
+- Docs handoff #890 merged as `913653ba3b4437bb12e62b4af97de77145ef00d0` after Flutter CI #2718 full green.
+- Work in progress: **none in Lane A production**. No Lane A shared-hotspot lease is held.
+- Stop reason: no remaining actionable independent Lane A-only acceptance item is known. Resume only for a concrete #56/Object-core/detail regression or explicit new Lane A routing.
