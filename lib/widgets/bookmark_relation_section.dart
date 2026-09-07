@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../data/app_database.dart';
-import '../data/bookmark_object_detail_context.dart';
 import '../data/bookmark_repository.dart';
-import '../features/object/presentation/widgets/object_body_editor_section.dart';
 import '../repositories/backlink_repository.dart';
-import '../views/object_inspector_page.dart';
+import 'bookmark_object_body_section.dart';
 
 const _relationLabels = <String, String>{
   'related': '関連',
@@ -15,69 +13,16 @@ const _relationLabels = <String, String>{
   'source': '元記事 / 元動画',
 };
 
-class BookmarkRelationSection extends StatefulWidget {
-  const BookmarkRelationSection({
+class BookmarkRelationSection extends StatelessWidget {
+  BookmarkRelationSection({
     super.key,
     required this.repository,
     required this.bookmark,
-  });
+  }) : backlinks = BacklinkRepository(repository);
 
   final BookmarkRepository repository;
   final BookmarkItem bookmark;
-
-  @override
-  State<BookmarkRelationSection> createState() => _BookmarkRelationSectionState();
-}
-
-class _BookmarkRelationSectionState extends State<BookmarkRelationSection> {
-  late BacklinkRepository backlinks;
-  late BookmarkObjectDetailContext _objectContext;
-  late Future<int?> _bookmarkObjectId;
-
-  BookmarkRepository get repository => widget.repository;
-  BookmarkItem get bookmark => widget.bookmark;
-
-  @override
-  void initState() {
-    super.initState();
-    _bindRepository();
-    _bookmarkObjectId = _resolveBookmarkObjectId();
-  }
-
-  @override
-  void didUpdateWidget(covariant BookmarkRelationSection oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.repository != widget.repository) {
-      _bindRepository();
-    }
-    if (oldWidget.repository != widget.repository ||
-        oldWidget.bookmark.id != widget.bookmark.id) {
-      _bookmarkObjectId = _resolveBookmarkObjectId();
-    }
-  }
-
-  void _bindRepository() {
-    backlinks = BacklinkRepository(repository);
-    _objectContext = BookmarkObjectDetailContext.fromRepository(repository);
-  }
-
-  Future<int?> _resolveBookmarkObjectId() =>
-      _objectContext.objectIdForBookmark(
-        workspaceId: repository.workspaceId,
-        bookmarkId: bookmark.id,
-      );
-
-  Future<void> _openObject(int objectId) {
-    return Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (_) => ObjectInspectorPage(
-          store: _objectContext.store,
-          objectStore: _objectContext.objectStore,
-          objectId: objectId,
-        ),
-      ),
-    );
-  }
+  final BacklinkRepository backlinks;
 
   Future<void> _addRelation(BuildContext context) async {
     final all = (await repository.watchAll().first)
@@ -234,49 +179,6 @@ class _BookmarkRelationSectionState extends State<BookmarkRelationSection> {
     );
   }
 
-  Widget _universalBody(ColorScheme scheme) {
-    return FutureBuilder<int?>(
-      future: _bookmarkObjectId,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const SizedBox(
-            height: 36,
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 1.5),
-              ),
-            ),
-          );
-        }
-        final objectId = snapshot.data;
-        if (objectId == null) {
-          // Older installations may not have completed Bookmark -> Object
-          // mirroring. This read-only detail path must not manufacture identity.
-          return const SizedBox.shrink();
-        }
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SizedBox(height: 22),
-            Divider(height: 1, color: scheme.outlineVariant),
-            const SizedBox(height: 18),
-            ObjectBodyEditorSection(
-              key: ValueKey('bookmark-object-body-${bookmark.id}'),
-              store: _objectContext.store,
-              objectStore: _objectContext.objectStore,
-              objectId: objectId,
-              workspaceId: repository.workspaceId,
-              onOpenObject: (targetId) => _openObject(targetId),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -284,7 +186,10 @@ class _BookmarkRelationSectionState extends State<BookmarkRelationSection> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _legacyRelations(scheme),
-        _universalBody(scheme),
+        BookmarkObjectBodySection(
+          repository: repository,
+          bookmarkId: bookmark.id,
+        ),
       ],
     );
   }
