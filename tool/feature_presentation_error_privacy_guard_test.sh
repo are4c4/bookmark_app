@@ -17,8 +17,9 @@ Future<void> runSafe(void Function(Object error) onError) async {
   } catch (error) {
     onError(error);
     final rawExample = r'$error';
+    final escapedExample = '\$error';
     // '$error' in a comment is not rendered.
-    if (rawExample.isEmpty) return;
+    if (rawExample.isEmpty || escapedExample.isEmpty) return;
   }
 }
 EOF
@@ -86,5 +87,28 @@ if [[ "$braced_status" -ne 1 ]]; then
 fi
 grep -Fq 'unsafe_braced.dart' <<<"$braced_failure"
 grep -Fq "caught variable 'exception' is interpolated into a string" <<<"$braced_failure"
+rm "$fixture/lib/features/object/presentation/widgets/unsafe_braced.dart"
+
+cat > "$fixture/lib/features/object/presentation/widgets/unsafe_even_escape.dart" <<'EOF'
+Future<void> runUnsafeEvenEscape() async {
+  try {
+    throw StateError('secret-path');
+  } catch (error) {
+    final message = 'Backslash then raw error: \\$error';
+    if (message.isEmpty) return;
+  }
+}
+EOF
+
+set +e
+even_escape_failure="$(cd "$fixture" && bash "$script" 2>&1)"
+even_escape_status=$?
+set -e
+
+if [[ "$even_escape_status" -ne 1 ]]; then
+  echo "Expected interpolation after an escaped backslash to exit 1, got $even_escape_status" >&2
+  exit 1
+fi
+grep -Fq 'unsafe_even_escape.dart' <<<"$even_escape_failure"
 
 echo "feature_presentation_error_privacy_guard_test: PASS"
