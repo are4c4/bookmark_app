@@ -93,7 +93,7 @@ Vault/Profile recovery semantics remain Storage-owned. Relation, Search, Primiti
 ## GenericDatabasePage / shared hotspots
 Focused extractions already integrated include `GenericDatabasePageStateLoader` (#310), `GenericDatabasePageServices.fromWorkspaceStore(...)` (#323), the reload performance probe (#786), and Relation-target-only record fanout (#795).
 
-The current Database/View PR #808 explicitly owns the shared `GenericDatabasePage` Relation picker integration. Do not edit `generic_database_page.dart` or its active Relation-host seam from Lane G while that ownership is open.
+The current Database/View PR #819 explicitly owns the shared `GenericDatabasePage` Relation picker integration (superseding #808). Do not edit `generic_database_page.dart` or its active Relation-host seam from Lane G while that ownership is open.
 
 Remaining high-value responsibility includes schema/database actions, Property create/edit workflows, and layout-specific host code. Continue only as small regression-backed slices coordinated with Database/View ownership.
 
@@ -110,7 +110,7 @@ Legacy Bookmark URL/thumbnail/Photo rows remain compatibility/import/export data
 3. Re-audit the remaining five Database-presentation shim imports; lower 5 only through naturally safe host edits, not broad complete-file rewrites.
 4. Delete a remaining shim only after repository-wide production caller-zero is proven.
 5. Keep `BookmarkLifecycleStore.dispose()` live unless a bootstrap/lifecycle refactor naturally removes all production callers.
-6. Do not overlap #808's `GenericDatabasePage` / Relation picker ownership; re-audit after it merges.
+6. Do not overlap #819's `GenericDatabasePage` / Relation picker ownership; re-audit after it merges.
 7. Lower presentation/database or feature-presentation `AppDatabase` ceilings only after a real responsibility/boundary move removes references.
 8. Shrink the #812 legacy raw-error allowlist one host at a time when a host can be edited safely with a focused regression; do not rewrite large hosts solely to satisfy the metric.
 9. Do not redesign Relation semantics, canonical Object search, primitive storage, or Vault lifecycle under Refactor.
