@@ -100,40 +100,74 @@ class TagObjectBridge {
 
   Future<void> syncLegacyTags(int workspaceId) async {
     final schema = await ensureTagObjectType(workspaceId);
-    await database.transaction(() async {
-      final tags = await database.select(database.tags).get();
-      final validTagIds = tags.map((tag) => tag.id).toSet();
+    await database.transaction(
+      () => _syncLegacyTagProjection(
+        workspaceId: workspaceId,
+        schema: schema,
+      ),
+    );
+  }
 
-      for (final tag in tags) {
-        final objectId = await _ensureObjectForTag(workspaceId, schema, tag);
-        await objectStore.renameObject(objectId, tag.name);
-        await objectStore.setPropertyValue(
-          objectId: objectId,
-          property: schema.legacyTagIdProperty,
-          value: tag.id,
-        );
-        await objectStore.setPropertyValue(
-          objectId: objectId,
-          property: schema.groupIdProperty,
-          value: tag.groupId,
-        );
+  /// Creates a legacy Tag and its canonical Tag Object projection atomically.
+  ///
+  /// Schema provisioning happens before the transaction. Once projection starts,
+  /// the legacy Tag row, Tag Object/link, metadata, Parent Relation, and orphan
+  /// cleanup either all commit or all roll back together.
+  Future<int> createLegacyTagObject({
+    required int workspaceId,
+    required String name,
+  }) async {
+    final schema = await ensureTagObjectType(workspaceId);
+    return database.transaction(() async {
+      final tagId = await database.createTag(name);
+      await _syncLegacyTagProjection(
+        workspaceId: workspaceId,
+        schema: schema,
+      );
+      final objectId = await objectIdForLegacyTag(workspaceId, tagId);
+      if (objectId == null) {
+        throw StateError('Canonical Tag Object was not created after Tag sync.');
       }
-
-      for (final tag in tags) {
-        final objectId = await objectIdForLegacyTag(workspaceId, tag.id);
-        if (objectId == null) continue;
-        final parentObjectId = tag.parentTagId == null
-            ? null
-            : await objectIdForLegacyTag(workspaceId, tag.parentTagId!);
-        await _relationMutations.setRelation(
-          objectId: objectId,
-          property: schema.parentProperty,
-          targetObjectIds: parentObjectId == null ? const [] : [parentObjectId],
-        );
-      }
-
-      await _removeOrphanTagObjects(workspaceId, schema, validTagIds);
+      return objectId;
     });
+  }
+
+  Future<void> _syncLegacyTagProjection({
+    required int workspaceId,
+    required TagObjectSchema schema,
+  }) async {
+    final tags = await database.select(database.tags).get();
+    final validTagIds = tags.map((tag) => tag.id).toSet();
+
+    for (final tag in tags) {
+      final objectId = await _ensureObjectForTag(workspaceId, schema, tag);
+      await objectStore.renameObject(objectId, tag.name);
+      await objectStore.setPropertyValue(
+        objectId: objectId,
+        property: schema.legacyTagIdProperty,
+        value: tag.id,
+      );
+      await objectStore.setPropertyValue(
+        objectId: objectId,
+        property: schema.groupIdProperty,
+        value: tag.groupId,
+      );
+    }
+
+    for (final tag in tags) {
+      final objectId = await objectIdForLegacyTag(workspaceId, tag.id);
+      if (objectId == null) continue;
+      final parentObjectId = tag.parentTagId == null
+          ? null
+          : await objectIdForLegacyTag(workspaceId, tag.parentTagId!);
+      await _relationMutations.setRelation(
+        objectId: objectId,
+        property: schema.parentProperty,
+        targetObjectIds: parentObjectId == null ? const [] : [parentObjectId],
+      );
+    }
+
+    await _removeOrphanTagObjects(workspaceId, schema, validTagIds);
   }
 
   Future<int?> objectIdForLegacyTag(int workspaceId, int tagId) async {
