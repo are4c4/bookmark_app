@@ -100,7 +100,9 @@ Flutter CI enforces the accepted current ceilings of **9** direct presentation/d
 
 ## Feature-presentation error privacy
 
-Canonical `lib/features/**/presentation/` code is additionally protected by `tool/feature_presentation_error_privacy_guard.sh` (#745). A catch may forward its typed/raw error object to a higher-level callback such as `onError(error)`, but presentation code must not interpolate the caught variable directly into a string such as `$error` or `${error.runtimeType}`. Use a stable user-safe message and privacy-safe diagnostics or typed mapping instead. Legacy `lib/views/` / `lib/widgets/` remain separately audited debt so existing raw-error surfaces do not block unrelated canonical feature work.
+Presentation code is protected by `tool/feature_presentation_error_privacy_guard.sh`. A catch may forward its typed/raw error object to a higher-level callback such as `onError(error)`, but canonical `lib/features/**/presentation/` and legacy `lib/views/` / `lib/widgets/` code must not interpolate the caught variable directly into a string such as `$error` or `${error.runtimeType}`. Use a stable user-safe message and privacy-safe diagnostics or typed mapping instead.
+
+#812 originally froze eight legacy hosts behind a ratcheting allowlist so existing debt would not block unrelated feature work. Focused cleanup has reduced that allowlist to **zero**; do not reintroduce an entry to land unrelated work. The guard fixture explicitly proves that the former `GenericDatabasePage` host and any new legacy host now fail the same privacy boundary.
 
 ## Progress measures
 

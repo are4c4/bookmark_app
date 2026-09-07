@@ -96,7 +96,7 @@ void main() {
     await tester.tap(find.text('保存'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Relationを更新できませんでした:'), findsOneWidget);
+    expect(find.text('Relationを更新できませんでした。'), findsOneWidget);
     final book = (await objectStore.listObjects(bookTypeId)).single;
     expect(book.values[relationId], isNull);
     expect(await objectStore.outgoingRelations(bookId), isEmpty);
