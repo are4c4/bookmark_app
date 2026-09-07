@@ -122,10 +122,10 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
         tagNames: widget.bookmark.tags.map((tag) => tag.name),
         personNames: null,
       );
-    } catch (error) {
+    } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('保存できませんでした: $error')),
+          const SnackBar(content: Text('保存できませんでした。')),
         );
       }
     } finally {
