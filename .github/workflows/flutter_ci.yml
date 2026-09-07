@@ -26,6 +26,7 @@ jobs:
         run: |
           bash tool/maintainability_report_test.sh
           bash tool/feature_legacy_dependency_guard_test.sh
+          bash tool/feature_presentation_error_privacy_guard_test.sh
 
       - name: Maintainability regression ceilings
         run: >-
@@ -37,6 +38,9 @@ jobs:
 
       - name: Feature legacy dependency guard
         run: bash tool/feature_legacy_dependency_guard.sh
+
+      - name: Feature presentation error privacy guard
+        run: bash tool/feature_presentation_error_privacy_guard.sh
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
