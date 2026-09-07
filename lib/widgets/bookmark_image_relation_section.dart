@@ -7,6 +7,7 @@ import '../data/bookmark_repository.dart';
 import '../data/object_store.dart';
 import '../domain/object_model.dart';
 import '../services/bookmark_image_relation_service.dart';
+import '../services/bookmark_image_relation_service_factory.dart';
 import '../services/image_visual_resolver.dart';
 import 'object_relation_picker_dialog.dart';
 
@@ -54,9 +55,7 @@ class _BookmarkImageRelationSectionState
   }
 
   void _resetService() {
-    _service = BookmarkImageRelationService(
-      widget.repository.workspaceStore.database,
-    );
+    _service = createBookmarkImageRelationService(widget.repository);
     _state = _load();
   }
 
@@ -240,7 +239,10 @@ class _BookmarkImageRelationSectionState
         ],
         const SizedBox(height: 10),
         if (images.isEmpty)
-          Text('関連画像はありません', style: TextStyle(fontSize: 12.5, color: muted))
+          Text(
+            '関連画像はありません',
+            style: TextStyle(fontSize: 12.5, color: muted),
+          )
         else
           SizedBox(
             height: 104,
@@ -282,7 +284,7 @@ class _BookmarkImageRelationSectionState
                 fit: StackFit.expand,
                 children: [
                   _CanonicalImageThumbnail(
-                    database: widget.repository.workspaceStore.database,
+                    database: _service.database,
                     objectStore: _service.objectStore,
                     imageObjectTypeId: state.imageObjectType.id,
                     imageObjectId: image.id,
@@ -364,7 +366,10 @@ class _BookmarkImageRelationSectionState
         ),
         const SizedBox(height: 10),
         if (photos.isEmpty)
-          Text('関連写真はありません', style: TextStyle(fontSize: 12.5, color: muted))
+          Text(
+            '関連写真はありません',
+            style: TextStyle(fontSize: 12.5, color: muted),
+          )
         else
           SizedBox(
             height: 104,
@@ -415,7 +420,8 @@ class _BookmarkImageRelationSectionState
                           SizedBox(
                             height: 30,
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 7),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 7),
                               child: Align(
                                 alignment: Alignment.centerLeft,
                                 child: Text(
