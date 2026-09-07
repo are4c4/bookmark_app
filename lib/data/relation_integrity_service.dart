@@ -7,6 +7,7 @@ enum RelationIntegrityIssueKind {
   crossWorkspaceTarget,
   missingTargetObject,
   cardinalityViolation,
+  duplicateTargetObject,
   missingIndexEdge,
   staleIndexEdge,
   invalidBidirectionalPair,
@@ -142,6 +143,9 @@ class RelationIntegrityService {
         }
 
         for (final source in sourceObjects) {
+          final rawStoredObjectIds = _rawPersistedRelationObjectIds(
+            source.values[property.id],
+          );
           final storedValue = ObjectRelationValue.fromJson(
             source.values[property.id],
           );
@@ -156,6 +160,27 @@ class RelationIntegrityService {
                 sourceObjectId: source.id,
                 message:
                     'Object ${source.id} stores ${storedObjectIds.length} targets for single Relation ${property.name}.',
+              ),
+            );
+          }
+
+          final seenTargetIds = <int>{};
+          final duplicateTargetIds = <int>{};
+          for (final targetId in rawStoredObjectIds) {
+            if (!seenTargetIds.add(targetId)) {
+              duplicateTargetIds.add(targetId);
+            }
+          }
+          for (final targetId in duplicateTargetIds) {
+            issues.add(
+              RelationIntegrityIssue(
+                kind: RelationIntegrityIssueKind.duplicateTargetObject,
+                objectTypeId: sourceType.id,
+                propertyId: property.id,
+                sourceObjectId: source.id,
+                targetObjectId: targetId,
+                message:
+                    'Object ${source.id} stores duplicate Relation target $targetId for ${property.name}.',
               ),
             );
           }
@@ -238,4 +263,19 @@ class RelationIntegrityService {
 
     return RelationIntegrityReport(issues: List.unmodifiable(issues));
   }
+}
+
+List<int> _rawPersistedRelationObjectIds(dynamic value) {
+  if (value is int) return <int>[value];
+  if (value is List) {
+    return value
+        .map((item) => item is int ? item : int.tryParse('$item'))
+        .whereType<int>()
+        .toList(growable: false);
+  }
+  if (value is Map) {
+    final raw = value['objectIds'];
+    if (raw is List) return _rawPersistedRelationObjectIds(raw);
+  }
+  return const <int>[];
 }
