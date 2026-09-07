@@ -1,11 +1,14 @@
 import 'dart:developer' as developer;
 import 'dart:io';
 
+import 'package:file_selector/file_selector.dart';
 import 'package:image/image.dart' as image;
 
 import '../data/generic_database_object_create_service.dart';
 import 'photo_storage_service.dart';
 import 'primitive_file_import_classifier.dart';
+
+typedef GenericDatabaseImagePicker = Future<List<String>> Function();
 
 /// Stable user-facing boundary when an Image-collection selection resolves to
 /// the File primitive instead. The message deliberately contains no source path.
@@ -29,25 +32,29 @@ class GenericDatabaseImageImportSourceUnavailableException implements Exception 
 /// Imports user-selected image files into app-managed storage and then creates
 /// canonical system Image Objects for a Database collection.
 ///
-/// Picker candidates are classified before any managed-file mutation. Every
-/// source must be a regular file and resolve to the supported Image primitive;
-/// mixed/non-Image selections therefore fail the whole preflight without
-/// creating managed copies or Objects. Classified Image sources use the same
-/// content-first managed import path as [PrimitiveObjectImportService].
+/// Picker candidates are intentionally not extension-filtered. Every selected
+/// source is classified before any managed-file mutation, so supported Image
+/// content with a misleading filename can still reach canonical Image import.
+/// Mixed/non-Image selections fail the whole preflight without creating managed
+/// copies or Objects. Legacy Photo picking remains owned by [PhotoStorageService]
+/// and keeps its historical extension-filtered behavior.
 class GenericDatabaseImageImportService {
   GenericDatabaseImageImportService({
     required this.photoStorage,
     required this.objectCreate,
     PrimitiveFileImportClassifier classifier =
         const PrimitiveFileImportClassifier(),
-  }) : classifier = classifier;
+    GenericDatabaseImagePicker? filePicker,
+  })  : classifier = classifier,
+        filePicker = filePicker ?? _pickPrimitiveImageCandidates;
 
   final PhotoStorageService photoStorage;
   final GenericDatabaseObjectCreateService objectCreate;
   final PrimitiveFileImportClassifier classifier;
+  final GenericDatabaseImagePicker filePicker;
 
   Future<List<int>> pickAndImport({required int databaseId}) async {
-    final sourcePaths = await photoStorage.pickImagePaths();
+    final sourcePaths = await filePicker();
     return importPaths(databaseId: databaseId, sourcePaths: sourcePaths);
   }
 
@@ -196,4 +203,12 @@ class GenericDatabaseImageImportService {
     if (lower.endsWith('.heif')) return 'image/heif';
     return null;
   }
+}
+
+Future<List<String>> _pickPrimitiveImageCandidates() async {
+  const allFiles = XTypeGroup(label: '画像としてインポート');
+  final selected = await openFiles(
+    acceptedTypeGroups: const <XTypeGroup>[allFiles],
+  );
+  return selected.map((file) => file.path).toList(growable: false);
 }
