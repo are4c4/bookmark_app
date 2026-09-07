@@ -129,13 +129,27 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
         statusFilter: _statusFilter,
         minRating: _minRating,
         personFilterId: _personFilterId,
-        photoFilterId: _photoFilterId,
         selectedTagIds: _selectedTagIds,
         includeDescendants: _includeDescendants,
         tagMatchMode: _tagMatchMode,
         sortField: _sortField,
         sortAscending: _sortAscending,
       ).apply(source, allTags);
+
+  Stream<List<BookmarkItem>> _watchBookmarksForActiveFilters() {
+    final photoId = _photoFilterId;
+    if (photoId == null) return widget.repository.watchAll();
+    return Stream.fromFuture(
+      widget.repository.watchPhotos().first.then(
+        (photos) => photos.where((photo) => photo.id == photoId).firstOrNull,
+      ),
+    ).asyncExpand((photo) {
+      if (photo == null) {
+        return Stream<List<BookmarkItem>>.value(const <BookmarkItem>[]);
+      }
+      return widget.repository.watchBookmarksForPhoto(photo);
+    });
+  }
 
   void _applyDatabaseView(DatabaseViewConfig view) {
     final filters = view.filters;
@@ -1469,7 +1483,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
             onDragExited: (_) => setState(() => _externalDragging = false),
             onDragDone: _handleExternalDrop,
             child: StreamBuilder<List<BookmarkItem>>(
-              stream: widget.repository.watchAll(),
+              stream: _watchBookmarksForActiveFilters(),
               builder: (context, bookmarkSnapshot) {
                 if (!bookmarkSnapshot.hasData) {
                   return const Center(child: CircularProgressIndicator());
