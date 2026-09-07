@@ -22,11 +22,13 @@ class BookmarkImageRelationSection extends StatefulWidget {
     required this.repository,
     required this.bookmark,
     this.onFilterByLegacyPhoto,
+    this.onChanged,
   });
 
   final BookmarkRepository repository;
   final BookmarkItem bookmark;
   final ValueChanged<PhotoRecord>? onFilterByLegacyPhoto;
+  final VoidCallback? onChanged;
 
   @override
   State<BookmarkImageRelationSection> createState() =>
@@ -115,6 +117,7 @@ class _BookmarkImageRelationSectionState
     setState(() => _mutating = true);
     try {
       await action();
+      widget.onChanged?.call();
       _reload();
     } catch (_) {
       if (!mounted) return;
