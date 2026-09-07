@@ -45,6 +45,11 @@ void main() {
       objectTypeId: definition.objectType.id,
       title: 'Concurrent winner',
     );
+    await objectStore.setPropertyValue(
+      objectId: winnerId,
+      property: definition.dateProperty,
+      value: '2026-09-08',
+    );
 
     await database.customStatement('''
       CREATE TRIGGER claim_daily_note_before_legacy_adoption
@@ -98,6 +103,11 @@ void main() {
     final winnerId = await objectStore.createObject(
       objectTypeId: definition.objectType.id,
       title: 'Concurrent winner',
+    );
+    await objectStore.setPropertyValue(
+      objectId: winnerId,
+      property: definition.dateProperty,
+      value: '2026-09-09',
     );
     await defaultsStore.writeBodyTemplate(
       objectTypeId: definition.objectType.id,
