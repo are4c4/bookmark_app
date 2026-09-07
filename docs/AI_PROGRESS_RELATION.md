@@ -3,82 +3,89 @@
 > Lane B durable handoff. Read `AGENTS.md`, the active Issue, and `docs/AI_PROGRESS.md` before implementation. Preserve the canonical Relation subsystem; do not invent parallel Relation writers/indexes merely to keep this lane busy.
 
 ## Lane goal
-Own cross-Object correctness and fail-closed data integrity: canonical Relation lifecycle, integrity-sensitive schema evolution, Relation-backed read consistency, and deletion/reference invariants.
+Own cross-Object correctness and fail-closed data integrity: canonical Relation lifecycle, integrity-sensitive schema evolution, Relation-backed read consistency, deletion/reference invariants, and Relation-producing workflow atomicity.
 
-## Primary active issues
-- #493 — integrity side of safe/reversible schema evolution, especially Relation target/cardinality changes.
-- #491 — lifecycle/integrity regressions for generic Relation Property authoring/editing and inline target creation.
-- #492 — integrity/read regressions for generic Gallery cover sources backed by Relations.
-- #245/#484 — new primitive/domain Relation-producing workflows when real production writes appear.
-- #56 — umbrella canonical Relation contract.
+## Current issue state
+- #56 — open umbrella for the generic Object/Database/Relation architecture and the continuing canonical Relation contract.
+- #491 — completed/closed. Generic Relation Property authoring and inline target creation are integrated; future changes are regression triggers, not unfinished acceptance work.
+- #492 — completed/closed. Generic Gallery Relation cover-source architecture is integrated; future Relation-backed media readers are regression triggers.
+- #493 — completed/closed. Safe Relation schema-evolution acceptance criteria are integrated; future target/cardinality changes remain integrity triggers.
+- #245/#484 and new primitive/domain work may create new Relation-producing workflow obligations when real production writes/readers land.
 
 ## Canonical Relation contract
 - Feature Relation writes go through `RelationMutationService`.
-- Reads/backlinks use `RelationReadService` / canonical ObjectStore projections.
+- Canonical UI/read consumers use `RelationReadService` or another reader that explicitly enforces the same stored-value/index/target-integrity contract.
 - Relation Property creation uses `ObjectStore.createRelationProperty(...)` or a canonical facade delegating to it.
-- `RelationIntegrityService` is read-only; `RelationIndexReconcileService` repairs deterministic index drift only.
+- `RelationIntegrityService` is read-only; `RelationIndexReconcileService` repairs deterministic index-only drift only.
 - Relation-safe Object deletion detaches surviving sources through canonical APIs.
-- Missing targets, duplicate targets, cardinality conflicts, stale index/pair metadata, target-type mismatches, malformed stored values, and ambiguous corruption fail closed.
-- Relation-backed presentation is read-only and must not repair serialized values or normalized edges opportunistically.
+- Missing/wrong-type targets, duplicate targets, cardinality conflicts, stale index/pair metadata, malformed stored values, and ambiguous corruption fail closed.
+- Relation-backed presentation/readers never repair serialized values or normalized edges opportunistically.
+- Relation-producing workflows that create Objects/files/legacy projections around a Relation write must use one outer transaction or an explicit rollback-safe ownership boundary.
 - No parallel serialized-id Relation writer or alternate edge/index store.
 
-## Integrated integrity state — 2026-09-07
-Latest audited main at this handoff: `3cf960082814c54f4f262b8061ba9320c4952e31`.
+## Integrated integrity state — 2026-09-08
+Latest audited main at this handoff: `36588e0d89e4f95e204d72d7a00194d7c7a2f0ba` (includes #871 and subsequent #869).
 
-- #506: fail-closed Relation schema evolution foundation. Target changes validate every existing target; ambiguous multi -> single requires explicit choices; single -> multi preserves values; failed migration rolls back atomically; bidirectional target retargeting remains unsupported.
-- #568: generic Property deletion cannot silently remove one side of a managed bidirectional Relation pair.
-- #577/#590: system Relation schema creation is canonical and rejects target/cardinality/pair-structure drift or reserved structural metadata injection.
-- #601: Gallery template cover Relations fail closed unless their configured source kind matches the canonical Image/Weblink target primitive; no partial ObjectType/View is created on mismatch.
-- #628/#662: malformed managed bidirectional pair metadata fails closed consistently across mutation, audit, delete inspection, and schema evolution.
-- #681: canonical `RelationMutationService.setRelation(...)` rejects repeated target Object ids before any Relation value/index write. Prior stored Relation value and normalized edges remain unchanged on rejection. Squash merge `81d28752d90aed6ba4bceb84b9822e30166aff35`; Flutter CI #2129 green.
-- #678: Value -> Object promotion is atomic across target Object creation, optional Relation Property creation, canonical attach, and optional source Value clear. `ObjectStore.ensureRelationIndexSchema()` verifies the actual edge table before trusting cached schema readiness so an outer transaction rollback can recreate the index correctly. Squash merge `94a9189c53781ba34837eb703c3ff93c34794d22`; Flutter CI #2140 green.
-- #683: Relation-group Board Object creation treats Object creation plus initial grouped preset as one transaction. Relation presets still use `RelationMutationService`; invalid targets roll back the newly-created Object. Squash merge `daab810680264dfe1ca54b4a0957e4b070034b42`; Flutter CI #2133 green.
-- #694: persisted duplicate Relation targets are visible to read-only integrity audit even though ordinary semantic reads intentionally de-duplicate. Index-only reconcile refuses this non-index corruption and leaves raw value/index untouched. Squash merge `ebdc703baa963338688dd1287ed4105cbe99c19d`.
-- #713: `ObjectRelationEditorService.save(...)` no longer de-duplicates caller selections before canonical validation. Repeated ids therefore reach the #681 duplicate-target guard and fail closed instead of silently becoming a valid-looking set. Squash merge `5f3c6496f87f86888fa4b8915735b5cfb4a731cb`.
-- #730: integrity audit now detects normalized edge order/`position` drift even when the target set is unchanged. Reconcile treats persisted Relation order as truth and repairs index order only; Relation values are not rewritten. Squash merge `becaf872b5513cd3fe6ee0f26f821eed7d62c1f7`; relevant CI green before merge.
-- #741: integrity audit detects stray `object_relation_edges` that point at a non-Relation Property or a Relation Property owned by another ObjectType. Reconcile deletes only deterministic stale edge rows after transaction-local re-audit; persisted values/schema are untouched. Squash merge `243fb0496fdaf7b03830a36bbaa5a3b28fae4baa`; relevant CI green before merge.
-- #758: added strict persisted Relation-value inspection for integrity-sensitive paths while preserving permissive compatibility semantics in ordinary `ObjectRelationValue.fromJson(...)`. Malformed top-level shapes/list members are reported as `malformedStoredValue`; index reconcile refuses the corruption; feature-level canonical writes and Relation-safe delete fail closed before overwrite. Managed bidirectional facade writes validate source/inverse stored values before delegation. Squash merge `550c7d16d480cf371eaca40178aacf4cadc066ba`; Flutter CI #2356 green.
-- #765: Relation-backed Gallery covers use the strict stored-value inspection before interpreting ids. A malformed serialized Relation cannot render a cover from only its parseable subset, and Gallery remains read-only with no repair. Squash merge `77336561581dbb2af4589b1660244ebad1bfcc57`; Flutter CI #2370 green.
-- #773: canonical `RelationReadService` outgoing/backlink projections now fail closed unless the stored Relation value is well formed, duplicate/cardinality-safe, and exactly matches normalized edge targets/order/positions for the Property. Target ObjectType must still belong to the source workspace. Valid reads preserve normalized edge ordering; no read-time repair occurs. Squash merge `66d3da4d80f2a8b071410dff0d86cbf62e92ddbb`; Flutter CI #2385 green.
+Foundation already integrated:
+- #506/#568/#577/#590/#601/#628/#662: fail-closed Relation schema evolution, managed bidirectional pair lifecycle, canonical system Relation schema creation, and Gallery/template structural validation.
+- #678: Value -> Object promotion is atomic; Relation index schema readiness is safe after outer-transaction rollback.
+- #681/#694/#713: duplicate target ids are rejected by canonical mutation, persisted duplicates are visible to audit, and editor adapters preserve malformed/duplicate caller input until canonical validation.
+- #683: Relation-group Board Object creation treats Object creation plus initial preset as one transaction.
+- #730/#741: audit/reconcile handles edge position/order drift and stray non-Relation/wrong-owner edges as deterministic index-only repair; persisted Relation values are not rewritten.
+- #758: strict persisted Relation-value inspection protects integrity-sensitive audit/write/delete paths while ordinary compatibility parsing remains permissive.
+- #765/#773: Gallery and shared `RelationReadService` projections fail closed on malformed/duplicate/cardinality-unsafe or serialized/index-inconsistent Relation state, with no read-time repair.
 
-## Cross-lane audit in this run
-- #491 still routes real quick-create/attach and editor saves through canonical Relation mutation. No newly merged workflow adds another Relation value/index or serialized-id writer.
-- #492 Gallery cover discovery/resolution remains read-only. #765 hardens the resolver itself and #773 hardens the shared canonical Relation read projection used by Object inspector/search/visual consumers.
-- #493 `RelationSchemaEvolutionService` still re-reads the canonical persisted Relation Property, validates source/target workspace identity, blocks unhealthy audited state, requires explicit multi -> single choices, applies inside a transaction, and keeps bidirectional target retargeting fail-closed.
-- #763 restores searchable Relation target ObjectType/cardinality authoring UX while preserving the canonical schema-evolution path; no Lane B writer bypass found.
-- #774 makes canonical Search Relation labels fail closed on malformed Relation reads; no Search-side repair/write path was introduced.
-- #785 adds Search regression coverage for the #773 canonical read consistency contract.
-- Open #781 only composes the existing read-only `DatabaseViewGalleryCoverSourceService` into `GenericDatabasePageServices`; B audit found no blocker and left a review comment.
-- Duplicate open #754 was re-audited and closed as superseded by #758/#765/#773. Its only unique residual behavior was defense-in-depth inside `BidirectionalRelationStore.setRelation(...)`; current production code calls that low-level method only through `RelationMutationService`, which performs strict validation first.
-- No shared hotspot lease is held by Lane B. The latest B production changes are isolated data-layer/read-resolver files, not `generic_database_page.dart`, `app_shell.dart`, or `object_inspector_page.dart`.
+Recent Lane B checkpoints:
+- #803 — Weblink Representative Image Relation is validated before remote download/Image/file side effects. Corrupt Relation state stops before side effects. Merge `460244dc83b386e136a32f501c86a391dabbd16c`.
+- #806 — Relation picker state fails closed on malformed persisted values and no longer silently drops malformed members or deduplicates diagnostic input. Merge `afe164eb60d72adfad81996421529ecac16c2f4b`; CI #2457 green.
+- #813 — Board Relation drag/drop routes through `RelationMutationService`; managed bidirectional source/inverse values and normalized edges stay synchronized. Merge `c58903069c691964be1eb90757a93a1a0a92ae5a`; full CI green.
+- #836 — Generic Database Relation-label projection uses the canonical stored-value/index consistency contract, so malformed, duplicate/cardinality-unsafe, missing-target, or index-drifted Relations do not leak partial labels. Merge `c9d03bb6b666eab62e382530874f7d9d6bf8f6f2`; CI #2526 green.
+- #850 — `TagObjectBridge.syncLegacyTags(...)` is atomic across mirrored Object/link/metadata/Parent Relation/orphan cleanup. Merge `96a43bcf3e9b815e4d9a62f8f223ea82d5c0fa56`; CI #2568 green.
+- #854 — Tag Relation target quick-create commits/rolls back the legacy Tag row, canonical Tag Object/link/metadata, and Parent Relation together. Merge `882166cc77ca649bfb0e6015d1cf306792c86816`; CI #2584 green.
+- #865 — Relation-backed Rollups no longer evaluate through permissive `ObjectStore.resolveRelation(...)`; corrupt/unresolved Relation state returns `null`, while healthy empty Relation still yields `count == 0`. Merge `aa94499e73931438aa88992ec448b1578dd65018`; CI #2620 green.
+- #871 — `RelationReadService` now exposes a Relation Property only when every stored/indexed target exists in the declared target ObjectType. `ObjectGraphQueryStore.backlinks(...)` no longer joins raw `object_relation_edges`; Object Inspector/Graph backlinks route through canonical `RelationReadService`. Wrong-type/missing targets and serialized/index drift fail closed without repair. Merge `eaf70d24cbceb2cdd1e9a74a71e220005553bdb7`; CI #2647 Analyze + full Test green.
+
+## Cross-lane audit
+- #491 production quick-create/attach reloads canonical selection context before save and persists through canonical mutation; Tag quick-create is additionally atomic after #854.
+- #492 Gallery discovery/resolution remains read-only and inherits strict stored/index integrity filtering.
+- #493 schema evolution re-reads canonical persisted schema, validates source/target workspace identity, blocks unhealthy audited state, requires explicit multi -> single choices, applies transactionally, and keeps bidirectional target retargeting fail-closed.
+- #827 template preflight validates Relation target primitives, Gallery cover compatibility, and referenced View Properties before primitive provisioning; no B blocker.
+- #832 Property schema management routes Relation rename/delete through canonical lifecycle; no B blocker.
+- #849 Search corrupt-schema isolation continues to use `RelationReadService` and adds no raw-edge/parser fallback or repair path; no B blocker.
+- #852 removed caller-zero bidirectional UI/test only; canonical pair services are untouched; no B blocker.
+- #869 adds canonical Image/Weblink media presentation in Database List rows only; it does not add Relation writes or a new Relation reader contract.
+- Production direct `ObjectStore.setRelation(...)` callers remain subsystem/internal. Production `BidirectionalRelationStore.setRelation(...)` is still reached through `RelationMutationService`, which performs strict validation first.
+- No shared hotspot lease is currently held by Lane B.
 
 ## Validation state
-- #681 Flutter CI #2129: green.
-- #678 Flutter CI #2140: green.
-- #683 Flutter CI #2133: green.
-- #694 fixed/refresh CI green before merge.
-- #713 refreshed latest-main CI green before merge.
-- #730 relevant Flutter Analyze/full Test green before merge.
-- #741 relevant Flutter Analyze/full Test green before merge.
-- #758 Flutter CI #2356: green.
-- #765 Flutter CI #2370: green.
-- #773 Flutter CI #2385: green.
+- #803 relevant Analyze/full Test green before merge.
+- #806 Flutter CI #2457 green.
+- #813 full Flutter CI green.
+- #836 Flutter CI #2526 green.
+- #850 Flutter CI #2568 green.
+- #854 Flutter CI #2584 green.
+- #865 Flutter CI #2620 green.
+- #871 Flutter CI #2647: Analyze + full Test green after fixture correction; initial #2643 failed only because the new test called a nonexistent `GenericDatabaseStore.getRecord()` helper.
+- Earlier checkpoints #678/#681/#683/#694/#713/#730/#741/#758/#765/#773 were green before merge as recorded in their PR/history.
 - Local Flutter execution is unavailable in this connector environment; GitHub Actions is the executable validation source.
 
 ## Exact next triggers
-1. A new #491 quick-create/attach or editor path that can bypass `RelationMutationService`, normalize malformed input before canonical validation, or produce non-idempotent edges on retry.
+1. A new production Relation writer/editor/quick-create path that bypasses `RelationMutationService`, normalizes malformed/duplicate input before canonical validation, or can leave partial side effects on retry/failure.
 2. A production caller that invokes `BidirectionalRelationStore.setRelation(...)` directly instead of `RelationMutationService`; add strict low-level stored-value validation before allowing that boundary to become feature-facing.
-3. A #493 Relation schema-evolution change involving target/cardinality, especially bidirectional target retargeting; keep unsupported cases fail-closed until both sides can be validated before writes.
-4. A new #492 Relation-backed media/read resolver that could repair on read, trust malformed/stale serialized/index disagreement, or assume single cardinality without validation.
-5. A primitive/template/domain/Board workflow wrapping the first Relation write in an outer transaction; preserve #678 relation-index schema readiness after rollback.
+3. A future Relation target/cardinality schema-evolution change, especially bidirectional target retargeting; unsupported cases remain fail-closed until both sides can be validated before writes.
+4. A new Relation-backed media/graph/search/computed-value reader that uses raw `object_relation_edges`, permissive `ObjectRelationValue.fromJson(...)`, or `ObjectStore.resolveRelation(...)` without the canonical integrity contract.
+5. A primitive/template/domain/Board workflow that creates external side effects around its first Relation write; preserve atomicity and #678 rollback-safe relation-index readiness.
 6. Any new delete/detach/cross-object reference workflow, stale index/backlink issue, reconcile ambiguity, corruption regression, or Relation-producing workflow.
 
 ## Cross-lane dependencies / risks
-- Lane C owns schema authoring UX; Lane B owns destructive Relation target/cardinality correctness and corruption behavior.
+- Lane C owns schema-authoring UX; Lane B owns destructive Relation target/cardinality correctness and corruption behavior.
 - Primitive target quick-create must retain primitive identity/import rules before canonical Relation attach; Lane B should test integrity rather than duplicate primitive creation logic.
-- Ordinary semantic Relation parsing remains permissive for compatibility. Integrity-sensitive audit/write/read projections use the strict persisted-value inspection instead; do not replace the storage model or silently normalize malformed persisted data.
-- Relation adapters must preserve malformed/duplicate caller input until canonical mutation validation; adapter-level set normalization can hide caller/corruption bugs and weaken fail-closed guarantees.
-- `RelationReadService` is now an integrity-filtered projection, not an index authority or repair service. Consumers should not bypass it with raw edges unless they are themselves an integrity service.
+- Ordinary semantic Relation parsing remains permissive for compatibility. Integrity-sensitive audit/write/read projections use strict persisted-value inspection; do not silently normalize malformed persisted data.
+- Relation adapters must preserve malformed/duplicate caller input until canonical mutation validation.
+- `RelationReadService` is an integrity-filtered projection, not an index authority or repair service. UI/graph/computed consumers should not bypass it with raw edges unless they are themselves an integrity service.
+
+## Work in progress / next actions
+There is no open Lane B production PR after #871. Before starting new code, re-scan the latest main/open PRs for one of the exact triggers above. If no concrete defect exists, do not invent a Relation abstraction merely to keep the lane active.
 
 ## Stop reason
-Latest main `3cf960082814c54f4f262b8061ba9320c4952e31`, Issues #491/#492/#493, recent Relation/Search merges, open PR #781, current open PR ownership, and production Relation/Bidirectional writer callers were re-audited. No additional independent feature-level Relation/data-integrity defect or safe integrity slice is currently identified. Do not invent speculative abstractions. Resume when one of the exact triggers above lands or a concrete Relation correctness regression appears.
+Latest main through `36588e0d89e4f95e204d72d7a00194d7c7a2f0ba`, completed Issues #491/#492/#493, open #56, current open PR ownership, low-level Relation writer/read callers, raw edge consumers, Graph backlinks, Rollups, Generic Database labels, Gallery, Search, Weblink preview, Board moves, and Tag projection/quick-create were re-audited. No additional independent feature-level Relation/data-integrity defect is currently identified. This satisfies the AGENTS stop condition: the lane has no remaining actionable safe work until a new concrete trigger lands.
