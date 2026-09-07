@@ -3,10 +3,13 @@ import 'dart:developer' as developer;
 import 'package:drift/drift.dart' show Variable;
 
 import '../services/bookmark_metadata_service.dart';
+import '../services/generic_database_file_import_service.dart';
 import '../services/generic_database_image_import_service.dart';
 import '../services/image_managed_file_deletion_policy.dart';
 import '../services/photo_storage_service.dart';
+import '../services/relation_target_quick_create_host_service.dart';
 import '../services/remote_image_storage_service.dart';
+import '../services/vault_managed_file_copy_service.dart';
 import '../services/weblink_create_enrichment_service.dart';
 import '../services/weblink_preview_image_pipeline.dart';
 import 'bidirectional_relation_store.dart';
@@ -21,6 +24,7 @@ import 'database_view_property_schema_service.dart';
 import 'database_view_property_type_conversion_service.dart';
 import 'database_view_property_type_migration_service.dart';
 import 'database_view_store.dart';
+import 'file_object_service.dart';
 import 'generic_database_collection_page_data.dart';
 import 'generic_database_object_create_service.dart';
 import 'generic_database_page_state_loader.dart';
@@ -39,8 +43,11 @@ import 'object_type_defaults_store.dart';
 import 'object_type_management_store.dart';
 import 'relation_mutation_service.dart';
 import 'relation_schema_evolution_service.dart';
+import 'relation_target_quick_create_policy.dart';
+import 'relation_target_quick_create_service.dart';
 import 'relation_target_service.dart';
 import 'system_object_store.dart';
+import 'tag_object_bridge.dart';
 import 'weblink_object_service.dart';
 import 'workspace_store.dart';
 
@@ -58,7 +65,11 @@ class GenericDatabasePageServices {
     required this.loader,
     required this.creator,
     required this.imageImport,
+    required this.fileImport,
     required this.relationEditor,
+    required this.relationQuickCreatePolicy,
+    required this.relationQuickCreate,
+    required this.relationQuickCreateHost,
     required this.relationMutations,
     required this.propertyAuthoring,
     required this.propertySchema,
@@ -173,6 +184,15 @@ class GenericDatabasePageServices {
       systemObjects: systemObjects,
       defaultsStore: defaultsStore,
     );
+    final files = FileObjectService(
+      systemObjects: systemObjects,
+      defaultsStore: defaultsStore,
+    );
+    final tagBridge = TagObjectBridge(
+      database: genericStore.database,
+      objectStore: objectStore,
+      systemObjectStore: systemObjects,
+    );
     final previewPipeline = weblinkPreviewImageIngest == null
         ? WeblinkPreviewImagePipeline(
             database: genericStore.database,
@@ -199,7 +219,37 @@ class GenericDatabasePageServices {
       dailyNotes: dailyNotes,
       weblinks: weblinks,
       images: images,
+      files: files,
       weblinkCreateEnricher: weblinkEnrichment.enrich,
+    );
+    final imageImport = GenericDatabaseImageImportService(
+      photoStorage: photoStorage,
+      objectCreate: creator,
+    );
+    final vaultDirectoryPath = genericStore.database.profileDirectoryPath?.trim();
+    final fileImport = vaultDirectoryPath == null || vaultDirectoryPath.isEmpty
+        ? null
+        : GenericDatabaseFileImportService(
+            managedFiles: VaultManagedFileCopyService(),
+            objectCreate: creator,
+            vaultDirectoryPath: vaultDirectoryPath,
+          );
+    final relationQuickCreatePolicy = RelationTargetQuickCreatePolicy(
+      objectStore: objectStore,
+      systemObjects: systemObjects,
+    );
+    final relationQuickCreate = RelationTargetQuickCreateService(
+      policy: relationQuickCreatePolicy,
+      objectStore: objectStore,
+      tagBridge: tagBridge,
+      weblinks: weblinks,
+      weblinkEnricher: weblinkEnrichment.enrich,
+    );
+    final relationQuickCreateHost = RelationTargetQuickCreateHostService(
+      policy: relationQuickCreatePolicy,
+      quickCreate: relationQuickCreate,
+      imageImport: imageImport,
+      fileImport: fileImport,
     );
     final computedStore = ObjectComputedValueStore(objectStore);
 
@@ -208,15 +258,16 @@ class GenericDatabasePageServices {
       objectStore: objectStore,
       loader: loader,
       creator: creator,
-      imageImport: GenericDatabaseImageImportService(
-        photoStorage: photoStorage,
-        objectCreate: creator,
-      ),
+      imageImport: imageImport,
+      fileImport: fileImport,
       relationEditor: ObjectRelationEditorService(
         targets: RelationTargetService(objectStore),
         mutations: relationMutations,
         identitySearch: identitySearch,
       ),
+      relationQuickCreatePolicy: relationQuickCreatePolicy,
+      relationQuickCreate: relationQuickCreate,
+      relationQuickCreateHost: relationQuickCreateHost,
       relationMutations: relationMutations,
       propertyAuthoring: propertyAuthoring,
       propertySchema: propertySchema,
@@ -260,7 +311,11 @@ class GenericDatabasePageServices {
   final GenericDatabaseCollectionPageLoader loader;
   final GenericDatabaseObjectCreateService creator;
   final GenericDatabaseImageImportService imageImport;
+  final GenericDatabaseFileImportService? fileImport;
   final ObjectRelationEditorService relationEditor;
+  final RelationTargetQuickCreatePolicy relationQuickCreatePolicy;
+  final RelationTargetQuickCreateService relationQuickCreate;
+  final RelationTargetQuickCreateHostService relationQuickCreateHost;
   final RelationMutationService relationMutations;
   final DatabasePropertyAuthoringService propertyAuthoring;
   final DatabaseViewPropertySchemaService propertySchema;
