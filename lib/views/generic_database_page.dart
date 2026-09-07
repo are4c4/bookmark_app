@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../data/bookmark_repository.dart';
 import '../data/database_view_gallery_adapter.dart';
+import '../data/database_view_gallery_cover_source_service.dart';
 import '../data/database_view_store.dart';
 import '../data/generic_database_object_create_service.dart';
 import '../data/generic_database_page_services.dart';
@@ -21,11 +22,11 @@ import '../domain/object_type_defaults.dart';
 import '../features/database/presentation/widgets/database_property_value_view.dart';
 import '../features/database/presentation/widgets/object_gallery_view.dart';
 import '../features/database/presentation/widgets/property_add_popover.dart';
-import '../features/database/presentation/widgets/weblink_gallery_media.dart';
 import '../features/object/presentation/object_open_presentation_host.dart';
 import '../features/object/presentation/widgets/object_detail_property_view.dart';
 import '../widgets/database_collection_settings_dialog.dart';
 import '../widgets/database_create_tiles.dart';
+import '../widgets/database_gallery_view_cover_media.dart';
 import '../widgets/database_view_tabs.dart';
 import '../widgets/notion_inline_field.dart';
 import '../widgets/object_board_view.dart';
@@ -74,6 +75,8 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
   Map<int, List<GenericRecord>> _recordsByType = const {};
   Map<int, Map<int, dynamic>> _computedValues = const {};
   DatabaseViewConfig? _activeView;
+  List<GalleryCoverSourceOption> _galleryCoverSources =
+      const <GalleryCoverSourceOption>[];
   int? _selectedRecordId;
   String _query = '';
   bool _loading = true;
@@ -148,6 +151,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.databaseId != widget.databaseId) {
       _activeView = null;
+      _galleryCoverSources = const <GalleryCoverSourceOption>[];
       _selectedRecordId = null;
       _query = '';
       _reload();
@@ -160,6 +164,17 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
       databaseId: widget.databaseId,
       workspaceId: widget.repository.workspaceId,
     );
+    var galleryCoverSources = const <GalleryCoverSourceOption>[];
+    final objectType = state.objectType;
+    if (objectType != null) {
+      try {
+        galleryCoverSources = await _pageServices.galleryCoverSources.discover(
+          objectTypeId: objectType.id,
+        );
+      } catch (_) {
+        galleryCoverSources = const <GalleryCoverSourceOption>[];
+      }
+    }
 
     if (!mounted) return;
     setState(() {
@@ -171,6 +186,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
       _objectTypes = state.objectTypes;
       _recordsByType = state.recordsByType;
       _computedValues = state.computedValues;
+      _galleryCoverSources = galleryCoverSources;
       _createMode = state.createMode;
       if (_selectedRecordId != null &&
           !state.records.any((record) => record.id == _selectedRecordId)) {
@@ -1018,6 +1034,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
           }
           final record = records[index];
           final scheme = Theme.of(context).colorScheme;
+          final activeView = _activeView;
           return Material(
             color: record.id == _selectedRecordId
                 ? scheme.surfaceContainerHigh
@@ -1031,14 +1048,16 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    WeblinkGalleryMedia(
-                      database: widget.repository.workspaceStore.database,
-                      objectStore: _objectStore,
-                      workspaceId: widget.repository.workspaceId,
-                      objectTypeId: record.databaseId,
-                      objectId: record.id,
-                      mode: mode,
-                    ),
+                    if (activeView != null)
+                      DatabaseGalleryViewCoverMedia(
+                        database: widget.repository.workspaceStore.database,
+                        objectStore: _objectStore,
+                        workspaceId: widget.repository.workspaceId,
+                        view: activeView,
+                        sourceObjectTypeId: record.databaseId,
+                        sourceObjectId: record.id,
+                        mode: mode,
+                      ),
                     Text(
                       record.title,
                       maxLines: 2,
@@ -2049,6 +2068,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                       child: ObjectViewToolbar(
                         view: activeView,
                         properties: _objectType?.properties ?? const [],
+                        galleryCoverSources: _galleryCoverSources,
                         onViewChanged: (next) {
                           _persistView(next);
                         },
