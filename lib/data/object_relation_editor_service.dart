@@ -69,7 +69,7 @@ class ObjectRelationEditorService {
     required RelationSelectionContext context,
     required Iterable<int> selectedObjectIds,
   }) async {
-    final selected = selectedObjectIds.toSet().toList(growable: false);
+    final selected = selectedObjectIds.toList(growable: false);
     final candidateIds = context.candidates.map((object) => object.id).toSet();
     final invalid = selected.where((id) => !candidateIds.contains(id)).toList();
     if (invalid.isNotEmpty) {
