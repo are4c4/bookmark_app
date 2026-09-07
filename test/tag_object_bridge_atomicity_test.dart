@@ -97,10 +97,6 @@ void main() {
     expect(edges.single.targetObjectId, parentObjectId);
     expect(edges.single.position, 0);
 
-    final legacyTag = await database.customSelect(
-      'SELECT name, parent_tag_id FROM tags WHERE id = ?',
-      variables: [],
-    );
     // Legacy Tag data is the source of truth and was changed before sync started;
     // only the mirrored Object/Relation projection is rolled back by sync.
     final row = await database.customSelect(
