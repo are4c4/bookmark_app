@@ -47,6 +47,7 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
   bool _editingUrl = false;
   bool _editingDescription = false;
   bool _savingInline = false;
+  int _imageVisualRevision = 0;
 
   @override
   void initState() {
@@ -67,6 +68,7 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
       _editingTitle = false;
       _editingUrl = false;
       _editingDescription = false;
+      _imageVisualRevision = 0;
       _syncControllers(force: true);
       return;
     }
@@ -201,6 +203,9 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
   }
 
   Widget _cover() => BookmarkVisualImage(
+        key: ValueKey(
+          'bookmark-detail-cover-${widget.bookmark.id}-$_imageVisualRevision',
+        ),
         repository: widget.repository,
         bookmark: widget.bookmark,
         width: double.infinity,
@@ -471,6 +476,10 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                           repository: widget.repository,
                           bookmark: bookmark,
                           onFilterByLegacyPhoto: widget.onFilterByPhoto,
+                          onChanged: () {
+                            if (!mounted) return;
+                            setState(() => _imageVisualRevision += 1);
+                          },
                         ),
                         const SizedBox(height: 22),
                         Divider(height: 1, color: scheme.outlineVariant),
