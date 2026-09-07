@@ -1,4 +1,5 @@
 import '../domain/object_model.dart';
+import '../domain/object_query.dart';
 import 'bidirectional_relation_store.dart';
 import 'database_view_gallery_adapter.dart';
 import 'database_view_group_adapter.dart';
@@ -196,6 +197,126 @@ class DatabaseViewPropertySchemaService {
       pairedRelationProperty: pairedRelationProperty,
     );
   }
+
+  /// Explicitly detaches one user-defined Property from View configuration.
+  ///
+  /// This does not mutate the Property schema, Object values, Relation values,
+  /// or normalized Relation edges. Only persisted View references owned by the
+  /// Database/View layer are changed. Unknown or future filter/sort payloads are
+  /// preserved byte-for-structure: only entries that decode as a known rule for
+  /// [propertyId] are removed.
+  ///
+  /// Returns the number of Views whose configuration changed.
+  Future<int> detachViewReferences({
+    required int objectTypeId,
+    required int propertyId,
+  }) async {
+    final property = await _canonicalCustomProperty(
+      objectTypeId: objectTypeId,
+      propertyId: propertyId,
+    );
+    final type = (await objectStore.getObjectType(objectTypeId))!;
+    final views = await viewStore.listViews(
+      workspaceId: type.workspaceId,
+      databaseKey: 'custom:$objectTypeId',
+    );
+    final propertyKey = 'p:${property.id}';
+    var changedViews = 0;
+
+    await genericStore.database.transaction(() async {
+      for (final view in views) {
+        final filterChanged = _hasFilterReference(view, property.id);
+        final sortChanged = _hasSortReference(view, property.id);
+        final groupChanged =
+            _groupAdapter.decode(view)?.propertyId == property.id;
+        final cover = _galleryAdapter.decodeCoverSource(view);
+        final coverChanged =
+            cover.isRelation && cover.relationPropertyId == property.id;
+        final visibleChanged = view.visibleProperties.contains(propertyKey);
+        final orderChanged = view.propertyOrder.contains(propertyKey);
+
+        if (!filterChanged &&
+            !sortChanged &&
+            !groupChanged &&
+            !coverChanged &&
+            !visibleChanged &&
+            !orderChanged) {
+          continue;
+        }
+
+        var next = view.copyWith(
+          filters: filterChanged
+              ? _filtersWithoutProperty(view, property.id)
+              : view.filters,
+          sorts: sortChanged
+              ? _sortsWithoutProperty(view, property.id)
+              : view.sorts,
+          visibleProperties: visibleChanged
+              ? view.visibleProperties
+                  .where((key) => key != propertyKey)
+                  .toList(growable: false)
+              : view.visibleProperties,
+          propertyOrder: orderChanged
+              ? view.propertyOrder
+                  .where((key) => key != propertyKey)
+                  .toList(growable: false)
+              : view.propertyOrder,
+        );
+        if (groupChanged) {
+          next = _groupAdapter.clear(next);
+        }
+        if (coverChanged) {
+          next = _galleryAdapter.encodeCoverSource(
+            next,
+            source: const GalleryCoverSource.none(),
+          );
+        }
+        await viewStore.updateView(next);
+        changedViews += 1;
+      }
+    });
+
+    return changedViews;
+  }
+
+  bool _hasFilterReference(DatabaseViewConfig view, int propertyId) {
+    final rawRules = view.filters['propertyRules'];
+    if (rawRules is! List) return false;
+    return rawRules.any(
+      (raw) => ObjectFilterRule.fromJson(raw)?.propertyId == propertyId,
+    );
+  }
+
+  bool _hasSortReference(DatabaseViewConfig view, int propertyId) =>
+      view.sorts.any(
+        (raw) => ObjectSortRule.fromJson(raw)?.propertyId == propertyId,
+      );
+
+  Map<String, dynamic> _filtersWithoutProperty(
+    DatabaseViewConfig view,
+    int propertyId,
+  ) {
+    final filters = <String, dynamic>{...view.filters};
+    final rawRules = filters['propertyRules'];
+    if (rawRules is List) {
+      filters['propertyRules'] = rawRules
+          .where(
+            (raw) => ObjectFilterRule.fromJson(raw)?.propertyId != propertyId,
+          )
+          .toList(growable: false);
+    }
+    return filters;
+  }
+
+  List<dynamic> _sortsWithoutProperty(
+    DatabaseViewConfig view,
+    int propertyId,
+  ) =>
+      view.sorts
+          .where(
+            (raw) => ObjectSortRule.fromJson(raw)?.propertyId != propertyId,
+          )
+          .toList(growable: false);
 
   Future<ObjectPropertyDefinition> _canonicalCustomProperty({
     required int objectTypeId,
