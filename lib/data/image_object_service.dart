@@ -406,9 +406,7 @@ class ImageObjectService {
         'Managed Image file path must not be empty.',
       );
     }
-    final resolver = systemObjects.database.pathResolver;
-    final resolved = resolver.resolveStoredPath(candidate);
-    return resolver.toStoredPath(resolved);
+    return systemObjects.database.pathResolver.canonicalStoredPath(candidate);
   }
 
   bool _storedPathsMatch(String stored, String canonicalCandidate) {
