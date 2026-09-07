@@ -121,6 +121,26 @@ class ObjectSearchRepository {
     );
   }
 
+  Future<String> _readRelationLabelsSearchText({
+    required AppObject object,
+    required int objectTypeId,
+  }) async {
+    try {
+      return _buildRelationLabelsSearchText(
+        object: object,
+        relations: await _relationReads.outgoing(
+          sourceObjectTypeId: objectTypeId,
+          sourceObjectId: object.id,
+        ),
+      );
+    } on FormatException {
+      // Relation owns canonical source/target ObjectType validation. If one
+      // related schema cannot be decoded, omit only this optional label bucket
+      // instead of aborting the otherwise healthy Object projection.
+      return '';
+    }
+  }
+
   Future<void> _insertObjects({
     int? workspaceId,
     int? objectId,
@@ -207,12 +227,9 @@ class ObjectSearchRepository {
             weblinkProjection?.consumedPropertyIds ?? const <int>{},
       );
       final body = await _readBodySearchText(currentObjectId);
-      final relationLabels = _buildRelationLabelsSearchText(
+      final relationLabels = await _readRelationLabelsSearchText(
         object: object,
-        relations: await _relationReads.outgoing(
-          sourceObjectTypeId: objectTypeId,
-          sourceObjectId: currentObjectId,
-        ),
+        objectTypeId: objectTypeId,
       );
       final derivedText = await _derivedTextStore.readCombined(currentObjectId);
       await _database.customStatement(
