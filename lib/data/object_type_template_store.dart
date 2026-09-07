@@ -305,6 +305,138 @@ class ObjectTypeTemplateStore {
     return null;
   }
 
+  void _preflightTemplate(ObjectTypeTemplate template) {
+    if (template.version <= 0) {
+      throw StateError('Template ${template.key} must use a positive version.');
+    }
+
+    final propertiesByName = <String, ObjectTypeTemplateProperty>{};
+    for (final property in template.properties) {
+      if (propertiesByName.containsKey(property.name)) {
+        throw StateError(
+          'Template ${template.key} contains duplicate Property name "${property.name}".',
+        );
+      }
+      propertiesByName[property.name] = property;
+
+      if (property.type == 'relation') {
+        final systemKey = property.relationTargetSystemKey?.trim() ?? '';
+        if (systemKey.isEmpty) {
+          throw ArgumentError(
+            'Relation template Property ${property.name} requires a target system key.',
+          );
+        }
+        if (systemKey != WeblinkObjectService.systemKey &&
+            systemKey != ImageObjectService.systemKey &&
+            systemKey != FileObjectService.systemKey &&
+            systemKey != TagObjectBridge.systemKey) {
+          throw StateError(
+            'Required primitive ObjectType "$systemKey" is not available for template provisioning.',
+          );
+        }
+        continue;
+      }
+
+      final parsedType = ObjectPropertyDefinition.fromStorageType(property.type);
+      final canonicalType = ObjectPropertyDefinition(
+        id: -1,
+        objectTypeId: -1,
+        name: property.name,
+        type: parsedType,
+        sortOrder: 0,
+      ).storageType;
+      if (canonicalType != property.type) {
+        throw StateError(
+          'Template Property ${property.name} uses unsupported type "${property.type}".',
+        );
+      }
+    }
+
+    void validateViewPropertyNames(
+      ObjectTypeTemplateView view,
+      Iterable<String> propertyNames,
+      String fieldName, {
+      bool rejectDuplicates = false,
+    }) {
+      final seen = <String>{};
+      for (final propertyName in propertyNames) {
+        if (rejectDuplicates && !seen.add(propertyName)) {
+          throw StateError(
+            'Template View ${view.name} $fieldName contains duplicate Property "$propertyName".',
+          );
+        }
+        if (!propertiesByName.containsKey(propertyName)) {
+          throw StateError(
+            'Template View ${view.name} $fieldName references unknown Property "$propertyName".',
+          );
+        }
+      }
+    }
+
+    for (final view in template.views) {
+      final coverPropertyName = view.galleryCoverRelationPropertyName;
+      final coverKind = view.galleryCoverKind;
+      if ((coverPropertyName == null) != (coverKind == null)) {
+        throw StateError(
+          'Template View ${view.name} Gallery cover requires both a Relation Property and cover kind.',
+        );
+      }
+      if (coverPropertyName != null && coverKind != null) {
+        final relationProperty = propertiesByName[coverPropertyName];
+        if (relationProperty == null || relationProperty.type != 'relation') {
+          throw StateError(
+            'Template View ${view.name} Gallery cover must reference exactly one Relation Property.',
+          );
+        }
+        final expectedSystemKey = switch (coverKind) {
+          ObjectTypeTemplateGalleryCoverKind.imageRelation =>
+            ImageObjectService.systemKey,
+          ObjectTypeTemplateGalleryCoverKind.weblinkRelationRepresentativeImage =>
+            WeblinkObjectService.systemKey,
+        };
+        final actualSystemKey =
+            relationProperty.relationTargetSystemKey?.trim() ?? '';
+        if (actualSystemKey != expectedSystemKey) {
+          throw StateError(
+            'Template View ${view.name} Gallery cover kind requires a Relation targeting "$expectedSystemKey", not "$actualSystemKey".',
+          );
+        }
+      }
+
+      validateViewPropertyNames(
+        view,
+        view.visiblePropertyNames,
+        'visible Properties',
+        rejectDuplicates: true,
+      );
+      validateViewPropertyNames(
+        view,
+        view.propertyOrderNames,
+        'Property order',
+        rejectDuplicates: true,
+      );
+      validateViewPropertyNames(
+        view,
+        view.propertyFilters.map((rule) => rule.propertyName),
+        'filter',
+      );
+      validateViewPropertyNames(
+        view,
+        view.propertySorts.map((rule) => rule.propertyName),
+        'sort',
+      );
+
+      if (view.propertyFilters.isNotEmpty) {
+        final rawRules = view.filters['propertyRules'];
+        if (rawRules != null && rawRules is! List) {
+          throw StateError(
+            'Template View ${view.name} raw propertyRules must be a list before template-local filters can be appended.',
+          );
+        }
+      }
+    }
+  }
+
   Future<void> _ensureInstanceSchema() async {
     await store.ensureSchema();
     await store.database.customStatement('''
@@ -346,6 +478,7 @@ class ObjectTypeTemplateStore {
     String? name,
     String? icon,
   }) async {
+    _preflightTemplate(template);
     await _ensureInstanceSchema();
     final objectStore = ObjectStore(store);
     final primitiveTargets = ObjectTypeTemplatePrimitiveTargetResolver(
