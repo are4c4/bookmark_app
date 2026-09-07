@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:drift/drift.dart';
 
 import '../domain/object_body.dart';
+import '../domain/object_body_block_contracts.dart';
 import 'generic_database_store.dart';
 
 /// Backward-compatible persistence for Object Body documents.
@@ -43,13 +44,16 @@ class ObjectBodyStore {
     } on FormatException {
       throw const FormatException('Stored Object body is not valid JSON.');
     }
-    return ObjectBodyDocument.fromJson(decoded);
+    final document = ObjectBodyDocument.fromJson(decoded);
+    ObjectBodyBlockContractValidator.validateDocument(document);
+    return document;
   }
 
   Future<void> write({
     required int objectId,
     required ObjectBodyDocument document,
   }) async {
+    ObjectBodyBlockContractValidator.validateDocument(document);
     await ensureSchema();
     await _genericStore.database.transaction(() async {
       await _genericStore.database.customStatement(
