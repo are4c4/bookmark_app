@@ -235,27 +235,45 @@ class ObjectStore {
     required ObjectPropertyDefinition property,
     required dynamic value,
   }) async {
-    if (property.isRelation) {
-      final storedProperty = await _validateRelationSource(
+    final storedProperty = await _propertyById(property.id);
+    if (storedProperty == null ||
+        storedProperty.objectTypeId != property.objectTypeId ||
+        storedProperty.type != property.type) {
+      throw ArgumentError.value(
+        property.id,
+        'property',
+        'Property ObjectType and type must match the persisted schema.',
+      );
+    }
+    if (storedProperty.isComputed) {
+      throw ArgumentError.value(
+        property.id,
+        'property',
+        'Computed Properties cannot store direct values.',
+      );
+    }
+
+    if (storedProperty.isRelation) {
+      final validatedProperty = await _validateRelationSource(
         objectId: objectId,
-        property: property,
+        property: storedProperty,
       );
       final relation = value is ObjectRelationValue
           ? value
           : ObjectRelationValue.fromJson(value);
-      await _validateRelation(storedProperty, relation);
+      await _validateRelation(validatedProperty, relation);
       await ensureRelationIndexSchema();
       await _genericStore.database.transaction(() async {
         await _genericStore.setValue(
           recordId: objectId,
-          propertyId: storedProperty.id,
+          propertyId: validatedProperty.id,
           value: relation.toJson(
-            multiple: storedProperty.allowsMultipleRelations,
+            multiple: validatedProperty.allowsMultipleRelations,
           ),
         );
         await _replaceRelationEdges(
           objectId: objectId,
-          propertyId: storedProperty.id,
+          propertyId: validatedProperty.id,
           targetObjectIds: relation.objectIds,
         );
       });
@@ -264,7 +282,7 @@ class ObjectStore {
 
     await _genericStore.setValue(
       recordId: objectId,
-      propertyId: property.id,
+      propertyId: storedProperty.id,
       value: value,
     );
   }
