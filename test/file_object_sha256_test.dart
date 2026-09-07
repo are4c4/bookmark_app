@@ -5,6 +5,7 @@ import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/object_type_defaults_store.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
+import 'package:bookmark_app/domain/object_type_defaults.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -133,5 +134,90 @@ void main() {
     );
 
     expect(await objectStore.listObjects(definition.objectType.id), isEmpty);
+  });
+
+  test('generated pre-hash File order upgrades without changing visibility',
+      () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final defaultsStore = ObjectTypeDefaultsStore(genericStore);
+    final service = FileObjectService(
+      systemObjects: SystemObjectStore(
+        database: database,
+        objectStore: ObjectStore(genericStore),
+      ),
+      defaultsStore: defaultsStore,
+    );
+    final definition = await service.ensureDefinition(workspaceId);
+    final previousVisible = <int>[
+      definition.originalFilenameProperty.id,
+      definition.contentTypeProperty.id,
+      definition.extensionProperty.id,
+      definition.sizeBytesProperty.id,
+      definition.importedAtProperty.id,
+    ];
+    final previousOrder = <int>[
+      ...previousVisible,
+      definition.fileProperty.id,
+    ];
+    await defaultsStore.write(
+      objectTypeId: definition.objectType.id,
+      defaults: ObjectTypeDefaults(
+        visiblePropertyIds: previousVisible,
+        propertyOrder: previousOrder,
+        openMode: ObjectOpenMode.sidePeek,
+      ),
+    );
+
+    await service.ensureDefinition(workspaceId);
+    final upgraded = await defaultsStore.read(definition.objectType.id);
+
+    expect(upgraded?.visiblePropertyIds, previousVisible);
+    expect(upgraded?.propertyOrder, <int>[
+      ...previousVisible,
+      definition.sha256Property.id,
+      definition.fileProperty.id,
+    ]);
+  });
+
+  test('custom File property order is preserved when SHA-256 is provisioned',
+      () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final defaultsStore = ObjectTypeDefaultsStore(genericStore);
+    final service = FileObjectService(
+      systemObjects: SystemObjectStore(
+        database: database,
+        objectStore: ObjectStore(genericStore),
+      ),
+      defaultsStore: defaultsStore,
+    );
+    final definition = await service.ensureDefinition(workspaceId);
+    final customOrder = <int>[
+      definition.fileProperty.id,
+      definition.originalFilenameProperty.id,
+      definition.contentTypeProperty.id,
+    ];
+    await defaultsStore.write(
+      objectTypeId: definition.objectType.id,
+      defaults: ObjectTypeDefaults(
+        visiblePropertyIds: <int>[definition.originalFilenameProperty.id],
+        propertyOrder: customOrder,
+        openMode: ObjectOpenMode.fullPage,
+      ),
+    );
+
+    await service.ensureDefinition(workspaceId);
+    final preserved = await defaultsStore.read(definition.objectType.id);
+
+    expect(preserved?.propertyOrder, customOrder);
+    expect(preserved?.visiblePropertyIds, <int>[
+      definition.originalFilenameProperty.id,
+    ]);
+    expect(preserved?.openMode, ObjectOpenMode.fullPage);
   });
 }
