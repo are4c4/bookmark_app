@@ -5,6 +5,7 @@ import '../data/image_object_service.dart';
 import '../data/object_store.dart';
 import '../data/object_type_defaults_store.dart';
 import '../data/relation_mutation_service.dart';
+import '../data/relation_stored_value_inspector.dart';
 import '../data/system_object_store.dart';
 import '../data/weblink_image_schema_service.dart';
 import '../data/weblink_object_service.dart';
@@ -76,12 +77,10 @@ class WeblinkPreviewImagePipeline {
       objectId: weblinkObjectId,
       label: 'Weblink',
     );
-    final currentRepresentative = ObjectRelationValue.fromJson(
-      weblink.values[schema.representativeImageProperty.id],
-    ).objectIds;
-    if (currentRepresentative.length > 1) {
-      throw StateError('Representative image Relation contains multiple ids.');
-    }
+    final currentRepresentative = await _representativeIds(
+      weblink: weblink,
+      property: schema.representativeImageProperty,
+    );
     if (currentRepresentative.isNotEmpty) {
       final imageId = currentRepresentative.single;
       await _objectById(
@@ -149,9 +148,10 @@ class WeblinkPreviewImagePipeline {
       objectId: weblinkObjectId,
       label: 'Weblink',
     );
-    final persisted = ObjectRelationValue.fromJson(
-      weblink.values[schema.representativeImageProperty.id],
-    ).objectIds;
+    final persisted = await _representativeIds(
+      weblink: weblink,
+      property: schema.representativeImageProperty,
+    );
     if (persisted.length != 1 || persisted.single != image.id) {
       throw StateError('Representative image Relation verification failed.');
     }
@@ -174,20 +174,52 @@ class WeblinkPreviewImagePipeline {
       objectId: weblinkObjectId,
       label: 'Weblink',
     );
-    final persisted = ObjectRelationValue.fromJson(
-      weblink.values[schema.representativeImageProperty.id],
-    ).objectIds;
+    final persisted = await _representativeIds(
+      weblink: weblink,
+      property: schema.representativeImageProperty,
+    );
     if (persisted.length != 1 || persisted.single != imageObjectId) {
       throw StateError('Representative image Relation value did not persist.');
     }
-    final edges = (await objectStore.outgoingRelations(weblinkObjectId))
-        .where(
-          (edge) => edge.propertyId == schema.representativeImageProperty.id,
-        )
-        .toList(growable: false);
-    if (edges.length != 1 || edges.single.targetObjectId != imageObjectId) {
-      throw StateError('Representative image Relation index did not persist.');
+  }
+
+  Future<List<int>> _representativeIds({
+    required AppObject weblink,
+    required ObjectPropertyDefinition property,
+  }) async {
+    final inspection = inspectRelationStoredValue(weblink.values[property.id]);
+    if (inspection.isMalformed) {
+      throw StateError(
+        'Representative image Relation has a malformed persisted value.',
+      );
     }
+    final rawIds = inspection.rawObjectIds;
+    if (rawIds.toSet().length != rawIds.length) {
+      throw StateError(
+        'Representative image Relation contains duplicate Object ids.',
+      );
+    }
+    if (!property.allowsMultipleRelations && rawIds.length > 1) {
+      throw StateError('Representative image Relation contains multiple ids.');
+    }
+
+    final edges = (await objectStore.outgoingRelations(weblink.id))
+        .where((edge) => edge.propertyId == property.id)
+        .toList(growable: false);
+    if (edges.length != rawIds.length) {
+      throw StateError(
+        'Representative image Relation value/index disagreement.',
+      );
+    }
+    for (var index = 0; index < rawIds.length; index++) {
+      final edge = edges[index];
+      if (edge.targetObjectId != rawIds[index] || edge.position != index) {
+        throw StateError(
+          'Representative image Relation value/index disagreement.',
+        );
+      }
+    }
+    return List<int>.unmodifiable(rawIds);
   }
 
   Future<AppObject> _objectById({
