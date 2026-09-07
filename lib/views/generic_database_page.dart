@@ -20,23 +20,23 @@ import '../domain/object_detail_content.dart';
 import '../domain/object_detail_property_presentation.dart';
 import '../domain/object_model.dart';
 import '../domain/object_type_defaults.dart';
+import '../features/database/presentation/widgets/database_create_tiles.dart';
 import '../features/database/presentation/widgets/database_property_value_view.dart';
+import '../features/database/presentation/widgets/database_view_tabs.dart';
 import '../features/database/presentation/widgets/object_gallery_view.dart';
 import '../features/database/presentation/widgets/property_add_popover.dart';
+import '../features/database/presentation/widgets/resizable_detail_pane.dart';
 import '../features/database/presentation/widgets/system_object_list_media.dart';
 import '../features/object/presentation/object_open_presentation_host.dart';
 import '../features/object/presentation/widgets/object_body_editor_section.dart';
 import '../features/object/presentation/widgets/object_detail_property_view.dart';
 import '../widgets/database_collection_settings_dialog.dart';
-import '../widgets/database_create_tiles.dart';
 import '../widgets/database_gallery_view_cover_media.dart';
 import '../widgets/database_property_schema_management_dialog.dart';
-import '../widgets/database_view_tabs.dart';
 import '../widgets/notion_inline_field.dart';
 import '../widgets/object_board_view.dart';
 import '../widgets/object_relation_picker_dialog.dart';
 import '../widgets/object_view_toolbar.dart';
-import '../widgets/resizable_detail_pane.dart';
 import 'object_inspector_page.dart';
 
 class GenericDatabasePage extends StatefulWidget {
@@ -1701,8 +1701,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                   'Backlinks  ${items.length}',
                   style: const TextStyle(
                     fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                  ),
+                    fontWeight: FontWeight.w600),
                 ),
               ],
             ),
