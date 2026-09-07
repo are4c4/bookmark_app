@@ -1,6 +1,6 @@
 # AI Progress — Database, View & Schema UX Lane
 
-> Lane C handoff. Read `AGENTS.md`, the active Issue, and `docs/AI_PROGRESS.md` before implementation. Verify current open PR ownership before touching shared hosts.
+> Lane C handoff. Read `AGENTS.md`, the active Issue, `docs/AI_PROGRESS.md`, and latest GitHub state before implementation. Verify current open PR ownership before touching shared hosts.
 
 ## Lane goal
 Make generic ObjectType/Database/View configuration expressive enough that new domains are created by configuration/templates rather than new management pages.
@@ -14,49 +14,68 @@ Make generic ObjectType/Database/View configuration expressive enough that new d
 - #56 / #484 — umbrella product architecture.
 
 ## Current checkpoint — 2026-09-07
-Latest verified `main` before the current #490 slice: `c36315706b45bbfb73185c6a69c64993bf71e64b`.
+Latest observed `main` while preparing this handoff: `c591cf7917de4bc3e4d78ea183d20d8f9f8eb7b5`.
 
-### Completed in this run
-- merged #760 (`9a4bd3ba71f48610d5290f2368ef53ea602dad12`) to make Flutter Test failures self-diagnosing: full expanded output is retained as a failure artifact and the final log tail is copied into GitHub Step Summary while preserving the original test exit code;
-- rebuilt closed #726 as #763 from current main, preserving only the focused Relation schema-authoring production/tests and the canonical Lane B `RelationSchemaEvolutionService.inspectChange -> confirmation -> updateRelationSchema` path;
-- used the new CI artifact to identify the exact #763 failure: a `RenderShrinkWrappingViewport` intrinsic-dimension assertion caused by the searchable target list inside `AlertDialog(scrollable: true)`;
-- replaced that shrink-wrapping viewport with an explicitly bounded result list, added the compact dialog regression, passed full Flutter CI, and merged #763 as `2fdd340bb79fc408cf21b7926699803f47d54861`;
-- closed stale #696 as superseded and updated #491 with the current remaining managed-import composition boundary;
-- started #490 user-facing template-selection polish on `feature/database-view-template-picker-search-490` / PR #776;
-- made the existing AppShell-reachable template picker searchable by template identity/description plus template-local Property and View metadata, while keeping the empty custom Database path visible under every search state;
-- added stable empty-result/clear behavior and focused widget regressions using template keys rather than text-count assumptions.
+### Completed checkpoints
+- #760 merged: Flutter Test failures now retain self-service diagnostics while preserving the original test exit code.
+- #763 merged as `2fdd340bb79fc408cf21b7926699803f47d54861`: Relation Property authoring uses searchable target selection, built-in/custom distinction, explicit single/multi selection, safe existing-Relation editing, and the canonical Lane B schema-evolution path; compact dialog regression is covered.
+- stale #696 closed as superseded.
+- #776 merged as `0e61b0c6bdc46efdfbb4fccc083a601a52612969`: the AppShell-reachable ObjectType template picker is searchable by template identity/description plus template-local Property/View metadata while the empty custom Database path remains available.
+- stale #781 closed as superseded by #792.
 
-## Current open Lane C work
-- #776 — searchable generic template picker for #490. GitHub Flutter CI is the current validation gate; merge when the current head is green and clean.
-- #491 — searchable target/cardinality authoring and safe existing-Relation editing are integrated. Remaining value-picker quick-create composition is primarily Image/File through D/F-owned managed-import callbacks; do not introduce title-only primitive creation.
-- #492 — core cover-source contract, resolver, fixed/masonry dispatcher, compatibility service, toolbar menu, template configuration and View-aware cover wrapper are present. The next gap is final real `GenericDatabasePage` host convergence: the card still directly uses the older Weblink media widget and must consume the View-aware generic cover host once shared-hotspot ownership is clear.
-- #493 — integrity substrate is largely integrated; remaining C work is broader impact/migration UX and explicit broken View-reference surfacing, not Relation mutation logic.
+## Current Lane C work
+### #492 — real generic Gallery cover convergence
+Active PR: #792, branch `feature/database-view-gallery-cover-host-492-v3`.
+
+The current slice:
+- exposes canonical `DatabaseViewGalleryCoverSourceService` through `GenericDatabasePageServices`, reusing the production `SystemObjectStore` composition;
+- discovers schema-derived cover choices from the real `GenericDatabasePage` reload path;
+- passes those choices into the existing `ObjectViewToolbar` cover selector;
+- replaces the real Gallery card's direct Weblink-only media composition with `DatabaseGalleryViewCoverMedia`;
+- preserves View-owned `galleryCoverSource` persistence and existing fixed/masonry contract;
+- adds focused service and real-host regressions with an unrelated custom `Plant -> Photo Relation(Image)` schema, including actual toolbar selection and `DatabaseViewStore` persistence.
+
+Old PR #781 is closed; do not revive it.
+
+### #491 — Relation quick-create remainder
+Searchable target/cardinality authoring and safe editing are integrated. Remaining Image/File quick-create must consume Lane D/F canonical managed-import composition. Do not introduce title-only primitive creation or another file writer.
+
+### #493 — next C-owned schema UX slice
+Integrity substrate is substantially integrated. The next safe Lane C slice is explicit View-reference handling around Property schema changes: surface which View settings reference a Property and provide an explicit C-owned detach/update path for View configuration only. Do not delete or retarget Relation data from this UX; destructive Relation target/cardinality correctness remains Lane B-owned.
 
 ## Validation
-- Local Flutter execution is not available in this automation environment; GitHub Flutter CI is the validation gate.
-- #763 full CI passed after the compact viewport fix.
-- #760 diagnostics are now available for future failing Flutter Test runs, including downloadable failure artifacts through the GitHub connector.
-- #776 focused coverage lives in `test/object_type_template_picker_test.dart`.
+- Local Flutter/Dart execution is unavailable in this automation environment; GitHub Flutter CI is the validation gate.
+- #763 and #776 passed full repository Flutter CI before merge.
+- #792 is the current Gallery host validation gate. If red, use the CI failure artifact/summary introduced by #760 rather than asking for manual log paste.
+- Focused #792 coverage:
+  - `test/generic_database_page_services_gallery_cover_test.dart`
+  - `test/generic_database_page_gallery_cover_integration_test.dart`
 
 ## Exact next actions
-1. Finish #776 CI triage, merge if green/clean, and record the #490 checkpoint on the Issue.
-2. Re-fetch latest `main` and open PR ownership immediately before any shared-host work.
-3. Continue #492 by replacing the remaining real generic Gallery card's direct Weblink-only media composition with `DatabaseGalleryViewCoverMedia`, and pass schema-discovered `galleryCoverSources` to the real toolbar without adding a domain-specific cover resolver.
-4. Keep #491 Image/File quick-create blocked on canonical D/F managed-import composition rather than inventing an alternate primitive writer.
-5. Continue #493 with user-facing impact/broken-reference UX only; destructive Relation migration correctness remains Lane B-owned.
-6. Then audit #249 generic presentation parity and the generic Database side-peek/detail Body composition gap.
+1. Triage #792 CI; fix any failure from the retained diagnostics, then merge when green and conflict-free.
+2. Update/comment #492 with the merged real-host coverage; reassess whether any close-condition gap remains before closing the Issue.
+3. Start #493 from fresh `main` with a focused View-reference detach/broken-reference UX service slice, avoiding Relation mutation semantics.
+4. Re-check Lane D/F state for #491 Image/File managed-import quick-create before attempting production composition.
+5. Then audit #249 generic presentation parity and generic Database side-peek/detail Body composition.
 
 ## Shared hotspot lease / ownership
-Before the #776 picker slice, current open PR changed-file ownership was re-audited and no open PR edited `object_type_template_picker.dart`. The picker slice does not touch a shared hotspot. The latest audit also found no then-open PR editing `generic_database_page.dart`, but this must be checked again immediately before the #492 host slice because parallel lanes are active.
+Before #792, open PR changed-file ownership was re-audited. No other active PR edited `lib/views/generic_database_page.dart`; concurrent PRs were docs-only Search handoff, standalone performance probe, and primitive remote-image storage work. Lane C therefore owns the patch-sized `generic_database_page.dart` Gallery host edit for #792.
 
-`generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, `bookmark_unified_stage1_page.dart`, `bookmark_reorderable_properties.dart`, `people_management_page.dart`, and `app_database.dart` remain shared hotspots.
+Re-check immediately before any subsequent shared-host edit. Shared hotspots remain:
+- `lib/views/generic_database_page.dart`
+- `lib/views/app_shell.dart`
+- `lib/views/object_inspector_page.dart`
+- `lib/views/bookmark_unified_stage1_page.dart`
+- `lib/widgets/bookmark_reorderable_properties.dart`
+- `lib/views/people_management_page.dart`
+- `lib/data/app_database.dart`
 
 ## Cross-lane dependencies
-- Lane B owns Relation mutation/index/backlink/audit/reconcile and destructive target/cardinality migration correctness; Lane C consumes those canonical services.
-- Lane D owns Weblink/Image/File/Tag primitive creation/import semantics used by Relation quick-create and Gallery media resolution.
-- Lane F owns managed filesystem/Vault copy and ownership/deletion lifecycle needed to finish Image/File quick-create composition.
-- Lane A owns core Object/Body contracts; Lane C composes them into Database/View hosts only after hotspot ownership is clear.
-- Lane G owns broad maintainability/refactor work.
+- Lane B owns Relation mutation/index/backlink/audit/reconcile and destructive target/cardinality migration correctness; Lane C consumes canonical services.
+- Lane D owns Weblink/Image/File/Tag primitive creation/import semantics and media resolution product behavior.
+- Lane F owns managed filesystem/Vault copy/ownership/deletion lifecycle.
+- Lane A owns core Object/Body contracts; Lane C composes them into Database/View hosts after hotspot ownership is clear.
+- Lane G owns broad behavior-preserving refactor/architecture-health work.
 
 ## Stop reason
-Do not stop on this checkpoint alone. Continue with #776 CI/merge, then proceed to the next safe #492 host convergence slice from fresh `main`.
+Do not stop merely because #792 CI is pending. Continue independent #493 contract/UX work where it does not conflict with the active Gallery host branch. Stop only at an `AGENTS.md` stop condition or tool/runtime boundary.
