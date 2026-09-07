@@ -203,9 +203,7 @@ void main() {
       contains(fileObject.id),
     );
 
-    final corruptProperty = definition.objectType.properties.firstWhere(
-      (property) => property.name == FileObjectService.originalFilenamePropertyName,
-    );
+    final corruptProperty = definition.originalFilenameProperty;
     await database.customStatement(
       'UPDATE generic_properties SET type = ? WHERE id = ?',
       ['futureRichText', corruptProperty.id],
