@@ -5,7 +5,6 @@ import 'package:bookmark_app/data/file_object_service.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
 import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/object_type_defaults_store.dart';
-import 'package:bookmark_app/data/profile_path_resolver.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/services/canonical_file_pdf_page_count_service.dart';
@@ -29,11 +28,12 @@ void main() {
     final workspaceId = await WorkspaceStore(database).initialize();
     final genericStore = GenericDatabaseStore(database);
     final objectStore = ObjectStore(genericStore);
+    final systemObjects = SystemObjectStore(
+      database: database,
+      objectStore: objectStore,
+    );
     final files = FileObjectService(
-      systemObjects: SystemObjectStore(
-        database: database,
-        objectStore: objectStore,
-      ),
+      systemObjects: systemObjects,
       defaultsStore: ObjectTypeDefaultsStore(genericStore),
     );
     final definition = await files.ensureDefinition(workspaceId);
@@ -46,9 +46,10 @@ void main() {
 
     String? readPath;
     final service = CanonicalFilePdfPageCountService(
-      resources: FileManagedResourceResolver(
-        objectStore,
-        pathResolver: ProfilePathResolver(root.path),
+      resources: CanonicalFileManagedResourceResolver(
+        objectStore: objectStore,
+        systemObjects: systemObjects,
+        pathResolver: database.pathResolver,
       ),
       readPageCount: (path) async {
         readPath = path;
@@ -90,11 +91,12 @@ void main() {
     final workspaceId = await WorkspaceStore(database).initialize();
     final genericStore = GenericDatabaseStore(database);
     final objectStore = ObjectStore(genericStore);
+    final systemObjects = SystemObjectStore(
+      database: database,
+      objectStore: objectStore,
+    );
     final files = FileObjectService(
-      systemObjects: SystemObjectStore(
-        database: database,
-        objectStore: objectStore,
-      ),
+      systemObjects: systemObjects,
       defaultsStore: ObjectTypeDefaultsStore(genericStore),
     );
     final definition = await files.ensureDefinition(workspaceId);
@@ -105,9 +107,10 @@ void main() {
     );
     var reads = 0;
     final service = CanonicalFilePdfPageCountService(
-      resources: FileManagedResourceResolver(
-        objectStore,
-        pathResolver: ProfilePathResolver(root.path),
+      resources: CanonicalFileManagedResourceResolver(
+        objectStore: objectStore,
+        systemObjects: systemObjects,
+        pathResolver: database.pathResolver,
       ),
       readPageCount: (path) async {
         reads++;
@@ -140,11 +143,12 @@ void main() {
     final workspaceId = await WorkspaceStore(database).initialize();
     final genericStore = GenericDatabaseStore(database);
     final objectStore = ObjectStore(genericStore);
+    final systemObjects = SystemObjectStore(
+      database: database,
+      objectStore: objectStore,
+    );
     final files = FileObjectService(
-      systemObjects: SystemObjectStore(
-        database: database,
-        objectStore: objectStore,
-      ),
+      systemObjects: systemObjects,
       defaultsStore: ObjectTypeDefaultsStore(genericStore),
     );
     final definition = await files.ensureDefinition(workspaceId);
@@ -153,9 +157,10 @@ void main() {
       filePath: managed.path,
       contentType: 'application/pdf',
     );
-    final resolver = FileManagedResourceResolver(
-      objectStore,
-      pathResolver: ProfilePathResolver(root.path),
+    final resolver = CanonicalFileManagedResourceResolver(
+      objectStore: objectStore,
+      systemObjects: systemObjects,
+      pathResolver: database.pathResolver,
     );
     final zeroService = CanonicalFilePdfPageCountService(
       resources: resolver,
