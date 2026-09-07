@@ -118,5 +118,11 @@ void main() {
       findsOneWidget,
       reason: 'the externally renamed Object must be searchable after re-entry',
     );
+
+    // The shell caches its built destinations. Dispose the full tree explicitly
+    // so cached page timers/controllers are cancelled before widget-test timer
+    // invariants run, matching other real-host regressions in this repository.
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
   });
 }
