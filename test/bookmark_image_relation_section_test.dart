@@ -98,6 +98,9 @@ void main() {
               repository: repository,
               bookmark: bookmark,
               onChanged: () => changeCount += 1,
+              // This host regression owns the real picker + Relation mutation.
+              // ImageVisualResolver/Image.file behavior is covered separately,
+              // so avoid platform image decode keeping this widget test alive.
               canonicalThumbnailBuilder: (context, image) => SizedBox(
                 key: ValueKey('bookmark-image-test-thumbnail-${image.id}'),
               ),
