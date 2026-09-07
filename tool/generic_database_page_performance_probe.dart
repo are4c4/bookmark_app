@@ -18,10 +18,11 @@ import 'package:drift/native.dart';
 ///   dart run tool/generic_database_page_performance_probe.dart
 ///   dart run tool/generic_database_page_performance_probe.dart 100:5 1000:20
 ///
-/// Each argument is `objects:relatedTypes`. The probe intentionally measures
-/// the production [GenericDatabasePageStateLoader] rather than a hand-written
-/// SQL approximation, so changes to page projection, related-type loading, or
-/// computed-Property evaluation show up in the result.
+/// Each argument is `objects:relatedTypes`. Related ObjectTypes are deliberately
+/// seeded even though the current page-state loader does not project all of
+/// their records. This keeps the probe sensitive to accidental reintroduction
+/// of workspace-wide ObjectType/record fan-out while measuring the production
+/// [GenericDatabasePageStateLoader] path.
 Future<void> main(List<String> arguments) async {
   final scenarios = arguments.isEmpty
       ? const [
@@ -121,17 +122,20 @@ Future<void> _runScenario(_Scenario scenario) async {
 
     if (first.objects.length != scenario.objects ||
         second.objects.length != scenario.objects ||
-        first.objectTypes.length != scenario.relatedTypes + 1 ||
+        first.objectTypes.isNotEmpty ||
+        first.recordsByType.isNotEmpty ||
+        second.objectTypes.isNotEmpty ||
+        second.recordsByType.isNotEmpty ||
         second.computedValues.length != scenario.objects) {
       throw StateError('Probe projection did not match seeded scenario.');
     }
 
     print(
-      '${scenario.objects} objects / ${scenario.relatedTypes} related types: '
+      '${scenario.objects} objects / ${scenario.relatedTypes} related types seeded: '
       'seed=${_milliseconds(seedWatch)}ms, '
       'load1=${_milliseconds(firstLoadWatch)}ms, '
       'load2=${_milliseconds(secondLoadWatch)}ms, '
-      'recordsByType=${second.recordsByType.length}, '
+      'workspaceFanout=${second.recordsByType.length}, '
       'computedObjects=${second.computedValues.length}',
     );
   } finally {
