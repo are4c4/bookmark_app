@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
 import '../repositories/backlink_repository.dart';
+import 'bookmark_object_body_section.dart';
 
 const _relationLabels = <String, String>{
   'related': '関連',
@@ -155,6 +156,10 @@ class BookmarkRelationSection extends StatelessWidget {
               }).toList(),
             );
           },
+        ),
+        BookmarkObjectBodySection(
+          repository: repository,
+          bookmarkId: bookmark.id,
         ),
       ],
     );
