@@ -44,41 +44,49 @@ Merged #688 (`792fb4d58701785dba2f4d9768c6f2cf1fe363a6`) adopted the shared `can
 
 Merged #697 (`48eaa34747925f760a4f30231565d989915576ca`) closed a missing-only File metadata gap: path-identity reuse now fills a missing `Imported at` while preserving any non-empty earlier timestamp. Flutter CI #2180 passed guardrails, Drift generation, Analyze and the full test suite before merge.
 
-Merged #702 (`bd0ec996ce87f8e01e9834c6e57b7e2b3c7a42c2`) now requires `CanonicalFileManagedResourceResolver` at the `CanonicalFileActionService` and `CanonicalFileExportService` API boundary. Native open/reveal/export therefore cannot be accidentally activated for a custom File-shaped ObjectType by passing the low-level structural resolver. Flutter CI #2202 passed guardrails, Drift generation, Analyze and the full test suite before merge.
+Merged #702 (`bd0ec996ce87f8e01e9834c6e57b7e2b3c7a42c2`) requires `CanonicalFileManagedResourceResolver` at the `CanonicalFileActionService` and `CanonicalFileExportService` API boundary. Native open/reveal/export therefore cannot be accidentally activated for a custom File-shaped ObjectType by passing the low-level structural resolver. Flutter CI #2202 passed guardrails, Drift generation, Analyze and the full test suite before merge.
+
+Merged #704 (`c7055cff8e8ffd2e5b68191efd753cb6c7959284`) extends the same canonical File identity gate to PDF metadata/preview/page-count/text services. The four PDF-native services now require `CanonicalFileManagedResourceResolver`; content-first classification and derived read-only behavior are unchanged. Flutter CI #2218 passed guardrails, Drift generation, Analyze and the full test suite before merge.
+
+Current PR #709: `fix/primitives-file-mime-enrichment-495`.
+Production+test head after refresh onto latest main: `5e011c3a890a7d05140d472a1e35ec2bdc74e50f`.
+
+#709 closes a concrete missing-only File metadata poisoning gap. `FileObjectService` previously persisted any non-empty normalized content-type string, while `PrimitiveFileImportClassifier` rejects values that are not MIME-shaped. A malformed value such as `not-a-mime` could therefore become permanent non-empty File metadata and block a later valid MIME from filling the field. The service now applies the same basic slash check before persistence. The focused regression proves invalid MIME stays missing, equivalent-path reimport reuses the same File Object, and a later parameterized `Application/PDF` enriches to `application/pdf`.
 
 ### MIME/content import routing
 `PrimitiveObjectImportService` validates a real regular-file source, classifies it content-first and delegates exactly once to Image or File; selected-importer failures never fall through.
 
 Merged #665 expanded strong signatures for common non-Image/unsupported-Image formats. Merged #684 (`aa0eefe5be1da730a7af94f0b26c7a6cdd58659f`) closes the existing-path extension-only gap: if real source bytes do not identify a supported Image and routing evidence falls back only to filename extension, production path import fails closed to generic File. Direct classifier extension fallback remains available when content is genuinely unavailable. #684 CI #2134 passed before merge.
 
-A fresh #495 audit found no additional concrete classifier defect worth widening the routing surface. End-to-end generic File import remains intentionally blocked on a Lane F-owned managed-copy + explicit ownership seam for arbitrary source files. Lane F PR #691 changes Vault move/reopen migration behavior and does not provide that seam. Lane D must not duplicate attachment/Vault copy/delete lifecycle or create a second managed-file root.
+The #709 metadata normalization change does not alter routing targets or classification precedence. It only prevents malformed declared MIME from becoming durable canonical File metadata.
+
+End-to-end generic File import remains intentionally blocked on a Lane F-owned managed-copy + explicit ownership seam for arbitrary source files. Lane F PR #691 changes Vault move/reopen migration behavior and does not provide that seam. Lane D must not duplicate attachment/Vault copy/delete lifecycle or create a second managed-file root.
 
 ### PDF-on-File
 PDF remains canonical File. Available capability services cover content-verified metadata, transient Quick Look preview bytes, Spotlight text extraction, page count, Search-derived text projection, and File open/reveal/export. No separate PDF persistence/search/storage route exists.
 
-Current PR #704: `refactor/primitives-canonical-pdf-capability-gate-489`
-Production/test head before this handoff refresh: `e04a72b3ed8184898eb4c1978fb43676294ece41`.
-
-#704 makes the canonical File identity gate mandatory at the PDF capability API boundary. `CanonicalFilePdfMetadataService`, `CanonicalFilePdfPreviewService`, `CanonicalFilePdfPageCountService`, and `CanonicalFilePdfTextService` now require `CanonicalFileManagedResourceResolver` instead of the low-level structural `FileManagedResourceResolver`. Existing content-first classification and derived-output semantics remain unchanged. Search composition already used the canonical resolver, so no search persistence/index contract changes are introduced.
+Merged #704 makes the canonical File identity gate mandatory at the PDF capability API boundary. Search composition already used `CanonicalFileManagedResourceResolver`, so no search persistence/index contract changed.
 
 ### Tag
 `TagObjectBridge` keeps built-in Tag on canonical Object storage; parent hierarchy is a normal self-Relation through canonical Relation APIs. Native Tag name uniqueness/identity remains intentionally undefined until product semantics are explicit.
 
-## Validation / CI
-Recent Lane D merges #665, #671, #675, #679, #682, #684, #688, #692, #693, #697 and #702 passed normal Flutter CI before integration. #688 CI #2147, #692 CI #2159, #693 CI #2169, #697 CI #2180 and #702 CI #2202 passed guardrails, Drift generation, Analyze and full tests.
+Refactor #705 removed the duplicate legacy `AppDatabase` tag-hierarchy mutation path in favor of `TagGroupStore.moveTag(...)`; this does not change Lane D Tag Object identity or Relation semantics.
 
-Local Flutter/Dart execution is unavailable in the connector-only runtime. #704 had CI #2207 running on its pre-handoff head; this docs refresh changes the head, so that run is obsolete for merge purposes. Require normal Flutter CI on the resulting current #704 head before integration.
+## Validation / CI
+Recent Lane D merges #665, #671, #675, #679, #682, #684, #688, #692, #693, #697, #702 and #704 passed normal Flutter CI before integration. #688 CI #2147, #692 CI #2159, #693 CI #2169, #697 CI #2180, #702 CI #2202 and #704 CI #2218 passed guardrails, Drift generation, Analyze and full tests.
+
+Local Flutter/Dart execution is unavailable in the connector-only runtime. #709 has been refreshed onto current main after unrelated Object/View merges. Require normal Flutter CI on the final #709 head including this handoff update before integration; any pre-refresh or pre-handoff run is obsolete.
 
 ## Hotspot / concurrency state
-No shared hotspot lease is required for #704. Current work stays in primitive service/test/docs. Avoid `generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, `people_management_page.dart`, `photo_management_page.dart`, Relation internals and Vault lifecycle code unless a fresh ownership audit proves a patch is safe.
+No shared hotspot lease is required for #709. Current work stays in `FileObjectService`, focused primitive test, and this lane handoff.
 
-`SystemObjectListMedia` already provides reusable canonical Image/Weblink leading media, but the live `GenericDatabasePage` List host still uses a fixed document icon. Lane D intentionally did not reconstruct that large shared file through the connector merely to replace one leading widget; coordinate a patch-sized host integration with Lane C when the hotspot is safely writable.
+`SystemObjectListMedia` already provides reusable canonical Image/Weblink leading media, but the live `GenericDatabasePage` List host still uses a fixed document icon. Lane D intentionally does not reconstruct that large shared file through the connector merely to replace one leading widget; coordinate a patch-sized host integration with Lane C when the hotspot is safely writable.
 
-Open-PR audit found no competing owner for the #704 PDF service/test files. #702 is merged. Refactor #695 is merged. Lane F #691 remains storage-migration-only and does not overlap the PDF capability slice.
+Latest open-PR audit found no competing owner for `FileObjectService`. Lane F #691 remains storage-migration-only. Lane C #696/#703 and other active Object/Relation/Refactor PRs do not overlap #709's files. Avoid `generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, `people_management_page.dart`, `photo_management_page.dart`, Relation internals and Vault lifecycle code unless a fresh ownership audit proves a patch is safe.
 
 ## Exact next actions
-1. Require green Flutter CI on the current #704 head after this handoff refresh and merge only that verified head.
-2. After #704, re-audit #489 native capability consumers for a concrete remaining duplication or fail-open boundary; do not add speculative abstractions.
+1. Require green Flutter CI on the final #709 head and merge only that verified head.
+2. After #709, re-audit canonical File metadata/native capability consumers for another concrete fail-open or missing-only enrichment defect; do not add speculative abstractions.
 3. Continue #495 only for concrete classification ambiguities. End-to-end File import waits for the Lane F managed-copy/ownership contract.
 4. Coordinate with Lane F on File managed-copy + explicit ownership before generic File import/delete lifecycle.
 5. Coordinate with Lane C for generic File import/create UX and File/Image/Weblink presentation hosts rather than reconstructing Database/View hotspots from Lane D.
