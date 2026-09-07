@@ -46,6 +46,34 @@ void main() {
     expect(rows, isEmpty);
   });
 
+  test('legacy Photo row deletion preserves an external absolute file',
+      () async {
+    final directory =
+        await Directory.systemTemp.createTemp('external_photo_delete_');
+    final externalDirectory =
+        await Directory.systemTemp.createTemp('external_photo_bytes_');
+    addTearDown(() => directory.delete(recursive: true));
+    addTearDown(() => externalDirectory.delete(recursive: true));
+    final fixture = await _repositoryFixture(directory.path);
+    addTearDown(fixture.database.close);
+    final externalFile = File('${externalDirectory.path}/external.jpg');
+    await externalFile.writeAsBytes(const <int>[7, 8, 9]);
+
+    final photoId = await fixture.repository.addPhoto(path: externalFile.path);
+    final photo = (await fixture.repository.watchPhotos().first)
+        .singleWhere((candidate) => candidate.id == photoId);
+
+    await fixture.repository.deletePhoto(photo);
+
+    expect(await externalFile.readAsBytes(), const <int>[7, 8, 9]);
+    expect(
+      await fixture.database.customSelect(
+        'SELECT id FROM photos WHERE id = $photoId',
+      ).get(),
+      isEmpty,
+    );
+  });
+
   test('Photo deletion preserves file reused by a native canonical Image',
       () async {
     final directory =
