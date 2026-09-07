@@ -24,18 +24,24 @@ Keep reusable Object/ObjectType identity, typed Property semantics, universal Bo
 - #761 merged: Body versions are one-based; zero/negative versions fail closed on read and serialization while positive future versions remain forward-compatible.
 - #755 merged: persisted Body block `id` / `type` / `text` / `attributes` field shapes fail closed instead of being stringified or flattened; valid unknown block attributes remain forward-compatible.
 - #780 merged as `af8a816a04275cd25020916eebdc8c5338a659a8`: Bookmark detail now composes the canonical universal Object Body through a read-only Bookmark -> Object identity boundary; unmirrored legacy Bookmarks stay fail-soft and corrupt Body stays fail-closed.
+- #796 merged as `e51506a8be1e796dde6d3f5cb4e7572a8d147410`: known checklist blocks reject a present non-boolean `checked` attribute before presentation; the same semantic validator protects persisted Body and ObjectType Body templates while unknown/future blocks remain opaque.
 - Universal Body text already participates in canonical Object search through Lane E; Lane A must not create a parallel note-search path.
 
 ## Universal Body status
-The Lane A correctness path for #481 is now integrated:
+The Lane A correctness path for #481 is integrated for canonical persisted content:
 - system/custom ObjectInspector Body editing is universal;
 - Weblink/Image identity-sensitive Property guards remain separate from Body mutability;
 - custom Objects and Daily Notes retain the same Body contract;
 - Bookmark detail uses the same canonical Body persistence/edit/action/reference services without a Bookmark-specific note table or writer;
 - Bookmark presentation never manufactures a missing mirrored Object identity;
-- unknown/rich blocks remain preserved, and malformed document/block structure fails closed before editable presentation.
+- unknown/rich blocks remain preserved, and malformed document/block structure or known checklist state fails closed before editable presentation.
 
-`ObjectInspectorPage` still contains Body editing orchestration that overlaps with the newly reusable `ObjectBodyEditorSection`. Consolidating that duplication would be a behavior-preserving shared-hotspot refactor rather than a correctness prerequisite for #481, so coordinate with Lane G/#225 before a broad extraction.
+`ObjectInspectorPage` still contains Body editing orchestration that overlaps with the reusable `ObjectBodyEditorSection`. Consolidating that duplication would be a behavior-preserving shared-hotspot refactor rather than a prerequisite for the persisted Body contract, so coordinate with Lane G/#225 before a broad extraction.
+
+## Known presentation gap
+`ObjectBodyStore.read()` now intentionally throws on malformed persisted Body. `ObjectBodyEditorSection` (used by Bookmark detail) handles that with an inline fail-closed error/retry state, but `ObjectInspectorPage._load()` still awaits `ObjectDetailContentLoader.load()` without an explicit load-failure state. A malformed Body can therefore surface as an async Inspector load error instead of the same safe retry UI.
+
+This is a concrete Lane A correctness follow-up, but `object_inspector_page.dart` is a shared hotspot. Implement only as a patch-sized error-state change after re-checking live ownership, or coordinate a behavior-preserving extraction with Lane G. Do not weaken `ObjectBodyStore` parsing to hide the presentation gap and do not fall back to an editable empty Body.
 
 ## Hotspot ownership / concurrency
 - `generic_database_page.dart`, `object_inspector_page.dart` and `app_shell.dart` remain shared hotspots. Re-check live PR ownership before editing them.
@@ -50,10 +56,11 @@ The Lane A correctness path for #481 is now integrated:
 - large behavior-preserving extraction from `ObjectInspectorPage` belongs with Lane G/#225 ownership coordination.
 
 ## Next actions
-1. Re-audit #481 after Lane C side-peek work lands; do not close it while that acceptance item is still unresolved.
-2. Continue only with a concrete new #56/#484 Object core invariant or regression found from real usage; do not invent speculative schema types.
-3. If Body editor duplication becomes an active maintainability task, coordinate a small behavior-preserving `ObjectInspectorPage` extraction with Lane G rather than racing the hotspot from Lane A.
-4. Keep Weblink/Image/File product semantics in Lane D, Relation lifecycle in Lane B, Search in Lane E, and Database/View layout in Lane C.
+1. Re-audit live ownership of `object_inspector_page.dart`; if unowned, add a small fail-closed Inspector load-error/retry regression for malformed Body without broad Body-editor extraction.
+2. Re-audit #481 after Lane C side-peek work lands; do not close it while that acceptance item is unresolved.
+3. Continue only with a concrete new #56/#484 Object core invariant or regression found from real usage; do not invent speculative schema types.
+4. If Body editor duplication becomes an active maintainability task, coordinate a small behavior-preserving `ObjectInspectorPage` extraction with Lane G rather than racing the hotspot from Lane A.
+5. Keep Weblink/Image/File product semantics in Lane D, Relation lifecycle in Lane B, Search in Lane E, and Database/View layout in Lane C.
 
 ## Current checkpoint
-No known unresolved A-core corruption issue remains in Body template/default parsing, block identity, document/block field shape, version range, managed timestamps, aliases, Daily Note identity, built-in-vs-user-defined schema protection, or Bookmark canonical Body composition. The remaining explicit #481 acceptance gap is generic Database side-peek Body composition/verification, owned by Lane C. Lane A should pause new speculative implementation unless a concrete core regression or newly unblocked A-owned requirement appears.
+Persisted Object Body and ObjectType Body-template corruption boundaries are fail-closed through structure, field shape, version range, block identity and known checklist semantic state. Bookmark detail exposes safe retry UI for corrupted Body. The remaining known Lane A presentation gap is matching that fail-closed load behavior in `ObjectInspectorPage`; the remaining explicit cross-lane #481 gap is generic Database side-peek Body composition/verification owned by Lane C.
