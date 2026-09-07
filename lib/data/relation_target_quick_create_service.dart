@@ -63,12 +63,10 @@ class RelationTargetQuickCreateService {
 
       case RelationTargetQuickCreateMode.tag:
         final name = _requiredInput(input, 'Tag name');
-        final tagId = await tagBridge.database.createTag(name);
-        await tagBridge.syncLegacyTags(workspaceId);
-        final objectId = await tagBridge.objectIdForLegacyTag(workspaceId, tagId);
-        if (objectId == null) {
-          throw StateError('Canonical Tag Object was not created after Tag sync.');
-        }
+        final objectId = await tagBridge.createLegacyTagObject(
+          workspaceId: workspaceId,
+          name: name,
+        );
         return _validatedTarget(
           workspaceId: workspaceId,
           targetObjectTypeId: targetObjectTypeId,
