@@ -76,6 +76,7 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
   final Set<int> _promotingWeblinkPropertyIds = <int>{};
   String? _systemKey;
   bool _loading = true;
+  bool _bodyLoadFailed = false;
   bool _dailyNoteNavigating = false;
 
   ObjectAliasStore get _aliasStore => ObjectAliasStore(widget.store);
@@ -180,7 +181,12 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
   }
 
   Future<void> _load() async {
-    if (mounted) setState(() => _loading = true);
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _bodyLoadFailed = false;
+      });
+    }
     final graph = ObjectGraphQueryStore(widget.store);
     final node = await graph.getNode(widget.objectId);
     if (node == null) {
@@ -188,10 +194,22 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
       return;
     }
 
-    final content = await _contentLoader.load(
-      objectTypeId: node.objectTypeId,
-      objectId: node.objectId,
-    );
+    ObjectDetailContent? content;
+    try {
+      content = await _contentLoader.load(
+        objectTypeId: node.objectTypeId,
+        objectId: node.objectId,
+      );
+    } on ObjectBodyContentLoadException {
+      if (!mounted) return;
+      setState(() {
+        _node = node;
+        _content = null;
+        _bodyLoadFailed = true;
+        _loading = false;
+      });
+      return;
+    }
     if (content == null) {
       if (mounted) setState(() => _loading = false);
       return;
@@ -212,6 +230,7 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
       _systemKey = systemKey;
       _relations = relations;
       _aliases = aliases;
+      _bodyLoadFailed = false;
       _loading = false;
     });
   }
@@ -691,6 +710,35 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
   Widget build(BuildContext context) {
     if (_loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (_bodyLoadFailed) {
+      return Scaffold(
+        appBar: AppBar(),
+        body: Center(
+          child: Container(
+            key: const ValueKey('body-load-error'),
+            padding: const EdgeInsets.all(24),
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.error_outline, size: 28),
+                const SizedBox(height: 12),
+                const Text(
+                  'Bodyを読み込めませんでした。内容は変更されていません。',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  key: const ValueKey('body-load-retry'),
+                  onPressed: _load,
+                  child: const Text('再試行'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
     }
     final node = _node;
     final content = _content;
