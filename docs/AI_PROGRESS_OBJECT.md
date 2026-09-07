@@ -1,95 +1,101 @@
 # AI Progress — Object Core & Body Lane
 
-> Lane A durable handoff. Read `AGENTS.md`, the active Issue, `docs/AI_PROGRESS.md`, live PR ownership and CI before implementation.
+> Lane A durable handoff. Read `AGENTS.md`, the active Issue, `docs/AI_PROGRESS.md`, live PR ownership and CI before implementation. GitHub live state overrides historical notes below.
 
 ## Lane goal
-Keep reusable Object/ObjectType identity, typed Property semantics, universal Body, Daily Note identity and shared detail/opening contracts coherent across built-in and user-defined ObjectTypes.
+Keep reusable Object/ObjectType identity, typed Property semantics, universal Body, Daily Note identity and shared Object opening/detail contracts coherent across built-in and user-defined ObjectTypes. Lane A may also own a focused legacy Bookmark presentation convergence Issue when GitHub explicitly routes it here; completed presentation work does not broaden Lane A into Primitive, Database/View, Search, Storage or Refactor ownership.
 
-## Primary active issues
-- #481 — universal Body/note surface for every ObjectType.
-- #56 — Object/ObjectType/detail/opening portions of the generic architecture umbrella.
-- #484 — user-defined ObjectType core behavior and built-in-vs-user-defined boundary only.
-- #490 — template/ObjectType ownership and template-instantiation integrity only; Database/View template UX stays Lane C.
-- #493 — Object/schema/default integrity only; Database/View impact UX stays Lane C and Relation lifecycle stays Lane B.
+## Current active scope — 2026-09-08
+- #56 — only concrete Object/ObjectType/Body/detail/opening obligations that remain clearly Lane A-owned.
 
-## Current integrated state — 2026-09-08
-- #503 merged: shared `ObjectInspectorPage` Body editing is universal for system and custom ObjectTypes.
-- #689 merged: custom ObjectType and Daily Note universal Body regressions are covered.
-- #699 merged: `ObjectStore.setPropertyValue` treats persisted Property ObjectType/type/semantics as authoritative and rejects forged metadata/computed direct writes.
-- #712 merged: concurrent generic Object creation returns the exact inserted row id.
-- #724 merged: intrinsic `createdTime` / `updatedTime` remain read-only through the shared Object detail mutation contract.
-- #511 merged: `ObjectTypeDefaults` can persist a reusable Body template and new Objects receive the current template without mutating existing Body.
-- #517 merged: focused Body-template updates preserve other ObjectType presentation defaults.
-- #521 merged: Object Body rejects blank/lossy block identities and duplicate block ids before persistence.
-- #740 merged: ObjectType defaults reject duplicate Property ids on both write and read boundaries.
-- #749 merged: malformed present Body `version` / `blocks` fields fail closed instead of silently becoming current-version/empty Body.
-- #761 merged: Body versions are one-based; zero/negative versions fail closed on read and serialization while positive future versions remain forward-compatible.
-- #755 merged: persisted Body block `id` / `type` / `text` / `attributes` field shapes fail closed instead of being stringified or flattened; valid unknown block attributes remain forward-compatible.
-- #780 merged as `af8a816a04275cd25020916eebdc8c5338a659a8`: Bookmark detail now composes the canonical universal Object Body through a read-only Bookmark -> Object identity boundary; unmirrored legacy Bookmarks stay fail-soft and corrupt Body stays fail-closed.
-- #796 merged as `e51506a8be1e796dde6d3f5cb4e7572a8d147410`: known checklist blocks reject a present non-boolean `checked` attribute before presentation; the same semantic validator protects persisted Body and ObjectType Body templates while unknown/future blocks remain opaque.
-- #811 merged as `26d624fe4cd7d586f636ed255e3e5b341922aa40`: `ObjectDetailContentLoader` distinguishes unsafe persisted Body reads, and `ObjectInspectorPage` now fails closed with the shared `body-load-error` / `body-load-retry` contract instead of exposing an editable empty Body or async load error. Focused loader/widget regressions verify corrupt content remains unchanged and retry recovers after canonical repair.
-- #827 merged as `2b4a3b11277c26ad05db45745c3076f33ec048e1`: ObjectType template application now performs a pure fail-closed preflight before primitive provisioning, rejecting duplicate Property names, missing/unknown primitive targets, unknown Property storage types and invalid View Property references before side effects.
-- #833 merged as `7d5efa9a0ff24978b7d3ac3b243c8368289b1162`: primitive Relation target provisioning now runs inside the same template-application transaction as the user-owned ObjectType, Properties, Views and instance registry, so later DB/runtime failure cannot leave a partial system primitive behind.
-- #835 merged as `4be3fe89100517f25fc1b7f4c8777b63d35f1f2d`: unknown persisted Object Property storage types fail closed with `FormatException` instead of silently hydrating as Text; known mappings are unchanged and corrupt raw storage is not auto-repaired or rewritten.
-- #843 merged as `a6e4dd39246d8c1f054ef015e56fc59e6ae9113d`: template Property preflight now uses the same canonical trimmed naming rule as persistence, rejecting blank names, leading/trailing-whitespace names, normalized duplicates such as `"Name"` / `" Name "`, and non-canonical template-local View/Gallery Property references before primitive provisioning.
-- Universal Body text already participates in canonical Object search through Lane E; Lane A must not create a parallel note-search path.
+Focused Lane A issues now completed/closed:
+- #481 — universal Object Body across all real shared opening surfaces.
+- #249 — Bookmark Gallery/List presentation parity tracked from real-host gaps.
 
-## Universal Body status
-The Lane A correctness path for #481 is integrated for canonical persisted content:
-- system/custom ObjectInspector Body editing is universal;
-- Weblink/Image identity-sensitive Property guards remain separate from Body mutability;
-- custom Objects and Daily Notes retain the same Body contract;
-- Bookmark detail uses the same canonical Body persistence/edit/action/reference services without a Bookmark-specific note table or writer;
-- Bookmark presentation never manufactures a missing mirrored Object identity;
-- unknown/rich blocks remain preserved, and malformed document/block structure or known checklist state fails closed before editable presentation;
-- malformed persisted Body now has safe retry presentation in both the reusable `ObjectBodyEditorSection` and the shared `ObjectInspectorPage` host.
+There is currently **no known independent Lane A production slice** after #249 closure. Idle is correct until #56 or real usage exposes a concrete Object-core/detail regression.
 
-`ObjectInspectorPage` still contains Body editing orchestration that overlaps with the reusable `ObjectBodyEditorSection`. Consolidating that duplication would be a behavior-preserving shared-hotspot refactor rather than a prerequisite for the persisted Body contract, so coordinate with Lane G/#225 before a broad extraction.
+## Integrated Object/Core state
+Major correctness checkpoints already on `main` include:
+- universal Body editing for system/custom ObjectTypes and Daily Notes (#503/#689);
+- persisted Property metadata/type/semantics remain authoritative and computed/intrinsic values fail closed on direct writes (#699/#724/#835);
+- concurrent Object creation returns the exact inserted identity (#712);
+- reusable ObjectType Body templates and focused default updates (#511/#517);
+- Body structure/version/block identity/field-shape validation is fail-closed while unknown/future blocks remain forward-compatible (#521/#749/#755/#761/#796);
+- Bookmark detail composes canonical Object Body without manufacturing missing mirrored Object identity (#780);
+- corrupt Body reads expose the shared safe retry boundary instead of editable empty content (#811);
+- ObjectType template application preflights invalid definitions before side effects and keeps primitive provisioning in the same transaction (#827/#833);
+- template Property names/references use canonical persistence naming rules and reject blank/padded/normalized-duplicate identities before provisioning (#843).
+
+Search indexing of Body/title/aliases/properties is Lane E-owned; Relation lifecycle is Lane B-owned. Do not create duplicate pipelines here.
+
+## Universal Body — #481 completed
+#874 (`38c20b67…`) completed the final cross-host requirement by composing the reusable canonical `ObjectBodyEditorSection` into Generic Database side peek. The same persisted Body contract now spans:
+- shared Object Inspector/detail;
+- side peek;
+- center peek/full-page shared opening paths;
+- Daily Notes and custom ObjectTypes;
+- Bookmark detail through the canonical Bookmark -> Object identity boundary.
+
+#481 has been audited and closed. The previous handoff statement that Generic Database side peek blocked #481 is obsolete and must not be revived.
+
+`ObjectInspectorPage` still contains some Body orchestration that overlaps reusable Body components. Any broad behavior-preserving extraction belongs with Lane G/#225 coordination, not speculative Lane A work.
+
+## Bookmark presentation parity — #249 completed
+The three concrete real-host gaps from #249 are now covered:
+- one Person/Object target per semantic chip is integrated; comma-joined synthetic Person chips are no longer the intended path (#301 and follow-up shared presentation work);
+- Bookmark List information hierarchy/readability was improved through focused metadata/chip/spacing slices (#352/#354 and follow-ups), with canonical URL presentation retained (#360);
+- Bookmark opening parity is handled through the shared opening contract and #247 is completed/closed;
+- #885 (`38494512fc2ba119fecb3f94e6973577aa665f67`) wires the real Stage1 Gallery to shared `ObjectGalleryModeMenu`, `DatabaseViewGalleryAdapter` and `ObjectGalleryView`, persisting `settings['galleryMode']` per active Bookmark View without introducing a Bookmark-only mode or renderer.
+
+The #885 real-host regression switches fixed -> masonry -> fixed and checks both renderer keys and persisted View settings. Filtering, sorting, selection, card content and opening behavior stay on the existing path.
+
+Validation for #885:
+- CI #2705 passed maintainability/feature guards, Drift generation, Analyze and the functional Gallery assertions, but the new widget test teardown left a Drift zero-duration cleanup timer pending.
+- commit `c791201832e174662bd0ea06ba5e5caa67286c5a` added the repository-standard post-unmount 1 ms pump; production code was unchanged.
+- Flutter CI #2712 then passed all maintainability/feature guards, Drift generation, `flutter analyze`, and the full Flutter test suite.
+- #249 was closed as completed after #885 merged.
+
+Any later visual polish discovered on real macOS should enter through a concrete #56/follow-up issue rather than keeping #249 conceptually active.
 
 ## ObjectType/template integrity status
-The Lane A core integrity slices for the current template path are integrated:
-- invalid template definitions covered by Lane A preflight are rejected before canonical primitive provisioning;
-- valid template application may provision/reuse system primitives, but those writes participate in the same transaction as user-owned template output;
-- template-created ObjectTypes/Properties/Views remain user-owned and later template versions do not silently rewrite customized instances;
-- unsupported persisted Property storage types no longer collapse to Text at the shared parser boundary;
-- template-local Property names now match the persisted canonical naming rule, so blank/whitespace-lossy names and normalized duplicates cannot change identity after preflight.
+The current Lane A core integrity requirements for the template path are integrated:
+- deterministic invalid template definitions fail before canonical primitive provisioning;
+- primitive provisioning participates in the same transaction as user-owned ObjectType/Property/View/template output;
+- template-created definitions remain user-owned and later template versions do not silently rewrite customized instances;
+- unsupported persisted Property storage types fail closed rather than becoming Text;
+- template-local Property identities match persistence normalization.
 
-The previously recorded Property-name normalization audit is complete via #843. Do not expand Lane A into general template/View presentation validation merely because adjacent persistence APIs also normalize labels; current `AGENTS.md` routes user-owned template/domain instantiation and Database/View UX primarily to Lane C. Only resume here for a concrete ObjectType/core identity invariant that is clearly Lane A-owned.
-
-## Known presentation gap
-There is no remaining known Lane A-only universal-Body presentation correctness gap after #811. The explicit #481 product gap is cross-lane: generic Database side peek is still an alternate Lane C-owned composition surface and must reuse the canonical Body/detail seam before #481 can close.
-
-Do not broaden Lane A into `generic_database_page.dart` to close that gap. Do not introduce another Body persistence/editor path. If a new Lane A issue is found, prefer a small core invariant/regression in Object/ObjectType/Body/detail contracts over speculative presentation work.
+General template/domain instantiation UX, View labels/layout/grouping and schema-management presentation remain Lane C concerns under current `AGENTS.md`. Do not absorb adjacent normalization/presentation work into Lane A without a concrete ObjectType/core identity invariant.
 
 ## Hotspot ownership / concurrency
-- `generic_database_page.dart`, `object_inspector_page.dart` and `app_shell.dart` remain shared hotspots. Re-check live PR ownership before editing them.
-- `object_type_template_store.dart` is a growing template core file; #843 was intentionally narrow. Further template/View behavior should follow current seven-lane routing instead of being absorbed by Lane A.
-- Prefer domain/store/service/test slices when a core invariant can be enforced below presentation.
-- Parallel executions are active; always re-fetch `main` and live PR ownership immediately before writing.
+Shared hotspots include `generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, `bookmark_unified_stage1_page.dart`, `bookmark_reorderable_properties.dart`, `people_management_page.dart`, `settings_page.dart`, `profile_manager.dart`, and `app_database.dart`.
 
-## Cross-lane dependencies
-- #481 cannot fully close until Lane C composes canonical Body into generic Database side peek / verifies its side-peek contract. Lane A should provide/reuse Body/detail contracts rather than broad-editing Database/View layout.
-- #490 remaining real-host template selection/layout/grouping and Bookmark-like generic product composition are Lane C/product concerns under current routing. Lane A should only take a clearly isolated ObjectType/core identity invariant.
-- #493 real-host schema management, impact dialogs and View-reference UX remain Lane C; Relation target/cardinality lifecycle remains Lane B. Lane A should keep persisted Property/default/schema identity fail-closed when a concrete core regression appears.
-- Weblink/Image/File/Tag product identity, managed media and primitive actions belong to Lane D.
-- Relation mutation/integrity belongs to Lane B.
-- Search/index pipelines belong to Lane E; Body/alias/property data contracts stay Lane A-owned, but indexing pipelines should not be duplicated here.
-- large behavior-preserving extraction from `ObjectInspectorPage` belongs with Lane G/#225 ownership coordination.
+- Re-check latest `main` and open PR ownership immediately before editing.
+- The Stage1 lease used for #885 is released; no Lane A production WIP remains.
+- Prefer core Store/Service/domain/test fixes below presentation when a real Object invariant can be enforced there.
+- Coordinate broad Body/detail extraction with Lane G/#225.
 
-## Next actions
-1. Re-audit #481 only after Lane C side-peek Body composition/verification lands; do not close #481 while that acceptance item is unresolved.
-2. Monitor #56 and real usage for a concrete Object/ObjectType/Body/detail core regression. Do not invent new schema types or abstractions to keep Lane A busy.
-3. If a #493 core integrity regression appears, keep the fix below presentation and outside Relation lifecycle; Database/View migration UX remains Lane C and Relation schema changes remain Lane B.
-4. If Body editor duplication becomes an active maintainability task, coordinate a small behavior-preserving `ObjectInspectorPage` extraction with Lane G rather than racing the hotspot from Lane A.
-5. Keep Weblink/Image/File product semantics in Lane D, Relation lifecycle in Lane B, Search in Lane E, and Database/View/template UX in Lane C.
+## Cross-lane boundaries
+- Weblink/Image/File/Tag identity, managed media, canonical image import/editing and Photo -> Image migration: Lane D (#155/#245).
+- Relation mutation/read/index/backlink/audit/reconcile correctness: Lane B.
+- Database/View/template/schema UX and generic layout contracts: Lane C.
+- Search projection/refresh/indexing: Lane E.
+- Vault/filesystem/release lifecycle: Lane F.
+- behavior-preserving hotspot reduction and caller-zero legacy deletion: Lane G/#225.
+
+#885 sharing generic Gallery contracts does not transfer generic Gallery ownership to Lane A after #249 completion.
+
+## Exact next actions
+1. Re-read live #56, latest `main`, `docs/AI_PROGRESS.md`, this file and open PR ownership on the next Lane A run.
+2. Take only a concrete Object/ObjectType/Body/detail/opening correctness regression or explicitly routed Object-core acceptance item.
+3. Do not invent RichText/new schema types, template label validation, Body abstractions or Bookmark presentation work merely to keep Lane A active.
+4. If a new issue touches Relation, Primitive, Search, Database/View, Storage or broad refactor semantics, hand it to the owning lane rather than creating a parallel implementation.
+5. If no concrete Lane A item exists, stop under the AGENTS idle/no-actionable-work condition.
 
 ## Latest run checkpoint — 2026-09-08
-- Code PR #843 merged to `main` as `a6e4dd39246d8c1f054ef015e56fc59e6ae9113d`.
-- Validation: Flutter CI #2549 passed on the implementation plus then-current `main`; after refreshing over Lane D #841, Flutter CI #2552 also passed in full, including maintainability guardrails, Drift generation, `flutter analyze`, and the complete Flutter test step.
-- #843 changed only `lib/data/object_type_template_store.dart` and `test/object_type_template_preflight_test.dart`; shared presentation hotspots were not edited.
-- During follow-up audit, static template ObjectType/View labels were noted to have their own persistence normalization, but general template/domain instantiation is routed to Lane C and no current Issue requires Lane A to claim that adjacent behavior.
-- Work in progress: none in Lane A production code.
-- Stop reason: no remaining actionable independent Lane A-only acceptance item is known. #481 is blocked on the Lane C side-peek composition item, and the next adjacent template work is Lane C-owned. Resume when that dependency lands or a concrete Object/ObjectType/Body/detail core regression appears.
-
-## Current checkpoint
-Persisted Object Body and ObjectType Body-template corruption boundaries are fail-closed through structure, field shape, version range, block identity and known checklist semantic state. Bookmark detail and `ObjectInspectorPage` both expose safe retry UI for corrupted Body without mutating or flattening stored content. ObjectType template instantiation now fails before deterministic invalid definitions can provision primitives, rolls primitive provisioning back with later template-application failures, rejects unknown persisted Property storage types instead of coercing them to Text, and aligns template-local Property identity with persistence normalization. The remaining explicit #481 close blocker is generic Database side-peek Body composition/verification owned by Lane C; there is currently no separate safe Lane A production slice to pursue without crossing lane ownership.
+- #481 was re-audited after #874 and is completed/closed.
+- PR #885 merged to `main` as `38494512fc2ba119fecb3f94e6973577aa665f67` after Flutter CI #2712 full green.
+- #249 was audited against its live comments/close condition and closed as completed.
+- During #885 integration, main also advanced through Search #884 (`f1651ba1…`, #877 completed) and Primitive #881 (`47d31345…`, canonical Bookmark Image Relation editing); both were audited as non-overlapping with the Stage1 Gallery hunk.
+- Work in progress: docs/handoff only; no Lane A production code remains open.
+- Stop reason after handoff: no remaining actionable independent Lane A-only acceptance item is known. Resume only for a concrete #56/Object-core/detail regression or explicit new Lane A routing.
