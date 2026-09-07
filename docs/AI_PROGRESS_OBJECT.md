@@ -22,10 +22,11 @@ Keep reusable Object/ObjectType identity, typed Property semantics, universal Bo
 - #740 merged: ObjectType defaults reject duplicate Property ids on both write and read boundaries.
 - #749 merged: malformed present Body `version` / `blocks` fields fail closed instead of silently becoming current-version/empty Body.
 - #761 merged: Body versions are one-based; zero/negative versions fail closed on read and serialization while positive future versions remain forward-compatible.
+- #755 merged: persisted Body block `id` / `type` / `text` / `attributes` field shapes fail closed instead of being stringified or flattened; valid unknown block attributes remain forward-compatible.
 - Universal Body text already participates in canonical Object search through Lane E; Lane A must not create a parallel note-search path.
 
 ## Active slice
-PR #732 — `feature/object-bookmark-universal-body-main-481`
+PR #780 — `feature/object-bookmark-universal-body-main2-481`
 
 Goal: expose the canonical universal Object Body inside the actual Bookmark detail composition without moving primitive identity or Relation lifecycle into Lane A.
 
@@ -33,15 +34,14 @@ Current implementation:
 - `ObjectBodyEditorSection` is backed by the canonical Body store/edit/action/reference services.
 - `BookmarkObjectDetailContext` resolves Bookmark -> mirrored Object identity through a read-only boundary; presentation never manufactures missing identity.
 - `BookmarkObjectBodySection` isolates Bookmark ID resolution and canonical Body composition from the legacy backlink stream.
-- `BookmarkRelationSection` composes that focused Body section after its existing legacy Relation surface, so real Bookmark side/center/full detail continues to expose one canonical Body path.
+- `BookmarkRelationSection` keeps its existing Relation implementation intact and adds only a five-line Body-host composition diff after that surface.
 - corrupt persisted Body remains fail-closed with retry instead of becoming an editable empty document.
 - Object references open through canonical Object detail.
 
 Validation / CI:
-- production/analyze/maintainability checks have been green across repeated #732 runs.
-- earlier widget regressions caused the repository `flutter test` step to stay alive until the 18-minute CI timeout without an assertion failure.
-- full `CoreObjectBridge.syncAll()` was removed from the regression, then the Body integration seam was separated from the legacy `BacklinkRepository` stream so the focused test no longer owns that long-lived subscription.
-- latest #732 head is `f1419500a3c082b8cf04bb471611a7246a3662d7`; process its normal CI before merge and re-fetch the head before any write.
+- stale #732 reached a fully green Flutter CI after its focused regression was separated from `CoreObjectBridge.syncAll()` and the legacy `BacklinkRepository` stream.
+- #780 recreates that green implementation from newer `main` after #755, with a smaller `BookmarkRelationSection` diff; process #780's own normal CI before merge.
+- latest #780 implementation head at creation is `3047709d3652a9be07532562ec3ff83e2221fd35`; always re-fetch the PR head before a write or merge because `main` and parallel lanes advance frequently.
 
 ## Hotspot ownership / concurrency
 - `generic_database_page.dart`, `object_inspector_page.dart` and `app_shell.dart` remain shared hotspots. Re-check live PR ownership before editing them.
@@ -55,11 +55,11 @@ Validation / CI:
 - Search/index pipelines belong to Lane E; Body/alias/property data contracts stay Lane A-owned, but indexing pipelines should not be duplicated here.
 
 ## Next actions
-1. Process current PR #732 CI and fix only the focused Bookmark Body regression if it still fails or times out.
-2. Merge #732 when green and the branch head is unchanged.
-3. Re-audit #481 acceptance after #732; generic Database side-peek Body remains a Lane C dependency unless ownership changes explicitly.
+1. Process current PR #780 CI and fix only failures caused by the latest-main recreation.
+2. Merge #780 when green/mergeable and the branch head is unchanged.
+3. Re-audit #481 acceptance after #780; generic Database side-peek Body remains a Lane C dependency unless ownership changes explicitly.
 4. Continue only with concrete #56/#484 Object core invariants not already protected by existing tests; do not invent speculative schema types or redesign Relation/primitive subsystems.
 5. Keep this handoff synchronized after material Lane A merges so stale branch/PR instructions do not cause duplicate work.
 
 ## Current checkpoint
-No known unresolved A-core corruption issue remains in Body template/default parsing, block identity, document field shape/version range, managed timestamps, aliases, Daily Note identity, or built-in-vs-user-defined schema protection. The active Lane A implementation risk is #732's Bookmark-detail integration CI behavior; the remaining generic Database side-peek Body composition is cross-lane Lane C work.
+No known unresolved A-core corruption issue remains in Body template/default parsing, block identity, document/block field shape, version range, managed timestamps, aliases, Daily Note identity, or built-in-vs-user-defined schema protection. The active Lane A implementation risk is #780's latest-main Bookmark-detail integration CI/mergeability; the remaining generic Database side-peek Body composition is cross-lane Lane C work.
