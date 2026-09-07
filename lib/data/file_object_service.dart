@@ -129,6 +129,8 @@ class FileObjectService {
     ]);
     final normalizedContentType = _normalizedContentType(contentType);
     final extension = _extension(filename ?? storedPath);
+    final importedAtValue =
+        (importedAt ?? DateTime.now()).toUtc().toIso8601String();
     final definition = await ensureDefinition(workspaceId);
     final objects = await systemObjects.objectStore.listObjects(
       definition.objectType.id,
@@ -137,7 +139,8 @@ class FileObjectService {
     for (final object in objects) {
       final existingPath =
           '${object.values[definition.fileProperty.id] ?? ''}'.trim();
-      if (existingPath.isEmpty || _canonicalStoredPath(existingPath) != storedPath) {
+      if (existingPath.isEmpty ||
+          _canonicalStoredPath(existingPath) != storedPath) {
         continue;
       }
       await _setIfMissing(
@@ -151,7 +154,16 @@ class FileObjectService {
         normalizedContentType,
       );
       await _setIfMissing(object, definition.extensionProperty, extension);
-      await _setNumberIfMissing(object, definition.sizeBytesProperty, validatedSize);
+      await _setNumberIfMissing(
+        object,
+        definition.sizeBytesProperty,
+        validatedSize,
+      );
+      await _setIfMissing(
+        object,
+        definition.importedAtProperty,
+        importedAtValue,
+      );
       return _reload(definition.objectType.id, object.id);
     }
 
@@ -177,11 +189,15 @@ class FileObjectService {
       normalizedContentType,
     );
     await _setIfMissing(created, definition.extensionProperty, extension);
-    await _setNumberIfMissing(created, definition.sizeBytesProperty, validatedSize);
+    await _setNumberIfMissing(
+      created,
+      definition.sizeBytesProperty,
+      validatedSize,
+    );
     await _setIfMissing(
       created,
       definition.importedAtProperty,
-      (importedAt ?? DateTime.now()).toUtc().toIso8601String(),
+      importedAtValue,
     );
     return _reload(definition.objectType.id, objectId);
   }
@@ -250,7 +266,9 @@ class FileObjectService {
     final candidate = value?.trim().toLowerCase();
     if (candidate == null || candidate.isEmpty) return null;
     final separator = candidate.indexOf(';');
-    final mime = separator < 0 ? candidate : candidate.substring(0, separator).trim();
+    final mime = separator < 0
+        ? candidate
+        : candidate.substring(0, separator).trim();
     return mime.isEmpty ? null : mime;
   }
 
