@@ -2,8 +2,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
-import '../../../../data/app_database.dart';
 import '../../../../data/object_store.dart';
+import '../../../../data/profile_path_resolver.dart';
 import '../../../../services/image_visual_resolver.dart';
 
 typedef ObjectImagePreviewCacheEvictor = Future<void> Function(String filePath);
@@ -21,7 +21,7 @@ typedef ObjectImagePreviewVisualResolver = Future<ImageManagedVisual?> Function(
 class ObjectImageDetailPreview extends StatefulWidget {
   const ObjectImageDetailPreview({
     super.key,
-    required this.database,
+    required this.pathResolver,
     required this.objectStore,
     required this.objectTypeId,
     required this.objectId,
@@ -32,7 +32,7 @@ class ObjectImageDetailPreview extends StatefulWidget {
     this.visualResolver,
   });
 
-  final AppDatabase database;
+  final ProfilePathResolver pathResolver;
   final ObjectStore objectStore;
   final int objectTypeId;
   final int objectId;
@@ -66,7 +66,7 @@ class _ObjectImageDetailPreviewState extends State<ObjectImageDetailPreview> {
   @override
   void didUpdateWidget(covariant ObjectImageDetailPreview oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final identityChanged = oldWidget.database != widget.database ||
+    final identityChanged = oldWidget.pathResolver != widget.pathResolver ||
         oldWidget.objectStore != widget.objectStore ||
         oldWidget.objectTypeId != widget.objectTypeId ||
         oldWidget.objectId != widget.objectId ||
@@ -86,7 +86,7 @@ class _ObjectImageDetailPreviewState extends State<ObjectImageDetailPreview> {
           )
         : await ImageVisualResolver(
             widget.objectStore,
-            pathResolver: widget.database.pathResolver,
+            pathResolver: widget.pathResolver,
           ).resolveManaged(
             imageObjectTypeId: widget.objectTypeId,
             imageObjectId: widget.objectId,
