@@ -8,11 +8,12 @@ typedef ObjectPropertyViewReferenceDetach =
 /// Presents the read-only impact of deleting a user-defined Property.
 ///
 /// Deletion is enabled only when no Object value, persisted View setting,
-/// computed Property schema, or managed bidirectional Relation pair would be
-/// affected. Callers may provide [onDetachViewReferences] to let the user
-/// explicitly remove only Database/View references and return a freshly
-/// inspected impact. Stored Object values, computed schema, and Relation schema
-/// remain separate blockers and are never cleared by this UX.
+/// Database collection filter, computed Property schema, or managed
+/// bidirectional Relation pair would be affected. Callers may provide
+/// [onDetachViewReferences] to let the user explicitly remove only View-owned
+/// references and return a freshly inspected impact. Stored Object values,
+/// collection filters, computed schema, and Relation schema remain separate
+/// blockers and are never cleared by this UX.
 Future<bool?> showObjectPropertyDeleteImpactDialog(
   BuildContext context, {
   required ObjectPropertyDeleteImpact impact,
@@ -51,6 +52,7 @@ class _ObjectPropertyDeleteImpactDialogState
   bool get _canDelete =>
       !_impact.hasStoredValues &&
       !_impact.isReferencedByViews &&
+      !_impact.isReferencedByCollections &&
       !_impact.hasComputedPropertyImpact &&
       !_impact.hasPairedRelationImpact;
 
@@ -115,7 +117,8 @@ class _ObjectPropertyDeleteImpactDialogState
             children: [
               if (_canDelete)
                 const Text(
-                  '保存値・View参照・Computed参照はありません。このPropertyを削除できます。',
+                  '保存値・View参照・Collection参照・Computed参照はありません。'
+                  'このPropertyを削除できます。',
                 )
               else ...[
                 DecoratedBox(
@@ -126,8 +129,9 @@ class _ObjectPropertyDeleteImpactDialogState
                   child: Padding(
                     padding: const EdgeInsets.all(12),
                     child: Text(
-                      'データ・View設定・Computed schema・関連するRelation schemaを失わないため、'
-                      'この状態では削除できません。影響を解消してから再度実行してください。',
+                      'データ・View設定・Collection filter・Computed schema・'
+                      '関連するRelation schemaを失わないため、この状態では削除できません。'
+                      '影響を解消してから再度実行してください。',
                       style: TextStyle(color: scheme.onErrorContainer),
                     ),
                   ),
@@ -145,6 +149,11 @@ class _ObjectPropertyDeleteImpactDialogState
                 warning: _impact.isReferencedByViews,
               ),
               _ImpactRow(
+                label: '参照しているCollection filter',
+                value: '${_impact.collectionReferences.length}件',
+                warning: _impact.isReferencedByCollections,
+              ),
+              _ImpactRow(
                 label: '参照しているFormula/Rollup',
                 value: '${_impact.computedReferences.length}件',
                 warning: _impact.hasComputedPropertyImpact,
@@ -155,6 +164,35 @@ class _ObjectPropertyDeleteImpactDialogState
                   value: paired.name,
                   warning: true,
                 ),
+              if (_impact.collectionReferences.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Collection参照',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 6),
+                ..._impact.collectionReferences.map(
+                  (reference) => Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: scheme.outlineVariant),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                        child: Text(
+                          reference.databaseName,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
               if (_impact.computedReferences.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 Text(
