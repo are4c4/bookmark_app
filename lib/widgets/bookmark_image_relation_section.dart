@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
+import '../data/object_store.dart';
 import '../domain/object_model.dart';
 import '../services/bookmark_image_relation_service.dart';
 import '../services/image_visual_resolver.dart';
