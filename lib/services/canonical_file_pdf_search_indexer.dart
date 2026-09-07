@@ -72,15 +72,25 @@ class CanonicalFilePdfSearchIndexer {
   /// or explicitly refreshing search is sufficient for current PDF text to join
   /// the same Object index as title, Properties, Body and Relations.
   Future<void> rebuildWorkspace(int workspaceId) async {
-    final fileType = await _systemObjects.getSystemObjectType(
-      workspaceId: workspaceId,
-      systemKey: FileObjectService.systemKey,
-    );
-    if (fileType != null) {
-      final files = await _objectStore.listObjects(fileType.id);
+    int? fileObjectTypeId;
+    try {
+      fileObjectTypeId = (await _systemObjects.getSystemObjectType(
+        workspaceId: workspaceId,
+        systemKey: FileObjectService.systemKey,
+      ))
+          ?.id;
+    } on FormatException {
+      // File schema decoding intentionally fails closed. PDF extraction is an
+      // optional Search contribution, so isolate that corrupt system type and
+      // still let the canonical Object FTS rebuild healthy ObjectTypes.
+      fileObjectTypeId = null;
+    }
+
+    if (fileObjectTypeId != null) {
+      final files = await _objectStore.listObjects(fileObjectTypeId);
       for (final file in files) {
         await _replaceContribution(
-          fileObjectTypeId: fileType.id,
+          fileObjectTypeId: fileObjectTypeId,
           fileObjectId: file.id,
         );
       }

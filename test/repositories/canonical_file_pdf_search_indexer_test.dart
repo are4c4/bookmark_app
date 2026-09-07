@@ -138,4 +138,119 @@ void main() {
       reason: 'focused PDF refresh must preserve ordinary File metadata search',
     );
   });
+
+  test('corrupt File schema does not block healthy Global Search rebuild', () async {
+    final root = await Directory.systemTemp.createTemp('pdf_search_corrupt_file_');
+    addTearDown(() => root.delete(recursive: true));
+    final managed = File('${root.path}/attachments/corruptible.pdf');
+    await managed.parent.create(recursive: true);
+    await managed.writeAsBytes('%PDF-1.7\nbody'.codeUnits);
+
+    final database = AppDatabase.forTesting(
+      NativeDatabase.memory(),
+      profileDirectoryPath: root.path,
+    );
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final files = FileObjectService(
+      systemObjects: SystemObjectStore(
+        database: database,
+        objectStore: objectStore,
+      ),
+      defaultsStore: ObjectTypeDefaultsStore(genericStore),
+    );
+    final definition = await files.ensureDefinition(workspaceId);
+    final fileObject = await files.findOrCreateManaged(
+      workspaceId: workspaceId,
+      filePath: managed.path,
+      title: 'Corruptible PDF object',
+      originalFilename: 'corruptible.pdf',
+      contentType: 'application/pdf',
+    );
+    final healthyTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Healthy Search Type',
+    );
+    final healthyObjectId = await objectStore.createObject(
+      objectTypeId: healthyTypeId,
+      title: 'HealthyBeforeFileCorruption',
+    );
+
+    var readerCalls = 0;
+    final indexer = CanonicalFilePdfSearchIndexer.forStore(
+      genericStore,
+      readText: (path) async {
+        readerCalls++;
+        expect(path, managed.path);
+        return 'CorruptiblePdfDerivedToken';
+      },
+    );
+    final globalSearch = ObjectGlobalSearchService(
+      genericStore,
+      pdfSearchIndexer: indexer,
+    );
+
+    await globalSearch.rebuildWorkspace(workspaceId);
+    expect(readerCalls, 1);
+    expect(
+      (await globalSearch.search(
+        workspaceId: workspaceId,
+        rawQuery: 'corruptiblepdfderived',
+      ))
+          .map((hit) => hit.object.id),
+      contains(fileObject.id),
+    );
+
+    final corruptProperty = definition.originalFilenameProperty;
+    await database.customStatement(
+      'UPDATE generic_properties SET type = ? WHERE id = ?',
+      ['futureRichText', corruptProperty.id],
+    );
+    await objectStore.renameObject(
+      healthyObjectId,
+      'HealthyAfterFileCorruption',
+    );
+
+    await globalSearch.rebuildWorkspace(workspaceId);
+    expect(
+      readerCalls,
+      1,
+      reason: 'corrupt File schema must skip optional PDF reconciliation',
+    );
+    expect(
+      await globalSearch.search(
+        workspaceId: workspaceId,
+        rawQuery: 'corruptiblepdfderived',
+      ),
+      isEmpty,
+      reason: 'corrupt File ObjectType must be omitted from the FTS rebuild',
+    );
+    expect(
+      (await globalSearch.search(
+        workspaceId: workspaceId,
+        rawQuery: 'healthyafterfilecorruption',
+      ))
+          .map((hit) => hit.object.id),
+      contains(healthyObjectId),
+      reason: 'healthy ObjectTypes must still rebuild through Global Search',
+    );
+
+    await database.customStatement(
+      'UPDATE generic_properties SET type = ? WHERE id = ?',
+      [corruptProperty.storageType, corruptProperty.id],
+    );
+    await globalSearch.rebuildWorkspace(workspaceId);
+    expect(readerCalls, 2);
+    expect(
+      (await globalSearch.search(
+        workspaceId: workspaceId,
+        rawQuery: 'corruptiblepdfderived',
+      ))
+          .map((hit) => hit.object.id),
+      contains(fileObject.id),
+      reason: 'repairing File schema must restore PDF-derived indexing',
+    );
+  });
 }
