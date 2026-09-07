@@ -9,6 +9,7 @@ Keep one canonical Object-level search/index architecture correct, stale-safe, p
 - **#414 closed.** Focused Bookmark FTS stale-token correctness was fixed before the legacy Bookmark-only FTS path was retired.
 - **#494 closed.** Canonical Object search/indexing is the live product path.
 - **#753 closed as completed.** Follow-up after Object Core #749: malformed persisted Body documents are isolated to the `body` search contribution instead of aborting Object/workspace indexing.
+- **#769 open, dependency-blocked on Relation PR #754.** Once the canonical strict persisted-Relation inspection boundary lands, Search must stop indexing normalized-edge labels for a Relation Property whose persisted value is malformed.
 - Latest Search implementation merge: **#757 / `f66c74bd7cf93365c72f22c9a880845de9673b12`**.
 - Refactor #654 previously removed the caller-zero legacy `FullTextSearchRepository`; do not recreate a parallel Bookmark/domain-specific search product.
 
@@ -67,6 +68,18 @@ Object Core owns strict Body parsing. Search must not reinterpret malformed pers
 
 Regression file: `test/repositories/object_search_malformed_body_test.dart`.
 
+## #769 malformed Relation-label obligation
+Relation labels are currently projected from `RelationReadService.outgoing(...)`, which resolves normalized Relation index edges. Relation PR #754 introduces a strict persisted-value inspector and intentionally leaves malformed user data untouched while refusing mutation/reconciliation.
+
+If a persisted Relation value becomes malformed while an older normalized edge remains, the current Search projection can still index that edge's target title. #769 requires Search to fail closed for that Relation Property after #754 lands:
+- reuse Relation's canonical persisted-value inspection; do not add a Search parser;
+- omit labels for the malformed Relation Property only;
+- preserve valid Relation Properties and all non-Relation search buckets;
+- focused refresh must remove previously indexed stale Relation labels;
+- Search must not repair Relation values or edges.
+
+Until #754 is merged, implementation is intentionally sequenced rather than duplicating an unmerged Relation contract.
+
 ## Incremental / stale-token contracts
 - focused Object refresh removes the previous FTS row by FTS `rowid` and inserts the current projection;
 - removed/changed title, alias, Property, Body, Relation, Weblink and derived-text tokens must disappear;
@@ -74,6 +87,7 @@ Regression file: `test/repositories/object_search_malformed_body_test.dart`.
 - derived producers replace only their own source key;
 - PDF re-extraction replaces `pdf-text`; blank/missing/non-PDF capability clears that contribution;
 - malformed Body is a source-local omission, not permission to keep stale Body tokens;
+- malformed Relation data must not authorize stale normalized-edge labels once #769 is implemented;
 - derived/search metadata is rebuildable and is never canonical Object identity.
 
 ## Live product routing
@@ -103,20 +117,19 @@ Focused #753 regressions prove:
 - Object Core owns Body persistence/parsing/editor semantics; Search consumes only the parsed search-text projection and isolates parse failure at its bucket boundary.
 - Primitive lane owns File/PDF extraction and native behavior; Search owns derived-text persistence/index/reconciliation.
 - Relation lane owns Relation persistence/integrity; Search owns denormalized display-label indexing and dependent refresh planning.
+- **#769 is sequenced after Relation #754** so Search can reuse its canonical `inspectRelationStoredValue(...)` contract rather than introducing a duplicate parser.
 - Refactor owns behavior-preserving legacy retirement; legacy Bookmark FTS retirement is already complete.
 - Lane E currently holds no shared-hotspot lease.
 
 ## Next actions
-There is no remaining actionable work in #414, #494, or #753.
-
-For the next Lane E run:
 1. Re-read current `main`, open Issues/PRs and recent cross-lane changes.
-2. Resume only for a concrete Search/Indexing issue or a real cross-lane correctness obligation.
-3. Prefer source-local fail-closed contribution boundaries over making one corrupt optional source take down the entire canonical index.
-4. Do not swallow unrelated persistence/index errors and do not log raw user content, extracted text, private paths or malformed Body payloads.
-5. Do not recreate domain-specific long-term search repositories.
+2. **When #754 merges, immediately implement #769** with focused stale-label regressions and no Relation mutation.
+3. Until #754 lands, do not duplicate its persisted Relation parser; inspect other concrete Search cross-lane obligations instead.
+4. Prefer source-local fail-closed contribution boundaries over making one corrupt optional source take down the entire canonical index.
+5. Do not swallow unrelated persistence/index errors and do not log raw user content, extracted text, private paths or malformed persisted payloads.
+6. Do not recreate domain-specific long-term search repositories.
 
 Potential future work such as large-PDF rebuild caching, richer ranking/filter UX, or semantic/vector search requires a separately scoped Issue; it is not implied by completed #494/#753.
 
 ## Stop reason
-**#753 is implemented, all CI passed, PR #757 merged, and the Issue is closed. No additional concrete Search/Indexing issue is currently assigned. Lane E is idle under the AGENTS.md stopping criteria until a new Search issue or cross-lane search obligation appears.**
+**#753 is complete, while newly identified #769 is a concrete Search correctness obligation blocked on Relation PR #754's canonical persisted-value inspection contract. Do not implement a duplicate parser. Resume #769 immediately after #754 lands; otherwise Lane E may remain dependency-blocked if no other independent Search work appears.**
