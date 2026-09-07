@@ -30,21 +30,46 @@ class DatabaseViewPropertyReference {
   final Set<DatabaseViewPropertyReferenceKind> kinds;
 }
 
+enum ObjectPropertyComputedReferenceKind {
+  formula,
+  rollupRelation,
+  rollupTarget,
+}
+
+class ObjectPropertyComputedReference {
+  const ObjectPropertyComputedReference({
+    required this.objectTypeId,
+    required this.objectTypeName,
+    required this.propertyId,
+    required this.propertyName,
+    required this.kind,
+  });
+
+  final int objectTypeId;
+  final String objectTypeName;
+  final int propertyId;
+  final String propertyName;
+  final ObjectPropertyComputedReferenceKind kind;
+}
+
 class ObjectPropertyDeleteImpact {
   const ObjectPropertyDeleteImpact({
     required this.property,
     required this.objectsWithStoredValue,
     required this.viewReferences,
+    this.computedReferences = const <ObjectPropertyComputedReference>[],
     this.pairedRelationProperty,
   });
 
   final ObjectPropertyDefinition property;
   final int objectsWithStoredValue;
   final List<DatabaseViewPropertyReference> viewReferences;
+  final List<ObjectPropertyComputedReference> computedReferences;
   final ObjectPropertyDefinition? pairedRelationProperty;
 
   bool get hasStoredValues => objectsWithStoredValue > 0;
   bool get isReferencedByViews => viewReferences.isNotEmpty;
+  bool get hasComputedPropertyImpact => computedReferences.isNotEmpty;
   bool get hasPairedRelationImpact => pairedRelationProperty != null;
 }
 
@@ -59,7 +84,9 @@ class ObjectPropertyDeleteImpact {
 /// Delete is intentionally inspection-only here: callers must surface this
 /// impact before choosing a canonical deletion/archive path. Managed
 /// bidirectional Relations also surface their inverse Property because the
-/// canonical Relation delete lifecycle removes both schema Properties.
+/// canonical Relation delete lifecycle removes both schema Properties. Formula
+/// and Rollup references are surfaced as blockers so deleting a Property cannot
+/// silently leave a computed schema with a dangling Property id.
 class DatabaseViewPropertySchemaService {
   const DatabaseViewPropertySchemaService({
     required this.objectStore,
@@ -149,6 +176,11 @@ class DatabaseViewPropertySchemaService {
       pairedRelationProperty = pair.inverseProperty;
     }
 
+    final computedReferences = await _computedReferencesTo(
+      workspaceId: type.workspaceId,
+      property: property,
+    );
+
     final views = await viewStore.listViews(
       workspaceId: type.workspaceId,
       databaseKey: 'custom:$objectTypeId',
@@ -194,6 +226,7 @@ class DatabaseViewPropertySchemaService {
       viewReferences: List<DatabaseViewPropertyReference>.unmodifiable(
         references,
       ),
+      computedReferences: computedReferences,
       pairedRelationProperty: pairedRelationProperty,
     );
   }
@@ -278,6 +311,69 @@ class DatabaseViewPropertySchemaService {
 
     return changedViews;
   }
+
+  Future<List<ObjectPropertyComputedReference>> _computedReferencesTo({
+    required int workspaceId,
+    required ObjectPropertyDefinition property,
+  }) async {
+    final references = <ObjectPropertyComputedReference>[];
+    for (final type in await objectStore.listObjectTypes(workspaceId)) {
+      for (final candidate in type.properties) {
+        if (candidate.id == property.id || !candidate.isComputed) continue;
+        if (candidate.type == ObjectPropertyType.formula &&
+            _formulaReferences(candidate, property.id)) {
+          references.add(
+            ObjectPropertyComputedReference(
+              objectTypeId: type.id,
+              objectTypeName: type.name,
+              propertyId: candidate.id,
+              propertyName: candidate.name,
+              kind: ObjectPropertyComputedReferenceKind.formula,
+            ),
+          );
+        }
+        if (candidate.type == ObjectPropertyType.rollup) {
+          if (_intConfig(candidate.config['relationPropertyId']) == property.id) {
+            references.add(
+              ObjectPropertyComputedReference(
+                objectTypeId: type.id,
+                objectTypeName: type.name,
+                propertyId: candidate.id,
+                propertyName: candidate.name,
+                kind: ObjectPropertyComputedReferenceKind.rollupRelation,
+              ),
+            );
+          }
+          if (_intConfig(candidate.config['targetPropertyId']) == property.id) {
+            references.add(
+              ObjectPropertyComputedReference(
+                objectTypeId: type.id,
+                objectTypeName: type.name,
+                propertyId: candidate.id,
+                propertyName: candidate.name,
+                kind: ObjectPropertyComputedReferenceKind.rollupTarget,
+              ),
+            );
+          }
+        }
+      }
+    }
+    return List<ObjectPropertyComputedReference>.unmodifiable(references);
+  }
+
+  bool _formulaReferences(
+    ObjectPropertyDefinition formula,
+    int propertyId,
+  ) {
+    final expression = '${formula.config['expression'] ?? ''}';
+    for (final match in RegExp(r'\{\s*(\d+)\s*\}').allMatches(expression)) {
+      if (int.tryParse(match.group(1) ?? '') == propertyId) return true;
+    }
+    return false;
+  }
+
+  int? _intConfig(dynamic value) =>
+      value is int ? value : int.tryParse('${value ?? ''}');
 
   bool _hasFilterReference(DatabaseViewConfig view, int propertyId) {
     final rawRules = view.filters['propertyRules'];
