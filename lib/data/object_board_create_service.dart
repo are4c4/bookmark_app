@@ -1,5 +1,3 @@
-import 'dart:developer' as developer;
-
 import '../domain/object_group.dart';
 import '../domain/object_model.dart';
 import 'object_board_move_service.dart';
@@ -74,11 +72,15 @@ class ObjectBoardCreateService {
       targetGroup: targetGroup,
     );
 
-    final objectId = await _objectStore.createObject(
-      objectTypeId: objectTypeId,
-      title: title,
-    );
-    try {
+    // The new Object and its initial Board-group preset are one logical write.
+    // Nested canonical Relation mutations participate in this transaction, so a
+    // preset failure rolls back the Object insert without relying on a separate
+    // best-effort cleanup delete.
+    return relationMutations.genericStore.database.transaction(() async {
+      final objectId = await _objectStore.createObject(
+        objectTypeId: objectTypeId,
+        title: title,
+      );
       if (value != null) {
         if (groupProperty.isRelation) {
           final relation = value is ObjectRelationValue
@@ -98,28 +100,6 @@ class ObjectBoardCreateService {
         }
       }
       return objectId;
-    } catch (_) {
-      // This Object was created by this operation and has not been exposed to
-      // the caller yet. Roll it back if the grouped preset cannot be written.
-      // Cleanup is best-effort: a secondary delete failure must not replace the
-      // original preset-write failure reported to the caller.
-      try {
-        await _objectStore.deleteObject(objectId);
-      } catch (_, stackTrace) {
-        _debugRollbackCleanupFailure(stackTrace);
-      }
-      rethrow;
-    }
-  }
-
-  void _debugRollbackCleanupFailure(StackTrace stackTrace) {
-    assert(() {
-      developer.log(
-        'Board Object rollback cleanup failed.',
-        name: 'bookmark_app.object_board_create',
-        stackTrace: stackTrace,
-      );
-      return true;
-    }());
+    });
   }
 }
