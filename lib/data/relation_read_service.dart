@@ -70,8 +70,9 @@ bool relationStoredValueMatchesEdges({
 /// consumers without exposing generic table details.
 ///
 /// This is a read-only projection, not a repair path. A Relation Property is
-/// exposed only when its persisted value is well-formed and exactly agrees with
-/// its normalized edge targets/order. Corrupt or drifting Properties therefore
+/// exposed only when its persisted value is well-formed, exactly agrees with
+/// its normalized edge targets/order, and every referenced target still exists
+/// in the declared target ObjectType. Corrupt or drifting Properties therefore
 /// fail closed until an explicit integrity/reconcile workflow handles them.
 class RelationReadService {
   const RelationReadService(this.objectStore);
@@ -117,11 +118,25 @@ class RelationReadService {
       }
     }
 
+    final targetIdsByType = <int, Set<int>>{};
+    Future<Set<int>> targetIdsFor(int objectTypeId) async {
+      final cached = targetIdsByType[objectTypeId];
+      if (cached != null) return cached;
+      final ids = (await objectStore.listObjects(objectTypeId))
+          .map((object) => object.id)
+          .toSet();
+      targetIdsByType[objectTypeId] = ids;
+      return ids;
+    }
+
     final sourceIdsByType = <int, Set<int>>{};
     for (final edge in edges) {
       final property = propertiesById[edge.propertyId];
+      final targetTypeId = property?.targetObjectTypeId;
       if (property == null ||
-          !objectTypesById.containsKey(property.targetObjectTypeId)) {
+          targetTypeId == null ||
+          !objectTypesById.containsKey(targetTypeId) ||
+          !(await targetIdsFor(targetTypeId)).contains(targetObjectId)) {
         continue;
       }
       sourceIdsByType
@@ -142,8 +157,11 @@ class RelationReadService {
     for (final edge in edges) {
       final property = propertiesById[edge.propertyId];
       final source = sourcesById[edge.sourceObjectId];
-      if (property == null || source == null) continue;
-      if (!objectTypesById.containsKey(property.targetObjectTypeId)) continue;
+      final targetTypeId = property?.targetObjectTypeId;
+      if (property == null || source == null || targetTypeId == null) continue;
+      if (!objectTypesById.containsKey(targetTypeId)) continue;
+      final targetIds = await targetIdsFor(targetTypeId);
+      if (!targetIds.contains(targetObjectId)) continue;
 
       final sourceEdges = outgoingBySource.putIfAbsent(
         source.id,
@@ -160,6 +178,9 @@ class RelationReadService {
         property: property,
         edges: propertyEdges,
       )) {
+        continue;
+      }
+      if (propertyEdges.any((candidate) => !targetIds.contains(candidate.targetObjectId))) {
         continue;
       }
 
@@ -191,8 +212,20 @@ class RelationReadService {
     final edges = await objectStore.outgoingRelations(sourceObjectId);
     if (edges.isEmpty) return const <ResolvedOutgoingRelation>[];
 
+    final targetObjectsByType = <int, Map<int, AppObject>>{};
+    Future<Map<int, AppObject>> targetsFor(int objectTypeId) async {
+      final cached = targetObjectsByType[objectTypeId];
+      if (cached != null) return cached;
+      final targets = <int, AppObject>{
+        for (final object in await objectStore.listObjects(objectTypeId))
+          object.id: object,
+      };
+      targetObjectsByType[objectTypeId] = targets;
+      return targets;
+    }
+
     final validPropertyIds = <int>{};
-    final idsByTargetType = <int, Set<int>>{};
+    final targetsById = <int, AppObject>{};
     for (final property in relationProperties.values) {
       final targetTypeId = property.targetObjectTypeId;
       if (targetTypeId == null) continue;
@@ -211,19 +244,13 @@ class RelationReadService {
       )) {
         continue;
       }
+      final targets = await targetsFor(targetTypeId);
+      if (propertyEdges.any((edge) => !targets.containsKey(edge.targetObjectId))) {
+        continue;
+      }
       validPropertyIds.add(property.id);
       for (final edge in propertyEdges) {
-        idsByTargetType
-            .putIfAbsent(targetTypeId, () => <int>{})
-            .add(edge.targetObjectId);
-      }
-    }
-
-    final targetsById = <int, AppObject>{};
-    for (final entry in idsByTargetType.entries) {
-      final objects = await objectStore.listObjects(entry.key);
-      for (final object in objects) {
-        if (entry.value.contains(object.id)) targetsById[object.id] = object;
+        targetsById[edge.targetObjectId] = targets[edge.targetObjectId]!;
       }
     }
 
