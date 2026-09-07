@@ -1,4 +1,5 @@
 import '../data/generic_database_store.dart';
+import '../data/object_graph_query_store.dart';
 import '../data/object_store.dart';
 import '../services/canonical_file_pdf_search_indexer.dart';
 import 'object_search_refresh_planner.dart';
@@ -17,12 +18,14 @@ class ObjectGlobalSearchService {
   })  : _index = ObjectSearchRepository(genericStore),
         _resolver = ObjectSearchResultResolver(ObjectStore(genericStore)),
         _refreshPlanner = ObjectSearchRefreshPlanner(ObjectStore(genericStore)),
+        _graphStore = ObjectGraphQueryStore(genericStore),
         _pdfSearchIndexer =
             pdfSearchIndexer ?? CanonicalFilePdfSearchIndexer.forStore(genericStore);
 
   final ObjectSearchRepository _index;
   final ObjectSearchResultResolver _resolver;
   final ObjectSearchRefreshPlanner _refreshPlanner;
+  final ObjectGraphQueryStore _graphStore;
   final CanonicalFilePdfSearchIndexer _pdfSearchIndexer;
 
   /// Rebuilds canonical Object search for one workspace after reconciling the
@@ -75,6 +78,36 @@ class ObjectGlobalSearchService {
         objectId: objectId,
       ),
     );
+  }
+
+  /// Refreshes every canonical Object visited while one Search-opened detail
+  /// route was active, plus the existing focused Relation-dependent expansion
+  /// for each visited Object.
+  ///
+  /// Nested Object Inspector navigation is not always Relation-backed (Daily
+  /// Note previous/next/today navigation is the canonical example). Resolve the
+  /// current ObjectType from canonical graph identity, then reuse the same
+  /// focused detail-return planner for every visited Object. Missing/deleted
+  /// Objects still refresh their own id so stale FTS rows are removed.
+  Future<void> refreshVisitedDetailReturnObjects(
+    Iterable<int> objectIds,
+  ) async {
+    final roots = objectIds.toSet().toList()..sort();
+    final affected = <int>{};
+    for (final objectId in roots) {
+      final node = await _graphStore.getNode(objectId);
+      if (node == null) {
+        affected.add(objectId);
+        continue;
+      }
+      affected.addAll(
+        await _refreshPlanner.forDetailReturn(
+          objectTypeId: node.objectTypeId,
+          objectId: objectId,
+        ),
+      );
+    }
+    await refreshObjects(affected);
   }
 
   Future<List<ResolvedObjectSearchHit>> search({
