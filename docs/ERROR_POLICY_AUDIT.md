@@ -9,7 +9,7 @@ Issue #225 requires reducing silent failure without breaking intentional best-ef
 - **rollback / fail-closed** — catch exists to restore invariants and then rethrow/translate. Preserve the primary failure even when cleanup also fails.
 - **user-visible failure** — catch already surfaces an error to UI. Prefer a stable domain/retry message over raw implementation exceptions.
 
-## Production audit — refreshed 2026-09-06
+## Production audit — refreshed 2026-09-07
 
 | Path | Current pattern | Classification | Refactor action |
 | --- | --- | --- | --- |
@@ -35,6 +35,7 @@ Issue #225 requires reducing silent failure without breaking intentional best-ef
 | `lib/views/global_search_page.dart` | search/index failures use a stable retry-oriented state | user-visible failure | #331 replaced raw caught-Object rendering while preserving rebuild retry behavior. |
 | `lib/views/settings_page.dart` / backup section | backup/settings operation failures use stable messages | user-visible failure | #332/#333/#335 stabilize backup, AutoOrganize and malformed View-opening settings; #374 extracts backup workflow and #400 moves database composition behind `DatabaseBackupService.fromRepository(...)` without changing error behavior. |
 | `lib/main.dart` | bootstrap/Profile-switch failure remains fail-closed; rollback to previous Profile is preserved | user-visible / fail-closed initialization | #368 replaced raw fatal-screen exception interpolation with one stable retry-oriented message and fixed debug operation labels + stack traces. Original error state and rollback semantics remain unchanged; Profile/path/exception text is not logged. |
+| `lib/features/database/presentation/widgets/database_property_add_popover_host.dart` | Property authoring failure is user-visible and must not expose storage/domain exception text | user-visible failure | #701 adds a real widget failure regression, replaces raw exception interpolation with a stable retry message, and keeps debug observability to a fixed operation label + stack trace. Property/Relation persistence stays on the existing canonical authoring service. |
 
 ## Current policy
 
