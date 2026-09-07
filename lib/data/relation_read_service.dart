@@ -1,5 +1,6 @@
 import '../domain/object_model.dart';
 import 'object_store.dart';
+import 'relation_stored_value_inspector.dart';
 
 class ResolvedRelationBacklink {
   const ResolvedRelationBacklink({
@@ -39,6 +40,11 @@ class RelationNeighborhood {
 
 /// Resolves relation-index edges into stable Object/Property references for UI
 /// consumers without exposing generic table details.
+///
+/// This is a read-only projection, not a repair path. A Relation Property is
+/// exposed only when its persisted value is well-formed and exactly agrees with
+/// its normalized edge targets/order. Corrupt or drifting Properties therefore
+/// fail closed until an explicit integrity/reconcile workflow handles them.
 class RelationReadService {
   const RelationReadService(this.objectStore);
 
@@ -73,6 +79,9 @@ class RelationReadService {
     if (edges.isEmpty) return const <ResolvedRelationBacklink>[];
 
     final objectTypes = await objectStore.listObjectTypes(workspaceId);
+    final objectTypesById = <int, AppObjectType>{
+      for (final type in objectTypes) type.id: type,
+    };
     final propertiesById = <int, ObjectPropertyDefinition>{};
     for (final type in objectTypes) {
       for (final property in type.properties) {
@@ -83,7 +92,10 @@ class RelationReadService {
     final sourceIdsByType = <int, Set<int>>{};
     for (final edge in edges) {
       final property = propertiesById[edge.propertyId];
-      if (property == null) continue;
+      if (property == null ||
+          !objectTypesById.containsKey(property.targetObjectTypeId)) {
+        continue;
+      }
       sourceIdsByType
           .putIfAbsent(property.objectTypeId, () => <int>{})
           .add(edge.sourceObjectId);
@@ -97,11 +109,32 @@ class RelationReadService {
       }
     }
 
+    final outgoingBySource = <int, List<ObjectRelationEdge>>{};
     final result = <ResolvedRelationBacklink>[];
     for (final edge in edges) {
       final property = propertiesById[edge.propertyId];
       final source = sourcesById[edge.sourceObjectId];
       if (property == null || source == null) continue;
+      if (!objectTypesById.containsKey(property.targetObjectTypeId)) continue;
+
+      final sourceEdges = outgoingBySource.putIfAbsent(
+        source.id,
+        () => <ObjectRelationEdge>[],
+      );
+      if (sourceEdges.isEmpty) {
+        sourceEdges.addAll(await objectStore.outgoingRelations(source.id));
+      }
+      final propertyEdges = sourceEdges
+          .where((candidate) => candidate.propertyId == property.id)
+          .toList(growable: false);
+      if (!_storedValueMatchesEdges(
+        source: source,
+        property: property,
+        edges: propertyEdges,
+      )) {
+        continue;
+      }
+
       result.add(
         ResolvedRelationBacklink(
           edge: edge,
@@ -119,6 +152,9 @@ class RelationReadService {
   }) async {
     final sourceType = await objectStore.getObjectType(sourceObjectTypeId);
     if (sourceType == null) return const <ResolvedOutgoingRelation>[];
+    final sourceObject = await _objectById(sourceObjectTypeId, sourceObjectId);
+    if (sourceObject == null) return const <ResolvedOutgoingRelation>[];
+
     final relationProperties = <int, ObjectPropertyDefinition>{
       for (final property in sourceType.properties)
         if (property.isRelation) property.id: property,
@@ -127,14 +163,32 @@ class RelationReadService {
     final edges = await objectStore.outgoingRelations(sourceObjectId);
     if (edges.isEmpty) return const <ResolvedOutgoingRelation>[];
 
+    final validEdges = <ObjectRelationEdge>[];
     final idsByTargetType = <int, Set<int>>{};
-    for (final edge in edges) {
-      final property = relationProperties[edge.propertyId];
-      final targetTypeId = property?.targetObjectTypeId;
+    for (final property in relationProperties.values) {
+      final targetTypeId = property.targetObjectTypeId;
       if (targetTypeId == null) continue;
-      idsByTargetType
-          .putIfAbsent(targetTypeId, () => <int>{})
-          .add(edge.targetObjectId);
+      final targetType = await objectStore.getObjectType(targetTypeId);
+      if (targetType == null || targetType.workspaceId != sourceType.workspaceId) {
+        continue;
+      }
+
+      final propertyEdges = edges
+          .where((edge) => edge.propertyId == property.id)
+          .toList(growable: false);
+      if (!_storedValueMatchesEdges(
+        source: sourceObject,
+        property: property,
+        edges: propertyEdges,
+      )) {
+        continue;
+      }
+      validEdges.addAll(propertyEdges);
+      for (final edge in propertyEdges) {
+        idsByTargetType
+            .putIfAbsent(targetTypeId, () => <int>{})
+            .add(edge.targetObjectId);
+      }
     }
 
     final targetsById = <int, AppObject>{};
@@ -146,7 +200,7 @@ class RelationReadService {
     }
 
     final result = <ResolvedOutgoingRelation>[];
-    for (final edge in edges) {
+    for (final edge in validEdges) {
       final property = relationProperties[edge.propertyId];
       final target = targetsById[edge.targetObjectId];
       if (property == null || target == null) continue;
@@ -159,5 +213,34 @@ class RelationReadService {
       );
     }
     return result;
+  }
+
+  Future<AppObject?> _objectById(int objectTypeId, int objectId) async {
+    for (final object in await objectStore.listObjects(objectTypeId)) {
+      if (object.id == objectId) return object;
+    }
+    return null;
+  }
+
+  bool _storedValueMatchesEdges({
+    required AppObject source,
+    required ObjectPropertyDefinition property,
+    required List<ObjectRelationEdge> edges,
+  }) {
+    final inspection = inspectRelationStoredValue(source.values[property.id]);
+    if (inspection.isMalformed) return false;
+
+    final storedIds = inspection.value.objectIds;
+    if (inspection.rawObjectIds.length != storedIds.length) return false;
+    if (!property.allowsMultipleRelations && storedIds.length > 1) return false;
+    if (storedIds.length != edges.length) return false;
+
+    for (var index = 0; index < storedIds.length; index++) {
+      final edge = edges[index];
+      if (edge.targetObjectId != storedIds[index] || edge.position != index) {
+        return false;
+      }
+    }
+    return true;
   }
 }
