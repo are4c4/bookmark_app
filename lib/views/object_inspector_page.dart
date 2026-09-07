@@ -54,11 +54,13 @@ class ObjectInspectorPage extends StatefulWidget {
     required this.store,
     required this.objectStore,
     required this.objectId,
+    this.onObjectVisited,
   });
 
   final GenericDatabaseStore store;
   final ObjectStore objectStore;
   final int objectId;
+  final ValueChanged<int>? onObjectVisited;
 
   @override
   State<ObjectInspectorPage> createState() => _ObjectInspectorPageState();
@@ -179,6 +181,7 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
   @override
   void initState() {
     super.initState();
+    widget.onObjectVisited?.call(widget.objectId);
     _load();
   }
 
@@ -286,6 +289,7 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
           store: widget.store,
           objectStore: widget.objectStore,
           objectId: objectId,
+          onObjectVisited: widget.onObjectVisited,
         ),
       ),
     );
