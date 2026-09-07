@@ -19,7 +19,13 @@ class ObjectBodyDocument {
       throw const FormatException('Object body document must be a JSON object.');
     }
     final rawVersion = value['version'];
+    if (value.containsKey('version') && rawVersion is! int) {
+      throw const FormatException('Object body version must be an integer.');
+    }
     final rawBlocks = value['blocks'];
+    if (value.containsKey('blocks') && rawBlocks is! List) {
+      throw const FormatException('Object body blocks must be a JSON array.');
+    }
     final blocks = rawBlocks is List
         ? rawBlocks
             .map(ObjectBodyBlock.fromJson)
