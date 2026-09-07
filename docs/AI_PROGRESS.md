@@ -27,12 +27,12 @@ Core product direction:
 - `#491` — Relation Property authoring and inline target creation UX.
 - `#492` — generic Gallery cover source from Object Relations.
 - `#493` — safe/reversible user-defined schema evolution.
-- `#495` — MIME/content-aware import routing to Image/File.
 - `#501` — 7-lane AI development ownership model.
 
-Recently completed architecture/search work:
+Recently completed architecture/search/primitive work:
 - `#414` — focused Bookmark FTS stale-token correctness; closed after rowid-based refresh regression coverage.
 - `#494` — unified canonical Object search/indexing; closed after live Object Global Search, Weblink metadata and PDF-derived File text integration.
+- `#495` — MIME/content-aware Image/File import routing; closed after #866 routed the real canonical Images picker through shared content classification before mutation while preserving the legacy Photo picker.
 - Refactor `#654` — caller-zero legacy Bookmark `FullTextSearchRepository` retired after canonical Global Search replacement parity.
 
 ## Seven development lanes
@@ -72,7 +72,7 @@ This lane is intentionally broader than the former Relation-only lane so mature 
 - #245 Image / Photo migration.
 - #484 File primitive and built-in boundary.
 - #489 native capabilities/shared managed-file semantics.
-- #495 content-aware file import.
+- #495 content-aware file import is complete/closed; future work needs a new concrete routing inconsistency rather than extending that issue speculatively.
 - Tag built-in/default semantics where not pure Relation integrity.
 
 ### E — Search & Indexing
@@ -88,8 +88,8 @@ This lane is intentionally broader than the former Relation-only lane so mature 
 ### G — Refactor & Architecture Health
 - #225 only: behavior-preserving extraction/deletion, caller-zero legacy retirement, AppDatabase narrowing, failure policy and CI/architecture guardrails.
 
-## Current implementation position — 2026-09-07
-Latest Search feature completion checkpoint: `683bdbb74cc5dabd3ac067e9ce5a802fc16ca2b4` (#635). Legacy Bookmark FTS retirement followed in `c2d4bd082e1e88c6781db4f51b2c12998a6ff85f` (#654). The seven lanes continue merging concurrently; always re-read the actual latest main before starting work.
+## Current implementation position — 2026-09-08
+The seven lanes continue merging concurrently; always re-read the actual latest `main` before starting work.
 
 Major integrated state:
 - generic Object/ObjectType/Database/View foundations are live in real hosts;
@@ -99,12 +99,13 @@ Major integrated state:
 - Weblink URL creation, metadata enrichment and managed representative media are largely integrated;
 - canonical Image import/reuse, Photo mirroring, Bookmark `Images`/`Cover Image` Relations, backlinks, safe deletion and editing are advanced;
 - Image edit actions include rotate, horizontal/vertical flip, restore, crop presets and normalized free crop; missing persisted geometry can fall back read-only to managed bytes;
+- canonical Image/File routing now uses shared content-aware classification at real generic entry points: #866 made the Images collection picker content-first, rejects mixed Image/File selections before mutation, and leaves the legacy Photo picker unchanged; #495 is closed;
 - Bookmark center peek, shared Property handle/add flows, Person chips and much of List metadata presentation are converged;
 - generic fixed/masonry Gallery is implemented;
 - **Global Search is canonical Object search:** one FTS projection covers title/aliases, selected typed Properties, universal Body, Relation labels, dedicated Weblink metadata and replaceable derived text; user-defined ObjectTypes and real Image/File primitives use the same repository;
 - **PDF remains a File Object:** Primitive lane exposes content-first PDF extracted text and Search reconciles it as replaceable `pdf-text` during Global Search workspace rebuild/focused File refresh;
 - live `GlobalSearchPage` routes through canonical Object search, and Refactor #654 has removed the superseded Bookmark-only `FullTextSearchRepository` implementation and its dedicated legacy-only tests;
-- **Storage-managed files use one Vault filesystem contract:** #750 provides copy + portable path + explicit ownership + rollback, #771 adds ownership-gated physical delete, #766 reuses the copy seam for legacy Bookmark attachments, and canonical generic File import now consumes the copy/rollback boundary (`eb2f0e6d1ca06feefb2664e20407e21622d5f0a4`);
+- **Storage-managed files use one Vault filesystem contract:** #750 provides copy + portable path + explicit ownership + rollback, #771 adds ownership-gated physical delete, #766 reuses the copy seam for legacy Bookmark attachments, and canonical generic File import consumes the shared copy/rollback boundary;
 - Refactor work has materially reduced caller-zero/dead layers and added architecture regression ceilings;
 - macOS release/DMG packaging CI has succeeded; the final user-machine install/launch/data-preservation check remains open in #218.
 
@@ -149,10 +150,10 @@ Before a non-trivial edit, inspect open PR ownership. One lane at a time may hol
 1. **A Object Core:** continue the remaining #481/#56 shared Object Core work identified in its lane handoff.
 2. **B Relations/Integrity:** continue #493 integrity work and audit new Relation-producing workflows as they land.
 3. **C Database/View:** continue generic schema/View/template UX from #490/#491/#492/#493 away from leased hotspots.
-4. **D Primitives:** continue #155/#245/#484/#489/#495 primitive/media migration work from its current handoff; generic File import already reuses the Storage-managed copy/rollback seam.
+4. **D Primitives:** continue #155/#245 presentation/caller convergence. #495 is completed/closed; do not create speculative routing work to keep that issue alive.
 5. **E Search:** #414/#494 complete and legacy Bookmark FTS retired; stay idle unless a new Search issue appears. Do not invent speculative search abstractions.
 6. **F Storage:** no independent repository implementation is currently required; remain idle pending real-macOS #242/#218 validation or a concrete filesystem/Vault contract gap reported by another lane.
-7. **G Refactor:** continue #225 with the next verified caller-zero/dependency-narrowing slice after #654.
+7. **G Refactor:** continue #225 with the next verified caller-zero/dependency-narrowing slice.
 
 ## Known risks
 - legacy Bookmark URL/thumbnail/Photo tables remain compatibility data while live/import/export/backup paths need them;
