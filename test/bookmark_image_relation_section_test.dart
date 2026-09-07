@@ -11,7 +11,7 @@ import 'package:bookmark_app/data/tag_object_bridge.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/services/bookmark_image_relation_service.dart';
 import 'package:bookmark_app/widgets/bookmark_image_relation_section.dart';
-import 'package:drift/drift.dart';
+import 'package:drift/drift.dart' show Variable;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -88,6 +88,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
+    var changeCount = 0;
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -96,6 +97,7 @@ void main() {
             child: BookmarkImageRelationSection(
               repository: repository,
               bookmark: bookmark,
+              onChanged: () => changeCount += 1,
             ),
           ),
         ),
@@ -124,6 +126,7 @@ void main() {
     );
     expect(state, isNotNull);
     expect(state!.images.selectedObjectIds, <int>[image.id]);
+    expect(changeCount, 1);
 
     final legacyLinkCount = (await database.customSelect(
       'SELECT COUNT(*) AS count FROM bookmark_photos WHERE bookmark_id = ?',
