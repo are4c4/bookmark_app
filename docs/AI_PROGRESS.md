@@ -29,6 +29,7 @@ Completed architecture/focused milestones include:
 - #501 — seven-lane AI development ownership model.
 - #877 — focused Search refresh for additional canonical Objects created/reused from Search-opened detail.
 - #888 — focused Search refresh for Objects visited through nested Inspector navigation.
+- #900 — focused Search refresh after asynchronous Weblink preview Image ingestion.
 - #249 — Bookmark Gallery/List presentation parity with shared generic contracts.
 
 Recent composition proof:
@@ -36,12 +37,13 @@ Recent composition proof:
 - #874 (`38c20b67…`) composes the reusable canonical Body editor into Generic Database side peek and closes #481.
 - #884 (`f1651ba169240484f3376f6c67f7ce76a810172b`) closes #877 by extending Search-owned focused detail-return refresh to canonical outgoing Relation targets and their label dependents without a workspace rebuild.
 - #894 (`ac470eec38115569d58dd04e2bc384d01bd59dd6`) closes #888 by tracking every Object visited through a Search-opened nested Inspector route and applying the same focused refresh plan to each visited Object, covering non-Relation Daily Note navigation without a workspace rebuild.
+- #902 (`c34ed6377db011dbff4c200a97fde91a06b2f4f2`) closes #900 by letting background Weblink preview ingestion report only the durably affected Image id; production composition forwards that impact to Search's existing label-dependent focused refresh so the Image and Weblink FTS projections become current without awaiting remote I/O or rebuilding the workspace.
 - #881 (`47d31345dbaa602e99d00c6199650d9e6b329d32`) moves Bookmark image editing onto canonical Image Relations while retaining compatibility projection for legacy callers.
 - #889 (`fcd0eb34c8ed79cbf67a8595f730f6c08cb7e7ff`) routes the legacy Photo Management “add to Bookmark” write through the same canonical Bookmark Image Relation authority using the stable Photo -> Image mapping, with malformed/missing mapping state failing closed.
 - #885 (`38494512fc2ba119fecb3f94e6973577aa665f67`) closes #249 by wiring the real Bookmark Stage1 Gallery to the shared fixed/masonry View contract and real-host persistence regression.
 
 ## Active architecture/product issues
-Live audit after #888 closure shows **6 open Issues**:
+Live audit after #900 closure shows **6 open Issues**:
 - `#56` — generic Object/Database/View daily-use integration umbrella.
 - `#155` — reusable Weblink Object; remaining rich Weblink/Image presentation and legacy Bookmark URL/media convergence.
 - `#218` — macOS installable delivery; repository packaging/CI complete, final user-machine validation remains.
@@ -49,7 +51,7 @@ Live audit after #888 closure shows **6 open Issues**:
 - `#242` — Vault/storage lifecycle; production code complete, final real-macOS validation remains.
 - `#245` — legacy Photos -> canonical Image Objects.
 
-Do not treat #249/#481/#484/#489/#490/#491/#492/#493/#494/#495/#501/#877/#888 as active merely because older Issue bodies or comments contain historical unchecked bullets.
+Do not treat #249/#481/#484/#489/#490/#491/#492/#493/#494/#495/#501/#877/#888/#900 as active merely because older Issue bodies or comments contain historical unchecked bullets.
 
 ## Seven development lanes
 - **A — Object Core & Body** — `docs/AI_PROGRESS_OBJECT.md`
@@ -93,12 +95,13 @@ Recent checkpoints:
 Continue canonical Image write/presentation parity and Photo -> Image migration before retiring legacy Photo UI/storage callers. Do not delete compatibility storage before caller parity and migration safety are proven.
 
 ### E — Search & Indexing
-#414/#494/#877/#888 are completed/closed.
+#414/#494/#877/#888/#900 are completed/closed.
 
 - #884 (`f1651ba1…`) completed #877 by expanding Search-owned focused detail-return refresh to trustworthy canonical outgoing Relation targets and their label dependents.
 - #894 (`ac470eec…`) completed #888 by tracking canonical Object ids visited through nested `ObjectInspectorPage` navigation and reusing the #884 focused planner for every visited Object; the real Daily Note A -> B Body edit regression proves new tokens appear and stale tokens disappear immediately on return to Search.
+- #902 (`c34ed637…`) completed #900 by keeping remote preview ingestion unawaited/best-effort while forwarding only the successful Image id through app composition to `ObjectGlobalSearchService.refreshObjectLabelDependents(...)`; delayed-I/O regression proves both the Image and its Weblink relation-label row become searchable even when Search rebuild finished first.
 
-Current status: **idle by design**. Resume only for a concrete Search/Indexing Issue or a demonstrated Search correctness obligation. Preserve focused refresh, Search-owned orchestration, privacy-safe failures, and existing Object/Relation ownership boundaries; do not introduce routine full-workspace rebuilds or Search dependencies into Object presentation merely to keep Lane E active.
+Current status: **idle by design** after a live post-#902 re-audit. Resume only for a concrete Search/Indexing Issue or a demonstrated Search correctness obligation. Preserve focused refresh, Search-owned projection/orchestration, privacy-safe failures, and existing Object/Relation/Primitive ownership boundaries; do not introduce routine full-workspace rebuilds or a workspace mutation event bus merely to keep Lane E active.
 
 ### F — Storage, Vault & Delivery
 - #242 Vault: repository implementation complete; real-macOS Create/Open/Switch/Move/Recovery validation remains.
@@ -125,7 +128,8 @@ Current focus remains behavior-preserving caller-zero deletion, hotspot responsi
 - Bookmark detail image editing and the legacy Photo Management Bookmark-attach flow now write through canonical Image Relations (#881/#889), while compatibility projection remains for old Photo-based readers during #245 migration.
 - Image and File remain distinct built-in primitives while sharing managed-file/Vault infrastructure.
 - PDF remains File + PDF capabilities/enrichment/search; there is no separate PDF persistence model.
-- Global Search is canonical Object search; focused detail-return freshness covers the root Object, trustworthy outgoing Relation targets/dependents, and Objects visited through nested Inspector navigation without routine workspace rebuilds (#884/#894).
+- Global Search is canonical Object search; focused freshness covers Search-opened root/related/nested detail mutations and asynchronous Weblink preview Image completion without routine workspace rebuilds (#884/#894/#902).
+- asynchronous Primitive/Object producers may report narrow canonical impact through composition callbacks; Search remains the projection/refresh authority and producers do not write FTS directly (#902).
 - Storage-managed files use one Vault filesystem contract with explicit ownership and fail-closed delete safety.
 - macOS release/DMG CI has succeeded; final local install/Vault preservation validation remains outside repository automation.
 
@@ -168,7 +172,7 @@ Before non-trivial edits, inspect current open PR ownership. One lane at a time 
 - Primitive owns Object/file identity, metadata and content routing; Storage owns Vault/filesystem byte placement, portable paths, explicit ownership, rollback and physical delete safety.
 - Relation/Data Integrity owns correctness of Relation mutations/reads and integrity-sensitive schema changes.
 - Object Core owns Body persistence/edit contracts and reusable Body composition seams; Database/View may compose those seams into its own hosts without taking over Body semantics.
-- Search owns canonical FTS projection, refresh planning and freshness orchestration. Object presentation may expose generic navigation-impact metadata such as #894's optional visited-Object callback without depending on Search services.
+- Search owns canonical FTS projection, refresh planning and freshness orchestration. Object presentation may expose generic navigation-impact metadata such as #894's optional visited-Object callback without depending on Search services; asynchronous Primitive/Object services may similarly expose narrow canonical completion impact such as #902's Image-id callback, with composition deciding Search refresh.
 - Primitive owns PDF/File extraction behavior; Search owns derived-text persistence/index/reconciliation.
 - Refactor deletes legacy code only after the owning product lane proves replacement parity.
 
@@ -184,7 +188,7 @@ Before non-trivial edits, inspect current open PR ownership. One lane at a time 
 - Photo -> Image migration must not delete or rewrite user data before production parity is proven;
 - Image/File shared infrastructure must not weaken Image ownership/delete/edit guarantees;
 - malformed Relation state must fail closed rather than be silently partially projected/repaired by presentation code;
-- Search freshness fixes must not reintroduce full-workspace rebuilds on every detail return or couple Object presentation to Search services;
+- Search freshness fixes must not reintroduce routine full-workspace rebuilds, couple mutation producers directly to FTS, or turn narrow completion callbacks into a workspace-wide event bus;
 - Vault changes must not silently replace inaccessible storage with a new empty database;
 - physical file deletion requires explicit Storage ownership and must not infer authority from path shape alone;
 - large shared hosts remain conflict magnets; throughput comes from lane ownership + hotspot leases, not concurrent broad edits.
