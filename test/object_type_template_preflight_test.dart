@@ -145,7 +145,7 @@ void main() {
         workspaceId: workspaceId,
         template: invalid,
       ),
-      throwsStateError,
+      throwsFormatException,
     );
 
     expect(
