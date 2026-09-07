@@ -237,7 +237,6 @@ class ProfileManager {
     await _save();
     return profile;
   }
-
   Future<DatabaseProfile> createVault({
     required String name,
     required String directoryPath,
@@ -478,7 +477,6 @@ class ProfileManager {
       await database.close();
     }
   }
-
   Future<DatabaseProfile> duplicateProfile(
     DatabaseProfile source, {
     String? name,
@@ -576,11 +574,17 @@ class ProfileManager {
     if (_state.activeProfileId == profile.id) {
       throw StateError('Switch to another profile before removing the active profile');
     }
+    final previousState = _state;
     _state = ProfileState(
       profiles: _state.profiles.where((candidate) => candidate.id != profile.id).toList(),
       activeProfileId: _state.activeProfileId,
     );
-    await _save();
+    try {
+      await _save();
+    } catch (_) {
+      _state = previousState;
+      rethrow;
+    }
   }
 
   // Compatibility alias for the existing shell callback. User-facing Vault
