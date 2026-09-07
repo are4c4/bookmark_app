@@ -1,6 +1,7 @@
 import '../domain/object_model.dart';
 import '../domain/object_query.dart';
 import 'bidirectional_relation_store.dart';
+import 'database_collection_store.dart';
 import 'database_view_gallery_adapter.dart';
 import 'database_view_group_adapter.dart';
 import 'database_view_query_adapter.dart';
@@ -30,6 +31,16 @@ class DatabaseViewPropertyReference {
   final Set<DatabaseViewPropertyReferenceKind> kinds;
 }
 
+class DatabaseCollectionPropertyReference {
+  const DatabaseCollectionPropertyReference({
+    required this.databaseId,
+    required this.databaseName,
+  });
+
+  final int databaseId;
+  final String databaseName;
+}
+
 enum ObjectPropertyComputedReferenceKind {
   formula,
   rollupRelation,
@@ -57,6 +68,7 @@ class ObjectPropertyDeleteImpact {
     required this.property,
     required this.objectsWithStoredValue,
     required this.viewReferences,
+    this.collectionReferences = const <DatabaseCollectionPropertyReference>[],
     this.computedReferences = const <ObjectPropertyComputedReference>[],
     this.pairedRelationProperty,
   });
@@ -64,11 +76,13 @@ class ObjectPropertyDeleteImpact {
   final ObjectPropertyDefinition property;
   final int objectsWithStoredValue;
   final List<DatabaseViewPropertyReference> viewReferences;
+  final List<DatabaseCollectionPropertyReference> collectionReferences;
   final List<ObjectPropertyComputedReference> computedReferences;
   final ObjectPropertyDefinition? pairedRelationProperty;
 
   bool get hasStoredValues => objectsWithStoredValue > 0;
   bool get isReferencedByViews => viewReferences.isNotEmpty;
+  bool get isReferencedByCollections => collectionReferences.isNotEmpty;
   bool get hasComputedPropertyImpact => computedReferences.isNotEmpty;
   bool get hasPairedRelationImpact => pairedRelationProperty != null;
 }
@@ -86,7 +100,9 @@ class ObjectPropertyDeleteImpact {
 /// bidirectional Relations also surface their inverse Property because the
 /// canonical Relation delete lifecycle removes both schema Properties. Formula
 /// and Rollup references are surfaced as blockers so deleting a Property cannot
-/// silently leave a computed schema with a dangling Property id.
+/// silently leave a computed schema with a dangling Property id. Collection
+/// filters and Views are inspected workspace-wide because secondary Databases
+/// may target an ObjectType different from their own storage identity.
 class DatabaseViewPropertySchemaService {
   const DatabaseViewPropertySchemaService({
     required this.objectStore,
@@ -111,6 +127,11 @@ class DatabaseViewPropertySchemaService {
         objectStore: objectStore,
         bidirectionalStore: _bidirectionalStore,
         genericStore: genericStore,
+      );
+
+  DatabaseCollectionStore get _collectionStore => DatabaseCollectionStore(
+        genericStore: genericStore,
+        objectStore: objectStore,
       );
 
   Future<ObjectPropertyDefinition> renameProperty({
@@ -180,10 +201,13 @@ class DatabaseViewPropertySchemaService {
       workspaceId: type.workspaceId,
       property: property,
     );
-
-    final views = await viewStore.listViews(
+    final collectionReferences = await _collectionReferencesTo(
       workspaceId: type.workspaceId,
-      databaseKey: 'custom:$objectTypeId',
+      propertyId: property.id,
+    );
+
+    final views = await viewStore.listWorkspaceViews(
+      workspaceId: type.workspaceId,
     );
     final references = <DatabaseViewPropertyReference>[];
     final propertyKey = 'p:${property.id}';
@@ -226,6 +250,7 @@ class DatabaseViewPropertySchemaService {
       viewReferences: List<DatabaseViewPropertyReference>.unmodifiable(
         references,
       ),
+      collectionReferences: collectionReferences,
       computedReferences: computedReferences,
       pairedRelationProperty: pairedRelationProperty,
     );
@@ -234,9 +259,11 @@ class DatabaseViewPropertySchemaService {
   /// Explicitly detaches one user-defined Property from View configuration.
   ///
   /// This does not mutate the Property schema, Object values, Relation values,
-  /// or normalized Relation edges. Only persisted View references owned by the
-  /// Database/View layer are changed. Unknown or future filter/sort payloads are
-  /// preserved byte-for-structure: only entries that decode as a known rule for
+  /// normalized Relation edges, or Database collection filters. Only persisted
+  /// View references owned by the Database/View layer are changed. Because a
+  /// secondary Database may target this ObjectType, all Views in the workspace
+  /// are inspected. Unknown or future filter/sort payloads are preserved
+  /// byte-for-structure: only entries that decode as a known rule for
   /// [propertyId] are removed.
   ///
   /// Returns the number of Views whose configuration changed.
@@ -249,9 +276,8 @@ class DatabaseViewPropertySchemaService {
       propertyId: propertyId,
     );
     final type = (await objectStore.getObjectType(objectTypeId))!;
-    final views = await viewStore.listViews(
+    final views = await viewStore.listWorkspaceViews(
       workspaceId: type.workspaceId,
-      databaseKey: 'custom:$objectTypeId',
     );
     final propertyKey = 'p:${property.id}';
     var changedViews = 0;
@@ -310,6 +336,29 @@ class DatabaseViewPropertySchemaService {
     });
 
     return changedViews;
+  }
+
+  Future<List<DatabaseCollectionPropertyReference>> _collectionReferencesTo({
+    required int workspaceId,
+    required int propertyId,
+  }) async {
+    final references = <DatabaseCollectionPropertyReference>[];
+    for (final database in await genericStore.listAllDatabases(workspaceId)) {
+      final collection = await _collectionStore.readEffective(database.id);
+      if (collection == null ||
+          !collection.collectionFilter.any(
+            (rule) => rule.propertyId == propertyId,
+          )) {
+        continue;
+      }
+      references.add(
+        DatabaseCollectionPropertyReference(
+          databaseId: database.id,
+          databaseName: database.name,
+        ),
+      );
+    }
+    return List<DatabaseCollectionPropertyReference>.unmodifiable(references);
   }
 
   Future<List<ObjectPropertyComputedReference>> _computedReferencesTo({
