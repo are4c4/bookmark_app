@@ -33,7 +33,7 @@ Canonical Image import/provenance/geometry/editing/deletion safety is establishe
 
 Merged #692 (`91824121156fbfebfa260b09d80e604d5923d8ab`) adopted the shared `ProfilePathResolver.canonicalStoredPath(...)` operation inside `ImageObjectService`, removing its remaining duplicate `resolveStoredPath -> toStoredPath` composition while preserving Image-specific empty-path validation, managed absolute/relative convergence, external absolute references, source provenance and concrete Image identity. Flutter CI #2159 passed maintainability guardrails, legacy dependency guard, Drift generation, Analyze and the full test suite before merge.
 
-Current PR #718 (`fix/primitives-image-mime-enrichment-495`) closes the Image counterpart of the missing-only MIME poisoning gap. It normalizes `contentType` before persistence with trim/lowercase/parameter stripping and a basic MIME slash check, matching canonical File behavior without restricting values to `image/*` or changing routing/identity. The focused regression proves `not-a-mime` remains missing, equivalent managed-path reimport reuses the same Image Object, and later `Image/PNG; charset=binary` enriches to `image/png`. Production/test were refreshed onto latest main as `9ff851ced0c8c01d4799af5587a75e9f8aec53ae`; this handoff commit follows that refresh.
+Merged #718 (`82e9b91294ee39b7105d4b84c01ff50d92521515`) closes the Image counterpart of the missing-only MIME poisoning gap. `ImageObjectService.findOrCreateManaged(...)` now trims/lowercases/strips parameters and keeps malformed non-MIME values missing so equivalent-path reimport can later enrich the same Image identity. Final Flutter CI #2276 passed before squash merge.
 
 Legacy Photo migration remains compatibility-sensitive. `CoreObjectBridge` intentionally retains its special relative-path/no-profile-root gate; replacing it mechanically with `ManagedFileResolver.resolveExisting(...)` would change migration semantics. Refactor #695 merged as `a2d22e89792ea4d46abe030bc56e1c7910c5fe60`, retiring four temporary Photo Database-presentation shim imports and ratcheting the legacy-import guardrail. Do not hide/remove legacy Photo persistence or navigation until Bookmark/People authority and write parity are proven.
 
@@ -59,7 +59,9 @@ Merged #709 (`b0e5852cc5cd4b14e0b5b97ca07c12c79a19e176`) closes the File counter
 
 Merged #665 expanded strong signatures for common non-Image/unsupported-Image formats. Merged #684 (`aa0eefe5be1da730a7af94f0b26c7a6cdd58659f`) closes the existing-path extension-only gap: if real source bytes do not identify a supported Image and routing evidence falls back only to filename extension, production path import fails closed to generic File. Direct classifier extension fallback remains available when content is genuinely unavailable. #684 CI #2134 passed before merge.
 
-#709, #711 and current #718 harden durable primitive metadata only; none changes routing target selection or content-first classification precedence.
+Merged #709, #711 and #718 harden durable primitive metadata without changing content-first routing precedence.
+
+Current branch `fix/primitives-malformed-mime-routing-495` addresses a concrete classifier ambiguity: the prior declared-MIME normalizer treated any string containing `/` as meaningful MIME evidence. Values such as `image/`, `/png`, `image/png/extra`, or whitespace-separated `image / png` could therefore suppress a valid supported image extension and incorrectly force File routing. `PrimitiveFileImportClassifier` now accepts only a complete RFC-token-shaped `type/subtype`; malformed declared values fall through to normal extension/fallback logic. Focused regression covers all four malformed shapes against a `.png` filename.
 
 End-to-end generic File import remains intentionally blocked on a Lane F-owned managed-copy + explicit ownership seam for arbitrary source files. Lane F PR #691 changes Vault move/reopen migration behavior and does not provide that seam. Lane D must not duplicate attachment/Vault copy/delete lifecycle or create a second managed-file root.
 
@@ -74,20 +76,20 @@ Merged #704 makes the canonical File identity gate mandatory at the PDF capabili
 Refactor #705 removed the duplicate legacy `AppDatabase` tag-hierarchy mutation path in favor of `TagGroupStore.moveTag(...)`; this does not change Lane D Tag Object identity or Relation semantics.
 
 ## Validation / CI
-Recent Lane D merges #665, #671, #675, #679, #682, #684, #688, #692, #693, #697, #702, #704, #709 and #711 passed normal Flutter CI before integration. #688 CI #2147, #692 CI #2159, #693 CI #2169, #697 CI #2180, #702 CI #2202, #704 CI #2218, #709 CI #2239 and #711 CI #2247 passed guardrails, Drift generation, Analyze and full tests.
+Recent Lane D merges #665, #671, #675, #679, #682, #684, #688, #692, #693, #697, #702, #704, #709, #711 and #718 passed normal Flutter CI before integration. #718 final CI #2276 passed guardrails, Drift generation, Analyze and full tests before merge.
 
-Local Flutter/Dart execution is unavailable in the connector-only runtime. #718's pre-refresh CI was green, but the refreshed final head requires normal Flutter CI including this handoff commit before integration. No local test result is claimed.
+Local Flutter/Dart execution is unavailable in the connector-only runtime. Current malformed-MIME routing branch has focused regression coverage but requires normal Flutter CI on the final head before integration; no local test result is claimed.
 
 ## Hotspot / concurrency state
-No shared hotspot lease is required for #718. The current slice touches only `ImageObjectService`, its focused test and this lane handoff. The latest open-PR audit found no competing owner for `ImageObjectService`; shared presentation hosts remain active cross-lane territory.
+No shared hotspot lease is required for the current slice. It touches only `PrimitiveFileImportClassifier`, its focused test, and this lane handoff. The latest open-PR audit found active Lane C/Object/Storage/Refactor PRs but none overlaps these files.
 
 `SystemObjectListMedia` already provides reusable canonical Image/Weblink leading media, but the live `GenericDatabasePage` List host still uses a fixed document icon. Lane D should coordinate a patch-sized host integration with Lane C rather than broadly rewriting that shared page. `ObjectImageDetailPanel` likewise remains reusable but live `ObjectInspectorPage` integration is a shared Object hotspot and needs a fresh ownership audit before editing.
 
-Lane F #691 remains storage-migration-only and still does not provide the generic managed-copy/ownership seam. Lane C and active Object/Relation/Refactor work do not own primitive data services. Avoid `generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, `people_management_page.dart`, `photo_management_page.dart`, Relation internals and Vault lifecycle code unless a fresh ownership audit proves a patch is safe.
+Lane F #691 remains storage-migration-only and still does not provide the generic managed-copy/ownership seam. Avoid `generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, `people_management_page.dart`, `photo_management_page.dart`, Relation internals and Vault lifecycle code unless a fresh ownership audit proves a patch is safe.
 
 ## Exact next actions
-1. Require green normal Flutter CI on final #718 head; if green and mergeable, integrate it.
-2. After #718, re-audit primitive metadata/native capability consumers only for another concrete fail-open or missing-only enrichment defect; do not add speculative abstractions.
+1. Open the focused malformed-MIME routing PR and require green normal Flutter CI on its final head.
+2. If green and mergeable, integrate it; then re-audit File/Image/Weblink metadata normalization for the same stricter MIME-shape consistency only where a concrete durable-poisoning path remains.
 3. Continue #495 only for concrete classification ambiguities. End-to-end File import waits for the Lane F managed-copy/ownership contract.
 4. Coordinate with Lane F on File managed-copy + explicit ownership before generic File import/delete lifecycle.
 5. Coordinate with Lane C for generic File import/create UX and File/Image/Weblink presentation hosts rather than reconstructing Database/View hotspots from Lane D.
