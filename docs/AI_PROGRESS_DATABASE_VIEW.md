@@ -22,7 +22,7 @@ A fresh GitHub audit found one safe Lane C coordination task even though no prod
 
 PR #873 — `Refresh repository-wide routing after composability completion`
 Branch: `docs/database-view-repo-handoff-refresh-20260908`
-Current meaningful head before this handoff update: `6c5ead6d…`; always read the live PR head/CI after this documentation commit.
+Live head changes during the docs refresh; always read current PR head/CI before acting.
 
 The PR is docs-only and refreshes repository-wide routing so future lanes do not re-enter completed work. It records:
 - #484/#490/#491/#492/#493/#494 as completed/closed;
@@ -30,6 +30,8 @@ The PR is docs-only and refreshes repository-wide routing so future lanes do not
 - Lane C as intentionally idle until a concrete Database/View/schema/template gap appears;
 - #481/#249 as Object-owned, #155/#245/#495 as Primitive/Object, #225 as Refactor, #242/#218 as real-macOS validation;
 - the remaining product edge as presentation/migration/consolidation rather than generic schema composability.
+
+Recent Primitive host work (#862 File collection import and #869 canonical List media) is already merged; it remains evidence that primitive-specific composition in generic hosts belongs to D, not a current C hotspot lease.
 
 No runtime behavior changes are included.
 
@@ -77,7 +79,7 @@ Manual Database membership include/exclude remains explicitly deferred in #56 un
 ## Shared hotspot lease
 Lane C currently holds **no shared-hotspot lease**.
 
-Current open Primitive work may own patch-sized `GenericDatabasePage` composition (for example canonical File import entry points). Do not edit that host from C without a fresh PR-file overlap audit.
+Recent Primitive work has touched `GenericDatabasePage` in patch-sized primitive-specific composition. It is merged at this checkpoint, but future C changes must still re-audit open PR files before touching the host.
 
 Before future C work, re-audit open PRs for:
 - `lib/views/generic_database_page.dart`
@@ -103,7 +105,7 @@ GitHub Flutter CI is the validation gate because local Flutter/Dart execution is
 Latest functional Lane C checkpoint #856 passed maintainability guards, Drift generation, Flutter Analyze and the complete Flutter Test suite before merge. #861 was docs-only and also passed full Flutter Analyze/Test before merge.
 
 ## Exact next actions
-1. Read live PR #873 head and Flutter CI after this handoff commit.
+1. Read live PR #873 head and Flutter CI after the latest handoff commit.
 2. If red, fix only the concrete documentation/guard failure; if green, re-check main/open PR overlap and squash-merge #873.
 3. Re-audit open Issues/PRs once more after #873 merge.
 4. If no new focused Database/View/schema/template obligation exists, stop under the AGENTS idle criterion instead of inventing product work.
