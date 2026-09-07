@@ -140,9 +140,9 @@ class _PhotoManagementPageState extends State<PhotoManagementPage> {
             ? '対応する画像はありませんでした'
             : '${imported.length}枚の写真を追加しました',
       );
-    } catch (error) {
+    } catch (_) {
       if (mounted) {
-        showAppToast(context, '写真を追加できませんでした: $error', error: true);
+        showAppToast(context, '写真を追加できませんでした。', error: true);
       }
     }
   }
@@ -160,9 +160,9 @@ class _PhotoManagementPageState extends State<PhotoManagementPage> {
             ? '写真は選択されませんでした'
             : '${imported.length}枚の写真を追加しました',
       );
-    } catch (error) {
+    } catch (_) {
       if (mounted) {
-        showAppToast(context, '写真を追加できませんでした: $error', error: true);
+        showAppToast(context, '写真を追加できませんでした。', error: true);
       }
     }
   }
