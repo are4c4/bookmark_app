@@ -14,6 +14,7 @@ import '../data/object_computed_value_store.dart';
 import '../data/object_graph_query_store.dart';
 import '../data/object_store.dart';
 import '../data/object_type_management_store.dart';
+import '../data/relation_target_quick_create_policy.dart';
 import '../database/database_definition.dart';
 import '../domain/object_detail_content.dart';
 import '../domain/object_detail_property_presentation.dart';
@@ -30,6 +31,7 @@ import '../widgets/database_gallery_view_cover_media.dart';
 import '../widgets/database_view_tabs.dart';
 import '../widgets/notion_inline_field.dart';
 import '../widgets/object_board_view.dart';
+import '../widgets/object_relation_picker_dialog.dart';
 import '../widgets/object_view_toolbar.dart';
 import '../widgets/resizable_detail_pane.dart';
 import 'object_inspector_page.dart';
@@ -1314,178 +1316,54 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
         sourceObjectId: record.id,
         property: objectProperty,
       );
-      if (!mounted) return;
-      final selectedIds = selection.selectedObjectIds.toSet();
-      var visible = await _pageServices.relationEditor.searchCandidates(
-        context: selection,
-        query: '',
+      final targetObjectTypeId = selection.property.targetObjectTypeId;
+      if (targetObjectTypeId == null) {
+        throw StateError('Relation Property has no target ObjectType.');
+      }
+      final quickCreateMode = await _pageServices.relationQuickCreateHost.modeFor(
+        workspaceId: widget.repository.workspaceId,
+        targetObjectTypeId: targetObjectTypeId,
       );
       if (!mounted) return;
-      var searchRequestId = 0;
-      String? searchError;
+      final quickCreateAvailable =
+          quickCreateMode != RelationTargetQuickCreateMode.unavailable;
 
-      final result = await showDialog<Set<int>>(
+      final result = await showObjectRelationPickerDialog(
         context: context,
-        builder: (dialogContext) => StatefulBuilder(
-          builder: (context, setLocalState) {
-            return AlertDialog(
-              titlePadding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
-              contentPadding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-              actionsPadding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-              title: Row(
-                children: [
-                  Expanded(child: Text(property.name)),
-                  Text(
-                    '${selectedIds.length}件選択',
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                  ),
-                ],
-              ),
-              content: SizedBox(
-                width: 460,
-                height: 470,
-                child: Column(
-                  children: [
-                    if (selection.missingTargetObjectIds.isNotEmpty ||
-                        selection.hasCardinalityViolation)
-                      Container(
-                        width: double.infinity,
-                        margin: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .errorContainer
-                              .withValues(alpha: .5),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          [
-                            if (selection.missingTargetObjectIds.isNotEmpty)
-                              '見つからないObject: ${selection.missingTargetObjectIds.join(', ')}',
-                            if (selection.hasCardinalityViolation)
-                              '単一Relationに複数の値が保存されています。明示的に選び直して保存してください。',
-                          ].join('\n'),
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: TextField(
-                        autofocus: true,
-                        decoration: const InputDecoration(
-                          prefixIcon: Icon(Icons.search, size: 18),
-                          hintText: 'Objectを検索',
-                        ),
-                        onChanged: (value) async {
-                          final requestId = ++searchRequestId;
-                          try {
-                            final next = await _pageServices.relationEditor
-                                .searchCandidates(
-                              context: selection,
-                              query: value,
-                            );
-                            if (!dialogContext.mounted ||
-                                requestId != searchRequestId) {
-                              return;
-                            }
-                            setLocalState(() {
-                              visible = next;
-                              searchError = null;
-                            });
-                          } catch (error) {
-                            if (!dialogContext.mounted ||
-                                requestId != searchRequestId) {
-                              return;
-                            }
-                            setLocalState(() {
-                              visible = const [];
-                              searchError = '$error';
-                            });
-                          }
-                        },
-                      ),
-                    ),
-                    if (searchError != null)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
-                        child: Text(
-                          'Objectを検索できませんでした: $searchError',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Theme.of(context).colorScheme.error,
-                              ),
-                        ),
-                      ),
-                    const SizedBox(height: 6),
-                    Expanded(
-                      child: visible.isEmpty
-                          ? const Center(child: Text('該当するObjectがありません'))
-                          : ListView.builder(
-                              itemCount: visible.length,
-                              itemBuilder: (context, index) {
-                                final candidate = visible[index];
-                                final selected =
-                                    selectedIds.contains(candidate.objectId);
-                                return ListTile(
-                                  dense: true,
-                                  leading: Icon(
-                                    selection.property.allowsMultipleRelations
-                                        ? (selected
-                                            ? Icons.check_box
-                                            : Icons.check_box_outline_blank)
-                                        : (selected
-                                            ? Icons.radio_button_checked
-                                            : Icons.radio_button_unchecked),
-                                    size: 19,
-                                  ),
-                                  title: Text(candidate.canonicalTitle),
-                                  subtitle: candidate.aliasContext == null
-                                      ? null
-                                      : Text(candidate.aliasContext!),
-                                  onTap: () => setLocalState(() {
-                                    if (selected) {
-                                      selectedIds.remove(candidate.objectId);
-                                    } else {
-                                      if (!selection
-                                          .property.allowsMultipleRelations) {
-                                        selectedIds.clear();
-                                      }
-                                      selectedIds.add(candidate.objectId);
-                                    }
-                                  }),
-                                );
-                              },
-                            ),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: selectedIds.isEmpty
-                      ? null
-                      : () => setLocalState(selectedIds.clear),
-                  child: const Text('クリア'),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('キャンセル'),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.pop(dialogContext, selectedIds),
-                  child: const Text('保存'),
-                ),
-              ],
-            );
-          },
+        selection: selection,
+        onSearch: ({required context, required query}) =>
+            _pageServices.relationEditor.searchCandidates(
+          context: context,
+          query: query,
         ),
+        onQuickCreate: quickCreateAvailable
+            ? (input) => _pageServices.relationQuickCreateHost.create(
+                  workspaceId: widget.repository.workspaceId,
+                  targetObjectTypeId: targetObjectTypeId,
+                  mode: quickCreateMode,
+                  input: input,
+                )
+            : null,
+        onReloadAfterQuickCreate: quickCreateAvailable
+            ? () => _pageServices.relationEditor.load(
+                  workspaceId: widget.repository.workspaceId,
+                  sourceObjectId: record.id,
+                  property: selection.property,
+                )
+            : null,
+        quickCreateLabel: quickCreateAvailable
+            ? (query) => _pageServices.relationQuickCreateHost.labelFor(
+                  quickCreateMode,
+                  query,
+                )
+            : null,
+        quickCreateRequiresInput:
+            _pageServices.relationQuickCreateHost.requiresInput(quickCreateMode),
       );
       if (result == null) return;
       await _pageServices.relationEditor.save(
-        context: selection,
-        selectedObjectIds: result,
+        context: result.context,
+        selectedObjectIds: result.selectedObjectIds,
       );
       await _reload();
     } catch (error) {
