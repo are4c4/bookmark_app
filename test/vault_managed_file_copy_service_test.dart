@@ -133,6 +133,29 @@ void main() {
     expect(await source.readAsString(), 'source');
   });
 
+  test('fails closed when attachments is a symbolic link', () async {
+    if (Platform.isWindows) return;
+
+    final source = File('${sandbox.path}/linked.txt');
+    await source.writeAsString('source');
+    final outside = Directory('${sandbox.path}/Outside');
+    await outside.create();
+    final link = Link('${vault.path}/attachments');
+    await link.create(outside.path);
+
+    await expectLater(
+      service.copyIntoVault(
+        sourcePath: source.path,
+        vaultDirectoryPath: vault.path,
+      ),
+      throwsA(isA<FileSystemException>()),
+    );
+
+    expect(await outside.list().toList(), isEmpty);
+    expect(await source.readAsString(), 'source');
+    expect(await link.target(), outside.path);
+  });
+
   test('does not create a missing Vault root while importing', () async {
     final source = File('${sandbox.path}/file.bin');
     await source.writeAsBytes(const <int>[9, 8, 7]);
