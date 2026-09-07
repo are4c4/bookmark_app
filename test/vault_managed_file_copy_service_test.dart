@@ -85,6 +85,102 @@ void main() {
     expect(Directory('${vault.path}/attachments').existsSync(), isTrue);
   });
 
+  test('owned persisted path can delete only its managed copy', () async {
+    final source = File('${sandbox.path}/owned.bin');
+    await source.writeAsBytes(const <int>[4, 5, 6]);
+    final copy = await service.copyIntoVault(
+      sourcePath: source.path,
+      vaultDirectoryPath: vault.path,
+    );
+
+    final first = await service.deleteOwnedCopy(
+      storedPath: copy.storedPath,
+      vaultDirectoryPath: vault.path,
+      ownershipStorageKey: copy.ownership.storageKey,
+    );
+    final second = await service.deleteOwnedCopy(
+      storedPath: copy.storedPath,
+      vaultDirectoryPath: vault.path,
+      ownershipStorageKey: copy.ownership.storageKey,
+    );
+
+    expect(first, VaultManagedFileDeleteResult.deleted);
+    expect(second, VaultManagedFileDeleteResult.alreadyMissing);
+    expect(File(copy.resolvedPath).existsSync(), isFalse);
+    expect(await source.readAsBytes(), const <int>[4, 5, 6]);
+  });
+
+  test('delete refuses unknown ownership without touching managed bytes',
+      () async {
+    final source = File('${sandbox.path}/unowned.bin');
+    await source.writeAsString('source');
+    final copy = await service.copyIntoVault(
+      sourcePath: source.path,
+      vaultDirectoryPath: vault.path,
+    );
+
+    await expectLater(
+      service.deleteOwnedCopy(
+        storedPath: copy.storedPath,
+        vaultDirectoryPath: vault.path,
+        ownershipStorageKey: 'external-file-v1',
+      ),
+      throwsA(isA<StateError>()),
+    );
+
+    expect(await File(copy.resolvedPath).readAsString(), 'source');
+    expect(await source.readAsString(), 'source');
+  });
+
+  test('delete refuses traversal and external absolute paths', () async {
+    final database = File('${vault.path}/database.sqlite');
+    await database.writeAsString('database');
+    final external = File('${sandbox.path}/external.txt');
+    await external.writeAsString('external');
+
+    for (final unsafePath in <String>[
+      'attachments/../database.sqlite',
+      external.absolute.path,
+    ]) {
+      await expectLater(
+        service.deleteOwnedCopy(
+          storedPath: unsafePath,
+          vaultDirectoryPath: vault.path,
+          ownershipStorageKey:
+              VaultManagedFileOwnership.vaultManagedCopy.storageKey,
+        ),
+        throwsA(isA<StateError>()),
+      );
+    }
+
+    expect(await database.readAsString(), 'database');
+    expect(await external.readAsString(), 'external');
+  });
+
+  test('delete refuses symbolic-link targets inside attachments', () async {
+    if (Platform.isWindows) return;
+
+    final attachments = Directory('${vault.path}/attachments');
+    await attachments.create();
+    final external = File('${sandbox.path}/external-owned.txt');
+    await external.writeAsString('keep me');
+    final link = Link('${attachments.path}/linked.txt');
+    await link.create(external.path);
+
+    await expectLater(
+      service.deleteOwnedCopy(
+        storedPath: 'attachments/linked.txt',
+        vaultDirectoryPath: vault.path,
+        ownershipStorageKey:
+            VaultManagedFileOwnership.vaultManagedCopy.storageKey,
+      ),
+      throwsA(isA<StateError>()),
+    );
+
+    expect(await external.readAsString(), 'keep me');
+    expect(await link.target(), external.path);
+  });
+
   test('rejects missing and non-file sources without creating managed bytes',
       () async {
     final sourceDirectory = Directory('${sandbox.path}/folder');

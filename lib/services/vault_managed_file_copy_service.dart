@@ -19,6 +19,11 @@ enum VaultManagedFileOwnership {
   final String storageKey;
 }
 
+enum VaultManagedFileDeleteResult {
+  deleted,
+  alreadyMissing,
+}
+
 /// Opaque receipt for one successful managed copy.
 ///
 /// The private constructor prevents callers from manufacturing ownership for an
@@ -43,11 +48,12 @@ class VaultManagedFileCopy {
       VaultManagedFileOwnership.vaultManagedCopy;
 }
 
-/// Copies arbitrary regular files into the active Vault's `attachments/` area.
+/// Owns managed regular-file placement inside a Vault's `attachments/` area.
 ///
-/// This service owns only filesystem placement, portable path conversion and
-/// rollback of bytes that it created. MIME classification, File/Image Object
-/// identity, metadata and Relation behavior belong to their feature lanes.
+/// This service owns only filesystem placement, portable path conversion,
+/// explicit filesystem ownership, rollback and ownership-gated physical delete.
+/// MIME classification, File/Image Object identity, metadata and Relation
+/// behavior belong to their feature lanes.
 class VaultManagedFileCopyService {
   VaultManagedFileCopyService();
 
@@ -113,8 +119,8 @@ class VaultManagedFileCopyService {
       }
 
       final resolvedPath = copiedFile.absolute.path;
-      final storedPath = ProfilePathResolver(vault.path)
-          .canonicalStoredPath(resolvedPath);
+      final storedPath =
+          ProfilePathResolver(vault.path).canonicalStoredPath(resolvedPath);
       if (!_isManagedAttachmentPath(
         resolvedPath: resolvedPath,
         vaultDirectoryPath: vault.path,
@@ -140,33 +146,72 @@ class VaultManagedFileCopyService {
     }
   }
 
-  /// Rolls back only a copy represented by a receipt created by this library.
+  /// Deletes persisted managed bytes only when explicit Storage ownership and a
+  /// safe Vault-relative `attachments/...` path are both supplied.
   ///
-  /// Missing destinations are already rolled back and therefore succeed. A
-  /// non-file entity or a path outside the receipt's Vault attachments area
-  /// fails closed rather than deleting an unexpected filesystem entity.
-  Future<void> rollbackCopy(VaultManagedFileCopy copy) async {
-    if (!_isManagedAttachmentPath(
-      resolvedPath: copy.resolvedPath,
-      vaultDirectoryPath: copy.vaultDirectoryPath,
-    )) {
-      throw StateError('Managed file rollback target is outside the Vault.');
+  /// This is intentionally stricter than checking whether an arbitrary path
+  /// happens to live under the Vault. External absolute paths, traversal,
+  /// symlinks and non-file entities fail closed. A missing managed file is
+  /// treated as an idempotent successful outcome without creating directories.
+  Future<VaultManagedFileDeleteResult> deleteOwnedCopy({
+    required String storedPath,
+    required String vaultDirectoryPath,
+    required String ownershipStorageKey,
+  }) async {
+    if (ownershipStorageKey !=
+        VaultManagedFileOwnership.vaultManagedCopy.storageKey) {
+      throw StateError('Managed file ownership is not recognized.');
     }
+
+    final vaultValue = vaultDirectoryPath.trim();
+    if (vaultValue.isEmpty) {
+      throw ArgumentError.value(
+        vaultDirectoryPath,
+        'vaultDirectoryPath',
+        'Vault directory path must not be empty.',
+      );
+    }
+    final vault = Directory(vaultValue).absolute;
+    if (!await vault.exists()) {
+      throw FileSystemException('Vault directory is unavailable.');
+    }
+
+    final candidate = _validatedManagedStoredPath(storedPath);
+    final resolvedPath =
+        ProfilePathResolver(vault.path).resolveStoredPath(candidate);
+    if (!_isManagedAttachmentPath(
+      resolvedPath: resolvedPath,
+      vaultDirectoryPath: vault.path,
+    )) {
+      throw StateError('Managed file delete target is outside the Vault.');
+    }
+
+    final type = await FileSystemEntity.type(
+      resolvedPath,
+      followLinks: false,
+    );
+    if (type == FileSystemEntityType.notFound) {
+      return VaultManagedFileDeleteResult.alreadyMissing;
+    }
+    if (type != FileSystemEntityType.file) {
+      throw StateError('Managed file delete target is not a regular file.');
+    }
+    await File(resolvedPath).delete();
+    return VaultManagedFileDeleteResult.deleted;
+  }
+
+  /// Rolls back only a copy represented by a receipt created by this library.
+  Future<void> rollbackCopy(VaultManagedFileCopy copy) async {
     final expected = ProfilePathResolver(copy.vaultDirectoryPath)
         .resolveStoredPath(copy.storedPath);
     if (!_samePath(expected, copy.resolvedPath)) {
       throw StateError('Managed file rollback receipt is inconsistent.');
     }
-
-    final type = await FileSystemEntity.type(
-      copy.resolvedPath,
-      followLinks: false,
+    await deleteOwnedCopy(
+      storedPath: copy.storedPath,
+      vaultDirectoryPath: copy.vaultDirectoryPath,
+      ownershipStorageKey: copy.ownership.storageKey,
     );
-    if (type == FileSystemEntityType.notFound) return;
-    if (type != FileSystemEntityType.file) {
-      throw StateError('Managed file rollback target is not a regular file.');
-    }
-    await File(copy.resolvedPath).delete();
   }
 
   Future<File> _availableTarget(
@@ -206,6 +251,21 @@ class VaultManagedFileCopyService {
         return true;
       }());
     }
+  }
+
+  String _validatedManagedStoredPath(String storedPath) {
+    final candidate = storedPath.trim().replaceAll('\\', '/');
+    if (candidate.isEmpty || _isAbsolute(candidate)) {
+      throw StateError('Managed file path must be Vault-relative.');
+    }
+    final segments = candidate.split('/');
+    if (segments.length < 2 ||
+        segments.first != 'attachments' ||
+        segments.any((segment) =>
+            segment.isEmpty || segment == '.' || segment == '..')) {
+      throw StateError('Managed file path is outside the attachments boundary.');
+    }
+    return candidate;
   }
 
   bool _isManagedAttachmentPath({
