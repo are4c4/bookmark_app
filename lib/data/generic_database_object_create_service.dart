@@ -194,6 +194,7 @@ class GenericDatabaseObjectCreateService {
     String? originalFilename,
     String? contentType,
     int? sizeBytes,
+    String? sha256,
     DateTime? importedAt,
   }) async {
     final page = await _load(databaseId);
@@ -214,6 +215,7 @@ class GenericDatabaseObjectCreateService {
       originalFilename: originalFilename,
       contentType: contentType,
       sizeBytes: sizeBytes,
+      sha256: sha256,
       importedAt: importedAt,
     );
     return object.id;

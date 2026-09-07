@@ -69,6 +69,8 @@ void main() {
 
   test('managed File collection creation reuses canonical File identity', () async {
     final definition = await files.ensureDefinition(workspaceId);
+    const sha256 =
+        '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 
     // Until the mixed file-import host lands, title-only generic creation must
     // fail closed rather than bypass canonical managed-file identity.
@@ -87,6 +89,7 @@ void main() {
       originalFilename: 'report.pdf',
       contentType: 'application/pdf',
       sizeBytes: 42,
+      sha256: sha256,
       importedAt: DateTime.utc(2026, 9, 7),
     );
     final secondId = await service.createFileFromManagedFile(
@@ -109,6 +112,7 @@ void main() {
       'application/pdf',
     );
     expect(objects.single.values[definition.sizeBytesProperty.id], 42);
+    expect(objects.single.values[definition.sha256Property.id], sha256);
   });
 
   test('managed File creation rejects a non-File collection before mutation',

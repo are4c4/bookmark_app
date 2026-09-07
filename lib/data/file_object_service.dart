@@ -11,6 +11,7 @@ class FileObjectDefinition {
     required this.contentTypeProperty,
     required this.extensionProperty,
     required this.sizeBytesProperty,
+    required this.sha256Property,
     required this.importedAtProperty,
   });
 
@@ -20,6 +21,7 @@ class FileObjectDefinition {
   final ObjectPropertyDefinition contentTypeProperty;
   final ObjectPropertyDefinition extensionProperty;
   final ObjectPropertyDefinition sizeBytesProperty;
+  final ObjectPropertyDefinition sha256Property;
   final ObjectPropertyDefinition importedAtProperty;
 }
 
@@ -74,6 +76,12 @@ class FileObjectService {
       type: ObjectPropertyType.number,
       config: const <String, dynamic>{'system': true},
     );
+    final sha256 = await systemObjects.ensureProperty(
+      objectTypeId: type.id,
+      name: 'SHA-256',
+      type: ObjectPropertyType.text,
+      config: const <String, dynamic>{'system': true},
+    );
     final importedAt = await systemObjects.ensureProperty(
       objectTypeId: type.id,
       name: 'Imported at',
@@ -92,6 +100,7 @@ class FileObjectService {
       contentTypeProperty: contentType,
       extensionProperty: extension,
       sizeBytesProperty: sizeBytes,
+      sha256Property: sha256,
       importedAtProperty: importedAt,
     );
 
@@ -102,6 +111,7 @@ class FileObjectService {
       contentTypeProperty: contentType,
       extensionProperty: extension,
       sizeBytesProperty: sizeBytes,
+      sha256Property: sha256,
       importedAtProperty: importedAt,
     );
   }
@@ -110,8 +120,8 @@ class FileObjectService {
   ///
   /// Reimport is deterministic by canonical stored path. Existing non-empty
   /// metadata is preserved; a retry may only fill fields that were previously
-  /// missing. Hash-based dedup can be added later without changing this path
-  /// identity contract.
+  /// missing. SHA-256 is optional metadata and does not replace stored-path
+  /// identity or silently merge independently managed files.
   Future<AppObject> findOrCreateManaged({
     required int workspaceId,
     required String filePath,
@@ -119,10 +129,12 @@ class FileObjectService {
     String? originalFilename,
     String? contentType,
     int? sizeBytes,
+    String? sha256,
     DateTime? importedAt,
   }) async {
     final storedPath = _canonicalStoredPath(filePath);
     final validatedSize = _validatedSize(sizeBytes);
+    final normalizedSha256 = _normalizedSha256(sha256);
     final filename = _firstNonEmpty(<String?>[
       originalFilename,
       _fileName(storedPath),
@@ -159,6 +171,7 @@ class FileObjectService {
         definition.sizeBytesProperty,
         validatedSize,
       );
+      await _setIfMissing(object, definition.sha256Property, normalizedSha256);
       await _setIfMissing(
         object,
         definition.importedAtProperty,
@@ -194,6 +207,7 @@ class FileObjectService {
       definition.sizeBytesProperty,
       validatedSize,
     );
+    await _setIfMissing(created, definition.sha256Property, normalizedSha256);
     await _setIfMissing(
       created,
       definition.importedAtProperty,
@@ -209,6 +223,7 @@ class FileObjectService {
     required ObjectPropertyDefinition contentTypeProperty,
     required ObjectPropertyDefinition extensionProperty,
     required ObjectPropertyDefinition sizeBytesProperty,
+    required ObjectPropertyDefinition sha256Property,
     required ObjectPropertyDefinition importedAtProperty,
   }) async {
     final desiredVisible = <int>[
@@ -218,7 +233,7 @@ class FileObjectService {
       sizeBytesProperty.id,
       importedAtProperty.id,
     ];
-    final desiredOrder = <int>[
+    final previousOrder = <int>[
       originalFilenameProperty.id,
       contentTypeProperty.id,
       extensionProperty.id,
@@ -226,14 +241,40 @@ class FileObjectService {
       importedAtProperty.id,
       fileProperty.id,
     ];
+    final desiredOrder = <int>[
+      originalFilenameProperty.id,
+      contentTypeProperty.id,
+      extensionProperty.id,
+      sizeBytesProperty.id,
+      importedAtProperty.id,
+      sha256Property.id,
+      fileProperty.id,
+    ];
     final current = await defaultsStore.read(objectTypeId);
-    if (current != null) return;
+    if (current == null) {
+      await defaultsStore.write(
+        objectTypeId: objectTypeId,
+        defaults: ObjectTypeDefaults(
+          visiblePropertyIds: desiredVisible,
+          propertyOrder: desiredOrder,
+          openMode: ObjectOpenMode.sidePeek,
+        ),
+      );
+      return;
+    }
+
+    // Upgrade only the exact generated order from the pre-hash File schema.
+    // A user-customized order remains authoritative and is never rewritten just
+    // because the built-in primitive gained optional system metadata.
+    final order = current.propertyOrder;
+    if (order == null || !_sameIds(order, previousOrder)) return;
     await defaultsStore.write(
       objectTypeId: objectTypeId,
       defaults: ObjectTypeDefaults(
-        visiblePropertyIds: desiredVisible,
+        visiblePropertyIds: current.visiblePropertyIds,
         propertyOrder: desiredOrder,
-        openMode: ObjectOpenMode.sidePeek,
+        openMode: current.openMode,
+        bodyTemplate: current.bodyTemplate,
       ),
     );
   }
@@ -260,6 +301,19 @@ class FileObjectService {
       );
     }
     return value;
+  }
+
+  String? _normalizedSha256(String? value) {
+    final candidate = value?.trim().toLowerCase();
+    if (candidate == null || candidate.isEmpty) return null;
+    if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(candidate)) {
+      throw ArgumentError.value(
+        value,
+        'sha256',
+        'SHA-256 must be a 64-character hexadecimal digest.',
+      );
+    }
+    return candidate;
   }
 
   String? _normalizedContentType(String? value) {
@@ -315,6 +369,14 @@ class FileObjectService {
       if (object.id == objectId) return object;
     }
     throw StateError('File Object $objectId does not exist.');
+  }
+
+  bool _sameIds(List<int> left, List<int> right) {
+    if (left.length != right.length) return false;
+    for (var index = 0; index < left.length; index++) {
+      if (left[index] != right[index]) return false;
+    }
+    return true;
   }
 
   String _fileName(String path) {
