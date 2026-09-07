@@ -1,8 +1,18 @@
+import '../domain/object_body.dart';
 import '../domain/object_detail_content.dart';
 import '../domain/object_model.dart';
 import 'object_body_store.dart';
 import 'object_computed_value_store.dart';
 import 'object_store.dart';
+
+/// Signals that the persisted Object Body could not be loaded safely.
+///
+/// Callers can distinguish this from Object absence and from failures while
+/// evaluating computed Properties without weakening ObjectBodyStore's
+/// fail-closed parsing contract.
+class ObjectBodyContentLoadException implements Exception {
+  const ObjectBodyContentLoadException();
+}
 
 /// Builds the shared Object detail payload used by side peek, center peek and
 /// full-page presentations.
@@ -36,7 +46,15 @@ class ObjectDetailContentLoader {
     }
     if (object == null) return null;
 
-    final body = await bodyStore.read(object.id);
+    late final ObjectBodyDocument body;
+    try {
+      body = await bodyStore.read(object.id);
+    } catch (_, stackTrace) {
+      Error.throwWithStackTrace(
+        const ObjectBodyContentLoadException(),
+        stackTrace,
+      );
+    }
     final computedValues = <int, dynamic>{};
     for (final property in objectType.properties) {
       if (!property.isComputed) continue;
