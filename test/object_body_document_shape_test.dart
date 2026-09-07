@@ -25,6 +25,24 @@ void main() {
     expect(document.version, ObjectBodyDocument.currentVersion + 1);
   });
 
+  test('Body document rejects non-positive versions on load and persistence', () {
+    for (final version in <int>[0, -1]) {
+      expect(
+        () => ObjectBodyDocument.fromJson(<String, dynamic>{
+          'version': version,
+          'blocks': <dynamic>[],
+        }),
+        throwsFormatException,
+        reason: 'Unexpectedly accepted persisted version $version',
+      );
+      expect(
+        () => ObjectBodyDocument(version: version).toJson(),
+        throwsFormatException,
+        reason: 'Unexpectedly serialized direct version $version',
+      );
+    }
+  });
+
   test('Body document rejects malformed top-level JSON shapes', () {
     for (final value in <dynamic>[
       null,
