@@ -90,11 +90,12 @@ After #687 and #695, the remaining real shim callers are concentrated in larger/
 ## AppDatabase responsibility state
 Major completed narrowing includes Bookmark aggregate reads -> `BookmarkReadStore`, profile-relative paths -> `ProfilePathResolver`, Saved View aggregation -> `SavedViewReadStore`, Photo aggregate/path reads -> `PhotoReadStore`, versioned migration helpers, engagement mutations -> `BookmarkEngagementStore`, dead People helpers removed, and duplicate Tag hierarchy mutation removed by #705.
 
-Two audited dead seams remain deferred because applying them requires editing large `bookmark_repository.dart`:
-- `AppDatabase.updateBookmarkFields(... personNames ...)` currently has one production caller that passes `personNames: null`; live Person updates are role-aware elsewhere;
-- `BookmarkLifecycleStore.remove()` is an empty method with one production call from permanent deletion.
+Three audited dead seams remain deferred because applying them requires editing large `bookmark_repository.dart` or a coupled large-host path:
+- `AppDatabase.updateBookmarkFields(... personNames ...)` currently has one production caller that always passes `personNames: null`; live Person updates are role-aware elsewhere;
+- `BookmarkLifecycleStore.remove()` is an empty method with one production call from permanent deletion;
+- `BookmarkRepository.setBookmarkPeopleFromDatabase(...)` has no production caller; the surviving role-aware path is `setPeopleForRole(...)`.
 
-Re-audit before changing either. Preserve attachment cleanup/deletion ordering and do not reconstruct the repository host for a one-line metric win.
+Re-audit before changing any of these. Preserve attachment cleanup/deletion ordering and do not reconstruct the repository host for a one-line metric win.
 
 ## GenericDatabasePage / shared hotspots
 Focused extractions already integrated include `GenericDatabasePageStateLoader` (#310) and `GenericDatabasePageServices.fromWorkspaceStore(...)` (#323).
@@ -120,13 +121,15 @@ Profile/Vault recovery semantics remain Storage-owned and must not be changed un
 ## Current-source audit result
 The latest caller-zero sweep found #705 as a real responsibility-removal candidate and integrated it. Production searches also confirmed `BookmarkRepository.createTag(... parent ...)` and Tag management already route hierarchy mutation through `TagGroupStore.moveTag(...)`, validating that the deleted `AppDatabase` hierarchy path was duplicate rather than canonical behavior.
 
+A follow-up repository search found `BookmarkRepository.setBookmarkPeopleFromDatabase(...)` only at its own declaration, with no production caller. It is therefore another likely deletion candidate, but the method lives in the large `bookmark_repository.dart` host; leave it for a naturally safe patch opportunity rather than rebuilding the full file solely to remove two lines.
+
 The remaining obvious shim and failure-policy candidates are concentrated in large shared hosts or another lane's active product territory. Do not create wrappers or speculative abstractions merely because no further small deletion candidate is currently available.
 
 ## Exact next actions
 1. Re-read current `main` and open PR ownership before every next slice; parallel lanes are merging rapidly.
 2. Continue true production caller-zero audits and prefer whole-module/API deletion when independent canonical coverage exists.
 3. Re-audit the remaining nine Database-presentation shim imports; lower 9 only through naturally safe host edits, not broad complete-file rewrites.
-4. Keep the two dead Bookmark API seams deferred until `bookmark_repository.dart` can be patched safely.
+4. Keep the three dead Bookmark API seams above deferred until `bookmark_repository.dart` can be patched safely.
 5. Continue `GenericDatabasePage` extraction only with a focused regression-backed slice and an available hotspot lease.
 6. Lower presentation/database or feature-presentation `AppDatabase` ceilings only after a real responsibility/boundary move removes references.
 7. Take additional raw-error/privacy cleanup only in small independently owned hosts; do not invade active Primitive/Relation/Storage semantics.
@@ -141,4 +144,4 @@ The remaining obvious shim and failure-policy candidates are concentrated in lar
 - behavior-preserving cleanup must not silently become schema, Relation, Search, primitive-storage, or recovery-policy redesign.
 
 ## Stop / continuation state
-#695, #701, and #705 are integrated and fully validated. The remaining obvious legacy-shim/raw-error candidates are currently concentrated in shared hotspots or another lane's active product territory, and the two known dead Bookmark API seams require a large repository host edit. Continue with a fresh ownership/caller-zero audit on the next run; if no independent safe slice exists, idling is preferable to manufacturing abstraction or broad hotspot churn.
+#695, #701, and #705 are integrated and fully validated. The remaining obvious legacy-shim/raw-error candidates are currently concentrated in shared hotspots or another lane's active product territory, and the three known dead Bookmark API seams require a large repository host edit. Continue with a fresh ownership/caller-zero audit on the next run; if no independent safe slice exists, idling is preferable to manufacturing abstraction or broad hotspot churn.
