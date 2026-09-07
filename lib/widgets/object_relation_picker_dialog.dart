@@ -31,6 +31,7 @@ Future<ObjectRelationPickerResult?> showObjectRelationPickerDialog({
   ObjectRelationPickerQuickCreate? onQuickCreate,
   ObjectRelationPickerReload? onReloadAfterQuickCreate,
   ObjectRelationPickerQuickCreateLabel? quickCreateLabel,
+  bool quickCreateRequiresInput = true,
 }) =>
     showDialog<ObjectRelationPickerResult>(
       context: context,
@@ -40,6 +41,7 @@ Future<ObjectRelationPickerResult?> showObjectRelationPickerDialog({
         onQuickCreate: onQuickCreate,
         onReloadAfterQuickCreate: onReloadAfterQuickCreate,
         quickCreateLabel: quickCreateLabel,
+        quickCreateRequiresInput: quickCreateRequiresInput,
       ),
     );
 
@@ -60,6 +62,7 @@ class ObjectRelationPickerDialog extends StatefulWidget {
     this.onQuickCreate,
     this.onReloadAfterQuickCreate,
     this.quickCreateLabel,
+    this.quickCreateRequiresInput = true,
   }) : assert(
           (onQuickCreate == null) == (onReloadAfterQuickCreate == null),
           'Quick-create requires both create and canonical reload callbacks.',
@@ -70,6 +73,11 @@ class ObjectRelationPickerDialog extends StatefulWidget {
   final ObjectRelationPickerQuickCreate? onQuickCreate;
   final ObjectRelationPickerReload? onReloadAfterQuickCreate;
   final ObjectRelationPickerQuickCreateLabel? quickCreateLabel;
+
+  /// Text-like target creation needs a title/name/URL before it can run.
+  /// Managed Image/File import is picker-driven and may explicitly opt out so
+  /// the import affordance remains available with an empty search field.
+  final bool quickCreateRequiresInput;
 
   @override
   State<ObjectRelationPickerDialog> createState() =>
@@ -135,7 +143,11 @@ class _ObjectRelationPickerDialogState extends State<ObjectRelationPickerDialog>
     final rawQuery = _searchController.text.trim();
     final create = widget.onQuickCreate;
     final reload = widget.onReloadAfterQuickCreate;
-    if (!_quickCreateEnabled || rawQuery.isEmpty || _creating) return;
+    if (!_quickCreateEnabled ||
+        (widget.quickCreateRequiresInput && rawQuery.isEmpty) ||
+        _creating) {
+      return;
+    }
     setState(() {
       _creating = true;
       _errorMessage = null;
@@ -257,7 +269,8 @@ class _ObjectRelationPickerDialogState extends State<ObjectRelationPickerDialog>
                 },
               ),
             ),
-            if (_quickCreateEnabled && query.isNotEmpty)
+            if (_quickCreateEnabled &&
+                (!widget.quickCreateRequiresInput || query.isNotEmpty))
               Padding(
                 padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
                 child: Align(
