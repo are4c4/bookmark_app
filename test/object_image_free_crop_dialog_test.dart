@@ -24,7 +24,7 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: ObjectImageFreeCropDialog(
-            database: database,
+            pathResolver: database.pathResolver,
             objectStore: objectStore,
             objectTypeId: 3,
             objectId: 11,
@@ -59,7 +59,7 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: ObjectImageFreeCropDialog(
-            database: database,
+            pathResolver: database.pathResolver,
             objectStore: objectStore,
             objectTypeId: 3,
             objectId: 11,
@@ -113,7 +113,7 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: ObjectImageFreeCropDialog(
-            database: database,
+            pathResolver: database.pathResolver,
             objectStore: objectStore,
             objectTypeId: 3,
             objectId: 11,
