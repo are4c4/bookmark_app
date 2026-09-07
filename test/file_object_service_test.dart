@@ -114,6 +114,50 @@ void main() {
     );
   });
 
+  test('reimport fills a missing File import timestamp', () async {
+    final root = await Directory.systemTemp.createTemp('file_object_enrich_');
+    addTearDown(() => root.delete(recursive: true));
+    final database = AppDatabase.forTesting(
+      NativeDatabase.memory(),
+      profileDirectoryPath: root.path,
+    );
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final systemObjects = SystemObjectStore(
+      database: database,
+      objectStore: objectStore,
+    );
+    final service = FileObjectService(
+      systemObjects: systemObjects,
+      defaultsStore: ObjectTypeDefaultsStore(genericStore),
+    );
+    final definition = await service.ensureDefinition(workspaceId);
+    final objectId = await objectStore.createObject(
+      objectTypeId: definition.objectType.id,
+      title: 'legacy.pdf',
+    );
+    await objectStore.setPropertyValue(
+      objectId: objectId,
+      property: definition.fileProperty,
+      value: 'files/legacy.pdf',
+    );
+    final importedAt = DateTime.utc(2026, 9, 7, 4, 5, 6);
+
+    final enriched = await service.findOrCreateManaged(
+      workspaceId: workspaceId,
+      filePath: '${root.path}/files/legacy.pdf',
+      importedAt: importedAt,
+    );
+
+    expect(enriched.id, objectId);
+    expect(
+      enriched.values[definition.importedAtProperty.id],
+      importedAt.toIso8601String(),
+    );
+  });
+
   test('File and Image remain distinct primitive ObjectTypes', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
