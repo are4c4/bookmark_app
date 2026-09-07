@@ -90,4 +90,39 @@ void main() {
       isNull,
     );
   });
+
+  test('detail loader identifies persisted Body read failures', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final bodyStore = ObjectBodyStore(genericStore);
+    final typeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Item',
+    );
+    final objectId = await objectStore.createObject(
+      objectTypeId: typeId,
+      title: 'Corrupt Body',
+    );
+    await bodyStore.ensureSchema();
+    await database.customStatement(
+      '''INSERT INTO object_bodies(object_id, document_json, updated_at)
+         VALUES (?, ?, CURRENT_TIMESTAMP)
+         ON CONFLICT(object_id)
+         DO UPDATE SET document_json = excluded.document_json''',
+      <Object?>[objectId, '[]'],
+    );
+    final loader = ObjectDetailContentLoader(
+      objectStore: objectStore,
+      bodyStore: bodyStore,
+      computedStore: ObjectComputedValueStore(objectStore),
+    );
+
+    expect(
+      () => loader.load(objectTypeId: typeId, objectId: objectId),
+      throwsA(isA<ObjectBodyContentLoadException>()),
+    );
+  });
 }
