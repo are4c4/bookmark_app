@@ -1,3 +1,4 @@
+import '../domain/mime_type_normalizer.dart';
 import '../domain/object_model.dart';
 import '../domain/object_type_defaults.dart';
 import 'object_type_defaults_store.dart';
@@ -139,7 +140,7 @@ class FileObjectService {
       originalFilename,
       _fileName(storedPath),
     ]);
-    final normalizedContentType = _normalizedContentType(contentType);
+    final normalizedContentType = MimeTypeNormalizer.normalize(contentType);
     final extension = _extension(filename ?? storedPath);
     final importedAtValue =
         (importedAt ?? DateTime.now()).toUtc().toIso8601String();
@@ -314,17 +315,6 @@ class FileObjectService {
       );
     }
     return candidate;
-  }
-
-  String? _normalizedContentType(String? value) {
-    final candidate = value?.trim().toLowerCase();
-    if (candidate == null || candidate.isEmpty) return null;
-    final separator = candidate.indexOf(';');
-    final mime = separator < 0
-        ? candidate
-        : candidate.substring(0, separator).trim();
-    if (mime.isEmpty || !mime.contains('/')) return null;
-    return mime;
   }
 
   String? _extension(String path) {
