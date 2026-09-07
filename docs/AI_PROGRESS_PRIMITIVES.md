@@ -76,7 +76,7 @@ Key integrated slices:
 File identity remains stored-path based. Reimporting the same external source intentionally creates a distinct managed path and distinct File Object even when SHA-256 matches.
 
 ### Canonical File — presentation
-The reusable File detail surface is now established on `main` without giving presentation raw filesystem ownership:
+The reusable File detail surface is established on `main` without giving presentation raw filesystem ownership:
 - #824 (`f5944785…`) — canonical open/reveal/export action widget with privacy-safe errors.
 - #830 (`106a87f4…`) — read-only inline PDF preview seam; non-PDF/missing/unavailable previews render nothing.
 - #834 (`97b64325…`) — `ObjectFileDetailPanel` composes preview + actions for one File identity and reserves no PDF-specific whitespace when unavailable.
@@ -110,17 +110,17 @@ The old “generic File import is blocked on Lane F managed-copy/ownership” st
 
 ## Validation
 - #824, #830, #834, #837 and #841 were integrated after normal Flutter CI passed their relevant maintainability guardrails, Drift generation, Analyze and full Flutter tests.
-- #841 specifically preserves the stricter presentation/database boundary by moving composition to `lib/services`; do not reintroduce presentation-owned `AppDatabase` composition.
+- #841 specifically preserves the presentation/database boundary by moving composition to `lib/services`; do not reintroduce presentation-owned `AppDatabase` composition.
 - Local Flutter/Dart execution is unavailable in this connector runtime; GitHub CI is the executable validation source.
 
 ## Current hotspot / concurrency state
-- Lane C PR #832 (`feature/database-view-real-host-schema-management-493`) currently owns `GenericDatabasePage` and explicitly plans/contains shared-host schema-management wiring. Do **not** overlap that file for File collection import UI until its lease clears.
-- No open PR was found claiming `object_inspector_page.dart` at the #841 merge checkpoint, but it remains a large shared hotspot. Re-audit immediately before any edit.
+- Lane C #832 merged as `83a44e0d…`; its `GenericDatabasePage` schema-management lease is cleared.
+- Fresh open-PR search after #832 found no PR claiming `generic_database_page.dart` and no PR claiming `object_inspector_page.dart`. Both remain large shared hotspots, so re-audit immediately before each edit rather than assuming they stay clear.
 - Bookmark/People/Photo hosts, `app_shell.dart` and `app_database.dart` remain shared hotspots and require a fresh open-PR audit before non-trivial edits.
 
 ## Exact next actions
-1. Re-audit `object_inspector_page.dart` ownership. If clear and a patch-sized edit path is available, place `ObjectFileDetailPanelHost` after the title/navigation area and before generic Properties for the canonical File system ObjectType; add a real-host regression proving custom File-shaped ObjectTypes do not receive native File UI.
-2. Wait for Lane C #832 to clear `GenericDatabasePage`, then connect #804 `requiresManagedFileImport()` + `GenericDatabaseFileImportService.importPickedFiles(...)` to the real File collection create affordance if no equivalent wiring landed meanwhile.
+1. Re-audit `object_inspector_page.dart`. If clear and a true patch-sized edit path is available, place `ObjectFileDetailPanelHost` after the title/navigation area and before generic Properties for the canonical File system ObjectType; add a real-host regression proving custom File-shaped ObjectTypes do not receive native File UI.
+2. Re-audit `generic_database_page.dart`. If clear, connect #804 `requiresManagedFileImport()` + `GenericDatabaseFileImportService.importPickedFiles(...)` to the real File collection create affordance unless equivalent wiring landed meanwhile.
 3. Re-audit #484 acceptance after those two host placements. Core File/PDF identity, metadata, ownership, import, actions, derived PDF capability and delete safety are implemented.
 4. Continue #245 only where replacement parity is explicit: canonical Image detail/List/Table parity and Bookmark/People write-authority migration are higher value than speculative new Image abstractions.
 5. Continue #155 only for generic Weblink collection/detail polish or caller-zero legacy URL/remote-thumbnail retirement.
@@ -128,7 +128,7 @@ The old “generic File import is blocked on Lane F managed-copy/ownership” st
 7. Keep Tag hierarchy on canonical Relation APIs and defer native uniqueness semantics.
 
 ## Cross-lane dependencies / blockers
-- Lane C: #832 currently blocks Lane D edits to `GenericDatabasePage`; no generic File core blocker remains.
+- Lane C: no current generic File blocker; #832 is merged, but `GenericDatabasePage` remains a shared hotspot requiring a fresh lease audit.
 - Lane F: no current generic File blocker; #750/#771 provide copy/ownership/rollback/delete filesystem boundaries.
 - Lane B: owns Relation integrity for primitive-producing workflows.
 - Lane E: owns search persistence/reconciliation; Lane D owns only File/PDF extraction/capability behavior.
@@ -139,4 +139,4 @@ Latest Lane D merge: #841, squash merge `b954bfc37999e432bb6e79a7ef785a5d2253058
 
 Recent File presentation sequence: #824 -> #830 -> #834 -> #837 -> #841.
 
-Current stop/coordination reason for shared-host work: `GenericDatabasePage` is leased by Lane C #832; `ObjectInspectorPage` is clear at the latest audit but requires a true patch-sized edit rather than whole-file replacement through the connector. Independent File core/presentation composition work is complete enough that the next value is real-host placement, not another parallel abstraction.
+Current coordination note: both remaining File host placements are now unblocked by known PR leases at the latest audit, but this connector exposes whole-file replacement rather than a safe local patch mutation for those large hotspots. Do not rewrite either host wholesale just to land a few lines; prefer a true patch-sized edit path when available. Independent File core/presentation composition work is complete enough that the next value is real-host placement, not another parallel abstraction.
