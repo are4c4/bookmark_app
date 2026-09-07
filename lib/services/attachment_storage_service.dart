@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:file_selector/file_selector.dart';
 
 import '../data/bookmark_attachment_store.dart';
+import 'vault_managed_file_copy_service.dart';
 
 class AttachmentStorageService {
   const AttachmentStorageService();
@@ -45,42 +46,40 @@ class AttachmentStorageService {
     final paths = sourcePaths.where(_isSupported).toList();
     if (paths.isEmpty) return const [];
 
-    final directory = Directory('$profileDirectoryPath/attachments');
-    if (!await directory.exists()) await directory.create(recursive: true);
-
+    final managedStorage = VaultManagedFileCopyService();
     final result = <BookmarkAttachment>[];
-    for (var i = 0; i < paths.length; i++) {
-      final sourcePath = paths[i];
+    for (final sourcePath in paths) {
       final source = File(sourcePath);
       if (!await source.exists()) continue;
-      final originalName = _fileName(source.path);
-      final safeName = originalName.replaceAll(
-        RegExp(r'[^A-Za-z0-9._\-ぁ-んァ-ヶ一-龠々ー ]'),
-        '_',
+
+      final copy = await managedStorage.copyIntoVault(
+        sourcePath: source.path,
+        vaultDirectoryPath: profileDirectoryPath,
       );
-      final targetPath =
-          '${directory.path}/${DateTime.now().microsecondsSinceEpoch}_${i}_$safeName';
-      final copied = await source.copy(targetPath);
-      final stat = await copied.stat();
-      final kind = _kindFor(targetPath);
-      final id = await store.add(
-        bookmarkId: bookmarkId,
-        fileName: originalName,
-        path: targetPath,
-        kind: kind,
-        sizeBytes: stat.size,
-      );
-      result.add(
-        BookmarkAttachment(
-          id: id,
+      final kind = _kindFor(copy.originalFilename);
+      try {
+        final id = await store.add(
           bookmarkId: bookmarkId,
-          fileName: originalName,
-          path: targetPath,
+          fileName: copy.originalFilename,
+          path: copy.resolvedPath,
           kind: kind,
-          sizeBytes: stat.size,
-          createdAt: DateTime.now(),
-        ),
-      );
+          sizeBytes: copy.sizeBytes,
+        );
+        result.add(
+          BookmarkAttachment(
+            id: id,
+            bookmarkId: bookmarkId,
+            fileName: copy.originalFilename,
+            path: copy.resolvedPath,
+            kind: kind,
+            sizeBytes: copy.sizeBytes,
+            createdAt: DateTime.now(),
+          ),
+        );
+      } catch (error, stackTrace) {
+        await managedStorage.rollbackCopy(copy);
+        Error.throwWithStackTrace(error, stackTrace);
+      }
     }
     return result;
   }
@@ -135,12 +134,6 @@ return output
     final dot = path.lastIndexOf('.');
     if (dot < 0 || dot == path.length - 1) return false;
     return _allowedExtensions.contains(path.substring(dot + 1).toLowerCase());
-  }
-
-  String _fileName(String path) {
-    final normalized = path.replaceAll('\\', '/');
-    final slash = normalized.lastIndexOf('/');
-    return slash < 0 ? normalized : normalized.substring(slash + 1);
   }
 
   Future<void> deleteAttachment(
