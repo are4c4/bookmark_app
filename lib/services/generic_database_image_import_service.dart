@@ -5,38 +5,84 @@ import 'package:image/image.dart' as image;
 
 import '../data/generic_database_object_create_service.dart';
 import 'photo_storage_service.dart';
+import 'primitive_file_import_classifier.dart';
+
+/// Stable user-facing boundary when an Image-collection selection resolves to
+/// the File primitive instead. The message deliberately contains no source path.
+class GenericDatabaseImageImportRequiresFileException implements Exception {
+  const GenericDatabaseImageImportRequiresFileException();
+
+  @override
+  String toString() =>
+      'Selected content does not belong to the supported Image primitive.';
+}
+
+/// Stable boundary when a selected source cannot be proven to be a regular file
+/// before any managed Image copy is created.
+class GenericDatabaseImageImportSourceUnavailableException implements Exception {
+  const GenericDatabaseImageImportSourceUnavailableException();
+
+  @override
+  String toString() => 'Selected image is not available for import.';
+}
 
 /// Imports user-selected image files into app-managed storage and then creates
 /// canonical system Image Objects for a Database collection.
 ///
-/// File picking/copying remains owned by [PhotoStorageService], while Object
-/// identity/reuse remains owned by [GenericDatabaseObjectCreateService]. This
-/// workflow composes the two boundaries, reuses byte-identical managed files on
-/// canonical Image reimport, returns each canonical Image Object id once, and
-/// removes only newly copied files if canonical Object creation fails.
+/// Picker candidates are classified before any managed-file mutation. Every
+/// source must be a regular file and resolve to the supported Image primitive;
+/// mixed/non-Image selections therefore fail the whole preflight without
+/// creating managed copies or Objects. Classified Image sources use the same
+/// content-first managed import path as [PrimitiveObjectImportService].
 class GenericDatabaseImageImportService {
-  const GenericDatabaseImageImportService({
+  GenericDatabaseImageImportService({
     required this.photoStorage,
     required this.objectCreate,
-  });
+    PrimitiveFileImportClassifier classifier =
+        const PrimitiveFileImportClassifier(),
+  }) : classifier = classifier;
 
   final PhotoStorageService photoStorage;
   final GenericDatabaseObjectCreateService objectCreate;
+  final PrimitiveFileImportClassifier classifier;
 
   Future<List<int>> pickAndImport({required int databaseId}) async {
-    final imported = await photoStorage.importImages(reuseIdentical: true);
-    return _createImported(databaseId: databaseId, imported: imported);
+    final sourcePaths = await photoStorage.pickImagePaths();
+    return importPaths(databaseId: databaseId, sourcePaths: sourcePaths);
   }
 
   Future<List<int>> importPaths({
     required int databaseId,
     required Iterable<String> sourcePaths,
   }) async {
-    final imported = await photoStorage.importPaths(
-      sourcePaths,
-      reuseIdentical: true,
-    );
-    return _createImported(databaseId: databaseId, imported: imported);
+    final prepared = <({String path, String contentType})>[];
+
+    for (final rawPath in sourcePaths) {
+      final path = rawPath.trim();
+      if (path.isEmpty || !await _isRegularFile(path)) {
+        throw const GenericDatabaseImageImportSourceUnavailableException();
+      }
+      final classification = await classifier.classifyPath(path: path);
+      final contentType = classification.contentType;
+      if (classification.target != PrimitiveFileImportTarget.image ||
+          contentType == null ||
+          contentType.isEmpty) {
+        throw const GenericDatabaseImageImportRequiresFileException();
+      }
+      prepared.add((path: path, contentType: contentType));
+    }
+
+    final objectIds = <int>{};
+    for (final item in prepared) {
+      objectIds.add(
+        await importClassifiedPath(
+          databaseId: databaseId,
+          sourcePath: item.path,
+          contentType: item.contentType,
+        ),
+      );
+    }
+    return objectIds.toList(growable: false);
   }
 
   /// Imports one source that has already been classified as a supported Image
@@ -57,7 +103,7 @@ class GenericDatabaseImageImportService {
       reuseIdentical: true,
     );
     if (photo == null) {
-      throw StateError('Classified Image source is not available.');
+      throw const GenericDatabaseImageImportSourceUnavailableException();
     }
     final objectIds = await _createImported(
       databaseId: databaseId,
@@ -97,6 +143,14 @@ class GenericDatabaseImageImportService {
       }
     }
     return objectIds.toList(growable: false);
+  }
+
+  Future<bool> _isRegularFile(String path) async {
+    try {
+      return (await File(path).stat()).type == FileSystemEntityType.file;
+    } on FileSystemException {
+      return false;
+    }
   }
 
   Future<void> _deleteManagedPhotoBestEffort(String path) async {
