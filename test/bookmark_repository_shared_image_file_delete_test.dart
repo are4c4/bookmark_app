@@ -11,6 +11,7 @@ import 'package:bookmark_app/data/object_type_defaults_store.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
 import 'package:bookmark_app/data/tag_object_bridge.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
+import 'package:bookmark_app/services/photo_storage_service.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -19,12 +20,15 @@ void main() {
     final directory =
         await Directory.systemTemp.createTemp('legacy_photo_delete_');
     addTearDown(() => directory.delete(recursive: true));
-    final managedFile = File('${directory.path}/legacy-only.jpg');
+    final photos = Directory('${directory.path}/photos');
+    await photos.create();
+    final managedFile = File('${photos.path}/legacy-only.jpg');
     await managedFile.writeAsBytes(const <int>[1, 2, 3]);
 
     final fixture = await _repositoryFixture(directory.path);
     addTearDown(fixture.database.close);
-    final photoId = await fixture.repository.addPhoto(path: managedFile.path);
+    final photoId =
+        await fixture.repository.addPhoto(path: 'photos/legacy-only.jpg');
     final photo = (await fixture.repository.watchPhotos().first)
         .singleWhere((candidate) => candidate.id == photoId);
 
@@ -42,7 +46,9 @@ void main() {
     final directory =
         await Directory.systemTemp.createTemp('shared_image_delete_');
     addTearDown(() => directory.delete(recursive: true));
-    final managedFile = File('${directory.path}/shared.jpg');
+    final photos = Directory('${directory.path}/photos');
+    await photos.create();
+    final managedFile = File('${photos.path}/shared.jpg');
     await managedFile.writeAsBytes(const <int>[4, 5, 6]);
 
     final fixture = await _repositoryFixture(directory.path);
@@ -59,10 +65,10 @@ void main() {
     );
     final nativeImage = await images.findOrCreateManaged(
       workspaceId: fixture.workspaceId,
-      filePath: 'shared.jpg',
+      filePath: 'photos/shared.jpg',
       title: 'Native owner',
     );
-    final photoId = await fixture.repository.addPhoto(path: managedFile.path);
+    final photoId = await fixture.repository.addPhoto(path: 'photos/shared.jpg');
     final bridge = CoreObjectBridge(
       database: fixture.database,
       objectStore: objectStore,
@@ -100,9 +106,44 @@ void main() {
     final remainingImages = await objectStore.listObjects(imageType.id);
     expect(remainingImages.map((image) => image.id), contains(nativeImage.id));
   });
+
+  test('legacy Photo row deletion preserves an external absolute file', () async {
+    final directory =
+        await Directory.systemTemp.createTemp('external_photo_delete_');
+    addTearDown(() => directory.delete(recursive: true));
+    final externalFile = File('${directory.path}/external.jpg');
+    await externalFile.writeAsBytes(const <int>[7, 8, 9]);
+
+    final fixture = await _repositoryFixture(directory.path);
+    addTearDown(fixture.database.close);
+    final photoId =
+        await fixture.repository.addPhoto(path: externalFile.path);
+    final photo = (await fixture.repository.watchPhotos().first)
+        .singleWhere((candidate) => candidate.id == photoId);
+
+    await fixture.repository.deletePhoto(photo);
+
+    expect(await externalFile.exists(), isTrue);
+    expect(
+      await fixture.database.customSelect(
+        'SELECT id FROM photos WHERE id = $photoId',
+      ).get(),
+      isEmpty,
+    );
+  });
 }
 
 Future<_RepositoryFixture> _repositoryFixture(String profileDirectoryPath) async {
+  final photos = Directory('$profileDirectoryPath/photos');
+  if (!await photos.exists()) {
+    await photos.create(recursive: true);
+  }
+  final previousPhotoDirectory = PhotoStorageService.activePhotoDirectoryPath;
+  PhotoStorageService.activePhotoDirectoryPath = photos.path;
+  addTearDown(() {
+    PhotoStorageService.activePhotoDirectoryPath = previousPhotoDirectory;
+  });
+
   final database = AppDatabase.forTesting(
     NativeDatabase.memory(),
     profileDirectoryPath: profileDirectoryPath,
