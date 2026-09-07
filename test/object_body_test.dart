@@ -40,14 +40,39 @@ void main() {
   });
 
   test('invalid block payloads are rejected instead of silently corrupted', () {
-    expect(
-      () => ObjectBodyBlock.fromJson(<String, dynamic>{'type': 'paragraph'}),
-      throwsFormatException,
-    );
-    expect(
-      () => ObjectBodyBlock.fromJson(<String, dynamic>{'id': 'b1'}),
-      throwsFormatException,
-    );
+    for (final value in <dynamic>[
+      <String, dynamic>{'type': 'paragraph'},
+      <String, dynamic>{'id': 'b1'},
+      <String, dynamic>{'id': 1, 'type': 'paragraph'},
+      <String, dynamic>{'id': 'b1', 'type': 7},
+      <String, dynamic>{'id': 'b1', 'type': 'paragraph', 'text': 42},
+      <String, dynamic>{
+        'id': 'b1',
+        'type': 'paragraph',
+        'attributes': <dynamic>[],
+      },
+      <dynamic, dynamic>{
+        'id': 'b1',
+        'type': 'futureWidget',
+        'attributes': <dynamic, dynamic>{1: 'lossy-key'},
+      },
+    ]) {
+      expect(
+        () => ObjectBodyBlock.fromJson(value),
+        throwsFormatException,
+        reason: 'Unexpectedly accepted $value',
+      );
+    }
+  });
+
+  test('missing optional block text and attributes keep canonical defaults', () {
+    final block = ObjectBodyBlock.fromJson(<String, dynamic>{
+      'id': 'future-1',
+      'type': 'futureWidget',
+    });
+
+    expect(block.text, isNull);
+    expect(block.attributes, isEmpty);
   });
 
   test('duplicate block identities are rejected on load and persistence', () {

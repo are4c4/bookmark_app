@@ -117,19 +117,44 @@ class ObjectBodyBlock {
     if (value is! Map) {
       throw const FormatException('Object body block must be a map.');
     }
-    final id = '${value['id'] ?? ''}'.trim();
-    final type = '${value['type'] ?? ''}'.trim();
+    final rawId = value['id'];
+    final rawType = value['type'];
+    if (rawId is! String || rawType is! String) {
+      throw const FormatException(
+        'Object body block id and type must be strings.',
+      );
+    }
+    final id = rawId.trim();
+    final type = rawType.trim();
     if (id.isEmpty || type.isEmpty) {
       throw const FormatException('Object body block requires id and type.');
     }
+
+    final rawText = value['text'];
+    if (value.containsKey('text') && rawText != null && rawText is! String) {
+      throw const FormatException('Object body block text must be a string.');
+    }
+
     final rawAttributes = value['attributes'];
+    if (value.containsKey('attributes') && rawAttributes is! Map) {
+      throw const FormatException(
+        'Object body block attributes must be a JSON object.',
+      );
+    }
+    if (rawAttributes is Map &&
+        rawAttributes.keys.any((key) => key is! String)) {
+      throw const FormatException(
+        'Object body block attribute keys must be strings.',
+      );
+    }
+
     return ObjectBodyBlock(
       id: id,
       type: type,
-      text: value['text'] == null ? null : '${value['text']}',
+      text: rawText as String?,
       attributes: rawAttributes is Map
           ? rawAttributes.map(
-              (key, item) => MapEntry('$key', item),
+              (key, item) => MapEntry(key as String, item),
             )
           : const <String, dynamic>{},
     );
