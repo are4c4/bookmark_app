@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../database/database_definition.dart';
 import '../domain/object_model.dart';
+import '../domain/object_query.dart';
 import 'database_view_gallery_adapter.dart';
 import 'database_view_store.dart';
 import 'file_object_service.dart';
@@ -34,6 +35,30 @@ class ObjectTypeTemplateProperty {
   final bool relationMultiple;
 }
 
+class ObjectTypeTemplateFilter {
+  const ObjectTypeTemplateFilter({
+    required this.propertyName,
+    required this.operator,
+    this.value,
+  });
+
+  /// Template-local Property name resolved after schema creation.
+  final String propertyName;
+  final ObjectFilterOperator operator;
+  final dynamic value;
+}
+
+class ObjectTypeTemplateSort {
+  const ObjectTypeTemplateSort({
+    required this.propertyName,
+    required this.direction,
+  });
+
+  /// Template-local Property name resolved after schema creation.
+  final String propertyName;
+  final ObjectSortDirection direction;
+}
+
 enum ObjectTypeTemplateGalleryCoverKind {
   imageRelation,
   weblinkRelationRepresentativeImage,
@@ -45,6 +70,8 @@ class ObjectTypeTemplateView {
     this.layoutType = 'table',
     this.filters = const <String, dynamic>{},
     this.sorts = const <dynamic>[],
+    this.propertyFilters = const <ObjectTypeTemplateFilter>[],
+    this.propertySorts = const <ObjectTypeTemplateSort>[],
     this.visiblePropertyNames = const <String>[],
     this.propertyOrderNames = const <String>[],
     this.settings = const <String, dynamic>{},
@@ -57,8 +84,14 @@ class ObjectTypeTemplateView {
 
   final String name;
   final String layoutType;
+
+  /// Raw persisted View query configuration kept for backwards compatibility.
   final Map<String, dynamic> filters;
   final List<dynamic> sorts;
+
+  /// Template-local query rules resolved to newly-created Property ids.
+  final List<ObjectTypeTemplateFilter> propertyFilters;
+  final List<ObjectTypeTemplateSort> propertySorts;
 
   /// Template-local Property names resolved to stable `p:<id>` View tokens
   /// after this template has created its user-owned schema.
@@ -410,6 +443,20 @@ class ObjectTypeTemplateStore {
         createdPropertyIds[property.name] = propertyId;
       }
 
+      int resolveViewPropertyId(
+        ObjectTypeTemplateView view,
+        String propertyName,
+        String fieldName,
+      ) {
+        final propertyId = createdPropertyIds[propertyName];
+        if (propertyId == null) {
+          throw StateError(
+            'Template View ${view.name} $fieldName references unknown Property "$propertyName".',
+          );
+        }
+        return propertyId;
+      }
+
       List<String> resolveViewProperties(
         ObjectTypeTemplateView view,
         List<String> propertyNames,
@@ -423,15 +470,56 @@ class ObjectTypeTemplateStore {
               'Template View ${view.name} $fieldName contains duplicate Property "$propertyName".',
             );
           }
-          final propertyId = createdPropertyIds[propertyName];
-          if (propertyId == null) {
-            throw StateError(
-              'Template View ${view.name} $fieldName references unknown Property "$propertyName".',
-            );
-          }
+          final propertyId = resolveViewPropertyId(
+            view,
+            propertyName,
+            fieldName,
+          );
           resolved.add('p:$propertyId');
         }
         return resolved;
+      }
+
+      Map<String, dynamic> resolveViewFilters(ObjectTypeTemplateView view) {
+        if (view.propertyFilters.isEmpty) return view.filters;
+        final rawRules = view.filters['propertyRules'];
+        if (rawRules != null && rawRules is! List) {
+          throw StateError(
+            'Template View ${view.name} raw propertyRules must be a list before template-local filters can be appended.',
+          );
+        }
+        return <String, dynamic>{
+          ...view.filters,
+          'propertyRules': <dynamic>[
+            if (rawRules is List) ...rawRules,
+            for (final rule in view.propertyFilters)
+              <String, dynamic>{
+                'propertyId': resolveViewPropertyId(
+                  view,
+                  rule.propertyName,
+                  'filter',
+                ),
+                'operator': rule.operator.name,
+                if (rule.value != null) 'value': rule.value,
+              },
+          ],
+        };
+      }
+
+      List<dynamic> resolveViewSorts(ObjectTypeTemplateView view) {
+        if (view.propertySorts.isEmpty) return view.sorts;
+        return <dynamic>[
+          ...view.sorts,
+          for (final rule in view.propertySorts)
+            <String, dynamic>{
+              'propertyId': resolveViewPropertyId(
+                view,
+                rule.propertyName,
+                'sort',
+              ),
+              'direction': rule.direction.name,
+            },
+        ];
       }
 
       final definition = DatabaseDefinition(
@@ -473,8 +561,8 @@ class ObjectTypeTemplateStore {
           definition: definition,
           name: view.name,
           layoutType: view.layoutType,
-          filters: view.filters,
-          sorts: view.sorts,
+          filters: resolveViewFilters(view),
+          sorts: resolveViewSorts(view),
           visibleProperties: resolveViewProperties(
             view,
             view.visiblePropertyNames,
