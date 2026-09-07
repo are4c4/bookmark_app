@@ -1,3 +1,4 @@
+import '../domain/object_body.dart';
 import '../domain/object_detail_content.dart';
 import '../domain/object_model.dart';
 import 'object_body_store.dart';
@@ -45,7 +46,7 @@ class ObjectDetailContentLoader {
     }
     if (object == null) return null;
 
-    late final dynamic body;
+    late final ObjectBodyDocument body;
     try {
       body = await bodyStore.read(object.id);
     } catch (error, stackTrace) {
