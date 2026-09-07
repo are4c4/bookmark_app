@@ -337,8 +337,14 @@ class ObjectTypeTemplateStore {
         continue;
       }
 
-      final canonicalType =
-          ObjectPropertyDefinition.fromStorageType(property.type).storageType;
+      final parsedType = ObjectPropertyDefinition.fromStorageType(property.type);
+      final canonicalType = ObjectPropertyDefinition(
+        id: -1,
+        objectTypeId: -1,
+        name: property.name,
+        type: parsedType,
+        sortOrder: 0,
+      ).storageType;
       if (canonicalType != property.type) {
         throw StateError(
           'Template Property ${property.name} uses unsupported type "${property.type}".',
