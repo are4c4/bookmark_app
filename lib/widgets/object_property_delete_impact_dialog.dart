@@ -2,43 +2,108 @@ import 'package:flutter/material.dart';
 
 import '../data/database_view_property_schema_service.dart';
 
+typedef ObjectPropertyViewReferenceDetach =
+    Future<ObjectPropertyDeleteImpact> Function();
+
 /// Presents the read-only impact of deleting a user-defined Property.
 ///
 /// Deletion is enabled only when no Object value, persisted View setting, or
-/// managed bidirectional Relation pair would be affected. This keeps the first
-/// destructive UX fail-closed: callers must migrate/clear data, detach View
-/// configuration, and choose an explicit paired-Relation lifecycle before
-/// invoking their canonical deletion path.
+/// managed bidirectional Relation pair would be affected. Callers may provide
+/// [onDetachViewReferences] to let the user explicitly remove only Database/View
+/// references and return a freshly inspected impact. Stored Object values and
+/// Relation schema remain separate blockers and are never cleared by this UX.
 Future<bool?> showObjectPropertyDeleteImpactDialog(
   BuildContext context, {
   required ObjectPropertyDeleteImpact impact,
+  ObjectPropertyViewReferenceDetach? onDetachViewReferences,
 }) {
   return showDialog<bool>(
     context: context,
     builder: (dialogContext) => ObjectPropertyDeleteImpactDialog(
       impact: impact,
+      onDetachViewReferences: onDetachViewReferences,
     ),
   );
 }
 
-class ObjectPropertyDeleteImpactDialog extends StatelessWidget {
+class ObjectPropertyDeleteImpactDialog extends StatefulWidget {
   const ObjectPropertyDeleteImpactDialog({
     super.key,
     required this.impact,
+    this.onDetachViewReferences,
   });
 
   final ObjectPropertyDeleteImpact impact;
+  final ObjectPropertyViewReferenceDetach? onDetachViewReferences;
+
+  @override
+  State<ObjectPropertyDeleteImpactDialog> createState() =>
+      _ObjectPropertyDeleteImpactDialogState();
+}
+
+class _ObjectPropertyDeleteImpactDialogState
+    extends State<ObjectPropertyDeleteImpactDialog> {
+  late ObjectPropertyDeleteImpact _impact;
+  bool _detachingViewReferences = false;
+  bool _detachFailed = false;
 
   bool get _canDelete =>
-      !impact.hasStoredValues &&
-      !impact.isReferencedByViews &&
-      !impact.hasPairedRelationImpact;
+      !_impact.hasStoredValues &&
+      !_impact.isReferencedByViews &&
+      !_impact.hasPairedRelationImpact;
+
+  @override
+  void initState() {
+    super.initState();
+    _impact = widget.impact;
+  }
+
+  @override
+  void didUpdateWidget(covariant ObjectPropertyDeleteImpactDialog oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.impact != widget.impact) {
+      _impact = widget.impact;
+      _detachFailed = false;
+    }
+  }
+
+  Future<void> _detachViewReferences() async {
+    final detach = widget.onDetachViewReferences;
+    if (detach == null ||
+        !_impact.isReferencedByViews ||
+        _detachingViewReferences) {
+      return;
+    }
+
+    setState(() {
+      _detachingViewReferences = true;
+      _detachFailed = false;
+    });
+    try {
+      final refreshed = await detach();
+      if (refreshed.property.id != _impact.property.id ||
+          refreshed.property.objectTypeId != _impact.property.objectTypeId) {
+        throw StateError('Property impact identity changed during View detach.');
+      }
+      if (!mounted) return;
+      setState(() {
+        _impact = refreshed;
+        _detachingViewReferences = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _detachingViewReferences = false;
+        _detachFailed = true;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return AlertDialog(
-      title: Text('「${impact.property.name}」を削除'),
+      title: Text('「${_impact.property.name}」を削除'),
       content: SizedBox(
         width: 480,
         child: SingleChildScrollView(
@@ -69,28 +134,28 @@ class ObjectPropertyDeleteImpactDialog extends StatelessWidget {
               ],
               _ImpactRow(
                 label: '値を保存しているObject',
-                value: '${impact.objectsWithStoredValue}件',
-                warning: impact.hasStoredValues,
+                value: '${_impact.objectsWithStoredValue}件',
+                warning: _impact.hasStoredValues,
               ),
               _ImpactRow(
                 label: '参照しているView',
-                value: '${impact.viewReferences.length}件',
-                warning: impact.isReferencedByViews,
+                value: '${_impact.viewReferences.length}件',
+                warning: _impact.isReferencedByViews,
               ),
-              if (impact.pairedRelationProperty case final paired?)
+              if (_impact.pairedRelationProperty case final paired?)
                 _ImpactRow(
                   label: '双方向Relationの相手Property',
                   value: paired.name,
                   warning: true,
                 ),
-              if (impact.viewReferences.isNotEmpty) ...[
+              if (_impact.viewReferences.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 Text(
                   'View参照',
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
                 const SizedBox(height: 6),
-                ...impact.viewReferences.map(
+                ..._impact.viewReferences.map(
                   (reference) => Padding(
                     padding: const EdgeInsets.only(bottom: 6),
                     child: DecoratedBox(
@@ -122,6 +187,37 @@ class ObjectPropertyDeleteImpactDialog extends StatelessWidget {
                       ),
                     ),
                   ),
+                ),
+                if (widget.onDetachViewReferences != null) ...[
+                  const SizedBox(height: 4),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: OutlinedButton.icon(
+                      key: const ValueKey('property-delete-detach-views'),
+                      onPressed: _detachingViewReferences
+                          ? null
+                          : _detachViewReferences,
+                      icon: _detachingViewReferences
+                          ? const SizedBox.square(
+                              dimension: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.link_off_outlined),
+                      label: Text(
+                        _detachingViewReferences
+                            ? 'View参照を解除中…'
+                            : 'View参照を外す',
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+              if (_detachFailed) ...[
+                const SizedBox(height: 10),
+                Text(
+                  'View参照を外せませんでした。設定を確認して再試行してください。',
+                  key: const ValueKey('property-delete-detach-error'),
+                  style: TextStyle(color: scheme.error),
                 ),
               ],
             ],
