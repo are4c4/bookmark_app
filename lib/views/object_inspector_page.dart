@@ -45,6 +45,8 @@ import '../features/object/presentation/widgets/object_body_insert_menu_button.d
 import '../features/object/presentation/widgets/object_body_object_reference_picker.dart';
 import '../features/object/presentation/widgets/object_body_reference_insert_menu_button.dart';
 import '../features/object/presentation/widgets/object_detail_property_view.dart';
+import '../features/object/presentation/widgets/object_file_detail_panel_host.dart';
+import '../services/canonical_file_detail_capabilities.dart';
 
 class ObjectInspectorPage extends StatefulWidget {
   const ObjectInspectorPage({
@@ -878,6 +880,14 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
                   : null,
             );
           }),
+          ObjectFileDetailPanelHost(
+            capabilities: CanonicalFileDetailCapabilities.fromDatabase(
+              database: widget.store.database,
+              objectStore: widget.objectStore,
+            ),
+            fileObjectTypeId: type.id,
+            fileObjectId: object.id,
+          ),
           const SizedBox(height: 24),
           Text(
             'Body',
