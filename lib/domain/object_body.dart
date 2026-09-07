@@ -22,6 +22,7 @@ class ObjectBodyDocument {
     if (value.containsKey('version') && rawVersion is! int) {
       throw const FormatException('Object body version must be an integer.');
     }
+    if (rawVersion is int) _validateVersion(rawVersion);
     final rawBlocks = value['blocks'];
     if (value.containsKey('blocks') && rawBlocks is! List) {
       throw const FormatException('Object body blocks must be a JSON array.');
@@ -40,6 +41,7 @@ class ObjectBodyDocument {
   }
 
   Map<String, dynamic> toJson() {
+    _validateVersion(version);
     _validateBlockStructure(blocks);
     return <String, dynamic>{
       'version': version,
@@ -57,6 +59,12 @@ class ObjectBodyDocument {
       version: version ?? this.version,
       blocks: blocks ?? this.blocks,
     );
+  }
+
+  static void _validateVersion(int version) {
+    if (version <= 0) {
+      throw const FormatException('Object body version must be positive.');
+    }
   }
 
   static void _validateBlockStructure(List<ObjectBodyBlock> blocks) {
