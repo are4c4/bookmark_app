@@ -18,10 +18,9 @@ Legacy `lib/views/` / `lib/widgets/` still contain Issue #225 debt, but that deb
 - `lib/views/generic_database_page.dart`;
 - `lib/views/object_inspector_page.dart`;
 - `lib/views/photo_management_page.dart`;
-- `lib/views/tag_management_page.dart`;
-- `lib/widgets/bookmark_detail_panel.dart`.
+- `lib/views/tag_management_page.dart`.
 
-`lib/views/image_editor_page.dart` was removed from the allowlist after its save/restore failure SnackBars switched to stable user-safe messages. The guard fails if the pattern spreads to another legacy presentation host. It also fails when an existing allowlisted file is cleaned but left on the allowlist, forcing the boundary to ratchet smaller in the same change. This deliberately avoids rewriting large shared hosts just to satisfy the policy while ensuring new legacy presentation code cannot repeat the debt.
+`lib/views/image_editor_page.dart` and `lib/widgets/bookmark_detail_panel.dart` were removed from the allowlist after their failure SnackBars switched to stable user-safe messages. The guard fails if the pattern spreads to another legacy presentation host. It also fails when an existing allowlisted file is cleaned but left on the allowlist, forcing the boundary to ratchet smaller in the same change. This deliberately avoids rewriting large shared hosts just to satisfy the policy while ensuring new legacy presentation code cannot repeat the debt.
 
 The guard is wired into Flutter CI and has isolated fixture coverage in `tool/feature_presentation_error_privacy_guard_test.sh` for canonical rejection, safe forwarding/escaping, legacy no-spread behavior, and stale-allowlist ratcheting.
 
