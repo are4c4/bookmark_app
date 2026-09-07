@@ -13,6 +13,14 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+Future<void> _pumpUntilFound(WidgetTester tester, Finder finder) async {
+  for (var attempt = 0; attempt < 100; attempt++) {
+    await tester.pump(const Duration(milliseconds: 20));
+    if (finder.evaluate().isNotEmpty) return;
+  }
+  fail('Expected widget did not appear within the bounded pump window.');
+}
+
 void main() {
   testWidgets('canonical File detail exposes native File actions', (tester) async {
     final root = await Directory.systemTemp.createTemp('object_inspector_file_');
@@ -57,12 +65,11 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(ValueKey('object-file-open-${file.id}')),
-      findsOneWidget,
-    );
+    final openFinder = find.byKey(ValueKey('object-file-open-${file.id}'));
+    await _pumpUntilFound(tester, openFinder);
+
+    expect(openFinder, findsOneWidget);
     expect(
       find.byKey(ValueKey('object-file-reveal-${file.id}')),
       findsOneWidget,
@@ -126,7 +133,8 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+
+    await _pumpUntilFound(tester, find.text('Not a built-in File'));
 
     expect(find.byKey(ValueKey('object-file-open-$customObjectId')), findsNothing);
     expect(
