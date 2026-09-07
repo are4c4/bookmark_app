@@ -50,7 +50,14 @@ class RelationIndexReconcileService {
     }
 
     await indexService.rebuildWorkspace(workspaceId);
-    final after = await integrityService.auditWorkspace(workspaceId);
+    var after = await integrityService.auditWorkspace(workspaceId);
+    if (after.issues.isNotEmpty &&
+        after.issues.every(
+          (issue) => issue.kind == RelationIntegrityIssueKind.staleIndexEdge,
+        )) {
+      await _deleteRemainingStaleEdges(workspaceId);
+      after = await integrityService.auditWorkspace(workspaceId);
+    }
     if (!after.isHealthy) {
       throw StateError(
         'Relation index reconciliation did not restore a healthy workspace.',
@@ -61,5 +68,37 @@ class RelationIndexReconcileService {
       after: after,
       rebuilt: true,
     );
+  }
+
+  Future<void> _deleteRemainingStaleEdges(int workspaceId) async {
+    final database = integrityService.bidirectionalStore.genericStore.database;
+    await database.transaction(() async {
+      final current = await integrityService.auditWorkspace(workspaceId);
+      if (current.issues.any(
+        (issue) => issue.kind != RelationIntegrityIssueKind.staleIndexEdge,
+      )) {
+        throw StateError(
+          'Relation index reconciliation refused because integrity changed '
+          'while removing stale edges.',
+        );
+      }
+      for (final issue in current.issues) {
+        final sourceObjectId = issue.sourceObjectId;
+        final propertyId = issue.propertyId;
+        final targetObjectId = issue.targetObjectId;
+        if (sourceObjectId == null || propertyId == null || targetObjectId == null) {
+          throw StateError(
+            'Stale Relation edge diagnostics must identify the exact edge.',
+          );
+        }
+        await database.customStatement(
+          '''DELETE FROM object_relation_edges
+             WHERE source_object_id = ?
+               AND property_id = ?
+               AND target_object_id = ?''',
+          [sourceObjectId, propertyId, targetObjectId],
+        );
+      }
+    });
   }
 }
