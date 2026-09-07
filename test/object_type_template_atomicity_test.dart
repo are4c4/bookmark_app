@@ -73,9 +73,7 @@ void main() {
 
     final instanceCount = await database.customSelect(
       '''SELECT COUNT(*) AS count FROM object_type_template_instances
-         WHERE template_key = ?''',
-      variables: [],
-      readsFrom: const {},
+         WHERE template_key = 'atomic-provisioning-test' ''',
     ).getSingle();
     expect(instanceCount.read<int>('count'), 0);
   });
