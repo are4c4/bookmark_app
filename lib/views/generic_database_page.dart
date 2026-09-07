@@ -1209,7 +1209,23 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                     selected: record.id == _selectedRecordId,
                     onSelectChanged: (_) => _openDatabaseObject(record.id),
                     cells: [
-                      DataCell(Text(record.title)),
+                      DataCell(
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SystemObjectListMedia(
+                              database: _store.database,
+                              objectStore: _objectStore,
+                              workspaceId: widget.repository.workspaceId,
+                              objectTypeId: record.databaseId,
+                              objectId: record.id,
+                              size: 32,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(record.title),
+                          ],
+                        ),
+                      ),
                       ...properties.map(
                         (property) => DataCell(
                           _propertyValueWidget(record, property),

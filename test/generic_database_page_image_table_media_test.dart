@@ -16,7 +16,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('real Images List hosts canonical Image leading media',
+  testWidgets('real Images Table hosts canonical Image media in name cell',
       (tester) async {
     Future<void> pumpUntilVisible(Finder finder) async {
       if (finder.evaluate().isNotEmpty) return;
@@ -51,7 +51,7 @@ void main() {
     final definition = await images.ensureDefinition(workspaceId);
     final objectId = await objectStore.createObject(
       objectTypeId: definition.objectType.id,
-      title: 'Canonical Image row',
+      title: 'Canonical Image table row',
     );
 
     await DatabaseViewStore(database).createView(
@@ -61,11 +61,11 @@ void main() {
         label: 'Images',
         icon: Icons.image_outlined,
         properties: const <DatabasePropertyDefinition>[],
-        defaultLayout: 'list',
+        defaultLayout: 'table',
         supportedLayouts: const <String>['gallery', 'list', 'table', 'board'],
       ),
-      name: 'List',
-      layoutType: 'list',
+      name: 'Table',
+      layoutType: 'table',
     );
 
     final destination = (await genericStore.listDatabases(workspaceId))
@@ -85,41 +85,30 @@ void main() {
       ),
     );
 
-    // The Images system collection can briefly expose its default Table while
-    // the persisted List View is loading. Wait for the List-specific 36px host
-    // instead of accepting the same Object's Table media at 32px.
+    final media = find.byKey(
+      ValueKey('system-object-list-media-image-$objectId'),
+    );
+    await pumpUntilVisible(media);
+    expect(media, findsOneWidget);
+    expect(find.text('Canonical Image table row'), findsOneWidget);
+
     final host = find.byWidgetPredicate(
       (widget) =>
           widget is SystemObjectListMedia &&
           widget.workspaceId == workspaceId &&
           widget.objectTypeId == definition.objectType.id &&
-          widget.objectId == objectId &&
-          widget.size == 36,
-      description: 'canonical Image List media host',
+          widget.objectId == objectId,
+      description: 'canonical Image Table media host',
     );
-    await pumpUntilVisible(host);
     expect(host, findsOneWidget);
-
-    // SystemObjectListMedia resolves system identity asynchronously after the
-    // List host itself is mounted. Wait for the resolved Image-kind content as
-    // a second phase instead of asserting in that intermediate FutureBuilder
-    // frame.
-    final resolvedMedia = find.byKey(
-      ValueKey('system-object-list-media-image-$objectId'),
-    );
-    await pumpUntilVisible(resolvedMedia);
-    expect(resolvedMedia, findsOneWidget);
-    expect(find.text('Canonical Image row'), findsOneWidget);
-
     final hostedMedia = tester.widget<SystemObjectListMedia>(host);
     expect(hostedMedia.database, same(database));
-    expect(hostedMedia.size, 36);
+    expect(hostedMedia.size, 32);
 
-    // This real-page regression deliberately uses a canonical Image without a
-    // File value so the production resolver can complete without starting a
-    // platform Image.file decode. Dedicated ImageVisualResolver tests already
-    // cover managed PNG/path resolution, while SystemObjectListMedia tests
-    // cover resolved-file presentation through the injected image builder.
+    // Keep this real-host regression deterministic: the canonical Image has no
+    // File value, so the production resolver classifies it as Image media but
+    // does not start a platform Image.file decode. Managed path resolution and
+    // resolved-file rendering remain covered by the focused resolver/widget tests.
     await tester.pumpWidget(const SizedBox.shrink());
   });
 }
