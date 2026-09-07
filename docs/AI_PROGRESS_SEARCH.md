@@ -15,10 +15,11 @@ Keep one canonical Object-level search/index architecture correct, stale-safe, p
 - **#797 closed.** Generic Property search treats `system: true` metadata as non-searchable unless `searchable: true` explicitly opts it in; implemented by #799 (`4e685bccafdfa3fde47aadee0e6dfe424bba85c6`).
 - **#807 closed.** Search-opened detail return performs focused refresh and replays the active query; implemented by #822 (`b80ec83b60fa997328e5ce57347d09fdfed70e2f`).
 - **#828 closed.** Re-entering cached Global Search from another shell destination recreates Search so cross-page edits are visible; implemented by #831 (`dfc4836a76f640456ad34c61d26db41ff7b555d6`).
-- **#847 closed.** Strict ObjectType schema corruption is isolated across projection, Relation labels, optional File/PDF reconciliation, and result resolution; implemented by #849 (`c945aa20c1d35842aeb19f653b80a2edcec931e4`).
-- **#877 closed.** Focused detail-return refresh now includes trustworthy current outgoing Relation targets and each target's Relation-label dependents, so related Objects created/reused inside a Search-opened detail are immediately refreshed without a workspace rebuild; implemented by #884 (`f1651ba169240484f3376f6c67f7ce76a810172b`).
-- **#888 closed.** Search-opened nested Inspector navigation now tracks every visited Object and refreshes each visited Object through the same focused planner, covering non-Relation navigation such as Daily Note previous/next/today; implemented by #894 (`ac470eec38115569d58dd04e2bc384d01bd59dd6`).
-- Latest verified Search implementation checkpoint: **main `ac470eec38115569d58dd04e2bc384d01bd59dd6`**.
+- **#847 closed.** Strict ObjectType schema corruption is isolated across canonical projection, Relation labels, optional File/PDF reconciliation, and result resolution; implemented by #849 (`c945aa20c1d35842aeb19f653b80a2edcec931e4`).
+- **#877 closed.** Focused detail-return refresh includes trustworthy current outgoing Relation targets and each target's Relation-label dependents; implemented by #884 (`f1651ba169240484f3376f6c67f7ce76a810172b`).
+- **#888 closed.** Search-opened nested Inspector navigation tracks every visited Object and refreshes each through the same focused planner, covering non-Relation navigation such as Daily Note previous/next/today; implemented by #894 (`ac470eec38115569d58dd04e2bc384d01bd59dd6`).
+- **#900 closed.** Background Weblink preview ingestion now reports the durably created/reused Image id and production composition applies focused Search label-dependent refresh, so an Image created after Search's initial rebuild and its Weblink relation-label row become fresh without shell re-entry; implemented by #902 (`c34ed6377db011dbff4c200a97fde91a06b2f4f2`).
+- Latest verified Search implementation checkpoint: **main `c34ed6377db011dbff4c200a97fde91a06b2f4f2`**.
 - Refactor #654 removed the caller-zero legacy Bookmark-only `FullTextSearchRepository`; do not recreate a parallel Bookmark/domain-specific search product.
 
 ## Canonical Object search architecture
@@ -43,7 +44,7 @@ Contributors:
 - **properties** — deterministic searchable typed values; Relation/File/Image/computed/internal identity values are excluded;
 - **body** — universal Body blocks through the Body-owned parsed text projection, never serialized block JSON;
 - **relation labels** — trustworthy resolved target Object display titles only, never raw Relation/Object ids;
-- **Weblink metadata** — URL, Domain, Page title, Site name and Description in a dedicated bucket; hidden/system media metadata is consumed but not searchable;
+- **Weblink metadata** — URL, Domain, Page title, Site name and Description in a dedicated bucket; hidden/system media metadata such as Preview image URL is consumed but not searchable;
 - **derived text** — replaceable source-keyed search metadata such as canonical File PDF `pdf-text`.
 
 Workspace and optional ObjectType filtering use canonical ids. Query behavior remains prefix-based with FTS5 BM25 ranking.
@@ -68,7 +69,8 @@ Major merged slices include:
 - #831 — shell Search re-entry invalidation for edits made outside Search;
 - #849 — strict ObjectType schema corruption isolation across projection, Relation labels, PDF reconciliation, and result resolution;
 - #884 — detail-return refresh expands to canonical outgoing Relation targets and target dependents without a workspace rebuild;
-- #894 — detail-return refresh tracks nested Inspector visits and applies the same focused refresh plan to every visited Object.
+- #894 — detail-return refresh tracks nested Inspector visits and applies the same focused refresh plan to every visited Object;
+- #902 — background Weblink preview completion emits only canonical Image impact and production composition refreshes that Image plus current Relation-label dependents without awaiting remote I/O or rebuilding the workspace.
 
 ## Fail-closed source contracts
 ### Body
@@ -140,6 +142,10 @@ Regressions:
 - on return, visited ids are deterministically de-duplicated, their current ObjectType ids are re-resolved through `ObjectGraphQueryStore.getNode()`, and each existing Object reuses the #884 `forDetailReturn()` planner;
 - missing/deleted visited Objects keep their ids in the refresh set so stale FTS rows are physically removed rather than merely hidden by result resolution;
 - the Inspector callback is generic presentation/navigation impact metadata only: `ObjectInspectorPage` does not import Search services and is not a second Object/Relation authority;
+- #902 keeps remote preview ingestion non-blocking: `ObjectSyncService` continues launching it with `unawaited(...)`, and only after `WeblinkPreviewImagePipeline.ingestIfMissing(...)` returns a durably verified Image/Representative Relation does it invoke the optional Image-id completion callback;
+- production composition wires that Image id to `ObjectGlobalSearchService.refreshObjectLabelDependents(...)`, so the Image and current backlink sources such as its Weblink refresh through canonical projection without the preview pipeline importing Search or writing FTS directly;
+- a post-ingestion Search refresh failure is best-effort and must not undo successful canonical preview mutation, force network retry, or expose URL/path/exception content through UI;
+- repeated preview attempts for the same URL in one live sync service remain de-duplicated by the existing attempt guard;
 - derived producers replace only their own source key;
 - PDF re-extraction replaces `pdf-text`; blank/missing/non-PDF capability clears that contribution;
 - malformed/inconsistent/corrupt optional source data is a source-local omission, not permission to retain stale tokens;
@@ -150,6 +156,8 @@ Focused regressions:
 - `test/object_global_search_weblink_promotion_refresh_test.dart` — #884 Search -> detail -> Weblink create/reuse -> return freshness;
 - `test/object_global_search_daily_note_refresh_test.dart` — #894 Search -> Daily Note A -> Daily Note B -> Body edit -> return, proving new Body token appears and stale token disappears;
 - `test/repositories/object_global_search_visited_refresh_test.dart` — duplicate visited ids and deleted visited Object stale-row removal;
+- `test/object_sync_preview_image_search_refresh_test.dart` — #902 delayed remote preview completes after Search rebuild and focused completion refresh makes both Image and Weblink relation-label projection searchable; callback failure does not undo canonical preview success;
+- `test/object_sync_search_refresh_wiring_test.dart` — production bootstrap/workspace-switch composition cannot silently bypass the preview completion refresh callback;
 - `test/global_search_page_error_test.dart` — detail-return refresh failures stay behind the stable privacy-safe Search error boundary.
 
 ## Live product routing
@@ -159,6 +167,8 @@ There is no live Bookmark-only FTS repository after #654. New domains participat
 
 Global Search workspace rebuild reconciles optional canonical File/PDF extracted text before rebuilding FTS. A corrupt File schema must not prevent the FTS rebuild.
 
+Background Weblink preview ingestion is not Search-owned enrichment. Primitive/Object services keep Image identity/storage/Relation mutation ownership; the app composition root merely forwards the resulting canonical Image impact to Search's existing focused refresh boundary.
+
 ## Validation
 Recent Search correctness slices passed repository Flutter CI before merge:
 - #799 / system metadata privacy boundary;
@@ -166,9 +176,10 @@ Recent Search correctness slices passed repository Flutter CI before merge:
 - #831 / shell Search re-entry freshness;
 - #849 / strict schema corruption isolation;
 - #884 / related-Object detail-return focused refresh;
-- #894 / nested visited-Object detail-return refresh.
+- #894 / nested visited-Object detail-return refresh;
+- #902 / background Weblink preview Image completion refresh.
 
-#884 passed Flutter CI #2700. #894 passed Flutter CI #2725. The #894 run included:
+#884 passed Flutter CI #2700. #894 passed Flutter CI #2725. #902 passed Flutter CI #2738. The #902 run included:
 - maintainability guardrail tests;
 - maintainability regression ceilings;
 - feature legacy-dependency guard;
@@ -177,18 +188,19 @@ Recent Search correctness slices passed repository Flutter CI before merge:
 - `flutter analyze`;
 - full Flutter test suite.
 
-The superseded #883 head carried the #877/#884 code/test delta and also passed CI #2696 before #884 was recreated directly from current main. Handoff PR #887 was intentionally closed unmerged after #888 was discovered so Lane E would not be recorded as idle prematurely.
+The superseded #883 head carried the #877/#884 code/test delta and also passed CI #2696 before #884 was recreated directly from current main. Handoff PR #887 was intentionally closed unmerged after #888 was discovered so Lane E would not be recorded as idle prematurely. Handoff PR #898 then recorded #877/#888 completion before the later #900 re-audit found the background preview race.
 
 ## Cross-lane dependencies / ownership
 - Object Core owns Body persistence/parsing and strict ObjectType/Property schema decoding; Search owns source-local omission and stale-row behavior at its consumption boundaries.
 - Object presentation owns reusable Inspector navigation. #894 adds only an optional generic visited-Object callback and propagates it through nested Inspector pushes; Search owns collecting that metadata and deciding FTS invalidation.
 - Relation owns Relation persistence, strict stored-value inspection, integrity, mutation, and canonical read consistency; Search owns denormalized trustworthy label indexing and refresh invalidation planning. #884 deliberately reuses `RelationReadService.outgoing(...)` for trustworthy target enumeration instead of introducing a second Relation authority model.
+- Primitive/Object owns Weblink remote preview enrichment plus canonical Image identity/storage and Representative Image Relation mutation. #902 adds only a generic post-ingestion Image-id callback to `ObjectSyncService`; the production composition root wires it to Search focused refresh. The preview pipeline does not import Search or become an FTS authority.
 - Primitive owns File/PDF identity, extraction and native behavior; Search owns derived-text persistence/index/reconciliation and ensures optional PDF capability failure does not take down canonical FTS.
 - Refactor owns behavior-preserving legacy retirement; Bookmark-only FTS retirement is complete.
-- Lane E currently holds no shared-hotspot lease after #894 merge.
+- Lane E currently holds no shared-hotspot lease after #902 merge.
 
 ## Next actions
-There is no remaining Search-owned actionable work in #414, #494, #753, #769, #782, #797, #807, #828, #847, #877, or #888.
+There is no remaining Search-owned actionable work in #414, #494, #753, #769, #782, #797, #807, #828, #847, #877, #888, or #900.
 
 For the next Lane E run:
 1. Re-read current `main`, open Issues/PRs, and recent cross-lane changes before creating work.
@@ -197,10 +209,11 @@ For the next Lane E run:
 4. Prefer source-local fail-closed contribution/planning boundaries over allowing one corrupt optional source to take down the canonical index.
 5. Do not swallow unrelated persistence/index errors and do not log raw user content, extracted text, private paths, malformed payloads, or internal metadata.
 6. Keep system-maintained metadata non-searchable unless a deliberate product requirement explicitly opts it in.
-7. Preserve focused detail-return invalidation; do not replace #822/#884/#894 with routine full-workspace rebuilds or a workspace mutation event bus without a separately scoped requirement.
-8. Do not recreate domain-specific long-term search repositories.
+7. Preserve focused invalidation; do not replace #822/#884/#894/#902 with routine full-workspace rebuilds or a workspace mutation event bus without a separately scoped requirement.
+8. For asynchronous cross-lane mutations, prefer narrow canonical impact callbacks at composition boundaries rather than making producers depend on Search repositories.
+9. Do not recreate domain-specific long-term search repositories.
 
 Potential future work such as large-PDF rebuild caching, richer ranking/filter UX, semantic/vector search, or a workspace-wide mutation event bus requires a separately scoped Issue; it is not implied by completed correctness work.
 
 ## Stop reason
-**#877 and #888 are complete. #884 is merged as `f1651ba169240484f3376f6c67f7ce76a810172b` with Flutter CI #2700 green, and #894 is merged as `ac470eec38115569d58dd04e2bc384d01bd59dd6` with Flutter CI #2725 green. Canonical Search detail-return freshness now covers both trustworthy related Objects and non-Relation nested Inspector visits while preserving focused invalidation, stale-row removal, Relation ownership, Search-owned orchestration and privacy-safe failures. Live GitHub re-audit found no additional Search-owned Issue, so Lane E is idle under the `AGENTS.md` stopping criteria until a new concrete Search obligation appears.**
+**#877, #888 and #900 are complete. #884 is merged as `f1651ba169240484f3376f6c67f7ce76a810172b` with Flutter CI #2700 green, #894 is merged as `ac470eec38115569d58dd04e2bc384d01bd59dd6` with Flutter CI #2725 green, and #902 is merged as `c34ed6377db011dbff4c200a97fde91a06b2f4f2` with Flutter CI #2738 green. Canonical Search freshness now covers Search-opened related/nested detail mutations and production background Weblink preview Image ingestion while preserving focused invalidation, canonical Object/Relation ownership, Search-owned projection, non-blocking enrichment and privacy-safe failure isolation. Live GitHub re-audit after #902 has not yet found another open Search-owned Issue, so Lane E is idle under the `AGENTS.md` stopping criteria unless a new concrete Search obligation is demonstrated.**
