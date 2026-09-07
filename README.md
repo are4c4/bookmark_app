@@ -93,6 +93,64 @@ dist/macos/Bookmark-<version>.dmg
 
 See [`docs/MACOS_RELEASE.md`](docs/MACOS_RELEASE.md) for Bundle Identifier safety, custom AppIcon input, DMG packaging, Gatekeeper notes, and update/install details.
 
+## Codebase size checks
+
+For quick raw Dart line counts, including blank lines and comments:
+
+```bash
+cd ~/bookmark_app
+
+echo "=== lib ==="
+find lib -name '*.dart' -type f -print0 | xargs -0 wc -l | tail -1
+
+echo "=== test ==="
+find test -name '*.dart' -type f -print0 | xargs -0 wc -l | tail -1
+
+echo "=== lib + test ==="
+find lib test -name '*.dart' -type f -print0 | xargs -0 wc -l | tail -1
+```
+
+For code / comment / blank-line counts, install `cloc` once and measure production and tests separately:
+
+```bash
+brew install cloc
+
+cd ~/bookmark_app
+cloc lib
+cloc test
+cloc lib test
+```
+
+To inspect the largest handwritten production Dart files, exclude generated files from the ranking:
+
+```bash
+cd ~/bookmark_app
+
+find lib -name '*.dart' \
+  ! -name '*.g.dart' \
+  ! -name '*.freezed.dart' \
+  -type f -print0 \
+  | xargs -0 wc -l \
+  | sort -nr \
+  | head -30
+```
+
+To list only handwritten production Dart files at or above 1,000 raw lines:
+
+```bash
+cd ~/bookmark_app
+
+find lib -name '*.dart' \
+  ! -name '*.g.dart' \
+  ! -name '*.freezed.dart' \
+  -type f -print0 \
+  | xargs -0 wc -l \
+  | sort -nr \
+  | awk '$1 >= 1000'
+```
+
+Generated files such as Drift's `app_database.g.dart` can be very large and should not be treated as maintainability hotspots. For Refactor work, prefer tracking handwritten responsibility concentration and legacy/domain-specific host retirement rather than total LOC alone.
+
 ## Database
 
 The current Drift schema version is **13**. Migration code preserves existing bookmark, workspace, lifecycle, tag-group, attachment, and PDF-annotation data while moving runtime CRUD toward typed Drift queries.
