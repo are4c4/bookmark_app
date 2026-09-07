@@ -65,6 +65,106 @@ void main() {
     expect(find.text('Kokoro Search Token'), findsWidgets);
   });
 
+  testWidgets(
+      'refreshes opened Object and Relation-label dependents after detail return',
+      (tester) async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final store = GenericDatabaseStore(database);
+    final objects = ObjectStore(store);
+
+    final personTypeId = await objects.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Person',
+      icon: '👤',
+    );
+    final bookTypeId = await objects.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Book',
+      icon: '📚',
+    );
+    final authorPropertyId = await objects.createRelationProperty(
+      objectTypeId: bookTypeId,
+      name: 'Author',
+      targetObjectTypeId: personTypeId,
+      multiple: false,
+    );
+    final bookType = (await objects.getObjectType(bookTypeId))!;
+    final authorProperty = bookType.properties.firstWhere(
+      (property) => property.id == authorPropertyId,
+    );
+    final authorId = await objects.createObject(
+      objectTypeId: personTypeId,
+      title: 'LegacyReturnLabel',
+    );
+    final bookId = await objects.createObject(
+      objectTypeId: bookTypeId,
+      title: 'Dependent source book',
+    );
+    await objects.setRelation(
+      objectId: bookId,
+      property: authorProperty,
+      targetObjectIds: <int>[authorId],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ObjectGlobalSearchPage(
+          store: store,
+          workspaceId: workspaceId,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'legacyreturn');
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(ValueKey('object-global-search-result-$authorId')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(ValueKey('object-global-search-result-$bookId')),
+      findsOneWidget,
+      reason: 'source Object must initially match through relation_labels',
+    );
+
+    await tester.tap(
+      find.byKey(ValueKey('object-global-search-result-$authorId')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(ObjectInspectorPage), findsOneWidget);
+
+    await objects.renameObject(authorId, 'CurrentReturnLabel');
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    expect(find.text('一致するオブジェクトがありません'), findsOneWidget);
+    expect(
+      find.byKey(ValueKey('object-global-search-result-$bookId')),
+      findsNothing,
+      reason:
+          'return refresh must remove the stale denormalized relation label',
+    );
+
+    await tester.enterText(find.byType(TextField), 'currentreturn');
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(ValueKey('object-global-search-result-$authorId')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(ValueKey('object-global-search-result-$bookId')),
+      findsOneWidget,
+      reason: 'dependent relation label must be reindexed with the new title',
+    );
+  });
+
   testWidgets('shows Object-specific empty-result language', (tester) async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
