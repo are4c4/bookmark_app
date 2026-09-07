@@ -248,7 +248,10 @@ class GenericDatabasePageServices {
       ),
       graphStore: ObjectGraphQueryStore(genericStore),
       viewStore: viewStore,
-      boardMoveService: ObjectBoardMoveService(objectStore),
+      boardMoveService: ObjectBoardMoveService(
+        objectStore,
+        relationMutations: relationMutations,
+      ),
     );
   }
 
