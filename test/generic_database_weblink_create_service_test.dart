@@ -3,7 +3,6 @@ import 'package:bookmark_app/data/bidirectional_relation_store.dart';
 import 'package:bookmark_app/data/database_collection_resolver.dart';
 import 'package:bookmark_app/data/database_collection_store.dart';
 import 'package:bookmark_app/data/daily_note_service.dart';
-import 'package:bookmark_app/data/file_object_service.dart';
 import 'package:bookmark_app/data/generic_database_collection_page_data.dart';
 import 'package:bookmark_app/data/generic_database_object_create_service.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
@@ -90,10 +89,6 @@ void main() {
       systemObjects: systemObjects,
       defaultsStore: defaultsStore,
     ).ensureDefinition(workspaceId);
-    final fileDefinition = await FileObjectService(
-      systemObjects: systemObjects,
-      defaultsStore: defaultsStore,
-    ).ensureDefinition(workspaceId);
     final dailyDefinition = await DailyNoteService(
       genericStore: genericStore,
       objectStore: objectStore,
@@ -112,10 +107,6 @@ void main() {
     expect(
       await service.createModeForObjectType(imageDefinition.objectType.id),
       GenericDatabaseCreateMode.managedImage,
-    );
-    expect(
-      await service.createModeForObjectType(fileDefinition.objectType.id),
-      GenericDatabaseCreateMode.managedFile,
     );
     expect(
       await service.createModeForObjectType(dailyDefinition.objectType.id),
