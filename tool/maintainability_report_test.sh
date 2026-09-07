@@ -143,4 +143,37 @@ if [[ "$shim_file_status" -ne 1 ]]; then
 fi
 grep -Fq 'Maintainability regression: 2 legacy Database presentation re-export shim files exceed maximum 1.' <<<"$shim_file_failure"
 
+# Prove the ratcheted production target is representable: once legacy imports
+# and re-export shim files are gone, both accepted ceilings can stay at zero.
+cat > "$fixture/lib/views/example_page.dart" <<'EOF'
+import '../features/database/presentation/widgets/database_view_tabs.dart';
+import '../features/database/presentation/widgets/database_page_toolbar.dart';
+final first = repository.workspaceStore.database;
+final second = repository.workspaceStore.database;
+EOF
+cat > "$fixture/lib/widgets/example_widget.dart" <<'EOF'
+import '../features/database/presentation/widgets/detail_property_row.dart';
+final database = repository.workspaceStore.database;
+EOF
+cat > "$fixture/test/example_test.dart" <<'EOF'
+import 'package:bookmark_app/features/database/presentation/widgets/database_create_tiles.dart';
+import 'package:bookmark_app/features/database/presentation/widgets/resizable_detail_pane.dart';
+void main() {}
+EOF
+rm "$fixture/lib/widgets/database_view_tabs.dart"
+rm "$fixture/lib/widgets/extra_database_compat.dart"
+
+zero_shim_output="$(
+  cd "$fixture" &&
+    bash "$script" \
+      --max-boundary-refs 4 \
+      --max-feature-presentation-db-imports 1 \
+      --max-legacy-shim-imports 0 \
+      --max-legacy-shims 0
+)"
+grep -Fq '0 legacy shim import(s) across 0 file(s)' <<<"$zero_shim_output"
+grep -Fq 'Legacy shim import regression threshold: 0 import(s) maximum' <<<"$zero_shim_output"
+grep -Fq '0 legacy shim file(s)' <<<"$zero_shim_output"
+grep -Fq 'Legacy shim file regression threshold: 0 file(s) maximum' <<<"$zero_shim_output"
+
 echo "maintainability_report_test: PASS"

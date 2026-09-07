@@ -9,48 +9,30 @@ Primary lane: **G — Refactor & Architecture Health**. Own behavior-preserving 
 
 ## Active checkpoint — 2026-09-08
 
-### Final Generic Database raw-error privacy cleanup
-Branch: `refactor/clean-generic-database-error-privacy-225`
+### Retire the final Database-presentation compatibility shims
+Branch: `refactor/retire-database-presentation-shims-225`
 
-Latest integrated `main` at the start of this slice is **#882 / `7ff4e273eef6ca04939cf27b660ac5bff9c24282`**. #882 retired five caller-zero `BookmarkRepository` forwarding APIs (`renameWorkspace`, `setActiveWorkspace`, `renameTag`, `setTagParent`, `deleteTag`) with **0 additions / 16 deletions** after Flutter CI #2688 passed fully.
+Latest integrated Lane G checkpoint is **#886 / `4469a5496a18b7fd5a81be17f41fb30298042cb6`**, which completed the legacy raw-error privacy track. Flutter CI #2720 passed maintainability guards, zero-allowlist privacy guard, Drift generation, Analyze and full Test on the final head before squash merge.
 
-The preceding privacy slices are integrated:
-- #863 Photo management: allowlist 6 -> 5;
-- #867 Bookmark Stage1: 5 -> 4;
-- #870 Object Inspector: 4 -> 3;
-- #872 AppShell: 3 -> 2;
-- #875 Tag management: 2 -> 1.
+The active shim-retirement slice is behavior-preserving:
+- `GenericDatabasePage` moves its final three legacy imports (`database_create_tiles`, `database_view_tabs`, `resizable_detail_pane`) directly to `lib/features/database/presentation/widgets/`;
+- the three one-line `lib/widgets/` re-export shims are deleted after a fresh repository-wide caller audit found no other production legacy imports;
+- Flutter CI ceilings ratchet legacy shim imports **3 -> 0** and shim files **3 -> 0**;
+- `tool/maintainability_report_test.sh` proves a zero-import/zero-shim fixture passes while existing failure cases still fail;
+- `test/generic_database_page_database_shim_import_test.dart` locks the canonical imports and rejects the three old Generic import paths;
+- `docs/MAINTAINABILITY.md` records the completed shim retirement.
 
-A fresh audit of current `lib/views/generic_database_page.dart` after #876 Table media and #874 side-peek Body found exactly **11** remaining raw caught-exception presentation surfaces:
-- Database identity update;
-- Database schema duplicate;
-- collection settings save;
-- Database delete;
-- quick Property creation;
-- normal Object creation;
-- full Property creation;
-- Board card move;
-- Board Object creation;
-- Relation edit/save;
-- side-peek Object delete.
-
-The active slice changes only those catches from `catch (error)` to `catch (_)` and removes `: $error` from the corresponding user messages. Operation behavior, Relation/Object mutation semantics, #874 Body composition, #876 Table media, view state and persistence are unchanged.
-
-Regression coverage:
-- `test/generic_database_page_error_privacy_test.dart` locks nine stable operation messages and rejects former raw interpolation;
-- `test/generic_database_page_relation_stale_picker_test.dart` keeps the real fail-closed stale-target regression while expecting the stable `Relationを更新できませんでした。` message;
-- `tool/feature_presentation_error_privacy_guard_test.sh` is being ratcheted to prove that even the former Generic host is rejected once the allowlist reaches zero.
-
-The guard's `legacy_allowed_hosts` is now intentionally **empty**. After this slice, raw caught-error interpolation is forbidden across canonical feature presentation and legacy `lib/views` / `lib/widgets` presentation.
+The Generic host was reconstructed through the connector from current source chunks. The intended runtime change is import-only; a diff audit found the import migration plus two non-semantic source-format artifacts (Backlinks `TextStyle` closing formatting and EOF newline state). Do not add any product behavior to this slice. If a safer exact patch mechanism becomes available, normalize those incidental formatting differences before merge; otherwise require full CI green and keep them explicitly classified as non-semantic.
 
 ## Latest integrated Lane G checkpoints
+- **#886 / `4469a549…` — Generic Database raw-error privacy cleanup.** Final legacy host stabilized; raw-error allowlist **1 -> 0**. CI #2720 full green.
 - **#882 / `7ff4e273…` — caller-zero BookmarkRepository wrappers retired.** Five dead Workspace/Tag forwarding APIs removed; CI #2688 full green.
-- **#875 / `f2d54ad…` — Tag management raw-error cleanup.** Six failure paths stabilized while duplicate-name domain messages were preserved; allowlist 2 -> 1.
-- **#872 / `51420bab…` — AppShell raw-error cleanup.** Database creation, Workspace creation and shared data-operation failures stabilized; allowlist 3 -> 2.
-- **#870 / `a18ce533…` — Object Inspector raw-error cleanup.** Ten failure surfaces stabilized; allowlist 4 -> 3.
-- **#868 / `c55146f…` — Bookmark Stage1 Database-presentation shim imports retired.** Legacy Database shim imports 5 -> 3.
-- **#867 / `4fb55d3…` — Bookmark Stage1 raw-error cleanup.** Allowlist 5 -> 4.
-- **#863 / `84350e59…` — Photo management raw-error cleanup.** Allowlist 6 -> 5.
+- **#875 / `f2d54ad…` — Tag management raw-error cleanup.** Six failure paths stabilized while duplicate-name domain messages were preserved; allowlist **2 -> 1**.
+- **#872 / `51420bab…` — AppShell raw-error cleanup.** Stable user-safe failure messages; allowlist **3 -> 2**.
+- **#870 / `a18ce533…` — Object Inspector raw-error cleanup.** Ten failure surfaces stabilized; allowlist **4 -> 3**.
+- **#868 / `c55146f…` — Bookmark Stage1 Database-presentation shim imports retired.** Legacy shim imports **5 -> 3**.
+- **#867 / `4fb55d3…` — Bookmark Stage1 raw-error cleanup.** Allowlist **5 -> 4**.
+- **#863 / `84350e59…` — Photo management raw-error cleanup.** Allowlist **6 -> 5**.
 - **#829 / `6fffec0d…` — caller-zero Weblink detail preview retired.**
 - **#812 / `f357daa6…` — raw-error presentation spread frozen behind the ratcheting guard.**
 - **#795 / `ecffd5b2…` — Generic Database Relation-record reload fanout bounded.**
@@ -61,18 +43,18 @@ Re-audit current production callers before every deletion; historical caller-zer
 ## Current measurable guardrails
 `.github/workflows/flutter_ci.yml` and live guard scripts are authoritative.
 
-Current intended baselines with the active Generic privacy slice applied:
+Intended baselines with the active shim slice applied:
 1. presentation direct `workspaceStore.database` reach-through: **9 maximum**;
 2. direct `AppDatabase` imports under canonical feature presentation: **4 maximum**;
-3. temporary Database-presentation legacy shim imports: **3 maximum**;
-4. temporary Database-presentation re-export shim files: **3 maximum**;
+3. Database-presentation legacy shim imports: **0 maximum**;
+4. Database-presentation re-export shim files: **0 maximum**;
 5. canonical feature-presentation caught-error interpolation: **forbidden**;
 6. legacy presentation caught-error interpolation: **forbidden; allowlist size 0**.
 
-Never relax a numeric ceiling or reintroduce an allowlist entry merely to land unrelated work.
+Never relax a numeric ceiling, recreate a compatibility shim under a new filename, or reintroduce an error-privacy allowlist entry merely to land unrelated work.
 
-## Error-privacy state
-#812 originally froze eight legacy raw-error hosts. Focused cleanups now cover all eight:
+## Error-privacy state — complete
+#812 originally froze eight legacy raw-error hosts. Focused cleanup retired all eight from the allowlist:
 - `lib/views/image_editor_page.dart`;
 - `lib/widgets/bookmark_detail_panel.dart`;
 - `lib/views/photo_management_page.dart`;
@@ -80,24 +62,22 @@ Never relax a numeric ceiling or reintroduce an allowlist entry merely to land u
 - `lib/views/object_inspector_page.dart`;
 - `lib/views/app_shell.dart`;
 - `lib/views/tag_management_page.dart`;
-- `lib/views/generic_database_page.dart` (active final slice).
+- `lib/views/generic_database_page.dart`.
 
-After the active slice merges, this track is complete at **8 -> 0 hosts**. Future work should enforce the zero boundary rather than create more isolated logging/privacy PRs unless a genuinely new defect appears.
+#886 completed the track at **8 -> 0 hosts**. Future work should enforce the zero boundary rather than create more isolated privacy cleanup PRs unless a genuinely new defect appears.
 
-## Temporary Database-presentation shim state
-Three one-line re-export shim files remain:
+## Database-presentation shim state
+Before the active slice, the final three one-line re-export shims were:
 - `lib/widgets/database_view_tabs.dart`;
 - `lib/widgets/database_create_tiles.dart`;
 - `lib/widgets/resizable_detail_pane.dart`.
 
-The only production legacy-shim imports are the three in `GenericDatabasePage`. Repository-wide audits found no other production legacy callers; package-form matches in maintainability fixture code are intentional regression coverage.
-
-After the privacy PR is independent and merged, the next preferred Lane G slice is a separate **3 -> 0 imports / 3 -> 0 shim files** retirement: switch Generic's three imports to canonical feature paths, delete the three one-line shims, ratchet CI ceilings to zero, update inventory/tests, and keep runtime behavior unchanged. Do not combine shim deletion with the privacy PR.
+A fresh default-branch code audit found the only production legacy imports in `GenericDatabasePage`. Stage1 had already moved its final two imports in #868. The active slice therefore moves Generic directly to canonical feature imports and deletes all three shims. After merge the intended state is **0 legacy shim imports / 0 Database-presentation re-export shim files**. Historical shim names remain in the scanner so reintroduction is detected.
 
 ## AppDatabase / caller-zero policy
 Major responsibility narrowing already integrated includes migration-helper extraction, Bookmark aggregate/read responsibilities, profile path conversion, Saved View/Photo aggregation, engagement mutations, duplicate Tag hierarchy mutation, dead People helpers, dead lifecycle seams, and caller-zero Bookmark/Weblink presentation/search paths.
 
-#882 reconfirmed that small root-repository forwarding APIs should be deleted only after fresh caller-zero proof. `BookmarkRepository.createTag(...)` remains live in Tag management, Bookmark Stage1 and Bookmark property UI, so do not remove it yet. `BookmarkLifecycleStore.dispose()` remains live despite its empty body because production bootstrap callers exist.
+#882 reconfirmed that small root-repository forwarding APIs should be deleted only after fresh caller-zero proof. `BookmarkRepository.createTag(...)` remains live. `BookmarkLifecycleStore.dispose()` remains a live bootstrap/lifecycle contract despite its empty body because production callers exist.
 
 Prefer true responsibility removal or deletion over pass-through wrappers added solely to improve a metric.
 
@@ -113,11 +93,11 @@ Always re-check open PR changed files immediately before non-trivial edits to:
 - `lib/services/profile_manager.dart`;
 - `lib/data/app_database.dart`.
 
-Latest ownership check for the active Generic privacy slice:
-- #874 (Generic side-peek Body), #876 (Generic Table media), #879 and #882 are merged;
-- open Search PR **#883** does not own `GenericDatabasePage`;
-- open Primitive PR **#881** owns Bookmark image Relation/detail work, not `GenericDatabasePage`;
-- no open PR currently owns Generic runtime code.
+Latest ownership check after #886 merge:
+- open Primitive **#892** touches Bookmark creation/Image Relation code, not Generic;
+- open docs-only **#893** does not own runtime hotspots;
+- open Search **#894** touches `ObjectInspectorPage` and Search files, not Generic;
+- no current open PR owns `GenericDatabasePage` runtime code at this checkpoint.
 
 Parallel lanes move quickly; re-check immediately before final branch rebuild/merge.
 
@@ -133,20 +113,18 @@ Parallel lanes move quickly; re-check immediately before final branch rebuild/me
 ## Validation
 Local Flutter/Dart execution is unavailable in this connector environment, so GitHub Flutter CI is the merge gate.
 
-- #882: Flutter CI #2688 passed maintainability guards, privacy guard, Drift generation, Analyze and full Test before squash merge.
-- Active Generic slice: exact base-diff must show production changes only in the 11 audited catch/message pairs; the current whole-file write also needs EOF/newline diff normalization before final one-commit rebuild.
-- Final-head CI must pass maintainability guard fixtures, zero-allowlist privacy guard, Drift generation, Analyze and full Test.
+- #886: final Flutter CI #2720 passed all guardrails, Drift generation, Analyze and full Test before merge.
+- Active shim slice: verify final comparison is one commit directly on latest `main`; runtime change must remain limited to Generic import routing plus explicitly classified non-semantic formatting if it cannot be safely normalized.
+- Final-head CI must pass maintainability report fixture at shim ceilings 0/0, legacy dependency/privacy guards, Drift generation, Analyze and full Test.
 - Use retained CI diagnostic logs/artifacts for failures; do not ask the user to paste logs.
 
 ## Exact next actions
-1. Finish the zero-allowlist guard fixture and privacy policy documentation.
-2. Normalize Generic's incidental EOF newline difference so production diff contains only the 11 catch/message pairs.
-3. Rebuild `refactor/clean-generic-database-error-privacy-225` as **one commit directly on latest main**, carrying only Generic, guard, guard fixture, privacy doc, focused tests and this handoff.
-4. Verify branch is ahead 1 / behind 0 and no open PR has acquired the Generic hotspot.
-5. Open a focused Lane G PR, require final-head Flutter CI green, then squash-merge and verify raw-error allowlist is exactly zero.
-6. Start a separate Generic Database shim retirement slice: imports **3 -> 0**, shim files **3 -> 0**, CI ceilings -> 0, with focused regression/inventory updates.
-7. Continue fresh caller-zero audits only where real production references can be deleted without product-semantic changes.
-8. Do not destructively remove Bookmark URL/thumbnail/Photo compatibility storage until caller-zero plus migration/import/export/backup parity is proven.
+1. Finish the shim branch documentation/test state and rebuild it as **one commit directly on latest main**, carrying only shim-retirement files.
+2. Verify repository-wide production legacy-shim imports are zero and the three `lib/widgets` re-export files are absent.
+3. Verify branch is ahead 1 / behind 0 and no open PR has acquired Generic ownership.
+4. Open a focused Lane G PR, require final-head Flutter CI green, then squash-merge.
+5. After merge, update Issue #225 checkpoint and re-audit caller-zero modules / presentation-database reach-through for the next independent behavior-preserving slice.
+6. Do not destructively remove Bookmark URL/thumbnail/Photo compatibility storage until caller-zero plus migration/import/export/backup parity is proven.
 
 ## Risks / stop conditions
 Parallel lanes move `main` frequently. Whole-file connector writes require exact-current-source preservation plus base-diff verification; final branch rebuilds must retain intervening main changes. Artificial/no-op CI-trigger commits are forbidden; rerun existing checks when appropriate instead.

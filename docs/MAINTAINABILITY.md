@@ -61,25 +61,27 @@ The presentation/database metrics are intentionally regression-oriented. They do
 
 Canonical feature presentation currently has **4 files** that import `app_database.dart` directly. Those existing dependencies are not being removed by fiat: the remaining Gallery/List media widgets use database-backed system ObjectType identity checks and therefore still require a real persistence boundary. The import metric prevents a fifth direct database import from being added while those dependencies are classified and migrated behind meaningful application-facing boundaries. Do not introduce a wrapper solely to lower this count. The previous eight-file baseline fell to seven when the production-caller-zero `ObjectWeblinkDetailPreview` module and its dedicated dead test were retired by #829. The staged Image detail preview/panel/free-crop seams then fell out of the count without deleting product infrastructure by accepting the already-existing `ProfilePathResolver` dependency directly instead of receiving the entire `AppDatabase` solely to read `database.pathResolver`.
 
-### Temporary Database-presentation shims
+### Database-presentation shim retirement
 
-The current re-export shim files are:
+The temporary Database-presentation re-export layer is retired. The historical shim names remain in the scanner denylist, but there are now **0 production legacy shim imports** and **0 re-export shim files**.
+
+The retired shim files are:
 - `lib/widgets/database_view_tabs.dart`;
 - `lib/widgets/database_create_tiles.dart`;
-- `lib/widgets/resizable_detail_pane.dart`.
+- `lib/widgets/resizable_detail_pane.dart`;
+- `lib/widgets/database_page_toolbar.dart`;
+- `lib/widgets/detail_property_row.dart`.
 
-`lib/widgets/detail_property_row.dart` reached caller-zero after production/test consumers moved to the canonical feature import and was retired by #672. `lib/widgets/database_page_toolbar.dart` later reached true caller-zero after management hosts moved to the canonical toolbar and was retired by #735. Their historical names intentionally remain in the import scanner so reintroducing either old shim/import path is still detected as legacy dependency growth.
+Canonical implementations live under `lib/features/database/presentation/widgets/`. `GenericDatabasePage` was the final production caller of the last three shims and now imports the canonical widgets directly. Reintroducing any historical shim path is a maintainability regression rather than a compatibility option.
 
-Canonical implementations live under `lib/features/database/presentation/widgets/`. The remaining three legacy shim imports are now confined to `GenericDatabasePage` (`database_create_tiles`, `database_view_tabs`, and `resizable_detail_pane`). That large shared host should not be reconstructed merely to change imports; migrate those only through a naturally patch-sized edit after current Database/View ownership is clear. The metrics prevent both new shim dependencies and new shim files while allowing current migration debt to ratchet down naturally.
-
-The report remains non-blocking by default so existing debt does not make unrelated local runs fail. For regression-only validation, callers may provide accepted ceilings explicitly:
+The report remains non-blocking by default so unrelated local runs can inspect current metrics without thresholds. For regression-only validation, callers may provide accepted ceilings explicitly:
 
 ```bash
 bash tool/maintainability_report.sh \
   --max-boundary-refs 9 \
   --max-feature-presentation-db-imports 4 \
-  --max-legacy-shim-imports 3 \
-  --max-legacy-shims 3
+  --max-legacy-shim-imports 0 \
+  --max-legacy-shims 0
 ```
 
 `--max-boundary-refs N` exits with status 1 only when measured presentation `workspaceStore.database` references exceed `N`.
@@ -90,13 +92,13 @@ bash tool/maintainability_report.sh \
 
 `--max-legacy-shims N` exits with status 1 only when the number of `lib/widgets/**/*.dart` files that re-export `../features/database/presentation/widgets/*.dart` exceeds `N`. This closes the loophole where a new compatibility shim could be introduced under a new filename and therefore bypass a known-import-name ceiling.
 
-The initial repository baseline was **22** legacy shim imports across **5** shim files. Refactor #474 migrated the three test-only imports in `test/database_interaction_widgets_test.dart` to canonical feature imports, lowering the accepted import ceiling to **19** without touching a production host. Refactor #499 moved `BookmarkAttachmentSection` directly to the canonical `DetailPropertyRow`, lowering the import ceiling to **18**. Refactor #541 moved `BookmarkReorderableProperties` to the same canonical `DetailPropertyRow`, lowering it again to **17**. The final `detail_property_row.dart` re-export then reached true caller-zero and was removed by #672, lowering the shim-file ceiling **5 → 4** without changing the import ceiling. Collection management moved its four shared Database presentation widgets directly to the canonical feature package in #687, lowering the accepted shim-import ceiling **17 → 13** without changing UI behavior. Photo management did the same in #695, lowering the accepted ceiling **13 → 9**. People management then moved its four imports in #707, lowering the accepted ceiling **9 → 5**. The now-unreferenced `database_page_toolbar.dart` re-export was removed by #735, lowering the shim-file ceiling **4 → 3**. Bookmark Stage1 then moved its `database_create_tiles` and `database_view_tabs` imports directly to the canonical feature package, lowering the accepted shim-import ceiling **5 → 3** without changing widget behavior.
+The initial repository baseline was **22** legacy shim imports across **5** shim files. Refactor #474 migrated the three test-only imports in `test/database_interaction_widgets_test.dart` to canonical feature imports, lowering the accepted import ceiling to **19** without touching a production host. Refactor #499 moved `BookmarkAttachmentSection` directly to the canonical `DetailPropertyRow`, lowering the import ceiling to **18**. Refactor #541 moved `BookmarkReorderableProperties` to the same canonical `DetailPropertyRow`, lowering it again to **17**. The final `detail_property_row.dart` re-export then reached true caller-zero and was removed by #672, lowering the shim-file ceiling **5 → 4** without changing the import ceiling. Collection management moved its four shared Database presentation widgets directly to the canonical feature package in #687, lowering the accepted shim-import ceiling **17 → 13** without changing UI behavior. Photo management did the same in #695, lowering the accepted ceiling **13 → 9**. People management then moved its four imports in #707, lowering the accepted ceiling **9 → 5**. The now-unreferenced `database_page_toolbar.dart` re-export was removed by #735, lowering the shim-file ceiling **4 → 3**. Bookmark Stage1 then moved its `database_create_tiles` and `database_view_tabs` imports directly to the canonical feature package, lowering the accepted shim-import ceiling **5 → 3**. The final Generic Database migration moved those last three imports to canonical paths and deleted the three now-caller-zero re-export files, taking both ceilings **3 → 0**.
 
 The presentation/database reach-through ceiling was initially enforced at **12**. Later cleanup in adjacent responsibility-moving slices reduced the measured production presentation baseline to **9 references across 6 files** without adding a replacement wrapper, so the accepted ceiling is now **9** and must not regress to the older 12-reference state.
 
-Flutter CI enforces the accepted current ceilings of **9** direct presentation/database reach-through references, **4** canonical feature-presentation `AppDatabase` imports, **3** legacy shim imports, and **3** Database-presentation re-export shim files. When Refactor removes one or more of any category, lower the corresponding CI ceiling in the same or an immediately following focused PR so the improvement cannot silently regress.
+Flutter CI enforces the accepted current ceilings of **9** direct presentation/database reach-through references, **4** canonical feature-presentation `AppDatabase` imports, **0** legacy shim imports, and **0** Database-presentation re-export shim files. When Refactor removes one or more of any category, lower the corresponding CI ceiling in the same or an immediately following focused PR so the improvement cannot silently regress.
 
-`tool/maintainability_report_test.sh` exercises passing ceilings and each regression-failure path against an isolated fixture, including canonical feature presentation reach-through, direct `AppDatabase` import detection, relative/package/same-directory shim imports, and detection of newly-added shim files. Canonical feature imports do not count as legacy shim imports. The fixture may use a retired shim name to prove the denylist remains effective; it is not a production caller.
+`tool/maintainability_report_test.sh` exercises passing ceilings and each regression-failure path against an isolated fixture, including canonical feature presentation reach-through, direct `AppDatabase` import detection, relative/package/same-directory shim imports, and detection of newly-added shim files. Canonical feature imports do not count as legacy shim imports. Historical shim names remain in the fixture specifically to prove that the denylist still detects a regression after production reaches zero.
 
 ## Feature-presentation error privacy
 
@@ -115,5 +117,5 @@ For Issue #225, prefer these measures over abstraction count:
 5. broad silent catches replaced with explicit best-effort/error policy plus tests where practical;
 6. direct presentation -> database reach-through references reduced where a focused Store/Service/composition boundary already exists;
 7. canonical feature-presentation direct `AppDatabase` imports reduced when meaningful application-facing boundaries replace them;
-8. temporary Database-presentation re-export imports reduced until each shim can be deleted;
-9. temporary Database-presentation re-export shim files reduced from the current three without introducing replacements under new filenames.
+8. retired Database-presentation shim imports remain at zero;
+9. retired Database-presentation re-export shim files remain at zero without replacement aliases.
