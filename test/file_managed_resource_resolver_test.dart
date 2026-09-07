@@ -43,6 +43,8 @@ void main() {
       originalFilename: 'report.pdf',
       contentType: 'application/pdf',
       sizeBytes: 6,
+      sha256:
+          'ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789',
     );
 
     final resource = await FileManagedResourceResolver(
@@ -60,8 +62,59 @@ void main() {
     expect(resource?.contentType, 'application/pdf');
     expect(resource?.extension, 'pdf');
     expect(resource?.persistedSizeBytes, 6);
+    expect(
+      resource?.sha256,
+      'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
+    );
     expect(resource?.actualSizeBytes, 6);
     expect(resource?.modifiedAt, isA<DateTime>());
+  });
+
+  test('invalid persisted hash is ignored without hiding an available File',
+      () async {
+    final root = await Directory.systemTemp.createTemp('file_resource_hash_');
+    addTearDown(() => root.delete(recursive: true));
+    final managed = File('${root.path}/files/report.bin');
+    await managed.parent.create(recursive: true);
+    await managed.writeAsBytes(const <int>[9, 8, 7]);
+
+    final database = AppDatabase.forTesting(
+      NativeDatabase.memory(),
+      profileDirectoryPath: root.path,
+    );
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final service = FileObjectService(
+      systemObjects: SystemObjectStore(
+        database: database,
+        objectStore: objectStore,
+      ),
+      defaultsStore: ObjectTypeDefaultsStore(genericStore),
+    );
+    final definition = await service.ensureDefinition(workspaceId);
+    final fileObject = await service.findOrCreateManaged(
+      workspaceId: workspaceId,
+      filePath: managed.path,
+    );
+    await objectStore.setPropertyValue(
+      objectId: fileObject.id,
+      property: definition.sha256Property,
+      value: 'historical-invalid-hash',
+    );
+
+    final resource = await FileManagedResourceResolver(
+      objectStore,
+      pathResolver: ProfilePathResolver(root.path),
+    ).resolveManaged(
+      fileObjectTypeId: definition.objectType.id,
+      fileObjectId: fileObject.id,
+    );
+
+    expect(resource, isNotNull);
+    expect(resource?.filePath, managed.path);
+    expect(resource?.sha256, isNull);
   });
 
   test('missing managed File fails closed without mutating metadata', () async {
