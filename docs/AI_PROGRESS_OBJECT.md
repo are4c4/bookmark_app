@@ -30,8 +30,8 @@ Keep reusable Object/ObjectType identity, schema semantics, Body and generic ope
 - behavior-preserving cleanup / #225 -> Lane G.
 
 ## Integrated state — 2026-09-07
-Latest repository main observed while refreshing this handoff: `7b34fbd9be85b5586626b36103339b5b45ec8da0`.
-Latest Lane A production merge in that history: #670 `488ec5d2ebf629e915a18eaffb239a2486079119`.
+Latest repository main observed while refreshing this handoff: `08d46d599c717b57f608159c5b106e836034e911`.
+Latest integrated Lane A slices remain #660/#661/#669/#670; always re-read main because other lanes merge continuously.
 
 ### Universal Body and Body persistence
 - #503 merged as `a8cf84d3af59ef537ae66518b7c7a9f4206c43c5`: `ObjectInspectorPage` permits Body editing for every ObjectType, including system ObjectTypes, while identity-sensitive title/Property/create guards remain intact.
@@ -50,6 +50,13 @@ Latest Lane A production merge in that history: #670 `488ec5d2ebf629e915a18eaffb
 - #650 merged as `cf347443173ad9a8bb834bd0a807c2765ef043e9`: non-object top-level ObjectType-default JSON fails closed instead of being treated as no overrides.
 - #660 merged as `f103862a2de73cfd5d5c460a1a37a34e30c0a13f`: ordinary Property deletion prunes that Property from ObjectType visibility/order defaults in the same transaction while preserving open mode and Body template. Relation Properties are deliberately rejected so Relation lifecycle stays canonical in Lane B.
 
+### Generic typed value integrity
+- The `generic_values` table has independent foreign keys to Records and Properties but cannot express that both rows belong to the same ObjectType.
+- PR #677 (`fix-generic-value-object-type-ownership-56`) closes this demonstrated gap at `GenericDatabaseStore.setValue(...)`: Record and Property must both exist and their `database_id` values must match before any value or parent timestamp mutation.
+- Focused coverage proves valid same-ObjectType writes continue to work, foreign Property writes fail without changing existing value/freshness state, and missing Record/Property ids fail clearly.
+- CI #2121 reached all guardrails and Drift generation, then found only a missing test import; commit `8c4de895...` fixes that import and CI #2130 is running.
+- Keep low-level Value upsert + parent freshness atomicity as a separate follow-up after #677; do not broaden #677 while validation CI is running.
+
 ### Daily Note identity
 - #618 merged: newly created Daily Note Object identity, Date value, optional Body template and registry claim are one transaction.
 - #647 merged as `212b2626912332736dec2644669ce0c5cb398f36`: `(workspace, local-date)` registry claims are race-safe; legacy adoption returns the actual concurrent winner and lost new-object claims clean up the duplicate inside the creation transaction.
@@ -61,27 +68,40 @@ Latest Lane A production merge in that history: #670 `488ec5d2ebf629e915a18eaffb
 - #669 merged as `d305f47aae1c04464bc286fe0322c5eec85ac28e`: actual alias add/replace/remove/clear mutations advance parent Object freshness; duplicate add, identical replace, missing remove and empty clear remain true no-ops.
 - Alias deletion/position compaction and parent freshness update are transactional; failure-injection coverage proves identity metadata is not left half-mutated.
 
-### Opening/search cross-lane state
-- Center peek and full-page generic openings reuse the shared Object Inspector/detail path.
-- Side peek is still a Database/View-owned alternate presentation surface. Lane A must not create a second Body persistence/editor path there; Lane C should compose the canonical shared Body/detail contract.
+### #481 real-host audit
+- Weblink and Image are protected by merged #503 real shared-Inspector regressions.
+- Daily Note uses the same Body contract.
+- Person is currently a normal user-owned `person` ObjectType template, so it inherits custom Object Inspector/Body behavior rather than requiring a Person-specific note implementation.
+- Generic center peek and full-page openings render `ObjectInspectorPage`.
+- Generic side peek remains a Lane C-owned alternate composition surface and still lacks Body; Lane A must not create a second Body storage/editor path there.
+- The real Bookmark host remains `BookmarkUnifiedStage1Page` -> `BookmarkDetailPanel` for its center/full presentation, with side peek selecting the same legacy detail surface. `BookmarkDetailPanel` renders Bookmark title/URL/Properties/photos/Relations/description but not the linked canonical Bookmark Object Body.
+- `CoreObjectBridge` already maintains `bookmark_object_links`, and `BookmarkObjectLinkReadStore` exposes the linked canonical Object id read-only. Therefore the Bookmark gap is presentation/composition, not missing Body persistence.
+- #481 remains open. Remaining close-condition work is generic side-peek composition in Lane C plus Bookmark host composition that exposes the linked canonical Body without creating a second note store/editor or discarding Bookmark-specific controls.
+
+### Search cross-lane state
 - Lane E has completed canonical Object Body search indexing and Global Search routing. Lane A should not add a second Body/Note search repository.
 
 ## Active Lane A WIP
-No independent Lane A production PR is active at this checkpoint. This handoff PR is docs-only.
+### #677 — reject cross-ObjectType generic Property value writes
+Branch: `fix-generic-value-object-type-ownership-56`.
 
-Before starting new production work, search open PRs again: multiple lanes and more than one autonomous Lane A execution have been active concurrently, and duplicate work has already occurred once (#661/#667).
+CI #2130 is running after the only first-run failure, a test-only missing `drift.dart` import. Production validation remains unchanged.
+
+Before starting another production edit, search open PRs again: multiple lanes and more than one autonomous Lane A execution have been active concurrently, and duplicate work already occurred (#661/#667).
 
 ## Hotspot / ownership notes
-- `object_inspector_page.dart`, `generic_database_page.dart`, `app_shell.dart`, `object_store.dart` and other semantic/shared hosts require a fresh open-PR lease check immediately before editing.
+- `object_inspector_page.dart`, `generic_database_page.dart`, `app_shell.dart`, `object_store.dart`, `generic_database_store.dart` and other semantic/shared hosts require a fresh open-PR lease check immediately before editing.
+- #677 temporarily owns the `GenericDatabaseStore.setValue(...)` hunk; do not stack generic-value atomicity changes into another branch until #677 lands or is superseded.
 - Do not broaden universal Body work into `generic_database_page.dart`; generic side-peek composition belongs to Lane C.
 - Do not route Relation Property deletion or target/cardinality changes around Lane B canonical Relation APIs.
 - Do not absorb primitive, Search, Vault or Refactor work simply because it operates on canonical Objects.
 
 ## Exact next actions
-1. Audit #481 close-condition coverage against current main, especially whether Bookmark and Person real opening surfaces actually reach the universal shared Body contract. Distinguish a missing Lane A shared-detail contract from a legacy/product-host presentation gap before changing code.
-2. Leave side-peek Body composition to Lane C; coordinate only on reuse of the existing canonical Body/detail seam.
-3. Re-audit #56/#484 for a concrete Object/ObjectType invariant or corruption case before adding another core validation rule. Do not manufacture speculative restrictions such as new defaults-list constraints without a demonstrated semantic failure.
-4. If no independent A-owned correctness gap remains after the real-host audit, stop production changes and wait for a concrete Object-core issue rather than crossing lane boundaries.
+1. Process CI #2130 for #677; if full CI is green and GitHub accepts the expected head, squash merge.
+2. Recheck lease ownership, then add an independent failure-injection regression for `GenericDatabaseStore.setValue(...)` atomicity. If parent `updated_at` touch fails, the value upsert must roll back rather than leave value/freshness state split.
+3. Update this handoff with #677 and any atomicity result before merging docs PR #663.
+4. Keep #481 open until Bookmark linked-Object Body composition and generic side-peek Body parity are implemented by the appropriate presentation owners.
+5. If no further demonstrated A-owned invariant exists, stop rather than invent restrictions or cross into another lane.
 
 ## Stop rule
 A green PR or one completed slice is not itself a stop condition. Continue to another independent Lane A core slice while safe work exists; stop rather than manufacture changes when only leased hotspots, speculative invariants, or other lanes' responsibilities remain.
