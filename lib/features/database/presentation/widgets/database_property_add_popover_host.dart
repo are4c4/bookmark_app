@@ -106,6 +106,14 @@ class _DatabasePropertyAddPopoverHostState
     );
   }
 
+  void _debugCreateFailure(StackTrace stackTrace) {
+    assert(() {
+      debugPrint('DatabasePropertyAddPopoverHost: Property creation failed.');
+      debugPrintStack(stackTrace: stackTrace);
+      return true;
+    }());
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<AppObjectType>>(
@@ -144,10 +152,13 @@ class _DatabasePropertyAddPopoverHostState
         relationMultiple: request.relationMultiple,
       );
       await widget.onCreated(propertyId);
-    } catch (error) {
+    } catch (_, stackTrace) {
+      _debugCreateFailure(stackTrace);
       if (!mounted) return;
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        SnackBar(content: Text('プロパティを追加できませんでした: $error')),
+        const SnackBar(
+          content: Text('プロパティを追加できませんでした。もう一度お試しください。'),
+        ),
       );
     }
   }
