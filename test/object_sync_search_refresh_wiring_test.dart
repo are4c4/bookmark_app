@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('production Object sync wires preview impact to focused Search refresh', () {
+  test('production Object sync wires background impact to focused Search refresh', () {
     final source = File('lib/main.dart').readAsStringSync();
 
     expect(
@@ -13,6 +13,14 @@ void main() {
       ),
       reason:
           'background preview ingestion must notify the canonical focused Search refresh boundary',
+    );
+    expect(
+      source,
+      contains(
+        'onCanonicalObjectsMirrored: search.refreshObjectLabelDependentsFor',
+      ),
+      reason:
+          'watcher-driven canonical mirror completion must notify the multi-root focused Search refresh boundary',
     );
     expect(
       RegExp(r'_objectSyncService\(database\)\.syncWorkspace').allMatches(source),
@@ -26,7 +34,7 @@ void main() {
         'ObjectSyncService(\n      database,\n      enableRemotePreviewImages: true,\n    ).syncWorkspace',
       )),
       reason:
-          'production preview sync must not bypass the focused completion callback',
+          'production Object sync must not bypass focused completion callbacks',
     );
   });
 }
