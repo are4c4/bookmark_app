@@ -163,6 +163,30 @@ class DatabaseViewStore {
     return rows.map(_fromRow).toList();
   }
 
+  /// Returns every persisted View in one workspace, across Database keys.
+  ///
+  /// Property ids are workspace-global schema identities. Schema impact
+  /// inspection must therefore see Views owned by secondary collections that
+  /// target the same ObjectType instead of assuming only `custom:<typeId>` can
+  /// reference a Property.
+  Future<List<DatabaseViewConfig>> listWorkspaceViews({
+    required int workspaceId,
+  }) async {
+    await _ensureSchema();
+    final rows = await database.customSelect(
+      '''
+      SELECT id, workspace_id, database_key, name, layout_type,
+             filters_json, sorts_json, visible_properties, property_order,
+             settings_json, sort_order
+      FROM database_views
+      WHERE workspace_id = ?
+      ORDER BY database_key, sort_order, id
+      ''',
+      variables: [Variable<int>(workspaceId)],
+    ).get();
+    return rows.map(_fromRow).toList();
+  }
+
   Future<DatabaseViewConfig> ensureDefaultView({
     required int workspaceId,
     required DatabaseDefinition definition,
