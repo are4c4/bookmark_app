@@ -205,6 +205,4 @@ class BookmarkLifecycleStore {
       throw StateError('復元状態を保存できませんでした (id=$bookmarkId)');
     }
   }
-
-  Future<void> dispose() async {}
 }
