@@ -164,6 +164,14 @@ class ObjectDetailEditService {
         'Object detail Value editing does not mutate Relation or Computed properties.',
       );
     }
+    if (canonical.type == ObjectPropertyType.createdTime ||
+        canonical.type == ObjectPropertyType.updatedTime) {
+      throw ArgumentError.value(
+        canonical.type,
+        'property',
+        'Object timestamps are managed by Object persistence and cannot be edited as stored Values.',
+      );
+    }
     return canonical;
   }
 
