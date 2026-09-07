@@ -48,7 +48,7 @@ void main() {
     expect(find.text('Profileを追加'), findsNothing);
   });
 
-  testWidgets('Vault removal explains managed deletion and external preservation',
+  testWidgets('Vault removal clearly preserves the Vault folder and data',
       (tester) async {
     const state = ProfileState(
       profiles: <DatabaseProfile>[
@@ -67,7 +67,7 @@ void main() {
       ],
       activeProfileId: 'default',
     );
-    var deleted = false;
+    var removed = false;
 
     tester.view.physicalSize = const Size(1200, 800);
     tester.view.devicePixelRatio = 1;
@@ -82,28 +82,32 @@ void main() {
           onCreate: (_) async {},
           onRename: (_, __) async {},
           onDuplicate: (_) async {},
-          onDelete: (_) async => deleted = true,
+          onDelete: (_) async => removed = true,
         ),
       ),
     );
 
     await tester.tap(find.byIcon(Icons.more_vert).last);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('削除'));
+    await tester.tap(find.text('一覧から外す'));
     await tester.pumpAndSettle();
 
-    expect(find.text('「External Vault」を削除しますか？'), findsOneWidget);
+    expect(find.text('「External Vault」を一覧から外しますか？'), findsOneWidget);
     expect(
-      find.textContaining('アプリ管理下で作成されたVaultの場合は保存データも削除されます'),
+      find.textContaining('Vaultフォルダと保存データは削除されません'),
       findsOneWidget,
     );
     expect(
-      find.textContaining('外部フォルダとして開いたVaultのファイルは削除されません'),
+      find.textContaining('既存のVaultとして再度開けます'),
       findsOneWidget,
+    );
+    expect(
+      find.textContaining('保存データも削除されます'),
+      findsNothing,
     );
 
     await tester.tap(find.text('キャンセル'));
     await tester.pumpAndSettle();
-    expect(deleted, isFalse);
+    expect(removed, isFalse);
   });
 }

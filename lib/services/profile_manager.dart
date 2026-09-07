@@ -237,7 +237,6 @@ class ProfileManager {
     await _save();
     return profile;
   }
-
   Future<DatabaseProfile> createVault({
     required String name,
     required String directoryPath,
@@ -478,7 +477,6 @@ class ProfileManager {
       await database.close();
     }
   }
-
   Future<DatabaseProfile> duplicateProfile(
     DatabaseProfile source, {
     String? name,
@@ -514,7 +512,7 @@ class ProfileManager {
       await _writeProfileMetadata(copy);
       return copy;
     } catch (_) {
-      await deleteProfile(copy);
+      await _discardAppManagedProfile(copy);
       rethrow;
     }
   }
@@ -556,28 +554,42 @@ class ProfileManager {
       await _save();
       return copy;
     } catch (_) {
-      await deleteProfile(copy);
+      await _discardAppManagedProfile(copy);
       rethrow;
     }
   }
 
-  Future<void> deleteProfile(DatabaseProfile profile) async {
-    if (profile.isDefault) throw StateError('Default profile cannot be deleted');
-    if (_state.profiles.length <= 1) throw StateError('At least one profile is required');
-    if (_state.activeProfileId == profile.id) {
-      throw StateError('Switch to another profile before deleting the active profile');
-    }
-    _state = ProfileState(
-      profiles: _state.profiles.where((candidate) => candidate.id != profile.id).toList(),
-      activeProfileId: _state.activeProfileId,
-    );
-    await _save();
+  Future<void> _discardAppManagedProfile(DatabaseProfile profile) async {
+    await removeProfile(profile);
     if (!_usesAppManagedDirectory(profile)) return;
     final directory = Directory(profile.directoryPath);
     if (await directory.exists()) {
       await directory.delete(recursive: true);
     }
   }
+
+  Future<void> removeProfile(DatabaseProfile profile) async {
+    if (profile.isDefault) throw StateError('Default profile cannot be removed');
+    if (_state.profiles.length <= 1) throw StateError('At least one profile is required');
+    if (_state.activeProfileId == profile.id) {
+      throw StateError('Switch to another profile before removing the active profile');
+    }
+    final previousState = _state;
+    _state = ProfileState(
+      profiles: _state.profiles.where((candidate) => candidate.id != profile.id).toList(),
+      activeProfileId: _state.activeProfileId,
+    );
+    try {
+      await _save();
+    } catch (_) {
+      _state = previousState;
+      rethrow;
+    }
+  }
+
+  // Compatibility alias for the existing shell callback. User-facing Vault
+  // removal unregisters the Vault but intentionally leaves all files intact.
+  Future<void> deleteProfile(DatabaseProfile profile) => removeProfile(profile);
 
   Future<void> setActiveProfile(DatabaseProfile profile) async {
     if (!_state.profiles.any((candidate) => candidate.id == profile.id)) return;

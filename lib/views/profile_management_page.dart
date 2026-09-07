@@ -62,16 +62,15 @@ class ProfileManagementPage extends StatelessWidget {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('「${profile.name}」を削除しますか？'),
+        title: Text('「${profile.name}」を一覧から外しますか？'),
         content: const Text(
-          'このVaultをアプリの一覧から削除します。'
-          'アプリ管理下で作成されたVaultの場合は保存データも削除されます。'
-          '外部フォルダとして開いたVaultのファイルは削除されません。'
-          'この操作は元に戻せません。',
+          'このVaultをアプリの一覧から外します。'
+          'Vaultフォルダと保存データは削除されません。'
+          '必要になった場合は既存のVaultとして再度開けます。',
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('キャンセル')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('削除')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('一覧から外す')),
         ],
       ),
     );
@@ -135,7 +134,7 @@ class ProfileManagementPage extends StatelessWidget {
                       const PopupMenuItem(value: 'rename', child: Text('名前を変更')),
                       const PopupMenuItem(value: 'duplicate', child: Text('複製')),
                       if (!profile.isDefault && !active)
-                        const PopupMenuItem(value: 'delete', child: Text('削除')),
+                        const PopupMenuItem(value: 'delete', child: Text('一覧から外す')),
                     ],
                   ),
                 ],
