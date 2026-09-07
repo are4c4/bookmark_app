@@ -2,6 +2,7 @@ import 'dart:developer' as developer;
 import 'dart:io';
 
 import '../data/profile_path_resolver.dart';
+import '../domain/managed_file_ownership.dart';
 
 /// Explicit filesystem ownership granted only for bytes copied by
 /// [VaultManagedFileCopyService].
@@ -10,13 +11,15 @@ import '../data/profile_path_resolver.dart';
 /// delete it. Callers should retain this grant alongside any downstream
 /// identity that needs to distinguish app-copied bytes from external files.
 enum VaultManagedFileOwnership {
-  vaultManagedCopy('vault-managed-copy-v1');
+  vaultManagedCopy(ManagedFileOwnership.vaultManagedCopy);
 
-  const VaultManagedFileOwnership(this.storageKey);
+  const VaultManagedFileOwnership(this.managedOwnership);
 
-  /// Stable value that a downstream identity layer may persist without
-  /// re-deriving ownership from the filesystem path.
-  final String storageKey;
+  /// Shared typed ownership contract consumed by primitive persistence.
+  final ManagedFileOwnership managedOwnership;
+
+  /// Stable value retained for Storage callers and persisted compatibility.
+  String get storageKey => managedOwnership.storageKey;
 }
 
 enum VaultManagedFileDeleteResult {
