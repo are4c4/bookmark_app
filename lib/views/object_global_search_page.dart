@@ -145,8 +145,8 @@ class _ObjectGlobalSearchPageState extends State<ObjectGlobalSearchPage> {
     }
   }
 
-  Future<void> _openResult(ResolvedObjectSearchHit result) {
-    return Navigator.of(context).push<void>(
+  Future<void> _openResult(ResolvedObjectSearchHit result) async {
+    await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => ObjectInspectorPage(
           store: widget.store,
@@ -155,6 +155,22 @@ class _ObjectGlobalSearchPageState extends State<ObjectGlobalSearchPage> {
         ),
       ),
     );
+    if (!mounted) return;
+
+    try {
+      await _searchService.refreshObjectLabelDependents(result.object.id);
+    } catch (_, stackTrace) {
+      _recordSearchFailure(
+        'Object global search result refresh failed.',
+        stackTrace,
+      );
+      return;
+    }
+
+    final query = _controller.text.trim();
+    if (query.isNotEmpty) {
+      await _search(query);
+    }
   }
 
   Widget _resultList() {
