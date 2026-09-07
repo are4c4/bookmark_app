@@ -8,7 +8,11 @@ Issue #225 — reduce maintenance hotspots and retire duplicate/unused legacy pa
 Primary lane: **G — Refactor & Architecture Health**. Object Core owns Object/Body semantics, Relations owns canonical Relation semantics, Database/View owns Database presentation semantics, Primitive Objects & Media owns Weblink/Image/File/etc. behavior, Search owns indexing/query semantics, and Storage/Vault owns storage/delivery behavior. Lane G owns measurable responsibility reduction, proven caller-zero retirement, failure-policy/privacy cleanup, maintainability guardrails, architecture-health audits, and incremental legacy shim retirement.
 
 ## Current checkpoint — 2026-09-07
-Latest Lane G integration at this handoff: **`bc99da762996083a317440fe8cf81efecd2dad60`** — **#672 Retire caller-zero DetailPropertyRow re-export shim**.
+Latest integrated Lane G checkpoint: **`c05cae868548b4c7df836229b5e7d88bc9a9fb7b`** — **#680 Refresh Refactor handoff after DetailPropertyRow shim retirement**.
+
+Current Lane G work in progress: **PR #687 `refactor/collection-presentation-shims-225`** on current main **`81d2875262220a531d7569c2622269e66dcba7d1`**. `CollectionManagementPage` now imports `DatabaseCreateRow`, `DatabasePageToolbar`, `DatabaseViewTabs`, and `ResizableDetailPane` directly from `lib/features/database/presentation/widgets/` instead of the four temporary `lib/widgets/` re-export shims. The UI/collection logic is unchanged. The CI legacy-shim-import ceiling is ratcheted **17 → 13** and `docs/MAINTAINABILITY.md` is updated in the same PR.
+
+The branch was first prepared on `7cee922a...`; Relation #681 landed before PR creation completed. Because #681 touched independent Relation integrity files, the Refactor branch was reset onto `81d28752...` and the same three-file Refactor delta was reapplied rather than carrying a stale-base merge commit.
 
 The repository `main` may already be newer because parallel lanes move quickly. Re-read `AGENTS.md`, Issue #225, open PRs and current `main` before every shared-host edit or merge.
 
@@ -23,6 +27,7 @@ The repository `main` may already be newer because parallel lanes move quickly. 
 - **#654** `c2d4bd08...` — retire the caller-zero legacy Bookmark-only FTS repository and dedicated tests after Search #629 routed live Global Search through canonical Objects (-369 LOC, +1).
 - **#668** `bea40b1c...` — refresh Lane G handoff and legacy Bookmark inventory after FTS retirement.
 - **#672** `bc99da76...` — remove caller-zero `lib/widgets/detail_property_row.dart` re-export shim and ratchet the shim-file ceiling **5 → 4**.
+- **#680** `c05cae86...` — refresh this handoff and legacy inventory after #672.
 
 ### Recent validation
 PR #654 and PR #672 both passed:
@@ -33,14 +38,14 @@ PR #654 and PR #672 both passed:
 - `flutter analyze`;
 - full `flutter test`.
 
-Before each merge, commits added after the branch base were compared and no overlapping ownership was found in the changed files.
+For PR #687, the branch delta against its current base is intentionally limited to `collection_management_page.dart`, `.github/workflows/flutter_ci.yml`, maintainability documentation, and this handoff. The production host change is four import substitutions only.
 
 ## Current measurable guardrails
-`.github/workflows/flutter_ci.yml` is the source of truth. At this checkpoint CI enforces:
+`.github/workflows/flutter_ci.yml` is the source of truth. On PR #687 the intended accepted ceilings are:
 
 1. presentation direct `workspaceStore.database` reach-through: **9 maximum**;
 2. direct `AppDatabase` imports under canonical feature presentation: **8 maximum**;
-3. temporary Database-presentation legacy shim imports: **17 maximum**;
+3. temporary Database-presentation legacy shim imports: **13 maximum**;
 4. temporary Database-presentation re-export shim files: **4 maximum**.
 
 Do not copy numeric ceilings into script help text as defaults. Ratchet a ceiling downward only when real debt is removed; never relax one merely to land unrelated feature work.
@@ -93,7 +98,7 @@ Major completed narrowing:
 ### Audited near-term AppDatabase candidate
 At the latest audit, `AppDatabase.updateBookmarkFields(... personNames ...)` still had one production caller (`BookmarkRepository.update`) and that caller passed `personNames: null`; live Person updates already use role-aware `setPeopleForRole(...)`. This remains a likely behavior-preserving dead API seam.
 
-However, applying it requires editing the large `bookmark_repository.dart` host. With connector whole-file replacement semantics, do not take that risk merely to delete one argument; wait for a safe patch mechanism or a naturally overlapping host edit, and re-audit callers then.
+However, applying it requires editing the large `bookmark_repository.dart` host. Do not take that risk merely to delete one argument; wait for a safe patch mechanism or a naturally overlapping host edit, and re-audit callers then.
 
 ## BookmarkLifecycleStore state
 Live mutations such as inbox/archive/trash/restore and `watchGenre()` remain in use. #642 removed caller-zero aggregate state readers and synchronous `genre()`.
@@ -120,7 +125,7 @@ Four legacy shim files remain:
 
 `lib/widgets/detail_property_row.dart` reached true caller-zero after `BookmarkAttachmentSection`, `BookmarkReorderableProperties`, and tests moved to the canonical feature import; #672 removed the shim and lowered the shim-file ceiling to **4**. The historical `detail_property_row` name intentionally remains guarded by the import scanner so reintroducing it is still detected.
 
-The shim-import ceiling remains **17** because #672 removed a definition with no callers rather than another import. The four surviving shims still have real callers concentrated in large/shared hosts such as Photo/People/Collection management, `GenericDatabasePage`, and Stage1. Do not rewrite those hosts solely to decrease a metric.
+PR #687 removes all four shim imports from `CollectionManagementPage` and lowers the shim-import ceiling **17 → 13**. The four shim files themselves remain live because other real callers still exist, concentrated in larger/shared hosts such as Photo/People management, `GenericDatabasePage`, and Stage1. Do not rewrite those hosts solely to decrease a metric; switch them opportunistically when a naturally patch-sized host edit is already safe.
 
 ## Failure-policy state
 High-value user-visible raw-error boundaries have largely been stabilized. Intentional compatibility/best-effort failures may stay fail-soft, but unexpected failures should be observable through privacy-safe debug/test diagnostics where useful.
@@ -147,21 +152,22 @@ Recent audits confirmed these still have production callers and are **not** call
 `tool/performance_probe.dart` is an intentional standalone CLI and must not be classified caller-zero merely because production Dart does not import it.
 
 ## Exact next actions
-1. Re-read current `main` and open PRs before choosing the next slice.
-2. Keep the two proven dead Bookmark API seams (`updateBookmarkFields.personNames`, `BookmarkLifecycleStore.remove()`) deferred until `bookmark_repository.dart` can be patched safely rather than reconstructed.
-3. Continue true production caller-zero audits; prefer whole-module/shim deletion over wrapper creation.
-4. Opportunistically ratchet temporary shim imports below 17 only when a real host is already safely modified and can switch to canonical imports.
-5. Lower presentation/database or feature-presentation AppDatabase ceilings only after a real boundary move removes references.
-6. Continue GenericDatabasePage responsibility extraction only in small slices coordinated with Database/View ownership.
-7. Do not touch Relation semantics, canonical Object search semantics, primitive storage semantics, or Vault lifecycle under Refactor.
-8. Do not destructively remove Bookmark URL/thumbnail/Photo storage until production caller-zero and portability/migration contracts are proven.
+1. Monitor PR #687 CI; if Analyze/full Test are green and current main still has no overlapping collection/guardrail edits, merge it and treat **13** as the new legacy-shim-import ceiling.
+2. Re-read current `main` and open PRs before choosing the next slice.
+3. Keep the two proven dead Bookmark API seams (`updateBookmarkFields.personNames`, `BookmarkLifecycleStore.remove()`) deferred until `bookmark_repository.dart` can be patched safely rather than reconstructed.
+4. Continue true production caller-zero audits; prefer whole-module/shim deletion over wrapper creation.
+5. Opportunistically ratchet temporary shim imports below 13 only when a real host is already safely modified and can switch to canonical imports.
+6. Lower presentation/database or feature-presentation AppDatabase ceilings only after a real boundary move removes references.
+7. Continue GenericDatabasePage responsibility extraction only in small slices coordinated with Database/View ownership.
+8. Do not touch Relation semantics, canonical Object search semantics, primitive storage semantics, or Vault lifecycle under Refactor.
+9. Do not destructively remove Bookmark URL/thumbnail/Photo storage until production caller-zero and portability/migration contracts are proven.
 
 ## Risks / sequencing
 - parallel lanes move `main` quickly;
-- connector file writes replace complete files, so avoid one-line edits in huge shared hosts unless the complete current file can be safely preserved;
+- complete-file connector writes require exact-current-source preservation; use diff verification after any larger host edit;
 - open PR ownership takes precedence over an old handoff;
 - behavior-preserving cleanup must not silently become migration, schema redesign, Relation redesign, Search redesign or storage-policy work;
 - a falling reference/LOC metric is useful only when real responsibility disappears.
 
 ## Stop / continuation state
-As of Lane G #672, the obvious whole-file caller-zero cleanup in Search and the `DetailPropertyRow` shim are retired. The remaining audited dead API seams require a large-host edit, while the four remaining presentation shims have real callers. The next safe Lane G slice should come from a new caller-zero audit or a naturally patch-sized responsibility move created by parallel lane progress; do not manufacture an abstraction or reconstruct a hotspot merely to keep the lane busy.
+PR #687 provides a concrete independent Lane G slice: four live legacy shim dependencies were removed from Collection management and the guardrail was ratcheted accordingly. No Relation/shared-hotspot semantics were changed. Continue with CI/integration and another verified caller-zero or naturally patch-sized dependency cleanup; do not manufacture abstractions solely to keep the lane active.
