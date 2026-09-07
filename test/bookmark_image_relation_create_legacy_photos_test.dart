@@ -70,7 +70,9 @@ void main() {
       workspaceId: workspaceId,
       bookmarkId: bookmarkId,
     ))!;
-    expect(state.images.selectedObjectIds, <int>[imageAId, imageBId]);
+    // #245 does not introduce ordering semantics for the multi-image Relation.
+    // The durable invariant is membership plus the explicit single cover.
+    expect(state.images.selectedObjectIds.toSet(), <int>{imageAId, imageBId});
     expect(state.validCoverImageObjectId, imageBId);
 
     final legacyRows = await database.customSelect(
@@ -97,7 +99,7 @@ void main() {
       workspaceId: workspaceId,
       bookmarkId: bookmarkId,
     ))!;
-    expect(state.images.selectedObjectIds, <int>[imageAId, imageBId]);
+    expect(state.images.selectedObjectIds.toSet(), <int>{imageAId, imageBId});
     expect(state.validCoverImageObjectId, imageBId);
   });
 
