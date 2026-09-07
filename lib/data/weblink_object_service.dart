@@ -485,7 +485,10 @@ class WeblinkObjectService {
 
   String? _normalizedContentType(String? value) {
     final candidate = value?.split(';').first.trim().toLowerCase();
-    return candidate == null || candidate.isEmpty ? null : candidate;
+    if (candidate == null || candidate.isEmpty || !candidate.contains('/')) {
+      return null;
+    }
+    return candidate;
   }
 
   String? _normalizedOptionalDate(String? value) {
