@@ -5,6 +5,8 @@ import 'package:bookmark_app/data/system_object_store.dart';
 import 'package:bookmark_app/features/object/presentation/widgets/object_file_detail_panel.dart';
 import 'package:bookmark_app/services/canonical_file_action_service.dart';
 import 'package:bookmark_app/services/canonical_file_export_service.dart';
+import 'package:bookmark_app/services/canonical_file_pdf_metadata_service.dart';
+import 'package:bookmark_app/services/canonical_file_pdf_page_count_service.dart';
 import 'package:bookmark_app/services/canonical_file_pdf_preview_service.dart';
 import 'package:bookmark_app/services/file_managed_resource_resolver.dart';
 import 'package:drift/native.dart';
@@ -40,10 +42,9 @@ void main() {
     await database.close();
   });
 
-  testWidgets('composes PDF preview and native actions for one File identity',
+  testWidgets('composes PDF capabilities and native actions for one File identity',
       (tester) async {
-    var requestedTypeId = 0;
-    var requestedObjectId = 0;
+    final requested = <String>[];
 
     await tester.pumpWidget(
       MaterialApp(
@@ -58,11 +59,31 @@ void main() {
               required fileObjectTypeId,
               required fileObjectId,
             }) async {
-              requestedTypeId = fileObjectTypeId;
-              requestedObjectId = fileObjectId;
+              requested.add('preview:$fileObjectTypeId:$fileObjectId');
               return const CanonicalFilePdfPreview(
                 fileObjectId: 34,
                 pngBytes: <int>[1, 2, 3],
+              );
+            },
+            pdfMetadataResolver: ({
+              required fileObjectTypeId,
+              required fileObjectId,
+            }) async {
+              requested.add('metadata:$fileObjectTypeId:$fileObjectId');
+              return const CanonicalFilePdfMetadata(
+                fileObjectId: 34,
+                title: 'Panel paper',
+                authors: <String>['Ada'],
+              );
+            },
+            pdfPageCountResolver: ({
+              required fileObjectTypeId,
+              required fileObjectId,
+            }) async {
+              requested.add('pages:$fileObjectTypeId:$fileObjectId');
+              return const CanonicalFilePdfPageCount(
+                fileObjectId: 34,
+                pageCount: 5,
               );
             },
             previewImageBuilder: (_, __) => const SizedBox.expand(
@@ -74,8 +95,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(requestedTypeId, 12);
-    expect(requestedObjectId, 34);
+    expect(
+      requested,
+      <String>['preview:12:34', 'metadata:12:34', 'pages:12:34'],
+    );
     expect(
       find.byKey(const ValueKey('object-file-detail-panel-34')),
       findsOneWidget,
@@ -86,6 +109,12 @@ void main() {
     );
     expect(find.byKey(const ValueKey('panel-pdf-image')), findsOneWidget);
     expect(
+      find.byKey(const ValueKey('object-file-pdf-summary-34')),
+      findsOneWidget,
+    );
+    expect(find.text('タイトル  Panel paper'), findsOneWidget);
+    expect(find.text('ページ数  5'), findsOneWidget);
+    expect(
       find.byKey(const ValueKey('object-file-detail-actions-34')),
       findsOneWidget,
     );
@@ -93,10 +122,17 @@ void main() {
     final previewBottom = tester
         .getBottomLeft(find.byKey(const ValueKey('object-file-pdf-preview-34')))
         .dy;
+    final summaryTop = tester
+        .getTopLeft(find.byKey(const ValueKey('object-file-pdf-summary-34')))
+        .dy;
+    final summaryBottom = tester
+        .getBottomLeft(find.byKey(const ValueKey('object-file-pdf-summary-34')))
+        .dy;
     final actionsTop = tester
         .getTopLeft(find.byKey(const ValueKey('object-file-detail-actions-34')))
         .dy;
-    expect(actionsTop - previewBottom, 12);
+    expect(summaryTop - previewBottom, 12);
+    expect(actionsTop - summaryBottom, 12);
   });
 
   testWidgets('non-PDF File reserves no preview space before native actions',
@@ -121,6 +157,10 @@ void main() {
 
     expect(
       find.byKey(const ValueKey('object-file-pdf-preview-35')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('object-file-pdf-summary-35')),
       findsNothing,
     );
     final panelTop = tester
