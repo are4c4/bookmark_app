@@ -1151,7 +1151,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
           return ListTile(
             selected: record.id == _selectedRecordId,
             leading: SystemObjectListMedia(
-              database: widget.repository.workspaceStore.database,
+              database: _store.database,
               objectStore: _objectStore,
               workspaceId: widget.repository.workspaceId,
               objectTypeId: record.databaseId,
