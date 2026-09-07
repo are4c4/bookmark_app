@@ -99,10 +99,16 @@ void main() {
     );
     await pumpUntilVisible(host);
     expect(host, findsOneWidget);
-    expect(
-      find.byKey(ValueKey('system-object-list-media-image-$objectId')),
-      findsOneWidget,
+
+    // SystemObjectListMedia resolves system identity asynchronously after the
+    // List host itself is mounted. Wait for the resolved Image-kind content as
+    // a second phase instead of asserting in that intermediate FutureBuilder
+    // frame.
+    final resolvedMedia = find.byKey(
+      ValueKey('system-object-list-media-image-$objectId'),
     );
+    await pumpUntilVisible(resolvedMedia);
+    expect(resolvedMedia, findsOneWidget);
     expect(find.text('Canonical Image row'), findsOneWidget);
 
     final hostedMedia = tester.widget<SystemObjectListMedia>(host);
