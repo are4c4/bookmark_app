@@ -3,6 +3,7 @@ import 'package:drift/drift.dart';
 import '../domain/object_model.dart';
 import 'generic_database_store.dart';
 import 'object_store.dart';
+import 'relation_stored_value_inspection.dart';
 
 class BidirectionalRelationPair {
   const BidirectionalRelationPair({
@@ -240,9 +241,7 @@ class BidirectionalRelationStore {
     }
     final targetTypeId = sourceProperty.targetObjectTypeId!;
 
-    final oldIds = ObjectRelationValue.fromJson(source.values[sourceProperty.id])
-        .objectIds
-        .toSet();
+    final oldIds = _storedObjectIds(source.values[sourceProperty.id]).toSet();
     final nextIds = targetObjectIds.toSet();
     final removed = oldIds.difference(nextIds);
     final added = nextIds.difference(oldIds);
@@ -252,9 +251,7 @@ class BidirectionalRelationStore {
         for (final targetId in added) {
           final target = await _objectById(targetTypeId, targetId);
           if (target == null) continue;
-          final current = ObjectRelationValue.fromJson(
-            target.values[inverseProperty.id],
-          ).objectIds;
+          final current = _storedObjectIds(target.values[inverseProperty.id]);
           if (current.isNotEmpty && !current.contains(objectId)) {
             throw StateError(
               'Inverse relation ${inverseProperty.name} accepts only one Object.',
@@ -272,9 +269,7 @@ class BidirectionalRelationStore {
       for (final targetId in removed) {
         final target = await _objectById(targetTypeId, targetId);
         if (target == null) continue;
-        final ids = ObjectRelationValue.fromJson(
-          target.values[inverseProperty.id],
-        ).objectIds.toSet()
+        final ids = _storedObjectIds(target.values[inverseProperty.id]).toSet()
           ..remove(objectId);
         await objectStore.setRelation(
           objectId: targetId,
@@ -286,9 +281,7 @@ class BidirectionalRelationStore {
       for (final targetId in added) {
         final target = await _objectById(targetTypeId, targetId);
         if (target == null) continue;
-        final ids = ObjectRelationValue.fromJson(
-          target.values[inverseProperty.id],
-        ).objectIds.toSet();
+        final ids = _storedObjectIds(target.values[inverseProperty.id]).toSet();
         if (!inverseProperty.allowsMultipleRelations) ids.clear();
         ids.add(objectId);
         await objectStore.setRelation(
@@ -421,6 +414,14 @@ class BidirectionalRelationStore {
       if (object.id == objectId) return object;
     }
     return null;
+  }
+
+  List<int> _storedObjectIds(dynamic value) {
+    final inspection = inspectRelationStoredValue(value);
+    if (inspection.isMalformed) {
+      throw StateError('Stored Relation value is malformed.');
+    }
+    return inspection.objectIds;
   }
 
   int? _intConfig(dynamic value) =>
