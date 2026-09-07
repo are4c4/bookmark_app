@@ -3,6 +3,7 @@ import 'bidirectional_relation_store.dart';
 import 'generic_database_store.dart';
 import 'object_store.dart';
 import 'relation_index_service.dart';
+import 'relation_stored_value_inspection.dart';
 
 /// Stable mutation facade for Relation consumers such as Object detail pages.
 ///
@@ -35,6 +36,16 @@ class RelationMutationService {
     }
 
     final storedProperty = await _canonicalRelationProperty(property);
+    final source = await _objectById(storedProperty.objectTypeId, objectId);
+    if (source == null) {
+      throw ArgumentError.value(
+        objectId,
+        'objectId',
+        'Object does not belong to the Relation source ObjectType.',
+      );
+    }
+    assertWellFormedStoredRelationValue(source.values[storedProperty.id]);
+
     final pair = await _pairIfManaged(storedProperty);
     if (pair != null) {
       await bidirectionalStore.setRelation(
@@ -189,8 +200,13 @@ class RelationMutationService {
         );
       }
 
-      final nextIds = ObjectRelationValue.fromJson(source.values[property.id])
-          .objectIds
+      final storedInspection = inspectRelationStoredValue(
+        source.values[property.id],
+      );
+      if (storedInspection.isMalformed) {
+        throw StateError('Stored Relation value is malformed.');
+      }
+      final nextIds = storedInspection.objectIds
           .where((id) => id != objectId)
           .toList(growable: false);
       plans.add(
@@ -246,6 +262,13 @@ class RelationMutationService {
       );
     }
     return storedProperty;
+  }
+
+  Future<AppObject?> _objectById(int objectTypeId, int objectId) async {
+    for (final object in await objectStore.listObjects(objectTypeId)) {
+      if (object.id == objectId) return object;
+    }
+    return null;
   }
 
   Future<BidirectionalRelationPair?> _pairIfManaged(
