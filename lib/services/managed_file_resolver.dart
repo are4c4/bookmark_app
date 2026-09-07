@@ -3,11 +3,12 @@ import 'dart:io';
 
 import '../data/profile_path_resolver.dart';
 
-/// Read-only file-backed capability shared by primitive ObjectTypes.
+/// File-backed path capability shared by primitive ObjectTypes.
 ///
 /// Primitive identity stays in the concrete Object (Image/File/etc.). This
-/// resolver owns only portable stored-path resolution plus conservative file
-/// existence/metadata probing. It never logs the user path or exception text.
+/// resolver owns portable stored-path canonicalization/resolution plus
+/// conservative file existence/metadata probing. It never logs the user path
+/// or exception text.
 class ManagedFileResolver {
   const ManagedFileResolver({ProfilePathResolver? pathResolver})
       : _pathResolver = pathResolver;
@@ -33,15 +34,17 @@ class ManagedFileResolver {
     }
   }
 
+  /// Canonicalizes either an absolute or already-stored path into the portable
+  /// identity used by file-backed primitives.
+  String canonicalStoredPath(String path) {
+    final normalized = _requiredPath(path);
+    return _pathResolver?.canonicalStoredPath(normalized) ?? normalized;
+  }
+
+  /// Converts a known resolved path into portable stored form without first
+  /// interpreting relative input against the profile root.
   String toStoredPath(String path) {
-    final normalized = path.trim();
-    if (normalized.isEmpty) {
-      throw ArgumentError.value(
-        path,
-        'path',
-        'Managed file path must not be empty.',
-      );
-    }
+    final normalized = _requiredPath(path);
     return _pathResolver?.toStoredPath(normalized) ?? normalized;
   }
 
@@ -54,6 +57,18 @@ class ManagedFileResolver {
       );
       return true;
     }());
+  }
+
+  String _requiredPath(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      throw ArgumentError.value(
+        value,
+        'path',
+        'Managed file path must not be empty.',
+      );
+    }
+    return trimmed;
   }
 
   String? _nonEmpty(String? value) {
