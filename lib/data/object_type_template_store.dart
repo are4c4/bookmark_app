@@ -487,27 +487,6 @@ class ObjectTypeTemplateStore {
     );
     final viewStore = DatabaseViewStore(store.database);
 
-    final relationTargets = <ObjectTypeTemplateProperty, int>{};
-    for (final property in template.properties) {
-      if (property.type != 'relation') continue;
-      final systemKey = property.relationTargetSystemKey?.trim() ?? '';
-      if (systemKey.isEmpty) {
-        throw ArgumentError(
-          'Relation template Property ${property.name} requires a target system key.',
-        );
-      }
-      final target = await primitiveTargets.resolveOrProvision(
-        workspaceId: workspaceId,
-        systemKey: systemKey,
-      );
-      if (target == null) {
-        throw StateError(
-          'Required primitive ObjectType "$systemKey" is not available in this workspace.',
-        );
-      }
-      relationTargets[property] = target.id;
-    }
-
     final galleryCoverRelations =
         <ObjectTypeTemplateView, ObjectTypeTemplateProperty>{};
     for (final view in template.views) {
@@ -547,6 +526,27 @@ class ObjectTypeTemplateStore {
     }
 
     return store.database.transaction(() async {
+      final relationTargets = <ObjectTypeTemplateProperty, int>{};
+      for (final property in template.properties) {
+        if (property.type != 'relation') continue;
+        final systemKey = property.relationTargetSystemKey?.trim() ?? '';
+        if (systemKey.isEmpty) {
+          throw ArgumentError(
+            'Relation template Property ${property.name} requires a target system key.',
+          );
+        }
+        final target = await primitiveTargets.resolveOrProvision(
+          workspaceId: workspaceId,
+          systemKey: systemKey,
+        );
+        if (target == null) {
+          throw StateError(
+            'Required primitive ObjectType "$systemKey" is not available in this workspace.',
+          );
+        }
+        relationTargets[property] = target.id;
+      }
+
       final objectTypeId = await objectStore.createObjectType(
         workspaceId: workspaceId,
         name: name?.trim().isNotEmpty == true ? name!.trim() : template.name,
