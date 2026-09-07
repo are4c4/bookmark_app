@@ -23,16 +23,21 @@ typedef ObjectFilePdfPreviewImageBuilder = Widget Function(
 class ObjectFilePdfPreview extends StatefulWidget {
   const ObjectFilePdfPreview({
     super.key,
-    required this.previewService,
+    this.previewService,
     required this.fileObjectTypeId,
     required this.fileObjectId,
     this.maxHeight = 420,
     this.previewResolver,
     this.imageBuilder,
     this.onError,
-  });
+  }) : assert(
+          previewService != null || previewResolver != null,
+          'Provide a canonical PDF preview service or an injected resolver.',
+        );
 
-  final CanonicalFilePdfPreviewService previewService;
+  /// Production capability source. Focused widget tests may leave this null and
+  /// inject [previewResolver] instead.
+  final CanonicalFilePdfPreviewService? previewService;
   final int fileObjectTypeId;
   final int fileObjectId;
   final double maxHeight;
@@ -73,15 +78,16 @@ class _ObjectFilePdfPreviewState extends State<ObjectFilePdfPreview> {
   Future<CanonicalFilePdfPreview?> _resolve() async {
     try {
       final customResolver = widget.previewResolver;
-      return customResolver != null
-          ? await customResolver(
-              fileObjectTypeId: widget.fileObjectTypeId,
-              fileObjectId: widget.fileObjectId,
-            )
-          : await widget.previewService.resolve(
-              fileObjectTypeId: widget.fileObjectTypeId,
-              fileObjectId: widget.fileObjectId,
-            );
+      if (customResolver != null) {
+        return await customResolver(
+          fileObjectTypeId: widget.fileObjectTypeId,
+          fileObjectId: widget.fileObjectId,
+        );
+      }
+      return await widget.previewService!.resolve(
+        fileObjectTypeId: widget.fileObjectTypeId,
+        fileObjectId: widget.fileObjectId,
+      );
     } catch (error) {
       widget.onError?.call(error);
       return null;
