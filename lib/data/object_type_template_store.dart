@@ -2,9 +2,11 @@ import 'package:drift/drift.dart' show Variable;
 import 'package:flutter/material.dart';
 
 import '../database/database_definition.dart';
+import '../domain/object_group.dart';
 import '../domain/object_model.dart';
 import '../domain/object_query.dart';
 import 'database_view_gallery_adapter.dart';
+import 'database_view_group_adapter.dart';
 import 'database_view_store.dart';
 import 'file_object_service.dart';
 import 'generic_database_store.dart';
@@ -59,6 +61,17 @@ class ObjectTypeTemplateSort {
   final ObjectSortDirection direction;
 }
 
+class ObjectTypeTemplateGroup {
+  const ObjectTypeTemplateGroup({
+    required this.propertyName,
+    this.includeEmpty = true,
+  });
+
+  /// Template-local Property name resolved after schema creation.
+  final String propertyName;
+  final bool includeEmpty;
+}
+
 enum ObjectTypeTemplateGalleryCoverKind {
   imageRelation,
   weblinkRelationRepresentativeImage,
@@ -72,6 +85,7 @@ class ObjectTypeTemplateView {
     this.sorts = const <dynamic>[],
     this.propertyFilters = const <ObjectTypeTemplateFilter>[],
     this.propertySorts = const <ObjectTypeTemplateSort>[],
+    this.group,
     this.visiblePropertyNames = const <String>[],
     this.propertyOrderNames = const <String>[],
     this.settings = const <String, dynamic>{},
@@ -89,9 +103,10 @@ class ObjectTypeTemplateView {
   final Map<String, dynamic> filters;
   final List<dynamic> sorts;
 
-  /// Template-local query rules resolved to newly-created Property ids.
+  /// Template-local query/group rules resolved to newly-created Property ids.
   final List<ObjectTypeTemplateFilter> propertyFilters;
   final List<ObjectTypeTemplateSort> propertySorts;
+  final ObjectTypeTemplateGroup? group;
 
   /// Template-local Property names resolved to stable `p:<id>` View tokens
   /// after this template has created its user-owned schema.
@@ -390,6 +405,18 @@ class ObjectTypeTemplateStore {
       }
     }
 
+    bool isGroupable(ObjectTypeTemplateProperty property) {
+      final type = ObjectPropertyDefinition.fromStorageType(property.type);
+      return switch (type) {
+        ObjectPropertyType.title ||
+        ObjectPropertyType.image ||
+        ObjectPropertyType.file ||
+        ObjectPropertyType.createdTime ||
+        ObjectPropertyType.updatedTime => false,
+        _ => true,
+      };
+    }
+
     for (final view in template.views) {
       final coverPropertyName = view.galleryCoverRelationPropertyName;
       final coverKind = view.galleryCoverKind;
@@ -449,6 +476,22 @@ class ObjectTypeTemplateStore {
         view.propertySorts.map((rule) => rule.propertyName),
         'sort',
       );
+
+      final group = view.group;
+      if (group != null) {
+        validateViewPropertyNames(view, [group.propertyName], 'group');
+        if (view.settings.containsKey(DatabaseViewGroupAdapter.groupSettingsKey)) {
+          throw StateError(
+            'Template View ${view.name} must not define both a template-local group and raw groupRule settings.',
+          );
+        }
+        final groupProperty = propertiesByName[group.propertyName]!;
+        if (!isGroupable(groupProperty)) {
+          throw StateError(
+            'Template View ${view.name} group references non-groupable Property "${group.propertyName}".',
+          );
+        }
+      }
 
       if (view.propertyFilters.isNotEmpty) {
         final rawRules = view.filters['propertyRules'];
@@ -686,7 +729,21 @@ class ObjectTypeTemplateStore {
         properties: const <DatabasePropertyDefinition>[],
       );
       for (final view in template.views) {
-        final settings = <String, dynamic>{...view.settings};
+        var settings = <String, dynamic>{...view.settings};
+        final group = view.group;
+        if (group != null) {
+          settings = const DatabaseViewGroupAdapter().encodeSettings(
+            settings,
+            group: ObjectGroupRule(
+              propertyId: resolveViewPropertyId(
+                view,
+                group.propertyName,
+                'group',
+              ),
+              includeEmpty: group.includeEmpty,
+            ),
+          );
+        }
         final coverPropertyName = view.galleryCoverRelationPropertyName;
         final coverKind = view.galleryCoverKind;
         if (coverPropertyName != null && coverKind != null) {
