@@ -1,39 +1,54 @@
 # AI Progress Handoff
 
-> Repository-wide integration checkpoint for AI development. Lane-specific implementation details live in the lane handoff files. Always verify live GitHub Issue/PR/CI state before editing shared hotspots.
+> Repository-wide integration checkpoint for AI development. Lane-specific implementation details live in the lane handoff files. Always verify live GitHub Issues, PRs, CI and the latest `main` before changing shared hotspots.
 
 ## Current goal
-Continue the transition from a Bookmark-specific application toward a composable Object/Relation/Database knowledge platform while preserving existing user data and reducing legacy maintenance cost.
+Continue the transition from a Bookmark-specific application toward a composable Object / Relation / Database knowledge platform while preserving user data and reducing legacy maintenance cost.
 
 Core product direction:
 - Object is the durable reusable entity.
 - ObjectType = schema/default behavior.
 - Database = collection/query context.
 - View = presentation/query configuration.
-- Built-in code is reserved for irreducible primitives/behaviors; domain models such as Bookmark/Paper/Book/Project should increasingly be user-composable templates/configuration.
+- Built-in code is reserved for irreducible native behavior; domain models such as Bookmark/Paper/Book/Project should normally be user-owned templates/configuration.
+
+## Repository position — 2026-09-08
+The generic composition architecture is now proven in production code, not only in design documents.
+
+Completed architecture milestones include:
+- #414 — legacy Bookmark FTS stale-token correctness.
+- #481 — universal Object Body across real shared opening surfaces.
+- #484 — built-in primitive boundary + user-composable domain architecture.
+- #489 — shared native capability direction for Image/File.
+- #490 — user-owned ObjectType/Database/View templates.
+- #491 — Relation Property authoring + inline target create/import UX.
+- #492 — generic Relation-backed Gallery cover source.
+- #493 — safe/reversible user-defined schema evolution.
+- #494 — canonical unified Object search/indexing.
+- #495 — MIME/content-aware Image/File import routing.
+- #501 — seven-lane AI development ownership model.
+
+Key composition proof:
+- #856 (`7e103a02…`) defines Bookmark only as a user-owned template/configuration and proves normal Bookmark-like operation through canonical Weblink creation, generic Relations, generic Property values, Databases, Views and View filtering without adding a new Bookmark-only persistence/presentation API.
+- Template visible/order/filter/sort/group/Gallery-cover references resolve symbolically to stable created Property ids.
+- Generic Relation target quick-create/import supports custom types plus canonical Tag/Weblink/Image/File behavior.
+- Generic Gallery cover selection resolves Relation-backed Image/Weblink media in the real Database host.
+- #874 (`38c20b67…`) closes universal Body opening parity by composing the reusable canonical Body editor into Generic Database side peek; #481 is completed/closed.
+
+The architecture-construction phase is therefore largely complete. The primary remaining work is presentation parity, legacy migration/consolidation, focused correctness follow-ups, and final real-machine validation.
 
 ## Active architecture/product issues
+There are currently eight open focused/umbrella issues:
 - `#56` — generic Object/Database/View daily-use integration umbrella.
-- `#155` — reusable Weblink Object and legacy Bookmark URL/media convergence.
-- `#218` — macOS installable delivery; repository packaging/CI is complete, final user-machine install/launch/data-preservation validation remains.
+- `#155` — reusable Weblink Object; remaining Weblink/Image presentation and legacy Bookmark URL/media convergence.
+- `#218` — macOS installable delivery; repository packaging/CI complete, final user-machine validation remains.
 - `#225` — maintainability, hotspot reduction and legacy-path retirement.
-- `#242` — user-selectable Vault/storage lifecycle; production implementation is complete, final real-macOS validation remains.
+- `#242` — Vault/storage lifecycle; production code complete, final real-macOS validation remains.
 - `#245` — legacy Photos -> canonical Image Objects.
-- `#249` — remaining Bookmark presentation parity.
-- `#481` — universal Body/note surface for every ObjectType.
-- `#484` — built-in primitive ObjectTypes and user-composable domain databases.
-- `#489` — capability-oriented shared native behavior.
-- `#490` — templates instantiate user-owned ObjectTypes/Databases/Views.
-- `#491` — Relation Property authoring and inline target creation UX.
-- `#492` — generic Gallery cover source from Object Relations.
-- `#493` — safe/reversible user-defined schema evolution.
-- `#495` — MIME/content-aware import routing to Image/File.
-- `#501` — 7-lane AI development ownership model.
+- `#249` — Bookmark presentation parity.
+- `#877` — Search freshness when Object detail creates/reuses additional canonical Objects.
 
-Recently completed architecture/search work:
-- `#414` — focused Bookmark FTS stale-token correctness; closed after rowid-based refresh regression coverage.
-- `#494` — unified canonical Object search/indexing; closed after live Object Global Search, Weblink metadata and PDF-derived File text integration.
-- Refactor `#654` — caller-zero legacy Bookmark `FullTextSearchRepository` retired after canonical Global Search replacement parity.
+Do not treat #481/#484/#489/#490/#491/#492/#493/#494/#495/#501 as active merely because older issue bodies or historical comments mention unfinished work.
 
 ## Seven development lanes
 - **A — Object Core & Body** — `docs/AI_PROGRESS_OBJECT.md`
@@ -44,125 +59,145 @@ Recently completed architecture/search work:
 - **F — Storage, Vault & Delivery** — `docs/AI_PROGRESS_STORAGE.md`
 - **G — Refactor & Architecture Health** — `docs/AI_PROGRESS_REFACTOR.md`
 
-Each implementation run/PR has exactly one primary lane. Issues may span lanes, but implementation should be split into coherent slices and sequenced across lane boundaries.
+Each implementation run/PR has exactly one primary lane. Issues may span lanes, but work should be split by coherent responsibility rather than temporary file availability.
 
-## Initial issue routing
+## Current routing
 ### A — Object Core & Body
-- #481 universal Body.
-- Core Object/ObjectType/identity/Body portions of #56/#484.
-- Daily Note, aliases and shared Object detail/opening contracts.
+#481 is completed/closed. Universal Body persistence/editing now uses the same canonical contract across system/custom Objects, Daily Note, Bookmark detail and generic side/center/full openings.
+
+A continues to own Object/ObjectType identity, shared Object opening/detail semantics and future Object-core obligations from #56. #249 Bookmark real-host presentation remains Object-owned unless GitHub explicitly reassigns it.
 
 ### B — Relations & Data Integrity
-- Canonical Relation lifecycle and regressions.
-- Integrity side of #493 schema evolution.
-- New Relation-producing workflows from #491/#492/#245/#484.
-- Cross-object delete/detach/retarget/cardinality correctness.
+Owns canonical Relation mutation/read/index/backlink/audit/reconcile correctness and fail-closed corruption behavior.
 
-This lane is intentionally broader than the former Relation-only lane so mature Relation production code can remain stable while independent integrity/schema-correctness work proceeds.
+#493 is complete/closed; continue only concrete integrity obligations created by live workflows or regressions. New Relation-producing Primitive/Object flows must continue using canonical mutation/read contracts rather than domain-specific edge stores.
 
 ### C — Database, View & Schema UX
-- #490 template/domain model instantiation.
-- #491 Relation Property authoring UX.
-- #492 generic Gallery cover-source configuration.
-- User-facing schema-editing portion of #493.
-- Generic Database/View portions of #249/#56.
+Focused #490/#491/#492/#493 work is complete. The final cross-lane #481 Database/View obligation also completed in #874.
+
+Current status: **idle by design**.
+
+Resume only when:
+1. a focused Database/View/schema/template Issue is opened or assigned to C;
+2. #56 gains a concrete generic Database/View acceptance gap not routed elsewhere;
+3. another lane lands a capability that creates a specific generic View/schema composition obligation;
+4. presentation ownership is explicitly reassigned to C.
+
+Do not invent manual include/exclude membership or speculative abstractions while no concrete product need exists.
 
 ### D — Primitive Objects & Media
-- #155 Weblink.
-- #245 Image / Photo migration.
-- #484 File primitive and built-in boundary.
-- #489 native capabilities/shared managed-file semantics.
-- #495 content-aware file import.
-- Tag built-in/default semantics where not pure Relation integrity.
+Primary active issues:
+- #155 Weblink/Image presentation and legacy media convergence.
+- #245 canonical Image / Photo migration.
+
+#495 import routing is complete/closed.
+
+Recent Image migration checkpoints:
+- #869 — canonical Image/Weblink media in generic List rows.
+- #876 (`3506974e…`) — canonical media in generic Table rows.
+- #879 (`3be71f12…`) — legacy Photo compatibility sync preserves first-class native Bookmark Image Relations instead of erasing them.
+
+Continue toward canonical Image presentation/write parity, then retire legacy Photo read/write/UI paths only after caller parity and migration safety are proven.
 
 ### E — Search & Indexing
-- #414 and #494 are complete/closed.
-- No active Search issue at this checkpoint; remain idle until a concrete Search/Indexing issue or cross-lane search obligation appears.
-- The old Bookmark-only `FullTextSearchRepository` has already been retired by Refactor #654; do not recreate a parallel domain-specific search product.
+#414/#494 are complete/closed, but #877 is now active.
+
+#877 owns focused Search freshness after an Object opened from Search creates/reuses an additional canonical Object (for example Weblink promotion). Preserve the focused-refresh architecture; do not rebuild the whole workspace on every detail return or import Search dependencies into Object presentation.
 
 ### F — Storage, Vault & Delivery
-- #242 Vault/Profile/filesystem lifecycle: code complete; real-macOS validation pending.
-- #218 release/install delivery: repository packaging complete; user-machine validation pending.
-- Shared managed-file copy/ownership/rollback/delete filesystem contract for primitives is delivered on `main`.
+- #242 Vault: repository implementation complete; real-macOS Create/Open/Switch/Move/Recovery validation remains.
+- #218 packaging/install: repository implementation complete; user-machine install/launch/data-preservation validation remains.
+- shared managed-file copy/ownership/rollback/delete filesystem contracts are delivered for Primitive consumers.
+
+No speculative Storage implementation is needed while these are waiting on real-machine validation.
 
 ### G — Refactor & Architecture Health
-- #225 only: behavior-preserving extraction/deletion, caller-zero legacy retirement, AppDatabase narrowing, failure policy and CI/architecture guardrails.
+#225 remains active.
 
-## Current implementation position — 2026-09-07
-Latest Search feature completion checkpoint: `683bdbb74cc5dabd3ac067e9ce5a802fc16ca2b4` (#635). Legacy Bookmark FTS retirement followed in `c2d4bd082e1e88c6781db4f51b2c12998a6ff85f` (#654). The seven lanes continue merging concurrently; always re-read the actual latest main before starting work.
+Current focus:
+- verified caller-zero legacy retirement;
+- large-host responsibility reduction;
+- dependency/shim ratchets;
+- stable user-facing failure policy and raw-exception privacy cleanup;
+- AppDatabase narrowing only when real responsibility disappears.
 
-Major integrated state:
-- generic Object/ObjectType/Database/View foundations are live in real hosts;
-- canonical Relation mutation/read/index/backlink/audit/reconcile is mature;
-- Bookmark -> Weblink and Weblink -> managed Image production paths are canonicalized;
-- Weblinks / Images / Daily Notes are exposed through generic navigation hosts;
-- Weblink URL creation, metadata enrichment and managed representative media are largely integrated;
-- canonical Image import/reuse, Photo mirroring, Bookmark `Images`/`Cover Image` Relations, backlinks, safe deletion and editing are advanced;
-- Image edit actions include rotate, horizontal/vertical flip, restore, crop presets and normalized free crop; missing persisted geometry can fall back read-only to managed bytes;
-- Bookmark center peek, shared Property handle/add flows, Person chips and much of List metadata presentation are converged;
-- generic fixed/masonry Gallery is implemented;
-- **Global Search is canonical Object search:** one FTS projection covers title/aliases, selected typed Properties, universal Body, Relation labels, dedicated Weblink metadata and replaceable derived text; user-defined ObjectTypes and real Image/File primitives use the same repository;
-- **PDF remains a File Object:** Primitive lane exposes content-first PDF extracted text and Search reconciles it as replaceable `pdf-text` during Global Search workspace rebuild/focused File refresh;
-- live `GlobalSearchPage` routes through canonical Object search, and Refactor #654 has removed the superseded Bookmark-only `FullTextSearchRepository` implementation and its dedicated legacy-only tests;
-- **Storage-managed files use one Vault filesystem contract:** #750 provides copy + portable path + explicit ownership + rollback, #771 adds ownership-gated physical delete, #766 reuses the copy seam for legacy Bookmark attachments, and canonical generic File import now consumes the copy/rollback boundary (`eb2f0e6d1ca06feefb2664e20407e21622d5f0a4`);
-- Refactor work has materially reduced caller-zero/dead layers and added architecture regression ceilings;
-- macOS release/DMG packaging CI has succeeded; the final user-machine install/launch/data-preservation check remains open in #218.
+Do not hide product behavior changes inside Refactor work.
 
-The largest product gap is no longer the Object/Relation/search core. It is **composability and migration**: making generic schema/View/template primitives strong enough that Bookmark and future domains do not require dedicated management code, while safely retiring remaining legacy Bookmark/Photo paths.
+## Major integrated state
+- Object/ObjectType/Database/View foundations are live in real hosts.
+- Database = target ObjectType + collection filter; View filter/sort/group/layout remain a separate presentation/query layer.
+- Table/List/Gallery/Board, multiple Views, persisted opening modes and generic schema editing are integrated.
+- universal Object Body is available through shared real opening surfaces without type-specific note storage/editor paths.
+- canonical Relation mutation/read/index/backlink/audit/reconcile is mature and production paths increasingly route reads through the same integrity contract.
+- template-derived schemas are user-owned, editable and are not silently reset by later template versions.
+- Bookmark-like domain creation/normal operation is proven through generic template/Object/Relation/Database/View contracts.
+- Weblink is a reusable canonical Object with normalized URL identity, enrichment and managed Image Relations.
+- Image and File remain distinct built-in primitives while sharing managed-file/Vault infrastructure.
+- PDF remains File + PDF capabilities/enrichment/search; there is no separate PDF persistence model.
+- Global Search is canonical Object search; the old Bookmark-only FTS path is retired.
+- Storage-managed files use one Vault filesystem contract with explicit ownership and fail-closed delete safety.
+- macOS release/DMG CI has succeeded; final local validation remains outside repository automation.
+
+## Remaining product edge
+The highest-value remaining work is:
+1. **#245 Photo -> Image** — continue canonical Image presentation/write parity, migrate remaining Bookmark/People Photo consumers, then hide/retire the legacy `写真` UI only after caller parity is proven.
+2. **#249 Bookmark presentation** — finish remaining real-host presentation convergence such as fixed/masonry Gallery parity.
+3. **#155 Weblink consolidation** — finish rich generic Weblink/Image presentation and retire legacy Bookmark URL/thumbnail compatibility only after callers reach zero.
+4. **#877 Search freshness** — refresh additional Objects created/reused from Search-opened detail without regressing focused-refresh boundaries.
+5. **#225 Refactor** — delete superseded Bookmark/Photo/shim paths after replacement parity and continue reducing hotspot responsibility.
+6. **#242/#218 validation** — perform final real-macOS Vault and packaged-app preservation checks with the user.
 
 ## Repository-wide design contract
 - Objects are global and are not owned/duplicated by Databases or Views.
 - ObjectType defines schema/defaults; Database selects Objects; View controls presentation/query.
 - Defaults resolve `View > Database > ObjectType > app`.
 - Object content = typed Properties + versioned block-oriented Body.
-- Weblink/Image/File/Tag are candidate built-in primitives because they have irreducible native behavior/default semantics.
-- Image and File remain distinct ObjectTypes but should reuse managed-file capabilities where appropriate.
-- PDF is initially a File Object with MIME/type-specific preview/enrichment/search behavior, not a parallel persistence model.
-- Bookmark/Note/Paper/Book/Project/Recipe/etc. should normally be user-owned/template ObjectTypes built from generic Properties/Relations/Databases/Views.
-- Relation writes/deletes use canonical Relation APIs; do not create format/domain-specific edge stores.
-- New domains participate in canonical Object search rather than adding long-term domain-specific search indexes.
-- New Object-first work must not deepen legacy Bookmark/Photo dependencies unless required for compatibility/migration.
+- Weblink/Image/File/Tag are built-in only for irreducible native identity/capability/default semantics.
+- Bookmark/Note/Paper/Book/Project/Recipe/etc. should normally be user-owned/template ObjectTypes.
+- Relation writes/deletes use canonical Relation APIs; no domain-specific edge stores.
+- New domains participate in canonical Object search instead of adding long-term domain-specific search indexes.
+- New Object-first work must not deepen legacy Bookmark/Photo dependencies except explicit compatibility/migration bridges.
+- Legacy storage/schema is not deleted merely because a replacement UI exists; retirement requires caller-zero/parity evidence and migration safety.
 
 ## Concurrency / hotspot rule
-Shared hotspots currently include:
-- `generic_database_page.dart`
-- `app_shell.dart`
-- `object_inspector_page.dart`
-- `bookmark_unified_stage1_page.dart`
-- `bookmark_reorderable_properties.dart`
-- `people_management_page.dart`
-- `settings_page.dart`
-- `profile_manager.dart`
-- `app_database.dart`
+Shared hotspots include:
+- `lib/views/generic_database_page.dart`
+- `lib/views/app_shell.dart`
+- `lib/views/object_inspector_page.dart`
+- `lib/views/bookmark_unified_stage1_page.dart`
+- `lib/widgets/bookmark_reorderable_properties.dart`
+- `lib/views/people_management_page.dart`
+- `lib/views/settings_page.dart`
+- `lib/services/profile_manager.dart`
+- `lib/data/app_database.dart`
 
-Before a non-trivial edit, inspect open PR ownership. One lane at a time may hold a broad **hotspot lease**. Other lanes should choose service/domain/test-only work or a proven patch-sized non-overlapping hunk.
+Before non-trivial edits, inspect current open PR ownership. One lane at a time may hold a broad hotspot lease. Patch-sized non-overlapping changes still require a fresh overlap audit.
 
 ## Cross-lane boundaries
-- Database/View lane owns generic presentation/settings; Primitive lane owns Weblink/Image/File product semantics.
-- Primitive lane owns Object/file identity, metadata and MIME/content routing; Storage lane owns Vault/filesystem byte placement, portable paths, explicit ownership, rollback and physical delete safety.
-- Database/View lane owns schema authoring UX; Relation/Data Integrity lane owns correctness of destructive target/cardinality migrations.
-- Object Core owns Body persistence/edit contracts; Search lane owns indexing Body text.
-- Primitive lane owns PDF/File extraction behavior; Search lane owns derived-text persistence/index/reconciliation.
-- Refactor deletes legacy code only after the owning product lane proves replacement parity; #654 is the completed Bookmark-FTS example of that policy.
+- Database/View owns generic presentation/configuration contracts; Primitive owns Weblink/Image/File-specific product semantics.
+- Primitive owns Object/file identity, metadata and content routing; Storage owns Vault/filesystem byte placement, portable paths, explicit ownership, rollback and physical delete safety.
+- Relation/Data Integrity owns correctness of Relation mutations/reads and integrity-sensitive schema changes.
+- Object Core owns Body persistence/edit contracts and reusable Body composition seams; Database/View may compose those seams into its own hosts without taking over Body semantics.
+- Search owns canonical FTS projection, refresh planning and freshness orchestration.
+- Primitive owns PDF/File extraction behavior; Search owns derived-text persistence/index/reconciliation.
+- Refactor deletes legacy code only after the owning product lane proves replacement parity.
 
-## Immediate high-value parallel work
-1. **A Object Core:** continue the remaining #481/#56 shared Object Core work identified in its lane handoff.
-2. **B Relations/Integrity:** continue #493 integrity work and audit new Relation-producing workflows as they land.
-3. **C Database/View:** continue generic schema/View/template UX from #490/#491/#492/#493 away from leased hotspots.
-4. **D Primitives:** continue #155/#245/#484/#489/#495 primitive/media migration work from its current handoff; generic File import already reuses the Storage-managed copy/rollback seam.
-5. **E Search:** #414/#494 complete and legacy Bookmark FTS retired; stay idle unless a new Search issue appears. Do not invent speculative search abstractions.
-6. **F Storage:** no independent repository implementation is currently required; remain idle pending real-macOS #242/#218 validation or a concrete filesystem/Vault contract gap reported by another lane.
-7. **G Refactor:** continue #225 with the next verified caller-zero/dependency-narrowing slice after #654.
+## Development hygiene
+- Follow `AGENTS.md` for autonomous-loop, lane ownership and stopping criteria.
+- Do not create `noop`, `tmp`, `oops`, whitespace-only or create/delete commits merely to trigger CI.
+- Prefer workflow rerun controls when available; otherwise make only meaningful changes.
+- Always re-read live GitHub state before implementation; handoff files are durable checkpoints, not substitutes for current Issues/PRs/CI.
 
 ## Known risks
-- legacy Bookmark URL/thumbnail/Photo tables remain compatibility data while live/import/export/backup paths need them;
-- user-defined schema evolution can silently corrupt data unless target/cardinality/type changes are explicit and transactional;
-- Image/File shared infrastructure must not weaken current Image ownership/delete/edit safety;
-- PDF text reconciliation currently runs during Global Search workspace rebuild; very large File sets may eventually justify separately scoped caching/performance work, but that is not required by completed #494;
+- legacy Bookmark URL/thumbnail/Photo compatibility data remains live while old hosts still consume it;
+- Photo -> Image migration must not delete or rewrite user data before production parity is proven;
+- Image/File shared infrastructure must not weaken Image ownership/delete/edit guarantees;
+- malformed Relation state must fail closed rather than be silently partially projected/repaired by presentation code;
+- Search freshness must not be "fixed" by reintroducing full-workspace rebuilds on every detail return;
 - Vault changes must not silently replace inaccessible storage with a new empty database;
-- managed-file physical deletion must require explicit Storage ownership and must not infer authority from a Vault-relative-looking path alone;
-- current large shared hosts are still conflict magnets; throughput comes from responsibility splits plus hotspot leases, not from letting every lane edit the same host concurrently;
-- an idle lane is preferable to speculative abstractions.
+- physical file deletion requires explicit Storage ownership and must not infer authority from path shape alone;
+- large shared hosts remain conflict magnets; throughput comes from lane ownership + hotspot leases, not concurrent broad edits;
+- idle lanes are preferable to speculative abstractions once concrete cross-lane obligations are exhausted.
 
 ## Handoff rule
-Each lane updates only its own progress file during normal work. Update this repository-wide file when lane routing, architecture decisions, cross-lane dependencies or global priorities materially change.
+Each lane normally updates only its own progress file. Update this repository-wide file when issue routing, architecture decisions, cross-lane dependencies or global priorities materially change.

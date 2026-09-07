@@ -8,14 +8,15 @@ Make ObjectType / Database / View / schema configuration expressive and safe eno
 ## Current status
 **Lane C currently has no independent actionable implementation issue.**
 
-The focused composability/schema Issues owned by this lane are complete:
-- #490 — completed/closed after generic Bookmark template proof.
-- #491 — completed/closed after Relation Property authoring and real target quick-create/import composition.
-- #492 — completed/closed after configurable Relation-backed Gallery cover reached the real generic Database host.
-- #493 — completed/closed after safe migration/delete UX and real-host Property schema management.
-- #484 umbrella — completed/closed after primitive-vs-domain boundary plus Bookmark composability proof.
+The focused composability/schema work is complete:
+- #484 — primitive-vs-user-owned-domain architecture — completed/closed.
+- #490 — user-owned ObjectType/Database/View templates — completed/closed.
+- #491 — Relation Property authoring + real target quick-create/import composition — completed/closed.
+- #492 — configurable Relation-backed Gallery cover in the real generic Database host — completed/closed.
+- #493 — safe/reversible schema evolution + real-host Property management — completed/closed.
+- #481 — universal Object Body — completed/closed after the final Lane C side-peek composition merged in #874.
 
-#56 remains open as the broader product umbrella, but its remaining concrete work is currently routed outside Lane C or requires real-host validation rather than speculative Database/View implementation.
+#56 remains the broader product umbrella, but no current acceptance gap is independently owned by Lane C. Idle is intentional; do not invent speculative Database/View abstractions merely to keep the lane busy.
 
 ## Latest completed checkpoints
 - #760 — failed Flutter Test runs retain diagnostic logs/artifacts.
@@ -29,7 +30,8 @@ The focused composability/schema Issues owned by this lane are complete:
 - #832 (`83a44e0d…`) — safe Property schema-management substrate including Formula/Rollup, workspace View and secondary Collection-filter blockers.
 - #845 (`a320a5b8…`) — real `GenericDatabasePage` Property schema management; #493 closed.
 - #851 (`0ca36410…`) — template View Group defaults resolve template-local Property names to created canonical Property ids.
-- #856 (`7e103a02…`) — generic user-owned Bookmark template and generic-operation proof; full Flutter Analyze/Test green; #490 and #484 subsequently closed.
+- #856 (`7e103a02…`) — generic user-owned Bookmark template and generic-operation proof; #490/#484 subsequently closed.
+- #874 (`38c20b67…`) — reusable canonical `ObjectBodyEditorSection` composed into real Generic Database side peek; #481 subsequently closed.
 
 ## What #856 proves
 The built-in `bookmark` starting experience is configuration, not a hard-coded domain engine:
@@ -41,19 +43,32 @@ The built-in `bookmark` starting experience is configuration, not a hard-coded d
 - canonical Weblink creation, Relation assignment, Property edits and View filtering work without introducing Bookmark-only persistence/presentation APIs;
 - template-derived schema remains editable by the user.
 
-Together with Paper/Plant regressions, version/ownership tests, searchable template selection, Group/Layout defaults and empty custom Database creation, this satisfies the Lane C composability target.
+Together with Paper/Plant regressions, version/ownership tests, searchable template selection, Group/Layout defaults and empty custom Database creation, this satisfies the generic composability target.
+
+## #481 completion contract
+#481 deliberately split ownership across lanes:
+- Lane A owned universal Body persistence/editor semantics and the reusable `ObjectBodyEditorSection` seam.
+- Lane C owned generic Database/View side-peek composition.
+
+#874 completed the final cross-lane blocker by:
+- composing `ObjectBodyEditorSection` into `GenericDatabasePage` side peek;
+- preserving existing title/Property/Relation/backlink/detail chrome;
+- reusing the canonical Object Body store/edit/action/reference services;
+- routing Body Object references through the existing Object opening path;
+- adding a real-host regression proving side-peek edits persist to the same canonical Object Body.
+
+#874 head `cd57873b…` passed Flutter CI #2668 in full (maintainability guards, Drift generation, Analyze and complete Test) before squash merge `38c20b67…`. #481 was then audited and closed as completed.
 
 ## Remaining open work and ownership
 Do not take these merely to keep Lane C busy:
-- #249 Bookmark Gallery/List presentation parity — **Object lane**.
-- #481 universal Body — **Object lane**.
-- #495 content-aware Image/File import routing — **Primitive lane**.
-- #155 Weblink/Image product presentation and legacy convergence — primarily **Primitive/Object** according to current routing.
-- #245 Photo -> Image migration — **Primitive/Object**, with Refactor cleanup after parity.
+- #249 Bookmark presentation parity — **Object lane**.
+- #155 Weblink/Image product presentation and legacy convergence — primarily **Primitive/Object**.
+- #245 Photo -> Image migration — **Primitive/Object**; generic canonical Image media now covers List (#869) and Table (#876), while #879 preserves native Bookmark Image Relations through legacy Photo sync.
+- #877 Search freshness after Object-detail-created targets — **Search lane**.
 - #225 maintainability / legacy retirement / broad host extraction — **Refactor lane**.
-- #149 final Property-handle close step — requires real-host visual validation on the user machine/theme.
-- #156 is already completed/closed; do not reopen based on stale prose in #56.
-- #242/#218 are held for real-macOS validation, not Lane C implementation.
+- #242/#218 — final real-macOS validation rather than Lane C implementation.
+
+#149, #156, #481, #484, #489, #490, #491, #492, #493, #494, #495 and #501 are completed/closed; do not resurrect them from stale umbrella prose.
 
 Manual Database membership include/exclude remains explicitly deferred in #56 until real use demonstrates a need; do not invent it speculatively.
 
@@ -68,28 +83,31 @@ Before future C work, re-audit open PRs for:
 - `lib/widgets/bookmark_reorderable_properties.dart`
 - `lib/views/people_management_page.dart`
 - `lib/views/settings_page.dart`
-- `lib/services/profile_manager.dart` / equivalent profile host
+- `lib/services/profile_manager.dart`
 - `lib/data/app_database.dart`
 
+Patch-sized changes in a shared host still require a live diff-overlap audit even when they belong to different lanes.
+
 ## Cross-lane boundaries
-- Lane B owns Relation mutation/index/backlink/audit/reconcile and destructive target/cardinality correctness; C consumes canonical services.
-- Lane A owns Object/ObjectType/Body/core identity and Object-owned presentation work.
-- Lane D owns Weblink/Image/File/Tag primitive product semantics and import/media behavior.
+- Lane B owns Relation mutation/index/backlink/audit/reconcile and fail-closed read correctness; C consumes canonical services.
+- Lane A owns Object/ObjectType/Body/core identity and reusable Body contracts; C may compose those contracts into Database/View hosts without taking over Body semantics.
+- Lane D owns Weblink/Image/File/Tag primitive product semantics and import/media behavior; primitive-specific generic-host composition remains D-owned.
+- Lane E owns Search indexing/freshness orchestration, including #877.
 - Lane F owns Vault/filesystem lifecycle and managed-byte placement/ownership boundaries.
 - Lane G owns behavior-preserving refactor, hotspot reduction and legacy retirement.
 
 ## Validation
 GitHub Flutter CI is the validation gate because local Flutter/Dart execution is unavailable in this automation environment. Use the #760 diagnostic artifact path for Test failures rather than requesting pasted logs.
 
-Latest functional Lane C checkpoint #856 passed maintainability guards, Drift generation, Flutter Analyze and the complete Flutter Test suite before merge.
+Latest functional Lane C checkpoint #874 passed maintainability guards, Drift generation, Flutter Analyze and the complete Flutter Test suite in CI #2668 before merge.
 
 ## Stop reason / resume triggers
-Current stop reason matches the AGENTS stopping criteria: **the active lane has no remaining independent actionable work**. Idle is preferable to inventing speculative abstractions or taking another lane's ownership.
+Current stop reason matches the AGENTS stopping criteria: **Lane C has no remaining independent actionable work.** Idle is preferable to speculative abstractions or taking another lane's ownership.
 
 Resume Lane C when any of the following occurs:
 1. a new focused Database/View/schema/template Issue is opened or explicitly assigned to C;
 2. #56 gains a concrete Database/View acceptance gap not already routed elsewhere;
-3. another lane lands a new capability that creates a specific C-owned View/schema composition obligation;
+3. another lane lands a capability that creates a specific C-owned View/schema composition obligation;
 4. ownership of #249 or another presentation slice is explicitly reassigned to C.
 
-On resume, start from live GitHub state; do not assume this idle checkpoint is still current.
+On every resume, start from live GitHub state rather than this checkpoint alone.
