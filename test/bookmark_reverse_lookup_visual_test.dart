@@ -84,4 +84,48 @@ void main() {
       expect(find.text('https://legacy.example/stale'), findsNothing);
     },
   );
+
+  testWidgets('reverse lookup dialog renders a stable stream failure',
+      (tester) async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceStore = WorkspaceStore(database);
+    final workspaceId = await workspaceStore.initialize();
+    final lifecycleStore = BookmarkLifecycleStore(database);
+    await lifecycleStore.initialize();
+    final repository = BookmarkRepository(
+      database,
+      workspaceStore: workspaceStore,
+      lifecycleStore: lifecycleStore,
+      workspaceId: workspaceId,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: ElevatedButton(
+              onPressed: () => showBookmarkReverseLookupDialog(
+                context: context,
+                repository: repository,
+                title: 'Related bookmarks',
+                bookmarks: Stream<List<BookmarkItem>>.error(
+                  StateError('internal relation mapping detail'),
+                ),
+              ),
+              child: const Text('Open'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('関連するブックマークを読み込めませんでした。'), findsOneWidget);
+    expect(find.textContaining('internal relation mapping detail'), findsNothing);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+  });
 }

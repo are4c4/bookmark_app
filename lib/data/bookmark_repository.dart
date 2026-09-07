@@ -2,6 +2,7 @@ import 'package:rxdart/rxdart.dart';
 
 import '../services/attachment_storage_service.dart';
 import '../services/auto_organize_service.dart';
+import '../services/legacy_photo_bookmark_backlink_service.dart';
 import '../services/photo_managed_file_deletion_policy.dart';
 import '../services/photo_storage_service.dart';
 
@@ -111,8 +112,18 @@ class BookmarkRepository {
   Stream<List<BookmarkItem>> watchBookmarksForPerson(Person person) => watchAll().map(
         (items) => items.where((item) => item.people.any((candidate) => candidate.id == person.id)).toList(),
       );
-  Stream<List<BookmarkItem>> watchBookmarksForPhoto(PhotoRecord photo) => watchAll().map(
-        (items) => items.where((item) => item.photos.any((candidate) => candidate.id == photo.id)).toList(),
+  Stream<List<BookmarkItem>> watchBookmarksForPhoto(PhotoRecord photo) =>
+      Stream.fromFuture(
+        LegacyPhotoBookmarkBacklinkService(_database).bookmarkIdsForPhoto(
+          workspaceId: workspaceId,
+          photoId: photo.id,
+        ),
+      ).asyncExpand(
+        (bookmarkIds) => watchAll().map(
+          (items) => items
+              .where((item) => bookmarkIds.contains(item.id))
+              .toList(),
+        ),
       );
   Stream<List<BookmarkItem>> watchBookmarksForCollection(CollectionRecord collection) => watchAll().map(
         (items) => items.where((item) => item.collections.any((candidate) => candidate.id == collection.id)).toList(),
