@@ -7,6 +7,7 @@ import '../services/generic_database_file_import_service.dart';
 import '../services/generic_database_image_import_service.dart';
 import '../services/image_managed_file_deletion_policy.dart';
 import '../services/photo_storage_service.dart';
+import '../services/relation_target_quick_create_host_service.dart';
 import '../services/remote_image_storage_service.dart';
 import '../services/vault_managed_file_copy_service.dart';
 import '../services/weblink_create_enrichment_service.dart';
@@ -68,6 +69,7 @@ class GenericDatabasePageServices {
     required this.relationEditor,
     required this.relationQuickCreatePolicy,
     required this.relationQuickCreate,
+    required this.relationQuickCreateHost,
     required this.relationMutations,
     required this.propertyAuthoring,
     required this.propertySchema,
@@ -243,6 +245,12 @@ class GenericDatabasePageServices {
       weblinks: weblinks,
       weblinkEnricher: weblinkEnrichment.enrich,
     );
+    final relationQuickCreateHost = RelationTargetQuickCreateHostService(
+      policy: relationQuickCreatePolicy,
+      quickCreate: relationQuickCreate,
+      imageImport: imageImport,
+      fileImport: fileImport,
+    );
     final computedStore = ObjectComputedValueStore(objectStore);
 
     return GenericDatabasePageServices(
@@ -259,6 +267,7 @@ class GenericDatabasePageServices {
       ),
       relationQuickCreatePolicy: relationQuickCreatePolicy,
       relationQuickCreate: relationQuickCreate,
+      relationQuickCreateHost: relationQuickCreateHost,
       relationMutations: relationMutations,
       propertyAuthoring: propertyAuthoring,
       propertySchema: propertySchema,
@@ -303,6 +312,7 @@ class GenericDatabasePageServices {
   final ObjectRelationEditorService relationEditor;
   final RelationTargetQuickCreatePolicy relationQuickCreatePolicy;
   final RelationTargetQuickCreateService relationQuickCreate;
+  final RelationTargetQuickCreateHostService relationQuickCreateHost;
   final RelationMutationService relationMutations;
   final DatabasePropertyAuthoringService propertyAuthoring;
   final DatabaseViewPropertySchemaService propertySchema;
