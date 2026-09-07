@@ -107,14 +107,15 @@ class RemoteImageStorageService {
       }
 
       final originalName = _originalName(uri, extension);
+      final managedName = _managedName(originalName, extension);
       final imported = await _storage.importBytes(
         bytes: response.bodyBytes,
-        originalName: originalName,
+        originalName: managedName,
       );
       return ManagedRemoteImage(
         path: imported.path,
         sourceUrl: uri.toString(),
-        originalName: imported.originalName,
+        originalName: originalName,
         contentType: contentType,
         pixelWidth: decoded?.width,
         pixelHeight: decoded?.height,
@@ -156,6 +157,13 @@ class RemoteImageStorageService {
     final segment = uri.pathSegments.isEmpty ? '' : uri.pathSegments.last.trim();
     if (segment.isNotEmpty && _hasSupportedExtension(segment)) return segment;
     return 'remote_image.$extension';
+  }
+
+  String _managedName(String originalName, String extension) {
+    final dot = originalName.lastIndexOf('.');
+    final stem = dot > 0 ? originalName.substring(0, dot) : originalName;
+    final safeStem = stem.trim().isEmpty ? 'remote_image' : stem;
+    return '$safeStem.$extension';
   }
 
   bool _hasSupportedExtension(String name) {
