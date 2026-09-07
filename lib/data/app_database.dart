@@ -366,27 +366,10 @@ class AppDatabase extends _$AppDatabase {
       (delete(bookmarkRelations)..where((r) =>
           r.sourceBookmarkId.equals(sourceId) & r.targetBookmarkId.equals(targetId) & r.relationType.equals(type))).go();
 
-  Future<int> createTag(String name, {int? parentTagId}) async {
+  Future<int> createTag(String name) async {
     final trimmed = name.trim();
     if (trimmed.isEmpty) throw ArgumentError('Tag name is empty');
-    final id = await _ensureTag(trimmed);
-    if (parentTagId != null) await setTagParent(id, parentTagId);
-    return id;
-  }
-  Future<bool> _wouldCreateTagCycle(int id, int? parentTagId) async {
-    var current = parentTagId;
-    final visited = <int>{id};
-    while (current != null) {
-      if (!visited.add(current)) return true;
-      final row = await (select(tags)..where((t) => t.id.equals(current!))).getSingleOrNull();
-      current = row?.parentTagId;
-    }
-    return false;
-  }
-  Future<void> setTagParent(int id, int? parentTagId) async {
-    if (id == parentTagId) throw ArgumentError('A tag cannot be its own parent');
-    if (await _wouldCreateTagCycle(id, parentTagId)) throw ArgumentError('This parent would create a tag cycle');
-    await (update(tags)..where((t) => t.id.equals(id))).write(TagsCompanion(parentTagId: Value(parentTagId)));
+    return _ensureTag(trimmed);
   }
 
   Future<int> deleteBookmark(int id) => (delete(bookmarks)..where((b) => b.id.equals(id))).go();
