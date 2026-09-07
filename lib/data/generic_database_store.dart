@@ -453,16 +453,18 @@ class GenericDatabaseStore {
         'Property belongs to ObjectType $propertyDatabaseId, not Record ObjectType $recordDatabaseId.',
       );
     }
-    await database.customStatement(
-      '''INSERT INTO generic_values(record_id, property_id, value_json)
-         VALUES (?, ?, ?)
-         ON CONFLICT(record_id, property_id)
-         DO UPDATE SET value_json = excluded.value_json''',
-      [recordId, propertyId, jsonEncode(value)],
-    );
-    await database.customStatement(
-      'UPDATE generic_records SET updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [recordId],
-    );
+    await database.transaction(() async {
+      await database.customStatement(
+        '''INSERT INTO generic_values(record_id, property_id, value_json)
+           VALUES (?, ?, ?)
+           ON CONFLICT(record_id, property_id)
+           DO UPDATE SET value_json = excluded.value_json''',
+        [recordId, propertyId, jsonEncode(value)],
+      );
+      await database.customStatement(
+        'UPDATE generic_records SET updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [recordId],
+      );
+    });
   }
 }
