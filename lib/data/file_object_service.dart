@@ -231,9 +231,7 @@ class FileObjectService {
         'Managed File path must not be empty.',
       );
     }
-    final resolver = systemObjects.database.pathResolver;
-    final resolved = resolver.resolveStoredPath(candidate);
-    return resolver.toStoredPath(resolved);
+    return systemObjects.database.pathResolver.canonicalStoredPath(candidate);
   }
 
   int? _validatedSize(int? value) {
