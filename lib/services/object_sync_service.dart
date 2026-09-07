@@ -24,8 +24,10 @@ class ObjectSyncService {
     this.database, {
     this.enableRemotePreviewImages = false,
     RemoteImageStorageService? remoteImageStorage,
-  })  : objectStore = ObjectStore(GenericDatabaseStore(database)),
-        _remoteImageStorage = remoteImageStorage {
+    Future<void> Function(int imageObjectId)? onPreviewImageIngested,
+  })  : _remoteImageStorage = remoteImageStorage,
+        _onPreviewImageIngested = onPreviewImageIngested,
+        objectStore = ObjectStore(GenericDatabaseStore(database)) {
     systemObjectStore = SystemObjectStore(
       database: database,
       objectStore: objectStore,
@@ -57,6 +59,13 @@ class ObjectSyncService {
   final ObjectStore objectStore;
   final bool enableRemotePreviewImages;
   final RemoteImageStorageService? _remoteImageStorage;
+
+  /// Optional composition callback invoked only after preview ingestion has
+  /// durably created/reused an Image and verified the canonical Representative
+  /// Image Relation. The sync service reports only canonical mutation impact;
+  /// it does not know whether a caller uses Search, analytics, or no consumer.
+  final Future<void> Function(int imageObjectId)? _onPreviewImageIngested;
+
   late final SystemObjectStore systemObjectStore;
   late final TagObjectBridge tagBridge;
   late final CoreObjectBridge coreBridge;
@@ -179,6 +188,20 @@ class ObjectSyncService {
     }
   }
 
+  Future<void> _notifyPreviewImageIngested(int imageObjectId) async {
+    final callback = _onPreviewImageIngested;
+    if (callback == null) return;
+    try {
+      await callback(imageObjectId);
+    } catch (_, stackTrace) {
+      // Canonical preview ingestion has already succeeded. A downstream
+      // projection/notification failure must remain best-effort and must not
+      // make Object sync retry the remote URL or undo the Relation mutation.
+      // Do not include ids, URLs, paths or exception text in diagnostics.
+      _debugPreviewFailure('post-ingestion notification', stackTrace);
+    }
+  }
+
   Future<void> _performPreviewSync(int workspaceId) async {
     if (_disposed || _watchedWorkspaceId != workspaceId) return;
     try {
@@ -210,10 +233,13 @@ class ObjectSyncService {
         _attemptedPreviewUrls[attemptKey] = normalizedPreview;
 
         try {
-          await _previewImagePipeline.ingestIfMissing(
+          final imageObjectId = await _previewImagePipeline.ingestIfMissing(
             workspaceId: workspaceId,
             weblinkObjectId: weblink.id,
           );
+          if (imageObjectId != null) {
+            await _notifyPreviewImageIngested(imageObjectId);
+          }
         } catch (_, stackTrace) {
           // Thumbnail ingestion is optional. Canonical Bookmark -> Weblink sync
           // remains successful even if remote I/O or Image enrichment fails.
