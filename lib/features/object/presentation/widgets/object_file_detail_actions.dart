@@ -5,6 +5,15 @@ import '../../../../services/canonical_file_action_service.dart';
 import '../../../../services/canonical_file_export_service.dart';
 
 typedef ObjectFileExportDestinationPicker = Future<String?> Function();
+typedef ObjectFileNativeAction = Future<void> Function({
+  required int fileObjectTypeId,
+  required int fileObjectId,
+});
+typedef ObjectFileExportAction = Future<void> Function({
+  required int fileObjectTypeId,
+  required int fileObjectId,
+  required String destinationPath,
+});
 
 /// Reusable native actions for one canonical File Object.
 ///
@@ -20,6 +29,9 @@ class ObjectFileDetailActions extends StatefulWidget {
     required this.fileObjectTypeId,
     required this.fileObjectId,
     this.exportDestinationPicker,
+    this.openAction,
+    this.revealAction,
+    this.exportAction,
     this.onError,
   });
 
@@ -28,6 +40,15 @@ class ObjectFileDetailActions extends StatefulWidget {
   final int fileObjectTypeId;
   final int fileObjectId;
   final ObjectFileExportDestinationPicker? exportDestinationPicker;
+
+  /// Focused presentation seams. Production hosts leave these null so every
+  /// action delegates to the canonical File services above. Widget tests may
+  /// inject deterministic callbacks instead of running platform/filesystem I/O
+  /// inside Flutter's fake-async zone.
+  final ObjectFileNativeAction? openAction;
+  final ObjectFileNativeAction? revealAction;
+  final ObjectFileExportAction? exportAction;
+
   final ValueChanged<Object>? onError;
 
   @override
@@ -68,10 +89,27 @@ class _ObjectFileDetailActionsState extends State<ObjectFileDetailActions> {
     }
   }
 
+  Future<void> _open() {
+    final action = widget.openAction ?? widget.actions.open;
+    return action(
+      fileObjectTypeId: widget.fileObjectTypeId,
+      fileObjectId: widget.fileObjectId,
+    );
+  }
+
+  Future<void> _reveal() {
+    final action = widget.revealAction ?? widget.actions.reveal;
+    return action(
+      fileObjectTypeId: widget.fileObjectTypeId,
+      fileObjectId: widget.fileObjectId,
+    );
+  }
+
   Future<void> _export() async {
     final destination = (await _pickExportDestination())?.trim();
     if (destination == null || destination.isEmpty) return;
-    await widget.exporter.exportTo(
+    final action = widget.exportAction ?? widget.exporter.exportTo;
+    await action(
       fileObjectTypeId: widget.fileObjectTypeId,
       fileObjectId: widget.fileObjectId,
       destinationPath: destination,
@@ -90,27 +128,13 @@ class _ObjectFileDetailActionsState extends State<ObjectFileDetailActions> {
           children: [
             FilledButton.icon(
               key: ValueKey('object-file-open-${widget.fileObjectId}'),
-              onPressed: _running
-                  ? null
-                  : () => _run(
-                        () => widget.actions.open(
-                          fileObjectTypeId: widget.fileObjectTypeId,
-                          fileObjectId: widget.fileObjectId,
-                        ),
-                      ),
+              onPressed: _running ? null : () => _run(_open),
               icon: const Icon(Icons.open_in_new),
               label: const Text('開く'),
             ),
             OutlinedButton.icon(
               key: ValueKey('object-file-reveal-${widget.fileObjectId}'),
-              onPressed: _running
-                  ? null
-                  : () => _run(
-                        () => widget.actions.reveal(
-                          fileObjectTypeId: widget.fileObjectTypeId,
-                          fileObjectId: widget.fileObjectId,
-                        ),
-                      ),
+              onPressed: _running ? null : () => _run(_reveal),
               icon: const Icon(Icons.folder_open),
               label: const Text('場所を表示'),
             ),
