@@ -101,6 +101,90 @@ void main() {
     },
   );
 
+  test('watcher mirror deletion removes the previous canonical FTS row', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+
+    await database.customStatement(
+      '''INSERT INTO bookmarks(url, title)
+         VALUES (?, ?)''',
+      <Object>[
+        'local-file://drop/DeleteFreshObject.pdf',
+        'DeleteFreshObject',
+      ],
+    );
+    final legacyBookmarkId = (await database.customSelect(
+      'SELECT id FROM bookmarks ORDER BY id DESC LIMIT 1',
+    ).getSingle())
+        .read<int>('id');
+    await database.customStatement(
+      'INSERT INTO bookmark_workspace(bookmark_id, workspace_id) VALUES (?, ?)',
+      <Object>[legacyBookmarkId, workspaceId],
+    );
+
+    final genericStore = GenericDatabaseStore(database);
+    final search = ObjectGlobalSearchService(genericStore);
+    final refreshed = Completer<List<int>>();
+    var deletionStarted = false;
+    final sync = ObjectSyncService(
+      database,
+      onCanonicalObjectsMirrored: (objectIds) async {
+        final ids = objectIds.toSet().toList()..sort();
+        await search.refreshObjectLabelDependentsFor(ids);
+        if (deletionStarted && !refreshed.isCompleted) {
+          refreshed.complete(ids);
+        }
+      },
+    );
+    addTearDown(sync.dispose);
+
+    await sync.syncWorkspace(workspaceId);
+    final bookmarkType = (await sync.systemObjectStore.getSystemObjectType(
+      workspaceId: workspaceId,
+      systemKey: CoreObjectBridge.bookmarkSystemKey,
+    ))!;
+    final bookmark =
+        (await sync.objectStore.listObjects(bookmarkType.id)).single;
+    await search.rebuildWorkspace(workspaceId);
+
+    final indexedBefore = await database.customSelect(
+      '''SELECT COUNT(*) AS count
+         FROM object_search_fts
+         WHERE CAST(object_id AS INTEGER) = ?''',
+      variables: [Variable<int>(bookmark.id)],
+    ).getSingle();
+    expect(indexedBefore.read<int>('count'), 1);
+
+    deletionStarted = true;
+    await database.customStatement(
+      'DELETE FROM bookmarks WHERE id = ?',
+      <Object>[legacyBookmarkId],
+    );
+
+    final impacted = await refreshed.future.timeout(const Duration(seconds: 3));
+    expect(
+      impacted,
+      contains(bookmark.id),
+      reason:
+          'the previous mirror snapshot must carry deleted canonical ids into focused invalidation',
+    );
+    expect(await sync.objectStore.listObjects(bookmarkType.id), isEmpty);
+
+    final indexedAfter = await database.customSelect(
+      '''SELECT COUNT(*) AS count
+         FROM object_search_fts
+         WHERE CAST(object_id AS INTEGER) = ?''',
+      variables: [Variable<int>(bookmark.id)],
+    ).getSingle();
+    expect(
+      indexedAfter.read<int>('count'),
+      0,
+      reason:
+          'focused refresh must physically remove the deleted mirror row rather than relying only on result resolution',
+    );
+  });
+
   test('canonical mirror survives a throwing Search impact callback', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
