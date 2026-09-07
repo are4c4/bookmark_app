@@ -30,6 +30,20 @@ Future<void> _pumpUntil(
   expect(finder, findsOneWidget);
 }
 
+void _closeDatabaseAfterUnmount(
+  WidgetTester tester,
+  AppDatabase database,
+) {
+  addTearDown(() async {
+    // BookmarkRelationSection owns a Drift-backed StreamBuilder. Dispose the
+    // widget subscription before closing its database so a failed assertion
+    // cannot leave the full-suite runner waiting on a live stream.
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await database.close();
+  });
+}
+
 Future<void> _mirrorLegacyObjectsOnce({
   required AppDatabase database,
   required int workspaceId,
@@ -57,7 +71,7 @@ void main() {
   testWidgets('mirrored Bookmark detail edits the canonical universal Body',
       (tester) async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(database.close);
+    _closeDatabaseAfterUnmount(tester, database);
     final workspaceStore = WorkspaceStore(database);
     final workspaceId = await workspaceStore.initialize();
     final lifecycleStore = BookmarkLifecycleStore(database);
@@ -140,7 +154,7 @@ void main() {
 
   testWidgets('corrupt universal Body stays fail closed', (tester) async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(database.close);
+    _closeDatabaseAfterUnmount(tester, database);
     final workspaceStore = WorkspaceStore(database);
     final workspaceId = await workspaceStore.initialize();
     final genericStore = GenericDatabaseStore(database);
@@ -192,7 +206,7 @@ void main() {
   testWidgets('unmirrored Bookmark detail keeps legacy content fail-soft',
       (tester) async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(database.close);
+    _closeDatabaseAfterUnmount(tester, database);
     final workspaceStore = WorkspaceStore(database);
     final workspaceId = await workspaceStore.initialize();
     final lifecycleStore = BookmarkLifecycleStore(database);
