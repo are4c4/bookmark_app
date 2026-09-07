@@ -8,7 +8,9 @@ trap 'rm -rf "$fixture"' EXIT
 
 mkdir -p \
   "$fixture/lib/features/object/presentation/widgets" \
-  "$fixture/lib/features/object/application"
+  "$fixture/lib/features/object/application" \
+  "$fixture/lib/views" \
+  "$fixture/lib/widgets"
 
 cat > "$fixture/lib/features/object/presentation/widgets/safe_forwarding.dart" <<'EOF'
 Future<void> runSafe(void Function(Object error) onError) async {
@@ -37,6 +39,68 @@ EOF
 
 output="$(cd "$fixture" && bash "$script")"
 grep -Fq 'feature_presentation_error_privacy_guard: PASS' <<<"$output"
+
+cat > "$fixture/lib/views/app_shell.dart" <<'EOF'
+Future<void> knownLegacyHost() async {
+  try {
+    throw StateError('legacy-private-value');
+  } catch (error) {
+    final message = 'Known legacy debt: $error';
+    if (message.isEmpty) return;
+  }
+}
+EOF
+
+legacy_allowed_output="$(cd "$fixture" && bash "$script")"
+grep -Fq 'feature_presentation_error_privacy_guard: PASS' <<<"$legacy_allowed_output"
+
+cat > "$fixture/lib/views/new_legacy_page.dart" <<'EOF'
+Future<void> newLegacyHost() async {
+  try {
+    throw StateError('new-private-value');
+  } catch (error) {
+    final message = 'New legacy debt: $error';
+    if (message.isEmpty) return;
+  }
+}
+EOF
+
+set +e
+legacy_spread_failure="$(cd "$fixture" && bash "$script" 2>&1)"
+legacy_spread_status=$?
+set -e
+
+if [[ "$legacy_spread_status" -ne 1 ]]; then
+  echo "Expected new legacy raw-error host to exit 1, got $legacy_spread_status" >&2
+  exit 1
+fi
+grep -Fq 'Caught exception interpolation spread into a new legacy presentation host:' <<<"$legacy_spread_failure"
+grep -Fq 'lib/views/new_legacy_page.dart' <<<"$legacy_spread_failure"
+rm "$fixture/lib/views/new_legacy_page.dart"
+
+cat > "$fixture/lib/views/app_shell.dart" <<'EOF'
+Future<void> cleanedLegacyHost() async {
+  try {
+    throw StateError('legacy-private-value');
+  } catch (_) {
+    const message = 'Stable user-safe message';
+    if (message.isEmpty) return;
+  }
+}
+EOF
+
+set +e
+stale_allowlist_failure="$(cd "$fixture" && bash "$script" 2>&1)"
+stale_allowlist_status=$?
+set -e
+
+if [[ "$stale_allowlist_status" -ne 1 ]]; then
+  echo "Expected cleaned allowlisted host to require ratchet, got $stale_allowlist_status" >&2
+  exit 1
+fi
+grep -Fq 'Legacy error privacy allowlist is stale after debt removal:' <<<"$stale_allowlist_failure"
+grep -Fq 'lib/views/app_shell.dart' <<<"$stale_allowlist_failure"
+rm "$fixture/lib/views/app_shell.dart"
 
 cat > "$fixture/lib/features/object/presentation/widgets/unsafe_simple.dart" <<'EOF'
 Future<void> runUnsafe() async {
