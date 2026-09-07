@@ -45,7 +45,7 @@ void main() {
 
     await expectLater(
       management.duplicateSchema(objectTypeId: sourceId),
-      throwsStateError,
+      throwsA(isA<FormatException>()),
     );
 
     final types = await objectStore.listObjectTypes(workspaceId);
@@ -85,7 +85,7 @@ void main() {
 
     await expectLater(
       management.duplicateSchema(objectTypeId: sourceId),
-      throwsStateError,
+      throwsA(isA<FormatException>()),
     );
 
     final types = await objectStore.listObjectTypes(workspaceId);
