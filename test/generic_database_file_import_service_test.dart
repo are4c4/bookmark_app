@@ -187,6 +187,39 @@ void main() {
     expect(await source.exists(), isTrue);
   });
 
+  test('reimport keeps distinct path identity even when SHA-256 matches',
+      () async {
+    final source = File('${sources.path}/same.bin');
+    await source.writeAsBytes(<int>[10, 20, 30, 40, 50]);
+    final definition = await files.ensureDefinition(workspaceId);
+
+    final firstId = await fileImports.importClassifiedPath(
+      databaseId: definition.objectType.id,
+      sourcePath: source.path,
+      contentType: 'application/octet-stream',
+    );
+    final secondId = await fileImports.importClassifiedPath(
+      databaseId: definition.objectType.id,
+      sourcePath: source.path,
+      contentType: 'application/octet-stream',
+    );
+
+    expect(secondId, isNot(firstId));
+    final objects = await objectStore.listObjects(definition.objectType.id);
+    expect(objects, hasLength(2));
+    final first = objects.singleWhere((object) => object.id == firstId);
+    final second = objects.singleWhere((object) => object.id == secondId);
+    final firstHash = first.values[definition.sha256Property.id];
+    final secondHash = second.values[definition.sha256Property.id];
+    expect(firstHash, isA<String>());
+    expect(secondHash, firstHash);
+    final firstPath = first.values[definition.fileProperty.id] as String;
+    final secondPath = second.values[definition.fileProperty.id] as String;
+    expect(secondPath, isNot(firstPath));
+    expect(await File('${vault.path}/$firstPath').exists(), isTrue);
+    expect(await File('${vault.path}/$secondPath').exists(), isTrue);
+  });
+
   test('File Object failure rolls back only the new Vault copy', () async {
     final source = File('${sources.path}/archive.bin');
     await source.writeAsBytes(<int>[1, 2, 3, 4]);
