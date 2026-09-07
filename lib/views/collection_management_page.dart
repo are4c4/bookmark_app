@@ -7,15 +7,15 @@ import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
 import '../data/database_view_store.dart';
 import '../database/database_definition.dart';
+import '../features/database/presentation/widgets/database_create_tiles.dart';
+import '../features/database/presentation/widgets/database_page_toolbar.dart';
+import '../features/database/presentation/widgets/database_view_tabs.dart';
+import '../features/database/presentation/widgets/resizable_detail_pane.dart';
 import '../ui/ui_tokens.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/app_toast.dart';
-import '../widgets/database_create_tiles.dart';
-import '../widgets/database_page_toolbar.dart';
-import '../widgets/database_view_tabs.dart';
 import '../widgets/inline_rename_text.dart';
 import '../widgets/notion_inline_field.dart';
-import '../widgets/resizable_detail_pane.dart';
 
 class CollectionManagementPage extends StatefulWidget {
   const CollectionManagementPage({super.key, required this.repository});
