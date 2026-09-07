@@ -39,6 +39,7 @@ class GenericDatabaseFileImportService {
         originalFilename: copy.originalFilename,
         contentType: contentType,
         sizeBytes: copy.sizeBytes,
+        storageOwnership: copy.ownership.managedOwnership,
       );
     } catch (_) {
       await _rollbackBestEffort(copy);

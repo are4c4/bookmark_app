@@ -7,6 +7,7 @@ import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/object_type_defaults_store.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
+import 'package:bookmark_app/domain/managed_file_ownership.dart';
 import 'package:bookmark_app/domain/object_model.dart';
 import 'package:bookmark_app/services/file_managed_resource_resolver.dart';
 import 'package:drift/native.dart';
@@ -17,7 +18,7 @@ void main() {
       () async {
     final root = await Directory.systemTemp.createTemp('canonical_file_resource_');
     addTearDown(() => root.delete(recursive: true));
-    final managed = File('${root.path}/files/report.pdf');
+    final managed = File('${root.path}/attachments/report.pdf');
     await managed.parent.create(recursive: true);
     await managed.writeAsBytes('%PDF-1.7\n'.codeUnits);
 
@@ -42,6 +43,7 @@ void main() {
       workspaceId: workspaceId,
       filePath: managed.path,
       contentType: 'application/pdf',
+      storageOwnership: ManagedFileOwnership.vaultManagedCopy,
     );
 
     final customTypeId = await objectStore.createObjectType(
@@ -84,7 +86,12 @@ void main() {
 
     expect(canonical, isNotNull);
     expect(canonical?.fileObjectId, canonicalFile.id);
+    expect(canonical?.storedPath, 'attachments/report.pdf');
     expect(canonical?.filePath, managed.path);
+    expect(
+      canonical?.storageOwnership,
+      ManagedFileOwnership.vaultManagedCopy,
+    );
     expect(custom, isNull);
   });
 }

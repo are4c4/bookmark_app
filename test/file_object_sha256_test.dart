@@ -178,11 +178,60 @@ void main() {
     expect(upgraded?.propertyOrder, <int>[
       ...previousVisible,
       definition.sha256Property.id,
+      definition.storageOwnershipProperty.id,
       definition.fileProperty.id,
     ]);
   });
 
-  test('custom File property order is preserved when SHA-256 is provisioned',
+  test('generated pre-ownership File order adds hidden ownership metadata',
+      () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final defaultsStore = ObjectTypeDefaultsStore(genericStore);
+    final service = FileObjectService(
+      systemObjects: SystemObjectStore(
+        database: database,
+        objectStore: ObjectStore(genericStore),
+      ),
+      defaultsStore: defaultsStore,
+    );
+    final definition = await service.ensureDefinition(workspaceId);
+    final previousVisible = <int>[
+      definition.originalFilenameProperty.id,
+      definition.contentTypeProperty.id,
+      definition.extensionProperty.id,
+      definition.sizeBytesProperty.id,
+      definition.importedAtProperty.id,
+    ];
+    final previousOrder = <int>[
+      ...previousVisible,
+      definition.sha256Property.id,
+      definition.fileProperty.id,
+    ];
+    await defaultsStore.write(
+      objectTypeId: definition.objectType.id,
+      defaults: ObjectTypeDefaults(
+        visiblePropertyIds: previousVisible,
+        propertyOrder: previousOrder,
+        openMode: ObjectOpenMode.sidePeek,
+      ),
+    );
+
+    await service.ensureDefinition(workspaceId);
+    final upgraded = await defaultsStore.read(definition.objectType.id);
+
+    expect(upgraded?.visiblePropertyIds, previousVisible);
+    expect(upgraded?.propertyOrder, <int>[
+      ...previousVisible,
+      definition.sha256Property.id,
+      definition.storageOwnershipProperty.id,
+      definition.fileProperty.id,
+    ]);
+  });
+
+  test('custom File property order is preserved when system metadata changes',
       () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);

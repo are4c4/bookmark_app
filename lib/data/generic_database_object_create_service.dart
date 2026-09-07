@@ -1,5 +1,6 @@
 import 'dart:developer' as developer;
 
+import '../domain/managed_file_ownership.dart';
 import '../domain/object_group.dart';
 import '../domain/object_model.dart';
 import 'daily_note_service.dart';
@@ -186,7 +187,9 @@ class GenericDatabaseObjectCreateService {
   ///
   /// File copying/classification belongs to the import boundary. This keeps
   /// title-only creation fail-closed so managed stored-path identity and
-  /// metadata cannot be bypassed by generic hosts.
+  /// metadata cannot be bypassed by generic hosts. Optional storage ownership
+  /// must come from the closed managed-file ownership contract rather than an
+  /// arbitrary string or path-location inference.
   Future<int> createFileFromManagedFile({
     required int databaseId,
     required String filePath,
@@ -196,6 +199,7 @@ class GenericDatabaseObjectCreateService {
     int? sizeBytes,
     String? sha256,
     DateTime? importedAt,
+    ManagedFileOwnership? storageOwnership,
   }) async {
     final page = await _load(databaseId);
     final systemKey = await _systemKey(page);
@@ -217,6 +221,7 @@ class GenericDatabaseObjectCreateService {
       sizeBytes: sizeBytes,
       sha256: sha256,
       importedAt: importedAt,
+      storageOwnership: storageOwnership,
     );
     return object.id;
   }

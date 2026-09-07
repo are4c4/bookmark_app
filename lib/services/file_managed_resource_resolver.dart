@@ -2,12 +2,14 @@ import '../data/file_object_service.dart';
 import '../data/object_store.dart';
 import '../data/profile_path_resolver.dart';
 import '../data/system_object_store.dart';
+import '../domain/managed_file_ownership.dart';
 import '../domain/object_model.dart';
 import 'managed_file_resolver.dart';
 
 class FileManagedResource {
   const FileManagedResource({
     required this.fileObjectId,
+    required this.storedPath,
     required this.filePath,
     required this.actualSizeBytes,
     required this.modifiedAt,
@@ -16,15 +18,18 @@ class FileManagedResource {
     this.extension,
     this.persistedSizeBytes,
     this.sha256,
+    this.storageOwnership,
   });
 
   final int fileObjectId;
+  final String storedPath;
   final String filePath;
   final String? originalFilename;
   final String? contentType;
   final String? extension;
   final int? persistedSizeBytes;
   final String? sha256;
+  final ManagedFileOwnership? storageOwnership;
   final int actualSizeBytes;
   final DateTime modifiedAt;
 }
@@ -35,7 +40,9 @@ class FileManagedResource {
 /// Property names. Production native File/PDF capability composition should use
 /// [CanonicalFileManagedResourceResolver], which first verifies the registered
 /// system File ObjectType. Portable path resolution and filesystem probing are
-/// delegated to the shared [ManagedFileResolver].
+/// delegated to the shared [ManagedFileResolver]. Persisted ownership is parsed
+/// through the closed [ManagedFileOwnership] contract; unknown values fail
+/// closed to no ownership.
 class FileManagedResourceResolver {
   FileManagedResourceResolver(
     this._objectStore, {
@@ -69,22 +76,27 @@ class FileManagedResourceResolver {
 
     final storedPath = _stringValue(object.values[fileProperty.id]);
     final reference = await _fileResolver.resolveExisting(storedPath);
-    if (reference == null) return null;
+    if (reference == null || storedPath == null) return null;
 
     final originalFilename = _valueFor(type, object, 'Original filename');
     final contentType = _valueFor(type, object, 'Content type');
     final extension = _valueFor(type, object, 'Extension');
     final persistedSize = _integerValueFor(type, object, 'Size bytes');
     final sha256 = _sha256ValueFor(type, object);
+    final storageOwnership = ManagedFileOwnership.fromStorageKey(
+      _valueFor(type, object, 'Storage ownership'),
+    );
 
     return FileManagedResource(
       fileObjectId: object.id,
+      storedPath: storedPath,
       filePath: reference.resolvedPath,
       originalFilename: originalFilename,
       contentType: contentType,
       extension: extension,
       persistedSizeBytes: persistedSize,
       sha256: sha256,
+      storageOwnership: storageOwnership,
       actualSizeBytes: reference.sizeBytes,
       modifiedAt: reference.modifiedAt,
     );
