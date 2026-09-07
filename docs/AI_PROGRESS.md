@@ -44,7 +44,7 @@ There are currently eight open umbrella/product issues:
 - `#242` — Vault/storage lifecycle; production code complete, final real-macOS validation remains.
 - `#245` — legacy Photos -> canonical Image Objects.
 - `#249` — Bookmark presentation parity; remaining real-host Gallery convergence is the main product gap.
-- `#481` — universal Body/note surface; core universal Body is integrated, while generic Database side peek still lacks the shared Body surface.
+- `#481` — universal Body/note surface; core universal Body is integrated and the final Generic Database side-peek composition slice is now active under the Object lane.
 
 Do not treat #484/#489/#490/#491/#492/#493/#494/#495/#501 as active merely because older issue bodies or historical comments mention unfinished work.
 
@@ -68,23 +68,23 @@ Current state:
 - canonical Body search is already integrated by Search;
 - Bookmark detail uses the shared canonical Body path;
 - `ObjectBodyEditorSection` is the reusable canonical Body composition seam;
-- no known independent Body persistence redesign is required.
+- no second Body persistence/editor path is needed.
 
-The remaining generic side-peek gap is a cross-lane composition obligation: **Lane C owns composing the existing Body seam into `GenericDatabasePage` side peek; Lane A continues to own the Body contract itself.**
+Current active #481 slice: PR #874 composes that existing Body seam into Generic Database side peek. The edit is Object-owned because it closes universal Object-opening parity while reusing, not redesigning, Database/View behavior.
 
 #249 remains routed to Object for Bookmark real-host presentation unless GitHub explicitly reassigns it.
 
 ### B — Relations & Data Integrity
 Owns canonical Relation mutation/read/index/backlink/audit/reconcile correctness and fail-closed corruption behavior.
 
-#493 is complete/closed; do not infer new work from its old acceptance list. Continue only concrete integrity obligations created by live workflows or regressions. Current Relation work includes hardening graph/backlink/read paths to use canonical fail-closed Relation contracts.
+#493 is complete/closed; do not infer new work from its old acceptance list. Continue only concrete integrity obligations created by live workflows or regressions. Recent work has hardened graph/backlink/read paths to use canonical fail-closed Relation contracts.
 
 ### C — Database, View & Schema UX
-Focused #490/#491/#492/#493 work is complete, but a concrete cross-lane #481 presentation obligation remains.
+Focused #490/#491/#492/#493 work is complete.
 
-**Current active slice:** compose the existing canonical `ObjectBodyEditorSection` (or the same shared Body contract) into generic Database side peek so side/center/full opening modes expose the same Object Body without a second Body store/editor path.
+Current status: **idle by design**.
 
-Do not broaden this into Body persistence semantics or Bookmark presentation; those remain owned by A/Object. Do not invent manual include/exclude membership while no concrete product need exists.
+Resume only when a concrete Database/View/schema/template obligation appears. Do not take #481 merely because the final composition hunk lands in `GenericDatabasePage`; PR #874 is explicitly Object-owned and reuses an existing Body seam. Do not invent manual include/exclude Database membership while no concrete product need exists.
 
 ### D — Primitive Objects & Media
 Primary active issues:
@@ -96,8 +96,9 @@ Primary active issues:
 Current product direction:
 - canonical Images collection import is content-aware and uses Image identity/provenance rules;
 - File collection import and File/PDF Object Inspector capabilities are integrated;
-- generic Image/Weblink media presentation is being completed across List/Table/detail hosts;
-- after presentation parity, retire legacy Photo write/read/UI paths safely rather than adding new bridges indefinitely.
+- #869 merged canonical Image/Weblink media into generic List rows;
+- PR #876 is the matching Table-row media parity slice;
+- after generic presentation parity, retire legacy Photo write/read/UI paths safely rather than adding new bridges indefinitely.
 
 ### E — Search & Indexing
 #414/#494 are complete/closed.
@@ -121,9 +122,7 @@ Current focus:
 - stable user-facing failure policy and raw-exception privacy cleanup;
 - AppDatabase narrowing only when real responsibility disappears.
 
-Recent cleanup has removed raw caught-exception exposure from Bookmark detail, Photo management, Bookmark Stage1, Object Inspector and AppShell surfaces and has continued ratcheting legacy import/privacy ceilings.
-
-Do not hide product behavior changes inside Refactor work.
+Recent cleanup has removed raw caught-exception exposure from Bookmark detail, Photo management, Bookmark Stage1, Object Inspector and AppShell; PR #875 continues the same guarded cleanup in Tag management. Do not hide product behavior changes inside Refactor work.
 
 ## Major integrated state
 - Object/ObjectType/Database/View foundations are live in real hosts.
@@ -141,9 +140,9 @@ Do not hide product behavior changes inside Refactor work.
 
 ## Remaining product edge
 The highest-value remaining work is:
-1. **#481 Generic Database side peek Body parity (Lane C composition slice)** — reuse the canonical Body seam so side peek matches center/full without introducing a second Body path.
-2. **#245 Photo -> Image** — finish generic Image List/Table/detail parity, migrate remaining Bookmark/People Photo consumers, then hide/retire the legacy `写真` UI only after caller parity is proven.
-3. **#249 Bookmark presentation** — complete the remaining real Stage1 fixed/masonry Gallery wiring through the shared View/Gallery contract; List/Person/opening parity is already substantially complete.
+1. **#245 Photo -> Image** — finish generic Image Table/detail parity, migrate remaining Bookmark/People Photo consumers, then hide/retire the legacy `写真` UI only after caller parity is proven.
+2. **#249 Bookmark presentation** — complete the remaining real Stage1 fixed/masonry Gallery wiring through the shared View/Gallery contract; List/Person/opening parity is already substantially complete.
+3. **#481 Universal Body** — complete PR #874 side-peek composition and verify side/center/full use the same canonical Body surface.
 4. **#155 Weblink consolidation** — finish rich generic Weblink/Image presentation and retire legacy Bookmark URL/thumbnail compatibility only after callers reach zero.
 5. **#225 Refactor** — delete superseded Bookmark/Photo/shim paths after replacement parity; continue reducing hotspot responsibility and guarded dependency ceilings.
 6. **#242/#218 validation** — perform the final real-macOS Vault and packaged-app preservation checks with the user.
@@ -174,11 +173,13 @@ Shared hotspots include:
 
 Before non-trivial edits, inspect current open PR ownership. One lane at a time may hold a broad hotspot lease. Patch-sized non-overlapping changes still require a fresh overlap audit.
 
+At this checkpoint, #874 and #876 both touch `GenericDatabasePage` in deliberately separated patch-sized regions; future edits must re-audit both before proceeding.
+
 ## Cross-lane boundaries
 - Database/View owns generic presentation/configuration contracts; Primitive owns Weblink/Image/File-specific product semantics.
 - Primitive owns Object/file identity, metadata and content routing; Storage owns Vault/filesystem byte placement, portable paths, explicit ownership, rollback and physical delete safety.
 - Relation/Data Integrity owns correctness of Relation mutations/reads and integrity-sensitive schema changes.
-- Object Core owns Body persistence/edit contracts and reusable Body composition seams; Database/View may compose those seams into its own opening hosts.
+- Object Core owns Body persistence/edit contracts and reusable Body composition seams; a real host may compose those seams without changing ownership of Body semantics.
 - Search owns Body indexing.
 - Primitive owns PDF/File extraction behavior; Search owns derived-text persistence/index/reconciliation.
 - Refactor deletes legacy code only after the owning product lane proves replacement parity.
