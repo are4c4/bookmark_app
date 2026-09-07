@@ -10,6 +10,7 @@ Keep one canonical Object-level search/index architecture correct, stale-safe, p
 - **#494 closed.** Canonical Object search/indexing is the live product path.
 - **#753 closed.** Search isolates malformed persisted Object Body documents to the `body` bucket instead of aborting Object/workspace indexing; implemented by #757 (`f66c74bd7cf93365c72f22c9a880845de9673b12`).
 - **#769 closed.** Search omits Relation labels for a malformed persisted Relation Property even when stale normalized edges remain; implemented by #774 (`c36315706b45bbfb73185c6a69c64993bf71e64b`).
+- **Relation #773 is open and B-owned.** It hardens canonical `RelationReadService` against broader serialized/index disagreements. Search already consumes that service, so if #773 lands Search inherits the stronger fail-closed projection automatically. Do not duplicate its integrity logic in Lane E.
 - Refactor #654 removed the caller-zero legacy Bookmark-only `FullTextSearchRepository`; do not recreate a parallel Bookmark/domain-specific search product.
 
 ## Canonical Object search architecture
@@ -80,6 +81,8 @@ For each outgoing Relation Property:
 
 Regression: `test/repositories/object_search_malformed_relation_test.dart`.
 
+Pending Relation #773 broadens the canonical read boundary beyond malformed payloads to serialized/index disagreement, cardinality/order disagreement and related read-side integrity checks. Because Search receives outgoing labels through `RelationReadService`, Lane E should inherit that behavior rather than mirror those checks.
+
 ## Incremental / stale-token contracts
 - focused Object refresh removes the previous FTS row by FTS `rowid` and inserts the current projection;
 - removed/changed title, alias, Property, Body, Relation, Weblink and derived-text tokens must disappear;
@@ -115,22 +118,23 @@ Recent correctness slices #757 and #774 passed repository Flutter CI before merg
 
 ## Cross-lane dependencies / ownership
 - Object Core owns Body persistence/parsing/editor semantics; Search consumes only its parsed search-text projection and isolates parse failure at its bucket boundary.
-- Relation owns Relation persistence, strict stored-value inspection, integrity and mutation; Search owns denormalized trustworthy label indexing and dependent refresh planning.
+- Relation owns Relation persistence, strict stored-value inspection, integrity, mutation, and canonical read consistency. Search owns denormalized trustworthy label indexing and dependent refresh planning. **#773 is currently B-owned pending work; do not duplicate it in Search.**
 - Primitive owns File/PDF extraction and native behavior; Search owns derived-text persistence/index/reconciliation.
 - Refactor owns behavior-preserving legacy retirement; Bookmark-only FTS retirement is complete.
 - Lane E currently holds no shared-hotspot lease.
 
 ## Next actions
-There is no remaining actionable work in #414, #494, #753, or #769.
+There is no remaining Search-owned actionable work in #414, #494, #753, or #769.
 
 For the next Lane E run:
 1. Re-read current `main`, open Issues/PRs, and recent cross-lane changes.
-2. Resume only for a concrete Search/Indexing issue or a real cross-lane correctness obligation.
-3. Prefer source-local fail-closed contribution boundaries over allowing one corrupt optional source to take down the canonical index.
-4. Do not swallow unrelated persistence/index errors and do not log raw user content, extracted text, private paths, malformed Body payloads, or malformed Relation payloads.
-5. Do not recreate domain-specific long-term search repositories.
+2. Check whether Relation #773 landed. If it did, verify Search still uses the canonical `RelationReadService`; do not add duplicate integrity checks unless a concrete regression demonstrates a Search-specific gap.
+3. Resume implementation only for a concrete Search/Indexing issue or a real cross-lane correctness obligation.
+4. Prefer source-local fail-closed contribution boundaries over allowing one corrupt optional source to take down the canonical index.
+5. Do not swallow unrelated persistence/index errors and do not log raw user content, extracted text, private paths, malformed Body payloads, or malformed Relation payloads.
+6. Do not recreate domain-specific long-term search repositories.
 
 Potential future work such as large-PDF rebuild caching, richer ranking/filter UX, or semantic/vector search requires a separately scoped Issue; it is not implied by completed #494/#753/#769.
 
 ## Stop reason
-**#753 and #769 are implemented with all repository CI green; PRs #757 and #774 are merged and both Issues are closed. No additional concrete Search/Indexing issue is currently assigned. Lane E is idle under the `AGENTS.md` stopping criteria until a new Search issue or cross-lane search obligation appears.**
+**#753 and #769 are implemented with all repository CI green; PRs #757 and #774 are merged and both Issues are closed. No additional Search-owned issue is currently actionable. Relation #773 remains a B-owned pending dependency whose read-side guarantees Search should consume rather than reimplement. Lane E is idle under the `AGENTS.md` stopping criteria unless a new Search issue or concrete Search-specific regression appears.**
