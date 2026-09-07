@@ -89,7 +89,7 @@ Do not invent manual include/exclude Database membership; #56 explicitly defers 
 - #495 content-aware Image/File import routing.
 - Weblink/Image/File/Tag primitive product semantics, import/media behavior and File/PDF capabilities.
 
-At this checkpoint, Primitive work is actively extending canonical File user-facing entry points; treat those as D-owned even when a patch-sized composition hunk lands in `GenericDatabasePage`.
+Recent Primitive work has already landed canonical File collection import and canonical Image media composition in generic Database hosts. Future patches in those shared hosts remain D-owned when the behavior is primitive-specific; always re-check live open PR ownership before editing.
 
 ### E — Search & Indexing
 - #414/#494 are complete/closed.
