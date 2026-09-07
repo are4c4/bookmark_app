@@ -108,4 +108,134 @@ void main() {
     );
     expect(wrongType, isEmpty);
   });
+
+  test('canonical reads fail closed on malformed persisted Relation values', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final readService = RelationReadService(objectStore);
+
+    final bookTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Book',
+    );
+    final personTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Person',
+    );
+    final relationId = await objectStore.createRelationProperty(
+      objectTypeId: bookTypeId,
+      name: 'Authors',
+      targetObjectTypeId: personTypeId,
+      multiple: true,
+    );
+    final relation = (await objectStore.getObjectType(bookTypeId))!
+        .properties
+        .singleWhere((property) => property.id == relationId);
+    final bookId = await objectStore.createObject(
+      objectTypeId: bookTypeId,
+      title: 'Book',
+    );
+    final personId = await objectStore.createObject(
+      objectTypeId: personTypeId,
+      title: 'Author',
+    );
+    await objectStore.setRelation(
+      objectId: bookId,
+      property: relation,
+      targetObjectIds: [personId],
+    );
+    await genericStore.setValue(
+      recordId: bookId,
+      propertyId: relationId,
+      value: <dynamic>[personId, 'broken'],
+    );
+
+    expect(
+      await readService.outgoing(
+        sourceObjectTypeId: bookTypeId,
+        sourceObjectId: bookId,
+      ),
+      isEmpty,
+    );
+    expect(
+      await readService.backlinks(
+        workspaceId: workspaceId,
+        targetObjectId: personId,
+      ),
+      isEmpty,
+    );
+    final edges = (await objectStore.outgoingRelations(bookId))
+        .where((edge) => edge.propertyId == relationId)
+        .toList(growable: false);
+    expect(edges, hasLength(1));
+    expect(edges.single.targetObjectId, personId);
+  });
+
+  test('canonical reads fail closed on serialized Relation/index disagreement', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final readService = RelationReadService(objectStore);
+
+    final bookTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Book',
+    );
+    final personTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Person',
+    );
+    final relationId = await objectStore.createRelationProperty(
+      objectTypeId: bookTypeId,
+      name: 'Author',
+      targetObjectTypeId: personTypeId,
+      multiple: false,
+    );
+    final relation = (await objectStore.getObjectType(bookTypeId))!
+        .properties
+        .singleWhere((property) => property.id == relationId);
+    final bookId = await objectStore.createObject(
+      objectTypeId: bookTypeId,
+      title: 'Book',
+    );
+    final personId = await objectStore.createObject(
+      objectTypeId: personTypeId,
+      title: 'Author',
+    );
+    await objectStore.setRelation(
+      objectId: bookId,
+      property: relation,
+      targetObjectIds: [personId],
+    );
+    await genericStore.setValue(
+      recordId: bookId,
+      propertyId: relationId,
+      value: null,
+    );
+
+    expect(
+      await readService.outgoing(
+        sourceObjectTypeId: bookTypeId,
+        sourceObjectId: bookId,
+      ),
+      isEmpty,
+    );
+    expect(
+      await readService.backlinks(
+        workspaceId: workspaceId,
+        targetObjectId: personId,
+      ),
+      isEmpty,
+    );
+    final edges = (await objectStore.outgoingRelations(bookId))
+        .where((edge) => edge.propertyId == relationId)
+        .toList(growable: false);
+    expect(edges, hasLength(1));
+    expect(edges.single.targetObjectId, personId);
+  });
 }
