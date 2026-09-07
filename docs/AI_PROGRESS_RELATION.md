@@ -22,7 +22,7 @@ Own cross-Object correctness and fail-closed data integrity: canonical Relation 
 - No parallel serialized-id Relation writer or alternate edge/index store.
 
 ## Integrated integrity state — 2026-09-07
-Latest audited main at this handoff: `5a7da287c65210a89ce95fd243a9624f98225580`.
+Latest audited main at this handoff: `ae07efe41f8cff98eb9499fd7fef586f81f14756`.
 
 - #506: fail-closed Relation schema evolution foundation. Target changes validate every existing target; ambiguous multi -> single requires explicit choices; single -> multi preserves values; failed migration rolls back atomically; bidirectional target retargeting remains unsupported.
 - #568: generic Property deletion cannot silently remove one side of a managed bidirectional Relation pair.
@@ -36,12 +36,12 @@ Latest audited main at this handoff: `5a7da287c65210a89ce95fd243a9624f98225580`.
 - #713: `ObjectRelationEditorService.save(...)` no longer de-duplicates caller selections before canonical validation. Repeated ids therefore reach the #681 duplicate-target guard and fail closed instead of silently becoming a valid-looking set. Regression proves a rejected duplicate multi-Relation save leaves the prior Relation value and normalized edge unchanged. Flutter CI #2251 green on the original executable head and #2260 green on the refreshed latest-main head; squash merge `5f3c6496f87f86888fa4b8915735b5cfb4a731cb`.
 
 ## Cross-lane audit in this run
-- #491 now has real canonical quick-create target services and page-service Relation attachment integration. Focused tests cover custom target creation, canonical Tag creation, URL-identity Weblink creation/enrichment, managed Image/File import-only paths, unsupported-system fail-closed behavior, picker candidate reload after quick-create, and canonical Weblink/Image target attach with idempotent saves/backlinks plus a healthy integrity audit. No parallel Relation value/index writer was found.
-- The #713 duplicate-selection finding was the concrete retry/idempotency gap found in that #491 audit: adapters must not normalize malformed repeated ids before the canonical mutation boundary can reject them.
-- Open PR #696 is Lane C presentation/schema-authoring work for searchable existing Relation target editing. Its diff still delegates mutation through `RelationSchemaEvolutionService.inspectChange(...) -> impact confirmation -> updateRelationSchema(...)`; no Relation value/index writer, serialized-id writer, or read-time repair path is introduced. It currently needs refresh against newer main but presents no independent Lane B correctness defect.
-- #492 Gallery cover resolution remains read-only through canonical Relation reads. Regressions cover deterministic first-position behavior for multi Relations, stale serialized/index disagreement fail-closed behavior, target-kind validation, and single-cardinality corruption fail-closed behavior.
-- Main commits merged after the prior code audit (#703 template View property ids, #712 exact Object create ids, and unrelated primitive/refactor/object work) do not add a new Relation-producing persistence path.
-- Current open PRs #718/#719/#720 are Primitive MIME, Refactor caller-zero shim, and Object timestamp-integrity work respectively; none changes Relation persistence or claims a Relation hotspot lease.
+- #491 still routes real quick-create/attach and editor saves through canonical Relation mutation. No newly merged workflow since the previous Lane B audit adds another Relation value/index or serialized-id writer.
+- #492 Gallery cover resolution remains read-only through canonical Relation reads; no read-time repair or alternate edge authority was introduced.
+- #493 `RelationSchemaEvolutionService` still re-reads the canonical persisted Relation Property, validates source/target workspace identity, blocks unhealthy audited state, requires explicit multi -> single choices, applies inside a transaction, and keeps bidirectional target retargeting fail-closed.
+- Main commit #722 (`ae07efe41f8cff98eb9499fd7fef586f81f14756`) adds template-local View filter/sort Property-name resolution and persists canonical Property ids after schema creation. It does not create or mutate Relation values, indexes, backlinks, pair metadata, or serialized Relation ids.
+- Open PR #696 remains Lane C Relation schema-authoring presentation. Its diff still delegates actual target/cardinality mutation through `RelationSchemaEvolutionService.inspectChange(...) -> impact confirmation -> updateRelationSchema(...)`; no independent Lane B correctness defect was found.
+- Current open PRs #724/#723/#718/#714/#698/#696/#708/#691 were reviewed for ownership/scope. None introduces a new Relation-producing persistence path or claims a Lane B shared-hotspot lease.
 - No shared hotspot lease is held by Lane B. This run made no production/shared-hotspot edit.
 
 ## Validation state
@@ -50,7 +50,7 @@ Latest audited main at this handoff: `5a7da287c65210a89ce95fd243a9624f98225580`.
 - #683 Flutter CI #2133: green.
 - #694 original CI #2165 exposed the raw-vs-semantic duplicate audit bug; refreshed/fixed Flutter CI #2249 green and #694 merged as `ebdc703baa963338688dd1287ed4105cbe99c19d`.
 - #713 Flutter CI #2251 green on the first executable head. After refreshing onto concurrent latest main, Flutter CI #2260 also green; #713 merged as `5f3c6496f87f86888fa4b8915735b5cfb4a731cb`.
-- 2026-09-07 latest-state audit is docs-only: no production Relation code changed, so no new focused executable test was required. Existing latest relevant Relation CI remains green as above.
+- 2026-09-07 latest-state audit is docs-only: no production Relation code changed, so no new focused executable test is required. Existing latest relevant Relation CI remains green as above.
 - Local Flutter execution is unavailable in this connector environment; GitHub Actions is the executable validation source.
 
 ## Exact next triggers
@@ -67,4 +67,4 @@ Latest audited main at this handoff: `5a7da287c65210a89ce95fd243a9624f98225580`.
 - Relation adapters must preserve malformed duplicate input until canonical mutation validation; adapter-level set normalization can hide caller/corruption bugs and weaken fail-closed guarantees.
 
 ## Stop reason
-Latest main `5a7da287c65210a89ce95fd243a9624f98225580`, Issues #491/#492/#493, current open PRs, recent commits, and hotspot ownership were re-audited. No additional independent Relation/data-integrity defect or safe integrity slice is currently identified. Do not invent speculative abstractions. Resume when one of the exact triggers above lands or a concrete Relation correctness regression appears.
+Latest main `ae07efe41f8cff98eb9499fd7fef586f81f14756`, Issues #491/#492/#493, current open PRs, recent commits, and hotspot ownership were re-audited. No additional independent Relation/data-integrity defect or safe integrity slice is currently identified. Do not invent speculative abstractions. Resume when one of the exact triggers above lands or a concrete Relation correctness regression appears.
