@@ -23,6 +23,7 @@ import '../domain/object_type_defaults.dart';
 import '../features/database/presentation/widgets/database_property_value_view.dart';
 import '../features/database/presentation/widgets/object_gallery_view.dart';
 import '../features/database/presentation/widgets/property_add_popover.dart';
+import '../features/database/presentation/widgets/system_object_list_media.dart';
 import '../features/object/presentation/object_open_presentation_host.dart';
 import '../features/object/presentation/widgets/object_detail_property_view.dart';
 import '../widgets/database_collection_settings_dialog.dart';
@@ -1149,7 +1150,14 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
           final record = records[index];
           return ListTile(
             selected: record.id == _selectedRecordId,
-            leading: const Icon(Icons.description_outlined, size: 18),
+            leading: SystemObjectListMedia(
+              database: _store.database,
+              objectStore: _objectStore,
+              workspaceId: widget.repository.workspaceId,
+              objectTypeId: record.databaseId,
+              objectId: record.id,
+              size: 36,
+            ),
             title: Text(record.title),
             subtitle: _orderedVisibleProperties.isEmpty
                 ? null
