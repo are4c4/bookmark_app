@@ -68,4 +68,57 @@ void main() {
     expect(backlinks.single.sourceObjectTypeName, '書籍');
     expect(backlinks.single.propertyName, 'タグ');
   });
+
+  test('graph backlinks fail closed on serialized Relation/index drift', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+
+    final tagTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Tag',
+    );
+    final bookTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Book',
+    );
+    final relationId = await objectStore.createRelationProperty(
+      objectTypeId: bookTypeId,
+      name: 'Tags',
+      targetObjectTypeId: tagTypeId,
+      multiple: true,
+    );
+    final relation = (await objectStore.getObjectType(bookTypeId))!
+        .properties
+        .singleWhere((property) => property.id == relationId);
+    final tagId = await objectStore.createObject(
+      objectTypeId: tagTypeId,
+      title: 'Math',
+    );
+    final bookId = await objectStore.createObject(
+      objectTypeId: bookTypeId,
+      title: 'Number Theory',
+    );
+    await objectStore.setRelation(
+      objectId: bookId,
+      property: relation,
+      targetObjectIds: [tagId],
+    );
+
+    await genericStore.setValue(
+      recordId: bookId,
+      propertyId: relationId,
+      value: null,
+    );
+
+    final graph = ObjectGraphQueryStore(genericStore);
+    expect(await graph.backlinks(tagId), isEmpty);
+
+    final rawBacklinks = await objectStore.backlinks(tagId);
+    expect(rawBacklinks, hasLength(1));
+    expect(rawBacklinks.single.sourceObjectId, bookId);
+    expect(rawBacklinks.single.propertyId, relationId);
+  });
 }

@@ -1,6 +1,8 @@
 import 'package:drift/drift.dart';
 
 import 'generic_database_store.dart';
+import 'object_store.dart';
+import 'relation_read_service.dart';
 
 class ObjectGraphNodeRecord {
   const ObjectGraphNodeRecord({
@@ -84,44 +86,55 @@ class ObjectGraphQueryStore {
   }
 
   Future<List<ObjectGraphBacklinkRecord>> backlinks(int targetObjectId) async {
-    await store.ensureSchema();
-    final relationIndexExists = await store.database.customSelect(
-      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'object_relation_edges' LIMIT 1",
-    ).getSingleOrNull();
-    if (relationIndexExists == null) return const [];
+    final target = await getNode(targetObjectId);
+    if (target == null) return const <ObjectGraphBacklinkRecord>[];
 
-    final rows = await store.database.customSelect(
-      '''SELECT edge.source_object_id AS source_object_id,
-                source.database_id AS source_object_type_id,
-                source.title AS source_title,
-                source_type.name AS source_object_type_name,
-                source_type.icon AS source_object_type_icon,
-                edge.property_id AS property_id,
-                property.name AS property_name
-         FROM object_relation_edges edge
-         JOIN generic_records source ON source.id = edge.source_object_id
-         JOIN generic_databases source_type ON source_type.id = source.database_id
-         JOIN generic_properties property ON property.id = edge.property_id
-         WHERE edge.target_object_id = ?
-         ORDER BY source_type.name COLLATE NOCASE,
-                  source.title COLLATE NOCASE,
-                  property.name COLLATE NOCASE''',
-      variables: [Variable<int>(targetObjectId)],
-    ).get();
+    final objectStore = ObjectStore(store);
+    final resolved = await RelationReadService(objectStore).backlinks(
+      workspaceId: target.workspaceId,
+      targetObjectId: targetObjectId,
+    );
+    if (resolved.isEmpty) return const <ObjectGraphBacklinkRecord>[];
 
-    return rows
-        .map(
-          (row) => ObjectGraphBacklinkRecord(
-            sourceObjectId: row.read<int>('source_object_id'),
-            sourceObjectTypeId: row.read<int>('source_object_type_id'),
-            sourceTitle: row.read<String>('source_title'),
-            sourceObjectTypeName: row.read<String>('source_object_type_name'),
-            sourceObjectTypeIcon: row.read<String>('source_object_type_icon'),
-            propertyId: row.read<int>('property_id'),
-            propertyName: row.read<String>('property_name'),
-          ),
-        )
-        .toList(growable: false);
+    final objectTypes = await objectStore.listObjectTypes(target.workspaceId);
+    final objectTypesById = {
+      for (final objectType in objectTypes) objectType.id: objectType,
+    };
+    final result = <ObjectGraphBacklinkRecord>[];
+    for (final backlink in resolved) {
+      final sourceType = objectTypesById[backlink.sourceObject.objectTypeId];
+      if (sourceType == null) continue;
+      result.add(
+        ObjectGraphBacklinkRecord(
+          sourceObjectId: backlink.sourceObject.id,
+          sourceObjectTypeId: backlink.sourceObject.objectTypeId,
+          sourceTitle: backlink.sourceObject.title,
+          sourceObjectTypeName: sourceType.name,
+          sourceObjectTypeIcon: sourceType.icon,
+          propertyId: backlink.property.id,
+          propertyName: backlink.property.name,
+        ),
+      );
+    }
+    result.sort(_compareBacklinks);
+    return result;
+  }
+
+  static int _compareBacklinks(
+    ObjectGraphBacklinkRecord left,
+    ObjectGraphBacklinkRecord right,
+  ) {
+    var compared = left.sourceObjectTypeName.toLowerCase().compareTo(
+      right.sourceObjectTypeName.toLowerCase(),
+    );
+    if (compared != 0) return compared;
+    compared = left.sourceTitle.toLowerCase().compareTo(
+      right.sourceTitle.toLowerCase(),
+    );
+    if (compared != 0) return compared;
+    return left.propertyName.toLowerCase().compareTo(
+      right.propertyName.toLowerCase(),
+    );
   }
 
   Future<bool> _hasSystemRegistry() async {
