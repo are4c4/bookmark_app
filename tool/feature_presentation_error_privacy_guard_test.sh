@@ -40,7 +40,7 @@ EOF
 output="$(cd "$fixture" && bash "$script")"
 grep -Fq 'feature_presentation_error_privacy_guard: PASS' <<<"$output"
 
-cat > "$fixture/lib/views/app_shell.dart" <<'EOF'
+cat > "$fixture/lib/views/generic_database_page.dart" <<'EOF'
 Future<void> knownLegacyHost() async {
   try {
     throw StateError('legacy-private-value');
@@ -78,7 +78,7 @@ grep -Fq 'Caught exception interpolation spread into a new legacy presentation h
 grep -Fq 'lib/views/new_legacy_page.dart' <<<"$legacy_spread_failure"
 rm "$fixture/lib/views/new_legacy_page.dart"
 
-cat > "$fixture/lib/views/app_shell.dart" <<'EOF'
+cat > "$fixture/lib/views/generic_database_page.dart" <<'EOF'
 Future<void> cleanedLegacyHost() async {
   try {
     throw StateError('legacy-private-value');
@@ -99,8 +99,8 @@ if [[ "$stale_allowlist_status" -ne 1 ]]; then
   exit 1
 fi
 grep -Fq 'Legacy error privacy allowlist is stale after debt removal:' <<<"$stale_allowlist_failure"
-grep -Fq 'lib/views/app_shell.dart' <<<"$stale_allowlist_failure"
-rm "$fixture/lib/views/app_shell.dart"
+grep -Fq 'lib/views/generic_database_page.dart' <<<"$stale_allowlist_failure"
+rm "$fixture/lib/views/generic_database_page.dart"
 
 cat > "$fixture/lib/features/object/presentation/widgets/unsafe_simple.dart" <<'EOF'
 Future<void> runUnsafe() async {

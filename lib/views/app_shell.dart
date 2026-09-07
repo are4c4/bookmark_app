@@ -163,10 +163,10 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
         _index = 11;
         _pageCache.remove(11);
       });
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('データベースを作成できませんでした: $error')),
+        const SnackBar(content: Text('データベースを作成できませんでした。')),
       );
     }
   }
@@ -207,8 +207,8 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
       await _reloadWorkspaces();
       final workspace = _workspaces.firstWhere((item) => item.id == id);
       await widget.onSwitchWorkspace(workspace);
-    } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Workspaceを作成できませんでした: $error')));
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Workspaceを作成できませんでした。')));
     }
   }
 
@@ -353,8 +353,8 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
         if (name?.isNotEmpty != true) return;
         await widget.onImportProfileBackup(archivePath, name!);
       }
-    } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('データ操作に失敗しました: $error')));
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('データ操作に失敗しました。')));
     }
   }
 
