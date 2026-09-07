@@ -10,7 +10,7 @@ import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/domain/object_body.dart';
 import 'package:bookmark_app/domain/object_body_block_contracts.dart';
 import 'package:bookmark_app/features/object/presentation/widgets/object_body_editor_section.dart';
-import 'package:bookmark_app/widgets/bookmark_relation_section.dart';
+import 'package:bookmark_app/widgets/bookmark_object_body_section.dart';
 import 'package:drift/drift.dart' show Variable;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
@@ -33,9 +33,6 @@ void _closeDatabaseAfterUnmount(
   AppDatabase database,
 ) {
   addTearDown(() async {
-    // BookmarkRelationSection owns a Drift-backed StreamBuilder. Dispose the
-    // widget subscription before closing its database so a failed assertion
-    // cannot leave the full-suite runner waiting on a live stream.
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
     await database.close();
@@ -101,18 +98,12 @@ void main() {
       title: 'Bookmark Body',
       inbox: true,
     );
-    final bookmark = (await repository.watchAll().first)
-        .singleWhere((item) => item.id == bookmarkId);
 
-    // This regression only needs the canonical Bookmark Object identity and
-    // compatibility link consumed by the detail. Avoid the heavyweight full
-    // legacy mirror, whose tag/photo/Relation synchronization is unrelated to
-    // the Body host contract and can leave a widget-test runner busy.
     final objectId = await _linkCanonicalBookmarkObject(
       database: database,
       workspaceId: workspaceId,
       bookmarkId: bookmarkId,
-      title: bookmark.title,
+      title: 'Bookmark Body',
     );
     expect(
       await BookmarkObjectLinkReadStore(database).objectIdForBookmark(
@@ -145,11 +136,9 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: SingleChildScrollView(
-            child: BookmarkRelationSection(
-              repository: repository,
-              bookmark: bookmark,
-            ),
+          body: BookmarkObjectBodySection(
+            repository: repository,
+            bookmarkId: bookmarkId,
           ),
         ),
       ),
@@ -240,22 +229,19 @@ void main() {
       title: 'Legacy only Bookmark',
       inbox: true,
     );
-    final bookmark = (await repository.watchAll().first)
-        .singleWhere((item) => item.id == bookmarkId);
 
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: BookmarkRelationSection(
+          body: BookmarkObjectBodySection(
             repository: repository,
-            bookmark: bookmark,
+            bookmarkId: bookmarkId,
           ),
         ),
       ),
     );
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(find.text('関連ブックマーク'), findsOneWidget);
     expect(
       find.byKey(ValueKey('bookmark-object-body-$bookmarkId')),
       findsNothing,
