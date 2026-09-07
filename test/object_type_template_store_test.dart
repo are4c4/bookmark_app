@@ -20,6 +20,7 @@ void main() {
     final keys = templates.map((item) => item.key).toList();
     expect(keys.toSet().length, keys.length);
     expect(keys.toSet(), {
+      'bookmark',
       'book',
       'paper',
       'person',
