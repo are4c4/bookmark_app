@@ -100,38 +100,40 @@ class TagObjectBridge {
 
   Future<void> syncLegacyTags(int workspaceId) async {
     final schema = await ensureTagObjectType(workspaceId);
-    final tags = await database.select(database.tags).get();
-    final validTagIds = tags.map((tag) => tag.id).toSet();
+    await database.transaction(() async {
+      final tags = await database.select(database.tags).get();
+      final validTagIds = tags.map((tag) => tag.id).toSet();
 
-    for (final tag in tags) {
-      final objectId = await _ensureObjectForTag(workspaceId, schema, tag);
-      await objectStore.renameObject(objectId, tag.name);
-      await objectStore.setPropertyValue(
-        objectId: objectId,
-        property: schema.legacyTagIdProperty,
-        value: tag.id,
-      );
-      await objectStore.setPropertyValue(
-        objectId: objectId,
-        property: schema.groupIdProperty,
-        value: tag.groupId,
-      );
-    }
+      for (final tag in tags) {
+        final objectId = await _ensureObjectForTag(workspaceId, schema, tag);
+        await objectStore.renameObject(objectId, tag.name);
+        await objectStore.setPropertyValue(
+          objectId: objectId,
+          property: schema.legacyTagIdProperty,
+          value: tag.id,
+        );
+        await objectStore.setPropertyValue(
+          objectId: objectId,
+          property: schema.groupIdProperty,
+          value: tag.groupId,
+        );
+      }
 
-    for (final tag in tags) {
-      final objectId = await objectIdForLegacyTag(workspaceId, tag.id);
-      if (objectId == null) continue;
-      final parentObjectId = tag.parentTagId == null
-          ? null
-          : await objectIdForLegacyTag(workspaceId, tag.parentTagId!);
-      await _relationMutations.setRelation(
-        objectId: objectId,
-        property: schema.parentProperty,
-        targetObjectIds: parentObjectId == null ? const [] : [parentObjectId],
-      );
-    }
+      for (final tag in tags) {
+        final objectId = await objectIdForLegacyTag(workspaceId, tag.id);
+        if (objectId == null) continue;
+        final parentObjectId = tag.parentTagId == null
+            ? null
+            : await objectIdForLegacyTag(workspaceId, tag.parentTagId!);
+        await _relationMutations.setRelation(
+          objectId: objectId,
+          property: schema.parentProperty,
+          targetObjectIds: parentObjectId == null ? const [] : [parentObjectId],
+        );
+      }
 
-    await _removeOrphanTagObjects(workspaceId, schema, validTagIds);
+      await _removeOrphanTagObjects(workspaceId, schema, validTagIds);
+    });
   }
 
   Future<int?> objectIdForLegacyTag(int workspaceId, int tagId) async {
