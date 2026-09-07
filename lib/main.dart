@@ -6,7 +6,9 @@ import 'package:flutter/material.dart';
 import 'data/app_database.dart';
 import 'data/bookmark_lifecycle_store.dart';
 import 'data/bookmark_repository.dart';
+import 'data/generic_database_store.dart';
 import 'data/workspace_store.dart';
+import 'repositories/object_global_search_service.dart';
 import 'services/app_settings_service.dart';
 import 'services/object_sync_service.dart';
 import 'services/photo_storage_service.dart';
@@ -74,6 +76,15 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
     await _settings.saveThemeMode(mode);
   }
 
+  ObjectSyncService _objectSyncService(AppDatabase database) {
+    final search = ObjectGlobalSearchService(GenericDatabaseStore(database));
+    return ObjectSyncService(
+      database,
+      enableRemotePreviewImages: true,
+      onPreviewImageIngested: search.refreshObjectLabelDependents,
+    );
+  }
+
   Future<BookmarkRepository> _openRepository(
     AppDatabase database,
     DatabaseProfile profile, {
@@ -93,10 +104,7 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
     final lifecycleStore = BookmarkLifecycleStore(database);
     await lifecycleStore.initialize();
     PhotoStorageService.activePhotoDirectoryPath = profile.photoDirectoryPath;
-    await ObjectSyncService(
-      database,
-      enableRemotePreviewImages: true,
-    ).syncWorkspace(workspaceId);
+    await _objectSyncService(database).syncWorkspace(workspaceId);
     _workspaceStore = workspaceStore;
     _lifecycleStore = lifecycleStore;
     return BookmarkRepository(
@@ -230,10 +238,7 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
       return;
     }
     await store.setActiveWorkspace(workspace.id);
-    await ObjectSyncService(
-      database,
-      enableRemotePreviewImages: true,
-    ).syncWorkspace(workspace.id);
+    await _objectSyncService(database).syncWorkspace(workspace.id);
     if (!mounted) return;
     setState(() {
       _repository = BookmarkRepository(
