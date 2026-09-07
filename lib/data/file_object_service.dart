@@ -233,6 +233,14 @@ class FileObjectService {
       sizeBytesProperty.id,
       importedAtProperty.id,
     ];
+    final previousOrder = <int>[
+      originalFilenameProperty.id,
+      contentTypeProperty.id,
+      extensionProperty.id,
+      sizeBytesProperty.id,
+      importedAtProperty.id,
+      fileProperty.id,
+    ];
     final desiredOrder = <int>[
       originalFilenameProperty.id,
       contentTypeProperty.id,
@@ -243,13 +251,30 @@ class FileObjectService {
       fileProperty.id,
     ];
     final current = await defaultsStore.read(objectTypeId);
-    if (current != null) return;
+    if (current == null) {
+      await defaultsStore.write(
+        objectTypeId: objectTypeId,
+        defaults: ObjectTypeDefaults(
+          visiblePropertyIds: desiredVisible,
+          propertyOrder: desiredOrder,
+          openMode: ObjectOpenMode.sidePeek,
+        ),
+      );
+      return;
+    }
+
+    // Upgrade only the exact generated order from the pre-hash File schema.
+    // A user-customized order remains authoritative and is never rewritten just
+    // because the built-in primitive gained optional system metadata.
+    final order = current.propertyOrder;
+    if (order == null || !_sameIds(order, previousOrder)) return;
     await defaultsStore.write(
       objectTypeId: objectTypeId,
       defaults: ObjectTypeDefaults(
-        visiblePropertyIds: desiredVisible,
+        visiblePropertyIds: current.visiblePropertyIds,
         propertyOrder: desiredOrder,
-        openMode: ObjectOpenMode.sidePeek,
+        openMode: current.openMode,
+        bodyTemplate: current.bodyTemplate,
       ),
     );
   }
@@ -344,6 +369,14 @@ class FileObjectService {
       if (object.id == objectId) return object;
     }
     throw StateError('File Object $objectId does not exist.');
+  }
+
+  bool _sameIds(List<int> left, List<int> right) {
+    if (left.length != right.length) return false;
+    for (var index = 0; index < left.length; index++) {
+      if (left[index] != right[index]) return false;
+    }
+    return true;
   }
 
   String _fileName(String path) {
