@@ -62,6 +62,21 @@ class ObjectGlobalSearchService {
     await refreshObjects(await _refreshPlanner.forObjectLabelChange(objectId));
   }
 
+  /// Refreshes the focused set of projections that a Search-opened detail may
+  /// have affected: the opened Object, its label dependents, trustworthy current
+  /// outgoing Relation targets, and each target's label dependents.
+  Future<void> refreshDetailReturnAffected({
+    required int objectTypeId,
+    required int objectId,
+  }) async {
+    await refreshObjects(
+      await _refreshPlanner.forDetailReturn(
+        objectTypeId: objectTypeId,
+        objectId: objectId,
+      ),
+    );
+  }
+
   Future<List<ResolvedObjectSearchHit>> search({
     required int workspaceId,
     required String rawQuery,

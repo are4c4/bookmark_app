@@ -66,6 +66,85 @@ void main() {
     expect(await planner.forObjectLabelChange(firstBook), <int>[firstBook]);
   });
 
+  test(
+      'detail return refreshes source, canonical targets, and target label dependents',
+      () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final planner = ObjectSearchRefreshPlanner(objectStore);
+
+    final targetType = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Target',
+    );
+    final sourceType = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Source',
+    );
+    final dependentType = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Dependent',
+    );
+    final sourceRelationId = await objectStore.createRelationProperty(
+      objectTypeId: sourceType,
+      name: 'Target',
+      targetObjectTypeId: targetType,
+      multiple: true,
+    );
+    final dependentRelationId = await objectStore.createRelationProperty(
+      objectTypeId: dependentType,
+      name: 'Observed target',
+      targetObjectTypeId: targetType,
+      multiple: false,
+    );
+    final sourceRelation = (await objectStore.getObjectType(sourceType))!
+        .properties
+        .singleWhere((property) => property.id == sourceRelationId);
+    final dependentRelation = (await objectStore.getObjectType(dependentType))!
+        .properties
+        .singleWhere((property) => property.id == dependentRelationId);
+
+    final source = await objectStore.createObject(
+      objectTypeId: sourceType,
+      title: 'Source Object',
+    );
+    final firstTarget = await objectStore.createObject(
+      objectTypeId: targetType,
+      title: 'First Target',
+    );
+    final secondTarget = await objectStore.createObject(
+      objectTypeId: targetType,
+      title: 'Second Target',
+    );
+    final dependent = await objectStore.createObject(
+      objectTypeId: dependentType,
+      title: 'Dependent Object',
+    );
+    await objectStore.setRelation(
+      objectId: source,
+      property: sourceRelation,
+      targetObjectIds: <int>[secondTarget, firstTarget],
+    );
+    await objectStore.setRelation(
+      objectId: dependent,
+      property: dependentRelation,
+      targetObjectIds: <int>[firstTarget],
+    );
+
+    final expectedAdditional = <int>{firstTarget, secondTarget, dependent}.toList()
+      ..sort();
+    expect(
+      await planner.forDetailReturn(
+        objectTypeId: sourceType,
+        objectId: source,
+      ),
+      <int>[source, ...expectedAdditional],
+    );
+  });
+
   test('missing or deleted Object still plans its own stale search row removal',
       () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());

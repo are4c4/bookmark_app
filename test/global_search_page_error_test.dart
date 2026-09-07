@@ -57,9 +57,12 @@ class _RefreshFailingSearchService extends ObjectGlobalSearchService {
   _RefreshFailingSearchService(GenericDatabaseStore store) : super(store);
 
   @override
-  Future<void> refreshObjectLabelDependents(int objectId) async {
+  Future<void> refreshDetailReturnAffected({
+    required int objectTypeId,
+    required int objectId,
+  }) async {
     throw StateError(
-      'private refresh detail /Users/example/profile.db object=$objectId',
+      'private refresh detail /Users/example/profile.db object=$objectId type=$objectTypeId',
     );
   }
 }
