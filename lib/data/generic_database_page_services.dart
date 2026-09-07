@@ -15,6 +15,7 @@ import 'database_collection_config_service.dart';
 import 'database_collection_resolver.dart';
 import 'database_collection_store.dart';
 import 'database_property_authoring_service.dart';
+import 'database_view_gallery_cover_source_service.dart';
 import 'database_view_open_mode_service.dart';
 import 'database_view_property_schema_service.dart';
 import 'database_view_property_type_conversion_service.dart';
@@ -65,6 +66,7 @@ class GenericDatabasePageServices {
     required this.valueTypeConversion,
     required this.valueTypeMigration,
     required this.collectionConfig,
+    required this.galleryCoverSources,
     required this.openPresentation,
     required this.stateLoader,
     required this.computedStore,
@@ -225,6 +227,10 @@ class GenericDatabasePageServices {
         collectionStore: collectionStore,
         objectStore: objectStore,
       ),
+      galleryCoverSources: DatabaseViewGalleryCoverSourceService(
+        objectStore: objectStore,
+        systemObjects: systemObjects,
+      ),
       openPresentation: ObjectOpenPresentationService(
         viewOpenModes: DatabaseViewOpenModeService(viewStore),
         objectTypeDefaults: defaultsStore,
@@ -259,6 +265,7 @@ class GenericDatabasePageServices {
   final DatabaseViewPropertyTypeConversionService valueTypeConversion;
   final DatabaseViewPropertyTypeMigrationService valueTypeMigration;
   final DatabaseCollectionConfigService collectionConfig;
+  final DatabaseViewGalleryCoverSourceService galleryCoverSources;
   final ObjectOpenPresentationService openPresentation;
   final GenericDatabasePageStateLoader stateLoader;
   final ObjectComputedValueStore computedStore;
