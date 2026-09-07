@@ -269,7 +269,8 @@ class FileObjectService {
     final mime = separator < 0
         ? candidate
         : candidate.substring(0, separator).trim();
-    return mime.isEmpty ? null : mime;
+    if (mime.isEmpty || !mime.contains('/')) return null;
+    return mime;
   }
 
   String? _extension(String path) {
