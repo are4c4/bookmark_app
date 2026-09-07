@@ -10,6 +10,7 @@ import 'image_object_service.dart';
 import 'object_store.dart';
 import 'object_type_defaults_store.dart';
 import 'relation_mutation_service.dart';
+import 'relation_read_service.dart';
 import 'system_object_store.dart';
 import 'tag_object_bridge.dart';
 
@@ -43,6 +44,8 @@ class CoreObjectBridge {
           objectStore: objectStore,
         ),
       );
+  late final RelationReadService _relationReads =
+      RelationReadService(objectStore);
 
   Future<void> ensureSchema() => _schemaReady ??= database.transaction(() async {
         await systemObjectStore.ensureSchema();
@@ -275,6 +278,12 @@ class CoreObjectBridge {
     final images = _property(bookmarkType, 'Images');
     final coverImage = _property(bookmarkType, 'Cover Image');
     final tags = _property(bookmarkType, 'Tags');
+    final legacyImageObjectIds = (await database.customSelect(
+      'SELECT object_id FROM photo_object_links WHERE workspace_id = ?',
+      variables: [Variable<int>(workspaceId)],
+    ).get())
+        .map((row) => row.read<int>('object_id'))
+        .toSet();
 
     for (final bookmark in bookmarks) {
       final objectId = await _ensureLinkedObject(
@@ -358,17 +367,52 @@ class CoreObjectBridge {
           'Legacy Bookmark ${bookmark.id} cover photo has no linked Image Object.',
         );
       }
+      // During Photo -> Image migration, legacy rows still own only the subset
+      // of Image Relations they can represent. Preserve native Image targets
+      // that have no photo_object_links mapping so a later compatibility sync
+      // cannot erase first-class canonical Image writes.
+      final existingRelations = await _relationReads.outgoing(
+        sourceObjectTypeId: bookmarkType.id,
+        sourceObjectId: objectId,
+      );
+      final nativeImageObjectIds = existingRelations
+          .where(
+            (relation) =>
+                relation.property.id == images.id &&
+                !legacyImageObjectIds.contains(relation.targetObject.id),
+          )
+          .map((relation) => relation.targetObject.id)
+          .toList(growable: false);
+      final mergedImageObjectIds = <int>[
+        ...photoObjectIds,
+        ...nativeImageObjectIds.where(
+          (objectId) => !photoObjectIds.contains(objectId),
+        ),
+      ];
+
+      int? nativeCoverImageObjectId;
+      for (final relation in existingRelations) {
+        if (relation.property.id != coverImage.id ||
+            legacyImageObjectIds.contains(relation.targetObject.id)) {
+          continue;
+        }
+        nativeCoverImageObjectId = relation.targetObject.id;
+        break;
+      }
+      final resolvedCoverImageObjectId =
+          nativeCoverImageObjectId ?? coverImageObjectId;
+
       await _relationMutations.setRelation(
         objectId: objectId,
         property: images,
-        targetObjectIds: photoObjectIds,
+        targetObjectIds: mergedImageObjectIds,
       );
       await _relationMutations.setRelation(
         objectId: objectId,
         property: coverImage,
-        targetObjectIds: coverImageObjectId == null
+        targetObjectIds: resolvedCoverImageObjectId == null
             ? const <int>[]
-            : <int>[coverImageObjectId],
+            : <int>[resolvedCoverImageObjectId],
       );
 
       final tagRows = await database.customSelect(
