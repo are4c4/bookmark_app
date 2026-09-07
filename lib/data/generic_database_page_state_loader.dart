@@ -32,8 +32,15 @@ class GenericDatabasePageState {
   final List<AppObject> objects;
   final List<GenericPropertyRecord> properties;
   final List<GenericRecord> records;
+
+  /// Compatibility placeholders for the current shared page-state seam.
+  ///
+  /// `GenericDatabasePage` does not consume these projections. Keeping them
+  /// empty avoids loading every ObjectType and every record set on each reload
+  /// while allowing the large shared host to be simplified separately.
   final List<GenericDatabaseDefinitionRecord> objectTypes;
   final Map<int, List<GenericRecord>> recordsByType;
+
   final Map<int, Map<int, dynamic>> computedValues;
   final GenericDatabaseCreateMode createMode;
 }
@@ -53,6 +60,10 @@ class GenericDatabasePageStateLoader {
   });
 
   final GenericDatabaseCollectionPageLoader pageLoader;
+
+  /// Retained until the shared `GenericDatabasePageServices` composition seam
+  /// can remove this constructor dependency without overlapping active work.
+  /// Reload no longer uses it for workspace-wide ObjectType/record fan-out.
   final GenericDatabaseStore genericStore;
   final ObjectComputedValueStore computedStore;
   final GenericDatabaseCreateModeResolver createModeForObjectType;
@@ -77,13 +88,6 @@ class GenericDatabasePageStateLoader {
     final createMode = objectType == null
         ? GenericDatabaseCreateMode.generic
         : await createModeForObjectType(objectType.id);
-
-    final objectTypes = await genericStore.listAllDatabases(workspaceId);
-    final recordsByType = <int, List<GenericRecord>>{};
-    for (final relatedType in objectTypes) {
-      recordsByType[relatedType.id] =
-          await genericStore.listRecords(relatedType.id);
-    }
 
     final computedValues = <int, Map<int, dynamic>>{};
     if (objectType != null) {
@@ -122,8 +126,8 @@ class GenericDatabasePageStateLoader {
       objects: objects,
       properties: page?.properties ?? const <GenericPropertyRecord>[],
       records: page?.records ?? const <GenericRecord>[],
-      objectTypes: objectTypes,
-      recordsByType: recordsByType,
+      objectTypes: const <GenericDatabaseDefinitionRecord>[],
+      recordsByType: const <int, List<GenericRecord>>{},
       computedValues: computedValues,
       createMode: createMode,
     );
