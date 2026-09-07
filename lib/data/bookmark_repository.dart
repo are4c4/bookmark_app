@@ -204,7 +204,6 @@ class BookmarkRepository {
       thumbnail: thumbnail,
       description: description,
       tagNames: tagNames,
-      personNames: null,
       status: status,
       rating: rating,
     );

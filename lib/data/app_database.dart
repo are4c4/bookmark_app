@@ -193,7 +193,6 @@ class AppDatabase extends _$AppDatabase {
     String? thumbnail,
     String? description,
     Iterable<String> tagNames = const [],
-    Iterable<String>? personNames,
     String? status,
     int? rating,
   }) => transaction(() async {
@@ -214,7 +213,6 @@ class AppDatabase extends _$AppDatabase {
           rating: rating == null ? const Value.absent() : Value(rating.clamp(0, 5)),
         ));
         await setBookmarkTags(id, tagNames);
-        if (personNames != null) await setBookmarkPeople(id, personNames);
       });
 
   Future<void> setBookmarkTags(int bookmarkId, Iterable<String> names) async {
