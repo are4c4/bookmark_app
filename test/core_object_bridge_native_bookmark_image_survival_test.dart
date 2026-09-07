@@ -108,7 +108,7 @@ void main() {
       title: 'Native image',
       originalFilename: 'native-only.png',
     );
-    expect(nativeImage.databaseId, imageType.id);
+    expect(nativeImage.objectTypeId, imageType.id);
 
     await mutations.setRelation(
       objectId: bookmarkObjectId,
