@@ -8,11 +8,13 @@ Issue #225 — reduce maintenance hotspots and retire duplicate/unused legacy pa
 Primary lane: **G — Refactor & Architecture Health**. This lane owns measurable responsibility reduction, proven caller-zero retirement, failure-policy/privacy cleanup, maintainability guardrails, architecture-health audits, and incremental legacy shim retirement. It does not redesign Relation semantics, primitive identity/storage semantics, Search semantics, Database/View product behavior, or Vault recovery policy.
 
 ## Current checkpoint — 2026-09-07
-Latest integrated Lane G production checkpoint: **`1efdf8d32347dc4755ee82d7fad3570e27539ef7` — #701 Sanitize Database Property add failure message**.
+Latest integrated Lane G production checkpoint: **`6cb9fa50482e44ed30f6b828bddc44c5a709e3d3` — #705 Retire duplicate AppDatabase tag hierarchy mutation**.
 
-Immediately preceding Lane G checkpoint: **`a2d22e89792ea4d46abe030bc56e1c7910c5fe60` — #695 Retire Photo Database presentation shim imports**.
+Immediately preceding Lane G checkpoints:
+- **`1efdf8d32347dc4755ee82d7fad3570e27539ef7` — #701 Sanitize Database Property add failure message**;
+- **`a2d22e89792ea4d46abe030bc56e1c7910c5fe60` — #695 Retire Photo Database presentation shim imports**.
 
-This run completed two independent behavior-preserving slices:
+This run completed three independent behavior-preserving slices:
 
 ### #695 — Photo Database-presentation shim cleanup
 - `PhotoManagementPage` now imports `DatabaseActionCard` / `DatabaseActionRow`, `DatabasePageToolbar`, `DatabaseViewTabs`, and `ResizableDetailPane` directly from `lib/features/database/presentation/widgets/`;
@@ -28,10 +30,17 @@ This run completed two independent behavior-preserving slices:
 - debug-only diagnostics use a fixed operation label plus stack trace, without exception text, paths, Property names, or persisted values;
 - Property persistence still goes through the existing `DatabasePropertyAuthoringService`; Relation schema/cardinality semantics are unchanged.
 
-Parallel main changes #685 and #702 landed between these Refactor merges. Their changed files were non-overlapping with #701, so #701 was merged only after GitHub recomputed it as mergeable and its full CI was green.
+### #705 — duplicate AppDatabase Tag hierarchy mutation retirement
+- `AppDatabase.createTag(...)` now owns only legacy Tag identity creation and no longer accepts the unused `parentTagId` argument;
+- duplicate `AppDatabase.setTagParent(...)` / cycle-walk logic was deleted;
+- canonical parent/group mutation remains `TagGroupStore.moveTag(...)`, which production Tag management and `BookmarkRepository.createTag(... parent ...)` already use;
+- the existing Tag integrity suite now builds hierarchy through `TagGroupStore.moveTag(...)`, so cycle prevention, group propagation, merge and descendant usage behavior remain exercised through the canonical Store;
+- production code decreased by 17 lines in `app_database.dart`; no Relation/Object/Search/Primitive/Storage semantics changed.
+
+Parallel Object/Primitive changes landed around these Refactor merges. Each Refactor integration was only performed after live mergeability and changed-file ownership were rechecked.
 
 ## Validation completed
-For **#695** current-head Flutter CI passed:
+For **#695**, **#701**, and **#705**, current-head Flutter CI passed:
 - Maintainability guardrail tests;
 - Maintainability regression ceilings;
 - feature legacy dependency guard;
@@ -39,9 +48,7 @@ For **#695** current-head Flutter CI passed:
 - `flutter analyze`;
 - full `flutter test`.
 
-For **#701** current-head Flutter CI passed the same full sequence, including the new Property-add failure regression.
-
-Both merges used expected-head SHA checks so a moving branch could not be integrated accidentally.
+The merges used expected-head SHA checks so a moving branch could not be integrated accidentally.
 
 ## Current measurable guardrails
 `.github/workflows/flutter_ci.yml` is the source of truth. Current accepted ceilings after #695 are:
@@ -66,7 +73,8 @@ Important integrated cleanup includes:
 - #672 — remove caller-zero `DetailPropertyRow` re-export shim and ratchet shim-file ceiling 5 → 4;
 - #687 — move Collection management off four Database-presentation shims and ratchet shim imports 17 → 13;
 - #695 — move Photo management off the same four shims and ratchet shim imports 13 → 9;
-- #701 — sanitize the canonical Database Property-add user-visible failure boundary with a focused regression.
+- #701 — sanitize the canonical Database Property-add user-visible failure boundary with a focused regression;
+- #705 — delete duplicate Tag hierarchy mutation/cycle logic from `AppDatabase` and keep `TagGroupStore.moveTag(...)` canonical.
 
 Key rule: tests dedicated only to a caller-zero implementation do not make that implementation live. Prove production callers are zero and surviving behavior is independently covered before deletion.
 
@@ -77,10 +85,10 @@ Four legacy shim files still exist:
 - `lib/widgets/database_create_tiles.dart`;
 - `lib/widgets/resizable_detail_pane.dart`.
 
-After #687 and #695, the remaining real shim callers are concentrated in larger/shared hosts such as People management, `GenericDatabasePage`, and Stage1. Do **not** reconstruct those files merely to reduce the metric. Switch callers only when a naturally patch-sized edit is already safe, then delete a shim only after true caller-zero is proven.
+After #687 and #695, the remaining real shim callers are concentrated in larger/shared hosts such as People management, `GenericDatabasePage`, and Stage1. A live ownership check found no open PR currently naming `people_management_page.dart`, and that host still has four shim imports. However it is a ~40 KB hotspot; with connector writes requiring complete-file replacement, do **not** reconstruct it merely to reduce the metric. Switch callers only when a naturally patch-sized edit mechanism/host change is safe, then delete a shim only after true caller-zero is proven.
 
 ## AppDatabase responsibility state
-Major completed narrowing includes Bookmark aggregate reads -> `BookmarkReadStore`, profile-relative paths -> `ProfilePathResolver`, Saved View aggregation -> `SavedViewReadStore`, Photo aggregate/path reads -> `PhotoReadStore`, versioned migration helpers, engagement mutations -> `BookmarkEngagementStore`, and dead People helpers removed.
+Major completed narrowing includes Bookmark aggregate reads -> `BookmarkReadStore`, profile-relative paths -> `ProfilePathResolver`, Saved View aggregation -> `SavedViewReadStore`, Photo aggregate/path reads -> `PhotoReadStore`, versioned migration helpers, engagement mutations -> `BookmarkEngagementStore`, dead People helpers removed, and duplicate Tag hierarchy mutation removed by #705.
 
 Two audited dead seams remain deferred because applying them requires editing large `bookmark_repository.dart`:
 - `AppDatabase.updateBookmarkFields(... personNames ...)` currently has one production caller that passes `personNames: null`; live Person updates are role-aware elsewhere;
@@ -109,15 +117,15 @@ A current search still finds raw user-visible exception interpolation in larger/
 
 Profile/Vault recovery semantics remain Storage-owned and must not be changed under Refactor merely because a catch is broad.
 
-## Current-source non-candidates / audit result
-The latest caller-zero sweep did not find another safe small production deletion. Candidate services/resolvers inspected still have real production callers, including Gallery cover compatibility/target resolution, Object search refresh planning, Image edit infrastructure, Database View management/group adapters, Generic Object View coordination, remote image storage, and the four remaining Database-presentation shims.
+## Current-source audit result
+The latest caller-zero sweep found #705 as a real responsibility-removal candidate and integrated it. Production searches also confirmed `BookmarkRepository.createTag(... parent ...)` and Tag management already route hierarchy mutation through `TagGroupStore.moveTag(...)`, validating that the deleted `AppDatabase` hierarchy path was duplicate rather than canonical behavior.
 
-Do not create wrappers or speculative abstractions merely because no deletion candidate is currently available.
+The remaining obvious shim and failure-policy candidates are concentrated in large shared hosts or another lane's active product territory. Do not create wrappers or speculative abstractions merely because no further small deletion candidate is currently available.
 
 ## Exact next actions
 1. Re-read current `main` and open PR ownership before every next slice; parallel lanes are merging rapidly.
 2. Continue true production caller-zero audits and prefer whole-module/API deletion when independent canonical coverage exists.
-3. Re-audit the remaining nine Database-presentation shim imports; lower 9 only through naturally safe host edits, not broad rewrites.
+3. Re-audit the remaining nine Database-presentation shim imports; lower 9 only through naturally safe host edits, not broad complete-file rewrites.
 4. Keep the two dead Bookmark API seams deferred until `bookmark_repository.dart` can be patched safely.
 5. Continue `GenericDatabasePage` extraction only with a focused regression-backed slice and an available hotspot lease.
 6. Lower presentation/database or feature-presentation `AppDatabase` ceilings only after a real responsibility/boundary move removes references.
@@ -133,4 +141,4 @@ Do not create wrappers or speculative abstractions merely because no deletion ca
 - behavior-preserving cleanup must not silently become schema, Relation, Search, primitive-storage, or recovery-policy redesign.
 
 ## Stop / continuation state
-#695 and #701 are integrated and fully validated. The next obvious legacy-shim and raw-error candidates are currently concentrated in shared hotspots or another lane's active product territory. Continue with a fresh ownership/caller-zero audit on the next run; if no independent safe slice exists, idling is preferable to manufacturing abstraction or broad hotspot churn.
+#695, #701, and #705 are integrated and fully validated. The remaining obvious legacy-shim/raw-error candidates are currently concentrated in shared hotspots or another lane's active product territory, and the two known dead Bookmark API seams require a large repository host edit. Continue with a fresh ownership/caller-zero audit on the next run; if no independent safe slice exists, idling is preferable to manufacturing abstraction or broad hotspot churn.
