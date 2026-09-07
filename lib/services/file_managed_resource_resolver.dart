@@ -1,5 +1,7 @@
+import '../data/file_object_service.dart';
 import '../data/object_store.dart';
 import '../data/profile_path_resolver.dart';
+import '../data/system_object_store.dart';
 import '../domain/object_model.dart';
 import 'managed_file_resolver.dart';
 
@@ -25,12 +27,13 @@ class FileManagedResource {
   final DateTime modifiedAt;
 }
 
-/// Resolves the file-backed capability of one canonical File Object read-only.
+/// Low-level read-only resolver for a File-shaped ObjectType.
 ///
-/// The caller is responsible for verifying [fileObjectTypeId] is the canonical
-/// system File ObjectType. Object identity/metadata stay in FileObjectService;
-/// portable path resolution and filesystem probing are delegated to the same
-/// [ManagedFileResolver] used by Image presentation.
+/// This class deliberately does not infer built-in primitive identity from
+/// Property names. Production native File/PDF capability composition should use
+/// [CanonicalFileManagedResourceResolver], which first verifies the registered
+/// system File ObjectType. Portable path resolution and filesystem probing are
+/// delegated to the shared [ManagedFileResolver].
 class FileManagedResourceResolver {
   FileManagedResourceResolver(
     this._objectStore, {
@@ -107,5 +110,40 @@ class FileManagedResourceResolver {
   String? _stringValue(dynamic value) {
     final candidate = value?.toString().trim();
     return candidate == null || candidate.isEmpty ? null : candidate;
+  }
+}
+
+/// Native file-backed resolver that refuses to activate File/PDF capability for
+/// arbitrary custom ObjectTypes that merely happen to contain a `File`
+/// Property.
+///
+/// Built-in identity is verified through the system ObjectType registry before
+/// any path or filesystem probe runs. This keeps PDF preview/metadata/text and
+/// other native File behavior attached to the concrete canonical File primitive
+/// rather than becoming implicit structural inheritance.
+class CanonicalFileManagedResourceResolver extends FileManagedResourceResolver {
+  CanonicalFileManagedResourceResolver({
+    required ObjectStore objectStore,
+    required SystemObjectStore systemObjects,
+    ProfilePathResolver? pathResolver,
+  })  : _systemObjects = systemObjects,
+        super(objectStore, pathResolver: pathResolver);
+
+  final SystemObjectStore _systemObjects;
+
+  @override
+  Future<FileManagedResource?> resolveManaged({
+    required int fileObjectTypeId,
+    required int fileObjectId,
+  }) async {
+    if (fileObjectTypeId <= 0 || fileObjectId <= 0) return null;
+    final systemKey = await _systemObjects.systemKeyForObjectType(
+      fileObjectTypeId,
+    );
+    if (systemKey != FileObjectService.systemKey) return null;
+    return super.resolveManaged(
+      fileObjectTypeId: fileObjectTypeId,
+      fileObjectId: fileObjectId,
+    );
   }
 }
