@@ -6,16 +6,11 @@
 Make ObjectType / Database / View / schema configuration expressive and safe enough that new domains normally require configuration/templates rather than dedicated management pages.
 
 ## Current status
-**Lane C has no independent product implementation issue.**
+Focused #490/#491/#492/#493 work is complete, but Lane C has one concrete cross-lane presentation obligation under #481:
 
-The focused composability/schema Issues owned by this lane are complete:
-- #490 — completed/closed after generic Bookmark template proof.
-- #491 — completed/closed after Relation Property authoring and real target quick-create/import composition.
-- #492 — completed/closed after configurable Relation-backed Gallery cover reached the real generic Database host.
-- #493 — completed/closed after safe migration/delete UX and real-host Property schema management.
-- #484 umbrella — completed/closed after primitive-vs-domain boundary plus Bookmark composability proof.
+**Generic Database side peek must compose the existing canonical Body surface so side/center/full opening modes expose the same Object Body.**
 
-#56 remains open as the broader product umbrella, but its remaining concrete implementation is currently routed outside Lane C or requires real-host validation rather than speculative Database/View work.
+Lane A owns the Body persistence/editor contract and has already provided the reusable `ObjectBodyEditorSection`; Lane C owns composition into the Database/View side-peek host. Do not create another Body store/editor path.
 
 ## Coordination checkpoint — 2026-09-08
 PR #873 refreshes repository-wide routing because `docs/AI_PROGRESS.md` had become stale after the composability milestone set completed.
@@ -24,11 +19,14 @@ The docs refresh records:
 - #484/#489/#490/#491/#492/#493/#494/#495/#501 as completed/closed;
 - #856 as the generic Bookmark template/operation proof;
 - exactly eight current open umbrella/product Issues: #56/#155/#218/#225/#242/#245/#249/#481;
-- Lane C as intentionally idle until a concrete Database/View/schema/template gap appears;
-- #481/#249 as Object-owned product work, #155/#245 as Primitive/Object migration/presentation work, #225 as Refactor, and #242/#218 as final real-macOS validation;
+- #481 generic Database side-peek Body composition as the current Lane C slice;
+- #249 remaining Bookmark presentation as Object-owned;
+- #155/#245 as Primitive/Object migration/presentation work, #225 as Refactor, and #242/#218 as final real-macOS validation;
 - the remaining product edge as presentation/migration/consolidation rather than missing generic schema composition.
 
-No runtime behavior changes are included.
+Recent Primitive host work (#862 File collection import, #866 content-aware Image picker, #869 canonical List media) is already merged; #495 is completed/closed. No Primitive PR currently owns `GenericDatabasePage` at this checkpoint, but re-audit live PR files immediately before editing it.
+
+PR #873 itself is docs-only; the #481 implementation belongs in a separate feature PR from latest main.
 
 ## Latest completed checkpoints
 - #760 — failed Flutter Test runs retain diagnostic logs/artifacts.
@@ -43,7 +41,23 @@ No runtime behavior changes are included.
 - #845 (`a320a5b8…`) — real `GenericDatabasePage` Property schema management; #493 closed.
 - #851 (`0ca36410…`) — template View Group defaults resolve template-local Property names to created canonical Property ids.
 - #856 (`7e103a02…`) — generic user-owned Bookmark template and generic-operation proof; full Flutter Analyze/Test green; #490 and #484 subsequently closed.
-- #861 (`87584453…`) — durable C-lane idle handoff after composability completion; full Flutter Analyze/Test green.
+- #861 (`87584453…`) — durable C-lane composability handoff; full Flutter Analyze/Test green.
+
+## #481 cross-lane contract
+Issue #481's latest Object-lane audits establish:
+- shared `ObjectInspectorPage` Body editing is universal for Weblink/Image/custom/Daily Note;
+- Bookmark real detail has a canonical Body composition path;
+- center peek and full-page generic Database openings already use `ObjectInspectorPage`;
+- generic Database side peek remains an alternate `_detail(...)` surface with title/Properties/backlinks but no Body;
+- `ObjectBodyEditorSection` is the reusable, non-Bookmark-specific canonical Body composition seam backed by `ObjectBodyStore` and existing Body edit/action/reference services;
+- Lane C should compose that seam into side peek, while Lane A should not broaden into Database/View presentation.
+
+Acceptance for the C slice:
+1. side peek renders/edits the same canonical Body as center/full;
+2. custom and system Object identity semantics remain unchanged;
+3. no second Body store/editor or flattened Body representation is introduced;
+4. side-peek Property/backlink behavior remains intact;
+5. focused real-host regression proves Body visibility/edit persistence through side peek.
 
 ## What #856 proves
 The built-in `bookmark` starting experience is configuration, not a hard-coded domain engine:
@@ -58,37 +72,36 @@ The built-in `bookmark` starting experience is configuration, not a hard-coded d
 Together with Paper/Plant regressions, version/ownership tests, searchable template selection, Group/Layout defaults and empty custom Database creation, this satisfies the Lane C composability target.
 
 ## Remaining open work and ownership
-Do not take these merely to keep Lane C busy:
-- #249 Bookmark presentation parity — **Object lane**; the primary remaining gap is real Stage1 fixed/masonry Gallery wiring.
-- #481 universal Body — **Object lane**; core universal Body is integrated, remaining gap is real-host composition parity such as Generic Database side peek.
+- #481 generic Database side-peek Body composition — **Lane C current slice**, using Lane A's canonical Body seam.
+- #249 Bookmark presentation parity — **Object lane**; primary remaining gap is real Stage1 fixed/masonry Gallery wiring.
 - #155 Weblink/Image product presentation and legacy convergence — primarily **Primitive/Object**.
 - #245 Photo -> Image migration — **Primitive/Object**, with Refactor cleanup after parity.
 - #225 maintainability / legacy retirement / broad host extraction — **Refactor lane**.
 - #242/#218 are held for final real-macOS validation, not Lane C implementation.
 
-#495 content-aware Image/File import routing is complete/closed. #149 and #156 are also closed; do not resurrect them from stale umbrella prose.
+#495 content-aware Image/File import routing, #149 Property-handle polish and #156 masonry Gallery are completed/closed; do not resurrect them from stale umbrella prose.
 
 Manual Database membership include/exclude remains explicitly deferred in #56 until real use demonstrates a need; do not invent it speculatively.
 
 ## Shared hotspot lease
-Lane C currently holds **no shared-hotspot lease**.
-
-At this checkpoint Primitive PR #869 is still open and owns a patch-sized `GenericDatabasePage` canonical List-media composition slice. Future C work must re-audit open PR files before touching that host.
-
-Before future C work, re-audit open PRs for:
+Before #481 implementation, re-audit current open PRs. The intended production host is:
 - `lib/views/generic_database_page.dart`
+
+Also re-audit:
 - `lib/views/app_shell.dart`
 - `lib/views/object_inspector_page.dart`
 - `lib/views/bookmark_unified_stage1_page.dart`
 - `lib/widgets/bookmark_reorderable_properties.dart`
 - `lib/views/people_management_page.dart`
 - `lib/views/settings_page.dart`
-- `lib/services/profile_manager.dart` / equivalent profile host
+- `lib/services/profile_manager.dart`
 - `lib/data/app_database.dart`
+
+Use a patch-sized host change. Do not rewrite the large page or absorb Body internals into it.
 
 ## Cross-lane boundaries
 - Lane B owns Relation mutation/index/backlink/audit/reconcile and fail-closed read correctness; C consumes canonical services.
-- Lane A owns Object/ObjectType/Body/core identity and Object-owned presentation work.
+- Lane A owns Object/ObjectType/Body/core identity and the reusable Body contract; C may compose the shared Body seam into Database/View hosts.
 - Lane D owns Weblink/Image/File/Tag primitive product semantics and import/media behavior.
 - Lane F owns Vault/filesystem lifecycle and managed-byte placement/ownership boundaries.
 - Lane G owns behavior-preserving refactor, hotspot reduction and legacy retirement.
@@ -99,18 +112,14 @@ GitHub Flutter CI is the validation gate because local Flutter/Dart execution is
 Latest functional Lane C checkpoint #856 passed maintainability guards, Drift generation, Flutter Analyze and the complete Flutter Test suite before merge. #861 was docs-only and also passed full Flutter Analyze/Test before merge.
 
 ## Exact next actions
-1. Read live PR #873 head and CI after the latest docs commits.
-2. If red, fix only the concrete documentation/guard failure; if green, re-check main/open PR overlap and merge #873.
-3. Re-audit open Issues/PRs after #873 merge.
-4. If no new focused Database/View/schema/template obligation exists, stop under the AGENTS idle criterion instead of inventing product work.
+1. Finish PR #873 routing refresh and merge it when the latest head is full CI green.
+2. Re-audit live open PR changed files for `generic_database_page.dart`.
+3. Start a fresh #481 Lane C branch from latest main.
+4. Inspect current `GenericDatabasePage._detail(...)`, `ObjectBodyEditorSection`, and existing side/center/full opening regressions.
+5. Compose the canonical Body section into generic side peek with a patch-sized host change and add real-host side-peek Body persistence coverage.
+6. Run full Flutter CI, fix exact failures, merge when green, then update #481/C handoff.
 
 ## Stop reason / resume triggers
-After #873 is merged, the expected stop reason remains: **the active lane has no remaining independent actionable product work**.
+Lane C is **not idle** while the #481 side-peek composition remains open. After that slice is merged, re-audit live Issues/PRs; idle is appropriate only if no new Database/View/schema/template or explicitly assigned cross-lane composition obligation remains.
 
-Resume Lane C when any of the following occurs:
-1. a new focused Database/View/schema/template Issue is opened or explicitly assigned to C;
-2. #56 gains a concrete Database/View acceptance gap not already routed elsewhere;
-3. another lane lands a new capability that creates a specific C-owned View/schema composition obligation;
-4. ownership of #249 or another presentation slice is explicitly reassigned to C.
-
-On resume, start from live GitHub state; do not assume this checkpoint is still current.
+On every resume, start from live GitHub state rather than this checkpoint alone.
