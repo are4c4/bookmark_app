@@ -9,6 +9,7 @@ import 'package:bookmark_app/domain/object_body.dart';
 import 'package:bookmark_app/domain/object_body_block_contracts.dart';
 import 'package:bookmark_app/services/object_sync_service.dart';
 import 'package:bookmark_app/widgets/bookmark_relation_section.dart';
+import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
