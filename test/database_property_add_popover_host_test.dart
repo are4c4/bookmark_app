@@ -10,6 +10,27 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+class _FailingPropertyAuthoringService
+    extends DatabasePropertyAuthoringService {
+  _FailingPropertyAuthoringService(super.objectStore);
+
+  @override
+  Future<List<AppObjectType>> relationTargets({required int workspaceId}) async =>
+      const <AppObjectType>[];
+
+  @override
+  Future<int> createProperty({
+    required int objectTypeId,
+    required String name,
+    required ObjectPropertyType type,
+    Map<String, dynamic> config = const <String, dynamic>{},
+    int? relationTargetObjectTypeId,
+    bool relationMultiple = true,
+  }) async {
+    throw StateError('private path: /Users/example/secret.db');
+  }
+}
+
 Future<void> _submitCreate(WidgetTester tester) async {
   final submit = find.byKey(const ValueKey('property-add-create-submit'));
   await tester.ensureVisible(submit);
@@ -148,5 +169,53 @@ void main() {
         .singleWhere((property) => property.id == createdPropertyId);
     expect(created.name, 'Memo');
     expect(created.type, ObjectPropertyType.text);
+  });
+
+  testWidgets('creation failure shows stable message without exception details',
+      (tester) async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final sourceTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Entry',
+    );
+    var created = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: DatabasePropertyAddPopoverHost(
+            workspaceId: workspaceId,
+            objectTypeId: sourceTypeId,
+            authoring: _FailingPropertyAuthoringService(objectStore),
+            hiddenProperties: const [],
+            onRevealExisting: (_) {},
+            onCreated: (_) => created = true,
+            buttonLabel: '追加',
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('追加'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('property-add-create-new')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('property-add-create-name')),
+      'Memo',
+    );
+    await _submitCreate(tester);
+
+    expect(created, isFalse);
+    expect(
+      find.text('プロパティを追加できませんでした。もう一度お試しください。'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('/Users/example/secret.db'), findsNothing);
+    expect(find.textContaining('Bad state'), findsNothing);
   });
 }
