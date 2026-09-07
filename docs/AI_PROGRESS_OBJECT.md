@@ -13,42 +13,47 @@ Keep reusable Object/ObjectType identity, typed Property semantics, universal Bo
 ## Current integrated state — 2026-09-07
 - #503 merged: shared `ObjectInspectorPage` Body editing is universal for system and custom ObjectTypes.
 - #689 merged: custom ObjectType and Daily Note universal Body regressions are covered.
-- #698 remains an open Lane A PR exposing canonical Object Body in the Bookmark detail composition; generic Database side peek is still Lane C-owned.
 - #699 merged: `ObjectStore.setPropertyValue` treats persisted Property ObjectType/type/semantics as authoritative and rejects forged metadata/computed direct writes.
-- #712 merged as `cc6e34ca03fa23e12548c3d2c2a4a09f995999a7`: generic Object creation returns the exact inserted row id under concurrency.
-- Universal Body text already participates in canonical Object search through completed Lane E work; Lane A must not create a parallel note search path.
+- #712 merged: concurrent generic Object creation returns the exact inserted row id.
+- #724 merged: intrinsic `createdTime` / `updatedTime` remain read-only through the shared Object detail mutation contract.
+- #511 merged: `ObjectTypeDefaults` can persist a reusable Body template and new Objects receive the current template without mutating existing Body.
+- #517 merged: focused Body-template updates preserve other ObjectType presentation defaults.
+- #521 merged: Object Body rejects blank/lossy block identities and duplicate block ids before persistence.
+- #740 merged: ObjectType defaults reject duplicate Property ids on both write and read boundaries.
+- #749 merged: malformed present Body `version` / `blocks` fields fail closed instead of silently becoming current-version/empty Body.
+- #761 merged: Body versions are one-based; zero/negative versions fail closed on read and serialization while positive future versions remain forward-compatible.
+- #755 merged: persisted Body block `id` / `type` / `text` / `attributes` field shapes fail closed instead of being stringified or flattened; valid unknown block attributes remain forward-compatible.
+- #780 merged as `af8a816a04275cd25020916eebdc8c5338a659a8`: Bookmark detail now composes the canonical universal Object Body through a read-only Bookmark -> Object identity boundary; unmirrored legacy Bookmarks stay fail-soft and corrupt Body stays fail-closed.
+- Universal Body text already participates in canonical Object search through Lane E; Lane A must not create a parallel note-search path.
 
-## Active slice
-Branch: `feature/object-detail-managed-values-main2`
-Latest implementation commit: `df47276cc9b48e4c4c5813f1770ed0c64af6a6dc`
+## Universal Body status
+The Lane A correctness path for #481 is now integrated:
+- system/custom ObjectInspector Body editing is universal;
+- Weblink/Image identity-sensitive Property guards remain separate from Body mutability;
+- custom Objects and Daily Notes retain the same Body contract;
+- Bookmark detail uses the same canonical Body persistence/edit/action/reference services without a Bookmark-specific note table or writer;
+- Bookmark presentation never manufactures a missing mirrored Object identity;
+- unknown/rich blocks remain preserved, and malformed document/block structure fails closed before editable presentation.
 
-Goal: keep intrinsic Object timestamps read-only through the shared Object detail mutation contract.
-
-Changes:
-- `ObjectDetailEditService` rejects `createdTime` and `updatedTime` from generic stored-Value editing even though they remain Value semantics for presentation/filtering purposes.
-- focused regression verifies both managed timestamp Property types fail closed and no `generic_values` entries are persisted.
-- the same patch previously passed Flutter CI on #720, but that PR diverged after parallel merges; this branch recreates the exact production/test slice from latest main rather than force-merging stale history.
-- no shared hotspot, Relation lifecycle, primitive implementation, Database/View layout, Search, Storage or Refactor cleanup is touched.
-
-Validation:
-- #720 head `36bf7cfe97d465a647ceb3e176a65b4b70b2052e` passed Flutter CI run #2270;
-- replacement branch requires its own normal Flutter CI before merge.
+`ObjectInspectorPage` still contains Body editing orchestration that overlaps with the newly reusable `ObjectBodyEditorSection`. Consolidating that duplication would be a behavior-preserving shared-hotspot refactor rather than a correctness prerequisite for #481, so coordinate with Lane G/#225 before a broad extraction.
 
 ## Hotspot ownership / concurrency
-Open PR audit found no need to touch `object_inspector_page.dart`, `generic_database_page.dart`, `app_shell.dart` or `app_database.dart` for this slice. Continue preferring service/domain/test work while other lanes own shared presentation hotspots.
+- `generic_database_page.dart`, `object_inspector_page.dart` and `app_shell.dart` remain shared hotspots. Re-check live PR ownership before editing them.
+- Prefer domain/store/service/test slices when a core invariant can be enforced below presentation.
+- Parallel Object executions have been active; always re-fetch branch head immediately before writing to an existing Lane A branch.
 
 ## Cross-lane dependencies
-- #481 cannot fully close until Lane C composes canonical Body into generic Database side peek; Lane A should provide/reuse Body/detail contracts rather than editing Database/View layout itself.
-- Weblink/Image/File-specific identity and managed media behavior belong to Lane D.
+- #481 cannot fully close until Lane C composes canonical Body into generic Database side peek / verifies its side-peek contract. Lane A should provide/reuse Body/detail contracts rather than broad-editing Database/View layout.
+- Weblink/Image/File/Tag product identity, managed media and primitive actions belong to Lane D.
 - Relation mutation/integrity belongs to Lane B.
+- Search/index pipelines belong to Lane E; Body/alias/property data contracts stay Lane A-owned, but indexing pipelines should not be duplicated here.
+- large behavior-preserving extraction from `ObjectInspectorPage` belongs with Lane G/#225 ownership coordination.
 
 ## Next actions
-1. Open replacement PR from `feature/object-detail-managed-values-main2`; close stale #720 as superseded.
-2. Process CI for the replacement and fix only failures caused by this slice.
-3. Merge when green/mergeable.
-4. Re-audit #698 and any current Body/detail PR ownership; avoid duplicating its Bookmark composition work.
-5. Continue with another independent #56/#484 Object core or typed Property semantic invariant from current main if available.
-6. Keep #481 open until Lane C side-peek Body composition is integrated; do not broaden Lane A into `generic_database_page.dart`.
+1. Re-audit #481 after Lane C side-peek work lands; do not close it while that acceptance item is still unresolved.
+2. Continue only with a concrete new #56/#484 Object core invariant or regression found from real usage; do not invent speculative schema types.
+3. If Body editor duplication becomes an active maintainability task, coordinate a small behavior-preserving `ObjectInspectorPage` extraction with Lane G rather than racing the hotspot from Lane A.
+4. Keep Weblink/Image/File product semantics in Lane D, Relation lifecycle in Lane B, Search in Lane E, and Database/View layout in Lane C.
 
-## Stop reason for this checkpoint
-Latest main advanced while #720 was open, making the old branch diverged/non-mergeable despite green CI. The managed-timestamp slice has been recreated on current main without shared-hotspot edits; next execution should process replacement CI and continue with another safe core slice if available.
+## Current checkpoint
+No known unresolved A-core corruption issue remains in Body template/default parsing, block identity, document/block field shape, version range, managed timestamps, aliases, Daily Note identity, built-in-vs-user-defined schema protection, or Bookmark canonical Body composition. The remaining explicit #481 acceptance gap is generic Database side-peek Body composition/verification, owned by Lane C. Lane A should pause new speculative implementation unless a concrete core regression or newly unblocked A-owned requirement appears.
