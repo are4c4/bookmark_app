@@ -11,6 +11,11 @@ import '../services/bookmark_image_relation_service_factory.dart';
 import '../services/image_visual_resolver.dart';
 import 'object_relation_picker_dialog.dart';
 
+typedef BookmarkImageThumbnailBuilder = Widget Function(
+  BuildContext context,
+  AppObject image,
+);
+
 /// Bookmark detail image UI backed by canonical Image Objects and Relations.
 ///
 /// Legacy Photo rows remain a read-only compatibility fallback only when the
@@ -23,12 +28,17 @@ class BookmarkImageRelationSection extends StatefulWidget {
     required this.bookmark,
     this.onFilterByLegacyPhoto,
     this.onChanged,
+    this.canonicalThumbnailBuilder,
   });
 
   final BookmarkRepository repository;
   final BookmarkItem bookmark;
   final ValueChanged<PhotoRecord>? onFilterByLegacyPhoto;
   final VoidCallback? onChanged;
+
+  /// Test/host seam. Production callers leave this null so canonical Image
+  /// thumbnails resolve through [ImageVisualResolver].
+  final BookmarkImageThumbnailBuilder? canonicalThumbnailBuilder;
 
   @override
   State<BookmarkImageRelationSection> createState() =>
@@ -286,12 +296,13 @@ class _BookmarkImageRelationSectionState
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  _CanonicalImageThumbnail(
-                    database: _service.database,
-                    objectStore: _service.objectStore,
-                    imageObjectTypeId: state.imageObjectType.id,
-                    imageObjectId: image.id,
-                  ),
+                  widget.canonicalThumbnailBuilder?.call(context, image) ??
+                      _CanonicalImageThumbnail(
+                        database: _service.database,
+                        objectStore: _service.objectStore,
+                        imageObjectTypeId: state.imageObjectType.id,
+                        imageObjectId: image.id,
+                      ),
                   if (isCover)
                     const Positioned(
                       top: 5,
