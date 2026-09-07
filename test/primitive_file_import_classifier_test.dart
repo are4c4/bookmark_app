@@ -57,6 +57,32 @@ void main() {
     expect(classification.contentType, 'image/heic');
   });
 
+  test('malformed MIME does not suppress supported image extension fallback', () {
+    for (final malformed in <String>[
+      'image/',
+      '/png',
+      'image/png/extra',
+      'image / png',
+    ]) {
+      final classification = classifier.classify(
+        filename: 'camera.png',
+        declaredContentType: malformed,
+      );
+
+      expect(
+        classification.target,
+        PrimitiveFileImportTarget.image,
+        reason: malformed,
+      );
+      expect(
+        classification.evidence,
+        PrimitiveFileImportEvidence.extension,
+        reason: malformed,
+      );
+      expect(classification.contentType, 'image/png', reason: malformed);
+    }
+  });
+
   test('unsupported image MIME remains a generic File', () {
     final classification = classifier.classify(
       filename: 'vector.svg',
