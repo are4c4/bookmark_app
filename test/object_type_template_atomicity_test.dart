@@ -55,7 +55,13 @@ void main() {
         workspaceId: workspaceId,
         template: template,
       ),
-      throwsA(anything),
+      throwsA(
+        predicate<Object>(
+          (error) =>
+              error.toString().contains('forced template instance failure'),
+          'the forced final template-instance failure',
+        ),
+      ),
     );
 
     expect(
