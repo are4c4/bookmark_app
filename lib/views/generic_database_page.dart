@@ -578,6 +578,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
   String get _createLabel => switch (_createMode) {
         GenericDatabaseCreateMode.weblinkUrl => 'URLを追加',
         GenericDatabaseCreateMode.managedImage => '画像をインポート',
+        GenericDatabaseCreateMode.managedFile => 'ファイルをインポート',
         GenericDatabaseCreateMode.dailyNote => '今日のノートを開く',
         GenericDatabaseCreateMode.generic => '新規ページ',
       };
@@ -585,6 +586,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
   IconData get _createIcon => switch (_createMode) {
         GenericDatabaseCreateMode.weblinkUrl => Icons.link,
         GenericDatabaseCreateMode.managedImage => Icons.add_photo_alternate_outlined,
+        GenericDatabaseCreateMode.managedFile => Icons.attach_file,
         GenericDatabaseCreateMode.dailyNote => Icons.today_outlined,
         GenericDatabaseCreateMode.generic => Icons.add,
       };
@@ -704,6 +706,16 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
         );
       } else if (_createMode == GenericDatabaseCreateMode.managedImage) {
         final ids = await _pageServices.imageImport.pickAndImport(
+          databaseId: widget.databaseId,
+        );
+        if (ids.isEmpty) return;
+        id = ids.first;
+      } else if (_createMode == GenericDatabaseCreateMode.managedFile) {
+        final importer = _pageServices.fileImport;
+        if (importer == null) {
+          throw StateError('Managed File import is unavailable for this profile.');
+        }
+        final ids = await importer.pickAndImport(
           databaseId: widget.databaseId,
         );
         if (ids.isEmpty) return;

@@ -16,7 +16,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('only canonical File collection requires managed File import', () async {
+  test('only canonical File collection uses managed File create mode', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
     final workspaceId = await WorkspaceStore(database).initialize();
@@ -72,10 +72,12 @@ void main() {
     expect(await service.requiresManagedFileImport(customTypeId), isFalse);
     expect(await service.requiresManagedFileImport(0), isFalse);
 
-    // Existing presentation switches remain backward-compatible until Lane C
-    // consumes the dedicated File-import capability.
     expect(
       await service.createModeForObjectType(fileDefinition.objectType.id),
+      GenericDatabaseCreateMode.managedFile,
+    );
+    expect(
+      await service.createModeForObjectType(customTypeId),
       GenericDatabaseCreateMode.generic,
     );
   });
