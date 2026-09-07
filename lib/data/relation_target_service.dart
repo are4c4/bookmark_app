@@ -1,5 +1,6 @@
 import '../domain/object_model.dart';
 import 'object_store.dart';
+import 'relation_stored_value_inspector.dart';
 
 class RelationTargetCandidates {
   const RelationTargetCandidates({
@@ -128,9 +129,15 @@ class RelationTargetService {
       );
     }
 
-    final selectedObjectIds = ObjectRelationValue.fromJson(
+    final inspection = inspectRelationStoredValue(
       sourceObject.values[resolved.property.id],
-    ).objectIds;
+    );
+    if (inspection.isMalformed) {
+      throw StateError(
+        'Malformed persisted Relation value for Object ${sourceObject.id} / Relation Property ${resolved.property.id}.',
+      );
+    }
+    final selectedObjectIds = inspection.rawObjectIds;
     final candidatesById = <int, AppObject>{
       for (final candidate in resolved.objects) candidate.id: candidate,
     };
