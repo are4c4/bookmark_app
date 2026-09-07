@@ -113,6 +113,137 @@ void main() {
     );
   });
 
+  test('trim-normalized duplicate Property names fail before provisioning',
+      () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final systemObjects = SystemObjectStore(
+      database: database,
+      objectStore: objectStore,
+    );
+    final templates = ObjectTypeTemplateStore(genericStore);
+    const invalid = ObjectTypeTemplate(
+      key: 'normalized-duplicate-property-preflight',
+      name: 'Normalized duplicate Property template',
+      icon: 'X',
+      description: 'must fail before persistence normalizes the duplicate',
+      properties: [
+        ObjectTypeTemplateProperty(
+          name: 'Cover',
+          type: 'relation',
+          relationTargetSystemKey: ImageObjectService.systemKey,
+        ),
+        ObjectTypeTemplateProperty(name: ' Cover ', type: 'text'),
+      ],
+    );
+
+    await expectLater(
+      templates.createFromTemplate(
+        workspaceId: workspaceId,
+        template: invalid,
+      ),
+      throwsStateError,
+    );
+
+    expect(
+      await systemObjects.getSystemObjectType(
+        workspaceId: workspaceId,
+        systemKey: ImageObjectService.systemKey,
+      ),
+      isNull,
+    );
+  });
+
+  test('blank Property names fail before primitive provisioning', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final systemObjects = SystemObjectStore(
+      database: database,
+      objectStore: objectStore,
+    );
+    final templates = ObjectTypeTemplateStore(genericStore);
+    const invalid = ObjectTypeTemplate(
+      key: 'blank-property-name-preflight',
+      name: 'Blank Property name template',
+      icon: 'X',
+      description: 'must fail before blank persistence',
+      properties: [
+        ObjectTypeTemplateProperty(
+          name: 'Cover',
+          type: 'relation',
+          relationTargetSystemKey: ImageObjectService.systemKey,
+        ),
+        ObjectTypeTemplateProperty(name: '   ', type: 'text'),
+      ],
+    );
+
+    await expectLater(
+      templates.createFromTemplate(
+        workspaceId: workspaceId,
+        template: invalid,
+      ),
+      throwsStateError,
+    );
+
+    expect(
+      await systemObjects.getSystemObjectType(
+        workspaceId: workspaceId,
+        systemKey: ImageObjectService.systemKey,
+      ),
+      isNull,
+    );
+  });
+
+  test('whitespace-lossy Property names fail before primitive provisioning',
+      () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final systemObjects = SystemObjectStore(
+      database: database,
+      objectStore: objectStore,
+    );
+    final templates = ObjectTypeTemplateStore(genericStore);
+    const invalid = ObjectTypeTemplate(
+      key: 'whitespace-lossy-property-name-preflight',
+      name: 'Whitespace-lossy Property name template',
+      icon: 'X',
+      description: 'must fail before persistence changes Property identity',
+      properties: [
+        ObjectTypeTemplateProperty(
+          name: 'Cover',
+          type: 'relation',
+          relationTargetSystemKey: ImageObjectService.systemKey,
+        ),
+        ObjectTypeTemplateProperty(name: ' Notes ', type: 'text'),
+      ],
+    );
+
+    await expectLater(
+      templates.createFromTemplate(
+        workspaceId: workspaceId,
+        template: invalid,
+      ),
+      throwsStateError,
+    );
+
+    expect(
+      await systemObjects.getSystemObjectType(
+        workspaceId: workspaceId,
+        systemKey: ImageObjectService.systemKey,
+      ),
+      isNull,
+    );
+  });
+
   test('unknown Property type fails instead of silently becoming text',
       () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
