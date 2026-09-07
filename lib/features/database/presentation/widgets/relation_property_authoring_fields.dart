@@ -100,6 +100,9 @@ class _RelationPropertyAuthoringFieldsState
     final filtered = _filteredTargets;
     final scheme = Theme.of(context).colorScheme;
     final keyPrefix = widget.keyPrefix;
+    final resultsHeight = filtered.isEmpty
+        ? 48.0
+        : (filtered.length * 64.0).clamp(64.0, 220.0).toDouble();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -133,41 +136,44 @@ class _RelationPropertyAuthoringFieldsState
         ),
         if (_showResults) ...[
           const SizedBox(height: 6),
-          Container(
-            key: ValueKey('$keyPrefix-target-results'),
-            constraints: const BoxConstraints(maxHeight: 220),
-            decoration: BoxDecoration(
-              border: Border.all(color: scheme.outlineVariant),
-              borderRadius: BorderRadius.circular(6),
+          SizedBox(
+            height: resultsHeight,
+            child: Container(
+              key: ValueKey('$keyPrefix-target-results'),
+              decoration: BoxDecoration(
+                border: Border.all(color: scheme.outlineVariant),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: filtered.isEmpty
+                  ? const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: Text('一致するObjectTypeがありません'),
+                    )
+                  : ListView.builder(
+                      itemCount: filtered.length,
+                      itemBuilder: (context, index) {
+                        final target = filtered[index];
+                        final isSelected = target.objectTypeId ==
+                            widget.selectedTargetObjectTypeId;
+                        return ListTile(
+                          key: ValueKey(
+                            '$keyPrefix-target-${target.objectTypeId}',
+                          ),
+                          dense: true,
+                          leading: Text(
+                            target.icon,
+                            style: const TextStyle(fontSize: 18),
+                          ),
+                          title: Text(target.name),
+                          subtitle: Text(target.kindLabel),
+                          trailing: isSelected
+                              ? const Icon(Icons.check, size: 18)
+                              : null,
+                          onTap: () => _select(target),
+                        );
+                      },
+                    ),
             ),
-            child: filtered.isEmpty
-                ? const Padding(
-                    padding: EdgeInsets.all(12),
-                    child: Text('一致するObjectTypeがありません'),
-                  )
-                : ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: filtered.length,
-                    itemBuilder: (context, index) {
-                      final target = filtered[index];
-                      final isSelected = target.objectTypeId ==
-                          widget.selectedTargetObjectTypeId;
-                      return ListTile(
-                        key: ValueKey('$keyPrefix-target-${target.objectTypeId}'),
-                        dense: true,
-                        leading: Text(
-                          target.icon,
-                          style: const TextStyle(fontSize: 18),
-                        ),
-                        title: Text(target.name),
-                        subtitle: Text(target.kindLabel),
-                        trailing: isSelected
-                            ? const Icon(Icons.check, size: 18)
-                            : null,
-                        onTap: () => _select(target),
-                      );
-                    },
-                  ),
           ),
         ],
         const SizedBox(height: 12),
