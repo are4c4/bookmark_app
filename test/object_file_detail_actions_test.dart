@@ -23,7 +23,6 @@ void main() {
   late int fileObjectId;
   late CanonicalFileManagedResourceResolver resources;
   late CanonicalFileExportService exporter;
-  late List<String> actionCalls;
   late CanonicalFileActionService actions;
 
   setUp(() async {
@@ -62,18 +61,7 @@ void main() {
       pathResolver: database.pathResolver,
     );
     exporter = CanonicalFileExportService(resources: resources);
-    actionCalls = <String>[];
-    actions = CanonicalFileActionService(
-      resources: resources,
-      openPath: (path) async {
-        actionCalls.add('open:$path');
-        return true;
-      },
-      revealPath: (path) async {
-        actionCalls.add('reveal:$path');
-        return true;
-      },
-    );
+    actions = CanonicalFileActionService(resources: resources);
   });
 
   tearDown(() async {
@@ -81,11 +69,10 @@ void main() {
     await root.delete(recursive: true);
   });
 
-  testWidgets('routes open reveal and export through canonical File services',
+  testWidgets('routes open reveal and export with canonical File identity',
       (tester) async {
-    final exportDirectory = Directory('${root.path}/exports');
-    await exportDirectory.create();
-    final destination = '${exportDirectory.path}/report-copy.txt';
+    final calls = <String>[];
+    const destination = '/chosen/export/report-copy.txt';
 
     await tester.pumpWidget(
       MaterialApp(
@@ -96,6 +83,27 @@ void main() {
             fileObjectTypeId: definition.objectType.id,
             fileObjectId: fileObjectId,
             exportDestinationPicker: () async => destination,
+            openAction: ({
+              required fileObjectTypeId,
+              required fileObjectId,
+            }) async {
+              calls.add('open:$fileObjectTypeId:$fileObjectId');
+            },
+            revealAction: ({
+              required fileObjectTypeId,
+              required fileObjectId,
+            }) async {
+              calls.add('reveal:$fileObjectTypeId:$fileObjectId');
+            },
+            exportAction: ({
+              required fileObjectTypeId,
+              required fileObjectId,
+              required destinationPath,
+            }) async {
+              calls.add(
+                'export:$fileObjectTypeId:$fileObjectId:$destinationPath',
+              );
+            },
           ),
         ),
       ),
@@ -108,11 +116,11 @@ void main() {
     await tester.tap(find.byKey(ValueKey('object-file-export-$fileObjectId')));
     await tester.pumpAndSettle();
 
-    expect(
-      actionCalls,
-      <String>['open:${managed.path}', 'reveal:${managed.path}'],
-    );
-    expect(await File(destination).readAsString(), 'canonical file bytes');
+    expect(calls, <String>[
+      'open:${definition.objectType.id}:$fileObjectId',
+      'reveal:${definition.objectType.id}:$fileObjectId',
+      'export:${definition.objectType.id}:$fileObjectId:$destination',
+    ]);
     expect(
       find.byKey(const ValueKey('object-file-detail-actions-error')),
       findsNothing,
@@ -121,22 +129,25 @@ void main() {
 
   testWidgets('action failure shows only stable path-free presentation error',
       (tester) async {
-    final failingActions = CanonicalFileActionService(
-      resources: resources,
-      openPath: (_) async => false,
-      revealPath: (_) async => false,
-    );
     Object? capturedError;
 
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: ObjectFileDetailActions(
-            actions: failingActions,
+            actions: actions,
             exporter: exporter,
             fileObjectTypeId: definition.objectType.id,
             fileObjectId: fileObjectId,
             exportDestinationPicker: () async => null,
+            openAction: ({
+              required fileObjectTypeId,
+              required fileObjectId,
+            }) async {
+              throw const CanonicalFileActionException(
+                'ファイルを開けませんでした。',
+              );
+            },
             onError: (error) => capturedError = error,
           ),
         ),
@@ -150,5 +161,6 @@ void main() {
     expect(find.text('ファイル操作に失敗しました。'), findsOneWidget);
     expect(find.textContaining(managed.path), findsNothing);
     expect(find.textContaining('report.txt'), findsNothing);
+    expect(find.textContaining('ファイルを開けませんでした。'), findsNothing);
   });
 }
