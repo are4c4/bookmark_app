@@ -210,10 +210,16 @@ class PrimitiveFileImportClassifier {
     final candidate = value?.trim().toLowerCase();
     if (candidate == null || candidate.isEmpty) return null;
     final separator = candidate.indexOf(';');
-    final mime = separator < 0 ? candidate : candidate.substring(0, separator).trim();
-    if (mime.isEmpty || !mime.contains('/')) return null;
+    final mime = separator < 0
+        ? candidate
+        : candidate.substring(0, separator).trim();
+    if (!_mimeTypePattern.hasMatch(mime)) return null;
     return mime;
   }
+
+  static final RegExp _mimeTypePattern = RegExp(
+    r"^[a-z0-9!#$%&'*+.^_`|~-]+/[a-z0-9!#$%&'*+.^_`|~-]+$",
+  );
 
   bool _isGenericBinaryMime(String value) =>
       value == 'application/octet-stream' || value == 'binary/octet-stream';
