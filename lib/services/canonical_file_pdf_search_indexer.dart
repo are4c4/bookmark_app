@@ -29,7 +29,8 @@ class CanonicalFilePdfSearchIndexer {
   /// Production composition for one profile/database.
   ///
   /// Tests may inject [readText] while still exercising the real managed-path,
-  /// content-classification, derived-text and FTS boundaries.
+  /// canonical File identity check, content-classification, derived-text and
+  /// FTS boundaries.
   factory CanonicalFilePdfSearchIndexer.forStore(
     GenericDatabaseStore genericStore, {
     CanonicalPdfTextReader? readText,
@@ -41,8 +42,9 @@ class CanonicalFilePdfSearchIndexer {
     );
     return CanonicalFilePdfSearchIndexer(
       pdfText: CanonicalFilePdfTextService(
-        resources: FileManagedResourceResolver(
-          objectStore,
+        resources: CanonicalFileManagedResourceResolver(
+          objectStore: objectStore,
+          systemObjects: systemObjects,
           pathResolver: genericStore.database.pathResolver,
         ),
         readText: readText,
