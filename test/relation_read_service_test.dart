@@ -324,9 +324,8 @@ void main() {
         .where((edge) => edge.propertyId == relationId)
         .toList(growable: false);
     expect(edges.map((edge) => edge.targetObjectId), [personId, imageId]);
-    expect(
-      (await genericStore.getRecord(bookId))!.values[relationId],
-      <int>[personId, imageId],
-    );
+    final persisted = (await genericStore.listRecords(bookTypeId))
+        .singleWhere((record) => record.id == bookId);
+    expect(persisted.values[relationId], <int>[personId, imageId]);
   });
 }
