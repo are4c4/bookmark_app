@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../data/database_view_property_clear_migration_service.dart';
 import '../data/database_view_property_type_conversion_service.dart';
 import '../data/database_view_property_type_migration_service.dart';
 import '../data/object_store.dart';
@@ -15,10 +16,10 @@ class ValuePropertySchemaDraft {
 /// Runs the complete safe type-edit flow for one user-owned Value Property.
 ///
 /// The first dialog only collects the requested destination type. The merged
-/// read-only preflight then classifies current data, the impact dialog gathers
-/// any explicit narrowing choices, and the transactional migration service
-/// re-runs preflight while applying. Presentation never writes Property schema
-/// or Object values directly.
+/// read-only preflight then classifies current data and the impact dialog gathers
+/// either normal narrowing choices or a separately confirmed destructive clear-
+/// values decision. Presentation never writes Property schema or Object values
+/// directly; both paths re-run preflight inside transactional migration services.
 Future<ObjectPropertyDefinition?> showValuePropertySchemaEditor({
   required BuildContext context,
   required ObjectPropertyDefinition property,
@@ -73,6 +74,15 @@ Future<ObjectPropertyDefinition?> showValuePropertySchemaEditor({
     objectLabels: objectLabels,
   );
   if (confirmation == null) return null;
+
+  if (confirmation.clearStoredValues) {
+    final result = await migration.applyChangeClearingStoredValues(
+      objectTypeId: sourceType.id,
+      propertyId: canonical.id,
+      nextType: draft.type,
+    );
+    return result.property;
+  }
 
   final result = await migration.applyChange(
     objectTypeId: sourceType.id,
@@ -163,7 +173,7 @@ class _ValuePropertySchemaEditorDialogState
             ),
             const SizedBox(height: 10),
             Text(
-              '既存値は次の確認画面で検査されます。変換できない値がある場合は変更できません。',
+              '既存値は次の確認画面で検査されます。安全に変換できない場合も値は自動削除されません。',
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],

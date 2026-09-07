@@ -59,7 +59,7 @@ Use `--top N` to change the number of files shown. The report includes:
 
 The presentation/database metrics are intentionally regression-oriented. They do not claim every existing occurrence is currently removable; they make composition debt visible so responsibility-moving PRs can show an actual reduction instead of only adding another wrapper. Refactor #522 extended the `workspaceStore.database` ceiling to canonical feature-presentation trees so moving code from a legacy host into `lib/features/**/presentation` cannot hide direct database reach-through.
 
-Canonical feature presentation currently has **8 files** that import `app_database.dart` directly. Those existing dependencies are not being removed by fiat: several widgets still receive `AppDatabase` as part of their current contract. The import metric therefore prevents a ninth direct database import from being added while those dependencies are classified and migrated behind meaningful application-facing boundaries. Do not introduce a wrapper solely to lower this count.
+Canonical feature presentation currently has **7 files** that import `app_database.dart` directly. Those existing dependencies are not being removed by fiat: several widgets still receive `AppDatabase` as part of their current contract. The import metric therefore prevents an eighth direct database import from being added while those dependencies are classified and migrated behind meaningful application-facing boundaries. Do not introduce a wrapper solely to lower this count. The previous eight-file baseline fell to seven when the production-caller-zero `ObjectWeblinkDetailPreview` module and its dedicated dead test were retired rather than kept as an unused presentation path.
 
 ### Temporary Database-presentation shims
 
@@ -77,7 +77,7 @@ The report remains non-blocking by default so existing debt does not make unrela
 ```bash
 bash tool/maintainability_report.sh \
   --max-boundary-refs 9 \
-  --max-feature-presentation-db-imports 8 \
+  --max-feature-presentation-db-imports 7 \
   --max-legacy-shim-imports 5 \
   --max-legacy-shims 3
 ```
@@ -94,7 +94,7 @@ The initial repository baseline was **22** legacy shim imports across **5** shim
 
 The presentation/database reach-through ceiling was initially enforced at **12**. Later cleanup in adjacent responsibility-moving slices reduced the measured production presentation baseline to **9 references across 6 files** without adding a replacement wrapper, so the accepted ceiling is now **9** and must not regress to the older 12-reference state.
 
-Flutter CI enforces the accepted current ceilings of **9** direct presentation/database reach-through references, **8** canonical feature-presentation `AppDatabase` imports, **5** legacy shim imports, and **3** Database-presentation re-export shim files. When Refactor removes one or more of any category, lower the corresponding CI ceiling in the same or an immediately following focused PR so the improvement cannot silently regress.
+Flutter CI enforces the accepted current ceilings of **9** direct presentation/database reach-through references, **7** canonical feature-presentation `AppDatabase` imports, **5** legacy shim imports, and **3** Database-presentation re-export shim files. When Refactor removes one or more of any category, lower the corresponding CI ceiling in the same or an immediately following focused PR so the improvement cannot silently regress.
 
 `tool/maintainability_report_test.sh` exercises passing ceilings and each regression-failure path against an isolated fixture, including canonical feature presentation reach-through, direct `AppDatabase` import detection, relative/package/same-directory shim imports, and detection of newly-added shim files. Canonical feature imports do not count as legacy shim imports. The fixture may use a retired shim name to prove the denylist remains effective; it is not a production caller.
 

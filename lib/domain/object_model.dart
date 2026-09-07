@@ -117,7 +117,9 @@ class ObjectPropertyDefinition {
         'updatedTime' => ObjectPropertyType.updatedTime,
         'formula' => ObjectPropertyType.formula,
         'rollup' => ObjectPropertyType.rollup,
-        _ => ObjectPropertyType.text,
+        _ => throw FormatException(
+            'Unsupported Object Property storage type "$value".',
+          ),
       };
 }
 
