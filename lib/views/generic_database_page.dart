@@ -28,6 +28,7 @@ import '../features/object/presentation/widgets/object_detail_property_view.dart
 import '../widgets/database_collection_settings_dialog.dart';
 import '../widgets/database_create_tiles.dart';
 import '../widgets/database_gallery_view_cover_media.dart';
+import '../widgets/database_property_schema_management_dialog.dart';
 import '../widgets/database_view_tabs.dart';
 import '../widgets/notion_inline_field.dart';
 import '../widgets/object_board_view.dart';
@@ -305,6 +306,22 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
         SnackBar(content: Text('コレクション設定を保存できませんでした: $error')),
       );
     }
+  }
+
+  Future<void> _manageProperties() async {
+    final objectType = _objectType;
+    if (objectType == null || objectType.kind != ObjectTypeKind.custom) return;
+    await showDatabasePropertySchemaManagementDialog(
+      context: context,
+      objectTypeId: objectType.id,
+      objectStore: _objectStore,
+      propertySchema: _pageServices.propertySchema,
+      relationSchemaEvolution: _pageServices.relationSchemaEvolution,
+      valueConversion: _pageServices.valueTypeConversion,
+      valueMigration: _pageServices.valueTypeMigration,
+      relationMutations: _pageServices.relationMutations,
+    );
+    if (mounted) await _reload();
   }
 
   Future<void> _deleteDatabase() async {
@@ -1883,13 +1900,24 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                     tooltip: 'データベース設定',
                     icon: const Icon(Icons.more_horiz, size: 19),
                     onSelected: (value) {
+                      if (value == 'properties') _manageProperties();
                       if (value == 'collection') _editCollectionSettings();
                       if (value == 'edit') _editDatabaseIdentity();
                       if (value == 'duplicate') _duplicateDatabase();
                       if (value == 'delete') _deleteDatabase();
                     },
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(
+                    itemBuilder: (_) => [
+                      if (_objectType?.kind == ObjectTypeKind.custom)
+                        const PopupMenuItem(
+                          key: ValueKey('database-manage-properties-menu-item'),
+                          value: 'properties',
+                          child: ListTile(
+                            dense: true,
+                            leading: Icon(Icons.tune, size: 18),
+                            title: Text('プロパティ設定'),
+                          ),
+                        ),
+                      const PopupMenuItem(
                         value: 'collection',
                         child: ListTile(
                           dense: true,
@@ -1897,7 +1925,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                           title: Text('コレクション設定'),
                         ),
                       ),
-                      PopupMenuItem(
+                      const PopupMenuItem(
                         value: 'edit',
                         child: ListTile(
                           dense: true,
@@ -1905,7 +1933,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                           title: Text('名前・アイコンを編集'),
                         ),
                       ),
-                      PopupMenuItem(
+                      const PopupMenuItem(
                         value: 'duplicate',
                         child: ListTile(
                           dense: true,
@@ -1913,8 +1941,8 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                           title: Text('構造を複製'),
                         ),
                       ),
-                      PopupMenuDivider(),
-                      PopupMenuItem(
+                      const PopupMenuDivider(),
+                      const PopupMenuItem(
                         value: 'delete',
                         child: ListTile(
                           dense: true,

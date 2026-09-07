@@ -492,6 +492,16 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
     ]);
   }
 
+  void _selectPage(int index) {
+    if (index == _index) return;
+    setState(() {
+      if (index == 1) {
+        _pageCache.remove(1);
+      }
+      _index = index;
+    });
+  }
+
   Widget _navTile(int index, IconData icon, String label) {
     final scheme = Theme.of(context).colorScheme;
     final selected = _index == index;
@@ -502,7 +512,7 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
         borderRadius: BorderRadius.circular(UiTokens.radiusSm),
         child: InkWell(
           borderRadius: BorderRadius.circular(UiTokens.radiusSm),
-          onTap: () => setState(() => _index = index),
+          onTap: () => _selectPage(index),
           child: SizedBox(
             height: UiTokens.sidebarRowHeight,
             child: Padding(
@@ -667,7 +677,7 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
           IconButton(tooltip: 'サイドバーを開く', onPressed: () => setState(() => _sidebarCollapsed = false), icon: const Icon(Icons.keyboard_double_arrow_right, size: UiTokens.iconNormal)),
           const SizedBox(height: UiTokens.space8),
           ...destinations.map((entry) => IconButton(
-            onPressed: () => setState(() => _index = entry.$1),
+            onPressed: () => _selectPage(entry.$1),
             style: IconButton.styleFrom(backgroundColor: _index == entry.$1 ? scheme.surfaceContainerHigh : Colors.transparent),
             icon: Icon(entry.$2, size: 19),
           )),
@@ -748,7 +758,7 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
       ),
     );
     if (selected != null && mounted) {
-      setState(() => _index = selected);
+      _selectPage(selected);
     }
   }
 
