@@ -8,7 +8,7 @@ import 'package:bookmark_app/data/system_object_store.dart';
 import 'package:bookmark_app/data/tag_object_bridge.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/services/bookmark_image_relation_service.dart';
-import 'package:drift/drift.dart';
+import 'package:drift/drift.dart' show Variable;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
