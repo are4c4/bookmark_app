@@ -76,12 +76,18 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
 
   Future<BookmarkRepository> _openRepository(
     AppDatabase database,
-    DatabaseProfile profile,
-  ) async {
-    await const ProfileStorageMigrator().migratePhotos(
-      database: database,
-      photoDirectoryPath: profile.photoDirectoryPath,
-    );
+    DatabaseProfile profile, {
+    String? movedFromDirectoryPath,
+    bool runStorageMigration = true,
+  }) async {
+    if (runStorageMigration) {
+      await const ProfileStorageMigrator().migratePhotos(
+        database: database,
+        photoDirectoryPath: profile.photoDirectoryPath,
+        previousProfileDirectoryPath: movedFromDirectoryPath,
+        importExternalFiles: movedFromDirectoryPath == null,
+      );
+    }
     final workspaceStore = WorkspaceStore(database);
     final workspaceId = await workspaceStore.initialize();
     final lifecycleStore = BookmarkLifecycleStore(database);
@@ -318,29 +324,53 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
     });
     await WidgetsBinding.instance.endOfFrame;
 
+    Object? preparationError;
+    StackTrace? preparationStackTrace;
     try {
       await lifecycle?.dispose();
-      await database.close();
-      _database = null;
-      _workspaceStore = null;
-      _lifecycleStore = null;
     } catch (error, stackTrace) {
-      _database = null;
-      _workspaceStore = null;
-      _lifecycleStore = null;
-      try {
-        await _reopenVaultAfterMove(source);
-      } catch (_, restoreStackTrace) {
+      preparationError = error;
+      preparationStackTrace = stackTrace;
+    }
+
+    try {
+      await database.close();
+    } catch (error, stackTrace) {
+      if (preparationError == null) {
+        preparationError = error;
+        preparationStackTrace = stackTrace;
+      } else {
         _debugBootstrapFailure(
-          'Vault move prepare rollback failed.',
-          restoreStackTrace,
+          'Vault move database close after prepare failure failed.',
+          stackTrace,
         );
       }
-      Error.throwWithStackTrace(error, stackTrace);
     }
+
+    _database = null;
+    _workspaceStore = null;
+    _lifecycleStore = null;
+    if (preparationError == null) return;
+
+    try {
+      await _reopenVaultAfterMove(
+        source,
+        runStorageMigration: false,
+      );
+    } catch (_, restoreStackTrace) {
+      _debugBootstrapFailure(
+        'Vault move prepare rollback failed.',
+        restoreStackTrace,
+      );
+    }
+    Error.throwWithStackTrace(preparationError, preparationStackTrace!);
   }
 
-  Future<void> _reopenVaultAfterMove(DatabaseProfile expected) async {
+  Future<void> _reopenVaultAfterMove(
+    DatabaseProfile expected, {
+    String? movedFromDirectoryPath,
+    bool runStorageMigration = true,
+  }) async {
     final manager = await ProfileManager.load();
     final profile = manager.state.activeProfile;
     if (profile.id != expected.id ||
@@ -353,7 +383,12 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
       profileDirectoryPath: profile.directoryPath,
     );
     try {
-      final repository = await _openRepository(database, profile);
+      final repository = await _openRepository(
+        database,
+        profile,
+        movedFromDirectoryPath: movedFromDirectoryPath,
+        runStorageMigration: runStorageMigration,
+      );
       if (!mounted) {
         await _lifecycleStore?.dispose();
         await database.close();
@@ -397,8 +432,14 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
     final source = manager.state.activeProfile;
     final move = VaultMoveLifecycleController.fromServices(
       prepareSource: _prepareActiveVaultMove,
-      activateTarget: _reopenVaultAfterMove,
-      restoreSource: _reopenVaultAfterMove,
+      activateTarget: (target) => _reopenVaultAfterMove(
+        target,
+        movedFromDirectoryPath: source.directoryPath,
+      ),
+      restoreSource: (restoredSource) => _reopenVaultAfterMove(
+        restoredSource,
+        runStorageMigration: false,
+      ),
     );
 
     try {
