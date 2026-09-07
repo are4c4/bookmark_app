@@ -250,7 +250,8 @@ class _DatabasePropertySchemaManagementDialogState
                             ),
                             const SizedBox(height: 10),
                           ],
-                          Flexible(
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxHeight: 420),
                             child: ListView.separated(
                               shrinkWrap: true,
                               itemCount: type.properties.length,
