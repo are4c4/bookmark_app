@@ -39,7 +39,8 @@ class RelationIndexReconcileService {
 
     final unsafeIssues = before.issues.where(
       (issue) => issue.kind != RelationIntegrityIssueKind.missingIndexEdge &&
-          issue.kind != RelationIntegrityIssueKind.staleIndexEdge,
+          issue.kind != RelationIntegrityIssueKind.staleIndexEdge &&
+          issue.kind != RelationIntegrityIssueKind.indexOrderMismatch,
     );
     if (unsafeIssues.isNotEmpty) {
       throw StateError(

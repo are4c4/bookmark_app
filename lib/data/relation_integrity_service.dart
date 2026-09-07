@@ -10,6 +10,7 @@ enum RelationIntegrityIssueKind {
   duplicateTargetObject,
   missingIndexEdge,
   staleIndexEdge,
+  indexOrderMismatch,
   invalidBidirectionalPair,
   inverseValueMismatch,
 }
@@ -185,8 +186,10 @@ class RelationIntegrityService {
             );
           }
 
-          final indexedIds = (await outgoingFor(source.id))
+          final indexedEdges = (await outgoingFor(source.id))
               .where((edge) => edge.propertyId == property.id)
+              .toList(growable: false);
+          final indexedIds = indexedEdges
               .map((edge) => edge.targetObjectId)
               .toSet();
 
@@ -233,6 +236,29 @@ class RelationIntegrityService {
             );
           }
 
+          final hasMatchingIndexedTargets =
+              storedIds.length == indexedIds.length &&
+              storedIds.containsAll(indexedIds);
+          final hasDuplicatePersistedTargets =
+              rawStoredObjectIds.length != storedObjectIds.length;
+          if (hasMatchingIndexedTargets &&
+              !hasDuplicatePersistedTargets &&
+              !_hasCanonicalIndexOrder(
+                storedObjectIds: storedObjectIds,
+                indexedEdges: indexedEdges,
+              )) {
+            issues.add(
+              RelationIntegrityIssue(
+                kind: RelationIntegrityIssueKind.indexOrderMismatch,
+                objectTypeId: sourceType.id,
+                propertyId: property.id,
+                sourceObjectId: source.id,
+                message:
+                    'Relation edge order for Object ${source.id} and ${property.name} does not match the persisted Relation value.',
+              ),
+            );
+          }
+
           if (pair != null) {
             final targetsById = {
               for (final target in targetObjects) target.id: target,
@@ -263,6 +289,21 @@ class RelationIntegrityService {
 
     return RelationIntegrityReport(issues: List.unmodifiable(issues));
   }
+}
+
+bool _hasCanonicalIndexOrder({
+  required List<int> storedObjectIds,
+  required List<ObjectRelationEdge> indexedEdges,
+}) {
+  if (storedObjectIds.length != indexedEdges.length) return false;
+  for (var index = 0; index < storedObjectIds.length; index++) {
+    final edge = indexedEdges[index];
+    if (edge.targetObjectId != storedObjectIds[index] ||
+        edge.position != index) {
+      return false;
+    }
+  }
+  return true;
 }
 
 List<int> _rawPersistedRelationObjectIds(dynamic value) {
