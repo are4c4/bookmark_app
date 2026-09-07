@@ -12,8 +12,8 @@ void main() {
       'application/vnd.api+json',
     );
     expect(
-      MimeTypeNormalizer.normalize("application/x-test!#$&'*+.^_`|~-value"),
-      "application/x-test!#$&'*+.^_`|~-value",
+      MimeTypeNormalizer.normalize(r"application/x-test!#$&'*+.^_`|~-value"),
+      r"application/x-test!#$&'*+.^_`|~-value",
     );
   });
 
