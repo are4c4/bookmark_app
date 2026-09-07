@@ -126,6 +126,7 @@ void main() {
 
     final genericStore = GenericDatabaseStore(database);
     final search = ObjectGlobalSearchService(genericStore);
+    final baselineRefreshed = Completer<void>();
     final refreshed = Completer<List<int>>();
     var deletionStarted = false;
     final sync = ObjectSyncService(
@@ -133,9 +134,11 @@ void main() {
       onCanonicalObjectsMirrored: (objectIds) async {
         final ids = objectIds.toSet().toList()..sort();
         await search.refreshObjectLabelDependentsFor(ids);
-        if (deletionStarted && !refreshed.isCompleted) {
-          refreshed.complete(ids);
+        if (!deletionStarted) {
+          if (!baselineRefreshed.isCompleted) baselineRefreshed.complete();
+          return;
         }
+        if (!refreshed.isCompleted) refreshed.complete(ids);
       },
     );
     addTearDown(sync.dispose);
@@ -157,6 +160,10 @@ void main() {
     ).getSingle();
     expect(indexedBefore.read<int>('count'), 1);
 
+    // Drift watch streams emit their current snapshot after subscription.
+    // Drain that first coalesced callback before entering the deletion phase so
+    // it cannot be mistaken for the watcher tick caused by the delete below.
+    await baselineRefreshed.future.timeout(const Duration(seconds: 3));
     deletionStarted = true;
     await database.customStatement(
       'DELETE FROM bookmarks WHERE id = ?',
