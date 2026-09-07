@@ -124,5 +124,9 @@ void main() {
     // invariants run, matching other real-host regressions in this repository.
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
+    // Drift closes watched queries through a zero-delay Timer after unmount.
+    // Advance fake time once so StreamQueryStore can mark them closed before
+    // the database teardown waits for those streams to finish.
+    await tester.pump(const Duration(milliseconds: 1));
   });
 }
