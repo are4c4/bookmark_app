@@ -1,0 +1,47 @@
+name: Temporary Lane D Table Media Patch
+
+on:
+  push:
+    branches:
+      - feature/primitives-image-table-media-host-245
+
+permissions:
+  contents: write
+
+jobs:
+  apply-patch:
+    if: ${{ !contains(github.event.head_commit.message, '[lane-d-table-media-applied]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/primitives-image-table-media-host-245
+          fetch-depth: 0
+      - name: Apply deterministic Table media patch
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          host = Path('lib/views/generic_database_page.dart')
+          source = host.read_text()
+          old = '                      DataCell(Text(record.title)),\n'
+          replacement = '''                      DataCell(\n                        Row(\n                          mainAxisSize: MainAxisSize.min,\n                          children: [\n                            SystemObjectListMedia(\n                              database: _store.database,\n                              objectStore: _objectStore,\n                              workspaceId: widget.repository.workspaceId,\n                              objectTypeId: record.databaseId,\n                              objectId: record.id,\n                              size: 32,\n                            ),\n                            const SizedBox(width: 8),\n                            Text(record.title),\n                          ],\n                        ),\n                      ),\n'''
+          count = source.count(old)
+          if count != 1:
+              raise SystemExit(f'Expected exactly one Table title cell, found {count}')
+          host.write_text(source.replace(old, replacement, 1))
+
+          test = Path('test/generic_database_page_image_table_media_test.dart')
+          if test.exists():
+              raise SystemExit(f'{test} already exists')
+          test.write_text('''import 'package:bookmark_app/data/app_database.dart';\nimport 'package:bookmark_app/data/bookmark_lifecycle_store.dart';\nimport 'package:bookmark_app/data/bookmark_repository.dart';\nimport 'package:bookmark_app/data/database_view_store.dart';\nimport 'package:bookmark_app/data/generic_database_store.dart';\nimport 'package:bookmark_app/data/image_object_service.dart';\nimport 'package:bookmark_app/data/object_store.dart';\nimport 'package:bookmark_app/data/object_type_defaults_store.dart';\nimport 'package:bookmark_app/data/system_object_store.dart';\nimport 'package:bookmark_app/data/workspace_store.dart';\nimport 'package:bookmark_app/database/database_definition.dart';\nimport 'package:bookmark_app/features/database/presentation/widgets/system_object_list_media.dart';\nimport 'package:bookmark_app/views/generic_database_page.dart';\nimport 'package:drift/native.dart';\nimport 'package:flutter/material.dart';\nimport 'package:flutter_test/flutter_test.dart';\n\nvoid main() {\n  testWidgets('real Images Table hosts canonical Image media in name cell',\n      (tester) async {\n    Future<void> pumpUntilVisible(Finder finder) async {\n      if (finder.evaluate().isNotEmpty) return;\n      for (var attempt = 0; attempt < 30; attempt += 1) {\n        await tester.pump(const Duration(milliseconds: 50));\n        if (finder.evaluate().isNotEmpty) return;\n      }\n      expect(finder, findsWidgets);\n    }\n\n    final database = AppDatabase.forTesting(NativeDatabase.memory());\n    addTearDown(database.close);\n    final workspaceStore = WorkspaceStore(database);\n    final workspaceId = await workspaceStore.initialize();\n    final lifecycleStore = BookmarkLifecycleStore(database);\n    await lifecycleStore.initialize();\n    final repository = BookmarkRepository(\n      database,\n      workspaceStore: workspaceStore,\n      lifecycleStore: lifecycleStore,\n      workspaceId: workspaceId,\n    );\n    final genericStore = GenericDatabaseStore(database);\n    final objectStore = ObjectStore(genericStore);\n    final images = ImageObjectService(\n      systemObjects: SystemObjectStore(\n        database: database,\n        objectStore: objectStore,\n      ),\n      defaultsStore: ObjectTypeDefaultsStore(genericStore),\n    );\n    final definition = await images.ensureDefinition(workspaceId);\n    final objectId = await objectStore.createObject(\n      objectTypeId: definition.objectType.id,\n      title: 'Canonical Image table row',\n    );\n\n    await DatabaseViewStore(database).createView(\n      workspaceId: workspaceId,\n      definition: DatabaseDefinition(\n        key: 'custom:${definition.objectType.id}',\n        label: 'Images',\n        icon: Icons.image_outlined,\n        properties: const <DatabasePropertyDefinition>[],\n        defaultLayout: 'table',\n        supportedLayouts: const <String>['gallery', 'list', 'table', 'board'],\n      ),\n      name: 'Table',\n      layoutType: 'table',\n    );\n\n    final destination = (await genericStore.listDatabases(workspaceId))\n        .singleWhere((item) => item.id == definition.objectType.id);\n\n    tester.view.physicalSize = const Size(1200, 900);\n    tester.view.devicePixelRatio = 1;\n    addTearDown(tester.view.resetPhysicalSize);\n    addTearDown(tester.view.resetDevicePixelRatio);\n    await tester.pumpWidget(\n      MaterialApp(\n        home: GenericDatabasePage(\n          repository: repository,\n          databaseId: destination.id,\n          onDatabaseChanged: () {},\n        ),\n      ),\n    );\n\n    final media = find.byKey(\n      ValueKey('system-object-list-media-image-$objectId'),\n    );\n    await pumpUntilVisible(media);\n    expect(media, findsOneWidget);\n    expect(find.text('Canonical Image table row'), findsOneWidget);\n\n    final host = find.byWidgetPredicate(\n      (widget) =>\n          widget is SystemObjectListMedia &&\n          widget.workspaceId == workspaceId &&\n          widget.objectTypeId == definition.objectType.id &&\n          widget.objectId == objectId,\n      description: 'canonical Image Table media host',\n    );\n    expect(host, findsOneWidget);\n    final hostedMedia = tester.widget<SystemObjectListMedia>(host);\n    expect(hostedMedia.database, same(database));\n    expect(hostedMedia.size, 32);\n\n    // Keep this real-host regression deterministic: the canonical Image has no\n    // File value, so the production resolver classifies it as Image media but\n    // does not start a platform Image.file decode. Managed path resolution and\n    // resolved-file rendering remain covered by the focused resolver/widget tests.\n    await tester.pumpWidget(const SizedBox.shrink());\n  });\n}\n''')
+          PY
+      - name: Commit patch result
+        shell: bash
+        run: |
+          git config user.name 'Are'
+          git config user.email '235915091+are4c4@users.noreply.github.com'
+          git add lib/views/generic_database_page.dart test/generic_database_page_image_table_media_test.dart
+          git commit -m 'Show canonical media in Database Table rows [lane-d-table-media-applied]'
+          git push origin HEAD:feature/primitives-image-table-media-host-245
