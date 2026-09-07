@@ -35,6 +35,7 @@ Recent composition proof:
 - #874 (`38c20b67…`) composes the reusable canonical Body editor into Generic Database side peek and closes #481.
 - #884 (`f1651ba169240484f3376f6c67f7ce76a810172b`) closes #877 by extending Search-owned focused detail-return refresh to canonical outgoing Relation targets and their label dependents without a workspace rebuild.
 - #881 (`47d31345dbaa602e99d00c6199650d9e6b329d32`) moves Bookmark image editing onto canonical Image Relations while retaining compatibility projection for legacy callers.
+- #889 (`fcd0eb34c8ed79cbf67a8595f730f6c08cb7e7ff`) routes the legacy Photo Management “add to Bookmark” write through the same canonical Bookmark Image Relation authority using the stable Photo -> Image mapping, with malformed/missing mapping state failing closed.
 - #885 (`38494512fc2ba119fecb3f94e6973577aa665f67`) closes #249 by wiring the real Bookmark Stage1 Gallery to the shared fixed/masonry View contract and real-host persistence regression.
 
 ## Active architecture/product issues
@@ -69,7 +70,7 @@ Lane A continues to own Object/ObjectType identity, Property/Body core semantics
 ### B — Relations & Data Integrity
 Owns canonical Relation mutation/read/index/backlink/audit/reconcile correctness and fail-closed corruption behavior.
 
-Continue only concrete integrity obligations created by live workflows or regressions. Primitive flows such as #881/#245 must continue using canonical Relation contracts rather than domain-specific edge stores.
+Continue only concrete integrity obligations created by live workflows or regressions. Primitive flows such as #881/#889/#245 must continue using canonical Relation contracts rather than domain-specific edge stores.
 
 ### C — Database, View & Schema UX
 Focused #490/#491/#492/#493 work and the cross-lane #481 composition obligation are complete.
@@ -86,6 +87,7 @@ Recent checkpoints:
 - #876 (`3506974e…`) — canonical media in generic Table rows.
 - #879 (`3be71f12…`) — legacy Photo compatibility sync preserves first-class native Bookmark Image Relations.
 - #881 (`47d31345…`) — Bookmark detail image editing writes canonical `Images` / `Cover Image` Relations while legacy mapped-photo projection remains compatibility-only.
+- #889 (`fcd0eb34…`) — legacy Photo Management Bookmark attachment now resolves the stable Photo -> Image mapping and delegates to the same canonical Bookmark Image Relation service; missing/malformed mappings fail closed instead of reviving Photo as a second write authority.
 
 Continue canonical Image write/presentation parity and Photo -> Image migration before retiring legacy Photo UI/storage callers. Do not delete compatibility storage before caller parity and migration safety are proven.
 
@@ -116,7 +118,7 @@ Current focus remains behavior-preserving caller-zero deletion, hotspot responsi
 - Bookmark-like domain creation/normal operation is proven through generic template/Object/Relation/Database/View contracts.
 - Bookmark Stage1 Gallery now uses the same fixed/masonry View setting/renderer contract as generic Database Gallery (#885); #249 is completed.
 - Weblink is a reusable canonical Object with normalized URL identity, enrichment and managed Image Relations.
-- Bookmark image editing is moving from legacy Photo writes to canonical Image Relations (#881), while compatibility projection remains for old callers.
+- Bookmark detail image editing and the legacy Photo Management Bookmark-attach flow now write through canonical Image Relations (#881/#889), while compatibility projection remains for old Photo-based readers during #245 migration.
 - Image and File remain distinct built-in primitives while sharing managed-file/Vault infrastructure.
 - PDF remains File + PDF capabilities/enrichment/search; there is no separate PDF persistence model.
 - Global Search is canonical Object search; detail-return freshness uses focused refresh planning rather than routine full-workspace rebuilds.
