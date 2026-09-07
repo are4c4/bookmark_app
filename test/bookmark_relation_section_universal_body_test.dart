@@ -95,6 +95,75 @@ void main() {
     expect(body.blocks.single.text, 'Edited Bookmark note');
   });
 
+  testWidgets('corrupt mirrored Bookmark Body stays fail closed', (tester) async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceStore = WorkspaceStore(database);
+    final workspaceId = await workspaceStore.initialize();
+    final lifecycleStore = BookmarkLifecycleStore(database);
+    await lifecycleStore.initialize();
+    final repository = BookmarkRepository(
+      database,
+      workspaceStore: workspaceStore,
+      lifecycleStore: lifecycleStore,
+      workspaceId: workspaceId,
+    );
+    final bookmarkId = await repository.create(
+      url: 'https://example.com/corrupt-bookmark-body',
+      title: 'Corrupt Bookmark Body',
+      inbox: true,
+    );
+    final bookmark = (await repository.watchAll().first)
+        .singleWhere((item) => item.id == bookmarkId);
+
+    final sync = ObjectSyncService(database);
+    addTearDown(sync.dispose);
+    await sync.syncWorkspace(workspaceId);
+    final objectId = await BookmarkObjectLinkReadStore(database)
+        .objectIdForBookmark(
+      workspaceId: workspaceId,
+      bookmarkId: bookmarkId,
+    );
+    expect(objectId, isNotNull);
+
+    final genericStore = GenericDatabaseStore(database);
+    final bodyStore = ObjectBodyStore(genericStore);
+    await bodyStore.ensureSchema();
+    await database.customStatement(
+      '''INSERT INTO object_bodies(object_id, document_json, updated_at)
+         VALUES (?, ?, CURRENT_TIMESTAMP)
+         ON CONFLICT(object_id)
+         DO UPDATE SET document_json = excluded.document_json''',
+      <Object?>[objectId!, '[]'],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BookmarkRelationSection(
+            repository: repository,
+            bookmark: bookmark,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(ValueKey('bookmark-object-body-$bookmarkId')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('body-load-error')), findsOneWidget);
+    expect(find.byKey(const ValueKey('body-load-retry')), findsOneWidget);
+    expect(find.byKey(const ValueKey('body-empty-insert')), findsNothing);
+
+    final row = await database.customSelect(
+      'SELECT document_json FROM object_bodies WHERE object_id = ?',
+      variables: [Variable<int>(objectId)],
+    ).getSingle();
+    expect(row.read<String>('document_json'), '[]');
+  });
+
   testWidgets('unmirrored Bookmark detail keeps legacy content fail-soft',
       (tester) async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
