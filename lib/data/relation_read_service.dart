@@ -38,6 +38,34 @@ class RelationNeighborhood {
   bool get isEmpty => outgoing.isEmpty && backlinks.isEmpty;
 }
 
+/// Returns whether one persisted Relation Property agrees exactly with its
+/// normalized edge projection.
+///
+/// This is intentionally pure/read-only so presentation loaders can share the
+/// same fail-closed contract as [RelationReadService] without repairing or
+/// normalizing corrupted persisted values.
+bool relationStoredValueMatchesEdges({
+  required AppObject source,
+  required ObjectPropertyDefinition property,
+  required List<ObjectRelationEdge> edges,
+}) {
+  final inspection = inspectRelationStoredValue(source.values[property.id]);
+  if (inspection.isMalformed) return false;
+
+  final storedIds = inspection.value.objectIds;
+  if (inspection.rawObjectIds.length != storedIds.length) return false;
+  if (!property.allowsMultipleRelations && storedIds.length > 1) return false;
+  if (storedIds.length != edges.length) return false;
+
+  for (var index = 0; index < storedIds.length; index++) {
+    final edge = edges[index];
+    if (edge.targetObjectId != storedIds[index] || edge.position != index) {
+      return false;
+    }
+  }
+  return true;
+}
+
 /// Resolves relation-index edges into stable Object/Property references for UI
 /// consumers without exposing generic table details.
 ///
@@ -127,7 +155,7 @@ class RelationReadService {
       final propertyEdges = sourceEdges
           .where((candidate) => candidate.propertyId == property.id)
           .toList(growable: false);
-      if (!_storedValueMatchesEdges(
+      if (!relationStoredValueMatchesEdges(
         source: source,
         property: property,
         edges: propertyEdges,
@@ -176,7 +204,7 @@ class RelationReadService {
       final propertyEdges = edges
           .where((edge) => edge.propertyId == property.id)
           .toList(growable: false);
-      if (!_storedValueMatchesEdges(
+      if (!relationStoredValueMatchesEdges(
         source: sourceObject,
         property: property,
         edges: propertyEdges,
@@ -221,27 +249,5 @@ class RelationReadService {
       if (object.id == objectId) return object;
     }
     return null;
-  }
-
-  bool _storedValueMatchesEdges({
-    required AppObject source,
-    required ObjectPropertyDefinition property,
-    required List<ObjectRelationEdge> edges,
-  }) {
-    final inspection = inspectRelationStoredValue(source.values[property.id]);
-    if (inspection.isMalformed) return false;
-
-    final storedIds = inspection.value.objectIds;
-    if (inspection.rawObjectIds.length != storedIds.length) return false;
-    if (!property.allowsMultipleRelations && storedIds.length > 1) return false;
-    if (storedIds.length != edges.length) return false;
-
-    for (var index = 0; index < storedIds.length; index++) {
-      final edge = edges[index];
-      if (edge.targetObjectId != storedIds[index] || edge.position != index) {
-        return false;
-      }
-    }
-    return true;
   }
 }
