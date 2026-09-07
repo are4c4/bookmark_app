@@ -227,9 +227,10 @@ void main() {
     expect(projected.read<int>('photo_id'), photoId);
     expect(projected.read<int>('is_cover'), 1);
 
-    // The mapped legacy subset is only a compatibility projection. Keeping it
-    // synchronized prevents CoreObjectBridge from erasing a canonical user edit
-    // while older Bookmark Photo callers are still being migrated.
+    // bookmark_photos is a compatibility projection here, not the decision
+    // source: it was rewritten from the canonical user selection above. Keeping
+    // the mapped subset projected prevents CoreObjectBridge from erasing that
+    // selection while older Bookmark Photo callers are still being migrated.
     await bridge.syncAll(workspaceId);
     state = (await service.load(
       workspaceId: workspaceId,
