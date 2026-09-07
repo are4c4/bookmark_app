@@ -246,6 +246,20 @@ The next AI run should be able to resume from GitHub state without needing the u
 - When multiple agents are working, avoid editing unrelated areas merely to reformat them.
 - Do not let two lanes concurrently own a broad refactor of the same core file; split or sequence the work first.
 
+## Commit hygiene and CI reruns
+
+This policy applies to every implementation lane A–G.
+
+- Every commit must represent a coherent repository change with a real code, test, documentation, migration, or configuration purpose.
+- Do **not** create commits solely to trigger CI, create activity, advance `main`, or force another workflow run.
+- Do **not** add temporary marker files such as `noop`, `tmp`, `oops`, `x`, `ignore`, or equivalent files and then remove them in a follow-up commit.
+- Do **not** use meaningless whitespace, formatting churn, comment churn, or unrelated documentation edits as a CI trigger.
+- If CI should be rerun, use the existing GitHub workflow/check rerun mechanism when available. If rerun tooling is unavailable, wait for the next meaningful repository change rather than manufacturing one.
+- Never merge an artificial CI-trigger/no-op commit into `main`.
+- A cancelled superseded CI run is acceptable; the latest meaningful commit is the one that needs to become green.
+
+See `docs/noop_commit_policy.md` and Issue #225 for the maintenance rationale and examples.
+
 ## Planning chat vs implementation chats
 
 Planning work should produce or refine a GitHub Issue with a clear goal, scope, acceptance criteria, lane ownership, and implementation notes.
