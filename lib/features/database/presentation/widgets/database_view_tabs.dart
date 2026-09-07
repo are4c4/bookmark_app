@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
 
 import '../../../../data/database_view_creation_service.dart';
+import '../../../../data/database_view_default_provisioning_service.dart';
 import '../../../../data/database_view_management_service.dart';
 import '../../../../data/database_view_open_mode_service.dart';
 import '../../../../data/database_view_store.dart';
@@ -78,7 +79,8 @@ class _DatabaseViewTabsState extends State<DatabaseViewTabs> {
         workspaceId: widget.workspaceId,
       );
     }
-    await widget.store.ensureDefaultView(
+    await DatabaseViewDefaultProvisioningService.fromViewStore(widget.store)
+        .ensureDefaultView(
       workspaceId: widget.workspaceId,
       definition: widget.definition,
     );
