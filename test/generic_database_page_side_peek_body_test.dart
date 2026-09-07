@@ -94,11 +94,8 @@ void main() {
     );
     expect(bodyHost, findsOneWidget);
     expect(
-      find.descendant(
-        of: bodyHost,
-        matching: find.byType(ObjectBodyEditorSection),
-      ),
-      findsOneWidget,
+      tester.widget<ObjectBodyEditorSection>(bodyHost).objectId,
+      objectId,
     );
 
     final bodyField = find.descendant(
