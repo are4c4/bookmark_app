@@ -17,13 +17,14 @@ class CanonicalFilePdfText {
 
 /// Optional extracted-text capability layered on the canonical File primitive.
 ///
-/// PDF remains a File Object. The managed resource is resolved and classified
-/// with the same content-first policy as import before any text reader runs.
-/// Search/indexing may consume the returned text, but this service does not own
-/// or write a search index.
+/// PDF remains a File Object. The managed resource is resolved through the
+/// system-identity-gated canonical File resolver and classified with the same
+/// content-first policy as import before any text reader runs. Search/indexing
+/// may consume the returned text, but this service does not own or write a
+/// search index.
 class CanonicalFilePdfTextService {
   CanonicalFilePdfTextService({
-    required FileManagedResourceResolver resources,
+    required CanonicalFileManagedResourceResolver resources,
     PrimitiveFileImportClassifier classifier =
         const PrimitiveFileImportClassifier(),
     CanonicalPdfTextReader? readText,
@@ -31,7 +32,7 @@ class CanonicalFilePdfTextService {
         _classifier = classifier,
         _readText = readText ?? _readSpotlightText;
 
-  final FileManagedResourceResolver _resources;
+  final CanonicalFileManagedResourceResolver _resources;
   final PrimitiveFileImportClassifier _classifier;
   final CanonicalPdfTextReader _readText;
 
