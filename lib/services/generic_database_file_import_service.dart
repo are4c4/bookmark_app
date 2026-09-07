@@ -44,7 +44,8 @@ class GenericDatabaseFileImportService {
     required this.managedFiles,
     required this.objectCreate,
     required this.vaultDirectoryPath,
-    PrimitiveFileImportClassifier classifier = const PrimitiveFileImportClassifier(),
+    PrimitiveFileImportClassifier classifier =
+        const PrimitiveFileImportClassifier(),
     GenericDatabaseFilePicker? filePicker,
     ManagedFileSha256Reader? sha256Reader,
   })  : classifier = classifier,
