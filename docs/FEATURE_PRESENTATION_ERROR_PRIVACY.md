@@ -14,12 +14,11 @@ This is a regression boundary, not a blanket ban on exception handling. Code may
 Legacy `lib/views/` / `lib/widgets/` still contain Issue #225 debt, but that debt is now frozen to an explicit host allowlist rather than left unguarded. Raw caught-error interpolation may temporarily remain only in these existing hosts:
 
 - `lib/views/app_shell.dart`;
-- `lib/views/bookmark_unified_stage1_page.dart`;
 - `lib/views/generic_database_page.dart`;
 - `lib/views/object_inspector_page.dart`;
 - `lib/views/tag_management_page.dart`.
 
-`lib/views/image_editor_page.dart`, `lib/widgets/bookmark_detail_panel.dart`, and `lib/views/photo_management_page.dart` were removed from the allowlist after their failure presentation switched to stable user-safe messages. The guard fails if the pattern spreads to another legacy presentation host. It also fails when an existing allowlisted file is cleaned but left on the allowlist, forcing the boundary to ratchet smaller in the same change. This deliberately avoids rewriting large shared hosts just to satisfy the policy while ensuring new legacy presentation code cannot repeat the debt.
+`lib/views/image_editor_page.dart`, `lib/widgets/bookmark_detail_panel.dart`, `lib/views/photo_management_page.dart`, and `lib/views/bookmark_unified_stage1_page.dart` were removed from the allowlist after their failure presentation switched to stable user-safe messages. The guard fails if the pattern spreads to another legacy presentation host. It also fails when an existing allowlisted file is cleaned but left on the allowlist, forcing the boundary to ratchet smaller in the same change. This deliberately avoids rewriting large shared hosts just to satisfy the policy while ensuring new legacy presentation code cannot repeat the debt.
 
 The guard is wired into Flutter CI and has isolated fixture coverage in `tool/feature_presentation_error_privacy_guard_test.sh` for canonical rejection, safe forwarding/escaping, legacy no-spread behavior, and stale-allowlist ratcheting.
 

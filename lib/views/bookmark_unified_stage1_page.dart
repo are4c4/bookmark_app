@@ -1404,10 +1404,10 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
             const SnackBar(content: Text('ドロップしたURLを追加しました')),
           );
         }
-      } catch (error) {
+      } catch (_) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('URLを追加できませんでした: $error')),
+            const SnackBar(content: Text('URLを追加できませんでした。')),
           );
         }
       }
