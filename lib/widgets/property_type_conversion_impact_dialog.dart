@@ -2,13 +2,19 @@ import 'package:flutter/material.dart';
 
 import '../data/database_view_property_type_conversion_service.dart';
 import '../domain/object_model.dart';
+import 'property_type_clear_migration_dialog.dart';
 
 class PropertyTypeConversionConfirmation {
   const PropertyTypeConversionConfirmation({
     this.explicitChoices = const <int, String>{},
+    this.clearStoredValues = false,
   });
 
   final Map<int, String> explicitChoices;
+
+  /// Explicit destructive decision returned only after the separate clear-
+  /// values confirmation dialog succeeds.
+  final bool clearStoredValues;
 }
 
 Future<PropertyTypeConversionConfirmation?> showPropertyTypeConversionImpactDialog({
@@ -24,12 +30,12 @@ Future<PropertyTypeConversionConfirmation?> showPropertyTypeConversionImpactDial
       ),
     );
 
-/// Confirmation-only UX for a preflighted Value Property type change.
+/// Confirmation UX for a preflighted Value Property type change.
 ///
-/// This dialog performs no schema/value mutation. Callers must re-run preflight
-/// at apply time and use a canonical transactional migration path. Destructive or
-/// unsupported changes remain disabled rather than offering an implicit clear or
-/// coercion action.
+/// This dialog performs no schema/value mutation. Normal migration-blocked
+/// changes remain disabled. The only destructive escape hatch is a separate,
+/// explicit clear-values confirmation which returns a typed decision to the
+/// caller; callers must still apply it through the transactional migration path.
 class PropertyTypeConversionImpactDialog extends StatefulWidget {
   const PropertyTypeConversionImpactDialog({
     super.key,
@@ -62,6 +68,18 @@ class _PropertyTypeConversionImpactDialogState
 
   String _objectLabel(int objectId) =>
       widget.objectLabels[objectId] ?? 'Object #$objectId';
+
+  Future<void> _confirmClearValues() async {
+    final confirmed = await showPropertyTypeClearMigrationDialog(
+      context: context,
+      impact: widget.impact,
+    );
+    if (!mounted || !confirmed) return;
+    Navigator.pop(
+      context,
+      const PropertyTypeConversionConfirmation(clearStoredValues: true),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -143,6 +161,12 @@ class _PropertyTypeConversionImpactDialogState
         ),
       ),
       actions: [
+        if (impact.mode == PropertyTypeConversionMode.requiresMigration)
+          TextButton(
+            key: const ValueKey('property-type-clear-values-path'),
+            onPressed: _confirmClearValues,
+            child: const Text('値をクリアして変更'),
+          ),
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: const Text('キャンセル'),
