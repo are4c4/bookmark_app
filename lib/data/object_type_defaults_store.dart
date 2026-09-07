@@ -44,7 +44,12 @@ class ObjectTypeDefaultsStore {
     } on FormatException {
       throw const FormatException('Stored ObjectType defaults are not valid JSON.');
     }
-    return ObjectTypeDefaults.fromJson(decoded);
+    final defaults = ObjectTypeDefaults.fromJson(decoded);
+    await _validateStoredReferences(
+      objectTypeId: objectTypeId,
+      defaults: defaults,
+    );
+    return defaults;
   }
 
   Future<void> write({
@@ -99,6 +104,38 @@ class ObjectTypeDefaultsStore {
       'DELETE FROM object_type_defaults WHERE object_type_id = ?',
       [objectTypeId],
     );
+  }
+
+  Future<void> _validateStoredReferences({
+    required int objectTypeId,
+    required ObjectTypeDefaults defaults,
+  }) async {
+    final objectType = await _genericStore.getDatabase(objectTypeId);
+    if (objectType == null) {
+      throw FormatException(
+        'Stored ObjectType defaults reference missing ObjectType $objectTypeId.',
+      );
+    }
+
+    final referencedIds = <int>{
+      ...?defaults.visiblePropertyIds,
+      ...?defaults.propertyOrder,
+    };
+    if (referencedIds.isEmpty) return;
+
+    final propertyIds = (await _genericStore.listProperties(objectTypeId))
+        .map((property) => property.id)
+        .toSet();
+    final invalidIds = referencedIds
+        .where((propertyId) => !propertyIds.contains(propertyId))
+        .toList(growable: false)
+      ..sort();
+    if (invalidIds.isNotEmpty) {
+      throw FormatException(
+        'Stored ObjectType defaults reference Properties not owned by '
+        'ObjectType $objectTypeId: ${invalidIds.join(', ')}.',
+      );
+    }
   }
 
   Future<void> _validatePropertyReferences({
