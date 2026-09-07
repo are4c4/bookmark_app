@@ -5,15 +5,16 @@ import 'file_managed_resource_resolver.dart';
 /// Exports one canonical File Object to an explicit caller-provided path.
 ///
 /// Canonical identity and Vault/profile-relative resolution remain owned by
-/// [FileManagedResourceResolver]. This service never rewrites the File Object,
-/// moves/deletes its managed source, chooses a destination, or creates another
-/// managed-storage root. The destination is created exclusively so export can
-/// never overwrite an existing user file.
+/// [CanonicalFileManagedResourceResolver]. This service never rewrites the File
+/// Object, moves/deletes its managed source, chooses a destination, or creates
+/// another managed-storage root. The destination is created exclusively so
+/// export can never overwrite an existing user file.
 class CanonicalFileExportService {
-  CanonicalFileExportService({required FileManagedResourceResolver resources})
-      : _resources = resources;
+  CanonicalFileExportService({
+    required CanonicalFileManagedResourceResolver resources,
+  }) : _resources = resources;
 
-  final FileManagedResourceResolver _resources;
+  final CanonicalFileManagedResourceResolver _resources;
 
   Future<void> exportTo({
     required int fileObjectTypeId,
