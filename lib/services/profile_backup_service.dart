@@ -30,7 +30,7 @@ class ProfileBackupService {
 
     final directory = Directory(profileDirectoryPath);
     if (!await directory.exists()) {
-      throw StateError('Profileフォルダが見つかりません。');
+      throw StateError('Vaultフォルダが見つかりません。');
     }
 
     await ZipFileEncoder().zipDirectory(
@@ -45,7 +45,7 @@ class ProfileBackupService {
     final file = await openFile(
       acceptedTypeGroups: const [
         XTypeGroup(
-          label: 'Bookmark Profile backup',
+          label: 'Bookmark Vault backup',
           extensions: ['zip'],
         ),
       ],
@@ -72,7 +72,7 @@ class ProfileBackupService {
       await extractFileToDisk(archive.path, target.path);
       if (!await File('${target.path}/database.sqlite').exists()) {
         throw const FormatException(
-          'database.sqliteを含むBookmark Profileバックアップではありません。',
+          'database.sqliteを含むBookmark Vaultバックアップではありません。',
         );
       }
     } catch (_) {

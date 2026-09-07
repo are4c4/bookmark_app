@@ -49,12 +49,12 @@ class ProfileManagementPage extends StatelessWidget {
   }
 
   Future<void> _create(BuildContext context) async {
-    final name = await _askName(context, 'Profileを追加');
+    final name = await _askName(context, 'Vaultを追加');
     if (name?.isNotEmpty == true) await onCreate(name!);
   }
 
   Future<void> _rename(BuildContext context, DatabaseProfile profile) async {
-    final name = await _askName(context, 'Profile名を変更', initial: profile.name);
+    final name = await _askName(context, 'Vault名を変更', initial: profile.name);
     if (name?.isNotEmpty == true) await onRename(profile, name!);
   }
 
@@ -63,7 +63,12 @@ class ProfileManagementPage extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: Text('「${profile.name}」を削除しますか？'),
-        content: const Text('Profileフォルダ内のデータベースと写真も削除されます。この操作は元に戻せません。'),
+        content: const Text(
+          'このVaultをアプリの一覧から削除します。'
+          'アプリ管理下で作成されたVaultの場合は保存データも削除されます。'
+          '外部フォルダとして開いたVaultのファイルは削除されません。'
+          'この操作は元に戻せません。',
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('キャンセル')),
           FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('削除')),
@@ -77,9 +82,9 @@ class ProfileManagementPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Profile管理'),
+        title: const Text('Vault管理'),
         actions: [
-          TextButton.icon(onPressed: () => _create(context), icon: const Icon(Icons.add), label: const Text('Profileを追加')),
+          TextButton.icon(onPressed: () => _create(context), icon: const Icon(Icons.add), label: const Text('Vaultを追加')),
           const SizedBox(width: 10),
         ],
       ),
