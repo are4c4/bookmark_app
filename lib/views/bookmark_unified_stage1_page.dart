@@ -3,11 +3,11 @@ import 'dart:io';
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
+import '../data/database_view_gallery_adapter.dart';
 import '../data/database_view_open_mode_service.dart';
 import '../data/database_view_store.dart';
 import '../database/database_definition.dart';
@@ -16,6 +16,7 @@ import '../data/workspace_store.dart';
 import '../features/database/presentation/widgets/database_create_tiles.dart';
 import '../features/database/presentation/widgets/database_page_toolbar.dart';
 import '../features/database/presentation/widgets/database_view_tabs.dart';
+import '../features/database/presentation/widgets/object_gallery_view.dart';
 import '../features/object/presentation/object_open_presentation_host.dart';
 import '../services/bookmark_metadata_service.dart';
 import '../services/bookmark_url_resolver.dart';
@@ -28,6 +29,7 @@ import '../widgets/bookmark_resolved_url_text.dart';
 import '../widgets/bookmark_visual_image.dart';
 import '../widgets/bookmark_property_order_dialog.dart';
 import '../widgets/notion_bookmark_card.dart';
+import '../widgets/object_gallery_mode_menu.dart';
 import '../widgets/relation_database_picker.dart';
 import 'bookmark_property_order.dart';
 import 'bookmark_query_engine.dart';
@@ -49,6 +51,7 @@ class BookmarkUnifiedStage1Page extends StatefulWidget {
 }
 
 class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
+  static const _galleryAdapter = DatabaseViewGalleryAdapter();
   static const _openPresentationHost = ObjectOpenPresentationHost();
 
   final _searchController = TextEditingController();
@@ -237,6 +240,12 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
     if (mounted && _activeDatabaseViewId == active.id) {
       _activeDatabaseView = next;
     }
+  }
+
+  Future<void> _persistDatabaseView(DatabaseViewConfig next) async {
+    await _databaseViewStore.updateView(next);
+    if (!mounted || _activeDatabaseViewId != next.id) return;
+    setState(() => _activeDatabaseView = next);
   }
 
   Widget _databaseViewTabs() => Padding(
@@ -571,60 +580,54 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
     );
   }
 
-  Widget _gallery(List<BookmarkItem> bookmarks) => LayoutBuilder(
-        builder: (context, constraints) {
-          final columns = constraints.maxWidth >= 1200
-              ? 4
-              : constraints.maxWidth >= 850
-                  ? 3
-                  : constraints.maxWidth >= 560
-                      ? 2
-                      : 1;
-          final scheme = Theme.of(context).colorScheme;
-          return MasonryGridView.count(
-            padding: const EdgeInsets.fromLTRB(18, 16, 18, 90),
-            crossAxisCount: columns,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            itemCount: bookmarks.length + 1,
-            itemBuilder: (context, index) {
-              if (index == bookmarks.length) {
-                return DatabaseActionCard(
-                  label: '新しいブックマーク',
-                  icon: Icons.add,
-                  onPressed: () => showBookmarkCreateDialog(
-                    context: context,
-                    repository: widget.repository,
-                  ),
-                );
-              }
-              final bookmark = bookmarks[index];
-              final selected = _selectionMode
-                  ? _batchSelectedIds.contains(bookmark.id)
-                  : bookmark.id == _selectedBookmarkId;
-              return Stack(children: [
-                _roleAwareCard(bookmark, selected: selected),
-                if (_selectionMode)
-                  Positioned(
-                    left: 8,
-                    top: 8,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: scheme.surfaceContainerHigh,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Checkbox(
-                        visualDensity: VisualDensity.compact,
-                        value: _batchSelectedIds.contains(bookmark.id),
-                        onChanged: (_) => _selectBookmark(bookmark),
-                      ),
-                    ),
-                  ),
-              ]);
-            },
+  Widget _gallery(List<BookmarkItem> bookmarks) {
+    final scheme = Theme.of(context).colorScheme;
+    final activeView = _activeDatabaseView;
+    final mode = activeView == null
+        ? GalleryViewMode.fixed
+        : _galleryAdapter.decode(activeView);
+    return ObjectGalleryView(
+      mode: mode,
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 90),
+      fixedMainAxisExtent: 360,
+      itemCount: bookmarks.length + 1,
+      itemBuilder: (context, index) {
+        if (index == bookmarks.length) {
+          return DatabaseActionCard(
+            label: '新しいブックマーク',
+            icon: Icons.add,
+            onPressed: () => showBookmarkCreateDialog(
+              context: context,
+              repository: widget.repository,
+            ),
           );
-        },
-      );
+        }
+        final bookmark = bookmarks[index];
+        final selected = _selectionMode
+            ? _batchSelectedIds.contains(bookmark.id)
+            : bookmark.id == _selectedBookmarkId;
+        return Stack(children: [
+          _roleAwareCard(bookmark, selected: selected),
+          if (_selectionMode)
+            Positioned(
+              left: 8,
+              top: 8,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerHigh,
+                  shape: BoxShape.circle,
+                ),
+                child: Checkbox(
+                  visualDensity: VisualDensity.compact,
+                  value: _batchSelectedIds.contains(bookmark.id),
+                  onChanged: (_) => _selectBookmark(bookmark),
+                ),
+              ),
+            ),
+        ]);
+      },
+    );
+  }
 
   Widget _image(
     BookmarkItem bookmark, {
@@ -1278,6 +1281,12 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
           icon: const Icon(Icons.tune, size: 17),
           label: const Text('プロパティ'),
         ),
+        if (_viewType == BookmarkStage1ViewType.gallery &&
+            _activeDatabaseView != null)
+          ObjectGalleryModeMenu(
+            view: _activeDatabaseView!,
+            onViewChanged: (next) => unawaited(_persistDatabaseView(next)),
+          ),
       ],
       trailingActions: [
         PopupMenuButton<String>(
