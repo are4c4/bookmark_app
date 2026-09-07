@@ -15,9 +15,9 @@ Core product direction:
 ## Active architecture/product issues
 - `#56` — generic Object/Database/View daily-use integration umbrella.
 - `#155` — reusable Weblink Object and legacy Bookmark URL/media convergence.
-- `#218` — macOS installable delivery; implementation is effectively complete, final issue cleanup/validation remains.
+- `#218` — macOS installable delivery; repository packaging/CI is complete, final user-machine install/launch/data-preservation validation remains.
 - `#225` — maintainability, hotspot reduction and legacy-path retirement.
-- `#242` — user-selectable Vault/storage lifecycle.
+- `#242` — user-selectable Vault/storage lifecycle; production implementation is complete, final real-macOS validation remains.
 - `#245` — legacy Photos -> canonical Image Objects.
 - `#249` — remaining Bookmark presentation parity.
 - `#481` — universal Body/note surface for every ObjectType.
@@ -81,9 +81,9 @@ This lane is intentionally broader than the former Relation-only lane so mature 
 - The old Bookmark-only `FullTextSearchRepository` has already been retired by Refactor #654; do not recreate a parallel domain-specific search product.
 
 ### F — Storage, Vault & Delivery
-- #242 Vault/Profile/filesystem lifecycle.
-- #218 release/install delivery.
-- Filesystem/backup/restore portions required by File/Image portability.
+- #242 Vault/Profile/filesystem lifecycle: code complete; real-macOS validation pending.
+- #218 release/install delivery: repository packaging complete; user-machine validation pending.
+- Shared managed-file copy/ownership/rollback/delete filesystem contract for primitives is delivered on `main`.
 
 ### G — Refactor & Architecture Health
 - #225 only: behavior-preserving extraction/deletion, caller-zero legacy retirement, AppDatabase narrowing, failure policy and CI/architecture guardrails.
@@ -104,8 +104,9 @@ Major integrated state:
 - **Global Search is canonical Object search:** one FTS projection covers title/aliases, selected typed Properties, universal Body, Relation labels, dedicated Weblink metadata and replaceable derived text; user-defined ObjectTypes and real Image/File primitives use the same repository;
 - **PDF remains a File Object:** Primitive lane exposes content-first PDF extracted text and Search reconciles it as replaceable `pdf-text` during Global Search workspace rebuild/focused File refresh;
 - live `GlobalSearchPage` routes through canonical Object search, and Refactor #654 has removed the superseded Bookmark-only `FullTextSearchRepository` implementation and its dedicated legacy-only tests;
+- **Storage-managed files use one Vault filesystem contract:** #750 provides copy + portable path + explicit ownership + rollback, #771 adds ownership-gated physical delete, #766 reuses the copy seam for legacy Bookmark attachments, and canonical generic File import now consumes the copy/rollback boundary (`eb2f0e6d1ca06feefb2664e20407e21622d5f0a4`);
 - Refactor work has materially reduced caller-zero/dead layers and added architecture regression ceilings;
-- macOS release packaging and local launch/data-preservation validation have succeeded.
+- macOS release/DMG packaging CI has succeeded; the final user-machine install/launch/data-preservation check remains open in #218.
 
 The largest product gap is no longer the Object/Relation/search core. It is **composability and migration**: making generic schema/View/template primitives strong enough that Bookmark and future domains do not require dedicated management code, while safely retiring remaining legacy Bookmark/Photo paths.
 
@@ -138,7 +139,7 @@ Before a non-trivial edit, inspect open PR ownership. One lane at a time may hol
 
 ## Cross-lane boundaries
 - Database/View lane owns generic presentation/settings; Primitive lane owns Weblink/Image/File product semantics.
-- Primitive lane owns Object/file identity; Storage lane owns Vault/filesystem lifecycle and portability.
+- Primitive lane owns Object/file identity, metadata and MIME/content routing; Storage lane owns Vault/filesystem byte placement, portable paths, explicit ownership, rollback and physical delete safety.
 - Database/View lane owns schema authoring UX; Relation/Data Integrity lane owns correctness of destructive target/cardinality migrations.
 - Object Core owns Body persistence/edit contracts; Search lane owns indexing Body text.
 - Primitive lane owns PDF/File extraction behavior; Search lane owns derived-text persistence/index/reconciliation.
@@ -148,9 +149,9 @@ Before a non-trivial edit, inspect open PR ownership. One lane at a time may hol
 1. **A Object Core:** continue the remaining #481/#56 shared Object Core work identified in its lane handoff.
 2. **B Relations/Integrity:** continue #493 integrity work and audit new Relation-producing workflows as they land.
 3. **C Database/View:** continue generic schema/View/template UX from #490/#491/#492/#493 away from leased hotspots.
-4. **D Primitives:** continue #155/#245/#484/#489/#495 primitive/media migration work from its current handoff.
+4. **D Primitives:** continue #155/#245/#484/#489/#495 primitive/media migration work from its current handoff; generic File import already reuses the Storage-managed copy/rollback seam.
 5. **E Search:** #414/#494 complete and legacy Bookmark FTS retired; stay idle unless a new Search issue appears. Do not invent speculative search abstractions.
-6. **F Storage:** continue #242/#218 Vault/storage/delivery work from its current handoff.
+6. **F Storage:** no independent repository implementation is currently required; remain idle pending real-macOS #242/#218 validation or a concrete filesystem/Vault contract gap reported by another lane.
 7. **G Refactor:** continue #225 with the next verified caller-zero/dependency-narrowing slice after #654.
 
 ## Known risks
@@ -159,6 +160,7 @@ Before a non-trivial edit, inspect open PR ownership. One lane at a time may hol
 - Image/File shared infrastructure must not weaken current Image ownership/delete/edit safety;
 - PDF text reconciliation currently runs during Global Search workspace rebuild; very large File sets may eventually justify separately scoped caching/performance work, but that is not required by completed #494;
 - Vault changes must not silently replace inaccessible storage with a new empty database;
+- managed-file physical deletion must require explicit Storage ownership and must not infer authority from a Vault-relative-looking path alone;
 - current large shared hosts are still conflict magnets; throughput comes from responsibility splits plus hotspot leases, not from letting every lane edit the same host concurrently;
 - an idle lane is preferable to speculative abstractions.
 
