@@ -146,22 +146,21 @@ class _ObjectGlobalSearchPageState extends State<ObjectGlobalSearchPage> {
   }
 
   Future<void> _openResult(ResolvedObjectSearchHit result) async {
+    final visitedObjectIds = <int>{result.object.id};
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => ObjectInspectorPage(
           store: widget.store,
           objectStore: ObjectStore(widget.store),
           objectId: result.object.id,
+          onObjectVisited: visitedObjectIds.add,
         ),
       ),
     );
     if (!mounted) return;
 
     try {
-      await _searchService.refreshDetailReturnAffected(
-        objectTypeId: result.objectType.id,
-        objectId: result.object.id,
-      );
+      await _searchService.refreshVisitedDetailReturnObjects(visitedObjectIds);
     } catch (_, stackTrace) {
       _recordSearchFailure(
         'Object global search result refresh failed.',
