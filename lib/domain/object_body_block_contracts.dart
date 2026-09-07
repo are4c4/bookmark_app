@@ -49,6 +49,31 @@ abstract final class ObjectBodyBlockAttribute {
   static const caption = 'caption';
 }
 
+/// Validates semantic fields for block kinds understood by the current app.
+///
+/// Unknown/future block kinds remain opaque and round-trippable. Optional known
+/// attributes also stay backward compatible when omitted. This validator only
+/// rejects values that would otherwise violate the current typed presentation
+/// contract after a document has already been accepted structurally.
+abstract final class ObjectBodyBlockContractValidator {
+  static void validateDocument(ObjectBodyDocument document) {
+    for (final block in document.blocks) {
+      validateBlock(block);
+    }
+  }
+
+  static void validateBlock(ObjectBodyBlock block) {
+    if (block.type != ObjectBodyBlockType.checklist) return;
+
+    final checked = block.attributes[ObjectBodyBlockAttribute.checked];
+    if (checked != null && checked is! bool) {
+      throw const FormatException(
+        'Object body checklist checked attribute must be a boolean.',
+      );
+    }
+  }
+}
+
 /// Creates currently-supported rich Body blocks while keeping their persisted
 /// representation compatible with the open string-based [ObjectBodyBlock]
 /// model.
