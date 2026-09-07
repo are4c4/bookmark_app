@@ -83,7 +83,13 @@ class RelationIntegrityService {
 
     for (final sourceType in objectTypes) {
       final sourceObjects = await objectsFor(sourceType.id);
-      for (final property in sourceType.properties.where((item) => item.isRelation)) {
+      final relationProperties = sourceType.properties
+          .where((item) => item.isRelation)
+          .toList(growable: false);
+      final relationPropertyIds = relationProperties
+          .map((property) => property.id)
+          .toSet();
+      for (final property in relationProperties) {
         final targetTypeId = property.targetObjectTypeId;
         if (targetTypeId == null) {
           issues.add(
@@ -283,6 +289,24 @@ class RelationIntegrityService {
               }
             }
           }
+        }
+      }
+
+      for (final source in sourceObjects) {
+        final strayEdges = (await outgoingFor(source.id))
+            .where((edge) => !relationPropertyIds.contains(edge.propertyId));
+        for (final edge in strayEdges) {
+          issues.add(
+            RelationIntegrityIssue(
+              kind: RelationIntegrityIssueKind.staleIndexEdge,
+              objectTypeId: sourceType.id,
+              propertyId: edge.propertyId,
+              sourceObjectId: source.id,
+              targetObjectId: edge.targetObjectId,
+              message:
+                  'Relation edge ${source.id} -> ${edge.targetObjectId} references Property ${edge.propertyId}, which is not a current Relation Property of ObjectType ${sourceType.id}.',
+            ),
+          );
         }
       }
     }
