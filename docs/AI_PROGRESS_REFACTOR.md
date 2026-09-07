@@ -9,33 +9,37 @@ Primary lane: **G — Refactor & Architecture Health**. Own behavior-preserving 
 
 ## Active checkpoint — 2026-09-08
 
-### AppShell raw-error privacy cleanup
-Branch: `refactor/clean-app-shell-error-privacy-225`
+### Tag management raw-error privacy cleanup
+Branch: `refactor/clean-tag-management-error-privacy-225`
 
-This slice was prepared on top of the Object Inspector privacy head while #870 CI ran. #870 subsequently passed full Flutter CI #2641 and squash-merged to `main` as `a18ce533242e6d60a3e6e11196034e3324ad3c40`. Before opening the AppShell PR, rebuild the branch as one commit on the latest main tree so no stacked Object Inspector diff or intervening cross-lane main changes remain.
+The preceding AppShell slice passed corrected Flutter CI #2648 and squash-merged as **#872 / `51420bab7818fc3f481b8f98e5ede7ec0f7cc62e`**, ratcheting the legacy raw-error allowlist **3 -> 2 hosts**. Relation #871 then merged as `eaf70d24cbceb2cdd1e9a74a71e220005553bdb7`, followed by Primitive #869 as `36588e0d89e4f95e204d72d7a00194d7c7a2f0ba`. The active Tag slice must be one commit directly on the current main tree before PR creation.
 
-A full `lib/views/app_shell.dart` audit found exactly three raw caught-exception user-visible surfaces:
-- generic Database creation;
-- Workspace creation;
-- shared data action failure for Bookmark import/export and Vault backup/restore operations.
+A full `lib/views/tag_management_page.dart` audit found exactly six raw caught-exception presentation surfaces:
+- inline tag rename;
+- inline tag creation;
+- drag/drop tag move;
+- Tag Group creation;
+- Tag Group rename;
+- Tag Group deletion.
 
-Each catch now discards the unused exception value and keeps an operation-specific stable message:
-- `データベースを作成できませんでした。`;
-- `Workspaceを作成できませんでした。`;
-- `データ操作に失敗しました。`.
+The active Tag slice removes raw exception text from all six workflows while preserving useful domain validation:
+- tag rename keeps the existing `ArgumentError('同名のタグが存在します')` contract as the stable duplicate-name message and otherwise uses `タグ名を変更できませんでした`;
+- Tag Group create/rename catch the existing `TagGroupNameConflictException` explicitly and keep `同じ名前のタググループが既にあります`;
+- inline tag creation, drag/drop move, generic Tag Group create/rename failures and Tag Group deletion use operation-specific stable messages without exception interpolation.
 
-The AppShell host was reconstructed from the exact stacked-base blob and diff-audited against the Object Inspector head: the production diff is **6 additions / 6 deletions in AppShell only**, corresponding to the three catch/message pairs. No Database creation, Workspace, import/export, Vault backup/restore, routing, or navigation semantics changed.
+The ~1,300-line Tag host was reconstructed from exact source chunks and diff-audited: the production diff is **27 additions / 11 deletions in `TagManagementPage` only**. No Tag hierarchy mutation, move/undo, merge, delete, filtering, selection, keyboard, Relation or persistence semantics changed.
 
 The slice also:
-- removes `lib/views/app_shell.dart` from `legacy_allowed_hosts`, ratcheting the legacy raw-error boundary **3 -> 2 hosts**;
+- removes `lib/views/tag_management_page.dart` from `legacy_allowed_hosts`, ratcheting the temporary legacy raw-error boundary **2 -> 1 host**;
 - updates `docs/FEATURE_PRESENTATION_ERROR_PRIVACY.md`;
-- adds `test/app_shell_error_privacy_test.dart`, locking all three stable messages and rejecting raw `$error` / `${error...}` presentation.
+- adds `test/tag_management_error_privacy_test.dart`, locking stable/domain messages and rejecting the former raw `$error` surfaces.
 
 ## Latest integrated Lane G checkpoints
-- **#870 / `a18ce533242e6d60a3e6e11196034e3324ad3c40` — Object Inspector raw-error cleanup.** Ten Object Inspector failure surfaces now use stable messages; the legacy error-privacy allowlist ratcheted **4 -> 3**. Full Flutter CI #2641 passed before squash merge.
-- **#868 / `c55146f700c07b6038051674e5322aa8d07f1e53` — Bookmark Stage1 Database-presentation shim imports retired.** Stage1 moved its final two Database widget imports to canonical feature paths; the accepted legacy-shim import ceiling ratcheted **5 -> 3**. Flutter CI #2637 passed fully before squash merge.
-- **#867 / `4fb55d3ad6fb19a5a20063fd8e66f730ae990d40` — Bookmark Stage1 raw-error cleanup.** External URL-drop failure uses a stable message; the legacy error-privacy allowlist ratcheted **5 -> 4**. Flutter CI #2634 passed fully before merge.
-- **#863 / `84350e59dec76fb7da0096274920ff237f98f98f` — Photo management raw-error cleanup.** Photo import failures use stable messages; the allowlist ratcheted **6 -> 5**.
+- **#872 / `51420bab7818fc3f481b8f98e5ede7ec0f7cc62e` — AppShell raw-error cleanup.** Database creation, Workspace creation and shared data-operation failures now use stable messages; allowlist **3 -> 2**. A stale guard fixture was corrected, then Flutter CI #2648 passed fully before merge.
+- **#870 / `a18ce533242e6d60a3e6e11196034e3324ad3c40` — Object Inspector raw-error cleanup.** Ten Object Inspector failure surfaces now use stable messages; allowlist **4 -> 3**. Flutter CI #2641 passed fully before merge.
+- **#868 / `c55146f700c07b6038051674e5322aa8d07f1e53` — Bookmark Stage1 Database-presentation shim imports retired.** Stage1 moved its final two Database widget imports to canonical feature paths; accepted legacy-shim import ceiling **5 -> 3**. Flutter CI #2637 passed fully before merge.
+- **#867 / `4fb55d3ad6fb19a5a20063fd8e66f730ae990d40` — Bookmark Stage1 raw-error cleanup.** External URL-drop failure uses a stable message; allowlist **5 -> 4**.
+- **#863 / `84350e59dec76fb7da0096274920ff237f98f98f` — Photo management raw-error cleanup.** Photo import failures use stable messages; allowlist **6 -> 5**.
 - **#855 / `1b41a9ce…` — Bookmark detail raw-error cleanup.** Bookmark detail save failures no longer expose raw caught exception text.
 - **#829 / `6fffec0d…` — caller-zero Weblink detail preview retired.** Dead production module/test deleted and feature-presentation direct `AppDatabase` imports ratcheted downward.
 - **#812 / `f357daa6…` — legacy raw-error presentation spread frozen.** Existing legacy debt became an explicit ratcheting allowlist while new hosts are forbidden.
@@ -47,30 +51,30 @@ Earlier caller-zero/dependency narrowing remains historical context only; re-aud
 ## Current measurable guardrails
 `.github/workflows/flutter_ci.yml` and live guard scripts are authoritative.
 
-Current intended baselines with the active AppShell slice applied:
+Current intended baselines with the active Tag slice applied:
 1. presentation direct `workspaceStore.database` reach-through: **9 maximum**;
 2. direct `AppDatabase` imports under canonical feature presentation: **4 maximum**;
 3. temporary Database-presentation legacy shim imports: **3 maximum**;
 4. temporary Database-presentation re-export shim files: **3 maximum**;
 5. canonical feature-presentation caught-error interpolation: **forbidden**;
-6. legacy presentation caught-error interpolation: temporarily allowlisted in **2 hosts**.
+6. legacy presentation caught-error interpolation: temporarily allowlisted in **1 host**.
 
 Never relax a numeric ceiling or enlarge an allowlist merely to land unrelated work.
 
 ## Error-privacy state
-#812 originally froze eight legacy raw-error hosts. Focused cleanup has since retired:
+#812 originally froze eight legacy raw-error hosts. Focused cleanup has retired:
 - `lib/views/image_editor_page.dart`;
 - `lib/widgets/bookmark_detail_panel.dart`;
 - `lib/views/photo_management_page.dart` (#863);
 - `lib/views/bookmark_unified_stage1_page.dart` (#867);
 - `lib/views/object_inspector_page.dart` (#870);
-- `lib/views/app_shell.dart` (active slice).
+- `lib/views/app_shell.dart` (#872);
+- `lib/views/tag_management_page.dart` (active slice).
 
-After the AppShell slice, the remaining temporary hosts are exactly:
-- `lib/views/generic_database_page.dart`;
-- `lib/views/tag_management_page.dart`.
+After the active Tag slice, the only remaining temporary host is:
+- `lib/views/generic_database_page.dart`.
 
-`TagManagementPage` has multiple inline rename/create/move/group failure workflows and is a larger privacy slice. `GenericDatabasePage` has many failure surfaces and is also a high-conflict shared host. Do not partially clean either host if it cannot leave the allowlist in the same coherent change.
+Primitive #869 has now merged, so the previous Generic hotspot lease is clear at this checkpoint. Re-check open PR ownership immediately before editing Generic, then audit all current failure surfaces before attempting the final **1 -> 0** privacy cleanup.
 
 ## Temporary Database-presentation shim state
 Three one-line re-export shim files remain:
@@ -80,7 +84,7 @@ Three one-line re-export shim files remain:
 
 After #868, the remaining production legacy-shim imports are exactly the three in `GenericDatabasePage`: create tiles, view tabs, and resizable detail pane. Repository-wide audits found no other production legacy callers; package-form matches in maintainability fixture code are intentional regression coverage.
 
-A complete **3 -> 0 imports / 3 -> 0 shim files** cleanup remains a high-confidence next Lane G slice once `GenericDatabasePage` is free. Primitive PR #869 owned that host at the latest audit; always re-check live PR ownership before touching it.
+A complete **3 -> 0 imports / 3 -> 0 shim files** cleanup is now unblocked by #869, subject to a fresh ownership check. Keep it separate from the final Generic privacy cleanup so each concern remains reviewable.
 
 ## AppDatabase / caller-zero policy
 Major responsibility narrowing already integrated includes migration-helper extraction, Bookmark aggregate/read responsibilities, profile path conversion, Saved View/Photo aggregation, engagement mutations, duplicate Tag hierarchy mutation, dead People helpers, dead lifecycle seams, and caller-zero Bookmark/Weblink presentation/search paths.
@@ -101,10 +105,11 @@ Always re-check open PR changed files immediately before non-trivial edits to:
 - `lib/services/profile_manager.dart`;
 - `lib/data/app_database.dart`.
 
-Latest known ownership during this run:
-- Primitive PR **#869** owns `GenericDatabasePage` for canonical List-row media presentation.
-- Relation PR **#859** is docs-only.
-- no open PR owned `AppShell` during the AppShell audit/implementation.
+Latest ownership check during this slice:
+- Primitive **#869 has merged** as `36588e0d…`; its `GenericDatabasePage` lease is clear.
+- Relation **#871 has merged** as `eaf70d24…` and did not touch Tag management or shared UI hotspots.
+- open PRs **#873** and **#859** are documentation-only at this checkpoint.
+- no open PR owns `TagManagementPage` or `GenericDatabasePage` runtime code at the latest check.
 
 Re-read live state before integration because parallel lanes move quickly.
 
@@ -120,19 +125,18 @@ Re-read live state before integration because parallel lanes move quickly.
 ## Validation
 Local Flutter/Dart execution is unavailable in this connector environment, so GitHub Flutter CI is the validation gate.
 
-- #870: full Flutter CI #2641 passed before squash merge.
-- Active AppShell slice: base-diff audit against the stacked Object Inspector head confirms production changes are only the three catch/message pairs. Final guard, Analyze and full Test must pass on the final one-commit branch before merge.
-- Use the retained CI diagnostic artifact/log flow for Flutter Test failures; do not request pasted logs from the user.
+- #872: corrected final Flutter CI #2648 passed maintainability guards, privacy guard, Drift generation, Analyze and full Test before squash merge.
+- Active Tag slice: exact-base diff confirms the production host changed only the six audited failure workflows. Final guard, Analyze and full Test must pass on a one-commit branch rebased onto current `main` before merge.
+- Use retained CI diagnostic artifacts/logs for Flutter Test failures; do not request pasted logs from the user.
 
 ## Exact next actions
-1. Read latest `main` and open PR ownership after #870 merge.
-2. Rebuild the AppShell slice as one commit using the latest-main tree as the base and only the AppShell/guard/doc/test/handoff blobs from this branch; verify `main...branch` is ahead 1 and contains no stacked Object Inspector diff.
-3. Open a focused Lane G AppShell privacy PR, require final-head Flutter CI green, then squash-merge and verify the allowlist is exactly two hosts.
-4. While CI runs, re-audit `TagManagementPage` fully and current caller-zero candidates away from active hotspot leases.
-5. After #869 clears `GenericDatabasePage`, re-audit its latest exact blob before either the final shim retirement or a separately scoped privacy cleanup. Do not combine those two concerns.
-6. Continue caller-zero audits only from current production state; delete code rather than wrapping it when replacement parity and zero callers are proven.
-7. Do not redesign Relation, Search, primitive storage/import, Database/View behavior, or Vault lifecycle under #225.
-8. Do not destructively remove Bookmark URL/thumbnail/Photo compatibility storage until caller-zero plus migration/import/export/backup parity is proven.
+1. Rebuild the active Tag slice as one commit on latest `main` (`36588e0d…` at this checkpoint) using only the Tag/guard/doc/test/handoff blobs, then verify `main...branch` is ahead 1 and production diff remains limited to `TagManagementPage` +27/-11.
+2. Open a focused Lane G Tag privacy PR, require final-head Flutter CI green, then squash-merge and verify the legacy error-privacy allowlist is exactly **1 host**.
+3. While CI runs, audit current `GenericDatabasePage` raw-error surface count without editing the active Tag branch.
+4. After the Tag PR is independent, take one Generic concern at a time: final **1 -> 0** privacy cleanup first if safely bounded, then separately the **3 -> 0** shim retirement (or reverse the order if current diff/ownership makes that safer). Do not combine them.
+5. Continue caller-zero audits only from current production state; delete code rather than wrapping it when replacement parity and zero callers are proven.
+6. Do not redesign Relation, Search, primitive storage/import, Database/View behavior, or Vault lifecycle under #225.
+7. Do not destructively remove Bookmark URL/thumbnail/Photo compatibility storage until caller-zero plus migration/import/export/backup parity is proven.
 
 ## Risks / stop conditions
 Parallel lanes move `main` frequently. Whole-file connector writes require exact-current-source preservation plus base-diff verification; branch refreshes must retain intervening main changes. Artificial/no-op CI-trigger commits are forbidden; rerun existing checks when appropriate instead.

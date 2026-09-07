@@ -216,7 +216,12 @@ class _TagManagementPageState extends State<TagManagementPage> {
       await _store.renameTag(tag.id, value);
       _cancelRename();
     } catch (error) {
-      if (mounted) setState(() => _editError = '$error');
+      if (!mounted) return;
+      final message = error is ArgumentError &&
+              error.message == '同名のタグが存在します'
+          ? '同名のタグが存在します'
+          : 'タグ名を変更できませんでした';
+      setState(() => _editError = message);
     }
   }
 
@@ -293,8 +298,8 @@ class _TagManagementPageState extends State<TagManagementPage> {
       });
       await _saveExpansion();
       _treeFocus.requestFocus();
-    } catch (error) {
-      if (mounted) setState(() => _createError = '$error');
+    } catch (_) {
+      if (mounted) setState(() => _createError = 'タグを追加できませんでした');
     }
   }
 
@@ -427,10 +432,10 @@ class _TagManagementPageState extends State<TagManagementPage> {
         actionLabel: '元に戻す',
         onAction: () => _store.restoreMove(snapshot),
       );
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('移動できませんでした: $error')),
+        const SnackBar(content: Text('移動できませんでした。')),
       );
     }
   }
@@ -476,10 +481,16 @@ class _TagManagementPageState extends State<TagManagementPage> {
         _focusedKey = 'group:$id';
       });
       await _saveExpansion();
-    } catch (error) {
+    } on TagGroupNameConflictException {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('グループを追加できませんでした: $error')),
+          const SnackBar(content: Text('同じ名前のタググループが既にあります')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('グループを追加できませんでした。')),
         );
       }
     }
@@ -493,10 +504,15 @@ class _TagManagementPageState extends State<TagManagementPage> {
     if (name?.isNotEmpty != true || name == group.name) return;
     try {
       await _groupMutations.renameGroup(group.id, name!);
-    } catch (error) {
+    } on TagGroupNameConflictException {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('グループ名を変更できませんでした: $error')),
+        const SnackBar(content: Text('同じ名前のタググループが既にあります')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('グループ名を変更できませんでした。')),
       );
     }
   }
@@ -532,10 +548,10 @@ class _TagManagementPageState extends State<TagManagementPage> {
         }
       });
       await _saveExpansion();
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('グループを削除できませんでした: $error')),
+        const SnackBar(content: Text('グループを削除できませんでした。')),
       );
     }
   }

@@ -32,7 +32,6 @@ catch_pattern = re.compile(r'\bcatch\s*\(\s*(' + identifier + r')\s*(?:,|\))')
 
 legacy_allowed_hosts = {
     'lib/views/generic_database_page.dart',
-    'lib/views/tag_management_page.dart',
 }
 
 
