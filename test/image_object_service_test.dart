@@ -265,4 +265,39 @@ void main() {
       throwsArgumentError,
     );
   });
+
+  test('invalid Image MIME stays missing until valid reimport enrichment',
+      () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final service = ImageObjectService(
+      systemObjects: SystemObjectStore(
+        database: database,
+        objectStore: objectStore,
+      ),
+      defaultsStore: ObjectTypeDefaultsStore(genericStore),
+    );
+
+    final first = await service.findOrCreateManaged(
+      workspaceId: workspaceId,
+      filePath: '/managed/mime.png',
+      contentType: 'not-a-mime',
+    );
+    final definition = await service.ensureDefinition(workspaceId);
+    var stored = (await objectStore.listObjects(definition.objectType.id)).single;
+    expect(stored.values[definition.contentTypeProperty.id], isNull);
+
+    final enriched = await service.findOrCreateManaged(
+      workspaceId: workspaceId,
+      filePath: ' /managed/mime.png ',
+      contentType: ' Image/PNG; charset=binary ',
+    );
+    stored = (await objectStore.listObjects(definition.objectType.id)).single;
+
+    expect(enriched.id, first.id);
+    expect(stored.values[definition.contentTypeProperty.id], 'image/png');
+  });
 }
