@@ -140,30 +140,33 @@ void main() {
       name: 'Delete me',
       type: ObjectPropertyType.text,
     );
+    final corruptJson = jsonEncode(
+      ObjectTypeDefaults(
+        visiblePropertyIds: <int>[propertyId, 999999],
+        propertyOrder: <int>[propertyId, 999999],
+      ).toJson(),
+    );
     await defaultsStore.ensureSchema();
     await database.customStatement(
       '''INSERT INTO object_type_defaults(object_type_id, defaults_json, updated_at)
          VALUES (?, ?, CURRENT_TIMESTAMP)''',
-      <Object?>[
-        typeId,
-        jsonEncode(
-          ObjectTypeDefaults(
-            visiblePropertyIds: <int>[propertyId, 999999],
-            propertyOrder: <int>[propertyId, 999999],
-          ).toJson(),
-        ),
-      ],
+      <Object?>[typeId, corruptJson],
     );
     final property = (await objectStore.getObjectType(typeId))!
         .properties
         .singleWhere((candidate) => candidate.id == propertyId);
 
-    await expectLater(deletion.deleteProperty(property), throwsArgumentError);
+    await expectLater(
+      deletion.deleteProperty(property),
+      throwsA(isA<FormatException>()),
+    );
 
     final type = (await objectStore.getObjectType(typeId))!;
     expect(type.properties.map((property) => property.id), contains(propertyId));
-    final defaults = await defaultsStore.read(typeId);
-    expect(defaults?.visiblePropertyIds, <int>[propertyId, 999999]);
-    expect(defaults?.propertyOrder, <int>[propertyId, 999999]);
+    final rows = await database.customSelect(
+      'SELECT defaults_json FROM object_type_defaults WHERE object_type_id = $typeId',
+    ).get();
+    expect(rows, hasLength(1));
+    expect(rows.single.read<String>('defaults_json'), corruptJson);
   });
 }
