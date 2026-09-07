@@ -117,6 +117,14 @@ class ObjectTypeDefaultsStore {
       );
     }
 
+    final duplicates = _duplicatePropertyReferences(defaults);
+    if (duplicates.isNotEmpty) {
+      throw FormatException(
+        'Stored ObjectType defaults contain duplicate Property ids: '
+        '${_formatDuplicateReferences(duplicates)}.',
+      );
+    }
+
     final referencedIds = <int>{
       ...?defaults.visiblePropertyIds,
       ...?defaults.propertyOrder,
@@ -151,6 +159,16 @@ class ObjectTypeDefaultsStore {
       );
     }
 
+    final duplicates = _duplicatePropertyReferences(defaults);
+    if (duplicates.isNotEmpty) {
+      throw ArgumentError.value(
+        duplicates,
+        'defaults',
+        'ObjectType defaults may not contain duplicate Property ids within '
+            'visiblePropertyIds or propertyOrder.',
+      );
+    }
+
     final referencedIds = <int>{
       ...?defaults.visiblePropertyIds,
       ...?defaults.propertyOrder,
@@ -174,3 +192,28 @@ class ObjectTypeDefaultsStore {
     }
   }
 }
+
+Map<String, List<int>> _duplicatePropertyReferences(ObjectTypeDefaults defaults) {
+  final duplicates = <String, List<int>>{};
+
+  void collect(String field, List<int>? ids) {
+    if (ids == null || ids.length < 2) return;
+    final seen = <int>{};
+    final duplicateIds = <int>{};
+    for (final id in ids) {
+      if (!seen.add(id)) duplicateIds.add(id);
+    }
+    if (duplicateIds.isNotEmpty) {
+      duplicates[field] = duplicateIds.toList(growable: false)..sort();
+    }
+  }
+
+  collect('visiblePropertyIds', defaults.visiblePropertyIds);
+  collect('propertyOrder', defaults.propertyOrder);
+  return duplicates;
+}
+
+String _formatDuplicateReferences(Map<String, List<int>> duplicates) =>
+    duplicates.entries
+        .map((entry) => '${entry.key}=[${entry.value.join(', ')}]')
+        .join('; ');
