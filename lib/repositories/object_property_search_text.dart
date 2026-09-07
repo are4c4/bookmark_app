@@ -16,11 +16,19 @@ const Set<ObjectPropertyType> searchableObjectPropertyTypes = {
 /// Relations, asset/file identity values, checkboxes, timestamps and computed
 /// values deliberately do not contribute here. They either need canonical
 /// labels/derived metadata or add little useful free-text search signal.
+///
+/// System-maintained metadata also fails closed from this generic contributor
+/// unless its schema explicitly opts into search with `searchable: true`.
+/// Native/internal metadata should otherwise use a dedicated contributor rather
+/// than becoming free-text merely because its storage type is text/number/date.
 String buildObjectPropertySearchText({
   required ObjectPropertyDefinition property,
   required dynamic value,
 }) {
-  if (property.config['searchable'] == false ||
+  final searchable = property.config['searchable'];
+  final systemManaged = property.config['system'] == true;
+  if (searchable == false ||
+      (systemManaged && searchable != true) ||
       !searchableObjectPropertyTypes.contains(property.type) ||
       value == null) {
     return '';
