@@ -448,10 +448,10 @@ class _ImageEditorPageState extends State<ImageEditorPage> {
       await FileImage(File(widget.path)).evict();
       if (!mounted) return;
       Navigator.pop(context, true);
-    } catch (error) {
+    } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('画像を編集できませんでした: $error')),
+          const SnackBar(content: Text('画像を編集できませんでした。')),
         );
       }
     } finally {
@@ -485,10 +485,10 @@ class _ImageEditorPageState extends State<ImageEditorPage> {
       await FileImage(File(widget.path)).evict();
       if (!mounted) return;
       Navigator.pop(context, true);
-    } catch (error) {
+    } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('元画像に戻せませんでした: $error')),
+          const SnackBar(content: Text('元画像に戻せませんでした。')),
         );
       }
     } finally {
