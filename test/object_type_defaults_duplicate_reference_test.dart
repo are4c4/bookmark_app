@@ -111,7 +111,7 @@ void main() {
 
       final row = await database.customSelect(
         'SELECT defaults_json FROM object_type_defaults WHERE object_type_id = ?',
-        variables: <Variable<Object>>[Variable<int>(typeId)],
+        variables: [Variable<int>(typeId)],
       ).getSingle();
       expect(row.read<String>('defaults_json'), corruptJson);
     }
