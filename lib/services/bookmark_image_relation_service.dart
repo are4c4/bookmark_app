@@ -236,6 +236,9 @@ class BookmarkImageRelationService {
     );
   }
 
+  /// Mirrors only the legacy-mapped subset required by CoreObjectBridge while
+  /// old Photo callers remain. This table is not consulted to decide the user
+  /// selection here; it is rewritten from the canonical selection.
   Future<void> _replaceLegacyBookmarkPhotoProjection({
     required BookmarkImageRelationState state,
     required Iterable<int> selectedImageObjectIds,
