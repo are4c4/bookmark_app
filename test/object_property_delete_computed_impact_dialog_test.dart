@@ -89,9 +89,9 @@ void main() {
 
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const ValueKey('property-delete-detach-views')),
-    );
+    final detach = find.byKey(const ValueKey('property-delete-detach-views'));
+    await tester.ensureVisible(detach);
+    await tester.tap(detach);
     await tester.pumpAndSettle();
 
     expect(find.text('Table'), findsNothing);
