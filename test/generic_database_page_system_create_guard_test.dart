@@ -1,6 +1,7 @@
 import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/bookmark_lifecycle_store.dart';
 import 'package:bookmark_app/data/bookmark_repository.dart';
+import 'package:bookmark_app/data/file_object_service.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
 import 'package:bookmark_app/data/image_object_service.dart';
 import 'package:bookmark_app/data/object_store.dart';
@@ -128,6 +129,30 @@ void main() {
     expect(find.text('画像をインポート'), findsOneWidget);
     expect(
       find.textContaining('Images must be imported from managed image/file input'),
+      findsNothing,
+    );
+  });
+
+  testWidgets('real Files page exposes managed import instead of title-only create',
+      (tester) async {
+    final fixture = await buildFixture();
+    addTearDown(fixture.database.close);
+    final definition = await FileObjectService(
+      systemObjects: fixture.systemObjects,
+      defaultsStore: fixture.defaultsStore,
+    ).ensureDefinition(fixture.workspaceId);
+
+    await pumpPage(
+      tester,
+      repository: fixture.repository,
+      databaseId: definition.objectType.id,
+    );
+
+    expect(await fixture.objectStore.listObjects(definition.objectType.id), isEmpty);
+    expect(find.text('新規ページ'), findsNothing);
+    expect(find.text('ファイルをインポート'), findsOneWidget);
+    expect(
+      find.textContaining('Files must be created from managed file input'),
       findsNothing,
     );
   });
