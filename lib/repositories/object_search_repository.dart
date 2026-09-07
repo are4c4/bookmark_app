@@ -121,6 +121,26 @@ class ObjectSearchRepository {
     );
   }
 
+  Future<String> _readRelationLabelsSearchText({
+    required AppObject object,
+    required int objectTypeId,
+  }) async {
+    try {
+      return _buildRelationLabelsSearchText(
+        object: object,
+        relations: await _relationReads.outgoing(
+          sourceObjectTypeId: objectTypeId,
+          sourceObjectId: object.id,
+        ),
+      );
+    } on FormatException {
+      // Relation owns canonical source/target ObjectType validation. If one
+      // related schema cannot be decoded, omit only this optional label bucket
+      // instead of aborting the otherwise healthy Object projection.
+      return '';
+    }
+  }
+
   Future<void> _insertObjects({
     int? workspaceId,
     int? objectId,
@@ -152,16 +172,31 @@ class ObjectSearchRepository {
     ).get();
 
     final typesById = <int, AppObjectType>{};
+    final unavailableObjectTypeIds = <int>{};
     final objectsByType = <int, Map<int, AppObject>>{};
     final systemKeysByType = <int, String?>{};
     for (final row in rows) {
       final currentObjectId = row.read<int>('object_id');
       final objectTypeId = row.read<int>('object_type_id');
+      if (unavailableObjectTypeIds.contains(objectTypeId)) continue;
+
       var objectType = typesById[objectTypeId];
       var objectsById = objectsByType[objectTypeId];
       if (objectType == null || objectsById == null) {
-        objectType = await _objectStore.getObjectType(objectTypeId);
-        if (objectType == null) continue;
+        try {
+          objectType = await _objectStore.getObjectType(objectTypeId);
+        } on FormatException {
+          // Object Core owns persisted schema decoding and intentionally fails
+          // closed on unsupported/corrupt Property definitions. Search isolates
+          // that failure to this ObjectType so healthy types in the same
+          // workspace can still rebuild and focused refresh can drop stale rows.
+          unavailableObjectTypeIds.add(objectTypeId);
+          continue;
+        }
+        if (objectType == null) {
+          unavailableObjectTypeIds.add(objectTypeId);
+          continue;
+        }
         typesById[objectTypeId] = objectType;
         final objects = await _objectStore.listObjects(objectTypeId);
         objectsById = <int, AppObject>{
@@ -192,12 +227,9 @@ class ObjectSearchRepository {
             weblinkProjection?.consumedPropertyIds ?? const <int>{},
       );
       final body = await _readBodySearchText(currentObjectId);
-      final relationLabels = _buildRelationLabelsSearchText(
+      final relationLabels = await _readRelationLabelsSearchText(
         object: object,
-        relations: await _relationReads.outgoing(
-          sourceObjectTypeId: objectTypeId,
-          sourceObjectId: currentObjectId,
-        ),
+        objectTypeId: objectTypeId,
       );
       final derivedText = await _derivedTextStore.readCombined(currentObjectId);
       await _database.customStatement(

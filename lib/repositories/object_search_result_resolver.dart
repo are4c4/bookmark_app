@@ -17,9 +17,9 @@ class ResolvedObjectSearchHit {
 /// Resolves canonical Object search ids into current Object/ObjectType data for
 /// presentation and shared opening behavior.
 ///
-/// Stale or inconsistent hits fail closed: deleted Objects, missing ObjectTypes,
-/// and workspace/ObjectType mismatches are omitted instead of being opened as a
-/// different entity. Result ranking/order from FTS is preserved.
+/// Stale or inconsistent hits fail closed: deleted Objects, missing/corrupt
+/// ObjectTypes, and workspace/ObjectType mismatches are omitted instead of being
+/// opened as a different entity. Result ranking/order from FTS is preserved.
 class ObjectSearchResultResolver {
   const ObjectSearchResultResolver(this.objectStore);
 
@@ -36,7 +36,14 @@ class ObjectSearchResultResolver {
     final typesById = <int, AppObjectType>{};
     final objectsById = <int, AppObject>{};
     for (final typeId in typeIds) {
-      final objectType = await objectStore.getObjectType(typeId);
+      AppObjectType? objectType;
+      try {
+        objectType = await objectStore.getObjectType(typeId);
+      } on FormatException {
+        // Canonical Object schema parsing intentionally fails closed. A stale
+        // FTS hit must not make otherwise healthy search results unavailable.
+        continue;
+      }
       if (objectType == null) continue;
       typesById[typeId] = objectType;
       for (final object in await objectStore.listObjects(typeId)) {
