@@ -144,4 +144,40 @@ void main() {
     expect(enriched.values[definition.contentTypeProperty.id], 'application/pdf');
     expect(enriched.values[definition.publishedDateProperty.id], isNull);
   });
+
+  test('invalid Weblink MIME stays missing so later enrichment can fill it',
+      () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final service = WeblinkObjectService(
+      systemObjects: SystemObjectStore(
+        database: database,
+        objectStore: objectStore,
+      ),
+      defaultsStore: ObjectTypeDefaultsStore(genericStore),
+    );
+    final definition = await service.ensureDefinition(workspaceId);
+    final weblink = await service.findOrCreate(
+      workspaceId: workspaceId,
+      url: 'https://example.net/article',
+    );
+
+    final invalid = await service.enrichIfMissing(
+      workspaceId: workspaceId,
+      objectId: weblink.id,
+      contentType: 'not-a-mime',
+    );
+    expect(invalid.values[definition.contentTypeProperty.id], isNull);
+
+    final enriched = await service.enrichIfMissing(
+      workspaceId: workspaceId,
+      objectId: weblink.id,
+      contentType: ' Text/HTML; charset=UTF-8 ',
+    );
+    expect(enriched.id, weblink.id);
+    expect(enriched.values[definition.contentTypeProperty.id], 'text/html');
+  });
 }
