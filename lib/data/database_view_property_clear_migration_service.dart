@@ -2,13 +2,13 @@ import '../domain/object_model.dart';
 import 'database_view_property_type_conversion_service.dart';
 import 'database_view_property_type_migration_service.dart';
 
-/// Explicit destructive fallback for Value Property type changes whose stored
-/// values cannot be migrated safely.
+/// Explicit destructive fallback for user-editable Value Property type changes
+/// whose stored values cannot be migrated safely.
 ///
 /// The caller must obtain an explicit user decision before invoking this method.
-/// Values are cleared and the existing safe migration path is re-run inside one
-/// outer transaction, so any later schema/preflight failure restores both the
-/// old values and old Property type.
+/// Stored value rows are removed and the existing safe migration path is re-run
+/// inside one outer transaction, so any later schema/preflight failure restores
+/// both the old values and old Property type.
 extension DatabaseViewPropertyClearMigration
     on DatabaseViewPropertyTypeMigrationService {
   Future<PropertyTypeMigrationResult> applyChangeClearingStoredValues({
@@ -24,10 +24,9 @@ extension DatabaseViewPropertyClearMigration
         nextType: nextType,
       );
 
-      if (impact.mode != PropertyTypeConversionMode.requiresMigration &&
-          impact.mode != PropertyTypeConversionMode.incompatible) {
+      if (impact.mode != PropertyTypeConversionMode.requiresMigration) {
         throw StateError(
-          'Clearing stored values is only valid for a migration-blocked Value Property type change.',
+          'Clearing stored values is only valid for a migration-blocked user Value Property type change.',
         );
       }
 
@@ -37,18 +36,16 @@ extension DatabaseViewPropertyClearMigration
       }
 
       final objects = await objectStore.listObjects(objectTypeId);
-      var clearedObjectCount = 0;
-      for (final object in objects) {
-        if (!object.values.containsKey(propertyId) ||
-            object.values[propertyId] == null) {
-          continue;
-        }
-        await objectStore.setPropertyValue(
-          objectId: object.id,
-          property: source,
-          value: null,
+      final objectIds = objects
+          .where((object) => object.values.containsKey(propertyId))
+          .map((object) => object.id)
+          .toList(growable: false);
+
+      for (final objectId in objectIds) {
+        await genericStore.database.customStatement(
+          'DELETE FROM generic_values WHERE record_id = ? AND property_id = ?',
+          [objectId, propertyId],
         );
-        clearedObjectCount++;
       }
 
       final migrated = await applyChange(
@@ -58,7 +55,7 @@ extension DatabaseViewPropertyClearMigration
       );
       return PropertyTypeMigrationResult(
         property: migrated.property,
-        transformedObjectCount: clearedObjectCount,
+        transformedObjectCount: objectIds.length,
       );
     });
   }
