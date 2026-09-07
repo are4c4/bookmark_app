@@ -3,8 +3,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../../../../data/app_database.dart';
 import '../../../../data/object_store.dart';
+import '../../../../data/profile_path_resolver.dart';
 import '../../../../services/image_visual_resolver.dart';
 import 'object_image_crop_selector.dart';
 import 'object_image_detail_preview.dart';
@@ -17,7 +17,7 @@ import 'object_image_detail_preview.dart';
 class ObjectImageFreeCropDialog extends StatefulWidget {
   const ObjectImageFreeCropDialog({
     super.key,
-    required this.database,
+    required this.pathResolver,
     required this.objectStore,
     required this.objectTypeId,
     required this.objectId,
@@ -25,7 +25,7 @@ class ObjectImageFreeCropDialog extends StatefulWidget {
     this.imageBuilder,
   });
 
-  final AppDatabase database;
+  final ProfilePathResolver pathResolver;
   final ObjectStore objectStore;
   final int objectTypeId;
   final int objectId;
@@ -51,7 +51,7 @@ class _ObjectImageFreeCropDialogState extends State<ObjectImageFreeCropDialog> {
   @override
   void didUpdateWidget(covariant ObjectImageFreeCropDialog oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.database != widget.database ||
+    if (oldWidget.pathResolver != widget.pathResolver ||
         oldWidget.objectStore != widget.objectStore ||
         oldWidget.objectTypeId != widget.objectTypeId ||
         oldWidget.objectId != widget.objectId ||
@@ -72,7 +72,7 @@ class _ObjectImageFreeCropDialogState extends State<ObjectImageFreeCropDialog> {
     }
     return ImageVisualResolver(
       widget.objectStore,
-      pathResolver: widget.database.pathResolver,
+      pathResolver: widget.pathResolver,
     ).resolveManaged(
       imageObjectTypeId: widget.objectTypeId,
       imageObjectId: widget.objectId,

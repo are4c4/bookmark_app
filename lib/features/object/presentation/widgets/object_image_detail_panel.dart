@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../../data/app_database.dart';
 import '../../../../data/object_store.dart';
+import '../../../../data/profile_path_resolver.dart';
 import '../../../../services/canonical_image_edit_service.dart';
 import 'object_image_detail_preview.dart';
 import 'object_image_edit_actions.dart';
@@ -16,7 +16,7 @@ import 'object_image_free_crop_dialog.dart';
 class ObjectImageDetailPanel extends StatefulWidget {
   const ObjectImageDetailPanel({
     super.key,
-    required this.database,
+    required this.pathResolver,
     required this.objectStore,
     required this.workspaceId,
     required this.objectTypeId,
@@ -30,7 +30,7 @@ class ObjectImageDetailPanel extends StatefulWidget {
     this.previewVisualResolver,
   });
 
-  final AppDatabase database;
+  final ProfilePathResolver pathResolver;
   final ObjectStore objectStore;
   final int workspaceId;
   final int objectTypeId;
@@ -63,7 +63,7 @@ class _ObjectImageDetailPanelState extends State<ObjectImageDetailPanel> {
   @override
   void didUpdateWidget(covariant ObjectImageDetailPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.database != widget.database ||
+    if (oldWidget.pathResolver != widget.pathResolver ||
         oldWidget.objectStore != widget.objectStore ||
         oldWidget.workspaceId != widget.workspaceId ||
         oldWidget.objectTypeId != widget.objectTypeId ||
@@ -81,7 +81,7 @@ class _ObjectImageDetailPanelState extends State<ObjectImageDetailPanel> {
   Future<Rect?> _selectFreeCrop(BuildContext context) => showDialog<Rect>(
         context: context,
         builder: (_) => ObjectImageFreeCropDialog(
-          database: widget.database,
+          pathResolver: widget.pathResolver,
           objectStore: widget.objectStore,
           objectTypeId: widget.objectTypeId,
           objectId: widget.objectId,
@@ -97,7 +97,7 @@ class _ObjectImageDetailPanelState extends State<ObjectImageDetailPanel> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         ObjectImageDetailPreview(
-          database: widget.database,
+          pathResolver: widget.pathResolver,
           objectStore: widget.objectStore,
           objectTypeId: widget.objectTypeId,
           objectId: widget.objectId,
