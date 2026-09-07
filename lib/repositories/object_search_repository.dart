@@ -152,16 +152,31 @@ class ObjectSearchRepository {
     ).get();
 
     final typesById = <int, AppObjectType>{};
+    final unavailableObjectTypeIds = <int>{};
     final objectsByType = <int, Map<int, AppObject>>{};
     final systemKeysByType = <int, String?>{};
     for (final row in rows) {
       final currentObjectId = row.read<int>('object_id');
       final objectTypeId = row.read<int>('object_type_id');
+      if (unavailableObjectTypeIds.contains(objectTypeId)) continue;
+
       var objectType = typesById[objectTypeId];
       var objectsById = objectsByType[objectTypeId];
       if (objectType == null || objectsById == null) {
-        objectType = await _objectStore.getObjectType(objectTypeId);
-        if (objectType == null) continue;
+        try {
+          objectType = await _objectStore.getObjectType(objectTypeId);
+        } on FormatException {
+          // Object Core owns persisted schema decoding and intentionally fails
+          // closed on unsupported/corrupt Property definitions. Search isolates
+          // that failure to this ObjectType so healthy types in the same
+          // workspace can still rebuild and focused refresh can drop stale rows.
+          unavailableObjectTypeIds.add(objectTypeId);
+          continue;
+        }
+        if (objectType == null) {
+          unavailableObjectTypeIds.add(objectTypeId);
+          continue;
+        }
         typesById[objectTypeId] = objectType;
         final objects = await _objectStore.listObjects(objectTypeId);
         objectsById = <int, AppObject>{
