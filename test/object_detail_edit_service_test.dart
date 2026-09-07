@@ -111,4 +111,60 @@ void main() {
       throwsArgumentError,
     );
   });
+
+  test('detail Value editing rejects managed Object timestamps', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final bodyStore = ObjectBodyStore(genericStore);
+    final loader = ObjectDetailContentLoader(
+      objectStore: objectStore,
+      bodyStore: bodyStore,
+      computedStore: ObjectComputedValueStore(objectStore),
+    );
+    final edits = ObjectDetailEditService(
+      objectStore: objectStore,
+      bodyStore: bodyStore,
+      loader: loader,
+    );
+
+    final typeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Item',
+    );
+    final createdId = await objectStore.createProperty(
+      objectTypeId: typeId,
+      name: 'Created',
+      type: ObjectPropertyType.createdTime,
+    );
+    final updatedId = await objectStore.createProperty(
+      objectTypeId: typeId,
+      name: 'Updated',
+      type: ObjectPropertyType.updatedTime,
+    );
+    final objectId = await objectStore.createObject(
+      objectTypeId: typeId,
+      title: 'Item',
+    );
+    final content = (await loader.load(objectTypeId: typeId, objectId: objectId))!;
+
+    for (final propertyId in <int>[createdId, updatedId]) {
+      final property = content.objectType.properties
+          .singleWhere((candidate) => candidate.id == propertyId);
+      await expectLater(
+        edits.setValue(
+          content: content,
+          property: property,
+          value: '2026-09-07T00:00:00Z',
+        ),
+        throwsArgumentError,
+      );
+    }
+
+    final reloaded = (await objectStore.listObjects(typeId)).single;
+    expect(reloaded.values.containsKey(createdId), isFalse);
+    expect(reloaded.values.containsKey(updatedId), isFalse);
+  });
 }
