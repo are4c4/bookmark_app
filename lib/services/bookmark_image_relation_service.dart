@@ -13,6 +13,7 @@ import '../data/object_store.dart';
 import '../data/relation_mutation_service.dart';
 import '../data/relation_target_service.dart';
 import '../data/system_object_store.dart';
+import '../data/tag_object_bridge.dart';
 import '../domain/object_identity_search.dart';
 import '../domain/object_model.dart';
 
@@ -52,6 +53,16 @@ class BookmarkImageRelationService {
       );
   late final BookmarkObjectLinkReadStore _links =
       BookmarkObjectLinkReadStore(database);
+  late final CoreObjectBridge _coreBridge = CoreObjectBridge(
+        database: database,
+        objectStore: objectStore,
+        systemObjectStore: _systemObjects,
+        tagBridge: TagObjectBridge(
+          database: database,
+          objectStore: objectStore,
+          systemObjectStore: _systemObjects,
+        ),
+      );
 
   /// Returns null only when this legacy Bookmark has not yet been mirrored into
   /// the canonical Object system. A partially present or incompatible canonical
@@ -179,6 +190,105 @@ class BookmarkImageRelationService {
           imageObjectId,
       ],
     );
+  }
+
+  /// Mirrors a freshly-created legacy Bookmark/Photo selection and commits the
+  /// result through canonical Image Relations without waiting for the debounced
+  /// background Object watcher.
+  ///
+  /// Every requested Photo mapping is validated before Relation mutation. This
+  /// keeps creation fail-closed and avoids partially attaching a multi-photo
+  /// selection when one legacy Photo cannot be represented canonically.
+  Future<void> saveLegacyPhotosAfterCreate({
+    required int workspaceId,
+    required int bookmarkId,
+    required Iterable<int> photoIds,
+    int? coverPhotoId,
+  }) async {
+    final selectedPhotoIds = <int>[];
+    final seenPhotoIds = <int>{};
+    for (final photoId in photoIds) {
+      if (seenPhotoIds.add(photoId)) selectedPhotoIds.add(photoId);
+    }
+    if (coverPhotoId != null && !seenPhotoIds.contains(coverPhotoId)) {
+      throw ArgumentError.value(
+        coverPhotoId,
+        'coverPhotoId',
+        'Cover Photo must also be included in the selected Photos.',
+      );
+    }
+    if (selectedPhotoIds.isEmpty) return;
+
+    // repository.create() writes legacy Bookmark/workspace rows synchronously,
+    // while the app-wide Object watcher mirrors them on a debounce. Creation
+    // needs deterministic Relation ownership immediately, so run the existing
+    // compatibility bridge once rather than sleeping/polling for that watcher.
+    await _coreBridge.syncAll(workspaceId);
+
+    final state = await load(
+      workspaceId: workspaceId,
+      bookmarkId: bookmarkId,
+    );
+    if (state == null) {
+      throw StateError(
+        'New Bookmark could not be mirrored before Image Relation creation.',
+      );
+    }
+    if (state.hasDiagnostics) {
+      throw StateError(
+        'Cannot save created Bookmark Images while Relations are malformed.',
+      );
+    }
+
+    final candidateImageIds =
+        state.images.candidates.map((image) => image.id).toSet();
+    final imageByPhotoId = <int, int>{};
+    for (final photoId in selectedPhotoIds) {
+      final imageObjectId = await _imageObjectIdForLegacyPhoto(
+        workspaceId: workspaceId,
+        photoId: photoId,
+      );
+      if (imageObjectId == null) {
+        throw StateError(
+          'Selected legacy Photo has no canonical Image mapping after mirror.',
+        );
+      }
+      if (!candidateImageIds.contains(imageObjectId)) {
+        throw StateError(
+          'Selected Photo mapping does not target a canonical Image in this workspace.',
+        );
+      }
+      imageByPhotoId[photoId] = imageObjectId;
+    }
+
+    final selectedImageObjectIds = state.images.selectedObjectIds.toList();
+    for (final photoId in selectedPhotoIds) {
+      final imageObjectId = imageByPhotoId[photoId]!;
+      if (!selectedImageObjectIds.contains(imageObjectId)) {
+        selectedImageObjectIds.add(imageObjectId);
+      }
+    }
+    final coverImageObjectId = coverPhotoId == null
+        ? state.validCoverImageObjectId
+        : imageByPhotoId[coverPhotoId];
+
+    await database.transaction(() async {
+      await _editor.save(
+        context: state.images,
+        selectedObjectIds: selectedImageObjectIds,
+      );
+      await _editor.save(
+        context: state.cover,
+        selectedObjectIds: coverImageObjectId == null
+            ? const <int>[]
+            : <int>[coverImageObjectId],
+      );
+      await _replaceLegacyBookmarkPhotoProjection(
+        state: state,
+        selectedImageObjectIds: selectedImageObjectIds,
+        coverImageObjectId: coverImageObjectId,
+      );
+    });
   }
 
   /// Saves the explicit multi-image selection. If the current valid cover is
