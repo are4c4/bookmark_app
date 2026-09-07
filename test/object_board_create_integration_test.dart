@@ -80,12 +80,14 @@ void main() {
     expect(edges.single.targetObjectId, statusId);
   });
 
-  test('rollback cleanup failure does not mask the original preset failure',
+  test('transaction rollback leaves no orphan when Relation preset fails',
       () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
     final workspaceId = await WorkspaceStore(database).initialize();
     final genericStore = GenericDatabaseStore(database);
+    // If create() still relied on an explicit cleanup delete, this store would
+    // make that cleanup fail and the newly-created Task would remain orphaned.
     final objectStore = _DeleteFailingObjectStore(genericStore);
     final bidirectionalStore = BidirectionalRelationStore(
       genericStore: genericStore,
@@ -143,6 +145,8 @@ void main() {
       ),
       throwsA(isA<ArgumentError>()),
     );
+
+    expect(await objectStore.listObjects(taskTypeId), isEmpty);
   });
 }
 
