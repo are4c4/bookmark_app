@@ -1,4 +1,5 @@
 import 'object_body.dart';
+import 'object_body_block_contracts.dart';
 
 enum ObjectOpenMode {
   sidePeek,
@@ -71,6 +72,9 @@ class ObjectTypeDefaults {
     final bodyTemplate = value.containsKey('bodyTemplate')
         ? ObjectBodyDocument.fromJson(value['bodyTemplate'])
         : null;
+    if (bodyTemplate != null) {
+      ObjectBodyBlockContractValidator.validateDocument(bodyTemplate);
+    }
 
     return ObjectTypeDefaults(
       visiblePropertyIds: readIds('visiblePropertyIds'),
@@ -80,13 +84,18 @@ class ObjectTypeDefaults {
     );
   }
 
-  Map<String, dynamic> toJson() => <String, dynamic>{
-        if (visiblePropertyIds != null)
-          'visiblePropertyIds': visiblePropertyIds,
-        if (propertyOrder != null) 'propertyOrder': propertyOrder,
-        if (openMode != null) 'openMode': openMode!.name,
-        if (bodyTemplate != null) 'bodyTemplate': bodyTemplate!.toJson(),
-      };
+  Map<String, dynamic> toJson() {
+    final template = bodyTemplate;
+    if (template != null) {
+      ObjectBodyBlockContractValidator.validateDocument(template);
+    }
+    return <String, dynamic>{
+      if (visiblePropertyIds != null) 'visiblePropertyIds': visiblePropertyIds,
+      if (propertyOrder != null) 'propertyOrder': propertyOrder,
+      if (openMode != null) 'openMode': openMode!.name,
+      if (template != null) 'bodyTemplate': template.toJson(),
+    };
+  }
 }
 
 extension _FirstOrNull<T> on Iterable<T> {
