@@ -14,7 +14,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test(
-    'loads page projection without eager workspace-wide record fanout',
+    'loads only Relation target record catalogs for page projection',
     () async {
       final database = AppDatabase.forTesting(NativeDatabase.memory());
       addTearDown(database.close);
@@ -73,9 +73,23 @@ void main() {
         workspaceId: workspaceId,
         name: 'Related',
       );
-      await objectStore.createObject(
+      final relatedObjectId = await objectStore.createObject(
         objectTypeId: relatedTypeId,
         title: 'Second',
+      );
+      await objectStore.createRelationProperty(
+        objectTypeId: databaseId,
+        name: 'Related record',
+        targetObjectTypeId: relatedTypeId,
+      );
+
+      final unrelatedTypeId = await objectStore.createObjectType(
+        workspaceId: workspaceId,
+        name: 'Unrelated',
+      );
+      await objectStore.createObject(
+        objectTypeId: unrelatedTypeId,
+        title: 'Never loaded for Relation projection',
       );
 
       int? resolvedCreateModeFor;
@@ -98,10 +112,16 @@ void main() {
       expect(state.objectType?.id, databaseId);
       expect(state.objects.map((object) => object.id), [objectId]);
       expect(state.records.map((record) => record.id), [objectId]);
-      expect(state.objectTypes, isEmpty);
-      expect(state.recordsByType, isEmpty);
-      expect(projectionStore.listAllDatabasesCalls, 0);
-      expect(projectionStore.listRecordsCalls, 0);
+      expect(state.objectTypes.map((type) => type.id).toSet(), {
+        databaseId,
+        relatedTypeId,
+        unrelatedTypeId,
+      });
+      expect(state.recordsByType.keys, [relatedTypeId]);
+      expect(state.recordsByType[relatedTypeId]?.single.id, relatedObjectId);
+      expect(state.recordsByType.containsKey(unrelatedTypeId), isFalse);
+      expect(projectionStore.listAllDatabasesCalls, 1);
+      expect(projectionStore.listRecordsDatabaseIds, [relatedTypeId]);
       expect(state.computedValues[objectId]?[formulaPropertyId], 6);
       expect(state.computedValues[objectId]?[brokenFormulaId], isNull);
       expect(state.createMode, GenericDatabaseCreateMode.weblinkUrl);
@@ -114,19 +134,19 @@ class _TrackingGenericDatabaseStore extends GenericDatabaseStore {
   _TrackingGenericDatabaseStore(super.database);
 
   int listAllDatabasesCalls = 0;
-  int listRecordsCalls = 0;
+  final List<int> listRecordsDatabaseIds = <int>[];
 
   @override
   Future<List<GenericDatabaseDefinitionRecord>> listAllDatabases(
     int workspaceId,
   ) async {
     listAllDatabasesCalls++;
-    return const <GenericDatabaseDefinitionRecord>[];
+    return super.listAllDatabases(workspaceId);
   }
 
   @override
   Future<List<GenericRecord>> listRecords(int databaseId) async {
-    listRecordsCalls++;
-    return const <GenericRecord>[];
+    listRecordsDatabaseIds.add(databaseId);
+    return super.listRecords(databaseId);
   }
 }
