@@ -13,96 +13,140 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('loads page projection and keeps computed failures fail-soft', () async {
-    final database = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(database.close);
-    final workspaceId = await WorkspaceStore(database).initialize();
-    final genericStore = GenericDatabaseStore(database);
-    final objectStore = ObjectStore(genericStore);
-    final computedStore = ObjectComputedValueStore(objectStore);
-    final collectionStore = DatabaseCollectionStore(
-      genericStore: genericStore,
-      objectStore: objectStore,
-    );
-    final pageLoader = GenericDatabaseCollectionPageLoader(
-      genericStore: genericStore,
-      collectionResolver: DatabaseCollectionResolver(
-        collectionStore: collectionStore,
+  test(
+    'loads only Relation target record catalogs for page projection',
+    () async {
+      final database = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(database.close);
+      final workspaceId = await WorkspaceStore(database).initialize();
+      final genericStore = GenericDatabaseStore(database);
+      final projectionStore = _TrackingGenericDatabaseStore(database);
+      final objectStore = ObjectStore(genericStore);
+      final computedStore = ObjectComputedValueStore(objectStore);
+      final collectionStore = DatabaseCollectionStore(
+        genericStore: genericStore,
         objectStore: objectStore,
-      ),
-    );
+      );
+      final pageLoader = GenericDatabaseCollectionPageLoader(
+        genericStore: genericStore,
+        collectionResolver: DatabaseCollectionResolver(
+          collectionStore: collectionStore,
+          objectStore: objectStore,
+        ),
+      );
 
-    final databaseId = await objectStore.createObjectType(
-      workspaceId: workspaceId,
-      name: 'Scores',
-    );
-    final valuePropertyId = await objectStore.createProperty(
-      objectTypeId: databaseId,
-      name: 'Score',
-      type: ObjectPropertyType.number,
-    );
-    final formulaPropertyId = await computedStore.createFormulaProperty(
-      objectTypeId: databaseId,
-      name: 'Double',
-      expression: '{$valuePropertyId} * 2',
-    );
-    final brokenFormulaId = await objectStore.createProperty(
-      objectTypeId: databaseId,
-      name: 'Broken',
-      type: ObjectPropertyType.formula,
-      config: const <String, dynamic>{'expression': 'not-valid('},
-    );
-    final objectType = (await objectStore.getObjectType(databaseId))!;
-    final valueProperty = objectType.properties
-        .singleWhere((property) => property.id == valuePropertyId);
-    final objectId = await objectStore.createObject(
-      objectTypeId: databaseId,
-      title: 'First',
-    );
-    await objectStore.setPropertyValue(
-      objectId: objectId,
-      property: valueProperty,
-      value: 3,
-    );
+      final databaseId = await objectStore.createObjectType(
+        workspaceId: workspaceId,
+        name: 'Scores',
+      );
+      final valuePropertyId = await objectStore.createProperty(
+        objectTypeId: databaseId,
+        name: 'Score',
+        type: ObjectPropertyType.number,
+      );
+      final formulaPropertyId = await computedStore.createFormulaProperty(
+        objectTypeId: databaseId,
+        name: 'Double',
+        expression: '{$valuePropertyId} * 2',
+      );
+      final brokenFormulaId = await objectStore.createProperty(
+        objectTypeId: databaseId,
+        name: 'Broken',
+        type: ObjectPropertyType.formula,
+        config: const <String, dynamic>{'expression': 'not-valid('},
+      );
+      final objectType = (await objectStore.getObjectType(databaseId))!;
+      final valueProperty = objectType.properties.singleWhere(
+        (property) => property.id == valuePropertyId,
+      );
+      final objectId = await objectStore.createObject(
+        objectTypeId: databaseId,
+        title: 'First',
+      );
+      await objectStore.setPropertyValue(
+        objectId: objectId,
+        property: valueProperty,
+        value: 3,
+      );
 
-    final relatedTypeId = await objectStore.createObjectType(
-      workspaceId: workspaceId,
-      name: 'Related',
-    );
-    final relatedObjectId = await objectStore.createObject(
-      objectTypeId: relatedTypeId,
-      title: 'Second',
-    );
+      final relatedTypeId = await objectStore.createObjectType(
+        workspaceId: workspaceId,
+        name: 'Related',
+      );
+      final relatedObjectId = await objectStore.createObject(
+        objectTypeId: relatedTypeId,
+        title: 'Second',
+      );
+      await objectStore.createRelationProperty(
+        objectTypeId: databaseId,
+        name: 'Related record',
+        targetObjectTypeId: relatedTypeId,
+      );
 
-    int? resolvedCreateModeFor;
-    final loader = GenericDatabasePageStateLoader(
-      pageLoader: pageLoader,
-      genericStore: genericStore,
-      computedStore: computedStore,
-      createModeForObjectType: (objectTypeId) async {
-        resolvedCreateModeFor = objectTypeId;
-        return GenericDatabaseCreateMode.weblinkUrl;
-      },
-    );
+      final unrelatedTypeId = await objectStore.createObjectType(
+        workspaceId: workspaceId,
+        name: 'Unrelated',
+      );
+      await objectStore.createObject(
+        objectTypeId: unrelatedTypeId,
+        title: 'Never loaded for Relation projection',
+      );
 
-    final state = await loader.load(
-      databaseId: databaseId,
-      workspaceId: workspaceId,
-    );
+      int? resolvedCreateModeFor;
+      final loader = GenericDatabasePageStateLoader(
+        pageLoader: pageLoader,
+        genericStore: projectionStore,
+        computedStore: computedStore,
+        createModeForObjectType: (objectTypeId) async {
+          resolvedCreateModeFor = objectTypeId;
+          return GenericDatabaseCreateMode.weblinkUrl;
+        },
+      );
 
-    expect(state.database?.id, databaseId);
-    expect(state.objectType?.id, databaseId);
-    expect(state.objects.map((object) => object.id), [objectId]);
-    expect(state.records.map((record) => record.id), [objectId]);
-    expect(state.objectTypes.map((type) => type.id).toSet(), {
-      databaseId,
-      relatedTypeId,
-    });
-    expect(state.recordsByType[databaseId]?.single.id, objectId);
-    expect(state.recordsByType[relatedTypeId]?.single.id, relatedObjectId);
-    expect(state.computedValues[objectId]?[formulaPropertyId], 6);
-    expect(state.computedValues[objectId]?[brokenFormulaId], isNull);
-    expect(state.createMode, GenericDatabaseCreateMode.weblinkUrl);
-    expect(resolvedCreateModeFor, databaseId);
-  });
+      final state = await loader.load(
+        databaseId: databaseId,
+        workspaceId: workspaceId,
+      );
+
+      expect(state.database?.id, databaseId);
+      expect(state.objectType?.id, databaseId);
+      expect(state.objects.map((object) => object.id), [objectId]);
+      expect(state.records.map((record) => record.id), [objectId]);
+      expect(state.objectTypes.map((type) => type.id).toSet(), {
+        databaseId,
+        relatedTypeId,
+        unrelatedTypeId,
+      });
+      expect(state.recordsByType.keys, [relatedTypeId]);
+      expect(state.recordsByType[relatedTypeId]?.single.id, relatedObjectId);
+      expect(state.recordsByType.containsKey(unrelatedTypeId), isFalse);
+      expect(projectionStore.listAllDatabasesCalls, 1);
+      expect(projectionStore.listRecordsDatabaseIds, [relatedTypeId]);
+      expect(state.computedValues[objectId]?[formulaPropertyId], 6);
+      expect(state.computedValues[objectId]?[brokenFormulaId], isNull);
+      expect(state.createMode, GenericDatabaseCreateMode.weblinkUrl);
+      expect(resolvedCreateModeFor, databaseId);
+    },
+  );
+}
+
+class _TrackingGenericDatabaseStore extends GenericDatabaseStore {
+  _TrackingGenericDatabaseStore(super.database);
+
+  int listAllDatabasesCalls = 0;
+  final List<int> listRecordsDatabaseIds = <int>[];
+
+  @override
+  Future<List<GenericDatabaseDefinitionRecord>> listAllDatabases(
+    int workspaceId,
+  ) async {
+    listAllDatabasesCalls++;
+    return super.listAllDatabases(workspaceId);
+  }
+
+  @override
+  Future<List<GenericRecord>> listRecords(int databaseId) async {
+    listRecordsDatabaseIds.add(databaseId);
+    return super.listRecords(databaseId);
+  }
 }

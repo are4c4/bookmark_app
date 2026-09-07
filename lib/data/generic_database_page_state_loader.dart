@@ -33,7 +33,14 @@ class GenericDatabasePageState {
   final List<GenericPropertyRecord> properties;
   final List<GenericRecord> records;
   final List<GenericDatabaseDefinitionRecord> objectTypes;
+
+  /// Record catalogs required by Relation rendering/editing for this page.
+  ///
+  /// Only ObjectTypes referenced by the current ObjectType's Relation
+  /// Properties are loaded. Unrelated workspace ObjectTypes are intentionally
+  /// omitted so page reload does not fan out into every record set.
   final Map<int, List<GenericRecord>> recordsByType;
+
   final Map<int, Map<int, dynamic>> computedValues;
   final GenericDatabaseCreateMode createMode;
 }
@@ -79,10 +86,21 @@ class GenericDatabasePageStateLoader {
         : await createModeForObjectType(objectType.id);
 
     final objectTypes = await genericStore.listAllDatabases(workspaceId);
+    final availableObjectTypeIds = objectTypes.map((type) => type.id).toSet();
+    final relationTargetObjectTypeIds = objectType == null
+        ? const <int>[]
+        : (objectType.properties
+                  .where((property) => property.isRelation)
+                  .map((property) => property.targetObjectTypeId)
+                  .whereType<int>()
+                  .where(availableObjectTypeIds.contains)
+                  .toSet()
+                  .toList()
+              ..sort());
     final recordsByType = <int, List<GenericRecord>>{};
-    for (final relatedType in objectTypes) {
-      recordsByType[relatedType.id] =
-          await genericStore.listRecords(relatedType.id);
+    for (final targetObjectTypeId in relationTargetObjectTypeIds) {
+      recordsByType[targetObjectTypeId] =
+          await genericStore.listRecords(targetObjectTypeId);
     }
 
     final computedValues = <int, Map<int, dynamic>>{};

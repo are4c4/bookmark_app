@@ -18,10 +18,11 @@ import 'package:drift/native.dart';
 ///   dart run tool/generic_database_page_performance_probe.dart
 ///   dart run tool/generic_database_page_performance_probe.dart 100:5 1000:20
 ///
-/// Each argument is `objects:relatedTypes`. The probe intentionally measures
-/// the production [GenericDatabasePageStateLoader] rather than a hand-written
-/// SQL approximation, so changes to page projection, related-type loading, or
-/// computed-Property evaluation show up in the result.
+/// Each argument is `objects:relatedTypes`. The first related ObjectType is an
+/// actual Relation target; remaining related ObjectTypes are deliberately
+/// unrelated to the page. This keeps the probe sensitive to accidental
+/// reintroduction of workspace-wide record fan-out while measuring the
+/// production [GenericDatabasePageStateLoader] path.
 Future<void> main(List<String> arguments) async {
   final scenarios = arguments.isEmpty
       ? const [
@@ -93,6 +94,7 @@ Future<void> _runScenario(_Scenario scenario) async {
       );
     }
 
+    int? relationTargetObjectTypeId;
     for (var index = 0; index < scenario.relatedTypes; index++) {
       final relatedTypeId = await objectStore.createObjectType(
         workspaceId: workspaceId,
@@ -101,6 +103,14 @@ Future<void> _runScenario(_Scenario scenario) async {
       await objectStore.createObject(
         objectTypeId: relatedTypeId,
         title: 'Related record $index',
+      );
+      relationTargetObjectTypeId ??= relatedTypeId;
+    }
+    if (relationTargetObjectTypeId != null) {
+      await objectStore.createRelationProperty(
+        objectTypeId: databaseId,
+        name: 'Probe relation',
+        targetObjectTypeId: relationTargetObjectTypeId,
       );
     }
     seedWatch.stop();
@@ -119,19 +129,23 @@ Future<void> _runScenario(_Scenario scenario) async {
     );
     secondLoadWatch.stop();
 
+    final expectedRecordCatalogs = scenario.relatedTypes == 0 ? 0 : 1;
     if (first.objects.length != scenario.objects ||
         second.objects.length != scenario.objects ||
         first.objectTypes.length != scenario.relatedTypes + 1 ||
+        second.objectTypes.length != scenario.relatedTypes + 1 ||
+        first.recordsByType.length != expectedRecordCatalogs ||
+        second.recordsByType.length != expectedRecordCatalogs ||
         second.computedValues.length != scenario.objects) {
       throw StateError('Probe projection did not match seeded scenario.');
     }
 
     print(
-      '${scenario.objects} objects / ${scenario.relatedTypes} related types: '
+      '${scenario.objects} objects / ${scenario.relatedTypes} related types seeded: '
       'seed=${_milliseconds(seedWatch)}ms, '
       'load1=${_milliseconds(firstLoadWatch)}ms, '
       'load2=${_milliseconds(secondLoadWatch)}ms, '
-      'recordsByType=${second.recordsByType.length}, '
+      'recordCatalogFanout=${second.recordsByType.length}, '
       'computedObjects=${second.computedValues.length}',
     );
   } finally {
