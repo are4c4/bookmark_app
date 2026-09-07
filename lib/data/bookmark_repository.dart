@@ -342,15 +342,6 @@ class BookmarkRepository {
       await const PhotoStorageService().deleteManagedPhoto(photo.path);
     }
   }
-  Future<void> attachPhoto(BookmarkItem bookmark, PhotoRecord photo, {bool asCover = false}) =>
-      _database.attachPhotoToBookmark(bookmark.id, photo.id, asCover: asCover);
-  Future<void> attachPhotos(BookmarkItem bookmark, Iterable<PhotoRecord> photos, {PhotoRecord? coverPhoto}) =>
-      _database.attachPhotosToBookmark(bookmark.id, photos.map((photo) => photo.id), coverPhotoId: coverPhoto?.id);
-  Future<void> attachPhotosByBookmarkId(int bookmarkId, Iterable<PhotoRecord> photos, {PhotoRecord? coverPhoto}) =>
-      _database.attachPhotosToBookmark(bookmarkId, photos.map((photo) => photo.id), coverPhotoId: coverPhoto?.id);
-  Future<void> detachPhoto(BookmarkItem bookmark, PhotoRecord photo) => _database.detachPhotoFromBookmark(bookmark.id, photo.id);
-  Future<void> setCoverPhoto(BookmarkItem bookmark, PhotoRecord photo) => _database.setCoverPhoto(bookmark.id, photo.id);
-  Future<void> clearCoverPhoto(BookmarkItem bookmark) => _database.clearCoverPhoto(bookmark.id);
 
   Future<int> createPerson(String name, {String? note}) => _database.createPerson(name, note: note);
   Future<void> updatePerson(Person person, String name, String? note, {PhotoRecord? profilePhoto, bool updateProfilePhoto = false}) =>
