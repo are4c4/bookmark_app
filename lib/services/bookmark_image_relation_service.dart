@@ -1,3 +1,5 @@
+import 'package:drift/drift.dart' show Variable;
+
 import '../data/app_database.dart';
 import '../data/bidirectional_relation_store.dart';
 import '../data/bookmark_object_link_read_store.dart';
@@ -17,10 +19,10 @@ import '../domain/object_model.dart';
 /// Canonical Bookmark -> Image editing boundary used while legacy Photo data is
 /// still retained for compatibility.
 ///
-/// This service never writes `bookmark_photos` or `photos`. It resolves a legacy
-/// Bookmark to its mirrored canonical Object, validates the system `Images` and
-/// `Cover Image` Relation schema, then delegates reads/search/writes to the
-/// shared Object/Relation services.
+/// Canonical `Images` / `Cover Image` Relations are the editing authority. While
+/// old Bookmark Photo callers still exist, the subset of selected Image Objects
+/// that have `photo_object_links` is mirrored back into `bookmark_photos` as a
+/// compatibility projection. Native Image Objects never acquire legacy rows.
 class BookmarkImageRelationService {
   BookmarkImageRelationService(this.database);
 
@@ -53,7 +55,7 @@ class BookmarkImageRelationService {
 
   /// Returns null only when this legacy Bookmark has not yet been mirrored into
   /// the canonical Object system. A partially present or incompatible canonical
-  /// schema fails closed instead of silently falling back to a second write path.
+  /// schema fails closed instead of silently falling back to a second authority.
   Future<BookmarkImageRelationState?> load({
     required int workspaceId,
     required int bookmarkId,
@@ -134,9 +136,13 @@ class BookmarkImageRelationService {
     }
     final selectedSet = selected.toSet();
     final currentCoverId = state.validCoverImageObjectId;
+    final retainedCoverId = currentCoverId != null &&
+            selectedSet.contains(currentCoverId)
+        ? currentCoverId
+        : null;
 
     await database.transaction(() async {
-      if (currentCoverId != null && !selectedSet.contains(currentCoverId)) {
+      if (currentCoverId != null && retainedCoverId == null) {
         await _editor.save(
           context: state.cover,
           selectedObjectIds: const <int>[],
@@ -145,6 +151,11 @@ class BookmarkImageRelationService {
       await _editor.save(
         context: state.images,
         selectedObjectIds: selected,
+      );
+      await _replaceLegacyBookmarkPhotoProjection(
+        state: state,
+        selectedImageObjectIds: selected,
+        coverImageObjectId: retainedCoverId,
       );
     });
   }
@@ -184,14 +195,32 @@ class BookmarkImageRelationService {
         context: state.cover,
         selectedObjectIds: <int>[imageObjectId],
       );
+      if (needsImageAttach || state.images.missingTargetObjectIds.isEmpty) {
+        await _replaceLegacyBookmarkPhotoProjection(
+          state: state,
+          selectedImageObjectIds: imageIds,
+          coverImageObjectId: imageObjectId,
+        );
+      } else {
+        await _setLegacyCoverProjection(
+          state: state,
+          coverImageObjectId: imageObjectId,
+        );
+      }
     });
   }
 
   Future<void> clearCover({required BookmarkImageRelationState state}) =>
-      _editor.save(
-        context: state.cover,
-        selectedObjectIds: const <int>[],
-      );
+      database.transaction(() async {
+        await _editor.save(
+          context: state.cover,
+          selectedObjectIds: const <int>[],
+        );
+        await database.customStatement(
+          'UPDATE bookmark_photos SET is_cover = 0 WHERE bookmark_id = ?',
+          <Object>[state.bookmarkId],
+        );
+      });
 
   Future<void> detachImage({
     required BookmarkImageRelationState state,
@@ -205,6 +234,78 @@ class BookmarkImageRelationService {
       selectedObjectIds:
           state.images.selectedObjectIds.where((id) => id != imageObjectId),
     );
+  }
+
+  Future<void> _replaceLegacyBookmarkPhotoProjection({
+    required BookmarkImageRelationState state,
+    required Iterable<int> selectedImageObjectIds,
+    required int? coverImageObjectId,
+  }) async {
+    final selected = selectedImageObjectIds.toList(growable: false);
+    final mappedPhotoIds = <int, int>{};
+    for (final imageObjectId in selected) {
+      final photoId = await _legacyPhotoIdForImage(
+        workspaceId: state.workspaceId,
+        imageObjectId: imageObjectId,
+      );
+      if (photoId != null) mappedPhotoIds[imageObjectId] = photoId;
+    }
+
+    await database.customStatement(
+      'DELETE FROM bookmark_photos WHERE bookmark_id = ?',
+      <Object>[state.bookmarkId],
+    );
+    for (final imageObjectId in selected) {
+      final photoId = mappedPhotoIds[imageObjectId];
+      if (photoId == null) continue;
+      await database.customStatement(
+        'INSERT INTO bookmark_photos(bookmark_id, photo_id, is_cover) '
+        'VALUES (?, ?, ?)',
+        <Object>[
+          state.bookmarkId,
+          photoId,
+          imageObjectId == coverImageObjectId ? 1 : 0,
+        ],
+      );
+    }
+  }
+
+  Future<void> _setLegacyCoverProjection({
+    required BookmarkImageRelationState state,
+    required int coverImageObjectId,
+  }) async {
+    await database.customStatement(
+      'UPDATE bookmark_photos SET is_cover = 0 WHERE bookmark_id = ?',
+      <Object>[state.bookmarkId],
+    );
+    final photoId = await _legacyPhotoIdForImage(
+      workspaceId: state.workspaceId,
+      imageObjectId: coverImageObjectId,
+    );
+    if (photoId == null) return;
+    await database.customStatement(
+      'INSERT OR REPLACE INTO bookmark_photos(bookmark_id, photo_id, is_cover) '
+      'VALUES (?, ?, 1)',
+      <Object>[state.bookmarkId, photoId],
+    );
+  }
+
+  Future<int?> _legacyPhotoIdForImage({
+    required int workspaceId,
+    required int imageObjectId,
+  }) async {
+    final rows = await database.customSelect(
+      '''SELECT photo_id
+         FROM photo_object_links
+         WHERE workspace_id = ? AND object_id = ?
+         LIMIT 1''',
+      variables: <Variable<int>>[
+        Variable<int>(workspaceId),
+        Variable<int>(imageObjectId),
+      ],
+    ).get();
+    if (rows.isEmpty) return null;
+    return rows.single.read<int>('photo_id');
   }
 
   ObjectPropertyDefinition _relationProperty(
