@@ -57,6 +57,8 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
     blocks: <ObjectBodyBlock>[],
   );
   bool _loading = true;
+  bool _loadFailed = false;
+  int _loadGeneration = 0;
 
   ObjectBodyStore get _bodyStore => ObjectBodyStore(widget.store);
 
@@ -103,17 +105,29 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
   }
 
   Future<void> _load() async {
-    if (mounted) setState(() => _loading = true);
+    final generation = ++_loadGeneration;
+    final objectId = widget.objectId;
+    final bodyStore = ObjectBodyStore(widget.store);
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _loadFailed = false;
+      });
+    }
     try {
-      final document = await _bodyStore.read(widget.objectId);
-      if (!mounted) return;
+      final document = await bodyStore.read(objectId);
+      if (!mounted || generation != _loadGeneration) return;
       setState(() {
         _document = document;
         _loading = false;
+        _loadFailed = false;
       });
     } catch (error) {
-      if (!mounted) return;
-      setState(() => _loading = false);
+      if (!mounted || generation != _loadGeneration) return;
+      setState(() {
+        _loading = false;
+        _loadFailed = true;
+      });
       _showError('Bodyを読み込めませんでした: $error');
     }
   }
@@ -291,6 +305,9 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
     }
   }
 
+  Widget _heading(BuildContext context) =>
+      Text('Body', style: Theme.of(context).textTheme.titleMedium);
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -307,11 +324,45 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
       );
     }
 
+    if (_loadFailed) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (widget.showHeading) ...[
+            _heading(context),
+            const SizedBox(height: 8),
+          ],
+          Container(
+            key: const ValueKey('body-load-error'),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.error_outline, size: 18),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text('Bodyを読み込めませんでした。内容は変更されていません。'),
+                ),
+                TextButton(
+                  key: const ValueKey('body-load-retry'),
+                  onPressed: _load,
+                  child: const Text('再試行'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (widget.showHeading) ...[
-          Text('Body', style: Theme.of(context).textTheme.titleMedium),
+          _heading(context),
           const SizedBox(height: 8),
         ],
         ObjectBodyDocumentView(
