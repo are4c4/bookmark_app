@@ -281,48 +281,6 @@ class AppDatabase extends _$AppDatabase {
         await (delete(photos)..where((photo) => photo.id.equals(id))).go();
       });
 
-  Future<void> attachPhotoToBookmark(int bookmarkId, int photoId, {bool asCover = false}) => transaction(() async {
-        if (asCover) {
-          await (update(bookmarkPhotos)..where((bp) => bp.bookmarkId.equals(bookmarkId)))
-              .write(const BookmarkPhotosCompanion(isCover: Value(false)));
-        }
-        await into(bookmarkPhotos).insert(
-          BookmarkPhotosCompanion.insert(bookmarkId: bookmarkId, photoId: photoId, isCover: Value(asCover)),
-          mode: InsertMode.insertOrReplace,
-        );
-      });
-
-  Future<void> attachPhotosToBookmark(int bookmarkId, Iterable<int> photoIds, {int? coverPhotoId}) => transaction(() async {
-        final uniqueIds = photoIds.toSet();
-        if (coverPhotoId != null) uniqueIds.add(coverPhotoId);
-        if (coverPhotoId != null) {
-          await (update(bookmarkPhotos)..where((bp) => bp.bookmarkId.equals(bookmarkId)))
-              .write(const BookmarkPhotosCompanion(isCover: Value(false)));
-        }
-        for (final photoId in uniqueIds) {
-          await into(bookmarkPhotos).insert(
-            BookmarkPhotosCompanion.insert(bookmarkId: bookmarkId, photoId: photoId, isCover: Value(photoId == coverPhotoId)),
-            mode: InsertMode.insertOrReplace,
-          );
-        }
-      });
-
-  Future<void> detachPhotoFromBookmark(int bookmarkId, int photoId) =>
-      (delete(bookmarkPhotos)..where((bp) => bp.bookmarkId.equals(bookmarkId) & bp.photoId.equals(photoId))).go();
-
-  Future<void> setCoverPhoto(int bookmarkId, int photoId) => transaction(() async {
-        await (update(bookmarkPhotos)..where((bp) => bp.bookmarkId.equals(bookmarkId)))
-            .write(const BookmarkPhotosCompanion(isCover: Value(false)));
-        await into(bookmarkPhotos).insert(
-          BookmarkPhotosCompanion.insert(bookmarkId: bookmarkId, photoId: photoId, isCover: const Value(true)),
-          mode: InsertMode.insertOrReplace,
-        );
-      });
-
-  Future<void> clearCoverPhoto(int bookmarkId) =>
-      (update(bookmarkPhotos)..where((bp) => bp.bookmarkId.equals(bookmarkId)))
-          .write(const BookmarkPhotosCompanion(isCover: Value(false)));
-
   Future<int> createPerson(String name, {String? note}) async {
     final trimmed = name.trim();
     if (trimmed.isEmpty) throw ArgumentError('Person name is empty');
