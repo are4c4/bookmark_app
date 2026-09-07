@@ -70,9 +70,8 @@ bool relationStoredValueMatchesEdges({
 /// consumers without exposing generic table details.
 ///
 /// This is a read-only projection, not a repair path. A Relation Property is
-/// exposed only when its persisted value is well-formed, exactly agrees with
-/// its normalized edge targets/order, and every referenced target still exists
-/// in the declared target ObjectType. Corrupt or drifting Properties therefore
+/// exposed only when its persisted value is well-formed and exactly agrees with
+/// its normalized edge targets/order. Corrupt or drifting Properties therefore
 /// fail closed until an explicit integrity/reconcile workflow handles them.
 class RelationReadService {
   const RelationReadService(this.objectStore);
@@ -104,24 +103,10 @@ class RelationReadService {
     required int workspaceId,
     required int targetObjectId,
   }) async {
-    final targetTypes = await objectStore.listObjectTypes(workspaceId);
-    final targetById = <int, AppObject>{};
-    for (final type in targetTypes) {
-      for (final object in await objectStore.listObjects(type.id)) {
-        if (object.id == targetObjectId) {
-          targetById[object.id] = object;
-          break;
-        }
-      }
-      if (targetById.containsKey(targetObjectId)) break;
-    }
-    final requestedTarget = targetById[targetObjectId];
-    if (requestedTarget == null) return const <ResolvedRelationBacklink>[];
-
     final edges = await objectStore.backlinks(targetObjectId);
     if (edges.isEmpty) return const <ResolvedRelationBacklink>[];
 
-    final objectTypes = targetTypes;
+    final objectTypes = await objectStore.listObjectTypes(workspaceId);
     final objectTypesById = <int, AppObjectType>{
       for (final type in objectTypes) type.id: type,
     };
@@ -136,7 +121,6 @@ class RelationReadService {
     for (final edge in edges) {
       final property = propertiesById[edge.propertyId];
       if (property == null ||
-          property.targetObjectTypeId != requestedTarget.objectTypeId ||
           !objectTypesById.containsKey(property.targetObjectTypeId)) {
         continue;
       }
@@ -159,10 +143,7 @@ class RelationReadService {
       final property = propertiesById[edge.propertyId];
       final source = sourcesById[edge.sourceObjectId];
       if (property == null || source == null) continue;
-      if (property.targetObjectTypeId != requestedTarget.objectTypeId ||
-          !objectTypesById.containsKey(property.targetObjectTypeId)) {
-        continue;
-      }
+      if (!objectTypesById.containsKey(property.targetObjectTypeId)) continue;
 
       final sourceEdges = outgoingBySource.putIfAbsent(
         source.id,
@@ -176,12 +157,6 @@ class RelationReadService {
           .toList(growable: false);
       if (!relationStoredValueMatchesEdges(
         source: source,
-        property: property,
-        edges: propertyEdges,
-      )) {
-        continue;
-      }
-      if (!await _allTargetsExist(
         property: property,
         edges: propertyEdges,
       )) {
@@ -236,11 +211,6 @@ class RelationReadService {
       )) {
         continue;
       }
-      final targetObjects = await objectStore.listObjects(targetTypeId);
-      final targetIds = targetObjects.map((target) => target.id).toSet();
-      if (propertyEdges.any((edge) => !targetIds.contains(edge.targetObjectId))) {
-        continue;
-      }
       validPropertyIds.add(property.id);
       for (final edge in propertyEdges) {
         idsByTargetType
@@ -272,17 +242,6 @@ class RelationReadService {
       );
     }
     return result;
-  }
-
-  Future<bool> _allTargetsExist({
-    required ObjectPropertyDefinition property,
-    required List<ObjectRelationEdge> edges,
-  }) async {
-    final targetTypeId = property.targetObjectTypeId;
-    if (targetTypeId == null) return false;
-    final targets = await objectStore.listObjects(targetTypeId);
-    final targetIds = targets.map((target) => target.id).toSet();
-    return edges.every((edge) => targetIds.contains(edge.targetObjectId));
   }
 
   Future<AppObject?> _objectById(int objectTypeId, int objectId) async {
