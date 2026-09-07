@@ -11,12 +11,13 @@ Keep one canonical Object-level search/index architecture correct, stale-safe, p
 - **#753 closed.** Malformed persisted Body is isolated to the `body` bucket; implemented by #757 (`f66c74bd7cf93365c72f22c9a880845de9673b12`).
 - **#769 closed.** Malformed persisted Relation values cannot leave stale target labels searchable; implemented by #774 (`c36315706b45bbfb73185c6a69c64993bf71e64b`).
 - **Relation #773 merged** as `66d3da4d80f2a8b071410dff0d86cbf62e92ddbb`; Search inherits its persisted/index consistency contract through `RelationReadService`.
-- **#782 closed.** Search regressions prove well-formed serialized/index Relation disagreement fails closed without duplicating Relation integrity logic; implemented by #785 (`34604856d81852bf3058502c59689e7f2c23462c`).
-- **#797 closed.** Generic Property search now treats `system: true` metadata as non-searchable unless `searchable: true` explicitly opts it in; implemented by #799 (`4e685bccafdfa3fde47aadee0e6dfe424bba85c6`).
-- **#807 closed.** Returning from a Search-opened Object detail performs focused refresh for the opened Object plus Relation-label dependents and re-runs the active query; implemented by #822 (`b80ec83b60fa997328e5ce57347d09fdfed70e2f`).
-- **#828 closed.** Re-entering the cached Global Search destination from another shell page recreates Search so canonical preparation runs and cross-page edits are visible; implemented by #831 (`dfc4836a76f640456ad34c61d26db41ff7b555d6`).
-- **#847 closed.** Strict ObjectType schema corruption is isolated across canonical projection, Relation labels, optional File/PDF reconciliation, and result resolution; implemented by #849 (`c945aa20c1d35842aeb19f653b80a2edcec931e4`).
-- Latest verified Search implementation checkpoint: **main `c945aa20c1d35842aeb19f653b80a2edcec931e4`**.
+- **#782 closed.** Search regressions prove serialized/index Relation disagreement fails closed without duplicating Relation integrity logic; implemented by #785 (`34604856d81852bf3058502c59689e7f2c23462c`).
+- **#797 closed.** Generic Property search treats `system: true` metadata as non-searchable unless `searchable: true` explicitly opts it in; implemented by #799 (`4e685bccafdfa3fde47aadee0e6dfe424bba85c6`).
+- **#807 closed.** Search-opened detail return performs focused refresh and replays the active query; implemented by #822 (`b80ec83b60fa997328e5ce57347d09fdfed70e2f`).
+- **#828 closed.** Re-entering cached Global Search from another shell destination recreates Search so cross-page edits are visible; implemented by #831 (`dfc4836a76f640456ad34c61d26db41ff7b555d6`).
+- **#847 closed.** Strict ObjectType schema corruption is isolated across projection, Relation labels, optional File/PDF reconciliation, and result resolution; implemented by #849 (`c945aa20c1d35842aeb19f653b80a2edcec931e4`).
+- **#877 closed.** Detail-return focused refresh now includes trustworthy current outgoing Relation targets and each target's Relation-label dependents, so related Objects created/reused inside a Search-opened detail are immediately refreshed without a workspace rebuild; implemented by #884 (`f1651ba169240484f3376f6c67f7ce76a810172b`).
+- Latest verified Search implementation checkpoint: **main `f1651ba169240484f3376f6c67f7ce76a810172b`**.
 - Refactor #654 removed the caller-zero legacy Bookmark-only `FullTextSearchRepository`; do not recreate a parallel Bookmark/domain-specific search product.
 
 ## Canonical Object search architecture
@@ -62,9 +63,10 @@ Major merged slices include:
 - Relation #758 + Search #774 — strict persisted Relation inspection reused by Search;
 - Relation #773 + Search #782/#785 — persisted/index Relation consistency inherited by Search;
 - #799 — system-maintained Property metadata default-deny for free-text search;
-- #822 — detail-return focused refresh and active-query replay;
+- #822 — Search-opened detail focused refresh and active-query replay;
 - #831 — shell Search re-entry invalidation for edits made outside Search;
-- #849 — strict ObjectType schema corruption isolation across projection, Relation labels, PDF reconciliation, and result resolution.
+- #849 — strict ObjectType schema corruption isolation across projection, Relation labels, PDF reconciliation, and result resolution;
+- #884 — detail-return refresh expands to canonical outgoing Relation targets and target dependents without a workspace rebuild.
 
 ## Fail-closed source contracts
 ### Body
@@ -84,18 +86,19 @@ Relation owns persisted Relation inspection/integrity/mutation/read consistency.
 
 Current trust boundary:
 - malformed persisted Relation value => that Property contributes no `relation_labels`;
-- persisted/index disagreement on target ids/count/order/positions => canonical `RelationReadService` returns no outgoing projection for that Property;
+- persisted/index disagreement on target ids/count/order/positions => canonical `RelationReadService` returns no trustworthy outgoing projection for that Property;
 - invalid target ObjectType/workspace consistency fails closed;
 - valid Relation Properties on the same Object continue to contribute;
 - raw persisted ids and stale normalized edges are never independently used as fallback search labels;
 - focused refresh removes prior labels that became untrustworthy;
 - Search never repairs Relation values or normalized edges;
-- if target ObjectType schema hydration itself throws `FormatException`, only the optional `relation_labels` bucket is omitted for that otherwise healthy source Object.
+- if target ObjectType schema hydration itself throws `FormatException`, only the optional Relation-derived contribution/planning expansion is omitted for an otherwise healthy source Object.
 
 Regressions:
 - `test/repositories/object_search_malformed_relation_test.dart`;
 - `test/repositories/object_search_relation_read_consistency_test.dart`;
-- `test/repositories/object_search_corrupt_object_type_test.dart`.
+- `test/repositories/object_search_corrupt_object_type_test.dart`;
+- `test/repositories/object_search_refresh_planner_test.dart`.
 
 ### System-maintained Property metadata
 Generic free-text Property search is default-deny for internal system metadata:
@@ -126,11 +129,14 @@ Regressions:
 - focused Object refresh removes the previous FTS row by FTS `rowid` and inserts the current projection;
 - removed/changed title, alias, Property, Body, Relation, Weblink and derived-text tokens must disappear;
 - Relation target display changes can refresh affected backlink source Objects without a workspace rebuild;
-- the refresh planner may use canonical raw backlinks to enumerate affected source ids, while each source reindex still passes through Relation trust checks;
+- the label-change planner may use canonical raw backlinks to enumerate affected source ids, while each source reindex still passes through Relation trust checks;
+- Search-opened detail return uses focused refresh rather than a workspace rebuild;
+- detail-return planning refreshes the opened Object, its existing label dependents, trustworthy current outgoing Relation targets from `RelationReadService.outgoing(...)`, and each target's label dependents (#884);
+- outgoing-target planning is only invalidation input: it never converts raw ids/edges into searchable text;
+- `FormatException` from optional Relation target expansion fails closed to the opened Object refresh, while unrelated persistence/index failures still surface through the existing Search error boundary;
 - derived producers replace only their own source key;
 - PDF re-extraction replaces `pdf-text`; blank/missing/non-PDF capability clears that contribution;
 - malformed/inconsistent/corrupt optional source data is a source-local omission, not permission to retain stale tokens;
-- Search-opened detail return uses focused refresh and active-query replay (#822);
 - shell re-entry from another destination recreates Global Search so cross-page changes are reflected (#831);
 - derived/search metadata is rebuildable and is never canonical Object identity.
 
@@ -144,38 +150,42 @@ Global Search workspace rebuild reconciles optional canonical File/PDF extracted
 ## Validation
 Recent Search correctness slices passed repository Flutter CI before merge:
 - #799 / system metadata privacy boundary;
-- #822 / detail-return freshness;
+- #822 / original detail-return freshness;
 - #831 / shell Search re-entry freshness;
-- #849 / strict schema corruption isolation.
+- #849 / strict schema corruption isolation;
+- #884 / related-Object detail-return focused refresh.
 
-#849 specifically passed Flutter CI #2583, including:
+#884 specifically passed Flutter CI #2700, including:
 - maintainability guardrail tests;
 - maintainability regression ceilings;
 - feature legacy-dependency guard;
 - feature presentation error-privacy guard;
+- Drift code generation;
 - `flutter analyze`;
 - full Flutter test suite.
 
+The superseded #883 head carried the same code/test delta and also passed CI #2696 before #884 was recreated directly from current main.
+
 ## Cross-lane dependencies / ownership
 - Object Core owns Body persistence/parsing and strict ObjectType/Property schema decoding; Search owns source-local omission and stale-row behavior at its consumption boundaries.
-- Relation owns Relation persistence, strict stored-value inspection, integrity, mutation, and canonical read consistency; Search owns denormalized trustworthy label indexing and dependent refresh planning.
+- Relation owns Relation persistence, strict stored-value inspection, integrity, mutation, and canonical read consistency; Search owns denormalized trustworthy label indexing and refresh invalidation planning. #884 deliberately reuses `RelationReadService.outgoing(...)` for trustworthy target enumeration instead of introducing a second Relation authority model.
 - Primitive owns File/PDF identity, extraction and native behavior; Search owns derived-text persistence/index/reconciliation and ensures optional PDF capability failure does not take down canonical FTS.
 - Refactor owns behavior-preserving legacy retirement; Bookmark-only FTS retirement is complete.
 - Lane E currently holds no shared-hotspot lease.
 
 ## Next actions
-There is no remaining Search-owned actionable work in #414, #494, #753, #769, #782, #797, #807, #828, or #847.
+There is no remaining Search-owned actionable work in #414, #494, #753, #769, #782, #797, #807, #828, #847, or #877.
 
 For the next Lane E run:
 1. Re-read current `main`, open Issues/PRs, and recent cross-lane changes before creating work.
 2. Resume implementation only for a concrete Search/Indexing issue or demonstrated cross-lane Search correctness obligation.
 3. Reuse canonical Object/Body/Relation/Primitive trust boundaries rather than duplicating parsing/integrity semantics in Search.
-4. Prefer source-local fail-closed contribution boundaries over allowing one corrupt optional source to take down the canonical index.
+4. Prefer source-local fail-closed contribution/planning boundaries over allowing one corrupt optional source to take down the canonical index.
 5. Do not swallow unrelated persistence/index errors and do not log raw user content, extracted text, private paths, malformed payloads, or internal metadata.
 6. Keep system-maintained metadata non-searchable unless a deliberate product requirement explicitly opts it in.
 7. Do not recreate domain-specific long-term search repositories.
 
-Potential future work such as large-PDF rebuild caching, richer ranking/filter UX, or semantic/vector search requires a separately scoped Issue; it is not implied by completed correctness work.
+Potential future work such as large-PDF rebuild caching, richer ranking/filter UX, semantic/vector search, or a workspace-wide mutation event bus requires a separately scoped Issue; it is not implied by completed correctness work.
 
 ## Stop reason
-**#797, #807, #828 and #847 are complete; #799, #822, #831 and #849 are merged with repository CI green. Canonical Search now has explicit privacy, live-freshness, source-local corruption and strict-schema fail-closed boundaries. No additional Search-owned issue is currently actionable, so Lane E is idle under the `AGENTS.md` stopping criteria unless a new Search issue or concrete Search-specific regression appears.**
+**#877 is complete; #884 is merged as `f1651ba169240484f3376f6c67f7ce76a810172b` with Flutter CI #2700 green. Canonical Search detail-return freshness now covers the opened Object plus trustworthy related Objects while preserving Relation fail-closed ownership and focused incremental refresh. Current GitHub re-audit found no additional Search-owned issue, so Lane E is idle under the `AGENTS.md` stopping criteria unless a new Search issue or concrete Search-specific regression appears.**
