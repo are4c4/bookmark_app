@@ -79,13 +79,16 @@ class PersonProfileImageRelationService {
     );
   }
 
-  /// Migrates all healthy legacy Person profile photos in one fail-closed pass.
+  /// Migrates every currently promotable legacy profile photo in one pass.
   ///
-  /// Every candidate is strictly preflighted before the first Relation write.
-  /// Missing/ambiguous Photo -> Image mappings, corrupt Relation value/index,
-  /// wrong targets, or conflicting existing canonical selections abort the whole
-  /// migration transaction. Existing matching selections are left untouched,
-  /// making repeated migration deterministic and idempotent.
+  /// A healthy legacy Photo whose canonical Image mapping is not available yet
+  /// is skipped and can be retried by a later Object sync. This is the same
+  /// fail-safe behavior as legacy Photo promotion when a managed file is
+  /// temporarily unavailable. Once a mapping exists, every candidate is
+  /// strictly preflighted before the first Relation write. Corrupt/ambiguous
+  /// mappings, Relation value/index drift, wrong targets, or conflicting
+  /// canonical selections abort the whole transaction. Existing matching
+  /// selections are left untouched, so repeated migration is deterministic.
   Future<void> migrateLegacyProfilePhotos(int workspaceId) async {
     await _people.syncLegacyPeople(workspaceId);
     final profileImageProperty = await _ensureProfileImageProperty(workspaceId);
@@ -94,7 +97,7 @@ class PersonProfileImageRelationService {
         .where((person) => person.profilePhotoId != null)
         .map((person) => person.id)
         .toList(growable: false);
-    if (candidates.isEmpty) return;
+    if (candidates.isEmpty || !await _photoMappingTableExists()) return;
 
     await database.transaction(() async {
       final plans = <_ProfileImageMigrationPlan>[];
@@ -115,7 +118,9 @@ class PersonProfileImageRelationService {
           workspaceId: workspaceId,
           photoId: legacyPhotoId,
           trustedRelation: trusted,
+          allowMissingMapping: true,
         );
+        if (imageObjectId == null) continue;
 
         if (trusted.selectedObjectIds.isEmpty) {
           plans.add(
@@ -170,6 +175,11 @@ class PersonProfileImageRelationService {
         photoId: legacyPhotoId,
         trustedRelation: trusted,
       );
+      if (imageObjectId == null) {
+        throw StateError(
+          'Legacy Person profile Photo has no canonical Image mapping.',
+        );
+      }
 
       if (trusted.selectedObjectIds.isEmpty) {
         await _mutations.setRelation(
@@ -310,10 +320,11 @@ class PersonProfileImageRelationService {
     return objectId;
   }
 
-  Future<int> _imageObjectIdForLegacyPhoto({
+  Future<int?> _imageObjectIdForLegacyPhoto({
     required int workspaceId,
     required int photoId,
     required RelationSelectionContext trustedRelation,
+    bool allowMissingMapping = false,
   }) async {
     final photo = await (database.select(database.photos)
           ..where((row) => row.id.equals(photoId)))
@@ -324,6 +335,7 @@ class PersonProfileImageRelationService {
       );
     }
     if (!await _photoMappingTableExists()) {
+      if (allowMissingMapping) return null;
       throw StateError(
         'Legacy Photo -> Image mapping is unavailable; refusing to manufacture a replacement.',
       );
@@ -337,6 +349,7 @@ class PersonProfileImageRelationService {
         Variable<int>(photoId),
       ],
     ).get();
+    if (rows.isEmpty && allowMissingMapping) return null;
     if (rows.length != 1) {
       throw StateError(
         'Legacy Person profile Photo does not have one unambiguous canonical Image mapping.',
