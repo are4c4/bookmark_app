@@ -38,6 +38,40 @@ void main() {
     expect(removed.blocks.last.toJson(), future.toJson());
   });
 
+  test('split paragraph preserves source metadata and unrelated blocks', () {
+    const future = ObjectBodyBlock(
+      id: 'future',
+      type: 'embed',
+      attributes: <String, dynamic>{'objectId': 42},
+    );
+    const document = ObjectBodyDocument(
+      blocks: <ObjectBodyBlock>[
+        ObjectBodyBlock(
+          id: 'p1',
+          type: 'paragraph',
+          text: 'hello world',
+          attributes: <String, dynamic>{'align': 'center'},
+        ),
+        future,
+      ],
+    );
+
+    final split = editor.splitParagraph(
+      document: document,
+      blockId: 'p1',
+      newBlockId: 'p2',
+      offset: 5,
+    );
+
+    expect(split.blocks.map((block) => block.id), ['p1', 'p2', 'future']);
+    expect(split.blocks[0].text, 'hello');
+    expect(split.blocks[0].attributes, {'align': 'center'});
+    expect(split.blocks[1].type, 'paragraph');
+    expect(split.blocks[1].text, ' world');
+    expect(split.blocks[1].attributes, isEmpty);
+    expect(split.blocks[2].toJson(), future.toJson());
+  });
+
   test('move reorders blocks without rewriting their payload', () {
     const document = ObjectBodyDocument(
       blocks: <ObjectBodyBlock>[
@@ -61,7 +95,8 @@ void main() {
   test('invalid edits fail closed', () {
     const document = ObjectBodyDocument(
       blocks: <ObjectBodyBlock>[
-        ObjectBodyBlock(id: 'a', type: 'paragraph'),
+        ObjectBodyBlock(id: 'a', type: 'paragraph', text: 'safe'),
+        ObjectBodyBlock(id: 'h', type: 'heading', text: 'Heading'),
       ],
     );
 
@@ -84,8 +119,35 @@ void main() {
       throwsStateError,
     );
     expect(
-      () => editor.moveBlock(document: document, blockId: 'a', toIndex: 1),
+      () => editor.moveBlock(document: document, blockId: 'a', toIndex: 2),
       throwsRangeError,
+    );
+    expect(
+      () => editor.splitParagraph(
+        document: document,
+        blockId: 'h',
+        newBlockId: 'new',
+        offset: 0,
+      ),
+      throwsStateError,
+    );
+    expect(
+      () => editor.splitParagraph(
+        document: document,
+        blockId: 'a',
+        newBlockId: 'new',
+        offset: 5,
+      ),
+      throwsRangeError,
+    );
+    expect(
+      () => editor.splitParagraph(
+        document: document,
+        blockId: 'a',
+        newBlockId: 'h',
+        offset: 2,
+      ),
+      throwsStateError,
     );
   });
 }
