@@ -107,6 +107,22 @@ class ObjectBodyBlockEditService {
         ),
       );
 
+  /// Merges one plain paragraph into its plain predecessor when that operation
+  /// is lossless. Unsafe boundaries are returned unchanged and not persisted.
+  Future<ObjectBodyDocument> mergeParagraphIntoPrevious({
+    required int objectId,
+    required String blockId,
+  }) async {
+    final current = await bodyStore.read(objectId);
+    final next = editor.mergeParagraphIntoPrevious(
+      document: current,
+      blockId: blockId,
+    );
+    if (identical(next, current)) return current;
+    await bodyStore.write(objectId: objectId, document: next);
+    return next;
+  }
+
   /// Updates checklist state without replacing its text or other attributes.
   Future<ObjectBodyDocument> setChecklistChecked({
     required int objectId,
