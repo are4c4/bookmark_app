@@ -164,6 +164,11 @@ class ObjectDetailEditService {
         'Object detail Value editing does not mutate Relation or Computed properties.',
       );
     }
+    if (canonical.isIdentityManaged) {
+      throw StateError(
+        'Identity-managed Object Properties cannot be edited through generic detail Value editing.',
+      );
+    }
     if (canonical.type == ObjectPropertyType.createdTime ||
         canonical.type == ObjectPropertyType.updatedTime) {
       throw ArgumentError.value(

@@ -60,15 +60,41 @@ class DailyNoteService {
       name: 'Daily Note',
       icon: '📅',
     );
-    final dateProperty = await systemObjects.ensureProperty(
+    var dateProperty = await systemObjects.ensureProperty(
       objectTypeId: type.id,
       name: 'Date',
       type: ObjectPropertyType.date,
     );
+    if (dateProperty.type != ObjectPropertyType.date) {
+      throw StateError(
+        'Existing Daily Note Date Property does not match the required Date schema.',
+      );
+    }
+    if (!dateProperty.isIdentityManaged) {
+      await genericStore.updateProperty(
+        GenericPropertyRecord(
+          id: dateProperty.id,
+          databaseId: dateProperty.objectTypeId,
+          name: dateProperty.name,
+          type: dateProperty.storageType,
+          config: <String, dynamic>{
+            ...dateProperty.config,
+            ObjectPropertyDefinition.identityManagedConfigKey: true,
+          },
+          sortOrder: dateProperty.sortOrder,
+        ),
+      );
+    }
     type = (await systemObjects.getSystemObjectType(
       workspaceId: workspaceId,
       systemKey: systemKey,
     ))!;
+    dateProperty = type.properties.singleWhere(
+      (property) => property.id == dateProperty.id,
+    );
+    if (!dateProperty.isIdentityManaged) {
+      throw StateError('Daily Note Date Property identity metadata was not persisted.');
+    }
 
     final currentDefaults = await defaultsStore.read(type.id);
     final needsDefaultBackfill = currentDefaults == null ||

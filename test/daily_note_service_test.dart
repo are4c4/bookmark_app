@@ -5,6 +5,7 @@ import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/object_type_defaults_store.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
+import 'package:bookmark_app/domain/object_model.dart';
 import 'package:bookmark_app/domain/object_type_defaults.dart';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
@@ -152,6 +153,79 @@ void main() {
       variables: [
         Variable<int>(workspaceId),
         const Variable<String>(dateKey),
+      ],
+    ).getSingle();
+    expect(registry.read<int>('object_id'), note.id);
+  });
+
+  test('Daily Note Date metadata backfills and generic overwrite is ignored',
+      () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final systemObjects = SystemObjectStore(
+      database: database,
+      objectStore: objectStore,
+    );
+    final defaultsStore = ObjectTypeDefaultsStore(genericStore);
+
+    final legacyType = await systemObjects.ensureSystemObjectType(
+      workspaceId: workspaceId,
+      systemKey: DailyNoteService.systemKey,
+      name: 'Daily Note',
+      icon: '📅',
+    );
+    final legacyDate = await systemObjects.ensureProperty(
+      objectTypeId: legacyType.id,
+      name: 'Date',
+      type: ObjectPropertyType.date,
+    );
+    expect(legacyDate.isIdentityManaged, isFalse);
+
+    final service = DailyNoteService(
+      genericStore: genericStore,
+      objectStore: objectStore,
+      systemObjects: systemObjects,
+      defaultsStore: defaultsStore,
+    );
+    final definition = await service.ensureDefinition(workspaceId);
+    expect(definition.dateProperty.id, legacyDate.id);
+    expect(definition.dateProperty.isIdentityManaged, isTrue);
+
+    final note = await service.openOrCreate(
+      workspaceId: workspaceId,
+      date: DateTime(2026, 9, 5),
+    );
+    expect(note.values[definition.dateProperty.id], '2026-09-05');
+
+    // This is the same low-level Value path used by the Generic Database Table.
+    // Once the identity-managed field has been initialized, generic overwrite
+    // must be a no-op rather than separating Date from the registry claim.
+    await genericStore.setValue(
+      recordId: note.id,
+      propertyId: definition.dateProperty.id,
+      value: '2026-09-06',
+    );
+
+    final reloaded = (await objectStore.listObjects(definition.objectType.id))
+        .singleWhere((object) => object.id == note.id);
+    expect(reloaded.values[definition.dateProperty.id], '2026-09-05');
+
+    final reopened = await service.openOrCreate(
+      workspaceId: workspaceId,
+      date: DateTime(2026, 9, 5),
+    );
+    expect(reopened.id, note.id);
+    expect(reopened.values[definition.dateProperty.id], '2026-09-05');
+
+    final registry = await database.customSelect(
+      '''SELECT object_id FROM daily_note_registry
+         WHERE workspace_id = ? AND note_date = ?''',
+      variables: <Variable<Object>>[
+        Variable<int>(workspaceId),
+        const Variable<String>('2026-09-05'),
       ],
     ).getSingle();
     expect(registry.read<int>('object_id'), note.id);
