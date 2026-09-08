@@ -90,11 +90,12 @@ void main() {
     }
 
     Future<void> revealInInspector(Finder target) async {
-      for (var attempt = 0; attempt < 8 && target.evaluate().isEmpty; attempt++) {
-        await tester.drag(
-          find.byType(ListView).first,
-          const Offset(0, -240),
-        );
+      for (
+        var attempt = 0;
+        attempt < 8 && target.evaluate().isEmpty;
+        attempt++
+      ) {
+        await tester.drag(find.byType(ListView).first, const Offset(0, -240));
         await tester.pump();
       }
     }
