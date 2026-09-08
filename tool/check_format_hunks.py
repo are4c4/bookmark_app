@@ -102,6 +102,22 @@ def _range_for_opcode(start: int, end: int, fallback: int) -> LineRange:
     return LineRange(anchor, anchor)
 
 
+def _line_match_key(line: str) -> str:
+    """Normalize inherited leading indentation only for attribution.
+
+    A historically unformatted enclosing construct can make `dart format`
+    shift every descendant line even when a newly edited line's token spacing
+    and structure are already formatter-compliant. Treat those lines as the
+    same while locating formatter operations. Internal whitespace, wrapping,
+    and tokens remain significant, so genuine formatting changes still fail.
+
+    Limitation: indentation-only defects added inside an already-unformatted
+    tracked hotspot can be deferred by the focused check. New files and
+    explicit whole-file checks remain strict and catch that debt.
+    """
+    return line.lstrip(" \t")
+
+
 def formatter_changes_touching_edits(
     source_patch: str,
     original_text: str,
@@ -142,8 +158,8 @@ def formatter_changes_touching_edits(
     formatted_lines = formatted_text.splitlines(keepends=True)
     matcher = SequenceMatcher(
         None,
-        original_lines,
-        formatted_lines,
+        [_line_match_key(line) for line in original_lines],
+        [_line_match_key(line) for line in formatted_lines],
         autojunk=False,
     )
 

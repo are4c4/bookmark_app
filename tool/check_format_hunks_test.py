@@ -34,6 +34,28 @@ class CheckFormatHunksTest(unittest.TestCase):
             [],
         )
 
+    def test_inherited_leading_indent_shift_does_not_fail_edit(self):
+        source = """@@ -3 +3 @@
+-    await oldSeed();
++    await seed();
+"""
+        original = """  test('legacy',
+      () async {
+    await seed();
+  });
+"""
+        formatted = """  test(
+    'legacy',
+    () async {
+      await seed();
+    },
+  );
+"""
+        self.assertEqual(
+            formatter_changes_touching_edits(source, original, formatted),
+            [],
+        )
+
     def test_unformatted_edit_fails_when_formatter_changes_that_line(self):
         source = """@@ -6 +6 @@
 -  print('old');
