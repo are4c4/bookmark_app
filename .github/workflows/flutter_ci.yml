@@ -269,7 +269,7 @@ jobs:
 
       - name: Upload test shard timing
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: flutter-test-timing-${{ github.run_id }}-${{ github.run_attempt }}-shard-${{ matrix.shard }}
           path: ci-artifacts/test-timing-${{ matrix.shard }}.json
@@ -302,7 +302,7 @@ jobs:
 
       - name: Upload Flutter test diagnostics
         if: ${{ always() && steps.flutter-test.outcome == 'failure' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: flutter-test-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}-shard-${{ matrix.shard }}
           path: ci-artifacts/flutter-test-shard-${{ matrix.shard }}*.log
@@ -320,7 +320,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Download shard timings
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           pattern: flutter-test-timing-${{ github.run_id }}-${{ github.run_attempt }}-shard-*
           path: ci-artifacts
@@ -402,7 +402,7 @@ jobs:
         run: bash tool/package_macos.sh
 
       - name: Upload macOS release package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: Bookmark-macOS
           if-no-files-found: error
