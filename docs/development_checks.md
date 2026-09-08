@@ -17,6 +17,10 @@ Runs the cheap checks that should be used repeatedly while editing:
 
 The format check compares against `origin/main` when available and also includes local staged, unstaged, and untracked Dart files. Override the comparison with `CHECK_BASE_REF=<ref>` or run `bash tool/check_format.sh --all` when a deliberate repository-wide format audit is needed.
 
+For existing tracked Dart files, the normal changed-file check is hunk-aware: it temporarily runs `dart format`, compares formatter changes in the pre-format file coordinates with lines edited since the selected base, and fails only when those ranges overlap. Formatter drift that already existed elsewhere in the same file is reported as preserved rather than forcing unrelated churn into a focused PR. New/untracked files, renamed paths that do not exist at the selected base, an unavailable base, and explicit `--all` checks remain conservative whole-file formatting checks. The guard restores every inspected file after comparison and `dart format` remains the sole formatting authority.
+
+CI exercises the hunk comparator and a temporary-repository integration regression before checking the repository diff. That regression covers a formatted new hunk inside a historically unformatted file, a genuinely unformatted edited hunk, and an unformatted newly added Dart file.
+
 ## Full gate
 
 ```bash
@@ -48,7 +52,7 @@ The classifier is deliberately fail-closed: if the complete PR diff cannot be de
 
 Flutter CI also provides non-product coordination/diagnostic signals for the multi-lane workflow:
 
-- **Shared hotspot audit:** on pull requests, compare the current PR with other open PRs and warn when both touch the same AGENTS.md shared hotspot. This is deliberately advisory: a patch-sized non-overlapping hunk can still proceed after a manual behavior/region audit.
+- **Shared hotspot audit:** on pull requests, compare the current PR with other open PRs and warn when both touch the same AGENTS.md shared hotspot. It also warns when a touched hotspot changed on `main` after branch divergence or when the PR's hotspot diff exceeds the configured changed-line threshold. These warnings are advisory: a patch-sized proven non-overlapping hunk can still proceed after a manual behavior/region audit.
 - **Shard health summary:** persist each full-test shard's elapsed time, then report average, longest shard, and max/average skew after the matrix completes. The initial warning thresholds are `1.25x` skew or `360s` for the longest shard.
 - **Flake diagnosis:** if a shard fails, rerun that same complete shard once. A fail-then-pass result is recorded as flaky, but the original first-pass failure still keeps the merge gate red.
 
