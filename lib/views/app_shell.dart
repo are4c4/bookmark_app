@@ -700,16 +700,23 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
       ('設定', Icons.settings_outlined, 10),
     ];
 
-    final selected = await showDialog<int>(
+    final selected = await showDialog<(int, int?)>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setLocalState) {
           final normalized = query.trim().toLowerCase();
-          final visible = destinations
+          final visibleDestinations = destinations
               .where(
                 (destination) =>
                     normalized.isEmpty ||
                     destination.$1.toLowerCase().contains(normalized),
+              )
+              .toList();
+          final visibleDatabases = _genericDatabases
+              .where(
+                (database) =>
+                    normalized.isEmpty ||
+                    database.name.toLowerCase().contains(normalized),
               )
               .toList();
           return AlertDialog(
@@ -731,21 +738,44 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
                   const SizedBox(height: UiTokens.space8),
                   Expanded(
                     child: ListView.builder(
-                      itemCount: visible.length,
+                      itemCount:
+                          visibleDestinations.length + visibleDatabases.length,
                       itemBuilder: (context, index) {
-                        final destination = visible[index];
+                        if (index < visibleDestinations.length) {
+                          final destination = visibleDestinations[index];
+                          return ListTile(
+                            leading: Icon(
+                              destination.$2,
+                              size: UiTokens.iconNormal,
+                            ),
+                            title: Text(destination.$1),
+                            trailing: const Icon(
+                              Icons.keyboard_return,
+                              size: UiTokens.iconSmall,
+                            ),
+                            onTap: () => Navigator.pop(dialogContext, (
+                              destination.$3,
+                              null,
+                            )),
+                          );
+                        }
+                        final database =
+                            visibleDatabases[index -
+                                visibleDestinations.length];
                         return ListTile(
-                          leading: Icon(
-                            destination.$2,
-                            size: UiTokens.iconNormal,
+                          leading: Text(
+                            database.icon,
+                            style: const TextStyle(
+                              fontSize: UiTokens.iconNormal,
+                            ),
                           ),
-                          title: Text(destination.$1),
+                          title: Text(database.name),
                           trailing: const Icon(
                             Icons.keyboard_return,
                             size: UiTokens.iconSmall,
                           ),
                           onTap: () =>
-                              Navigator.pop(dialogContext, destination.$3),
+                              Navigator.pop(dialogContext, (11, database.id)),
                         );
                       },
                     ),
@@ -758,7 +788,16 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
       ),
     );
     if (selected != null && mounted) {
-      _selectPage(selected);
+      final databaseId = selected.$2;
+      if (selected.$1 == 11 && databaseId != null) {
+        setState(() {
+          _selectedGenericDatabaseId = databaseId;
+          _index = 11;
+          _pageCache.remove(11);
+        });
+      } else {
+        _selectPage(selected.$1);
+      }
     }
   }
 
