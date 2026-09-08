@@ -47,19 +47,6 @@ extension AppDatabasePersonRoles on AppDatabase {
     });
   }
 
-  Stream<List<PersonRoleAssignment>> watchRoleAssignmentsForPerson(int personId) {
-    final query = select(bookmarkPeople)
-      ..where((relation) => relation.personId.equals(personId));
-
-    return query.watch().asyncMap((relations) async {
-      final person = await (select(people)..where((p) => p.id.equals(personId))).getSingleOrNull();
-      if (person == null) return const <PersonRoleAssignment>[];
-      return relations
-          .map((relation) => PersonRoleAssignment(person: person, role: normalizePersonRole(relation.role)))
-          .toList();
-    });
-  }
-
   Future<void> setPeopleForRole(
     int bookmarkId,
     String role,
