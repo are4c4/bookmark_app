@@ -170,4 +170,67 @@ void main() {
       throwsRangeError,
     );
   });
+
+  test('identity-managed Date rejects generic detail overwrite', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final bodyStore = ObjectBodyStore(genericStore);
+    final loader = ObjectDetailContentLoader(
+      objectStore: objectStore,
+      bodyStore: bodyStore,
+      computedStore: ObjectComputedValueStore(objectStore),
+    );
+    final edits = ObjectDetailEditService(
+      objectStore: objectStore,
+      bodyStore: bodyStore,
+      loader: loader,
+    );
+
+    final typeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Identity entry',
+    );
+    final dateId = await objectStore.createProperty(
+      objectTypeId: typeId,
+      name: 'Identity date',
+      type: ObjectPropertyType.date,
+      config: const <String, dynamic>{
+        ObjectPropertyDefinition.identityManagedConfigKey: true,
+      },
+    );
+    final type = (await objectStore.getObjectType(typeId))!;
+    final dateProperty =
+        type.properties.singleWhere((property) => property.id == dateId);
+    final objectId = await objectStore.createObject(
+      objectTypeId: typeId,
+      title: 'Identity entry',
+    );
+    await objectStore.setPropertyValue(
+      objectId: objectId,
+      property: dateProperty,
+      value: '2026-09-02',
+    );
+    final content = (await loader.load(
+      objectTypeId: typeId,
+      objectId: objectId,
+    ))!;
+
+    await expectLater(
+      edits.setDate(
+        content: content,
+        property: dateProperty,
+        value: '2026-09-03',
+      ),
+      throwsStateError,
+    );
+
+    final reloaded = (await loader.load(
+      objectTypeId: typeId,
+      objectId: objectId,
+    ))!;
+    expect(reloaded.object.valueFor(dateId), '2026-09-02');
+  });
 }

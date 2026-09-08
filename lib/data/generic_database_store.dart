@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:drift/drift.dart';
 
+import '../domain/object_model.dart';
 import 'app_database.dart';
 
 class GenericDatabaseDefinitionRecord {
@@ -429,8 +430,20 @@ class GenericDatabaseStore {
            (SELECT database_id FROM generic_records WHERE id = ? LIMIT 1)
              AS record_database_id,
            (SELECT database_id FROM generic_properties WHERE id = ? LIMIT 1)
-             AS property_database_id''',
-      variables: [Variable<int>(recordId), Variable<int>(propertyId)],
+             AS property_database_id,
+           (SELECT config_json FROM generic_properties WHERE id = ? LIMIT 1)
+             AS property_config_json,
+           EXISTS(
+             SELECT 1 FROM generic_values
+             WHERE record_id = ? AND property_id = ?
+           ) AS value_exists''',
+      variables: [
+        Variable<int>(recordId),
+        Variable<int>(propertyId),
+        Variable<int>(propertyId),
+        Variable<int>(recordId),
+        Variable<int>(propertyId),
+      ],
     ).getSingle();
     final recordDatabaseId = ownership.readNullable<int>('record_database_id');
     final propertyDatabaseId = ownership.readNullable<int>('property_database_id');
@@ -455,6 +468,23 @@ class GenericDatabaseStore {
         'Property belongs to ObjectType $propertyDatabaseId, not Record ObjectType $recordDatabaseId.',
       );
     }
+
+    final propertyConfigRaw =
+        ownership.readNullable<String>('property_config_json');
+    final valueExists = ownership.read<int>('value_exists') != 0;
+    if (valueExists &&
+        propertyConfigRaw != null &&
+        ObjectPropertyDefinition.isIdentityManagedConfig(
+          _decodeMap(propertyConfigRaw),
+        )) {
+      // Identity-managed Values are initialized by their owning lifecycle
+      // service and then remain stable. Generic Table/Value writers consume
+      // the same metadata contract as Object detail editing and cannot split a
+      // stored identity field from its registry/owner state. Returning before
+      // the transaction also keeps updated_at unchanged for the rejected edit.
+      return;
+    }
+
     await database.transaction(() async {
       await database.customStatement(
         '''INSERT INTO generic_values(record_id, property_id, value_json)
