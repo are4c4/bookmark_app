@@ -359,9 +359,3 @@ class BookmarkItem {
   final List<CollectionRecord> collections;
   final PhotoRecord? coverPhoto;
 }
-
-class SavedViewConfig {
-  const SavedViewConfig({required this.view, required this.tags});
-  final SavedView view;
-  final List<Tag> tags;
-}

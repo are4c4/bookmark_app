@@ -4,8 +4,8 @@ import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/bookmark_attachment_store.dart';
 import 'package:bookmark_app/data/bookmark_lifecycle_store.dart';
 import 'package:bookmark_app/data/bookmark_repository.dart';
-import 'package:bookmark_app/data/saved_view_write_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
+import 'package:drift/drift.dart' hide isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -143,21 +143,23 @@ void main() {
     );
   });
 
-  test('saved views persist relation and tag matching filters', () async {
+  test('legacy saved views persist migration filter fields', () async {
     final personId = await repository.createPerson('Author');
     final photoFile = File('${tempDirectory.path}/photos/cover.jpg');
     await photoFile.create(recursive: true);
     await photoFile.writeAsBytes([1]);
     final photoId = await repository.addPhoto(path: photoFile.path);
 
-    final viewId = await SavedViewWriteStore(database).create(
-      name: 'Author photos',
-      layoutType: 'table',
-      tagMatchMode: 'and',
-      includeDescendants: false,
-      personFilterId: personId,
-      photoFilterId: photoId,
-    );
+    final viewId = await database.into(database.savedViews).insert(
+          SavedViewsCompanion.insert(
+            name: 'Author photos',
+            layoutType: const Value('table'),
+            tagMatchMode: const Value('and'),
+            includeDescendants: const Value(false),
+            personFilterId: Value(personId),
+            photoFilterId: Value(photoId),
+          ),
+        );
     final view = await (database.select(database.savedViews)
           ..where((item) => item.id.equals(viewId)))
         .getSingle();
