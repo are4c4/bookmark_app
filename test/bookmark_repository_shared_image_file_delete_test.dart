@@ -28,7 +28,7 @@ void main() {
     final fixture = await _repositoryFixture(directory.path);
     addTearDown(fixture.database.close);
     final photoId =
-        await fixture.repository.addPhoto(path: 'photos/legacy-only.jpg');
+        await fixture.database.addPhoto(path: 'photos/legacy-only.jpg');
     final photo = (await fixture.repository.watchPhotos().first)
         .singleWhere((candidate) => candidate.id == photoId);
 
@@ -68,7 +68,7 @@ void main() {
       filePath: 'photos/shared.jpg',
       title: 'Native owner',
     );
-    final photoId = await fixture.repository.addPhoto(path: 'photos/shared.jpg');
+    final photoId = await fixture.database.addPhoto(path: 'photos/shared.jpg');
     final bridge = CoreObjectBridge(
       database: fixture.database,
       objectStore: objectStore,
@@ -116,8 +116,7 @@ void main() {
 
     final fixture = await _repositoryFixture(directory.path);
     addTearDown(fixture.database.close);
-    final photoId =
-        await fixture.repository.addPhoto(path: externalFile.path);
+    final photoId = await fixture.database.addPhoto(path: externalFile.path);
     final photo = (await fixture.repository.watchPhotos().first)
         .singleWhere((candidate) => candidate.id == photoId);
 
