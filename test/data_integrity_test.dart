@@ -82,7 +82,7 @@ void main() {
     final backupFile = File('${photoFile.path}.bookmark_original');
     await backupFile.writeAsBytes([1, 2, 3]);
 
-    final photoId = await repository.addPhoto(path: photoFile.path);
+    final photoId = await database.addPhoto(path: photoFile.path);
     final storedPhoto = await (database.select(database.photos)
           ..where((item) => item.id.equals(photoId)))
         .getSingle();
@@ -144,7 +144,7 @@ void main() {
     final photoFile = File('${tempDirectory.path}/photos/cover.jpg');
     await photoFile.create(recursive: true);
     await photoFile.writeAsBytes([1]);
-    final photoId = await repository.addPhoto(path: photoFile.path);
+    final photoId = await database.addPhoto(path: photoFile.path);
 
     final viewId = await database.into(database.savedViews).insert(
           SavedViewsCompanion.insert(
