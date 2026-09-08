@@ -8,14 +8,14 @@ Own physical data-location lifecycle, Vault portability/recovery, filesystem-lev
 ## Current status — 2026-09-08
 Lane F is active on **#951 — final Photo -> Image Vault/data-preservation validation**, coordinated with the remaining real-macOS checks in **#242**.
 
-Latest repository audit is based on `main` `d5780ba448cc6e4c71814e1a9119235061cafa94`:
+Latest repository audit is based on `main` `10bae52808a0176a94163228d348c988de516498`:
 - **#949 is completed/closed.** PR #1015 merged as `5f03dccc55e9333c51ce3db2a2e8d8f6f2216f0f`, so canonical `画像` is now the single normal user-facing image collection and legacy `写真` AppShell navigation is retired.
 - **#941 is completed/closed.** Shared Object Inspector canonical Image preview/edit parity is integrated.
-- **#950 remains active.** Open G-lane PR #1019 removes the now caller-zero `PhotoManagementPage` implementation. Its contract explicitly preserves Photo schema/data, `bookmark_photos`, `photo_object_links`, Person legacy photo data, Vault files, migrations, backup/import/export behavior and Storage policy.
+- **#950 remains active, but its current product-retirement gate is integrated.** PR #1019 merged as `10bae52808a0176a94163228d348c988de516498`, deleting the caller-zero `PhotoManagementPage` implementation while explicitly preserving Photo schema/data, `bookmark_photos`, `photo_object_links`, Person legacy photo data, Vault files, migrations, backup/import/export behavior and Storage policy.
 - **#242 implementation remains complete.** Only real-macOS Create/Open/Switch/Move/Recovery validation remains.
 - **#897 and #218 remain completed/closed.** Legacy Photo physical deletion is Vault-safe, and macOS packaging/real-Mac launch/data preservation has already been validated.
 
-The final #951 real-machine pass should be run after the applicable #950 caller-zero cleanup is integrated, but #949 completion released an independent F-owned validation-tooling slice that can be implemented now.
+The repository-side prerequisite for the final #951 preservation pass is now effectively released: canonical Images own normal product navigation/detail, and the legacy Photo management UI is caller-zero and removed. Remaining #950 refactor work must continue to preserve migration/Vault compatibility but does not block starting #951.
 
 ## Active implementation — read-only Vault preservation manifest
 Branch: `feature/storage-vault-preservation-manifest-951`
@@ -57,7 +57,7 @@ Validation coverage currently includes:
 The Python regression is wired into the existing `Developer workflow diagnostic tests` CI step so the repository's normal full gate validates it.
 
 ## #951 — final Photo -> Image preservation matrix
-After #950 is integrated far enough to represent the intended final caller-retirement state, run the real app on macOS and verify:
+The repository state is now ready for the real app/macOS pass. Verify:
 1. existing legacy Photos promoted to canonical Images still resolve after restart;
 2. existing Bookmark `Images` / `Cover Image` media migrated from Photo data still renders after restart;
 3. existing Person profile Images still render after restart;
@@ -123,13 +123,13 @@ Do not infer generic File ownership from path location alone. Lane D owns Image/
 - Lane D owns Image/Photo/File identity, promotion/mapping, MIME/content routing and user-facing primitive semantics.
 - Lane B owns Relation mutation/index/delete integrity.
 - Lane C completed #949 and owns no remaining legacy `写真` navigation work.
-- Lane G owns #950 caller-zero compatibility deletion. PR #1019 currently changes no Vault/Storage behavior.
+- Lane G owns further #950 caller-zero compatibility deletion. #1019 is integrated and changed no Vault/Storage behavior.
 - Lane F owns byte placement, portable paths, Vault lifecycle/recovery, physical-delete safety, and #951 preservation validation/tooling.
 
 Current F branch does not edit `profile_manager.dart`, `settings_page.dart`, `app_database.dart`, AppShell or primitive hosts. The only shared CI file edit is one non-overlapping diagnostic-test line after G PR #1017 merged.
 
 ## Current checkpoint / validation
-- baseline refreshed to main `d5780ba448cc6e4c71814e1a9119235061cafa94` after #1017 merged;
+- baseline refreshed to main `10bae52808a0176a94163228d348c988de516498` after #1019 merged;
 - current branch: `feature/storage-vault-preservation-manifest-951`;
 - current branch includes the read-only manifest helper, nine focused Python regressions, validation guide, and CI invocation;
 - an earlier local version of the helper passed its first eight Python unit tests; the ninth symlink-parent containment regression was added during safety review and is now covered by normal PR CI;
@@ -139,10 +139,9 @@ Current F branch does not edit `profile_manager.dart`, `settings_page.dart`, `ap
 
 ## Next actions
 1. Open/integrate the focused F PR after normal CI proves the Python regression plus Analyze/full Flutter Test remain green.
-2. Recheck #1019/#950 after integration; if the caller-zero Photo management deletion is merged with its preservation contract intact, the repository dependency for the final #951 pass is effectively released.
-3. Run the combined #951 + #242 real-macOS preservation matrix using `docs/vault_preservation_validation.md`, retaining the source Vault throughout destructive-looking Move/recovery exercises.
-4. Record filesystem/Vault results on #242 and Photo -> Image semantic-preservation results on #951.
-5. If a reproducible filesystem/Vault defect appears, create/follow a focused Lane F Issue and add a regression-backed fix. Otherwise close #242/#951 once the real-machine criteria are confirmed.
+2. Run the combined #951 + #242 real-macOS preservation matrix using `docs/vault_preservation_validation.md`, retaining the source Vault throughout destructive-looking Move/recovery exercises.
+3. Record filesystem/Vault results on #242 and Photo -> Image semantic-preservation results on #951.
+4. If a reproducible filesystem/Vault defect appears, create/follow a focused Lane F Issue and add a regression-backed fix. Otherwise close #242/#951 once the real-machine criteria are confirmed.
 
 ## Stop condition
-Do not stop merely because the validation-tool PR is opened or CI is pending. Continue with any independent F-owned work. Once the helper is integrated, the remaining #242/#951 closure work requires actual real-macOS app/Vault interaction; if #950 is also settled and no repository defect is known, that real-machine boundary is the legitimate remaining blocker.
+Do not stop merely because the validation-tool PR is opened or CI is pending. Continue with any independent F-owned work. Once the helper is integrated, no known repository-side dependency remains for #951; the remaining closure work requires actual real-macOS app/Vault interaction, which is the legitimate remaining boundary if no defect is found.
