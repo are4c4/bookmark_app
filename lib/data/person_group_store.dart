@@ -134,20 +134,4 @@ class PersonGroupStore {
       }
     });
   }
-
-  Future<void> addPerson(int groupId, int personId) async {
-    await _ensureSchema();
-    await database.customStatement(
-      'INSERT OR IGNORE INTO person_group_members(group_id, person_id) VALUES (?, ?)',
-      [groupId, personId],
-    );
-  }
-
-  Future<void> removePerson(int groupId, int personId) async {
-    await _ensureSchema();
-    await database.customStatement(
-      'DELETE FROM person_group_members WHERE group_id = ? AND person_id = ?',
-      [groupId, personId],
-    );
-  }
 }
