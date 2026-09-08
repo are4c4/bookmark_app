@@ -89,6 +89,16 @@ void main() {
       expect(find.text('Objectが見つかりません'), findsNothing);
     }
 
+    Future<void> revealInInspector(Finder target) async {
+      for (var attempt = 0; attempt < 8 && target.evaluate().isEmpty; attempt++) {
+        await tester.drag(
+          find.byType(ListView).first,
+          const Offset(0, -240),
+        );
+        await tester.pump();
+      }
+    }
+
     Future<void> verifyEditableBody(int objectId, String text) async {
       await openInspector(objectId, 0);
       expect(find.byKey(const ValueKey('body-empty-insert')), findsOneWidget);
@@ -108,6 +118,7 @@ void main() {
       await openInspector(objectId, 1);
 
       final textField = find.byKey(const ValueKey('body-text-body'));
+      await revealInInspector(textField);
       expect(textField, findsOneWidget);
       await tester.enterText(textField, text);
       await tester.pumpAndSettle();
