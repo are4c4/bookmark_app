@@ -3,8 +3,10 @@
 
 This helper supports the Lane F real-machine validation for #242/#951. It never
 writes inside a Vault. It records Vault metadata, verifies SQLite with
-PRAGMA quick_check, and hashes managed files under photos/ and attachments/
-without following symlinks.
+PRAGMA quick_check, hashes managed files under photos/ and attachments/ without
+following symlinks, and records the database paths that refer to those storage
+areas so Move/reopen validation can distinguish Vault rebasing from external
+reference mutation.
 """
 
 from __future__ import annotations
@@ -13,6 +15,8 @@ import argparse
 import hashlib
 import json
 import os
+import posixpath
+import re
 import sqlite3
 import stat
 import sys
@@ -22,6 +26,10 @@ from typing import Any, Iterable
 MANIFEST_VERSION = 1
 MANAGED_DIRS = ("photos", "attachments")
 PROFILE_KEYS = ("formatVersion", "id", "database", "photos", "attachments")
+PATH_REFERENCE_TABLES = (
+    ("photos", "path"),
+    ("bookmark_attachments", "path"),
+)
 
 
 class ManifestError(RuntimeError):
@@ -104,7 +112,7 @@ def _read_profile(vault: Path) -> dict[str, Any]:
     return {key: decoded.get(key) for key in PROFILE_KEYS}
 
 
-def _inspect_database(vault: Path) -> dict[str, Any]:
+def _database_connection_uri(vault: Path) -> tuple[Path, os.stat_result, str]:
     database_path = vault / "database.sqlite"
     try:
         st = database_path.lstat()
@@ -112,8 +120,15 @@ def _inspect_database(vault: Path) -> dict[str, Any]:
         raise ManifestError("database.sqlite is missing") from exc
     if not stat.S_ISREG(st.st_mode):
         raise ManifestError("database.sqlite must be a regular non-symlink file")
+    return (
+        database_path,
+        st,
+        f"file:{database_path.resolve().as_posix()}?mode=ro",
+    )
 
-    uri = f"file:{database_path.resolve().as_posix()}?mode=ro"
+
+def _inspect_database(vault: Path) -> dict[str, Any]:
+    database_path, st, uri = _database_connection_uri(vault)
     try:
         connection = sqlite3.connect(uri, uri=True)
         try:
@@ -135,6 +150,65 @@ def _inspect_database(vault: Path) -> dict[str, Any]:
     }
 
 
+def _normalize_path_reference(vault: Path, raw_path: Any) -> tuple[str, str]:
+    if not isinstance(raw_path, str) or raw_path == "":
+        raise ManifestError("Stored database path reference must be a non-empty string")
+
+    normalized = raw_path.replace("\\", "/")
+    normalized_path = posixpath.normpath(normalized)
+    vault_root = vault.as_posix().rstrip("/")
+    is_absolute = normalized.startswith("/") or re.match(
+        r"^[A-Za-z]:/", normalized
+    ) is not None
+
+    if is_absolute:
+        if normalized_path == vault_root:
+            return "vault", "."
+        if normalized_path.startswith(f"{vault_root}/"):
+            return "vault", normalized_path[len(vault_root) + 1 :]
+        return "external", normalized_path
+
+    if normalized_path == ".." or normalized_path.startswith("../"):
+        raise ManifestError("Stored database path reference escapes the Vault")
+    if normalized_path in ("", "."):
+        raise ManifestError("Stored database path reference does not identify a file")
+    return "vault", normalized_path
+
+
+def _inspect_path_references(vault: Path) -> list[dict[str, Any]]:
+    _, _, uri = _database_connection_uri(vault)
+    references: list[dict[str, Any]] = []
+    try:
+        connection = sqlite3.connect(uri, uri=True)
+        try:
+            for table, column in PATH_REFERENCE_TABLES:
+                present = connection.execute(
+                    "SELECT 1 FROM sqlite_master "
+                    "WHERE type = 'table' AND name = ? LIMIT 1",
+                    (table,),
+                ).fetchone()
+                if present is None:
+                    raise ManifestError(f"{table} table is missing")
+                for row_id, raw_path in connection.execute(
+                    f"SELECT id, {column} FROM {table} ORDER BY id"
+                ):
+                    scope, identity = _normalize_path_reference(vault, raw_path)
+                    references.append(
+                        {
+                            "table": table,
+                            "id": int(row_id),
+                            "storedPath": raw_path,
+                            "scope": scope,
+                            "canonicalIdentity": identity,
+                        }
+                    )
+        finally:
+            connection.close()
+    except sqlite3.Error as exc:
+        raise ManifestError("database path references could not be read") from exc
+    return references
+
+
 def snapshot_vault(vault_path: Path) -> dict[str, Any]:
     vault = Path(os.path.abspath(os.fspath(vault_path.expanduser())))
     try:
@@ -153,6 +227,7 @@ def snapshot_vault(vault_path: Path) -> dict[str, Any]:
         "profile": _read_profile(vault),
         "database": _inspect_database(vault),
         "managedEntries": managed_entries,
+        "pathReferences": _inspect_path_references(vault),
     }
 
 
@@ -165,6 +240,9 @@ def _load_manifest(path: Path) -> dict[str, Any]:
         raise ManifestError(f"Unsupported manifest format: {path}")
     if not isinstance(decoded.get("managedEntries"), list):
         raise ManifestError(f"Manifest managedEntries is invalid: {path}")
+    path_references = decoded.get("pathReferences")
+    if path_references is not None and not isinstance(path_references, list):
+        raise ManifestError(f"Manifest pathReferences is invalid: {path}")
     return decoded
 
 
@@ -175,6 +253,74 @@ def _managed_index(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
             raise ManifestError("Manifest contains an invalid managed entry")
         index[raw["path"]] = raw
     return index
+
+
+def _path_reference_index(
+    manifest: dict[str, Any],
+) -> dict[tuple[str, int], dict[str, Any]] | None:
+    raw_references = manifest.get("pathReferences")
+    if raw_references is None:
+        return None
+    if not isinstance(raw_references, list):
+        raise ManifestError("Manifest pathReferences is invalid")
+
+    index: dict[tuple[str, int], dict[str, Any]] = {}
+    for raw in raw_references:
+        if (
+            not isinstance(raw, dict)
+            or not isinstance(raw.get("table"), str)
+            or not isinstance(raw.get("id"), int)
+        ):
+            raise ManifestError("Manifest contains an invalid path reference")
+        key = (raw["table"], raw["id"])
+        if key in index:
+            raise ManifestError("Manifest contains duplicate path reference identifiers")
+        index[key] = raw
+    return index
+
+
+def _compare_path_references(
+    before: dict[str, Any],
+    after: dict[str, Any],
+    *,
+    allow_extra: bool,
+) -> list[str]:
+    before_references = _path_reference_index(before)
+    after_references = _path_reference_index(after)
+    if before_references is None:
+        # Compatibility for manifests created by the first version of this tool.
+        return []
+    if after_references is None:
+        return ["after manifest is missing database path references"]
+
+    problems: list[str] = []
+    for key, expected in sorted(before_references.items()):
+        actual = after_references.get(key)
+        label = f"{key[0]}#{key[1]}"
+        if actual is None:
+            problems.append(f"database path reference missing: {label}")
+            continue
+        if expected.get("scope") != actual.get("scope"):
+            problems.append(
+                "database path reference scope changed: "
+                f"{label}: {expected.get('scope')} -> {actual.get('scope')}"
+            )
+            continue
+        if expected.get("canonicalIdentity") != actual.get("canonicalIdentity"):
+            problems.append(f"database path reference target changed: {label}")
+            continue
+        if (
+            expected.get("scope") == "external"
+            and expected.get("storedPath") != actual.get("storedPath")
+        ):
+            problems.append(f"external database path reference text changed: {label}")
+
+    if not allow_extra:
+        for key in sorted(set(after_references) - set(before_references)):
+            problems.append(
+                f"unexpected database path reference added: {key[0]}#{key[1]}"
+            )
+    return problems
 
 
 def compare_manifests(
@@ -227,6 +373,9 @@ def compare_manifests(
         for path in sorted(set(after_entries) - set(before_entries)):
             problems.append(f"unexpected managed entry added: {path}")
 
+    problems.extend(
+        _compare_path_references(before, after, allow_extra=allow_extra)
+    )
     return problems
 
 
@@ -253,10 +402,16 @@ def _print_snapshot_summary(manifest: dict[str, Any], output: Path) -> None:
     files = sum(1 for entry in manifest["managedEntries"] if entry.get("kind") == "file")
     symlinks = sum(1 for entry in manifest["managedEntries"] if entry.get("kind") == "symlink")
     missing = [entry["path"] for entry in manifest["managedEntries"] if entry.get("kind") == "missing"]
+    references = manifest.get("pathReferences") or []
+    external_references = sum(
+        1 for reference in references if reference.get("scope") == "external"
+    )
     print(f"Wrote manifest: {output}")
     print(f"SQLite quick_check: {manifest['database']['quickCheck']}")
     print(f"Managed files hashed: {files}")
     print(f"Managed symlinks observed (not followed): {symlinks}")
+    print(f"Database path references recorded: {len(references)}")
+    print(f"External absolute references recorded: {external_references}")
     if missing:
         print(f"Managed directories missing: {', '.join(missing)}")
 
@@ -275,7 +430,7 @@ def build_parser() -> argparse.ArgumentParser:
     compare.add_argument(
         "--allow-extra",
         action="store_true",
-        help="Do not fail when the after snapshot contains additional managed entries",
+        help="Do not fail when the after snapshot contains additional managed entries or path references",
     )
     compare.add_argument(
         "--allow-profile-id-change",
