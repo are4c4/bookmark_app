@@ -90,12 +90,13 @@ void main() {
     }
 
     Future<void> revealInInspector(Finder target) async {
+      final inspectorScroll = find.byType(ListView).first;
       for (
         var attempt = 0;
-        attempt < 8 && target.evaluate().isEmpty;
+        attempt < 20 && target.evaluate().isEmpty;
         attempt++
       ) {
-        await tester.drag(find.byType(ListView).first, const Offset(0, -240));
+        await tester.drag(inspectorScroll, const Offset(0, -400));
         await tester.pump();
       }
     }
