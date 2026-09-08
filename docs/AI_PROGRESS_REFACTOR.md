@@ -5,81 +5,101 @@
 ## Current goal
 Issue #225 — reduce maintenance hotspots and retire duplicate/unused legacy paths while preserving product behavior.
 
-Primary lane: **G — Refactor & Architecture Health**. Own behavior-preserving extraction/deletion, caller-zero retirement, failure/privacy policy cleanup, measurable dependency reduction, maintainability guardrails, and incremental legacy convergence. Do not redesign Relation semantics, primitive identity/storage behavior, Search semantics, Database/View product behavior, or Vault recovery policy from this lane.
+Primary lane: **G — Refactor & Architecture Health**. Own behavior-preserving extraction/deletion, caller-zero retirement, measurable dependency reduction, `AppDatabase` narrowing, failure/privacy policy guardrails, and incremental legacy convergence. Do not redesign Relation semantics, primitive identity/storage behavior, Search semantics, Database/View product behavior, or Vault recovery policy from this lane.
 
 ## Active checkpoint — 2026-09-08
 
-### Retire the final Database-presentation compatibility shims
-Branch: `refactor/retire-database-presentation-shims-225`
+Latest `main` at this handoff: **`b42ca9bdb70a080d8a9ab186d70ab610b1a82994`** (`#940`).
 
-Latest integrated Lane G checkpoint is **#886 / `4469a5496a18b7fd5a81be17f41fb30298042cb6`**, which completed the legacy raw-error privacy track. Flutter CI #2720 passed maintainability guards, zero-allowlist privacy guard, Drift generation, Analyze and full Test on the final head before squash merge.
+Current open PR audit at this checkpoint: **none**. Re-check live state before every non-trivial edit because other lanes move quickly.
 
-The active shim-retirement slice is behavior-preserving:
-- `GenericDatabasePage` moves its final three legacy imports (`database_create_tiles`, `database_view_tabs`, `resizable_detail_pane`) directly to `lib/features/database/presentation/widgets/`;
-- the three one-line `lib/widgets/` re-export shims are deleted after a fresh repository-wide caller audit found no other production legacy imports;
-- Flutter CI ceilings ratchet legacy shim imports **3 -> 0** and shim files **3 -> 0**;
-- `tool/maintainability_report_test.sh` proves a zero-import/zero-shim fixture passes while existing failure cases still fail;
-- `test/generic_database_page_database_shim_import_test.dart` locks the canonical imports and rejects the three old Generic import paths;
-- `docs/MAINTAINABILITY.md` records the completed shim retirement.
-
-The Generic host was reconstructed through the connector from current source chunks. The intended runtime change is import-only; a diff audit found the import migration plus two non-semantic source-format artifacts (Backlinks `TextStyle` closing formatting and EOF newline state). Do not add any product behavior to this slice. If a safer exact patch mechanism becomes available, normalize those incidental formatting differences before merge; otherwise require full CI green and keep them explicitly classified as non-semantic.
+Lane G has just completed a sustained caller-zero/compatibility-retirement sequence. There is no active runtime branch at this checkpoint; the next implementation run should start from fresh `main` and select the next small behavior-preserving Issue #225 slice only after a new caller/ownership audit.
 
 ## Latest integrated Lane G checkpoints
-- **#886 / `4469a549…` — Generic Database raw-error privacy cleanup.** Final legacy host stabilized; raw-error allowlist **1 -> 0**. CI #2720 full green.
-- **#882 / `7ff4e273…` — caller-zero BookmarkRepository wrappers retired.** Five dead Workspace/Tag forwarding APIs removed; CI #2688 full green.
-- **#875 / `f2d54ad…` — Tag management raw-error cleanup.** Six failure paths stabilized while duplicate-name domain messages were preserved; allowlist **2 -> 1**.
-- **#872 / `51420bab…` — AppShell raw-error cleanup.** Stable user-safe failure messages; allowlist **3 -> 2**.
-- **#870 / `a18ce533…` — Object Inspector raw-error cleanup.** Ten failure surfaces stabilized; allowlist **4 -> 3**.
-- **#868 / `c55146f…` — Bookmark Stage1 Database-presentation shim imports retired.** Legacy shim imports **5 -> 3**.
-- **#867 / `4fb55d3…` — Bookmark Stage1 raw-error cleanup.** Allowlist **5 -> 4**.
-- **#863 / `84350e59…` — Photo management raw-error cleanup.** Allowlist **6 -> 5**.
-- **#829 / `6fffec0d…` — caller-zero Weblink detail preview retired.**
-- **#812 / `f357daa6…` — raw-error presentation spread frozen behind the ratcheting guard.**
-- **#795 / `ecffd5b2…` — Generic Database Relation-record reload fanout bounded.**
-- **#735 / `60d6ac5a…` — caller-zero Database toolbar re-export shim retired.**
 
-Re-audit current production callers before every deletion; historical caller-zero conclusions are not permanent assumptions.
+Recent integration sequence:
+- **#940 / `b42ca9bd…` — caller-zero Person role reverse query retired.** Removed `BookmarkRepository.watchRolesForPerson(...)` and its now-caller-zero `AppDatabasePersonRoles.watchRoleAssignmentsForPerson(...)`; live Bookmark -> Person role reads remain unchanged. Production diff: 15 LOC deleted. Flutter CI #2831 full green.
+- **#938 / `4f01eee6…` — legacy Bookmark-create Photo entry point retired.** Removed caller-zero `BookmarkImageRelationService.saveLegacyPhotosAfterCreate(...)`; production service diff deleted 116 LOC. The important corrupt-Cover fail-closed regression moved to canonical `saveImagesAfterCreate(...)`. Flutter CI #2826 full green.
+- **#915 / `545e07e1…` — legacy `AppDatabase` Bookmark↔Photo mutation helpers retired.** Removed five caller-zero mutation helpers after the only test fixture caller was converted to direct legacy-row fixture setup. Production diff: 42 LOC deleted; legacy compatibility reads/schema remain.
+- **#903 / `48e945fd…` — legacy Bookmark Photo forwarding APIs retired.** Removed six caller-zero `BookmarkRepository` Photo mutation forwarders after canonical Image Relation migration. Production diff: 9 LOC deleted. Flutter CI #2748 full green.
+- **#899 / `c6157b3a…` — final Database-presentation compatibility shims retired.** Legacy Database presentation imports **22 -> 0** and re-export shim files **5 -> 0**; CI ceilings fixed at zero. Flutter CI #2737 full green.
+- **#886 / `4469a549…` — presentation raw-error cleanup completed.** Legacy raw-error host allowlist **8 -> 0**. Flutter CI #2720 full green.
+- **#882 / `7ff4e273…` — five dead `BookmarkRepository` Workspace/Tag forwarders retired.** Flutter CI #2688 full green.
+- **#875 / `f2d54ad…`**, **#872 / `51420bab…`**, **#870 / `a18ce533…`**, **#867 / `4fb55d3…`**, **#863 / `84350e59…`** — focused error-privacy ratchets that reduced the legacy presentation allowlist to zero while preserving typed/domain messages where useful.
+- **#868 / `c55146f…`** — Stage1 legacy Database-presentation imports retired before #899 closed the remaining Generic imports/shims.
+- **#829 / `6fffec0d…`** — caller-zero Weblink detail preview retired.
+- **#795 / `ecffd5b2…`** — Generic Database Relation-record reload fanout bounded.
+- **#735 / `60d6ac5a…`** — caller-zero Database toolbar re-export shim retired.
+
+A failed deletion attempt is also important history:
+- **#931 was closed, not merged.** Analyze exposed a missed live caller path `BookmarkRelationSection -> BacklinkRepository.link/unlink -> BookmarkRepository.addRelation/removeRelation`. Treat this as a standing rule: code-search “definition only” is not sufficient proof; trace wrappers/real hosts and let Analyze/full Test be the final caller-zero proof.
 
 ## Current measurable guardrails
 `.github/workflows/flutter_ci.yml` and live guard scripts are authoritative.
 
-Intended baselines with the active shim slice applied:
-1. presentation direct `workspaceStore.database` reach-through: **9 maximum**;
-2. direct `AppDatabase` imports under canonical feature presentation: **4 maximum**;
+Current intended boundaries:
+1. presentation direct `workspaceStore.database` reach-through: guarded ceiling remains in CI;
+2. direct `AppDatabase` imports under canonical feature presentation: guarded ceiling remains in CI;
 3. Database-presentation legacy shim imports: **0 maximum**;
 4. Database-presentation re-export shim files: **0 maximum**;
 5. canonical feature-presentation caught-error interpolation: **forbidden**;
-6. legacy presentation caught-error interpolation: **forbidden; allowlist size 0**.
+6. legacy `lib/views` / `lib/widgets` caught-error interpolation: **forbidden; allowlist size 0**.
 
 Never relax a numeric ceiling, recreate a compatibility shim under a new filename, or reintroduce an error-privacy allowlist entry merely to land unrelated work.
 
-## Error-privacy state — complete
-#812 originally froze eight legacy raw-error hosts. Focused cleanup retired all eight from the allowlist:
-- `lib/views/image_editor_page.dart`;
-- `lib/widgets/bookmark_detail_panel.dart`;
-- `lib/views/photo_management_page.dart`;
-- `lib/views/bookmark_unified_stage1_page.dart`;
-- `lib/views/object_inspector_page.dart`;
-- `lib/views/app_shell.dart`;
-- `lib/views/tag_management_page.dart`;
-- `lib/views/generic_database_page.dart`.
+## Completed compatibility tracks
 
-#886 completed the track at **8 -> 0 hosts**. Future work should enforce the zero boundary rather than create more isolated privacy cleanup PRs unless a genuinely new defect appears.
+### Presentation error privacy — complete
+#812 originally froze eight legacy raw-error hosts. #886 completed the track at **8 -> 0 hosts**. Future work should enforce the zero boundary rather than reopen an allowlist unless a genuinely new product defect appears.
 
-## Database-presentation shim state
-Before the active slice, the final three one-line re-export shims were:
-- `lib/widgets/database_view_tabs.dart`;
-- `lib/widgets/database_create_tiles.dart`;
-- `lib/widgets/resizable_detail_pane.dart`.
+### Database presentation shims — complete
+#868 moved Stage1 off the legacy imports. #899 moved Generic to canonical `lib/features/database/presentation/widgets/` imports and deleted the final three one-line `lib/widgets/` shims. The repository is now **0 legacy Database-presentation imports / 0 shim files**; historical names remain guarded so they cannot return.
 
-A fresh default-branch code audit found the only production legacy imports in `GenericDatabasePage`. Stage1 had already moved its final two imports in #868. The active slice therefore moves Generic directly to canonical feature imports and deletes all three shims. After merge the intended state is **0 legacy shim imports / 0 Database-presentation re-export shim files**. Historical shim names remain in the scanner so reintroduction is detected.
+### Legacy Bookmark/Photo mutation narrowing — substantially reduced
+Canonical Bookmark Image writes now go through Image Relations. Lane G removed caller-zero mutation entry points/forwarders in #903/#915/#938 while preserving compatibility reads, legacy schema/data, and the canonical Relation -> legacy projection still needed by live Photo-era consumers.
 
-## AppDatabase / caller-zero policy
-Major responsibility narrowing already integrated includes migration-helper extraction, Bookmark aggregate/read responsibilities, profile path conversion, Saved View/Photo aggregation, engagement mutations, duplicate Tag hierarchy mutation, dead People helpers, dead lifecycle seams, and caller-zero Bookmark/Weblink presentation/search paths.
+Do **not** delete Photo CRUD/schema, `bookmark_photos` rows, Bookmark URL/thumbnail storage, or compatibility reads merely because some writers are gone. Retirement still requires caller-zero plus migration/import/export/backup parity and owning-lane product proof.
 
-#882 reconfirmed that small root-repository forwarding APIs should be deleted only after fresh caller-zero proof. `BookmarkRepository.createTag(...)` remains live. `BookmarkLifecycleStore.dispose()` remains a live bootstrap/lifecycle contract despite its empty body because production callers exist.
+## Caller-zero policy
 
-Prefer true responsibility removal or deletion over pass-through wrappers added solely to improve a metric.
+Fresh caller proof is required before every deletion:
+1. search the symbol on current default branch;
+2. trace any wrappers/adapters to real production hosts;
+3. inspect relevant tests that may represent a compatibility contract rather than disposable coverage;
+4. keep schema/read compatibility when only write APIs are caller-zero;
+5. use Analyze and full Test as the final proof before merge.
+
+Examples of deliberately retained live APIs from the latest audit:
+- `BookmarkRepository.watchPersonRoles(...)` / `watchPersonRoleAssignments(...)` — used by Bookmark Person-role presentation;
+- `watchBookmarksForPerson(...)`, `watchBookmarksForPhoto(...)`, `watchBookmarksForCollection(...)` — live management/backlink UI callers remain;
+- Photo CRUD / `watchPhotos()` — `PhotoManagementPage` and compatibility hosts still use them;
+- `BookmarkAttachmentStore.initialize()/dispose()` — bodies are currently trivial/no-op but live presentation code treats them as lifecycle contract; deleting them would require broader host edits for little responsibility reduction;
+- `BookmarkRepository.addRelation/removeRelation` — live through Backlink UI; #931 proved they are not dead.
+
+Prefer deleting a real responsibility over introducing another pass-through abstraction just to improve a metric.
+
+## Issue #225 remaining priorities
+
+### P1 — GenericDatabasePage responsibility reduction
+Still open and high-value:
+- page state/loading/computed projection extraction;
+- schema/database action workflows (identity edit, duplicate, delete, collection settings) behind focused services/facades;
+- layout-specific host extraction;
+- Property-edit/dialog workflow extraction.
+
+`GenericDatabasePage` remains a large conflict-prone hotspot. In the connector environment, whole-file writes are risky for tiny edits, so do not force a broad extraction merely to keep Lane G busy. Prefer a patch-sized independent slice when a safe editing path and ownership window exist.
+
+### P2 — dependency composition
+Continue reducing presentation reach-through such as `repository.workspaceStore.database` when a real application facade can remove responsibility. Do not add a facade whose only purpose is forwarding one existing call.
+
+### P2 — `AppDatabase` narrowing
+Major responsibilities have already moved out. Continue only where a real caller-zero or responsibility-removal slice exists, with regression coverage. Historical migration semantics remain compatibility contracts.
+
+### P1/P2 — legacy Bookmark convergence
+Continue caller-zero retirement as Primitive/Object/Relation lanes prove replacement parity. Track production references and deleted LOC rather than adapter count.
+
+### Failure policy
+The highest-value broad catch/privacy work is already covered and documented in `docs/ERROR_POLICY_AUDIT.md`. Prefer responsibility reduction/caller-zero deletion now; only reopen failure-policy work for a concrete silent-corruption or observability gap.
 
 ## Shared hotspots / ownership
 Always re-check open PR changed files immediately before non-trivial edits to:
@@ -93,13 +113,7 @@ Always re-check open PR changed files immediately before non-trivial edits to:
 - `lib/services/profile_manager.dart`;
 - `lib/data/app_database.dart`.
 
-Latest ownership check after #886 merge:
-- open Primitive **#892** touches Bookmark creation/Image Relation code, not Generic;
-- open docs-only **#893** does not own runtime hotspots;
-- open Search **#894** touches `ObjectInspectorPage` and Search files, not Generic;
-- no current open PR owns `GenericDatabasePage` runtime code at this checkpoint.
-
-Parallel lanes move quickly; re-check immediately before final branch rebuild/merge.
+At this checkpoint there are no open PRs, but this fact is time-sensitive and must not be reused without a fresh audit.
 
 ## Cross-lane boundaries
 - Lane A owns Object/ObjectType/Body and Object-owned presentation behavior.
@@ -108,25 +122,32 @@ Parallel lanes move quickly; re-check immediately before final branch rebuild/me
 - Lane D owns Weblink/Image/File/Tag primitive product semantics and media/import behavior.
 - Lane E owns canonical Object search/indexing.
 - Lane F owns Vault/filesystem lifecycle and delivery.
-- Lane G may delete or narrow legacy paths only after replacement parity/ownership is established; do not hide product changes inside refactor PRs.
+- Lane G may delete or narrow legacy paths only after replacement parity/ownership is established; never hide product changes inside refactor PRs.
 
 ## Validation
-Local Flutter/Dart execution is unavailable in this connector environment, so GitHub Flutter CI is the merge gate.
+Local Flutter/Dart execution is unavailable in this connector environment; GitHub Flutter CI is the merge gate.
 
-- #886: final Flutter CI #2720 passed all guardrails, Drift generation, Analyze and full Test before merge.
-- Active shim slice: verify final comparison is one commit directly on latest `main`; runtime change must remain limited to Generic import routing plus explicitly classified non-semantic formatting if it cannot be safely normalized.
-- Final-head CI must pass maintainability report fixture at shim ceilings 0/0, legacy dependency/privacy guards, Drift generation, Analyze and full Test.
-- Use retained CI diagnostic logs/artifacts for failures; do not ask the user to paste logs.
+Recent validation checkpoints:
+- #940: Flutter CI #2831 full green.
+- #938: Flutter CI #2826 full green.
+- #903: final Flutter CI #2748 full green.
+- #899: final Flutter CI #2737 full green.
+- #886: final Flutter CI #2720 full green.
+
+For caller-zero deletion, a green Analyze is especially important because it catches missed live callers that code search may not surface reliably (#931).
 
 ## Exact next actions
-1. Finish the shim branch documentation/test state and rebuild it as **one commit directly on latest main**, carrying only shim-retirement files.
-2. Verify repository-wide production legacy-shim imports are zero and the three `lib/widgets` re-export files are absent.
-3. Verify branch is ahead 1 / behind 0 and no open PR has acquired Generic ownership.
-4. Open a focused Lane G PR, require final-head Flutter CI green, then squash-merge.
-5. After merge, update Issue #225 checkpoint and re-audit caller-zero modules / presentation-database reach-through for the next independent behavior-preserving slice.
-6. Do not destructively remove Bookmark URL/thumbnail/Photo compatibility storage until caller-zero plus migration/import/export/backup parity is proven.
+1. Start from current `main`; re-read Issue #225 and live open PR ownership.
+2. Continue fresh caller-zero audit in small Store/Repository/Service boundaries. Delete only when wrapper-to-real-host tracing plus Analyze can prove zero callers.
+3. If no true deletion exists, select a patch-sized `GenericDatabasePage` P1 extraction that removes real responsibility without adding a pass-through layer; defer if hotspot ownership or connector whole-file risk makes the slice unsafe.
+4. Re-audit presentation/database reach-through for a focused composition improvement only where an application facade genuinely removes low-level construction.
+5. Keep Photo/Bookmark compatibility storage and reads until the owning product lane proves full replacement parity.
+6. Update Issue #225 and this handoff after the next material integration checkpoint.
 
 ## Risks / stop conditions
-Parallel lanes move `main` frequently. Whole-file connector writes require exact-current-source preservation plus base-diff verification; final branch rebuilds must retain intervening main changes. Artificial/no-op CI-trigger commits are forbidden; rerun existing checks when appropriate instead.
+- Parallel lanes move `main` quickly; historical caller/ownership conclusions expire immediately.
+- GitHub code-search indexing can lag; prefer direct current-ref file inspection for critical caller-zero decisions.
+- Whole-file connector writes require exact-current-source preservation plus base-diff verification; do not accept unrelated formatting churn.
+- Artificial/no-op CI-trigger commits are forbidden; use workflow rerun controls or the next meaningful change.
 
-Stop only when the active Lane G work has no independent safe next slice, a genuine external/product blocker remains, an unavoidable hotspot conflict blocks the next step, validation is externally blocked with no independent work left, or the runtime/tool limit is reached. Pending CI by itself is not a stop reason.
+Stop only when no independent safe Issue #225 slice remains, a genuine product/external blocker exists, an unavoidable hotspot conflict blocks the next step, validation is externally blocked with no independent work left, or the runtime/tool limit is reached. Pending CI by itself is not a stop reason.
