@@ -13,6 +13,8 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as image;
 
+import 'support/legacy_photo_fixture.dart';
+
 void main() {
   test('store factory preserves canonical ownership preflight', () async {
     final root =

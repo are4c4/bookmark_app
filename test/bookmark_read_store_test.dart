@@ -3,6 +3,8 @@ import 'package:bookmark_app/data/bookmark_read_store.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/legacy_photo_fixture.dart';
+
 void main() {
   test('aggregates Bookmark metadata and resolves managed photo paths', () async {
     final database = AppDatabase.forTesting(

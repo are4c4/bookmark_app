@@ -15,6 +15,8 @@ import 'package:bookmark_app/services/photo_storage_service.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/legacy_photo_fixture.dart';
+
 void main() {
   test('native Image reused by legacy Photo mapping deletes both identities', () async {
     final fixture = await _MappingFixture.create();

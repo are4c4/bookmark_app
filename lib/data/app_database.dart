@@ -115,8 +115,6 @@ class AppDatabase extends _$AppDatabase {
     return result;
   }
 
-  static String _normalizeNamesText(Iterable<String> names) => _normalizeNames(names).join(', ');
-
   Future<int> _ensureTag(String name) async {
     final existing = await (select(tags)..where((t) => t.name.equals(name))).getSingleOrNull();
     if (existing != null) return existing.id;
@@ -265,9 +263,6 @@ class AppDatabase extends _$AppDatabase {
           await setBookmarkTags(bookmarkId, current.map((e) => e.name).where((e) => !removing.contains(e.toLowerCase())));
         }
       });
-
-  Future<int> addPhoto({required String path, String? title, String? note, Iterable<String> tagNames = const []}) =>
-      into(photos).insert(PhotosCompanion.insert(path: pathResolver.toStoredPath(path), title: Value(title), note: Value(note), tags: Value(_normalizeNamesText(tagNames))));
 
   Future<int> createPerson(String name, {String? note}) async {
     final trimmed = name.trim();

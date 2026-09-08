@@ -16,6 +16,8 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as image;
 
+import 'support/legacy_photo_fixture.dart';
+
 void main() {
   AppObject expectedObject({int id = 7}) {
     final now = DateTime(2026, 9, 6);
