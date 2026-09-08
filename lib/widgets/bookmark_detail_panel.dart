@@ -4,6 +4,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
+import '../services/bookmark_presentation_resolver_factory.dart';
+import '../services/bookmark_url_resolver.dart';
 import 'bookmark_image_relation_section.dart';
 import 'bookmark_relation_section.dart';
 import 'bookmark_reorderable_properties.dart';
@@ -20,6 +22,7 @@ class BookmarkDetailPanel extends StatefulWidget {
     this.onFilterByPhoto,
     this.propertyOrder = const [],
     this.onPropertyOrderChanged,
+    this.resolveUrl,
   });
 
   final BookmarkRepository repository;
@@ -30,6 +33,7 @@ class BookmarkDetailPanel extends StatefulWidget {
   final ValueChanged<PhotoRecord>? onFilterByPhoto;
   final List<String> propertyOrder;
   final ValueChanged<List<String>>? onPropertyOrderChanged;
+  final BookmarkUrlResolve? resolveUrl;
 
   @override
   State<BookmarkDetailPanel> createState() => _BookmarkDetailPanelState();
@@ -42,11 +46,14 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
   late final FocusNode _titleFocus;
   late final FocusNode _urlFocus;
   late final FocusNode _descriptionFocus;
+  late BookmarkUrlResolve _resolveBookmarkUrl;
+  late Future<BookmarkUrlSource?> _resolvedUrl;
 
   bool _editingTitle = false;
   bool _editingUrl = false;
   bool _editingDescription = false;
   bool _savingInline = false;
+  String? _editingUrlBaseline;
   int _imageVisualRevision = 0;
 
   @override
@@ -59,15 +66,26 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
     _titleFocus = FocusNode()..addListener(_handleTitleFocus);
     _urlFocus = FocusNode()..addListener(_handleUrlFocus);
     _descriptionFocus = FocusNode()..addListener(_handleDescriptionFocus);
+    _configureUrlResolver();
   }
 
   @override
   void didUpdateWidget(covariant BookmarkDetailPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final urlContextChanged =
+        oldWidget.repository != widget.repository ||
+        oldWidget.repository.workspaceId != widget.repository.workspaceId ||
+        oldWidget.bookmark.id != widget.bookmark.id ||
+        oldWidget.bookmark.url != widget.bookmark.url ||
+        oldWidget.resolveUrl != widget.resolveUrl;
+    if (urlContextChanged) {
+      _configureUrlResolver();
+    }
     if (oldWidget.bookmark.id != widget.bookmark.id) {
       _editingTitle = false;
       _editingUrl = false;
       _editingDescription = false;
+      _editingUrlBaseline = null;
       _imageVisualRevision = 0;
       _syncControllers(force: true);
       return;
@@ -75,13 +93,37 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
     _syncControllers();
   }
 
+  void _configureUrlResolver() {
+    _resolveBookmarkUrl = widget.resolveUrl ??
+        BookmarkPresentationResolverFactory.urlFor(widget.repository);
+    _resolvedUrl = _resolveBookmarkUrl(widget.bookmark);
+    _syncUrlControllerFromResolved();
+  }
+
   void _syncControllers({bool force = false}) {
     if (force || !_editingTitle) _titleController.text = widget.bookmark.title;
-    if (force || !_editingUrl) _urlController.text = widget.bookmark.url;
+    if (force || !_editingUrl) _syncUrlControllerFromResolved();
     if (force || !_editingDescription) {
       _descriptionController.text = widget.bookmark.description ?? '';
     }
   }
+
+  void _syncUrlControllerFromResolved() {
+    final future = _resolvedUrl;
+    final bookmarkId = widget.bookmark.id;
+    future.then((resolved) {
+      if (!mounted ||
+          !identical(future, _resolvedUrl) ||
+          widget.bookmark.id != bookmarkId ||
+          _editingUrl) {
+        return;
+      }
+      _urlController.text = resolved?.value ?? widget.bookmark.url;
+    });
+  }
+
+  Future<String> _preferredUrl() async =>
+      (await _resolvedUrl)?.value ?? widget.bookmark.url;
 
   void _handleTitleFocus() {
     if (!_titleFocus.hasFocus && _editingTitle) _saveTitle();
@@ -117,9 +159,10 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
     if (_savingInline) return;
     setState(() => _savingInline = true);
     try {
+      final effectiveUrl = url ?? await _preferredUrl();
       await widget.repository.update(
         id: widget.bookmark.id,
-        url: url ?? widget.bookmark.url,
+        url: effectiveUrl,
         title: title ?? widget.bookmark.title,
         description: description ?? widget.bookmark.description,
         thumbnail: widget.bookmark.thumbnail,
@@ -152,13 +195,15 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
   Future<void> _saveUrl() async {
     if (!_editingUrl) return;
     final value = _urlController.text.trim();
+    final current = _editingUrlBaseline ?? widget.bookmark.url;
+    _editingUrlBaseline = null;
     if (value.isEmpty) {
-      _urlController.text = widget.bookmark.url;
       if (mounted) setState(() => _editingUrl = false);
+      _syncUrlControllerFromResolved();
       return;
     }
     if (mounted) setState(() => _editingUrl = false);
-    if (value != widget.bookmark.url) await _saveInline(url: value);
+    if (value != current) await _saveInline(url: value);
   }
 
   Future<void> _saveDescription() async {
@@ -173,7 +218,7 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
 
   void _cancelInline() {
     _titleController.text = widget.bookmark.title;
-    _urlController.text = widget.bookmark.url;
+    _editingUrlBaseline = null;
     _descriptionController.text = widget.bookmark.description ?? '';
     _titleFocus.unfocus();
     _urlFocus.unfocus();
@@ -183,6 +228,7 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
       _editingUrl = false;
       _editingDescription = false;
     });
+    _syncUrlControllerFromResolved();
   }
 
   String _compactUrl(String value) {
@@ -199,6 +245,20 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('URLを開けませんでした')),
       );
+    }
+  }
+
+  Future<void> _openResolvedUrl() async {
+    try {
+      final resolved = await _resolvedUrl;
+      if (resolved == null) return;
+      await _openUrl(resolved.value);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('URLを開けませんでした')),
+        );
+      }
     }
   }
 
@@ -283,54 +343,65 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
 
   Widget _inlineUrl(BookmarkItem bookmark) {
     final scheme = Theme.of(context).colorScheme;
-    if (_editingUrl) {
-      return TextField(
-        controller: _urlController,
-        focusNode: _urlFocus,
-        autofocus: true,
-        maxLines: 2,
-        minLines: 1,
-        textInputAction: TextInputAction.done,
-        onSubmitted: (_) => _saveUrl(),
-        style: TextStyle(fontSize: 13, color: scheme.onSurface),
-        decoration: const InputDecoration(
-          isDense: true,
-          contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-        ),
-      );
-    }
-    return Tooltip(
-      message: bookmark.url,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(4),
-        onTap: () {
-          setState(() => _editingUrl = true);
-          WidgetsBinding.instance.addPostFrameCallback(
-            (_) => _urlFocus.requestFocus(),
+    return FutureBuilder<BookmarkUrlSource?>(
+      future: _resolvedUrl,
+      builder: (context, snapshot) {
+        final value = snapshot.data?.value ?? bookmark.url;
+        if (_editingUrl) {
+          return TextField(
+            controller: _urlController,
+            focusNode: _urlFocus,
+            autofocus: true,
+            maxLines: 2,
+            minLines: 1,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => _saveUrl(),
+            style: TextStyle(fontSize: 13, color: scheme.onSurface),
+            decoration: const InputDecoration(
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+            ),
           );
-        },
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 6),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  _compactUrl(bookmark.url),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
-                ),
+        }
+        return Tooltip(
+          message: value,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(4),
+            onTap: () {
+              _urlController.text = value;
+              _editingUrlBaseline = value;
+              setState(() => _editingUrl = true);
+              WidgetsBinding.instance.addPostFrameCallback(
+                (_) => _urlFocus.requestFocus(),
+              );
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 6),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _compactUrl(value),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.edit_outlined,
+                    size: 13,
+                    color: scheme.onSurfaceVariant.withValues(alpha: .65),
+                  ),
+                ],
               ),
-              const SizedBox(width: 4),
-              Icon(
-                Icons.edit_outlined,
-                size: 13,
-                color: scheme.onSurfaceVariant.withValues(alpha: .65),
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -453,7 +524,7 @@ class _BookmarkDetailPanelState extends State<BookmarkDetailPanel> {
                             Expanded(child: _inlineUrl(bookmark)),
                             const SizedBox(width: 4),
                             TextButton.icon(
-                              onPressed: () => _openUrl(bookmark.url),
+                              onPressed: _openResolvedUrl,
                               icon: const Icon(Icons.open_in_new, size: 15),
                               label: const Text('開く'),
                             ),
