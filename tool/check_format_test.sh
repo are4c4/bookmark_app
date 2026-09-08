@@ -6,6 +6,8 @@ guard="$script_dir/check_format.sh"
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
 
+python3 "$script_dir/check_format_hunks_test.py"
+
 cd "$tmp_dir"
 git init -q
 git config user.name "Format Guard Test"
@@ -35,7 +37,7 @@ void main() {
 EOF
 
 before="$(cat sample.dart)"
-CHECK_BASE_REF=HEAD bash "$guard"
+CHECK_FORMAT_SKIP_SELF_TESTS=1 CHECK_BASE_REF=HEAD bash "$guard"
 after="$(cat sample.dart)"
 [[ "$before" == "$after" ]] || {
   echo "check_format_test: guard mutated a passing file" >&2
@@ -53,7 +55,7 @@ void main() {
 EOF
 
 before="$(cat sample.dart)"
-if CHECK_BASE_REF=HEAD bash "$guard"; then
+if CHECK_FORMAT_SKIP_SELF_TESTS=1 CHECK_BASE_REF=HEAD bash "$guard"; then
   echo "check_format_test: unformatted edited hunk unexpectedly passed" >&2
   exit 1
 fi
@@ -68,7 +70,7 @@ cat >added.dart <<'EOF'
 void added( ){print('new');}
 EOF
 
-if CHECK_BASE_REF=HEAD bash "$guard"; then
+if CHECK_FORMAT_SKIP_SELF_TESTS=1 CHECK_BASE_REF=HEAD bash "$guard"; then
   echo "check_format_test: unformatted new file unexpectedly passed" >&2
   exit 1
 fi
@@ -79,6 +81,6 @@ void added() {
 }
 EOF
 
-CHECK_BASE_REF=HEAD bash "$guard"
+CHECK_FORMAT_SKIP_SELF_TESTS=1 CHECK_BASE_REF=HEAD bash "$guard"
 
 echo "check_format_test: PASS"
