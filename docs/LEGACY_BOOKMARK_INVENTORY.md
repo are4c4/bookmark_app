@@ -72,6 +72,14 @@ The legacy `DetailPropertyRow` shim reached zero production/test imports after B
 ### `lib/widgets/database_page_toolbar.dart` re-export shim — #735
 After Collection, Photo and People management moved to the canonical Database toolbar, repository-wide exact import audit found no remaining legacy toolbar-shim caller. #735 deleted the one-line re-export and lowered the shim-file ceiling **4 → 3**. The historical name remains guarded so the compatibility path cannot silently return.
 
+### Final Database-presentation re-export shims — #868 / #899
+#868 moved Stage1 off the remaining temporary Database-presentation imports. #899 then moved `GenericDatabasePage` to the canonical `lib/features/database/presentation/widgets/` imports and deleted the final three legacy re-export files:
+- `lib/widgets/database_view_tabs.dart`;
+- `lib/widgets/database_create_tiles.dart`;
+- `lib/widgets/resizable_detail_pane.dart`.
+
+The current enforced state is **0 legacy Database-presentation imports / 0 shim files**. Historical shim names remain in the maintainability guard so compatibility debt cannot silently return.
+
 ## Retired AppDatabase responsibilities
 
 These architecture-cleanup candidates are complete:
@@ -91,6 +99,8 @@ Do not reintroduce these responsibilities into the database root.
 #642 removed caller-zero `BookmarkLifecycleState`, `states()`, `watchStates()` and synchronous `genre()`. Live lifecycle mutations and `watchGenre()` remain.
 
 #731 removed caller-zero `BookmarkRepository.setBookmarkPeopleFromDatabase(...)`, empty `BookmarkLifecycleStore.remove(...)`, and the sole no-op permanent-delete call. Permanent deletion still performs attachment cleanup before the actual Bookmark row deletion, and `data_integrity_test.dart` covers attachment bytes, attachment rows and Bookmark row removal.
+
+#944 removed caller-zero Saved View forwarding state/APIs from `BookmarkRepository` and caller-zero Saved View/workspace helpers from `WorkspaceStore`. The only test fixture that had depended on the forwarding mutation now uses `SavedViewWriteStore` directly. Saved View persistence/read-write stores and live workspace assignment behavior remain; do not rebuild the deleted facade merely for symmetry.
 
 `BookmarkLifecycleStore.dispose()` is **not** caller-zero: #736 initially attempted to retire the empty method, but CI exposed eight production callers in `lib/main.dart`. #736 was closed without merge. Treat the method as a live bootstrap/lifecycle contract until a naturally scoped composition cleanup proves otherwise.
 
@@ -135,15 +145,10 @@ Several consumers still obtain lower-level capabilities through `BookmarkReposit
 
 Attachment UI still has lower-level store/service composition tied to Bookmark hosts. Do not solve this by making `BookmarkRepository` broader; wait for a focused boundary that removes responsibility.
 
-### Temporary Database-presentation re-export shims
-Three legacy re-export shim files remain under `lib/widgets/`:
-- `database_view_tabs.dart`;
-- `database_create_tiles.dart`;
-- `resizable_detail_pane.dart`.
+### Database-presentation re-export shims — complete
+The temporary Database-presentation re-export track is complete as of #899: **0 imports / 0 shim files**. `GenericDatabasePage` and Stage1 now import canonical Database presentation widgets directly.
 
-Canonical implementations live under `lib/features/database/presentation/widgets/`. #687 moved Collection management off four shim imports (**17 → 13**), #695 did the same for Photo management (**13 → 9**), and #707 moved People management off its four shim imports (**9 → 5**). #735 then deleted the caller-zero toolbar shim and lowered the shim-file ceiling **4 → 3**.
-
-The remaining five shim imports are concentrated in two large/shared hosts: `GenericDatabasePage` has create-tiles, view-tabs and resizable-pane imports; Stage1 has create-tiles and view-tabs imports. Do not reconstruct either host solely to lower a metric. Retire each shim only when all callers can be moved naturally through patch-sized edits.
+Do not recreate a legacy shim to avoid touching a caller. The maintainability guard intentionally retains historical shim names and zero ceilings so any reintroduction fails CI.
 
 ### GenericDatabasePage hotspot
 Refactor progress includes:
@@ -155,7 +160,7 @@ Remaining high-value responsibilities include schema/database actions, Property-
 ### User-visible failure boundaries
 Global Search, Settings, attachment import, bootstrap/Profile-switch and Database Property-add raw-error boundaries have been stabilized in focused slices. #745 additionally guards canonical `lib/features/**/presentation/` from directly interpolating caught exception variables into strings while allowing typed forwarding such as `onError(error)`.
 
-Legacy `lib/views/` / `lib/widgets/` still contain raw-error debt. Re-audit before assuming an old candidate still exists, and prefer naturally scoped regression-backed edits rather than reconstructing large shared hosts solely to replace one string.
+The legacy `lib/views/` / `lib/widgets/` raw-error allowlist was later ratcheted to **0** by #886. Re-audit before assuming an old candidate still exists, and prefer naturally scoped regression-backed edits rather than reconstructing large shared hosts solely to replace one string.
 
 ### Profile recovery policy
 `ProfileManager` intentionally fails soft when persisted profile-registry metadata cannot be decoded, but fallback can affect selected data location. Diagnostic privacy is sanitized; behavior changes still require explicit Storage/Vault recovery policy.
@@ -173,8 +178,8 @@ Before merging new Object/Database/View work, search the diff for newly added pr
 A match is not automatically wrong outside the explicitly guarded feature boundaries, but the PR must classify it and state the retirement condition. `lib/features/**` is additionally protected by the feature legacy-dependency and feature-presentation error-privacy guards.
 
 ## Next removal order
-1. Continue true production caller-zero audits and delete whole modules/shims only when independent canonical coverage exists.
-2. Ratchet the remaining Database-presentation shim imports below **5** only through naturally patch-sized caller changes; delete a shim only at true caller-zero.
+1. Continue true production caller-zero audits and delete whole modules/APIs only when independent canonical coverage exists.
+2. Keep the Database-presentation shim/import ceilings at **0**; never recreate the retired compatibility path to avoid a caller edit.
 3. Re-audit remaining Bookmark URL/detail/backlink presentation only where Object/Database/Relation parity is proven.
 4. Continue GenericDatabasePage P1 decomposition as measurable responsibility/LOC reductions, coordinated with Database/View lane ownership.
 5. Continue Object-first Photo/Image and Bookmark/Image convergence through existing bridges; do not destructively remove legacy Photo storage.
