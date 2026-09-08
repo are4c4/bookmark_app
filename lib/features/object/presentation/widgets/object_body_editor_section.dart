@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../data/database_view_store.dart';
 import '../../../../data/generic_database_store.dart';
@@ -59,6 +60,8 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
   bool _loading = true;
   bool _loadFailed = false;
   int _loadGeneration = 0;
+  String? _autofocusBlockId;
+  Future<void> _textMutationQueue = Future<void>.value();
 
   ObjectBodyStore get _bodyStore => ObjectBodyStore(widget.store);
 
@@ -113,6 +116,7 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
       setState(() {
         _loading = true;
         _loadFailed = false;
+        _autofocusBlockId = null;
       });
     }
     try {
@@ -144,22 +148,70 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
   }
 
   Future<void> _runMutation(
-    Future<ObjectBodyDocument> Function() mutation,
-  ) async {
+    Future<ObjectBodyDocument> Function() mutation, {
+    int? expectedObjectId,
+  }) async {
+    final objectId = expectedObjectId ?? widget.objectId;
     try {
-      _applyDocument(await mutation());
+      final document = await mutation();
+      if (!mounted || widget.objectId != objectId) return;
+      _applyDocument(document);
     } catch (_) {
-      _showError('Bodyを更新できませんでした。');
+      if (mounted && widget.objectId == objectId) {
+        _showError('Bodyを更新できませんでした。');
+      }
     }
   }
 
-  Future<void> _editText(ObjectBodyBlock block, String text) => _runMutation(
-        () => _bodyBlockEdits.updateText(
-          objectId: widget.objectId,
-          blockId: block.id,
-          text: text,
-        ),
+  Future<void> _enqueueTextMutation(
+    int objectId,
+    Future<ObjectBodyDocument> Function() mutation,
+  ) {
+    final operation = _textMutationQueue.then((_) async {
+      if (!mounted || widget.objectId != objectId) return;
+      await _runMutation(mutation, expectedObjectId: objectId);
+    });
+    _textMutationQueue = operation;
+    return operation;
+  }
+
+  Future<void> _editText(ObjectBodyBlock block, String text) {
+    final objectId = widget.objectId;
+    final edits = _bodyBlockEdits;
+    return _enqueueTextMutation(
+      objectId,
+      () => edits.updateText(
+        objectId: objectId,
+        blockId: block.id,
+        text: text,
+      ),
+    );
+  }
+
+  Future<void> _splitParagraph(
+    ObjectBodyBlock block,
+    TextSelection selection,
+  ) async {
+    final objectId = widget.objectId;
+    final bodyStore = _bodyStore;
+    final edits = _bodyBlockEdits;
+    String? newBlockId;
+    await _enqueueTextMutation(objectId, () async {
+      final latest = await bodyStore.read(objectId);
+      newBlockId = _bodyBlockIds.next(latest, prefix: 'paragraph');
+      return edits.splitParagraph(
+        objectId: objectId,
+        blockId: block.id,
+        newBlockId: newBlockId!,
+        selectionStart: selection.start,
+        selectionEnd: selection.end,
       );
+    });
+    if (!mounted || widget.objectId != objectId || newBlockId == null) return;
+    if (_document.blocks.any((item) => item.id == newBlockId)) {
+      setState(() => _autofocusBlockId = newBlockId);
+    }
+  }
 
   Future<void> _toggleChecklist(ObjectBodyBlock block, bool checked) =>
       _runMutation(
@@ -370,6 +422,8 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
         ObjectBodyDocumentView(
           document: _document,
           onTextChanged: (block, text) => _editText(block, text),
+          onParagraphSplit: _splitParagraph,
+          autofocusBlockId: _autofocusBlockId,
           onChecklistChanged: (block, checked) =>
               _toggleChecklist(block, checked),
           onObjectReferenceTap: (block) {
