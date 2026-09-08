@@ -13,6 +13,8 @@ import 'package:bookmark_app/services/photo_storage_service.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/legacy_photo_fixture.dart';
+
 void main() {
   test('legacy-mirrored Image deletion detaches canonical Relations and clears legacy Person photo', () async {
     final root = await Directory.systemTemp.createTemp(
