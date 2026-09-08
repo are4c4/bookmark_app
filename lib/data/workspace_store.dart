@@ -223,28 +223,10 @@ class WorkspaceStore {
           .map((row) => row.bookmarkId)
           .toSet();
 
-  Stream<Set<int>> watchSavedViewIds(int workspaceId) =>
-      (database.select(database.savedViewWorkspaces)..where((relation) => relation.workspaceId.equals(workspaceId)))
-          .watch()
-          .map((rows) => rows.map((row) => row.savedViewId).toSet());
-
-  Future<Set<int>> savedViewIds(int workspaceId) async =>
-      (await (database.select(database.savedViewWorkspaces)..where((relation) => relation.workspaceId.equals(workspaceId))).get())
-          .map((row) => row.savedViewId)
-          .toSet();
-
   Future<void> assignBookmark(int bookmarkId, int workspaceId) =>
       database.into(database.bookmarkWorkspaces).insertOnConflictUpdate(
             BookmarkWorkspacesCompanion.insert(
               bookmarkId: Value(bookmarkId),
-              workspaceId: workspaceId,
-            ),
-          );
-
-  Future<void> assignSavedView(int savedViewId, int workspaceId) =>
-      database.into(database.savedViewWorkspaces).insertOnConflictUpdate(
-            SavedViewWorkspacesCompanion.insert(
-              savedViewId: Value(savedViewId),
               workspaceId: workspaceId,
             ),
           );
