@@ -65,6 +65,7 @@ void main() {
     expect(schema.legacyPersonIdProperty.type, ObjectPropertyType.number);
     expect(schema.legacyPersonIdProperty.config['system'], isTrue);
     expect(schema.legacyPersonIdProperty.config['hidden'], isTrue);
+    expect(schema.legacyPersonIdProperty.isIdentityManaged, isTrue);
 
     final secondTouched = await bridge.syncLegacyPeople(workspaceId);
     final secondObjectId =
@@ -183,10 +184,14 @@ void main() {
         (await bridge.objectIdForLegacyPerson(workspaceId, personId))!;
     final schema = await bridge.ensurePersonObjectType(workspaceId);
 
-    await objectStore.setPropertyValue(
-      objectId: objectId,
-      property: schema.legacyPersonIdProperty,
-      value: personId + 1000,
+    await database.customStatement(
+      '''UPDATE generic_values SET value_json = ?
+         WHERE record_id = ? AND property_id = ?''',
+      <Object>[
+        '${personId + 1000}',
+        objectId,
+        schema.legacyPersonIdProperty.id,
+      ],
     );
 
     await expectLater(
@@ -244,6 +249,11 @@ void main() {
           .singleWhere((property) => property.name == 'Legacy Person ID')
           .type,
       ObjectPropertyType.text,
+    );
+    expect(
+      refreshed.properties.where((property) => property.name == 'Note'),
+      isEmpty,
+      reason: 'schema preflight must fail before adding sibling Properties',
     );
   });
 }
