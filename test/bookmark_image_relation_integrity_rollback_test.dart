@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/core_object_bridge.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
@@ -209,15 +211,13 @@ Future<_Snapshot> _snapshot(_Fixture fixture) async {
   );
 }
 
-Future<List<int>> _storedValue(
+Future<String> _storedValue(
   _Fixture fixture,
   ObjectPropertyDefinition property,
 ) async {
   final record = (await fixture.genericStore.listRecords(fixture.bookmarkType.id))
       .singleWhere((candidate) => candidate.id == fixture.bookmarkObjectId);
-  final raw = record.values[property.id];
-  if (raw == null) return const <int>[];
-  return List<int>.from(raw as List);
+  return jsonEncode(record.values[property.id]);
 }
 
 Future<List<String>> _edgeSnapshot(
@@ -266,8 +266,8 @@ class _Snapshot {
     required this.legacyProjection,
   });
 
-  final List<int> imagesValue;
-  final List<int> coverValue;
+  final String imagesValue;
+  final String coverValue;
   final List<String> imagesEdges;
   final List<String> coverEdges;
   final List<String> legacyProjection;
@@ -275,16 +275,16 @@ class _Snapshot {
   @override
   bool operator ==(Object other) =>
       other is _Snapshot &&
-      _listEquals(imagesValue, other.imagesValue) &&
-      _listEquals(coverValue, other.coverValue) &&
+      imagesValue == other.imagesValue &&
+      coverValue == other.coverValue &&
       _listEquals(imagesEdges, other.imagesEdges) &&
       _listEquals(coverEdges, other.coverEdges) &&
       _listEquals(legacyProjection, other.legacyProjection);
 
   @override
   int get hashCode => Object.hash(
-        Object.hashAll(imagesValue),
-        Object.hashAll(coverValue),
+        imagesValue,
+        coverValue,
         Object.hashAll(imagesEdges),
         Object.hashAll(coverEdges),
         Object.hashAll(legacyProjection),
