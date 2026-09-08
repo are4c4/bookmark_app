@@ -106,8 +106,6 @@ class BookmarkRepository {
 
   Stream<List<PersonRoleAssignment>> watchPersonRoles(BookmarkItem bookmark) =>
       _database.watchPersonRoleAssignments(bookmark.id);
-  Stream<List<PersonRoleAssignment>> watchRolesForPerson(Person person) =>
-      _database.watchRoleAssignmentsForPerson(person.id);
 
   Stream<List<BookmarkItem>> watchBookmarksForPerson(Person person) => watchAll().map(
         (items) => items.where((item) => item.people.any((candidate) => candidate.id == person.id)).toList(),
