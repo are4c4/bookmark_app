@@ -1,5 +1,4 @@
 import 'package:bookmark_app/data/app_database.dart';
-import 'package:bookmark_app/data/core_object_bridge.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
 import 'package:bookmark_app/data/object_type_defaults_store.dart';
 import 'package:bookmark_app/data/weblink_object_service.dart';
