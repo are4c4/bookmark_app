@@ -2,6 +2,7 @@ import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
 import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
+import 'package:bookmark_app/repositories/object_global_search_service.dart';
 import 'package:bookmark_app/views/object_global_search_page.dart';
 import 'package:bookmark_app/views/object_inspector_page.dart';
 import 'package:drift/native.dart';
@@ -63,6 +64,59 @@ void main() {
 
     expect(find.byType(ObjectInspectorPage), findsOneWidget);
     expect(find.text('Kokoro Search Token'), findsWidgets);
+  });
+
+  testWidgets(
+      'replays active query after focused refresh from another Search service instance',
+      (tester) async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final store = GenericDatabaseStore(database);
+    final objects = ObjectStore(store);
+    final pageSearch = ObjectGlobalSearchService(store);
+    final producerSearch = ObjectGlobalSearchService(store);
+
+    final noteTypeId = await objects.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Note',
+      icon: '📝',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ObjectGlobalSearchPage(
+          store: store,
+          workspaceId: workspaceId,
+          searchService: pageSearch,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'backgroundvisible');
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pumpAndSettle();
+
+    expect(find.text('一致するオブジェクトがありません'), findsOneWidget);
+
+    final objectId = await objects.createObject(
+      objectTypeId: noteTypeId,
+      title: 'BackgroundVisible Token',
+    );
+    await producerSearch.refreshObject(objectId);
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(ValueKey('object-global-search-result-$objectId')),
+      findsOneWidget,
+      reason:
+          'a Search-local projection change from another service instance must replay the active query',
+    );
+    expect(find.text('BackgroundVisible Token'), findsOneWidget);
   });
 
   testWidgets(
