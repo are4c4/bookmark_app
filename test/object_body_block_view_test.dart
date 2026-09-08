@@ -14,6 +14,7 @@ void main() {
     ObjectBodyBlockPresentation presentation, {
     ValueChanged<String>? onTextChanged,
     ObjectBodyParagraphSplitCallback? onParagraphSplit,
+    ObjectBodyParagraphMergeCallback? onParagraphMergeWithPrevious,
     ValueChanged<bool>? onChecklistChanged,
     VoidCallback? onObjectReferenceTap,
   }) {
@@ -23,6 +24,7 @@ void main() {
           presentation: presentation,
           onTextChanged: onTextChanged,
           onParagraphSplit: onParagraphSplit,
+          onParagraphMergeWithPrevious: onParagraphMergeWithPrevious,
           onChecklistChanged: onChecklistChanged,
           onObjectReferenceTap: onObjectReferenceTap,
         ),
@@ -91,6 +93,51 @@ void main() {
     expect(editable.controller.text, 'hello\n world');
     expect(editable.controller.selection,
         const TextSelection.collapsed(offset: 6));
+  });
+
+  testWidgets('Backspace at paragraph start requests merge with previous',
+      (tester) async {
+    var mergeCount = 0;
+    await tester.pumpWidget(host(
+      presenter.present(factory.paragraph(id: 'p1', text: 'world')),
+      onTextChanged: (_) {},
+      onParagraphMergeWithPrevious: () async {
+        mergeCount++;
+      },
+    ));
+
+    await tester.tap(find.byType(TextField));
+    await tester.pump();
+    final editable = tester.widget<EditableText>(find.byType(EditableText));
+    editable.controller.selection = const TextSelection.collapsed(offset: 0);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+    await tester.pump();
+
+    expect(mergeCount, 1);
+    expect(editable.controller.text, 'world');
+  });
+
+  testWidgets('Backspace away from paragraph start does not request merge',
+      (tester) async {
+    var mergeCount = 0;
+    await tester.pumpWidget(host(
+      presenter.present(factory.paragraph(id: 'p1', text: 'world')),
+      onTextChanged: (_) {},
+      onParagraphMergeWithPrevious: () async {
+        mergeCount++;
+      },
+    ));
+
+    await tester.tap(find.byType(TextField));
+    await tester.pump();
+    final editable = tester.widget<EditableText>(find.byType(EditableText));
+    editable.controller.selection = const TextSelection.collapsed(offset: 3);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+    await tester.pump();
+
+    expect(mergeCount, 0);
   });
 
   testWidgets('dispatches checklist changes', (tester) async {
