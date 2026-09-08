@@ -269,12 +269,6 @@ class AppDatabase extends _$AppDatabase {
   Future<int> addPhoto({required String path, String? title, String? note, Iterable<String> tagNames = const []}) =>
       into(photos).insert(PhotosCompanion.insert(path: pathResolver.toStoredPath(path), title: Value(title), note: Value(note), tags: Value(_normalizeNamesText(tagNames))));
 
-  Future<void> deletePhoto(int id) => transaction(() async {
-        await (update(people)..where((person) => person.profilePhotoId.equals(id)))
-            .write(const PeopleCompanion(profilePhotoId: Value(null)));
-        await (delete(photos)..where((photo) => photo.id.equals(id))).go();
-      });
-
   Future<int> createPerson(String name, {String? note}) async {
     final trimmed = name.trim();
     if (trimmed.isEmpty) throw ArgumentError('Person name is empty');
