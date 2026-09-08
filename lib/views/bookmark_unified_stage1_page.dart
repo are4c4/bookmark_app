@@ -145,16 +145,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
   Stream<List<BookmarkItem>> _watchBookmarksForActiveFilters() {
     final photoId = _photoFilterId;
     if (photoId == null) return widget.repository.watchAll();
-    return Stream.fromFuture(
-      widget.repository.watchPhotos().first.then(
-        (photos) => photos.where((photo) => photo.id == photoId).firstOrNull,
-      ),
-    ).asyncExpand((photo) {
-      if (photo == null) {
-        return Stream<List<BookmarkItem>>.value(const <BookmarkItem>[]);
-      }
-      return widget.repository.watchBookmarksForPhoto(photo);
-    });
+    return widget.repository.watchBookmarksForPhotoId(photoId);
   }
 
   void _applyDatabaseView(DatabaseViewConfig view) {

@@ -16,6 +16,13 @@ class PhotoReadStore {
         createdAt: photo.createdAt,
       );
 
+  Future<PhotoRecord?> getById(int id) async {
+    final photo = await (database.select(
+      database.photos,
+    )..where((photo) => photo.id.equals(id))).getSingleOrNull();
+    return photo == null ? null : resolveRecord(photo);
+  }
+
   Stream<List<PhotoRecord>> watchAll() =>
       (database.select(database.photos)
             ..orderBy([
