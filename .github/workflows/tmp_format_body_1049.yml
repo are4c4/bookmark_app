@@ -1,0 +1,53 @@
+name: Temporary format Body #1049
+
+on:
+  push:
+    branches:
+      - feature/object-body-document-chrome-1049
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: feature/object-body-document-chrome-1049
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Format Body #1049 Dart files
+        run: |
+          dart format \
+            lib/domain/object_body_editor.dart \
+            lib/features/object/presentation/widgets/object_body_block_action_bar.dart \
+            lib/features/object/presentation/widgets/object_body_block_view.dart \
+            lib/features/object/presentation/widgets/object_body_document_view.dart \
+            lib/features/object/presentation/widgets/object_body_editor_section.dart \
+            test/object_body_block_action_bar_test.dart \
+            test/object_body_block_edit_service_test.dart \
+            test/object_body_block_view_test.dart \
+            test/object_body_editor_section_keyboard_test.dart
+      - name: Commit formatter output
+        run: |
+          if git diff --quiet; then
+            echo "No formatter changes required"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            lib/domain/object_body_editor.dart \
+            lib/features/object/presentation/widgets/object_body_block_action_bar.dart \
+            lib/features/object/presentation/widgets/object_body_block_view.dart \
+            lib/features/object/presentation/widgets/object_body_document_view.dart \
+            lib/features/object/presentation/widgets/object_body_editor_section.dart \
+            test/object_body_block_action_bar_test.dart \
+            test/object_body_block_edit_service_test.dart \
+            test/object_body_block_view_test.dart \
+            test/object_body_editor_section_keyboard_test.dart
+          git commit -m "style: format Body document editing"
+          git push origin HEAD:feature/object-body-document-chrome-1049
