@@ -43,6 +43,8 @@ class ObjectPropertyDefinition {
     this.config = const <String, dynamic>{},
   });
 
+  static const String identityManagedConfigKey = 'identityManaged';
+
   final int id;
   final int objectTypeId;
   final String name;
@@ -73,6 +75,11 @@ class ObjectPropertyDefinition {
   bool get isValue => semantics == ObjectPropertySemantics.value;
   bool get isRelation => semantics == ObjectPropertySemantics.objectRelation;
   bool get isComputed => semantics == ObjectPropertySemantics.computed;
+
+  /// Identity-managed Values are written only through the owning Object
+  /// lifecycle service. Generic detail/property editors must treat them as
+  /// read-only so one field cannot be changed independently of Object identity.
+  bool get isIdentityManaged => config[identityManagedConfigKey] == true;
 
   int? get targetObjectTypeId {
     final value = config['targetObjectTypeId'];
