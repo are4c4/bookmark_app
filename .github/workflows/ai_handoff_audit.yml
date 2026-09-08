@@ -1,0 +1,35 @@
+name: AI Handoff Audit
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ai-handoff-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  handoff-audit:
+    name: handoff-audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Test handoff audit logic
+        run: python3 tool/handoff_pr_guard_test.py
+
+      - name: Audit durable handoff freshness
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          CURRENT_PR_NUMBER: ${{ github.event.pull_request.number }}
+          HANDOFF_STALE_COMMIT_WARN: 20
+        run: python3 tool/handoff_pr_guard.py
