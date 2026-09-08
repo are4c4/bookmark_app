@@ -74,37 +74,6 @@ void main() {
     );
   });
 
-  test('deleting a photo clears profile-photo references and managed files',
-      () async {
-    final photoFile = File('${tempDirectory.path}/photos/photo.jpg');
-    await photoFile.create(recursive: true);
-    await photoFile.writeAsBytes([1, 2, 3]);
-    final backupFile = File('${photoFile.path}.bookmark_original');
-    await backupFile.writeAsBytes([1, 2, 3]);
-
-    final photoId = await database.addPhoto(path: photoFile.path);
-    final storedPhoto = await (database.select(database.photos)
-          ..where((item) => item.id.equals(photoId)))
-        .getSingle();
-    expect(storedPhoto.path, 'photos/photo.jpg');
-
-    final personId = await repository.createPerson('Author');
-    await (database.update(database.people)
-          ..where((person) => person.id.equals(personId)))
-        .write(PeopleCompanion(profilePhotoId: Value(photoId)));
-    final photo = (await repository.watchPhotos().first)
-        .firstWhere((item) => item.id == photoId);
-
-    await repository.deletePhoto(photo);
-
-    final person = await (database.select(database.people)
-          ..where((item) => item.id.equals(personId)))
-        .getSingle();
-    expect(person.profilePhotoId, isNull);
-    expect(await photoFile.exists(), isFalse);
-    expect(await backupFile.exists(), isFalse);
-  });
-
   test('permanent bookmark deletion removes managed attachment files',
       () async {
     final bookmark = await createBookmark();

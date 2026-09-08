@@ -34,4 +34,21 @@ void main() {
     expect(repository, isNot(contains('updatePhoto(')));
     expect(database, isNot(contains('updatePhoto(')));
   });
+
+  test('legacy Photo delete API and ownership policy stay retired', () {
+    final repository = File('lib/data/bookmark_repository.dart')
+        .readAsStringSync();
+    final database = File('lib/data/app_database.dart').readAsStringSync();
+    final canonicalDeletion = File(
+      'lib/services/legacy_photo_image_deletion_service.dart',
+    ).readAsStringSync();
+
+    expect(repository, isNot(contains('deletePhoto(')));
+    expect(database, isNot(contains('deletePhoto(')));
+    expect(
+      File('lib/services/photo_managed_file_deletion_policy.dart').existsSync(),
+      isFalse,
+    );
+    expect(canonicalDeletion, contains('deletePhotoCompatibilityRow('));
+  });
 }
