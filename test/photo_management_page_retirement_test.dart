@@ -25,4 +25,13 @@ void main() {
       );
     }
   });
+
+  test('legacy Photo metadata update APIs stay retired', () {
+    final repository = File('lib/data/bookmark_repository.dart')
+        .readAsStringSync();
+    final database = File('lib/data/app_database.dart').readAsStringSync();
+
+    expect(repository, isNot(contains('updatePhoto(')));
+    expect(database, isNot(contains('updatePhoto(')));
+  });
 }

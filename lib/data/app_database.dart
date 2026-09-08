@@ -269,12 +269,6 @@ class AppDatabase extends _$AppDatabase {
   Future<int> addPhoto({required String path, String? title, String? note, Iterable<String> tagNames = const []}) =>
       into(photos).insert(PhotosCompanion.insert(path: pathResolver.toStoredPath(path), title: Value(title), note: Value(note), tags: Value(_normalizeNamesText(tagNames))));
 
-  Future<void> updatePhoto(int id, {String? title, String? note, Iterable<String>? tagNames}) =>
-      (update(photos)..where((p) => p.id.equals(id))).write(PhotosCompanion(
-        title: Value(title), note: Value(note),
-        tags: tagNames == null ? const Value.absent() : Value(_normalizeNamesText(tagNames)),
-      ));
-
   Future<void> deletePhoto(int id) => transaction(() async {
         await (update(people)..where((person) => person.profilePhotoId.equals(id)))
             .write(const PeopleCompanion(profilePhotoId: Value(null)));
