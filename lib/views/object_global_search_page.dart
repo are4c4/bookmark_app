@@ -36,8 +36,8 @@ class _ObjectGlobalSearchPageState extends State<ObjectGlobalSearchPage> {
   late ObjectGlobalSearchService _searchService;
   final TextEditingController _controller = TextEditingController();
   Timer? _debounce;
-  Timer? _projectionReplayDebounce;
   StreamSubscription<void>? _projectionChangesSubscription;
+  bool _projectionReplayScheduled = false;
   List<ResolvedObjectSearchHit> _results = const <ResolvedObjectSearchHit>[];
   bool _indexing = true;
   bool _searching = false;
@@ -77,7 +77,6 @@ class _ObjectGlobalSearchPageState extends State<ObjectGlobalSearchPage> {
   @override
   void dispose() {
     _debounce?.cancel();
-    _projectionReplayDebounce?.cancel();
     final subscription = _projectionChangesSubscription;
     if (subscription != null) unawaited(subscription.cancel());
     _controller.dispose();
@@ -102,7 +101,6 @@ class _ObjectGlobalSearchPageState extends State<ObjectGlobalSearchPage> {
   }
 
   Future<void> _prepareIndex() async {
-    _projectionReplayDebounce?.cancel();
     if (mounted) {
       setState(() {
         _indexing = true;
@@ -122,23 +120,25 @@ class _ObjectGlobalSearchPageState extends State<ObjectGlobalSearchPage> {
   }
 
   void _scheduleProjectionReplay() {
-    if (!mounted || _indexing || _controller.text.trim().isEmpty) return;
-    _projectionReplayDebounce?.cancel();
-    _projectionReplayDebounce = Timer(
-      const Duration(milliseconds: 40),
-      () {
-        if (!mounted || _indexing) return;
-        final query = _controller.text.trim();
-        if (query.isNotEmpty) unawaited(_search(query));
-      },
-    );
+    if (!mounted ||
+        _indexing ||
+        _controller.text.trim().isEmpty ||
+        _projectionReplayScheduled) {
+      return;
+    }
+    _projectionReplayScheduled = true;
+    scheduleMicrotask(() {
+      _projectionReplayScheduled = false;
+      if (!mounted || _indexing) return;
+      final query = _controller.text.trim();
+      if (query.isNotEmpty) unawaited(_search(query));
+    });
   }
 
   void _onQueryChanged(String value) {
     _debounce?.cancel();
     if (mounted) setState(() {});
     if (value.trim().isEmpty) {
-      _projectionReplayDebounce?.cancel();
       setState(() {
         _results = const <ResolvedObjectSearchHit>[];
         _searching = false;
