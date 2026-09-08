@@ -75,4 +75,80 @@ void main() {
         tester.widget<EditableText>(find.byType(EditableText).at(1));
     expect(secondEditable.focusNode.hasFocus, isTrue);
   });
+
+  testWidgets(
+      'Backspace merges persisted paragraphs and focuses the previous caret',
+      (tester) async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final store = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(store);
+    final objectTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Note',
+    );
+    final objectId = await objectStore.createObject(
+      objectTypeId: objectTypeId,
+      title: 'Keyboard Merge Body',
+    );
+    final bodyStore = ObjectBodyStore(store);
+    await bodyStore.write(
+      objectId: objectId,
+      document: const ObjectBodyDocument(
+        blocks: <ObjectBodyBlock>[
+          ObjectBodyBlock(
+            id: 'paragraph-1',
+            type: 'paragraph',
+            text: 'hello ',
+          ),
+          ObjectBodyBlock(
+            id: 'paragraph-2',
+            type: 'paragraph',
+            text: 'world',
+          ),
+        ],
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ObjectBodyEditorSection(
+            store: store,
+            objectStore: objectStore,
+            objectId: objectId,
+            workspaceId: workspaceId,
+            showHeading: false,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TextField), findsNWidgets(2));
+    await tester.tap(find.byType(TextField).at(1));
+    await tester.pump();
+    final secondEditable =
+        tester.widget<EditableText>(find.byType(EditableText).at(1));
+    secondEditable.controller.selection =
+        const TextSelection.collapsed(offset: 0);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+    await tester.pumpAndSettle();
+
+    final stored = await bodyStore.read(objectId);
+    expect(stored.blocks, hasLength(1));
+    expect(stored.blocks.single.id, 'paragraph-1');
+    expect(stored.blocks.single.text, 'hello world');
+    expect(find.byType(TextField), findsOneWidget);
+
+    final mergedEditable =
+        tester.widget<EditableText>(find.byType(EditableText));
+    expect(mergedEditable.focusNode.hasFocus, isTrue);
+    expect(
+      mergedEditable.controller.selection,
+      const TextSelection.collapsed(offset: 6),
+    );
+  });
 }
