@@ -33,6 +33,37 @@ class ObjectBodyEditor {
     return document.copyWith(blocks: List.unmodifiable(next));
   }
 
+  /// Splits one paragraph at [offset] and inserts a new paragraph immediately
+  /// after it without rewriting any unrelated block payload.
+  ObjectBodyDocument splitParagraph({
+    required ObjectBodyDocument document,
+    required String blockId,
+    required String newBlockId,
+    required int offset,
+  }) {
+    _assertUniqueId(document, newBlockId);
+    final index = _indexOf(document, blockId);
+    final block = document.blocks[index];
+    if (block.type != 'paragraph') {
+      throw StateError('Object Body block $blockId is not a paragraph.');
+    }
+    final text = block.text ?? '';
+    if (offset < 0 || offset > text.length) {
+      throw RangeError.range(offset, 0, text.length, 'offset');
+    }
+
+    final next = List<ObjectBodyBlock>.of(document.blocks);
+    next[index] = block.copyWith(text: text.substring(0, offset));
+    next.insert(
+      index + 1,
+      ObjectBodyBlock.paragraph(
+        id: newBlockId,
+        text: text.substring(offset),
+      ),
+    );
+    return document.copyWith(blocks: List.unmodifiable(next));
+  }
+
   ObjectBodyDocument removeBlock({
     required ObjectBodyDocument document,
     required String blockId,
