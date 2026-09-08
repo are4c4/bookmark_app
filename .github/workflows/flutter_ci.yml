@@ -9,6 +9,10 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  contents: read
+  pull-requests: read
+
 concurrency:
   group: flutter-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -26,6 +30,18 @@ jobs:
 
       - name: Developer check script syntax
         run: bash -n tool/check_format.sh tool/check_fast.sh tool/check_full.sh
+
+      - name: Developer workflow diagnostic tests
+        run: |
+          python3 tool/shared_hotspot_conflict_guard_test.py
+          python3 tool/report_test_health_test.py
+
+      - name: Shared hotspot overlap audit
+        if: github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          CURRENT_PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: python3 tool/shared_hotspot_conflict_guard.py
 
       - name: Maintainability guardrail tests
         run: |
@@ -121,37 +137,131 @@ jobs:
           echo "elapsed-seconds=$SECONDS" >> "$GITHUB_OUTPUT"
           exit "$status"
 
-      - name: Report CI shard timing
-        if: always()
+      - name: Rerun failed shard once for flake diagnosis
+        id: flutter-test-rerun
+        if: ${{ failure() && steps.flutter-test.outcome == 'failure' }}
+        timeout-minutes: 18
         run: |
+          set -o pipefail
+          mkdir -p ci-artifacts
+          SECONDS=0
+          set +e
+          flutter test \
+            --timeout 2m \
+            --reporter expanded \
+            --total-shards 4 \
+            --shard-index ${{ matrix.shard }} \
+            2>&1 | tee ci-artifacts/flutter-test-shard-${{ matrix.shard }}-rerun.log
+          status=$?
+          set -e
+          echo "elapsed-seconds=$SECONDS" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+      - name: Record test shard health
+        if: always()
+        env:
+          SHARD: ${{ matrix.shard }}
+          FIRST_OUTCOME: ${{ steps.flutter-test.outcome }}
+          RERUN_OUTCOME: ${{ steps.flutter-test-rerun.outcome }}
+          TEST_ELAPSED: ${{ steps.flutter-test.outputs.elapsed-seconds }}
+          RERUN_ELAPSED: ${{ steps.flutter-test-rerun.outputs.elapsed-seconds }}
+          DRIFT_CACHE_HIT: ${{ steps.drift-generated-cache.outputs.cache-hit }}
+        run: |
+          mkdir -p ci-artifacts
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          elapsed_raw = os.environ.get('TEST_ELAPSED', '')
+          elapsed = int(elapsed_raw) if elapsed_raw.isdigit() else 0
+          rerun = os.environ.get('RERUN_OUTCOME') or 'skipped'
+          payload = {
+              'shard': int(os.environ['SHARD']),
+              'elapsed_seconds': elapsed,
+              'first_outcome': os.environ.get('FIRST_OUTCOME') or 'unknown',
+              'rerun_outcome': rerun,
+          }
+          Path(f"ci-artifacts/test-timing-{payload['shard']}.json").write_text(
+              json.dumps(payload, sort_keys=True), encoding='utf-8'
+          )
+          PY
+          if [[ "${FIRST_OUTCOME:-}" == "failure" && "${RERUN_OUTCOME:-}" == "success" ]]; then
+            echo "::warning title=Flaky Flutter test shard::Shard ${SHARD} failed first pass and passed an identical rerun; the original failure still keeps CI red."
+          fi
           {
             echo '## Flutter Test shard ${{ matrix.shard }} of 4 timing'
             echo
             echo '- Drift generated cache hit: `${{ steps.drift-generated-cache.outputs.cache-hit }}`'
-            echo '- Flutter Test elapsed: `${{ steps.flutter-test.outputs.elapsed-seconds || 'not-run' }}s`'
+            echo '- First pass: `${{ steps.flutter-test.outcome }}` in `${{ steps.flutter-test.outputs.elapsed-seconds || 'not-run' }}s`'
+            echo '- Diagnostic rerun: `${{ steps.flutter-test-rerun.outcome || 'skipped' }}` in `${{ steps.flutter-test-rerun.outputs.elapsed-seconds || 'not-run' }}s`'
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Upload test shard timing
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-test-timing-${{ github.run_id }}-${{ github.run_attempt }}-shard-${{ matrix.shard }}
+          path: ci-artifacts/test-timing-${{ matrix.shard }}.json
+          if-no-files-found: warn
+          retention-days: 1
+
       - name: Summarize Flutter test failure
-        if: ${{ failure() && steps.flutter-test.outcome == 'failure' }}
+        if: ${{ always() && steps.flutter-test.outcome == 'failure' }}
         run: |
           {
             echo '## Flutter Test shard ${{ matrix.shard }} of 4 failure'
             echo
-            echo 'Last 200 log lines:'
+            echo '- First pass outcome: `${{ steps.flutter-test.outcome }}`'
+            echo '- Diagnostic rerun outcome: `${{ steps.flutter-test-rerun.outcome || 'not-run' }}`'
+            echo
+            echo 'First-pass last 120 log lines:'
             echo
             echo '```text'
-            tail -n 200 ci-artifacts/flutter-test-shard-${{ matrix.shard }}.log
+            tail -n 120 ci-artifacts/flutter-test-shard-${{ matrix.shard }}.log
             echo '```'
+            if [[ -f ci-artifacts/flutter-test-shard-${{ matrix.shard }}-rerun.log ]]; then
+              echo
+              echo 'Rerun last 120 log lines:'
+              echo
+              echo '```text'
+              tail -n 120 ci-artifacts/flutter-test-shard-${{ matrix.shard }}-rerun.log
+              echo '```'
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload Flutter test diagnostics
-        if: ${{ failure() && steps.flutter-test.outcome == 'failure' }}
+        if: ${{ always() && steps.flutter-test.outcome == 'failure' }}
         uses: actions/upload-artifact@v4
         with:
           name: flutter-test-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}-shard-${{ matrix.shard }}
-          path: ci-artifacts/flutter-test-shard-${{ matrix.shard }}.log
+          path: ci-artifacts/flutter-test-shard-${{ matrix.shard }}*.log
           if-no-files-found: warn
           retention-days: 7
+
+  test-health:
+    name: test-health
+    if: always()
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Download shard timings
+        uses: actions/download-artifact@v4
+        with:
+          pattern: flutter-test-timing-${{ github.run_id }}-${{ github.run_attempt }}-shard-*
+          path: ci-artifacts
+          merge-multiple: true
+
+      - name: Report Flutter Test health
+        env:
+          EXPECTED_TEST_SHARDS: 4
+          TEST_SHARD_SKEW_WARN: 1.25
+          TEST_SHARD_WALL_WARN_SECONDS: 360
+        run: python3 tool/report_test_health.py --directory ci-artifacts
 
   build-macos:
     name: build-macos-release
