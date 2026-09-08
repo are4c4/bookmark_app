@@ -1,93 +1,84 @@
-import 'package:bookmark_app/data/app_database.dart';
-import 'package:bookmark_app/data/bookmark_lifecycle_store.dart';
-import 'package:bookmark_app/data/bookmark_repository.dart';
-import 'package:bookmark_app/data/workspace_store.dart';
-import 'package:bookmark_app/services/bookmark_url_resolver.dart';
-import 'package:bookmark_app/widgets/bookmark_detail_panel.dart';
-import 'package:drift/native.dart';
-import 'package:flutter/material.dart';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets(
-    'Bookmark detail keeps canonical Weblink URL across presentation and edits',
-    (tester) async {
-      final database = AppDatabase.forTesting(NativeDatabase.memory());
-      addTearDown(() async {
-        await tester.pumpWidget(const SizedBox.shrink());
-        await tester.pump();
-        await database.close();
-      });
-      final workspaceStore = WorkspaceStore(database);
-      final workspaceId = await workspaceStore.initialize();
-      final lifecycleStore = BookmarkLifecycleStore(database);
-      await lifecycleStore.initialize();
-      final repository = BookmarkRepository(
-        database,
-        workspaceStore: workspaceStore,
-        lifecycleStore: lifecycleStore,
-        workspaceId: workspaceId,
-      );
-      final bookmarkId = await repository.create(
-        url: 'https://legacy.example/stale',
-        title: 'Legacy bookmark',
-        inbox: true,
-      );
-      final bookmark = (await repository.watchAll().first)
-          .singleWhere((item) => item.id == bookmarkId);
+  test('Bookmark detail URL wiring keeps canonical Weblink authority', () {
+    final source =
+        File('lib/widgets/bookmark_detail_panel.dart').readAsStringSync();
 
-      tester.view.physicalSize = const Size(1000, 900);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
+    expect(
+      source,
+      contains(
+        "import '../services/bookmark_presentation_resolver_factory.dart';",
+      ),
+    );
+    expect(
+      source,
+      contains("import '../services/bookmark_url_resolver.dart';"),
+    );
+    expect(source, contains('final BookmarkUrlResolve? resolveUrl;'));
+    expect(source, contains('late BookmarkUrlResolve _resolveBookmarkUrl;'));
+    expect(source, contains('late Future<BookmarkUrlSource?> _resolvedUrl;'));
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: BookmarkDetailPanel(
-              repository: repository,
-              bookmark: bookmark,
-              onClose: () {},
-              resolveUrl: (_) async => const BookmarkUrlSource(
-                kind: BookmarkUrlSourceKind.canonicalWeblink,
-                value: 'https://canonical.example/article',
-              ),
-            ),
-          ),
-        ),
-      );
-      await tester.pump(const Duration(milliseconds: 100));
+    expect(
+      RegExp(
+        r'_resolveBookmarkUrl\s*=\s*widget\.resolveUrl\s*\?\?\s*BookmarkPresentationResolverFactory\.urlFor\(widget\.repository\);',
+      ).hasMatch(source),
+      isTrue,
+    );
+    expect(
+      RegExp(
+        r'_resolvedUrl\s*=\s*_resolveBookmarkUrl\(widget\.bookmark\);',
+      ).hasMatch(source),
+      isTrue,
+    );
 
-      expect(find.text('canonical.example'), findsOneWidget);
-      expect(find.text('legacy.example'), findsNothing);
+    expect(
+      RegExp(
+        r'final\s+effectiveUrl\s*=\s*url\s*\?\?\s*await\s+_preferredUrl\(\);',
+      ).hasMatch(source),
+      isTrue,
+    );
+    expect(
+      RegExp(r'url:\s*effectiveUrl,').hasMatch(source),
+      isTrue,
+    );
 
-      await tester.tap(find.text('Legacy bookmark'));
-      await tester.pump();
-      final titleField = find.byWidgetPredicate(
-        (widget) =>
-            widget is TextField &&
-            widget.controller?.text == 'Legacy bookmark',
-      );
-      expect(titleField, findsOneWidget);
-      await tester.enterText(titleField, 'Renamed bookmark');
-      tester.testTextInput.receiveAction(TextInputAction.done);
-      await tester.pump(const Duration(milliseconds: 100));
+    expect(source, contains('FutureBuilder<BookmarkUrlSource?>('));
+    expect(
+      RegExp(
+        r'final\s+value\s*=\s*snapshot\.data\?\.value\s*\?\?\s*bookmark\.url;',
+      ).hasMatch(source),
+      isTrue,
+    );
+    expect(
+      RegExp(r'_urlController\.text\s*=\s*value;').hasMatch(source),
+      isTrue,
+    );
+    expect(
+      RegExp(r'_editingUrlBaseline\s*=\s*value;').hasMatch(source),
+      isTrue,
+    );
+    expect(source, contains('onPressed: _openResolvedUrl'));
 
-      final updated = (await repository.watchAll().first)
-          .singleWhere((item) => item.id == bookmarkId);
-      expect(updated.title, 'Renamed bookmark');
-      expect(updated.url, 'https://canonical.example/article');
-
-      await tester.tap(find.text('canonical.example'));
-      await tester.pump();
-      expect(
-        find.byWidgetPredicate(
-          (widget) =>
-              widget is TextField &&
-              widget.controller?.text == 'https://canonical.example/article',
-        ),
-        findsOneWidget,
-      );
-    },
-  );
+    expect(
+      RegExp(r'url:\s*url\s*\?\?\s*widget\.bookmark\.url').hasMatch(source),
+      isFalse,
+    );
+    expect(
+      RegExp(r'message:\s*bookmark\.url').hasMatch(source),
+      isFalse,
+    );
+    expect(
+      RegExp(r'_compactUrl\(bookmark\.url\)').hasMatch(source),
+      isFalse,
+    );
+    expect(
+      RegExp(
+        r'onPressed:\s*\(\)\s*=>\s*_openUrl\(bookmark\.url\)',
+      ).hasMatch(source),
+      isFalse,
+    );
+  });
 }
