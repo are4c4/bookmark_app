@@ -53,6 +53,15 @@ class VaultPreservationManifestTest(unittest.TestCase):
             )
             self.assertEqual(len(files["photos/image.bin"]["sha256"]), 64)
 
+    def test_snapshot_rejects_invalid_vault_metadata(self):
+        with tempfile.TemporaryDirectory() as directory:
+            vault = make_vault(Path(directory))
+            metadata = json.loads((vault / "profile.json").read_text(encoding="utf-8"))
+            metadata["database"] = "elsewhere.sqlite"
+            (vault / "profile.json").write_text(json.dumps(metadata), encoding="utf-8")
+            with self.assertRaisesRegex(manifest.ManifestError, "Vault v1 metadata"):
+                manifest.snapshot_vault(vault)
+
     def test_compare_accepts_unchanged_managed_content(self):
         with tempfile.TemporaryDirectory() as directory:
             vault = make_vault(Path(directory))
