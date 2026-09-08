@@ -15,7 +15,7 @@ Core product direction:
 ## Repository position — 2026-09-08
 The generic composition architecture is proven in production code. Remaining work is primarily Photo -> Image / Weblink convergence, maintainability/caller-zero retirement, final Vault real-machine validation, and usage-driven daily-use finishing.
 
-Completed focused milestones now include #249, #414, #481, #484, #489, #490, #491, #492, #493, #494, #495, #501, #877, #888, #895, #896, #897, #909 and #218.
+Completed focused milestones now include #249, #414, #481, #484, #489, #490, #491, #492, #493, #494, #495, #501, #877, #888, #895, #896, #897, #909, #920 and #218.
 
 Recent integration proof:
 - #856 (`7e103a02…`) proves Bookmark-like behavior can be expressed through user-owned template/Object/Relation/Database/View configuration rather than a new Bookmark-only persistence model.
@@ -25,9 +25,10 @@ Recent integration proof:
 - #889 (`fcd0eb34…`) routes legacy Photo Management “add to Bookmark” through the same canonical Bookmark Image Relation authority.
 - #892 (`94b3833106683745291470732331aef3d28d66d5`) routes Bookmark creation Photo selection through canonical Image Relations.
 - #895 / PR #922 (`bc09381b9eb77dee6b4ef12a94e7b9c06bc86c36`) hardens those Bookmark Image Relation writers with strict stored-value/index/target/cardinality mutation preflight and rollback-safe compatibility projection; Flutter CI #2793 Analyze + full Test green.
-- #896 is completed: canonical Images receive a useful shared default Gallery View without resetting user customization.
+- #896 / PR #908 (`12994803b043c9da54da8c3175877512119d368b`) makes canonical Images seed a shared masonry/direct-Image Gallery only when zero Views exist and never resets user customization; Flutter CI #2750 full green.
 - #897 is completed: legacy Photo physical deletion is constrained to proven active-Vault managed ownership and fails closed on external/ambiguous paths.
 - #909 / PR #923 (`03acb81633031cb833975196b29f66947d9de747`) provides exact Search-agnostic canonical Object impact from live mirror sync while preserving initial non-notifying bootstrap and callback failure isolation; Flutter CI #2795 full green.
+- #920 / PR #925 (`b8646d370035940222921d49ba1812a78d056523`) makes canonical Weblinks seed a shared first-run List View only when zero Views exist, preserving later user rename/layout/settings across reopen; Flutter CI #2789 full green.
 - #218 is completed after real-Mac release launch/data-preservation validation.
 
 ## Active architecture/product issues
@@ -65,12 +66,20 @@ The integrated #909 contract reports only canonical Object ids whose semantic pe
 The #895 completion contract is now part of the canonical Relation boundary: integrity-sensitive Bookmark Image mutations re-read fresh state using shared strict preflight, reject malformed/duplicate/missing/wrong-type/cardinality/index drift without repair, and keep canonical Relation writes plus `bookmark_photos` compatibility projection atomic. See `docs/AI_PROGRESS_RELATION.md`.
 
 ### C — Database, View & Schema UX
-#896 is **completed/closed**. Canonical Images now have a useful shared default Gallery View through normal Database/View configuration while preserving user customization. Lane C should be considered idle unless live #56/#245 usage exposes a new Database/View/schema UX defect.
+#896 and #920 are **completed/closed**.
+
+Canonical system collections now use ordinary persisted View configuration for first-use defaults:
+- Images -> shared masonry Gallery + direct Image cover only when zero Views exist;
+- Weblinks -> shared List only when zero Views exist;
+- any existing View wins unchanged, preserving user rename/layout/settings;
+- ordinary custom ObjectTypes retain normal Database definition/default behavior.
+
+Lane C is **idle by design** until live #56/#155/#245 usage exposes a new concrete Database/View/schema/template UX defect. Do not invent speculative View abstractions merely to keep the lane active.
 
 ### D — Primitive Objects & Media
 Primary active Issues remain **#155 and #245**.
 
-Recent Image migration checkpoints include canonical Bookmark detail/photo-management/create Image Relation writes (#881/#889/#892), #895 integrity hardening, #896 default Images Gallery UX, and #897 Vault-safe legacy Photo deletion. Continue canonical Image write/presentation parity and retire Photo-only callers only after replacement parity and safety are demonstrated.
+Recent Image migration checkpoints include canonical Bookmark detail/photo-management/create Image Relation writes (#881/#889/#892), #895 integrity hardening, #896 default Images Gallery UX, and #897 Vault-safe legacy Photo deletion. Continue canonical Image write/presentation parity and retire Photo-only callers only after replacement parity and safety are demonstrated. #920 gives Weblinks a useful shared default List without moving Weblink identity/metadata/media semantics into Lane C.
 
 ### E — Search & Indexing
 No open Search-owned Issue is present in the current live Issue audit. Preserve focused Search-owned refresh rather than routine full-workspace rebuilds. The #909 canonical Object-sync impact contract is now available as a Search-agnostic invalidation input when future live-mirror Search work needs it.
@@ -93,6 +102,7 @@ No open Search-owned Issue is present in the current live Issue audit. Preserve 
 - Weblink is a reusable canonical Object with normalized URL identity, enrichment and managed Image Relations.
 - Bookmark detail, Photo Management attachment and Bookmark creation write image selection through canonical Image Relations (#881/#889/#892); #895 prevents corrupt canonical state or compatibility sync from silently overwriting those Relations.
 - Canonical Images have shared default Gallery configuration (#896) while retaining normal View customization.
+- Canonical Weblinks have a shared default List configuration (#920) while retaining normal View customization and shared `SystemObjectListMedia` rendering.
 - Legacy Photo physical deletion is Vault-safe (#897); external/ambiguous files are preserved.
 - Live Object mirror sync can report exact semantic canonical Object impact without Search dependencies (#909).
 - Image and File remain distinct built-in primitives while sharing managed-file/Vault infrastructure.
@@ -140,7 +150,7 @@ At the latest audit there is no open PR, so no repository-wide hotspot lease is 
 - Follow `AGENTS.md` autonomous-loop, lane ownership and stopping criteria.
 - Do not manufacture no-op/whitespace/temp commits to trigger CI; use workflow rerun controls or the next meaningful change.
 - Always re-read live GitHub state before implementation; handoff files are durable checkpoints, not substitutes for current Issues/PRs/CI.
-- Idle is correct when no concrete work exists. Lanes A/B/C are currently idle after #909/#895/#896 until new concrete triggers appear; D and G retain active repository implementation work, while F #242 is manual-validation gated.
+- Idle is correct when no concrete work exists. Lanes A/B/C are currently idle after #909/#895/#896/#920 until new concrete triggers appear; D and G retain active repository implementation work, while F #242 is manual-validation gated.
 
 ## Known risks
 - legacy Bookmark URL/thumbnail/Photo compatibility data remains live while old callers still consume it;
