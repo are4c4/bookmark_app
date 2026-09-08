@@ -1,7 +1,6 @@
 import 'package:drift/drift.dart';
 
 import '../domain/object_model.dart';
-import '../domain/object_property_management.dart';
 import '../domain/object_type_defaults.dart';
 import 'generic_database_store.dart';
 import 'object_store.dart';
@@ -80,7 +79,7 @@ class DailyNoteService {
           type: dateProperty.storageType,
           config: <String, dynamic>{
             ...dateProperty.config,
-            objectPropertyIdentityManagedConfigKey: true,
+            ObjectPropertyDefinition.identityManagedConfigKey: true,
           },
           sortOrder: dateProperty.sortOrder,
         ),
