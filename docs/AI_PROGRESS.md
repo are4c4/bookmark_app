@@ -38,6 +38,9 @@ Durable repository-wide routing centers on these architecture/product Issues; fo
 - `#225` — maintainability, hotspot reduction and legacy-path retirement.
 - `#242` — Vault/storage lifecycle; production implementation complete, final real-macOS Create/Open/Switch/Move/Recovery validation remains.
 - `#245` — legacy Photos -> canonical Image Objects.
+- `#949` — Lane C child of #245: make canonical Images the single normal user-facing image collection/navigation surface.
+- `#941` — Lane D Image Inspector parity; current product dependency for #949 final Photo-navigation retirement.
+- `#999` — Lane G changed-Dart format-guard correction; current tooling dependency for Lane C PR #997.
 
 Open PR and hotspot ownership are time-sensitive and are intentionally not frozen as repository-wide handoff state. Re-check live PRs and diffs immediately before starting work.
 
@@ -66,20 +69,27 @@ The integrated #909 contract reports only canonical Object ids whose semantic pe
 The #895 completion contract is now part of the canonical Relation boundary: integrity-sensitive Bookmark Image mutations re-read fresh state using shared strict preflight, reject malformed/duplicate/missing/wrong-type/cardinality/index drift without repair, and keep canonical Relation writes plus `bookmark_photos` compatibility projection atomic. See `docs/AI_PROGRESS_RELATION.md`.
 
 ### C — Database, View & Schema UX
-#896 and #920 are **completed/closed**.
+#896 and #920 are **completed/closed**. Lane C is now **active on #949** because the live Photo -> Image migration exposed a concrete generic navigation parity obligation.
 
-Canonical system collections now use ordinary persisted View configuration for first-use defaults:
+Canonical system collections still use ordinary persisted View configuration for first-use defaults:
 - Images -> shared masonry Gallery + direct Image cover only when zero Views exist;
 - Weblinks -> shared List only when zero Views exist;
 - any existing View wins unchanged, preserving user rename/layout/settings;
 - ordinary custom ObjectTypes retain normal Database definition/default behavior.
 
-Lane C is **idle by design** until live #56/#155/#245 usage exposes a new concrete Database/View/schema/template UX defect. Do not invent speculative View abstractions merely to keep the lane active.
+Current C work:
+- draft PR #997 adds persisted generic Databases, including canonical `画像`, to the existing ⌘K command palette and routes them through `GenericDatabasePage` rather than Image-specific navigation;
+- #997 is intentionally blocked by #999 because the new changed-Dart format guard currently forces broad unrelated formatting of pre-existing `app_shell.dart` drift;
+- final removal of the legacy user-facing `写真` AppShell destination waits for #941 Image Inspector parity; underlying Photo data/compatibility code must remain intact, with caller-zero deletion left to Lane G.
+
+Do not treat this as a reason to invent broader Database/View abstractions; #949 is a focused navigation/convergence slice only.
 
 ### D — Primitive Objects & Media
 Primary active Issues remain **#155 and #245**.
 
-Recent Image migration checkpoints include canonical Bookmark detail/photo-management/create Image Relation writes (#881/#889/#892), #895 integrity hardening, #896 default Images Gallery UX, and #897 Vault-safe legacy Photo deletion. Continue canonical Image write/presentation parity and retire Photo-only callers only after replacement parity and safety are demonstrated. #920 gives Weblinks a useful shared default List without moving Weblink identity/metadata/media semantics into Lane C.
+Recent Image migration checkpoints include canonical Bookmark detail/photo-management/create Image Relation writes (#881/#889/#892), #895 integrity hardening, #896 default Images Gallery UX, #897 Vault-safe legacy Photo deletion, and completed People profile-Image migration #948. #941 now owns the remaining canonical Image preview/edit composition in the shared Object Inspector. Its existing branch contains focused test and production composition commits but still needs current-main refresh, PR/CI integration and Issue closure before Lane C may retire legacy `写真` navigation.
+
+Continue canonical Image write/presentation parity and retire Photo-only callers only after replacement parity and safety are demonstrated. #920 gives Weblinks a useful shared default List without moving Weblink identity/metadata/media semantics into Lane C.
 
 ### E — Search & Indexing
 No open Search-owned Issue is present in the current live Issue audit. Preserve focused Search-owned refresh rather than routine full-workspace rebuilds. The #909 canonical Object-sync impact contract is now available as a Search-agnostic invalidation input when future live-mirror Search work needs it.
@@ -89,6 +99,8 @@ No open Search-owned Issue is present in the current live Issue audit. Preserve 
 
 ### G — Refactor & Architecture Health
 #225 remains active. Keep product behavior changes out of Refactor work and retire legacy/shim paths only after the owning product lane proves replacement parity.
+
+#999 is a focused tooling-health child currently blocking #997: changed-Dart format enforcement must stay authoritative for new/changed code without forcing unrelated historical formatter churn across a touched shared hotspot. Do not solve it by broad-formatting product hosts or weakening Analyze/full Test coverage.
 
 ## Major integrated state
 - Object/ObjectType/Database/View foundations are live in real hosts.
@@ -113,9 +125,9 @@ No open Search-owned Issue is present in the current live Issue audit. Preserve 
 
 ## Remaining product edge
 Highest-value live work:
-1. **#245 Photo -> Image** — finish canonical Image presentation/write parity, migrate remaining Bookmark/People/Photo consumers, then hide/retire legacy `写真` only after caller parity.
+1. **#245 Photo -> Image** — finish #941 Image Inspector parity, integrate Lane C #949/PR #997 generic navigation, then make canonical `画像` the single normal user-facing image collection while preserving legacy compatibility data.
 2. **#155 Weblink convergence** — finish generic rich Weblink/Image presentation and retire remaining Bookmark URL/thumbnail compatibility only after caller-zero proof.
-3. **#225 Refactor** — delete superseded shims/legacy paths after replacement parity.
+3. **#225 Refactor** — resolve #999 tooling behavior and delete superseded shims/legacy paths only after replacement parity.
 4. **#242 validation** — final real-macOS Vault Create/Open/Switch/Move/Recovery preservation checks.
 5. **#56 usage-driven finishing** — create focused follow-ups only for demonstrated daily-use gaps.
 
@@ -150,7 +162,7 @@ Do not infer hotspot availability from this handoff. Open PRs and ownership leas
 - Follow `AGENTS.md` autonomous-loop, lane ownership and stopping criteria.
 - Do not manufacture no-op/whitespace/temp commits to trigger CI; use workflow rerun controls or the next meaningful change.
 - Always re-read live GitHub state before implementation; handoff files are durable checkpoints, not substitutes for current Issues/PRs/CI.
-- Idle is correct when no concrete work exists. Lanes A/B/C are currently idle after #909/#895/#896/#920 until new concrete triggers appear; D and G retain active repository implementation work, while F #242 is manual-validation gated.
+- Idle is correct when no concrete work exists. Lanes A/B are currently idle after #909/#895; Lane C is active on #949 but presently dependency-gated by #999 for PR #997 and #941 for final navigation retirement; D and G retain active repository implementation work, while F #242 is manual-validation gated.
 
 ## Known risks
 - legacy Bookmark URL/thumbnail/Photo compatibility data remains live while old callers still consume it;
