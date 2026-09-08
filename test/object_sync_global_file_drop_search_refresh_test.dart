@@ -1,0 +1,252 @@
+import 'dart:async';
+
+import 'package:bookmark_app/data/app_database.dart';
+import 'package:bookmark_app/data/core_object_bridge.dart';
+import 'package:bookmark_app/data/generic_database_store.dart';
+import 'package:bookmark_app/data/weblink_object_service.dart';
+import 'package:bookmark_app/data/workspace_store.dart';
+import 'package:bookmark_app/domain/object_model.dart';
+import 'package:bookmark_app/repositories/object_global_search_service.dart';
+import 'package:bookmark_app/services/object_sync_service.dart';
+import 'package:drift/drift.dart';
+import 'package:drift/native.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  test(
+    'watcher mirror after Search rebuild refreshes dropped Bookmark and Weblink',
+    () async {
+      final database = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(database.close);
+      final workspaceId = await WorkspaceStore(database).initialize();
+      final genericStore = GenericDatabaseStore(database);
+      final search = ObjectGlobalSearchService(genericStore);
+      final refreshed = Completer<List<int>>();
+      var mutationStarted = false;
+
+      final sync = ObjectSyncService(
+        database,
+        onCanonicalObjectsMirrored: (objectIds) async {
+          final ids = objectIds.toSet().toList()..sort();
+          await search.refreshObjectLabelDependentsFor(ids);
+          if (mutationStarted && !refreshed.isCompleted) {
+            refreshed.complete(ids);
+          }
+        },
+      );
+      addTearDown(sync.dispose);
+
+      // Production ordering: the live mirror is active and Global Search has
+      // already rebuilt before the app-wide drop surface mutates legacy data.
+      await sync.syncWorkspace(workspaceId);
+      await search.rebuildWorkspace(workspaceId);
+      expect(
+        await search.search(
+          workspaceId: workspaceId,
+          rawQuery: 'dropfreshobject',
+        ),
+        isEmpty,
+      );
+
+      mutationStarted = true;
+      await database.customStatement(
+        '''INSERT INTO bookmarks(url, title)
+           VALUES (?, ?)''',
+        <Object>[
+          'local-file://drop/DropFreshObject.pdf',
+          'DropFreshObject',
+        ],
+      );
+      final bookmarkId = (await database.customSelect(
+        'SELECT id FROM bookmarks ORDER BY id DESC LIMIT 1',
+      ).getSingle())
+          .read<int>('id');
+      await database.customStatement(
+        'INSERT INTO bookmark_workspace(bookmark_id, workspace_id) VALUES (?, ?)',
+        <Object>[bookmarkId, workspaceId],
+      );
+
+      final impacted = await refreshed.future.timeout(const Duration(seconds: 3));
+
+      final bookmarkType = (await sync.systemObjectStore.getSystemObjectType(
+        workspaceId: workspaceId,
+        systemKey: CoreObjectBridge.bookmarkSystemKey,
+      ))!;
+      final weblinkType = (await sync.systemObjectStore.getSystemObjectType(
+        workspaceId: workspaceId,
+        systemKey: WeblinkObjectService.systemKey,
+      ))!;
+      final bookmark =
+          (await sync.objectStore.listObjects(bookmarkType.id)).single;
+      final weblink = (await sync.objectStore.listObjects(weblinkType.id)).single;
+
+      expect(impacted, contains(bookmark.id));
+      expect(impacted, contains(weblink.id));
+
+      final hits = await search.search(
+        workspaceId: workspaceId,
+        rawQuery: 'dropfreshobject',
+      );
+      expect(
+        hits.map((hit) => hit.object.id),
+        contains(bookmark.id),
+        reason:
+            'the debounced legacy mirror must add the canonical Bookmark FTS row while Search stays mounted',
+      );
+      expect(
+        hits.map((hit) => hit.object.id),
+        contains(weblink.id),
+        reason:
+            'the same focused mirror impact must add the reusable Weblink FTS row without a workspace rebuild',
+      );
+    },
+  );
+
+  test('same-workspace mirror deletion removes the previous canonical FTS row',
+      () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+
+    await database.customStatement(
+      '''INSERT INTO bookmarks(url, title)
+         VALUES (?, ?)''',
+      <Object>[
+        'local-file://drop/DeleteFreshObject.pdf',
+        'DeleteFreshObject',
+      ],
+    );
+    final legacyBookmarkId = (await database.customSelect(
+      'SELECT id FROM bookmarks ORDER BY id DESC LIMIT 1',
+    ).getSingle())
+        .read<int>('id');
+    await database.customStatement(
+      'INSERT INTO bookmark_workspace(bookmark_id, workspace_id) VALUES (?, ?)',
+      <Object>[legacyBookmarkId, workspaceId],
+    );
+
+    final genericStore = GenericDatabaseStore(database);
+    final search = ObjectGlobalSearchService(genericStore);
+    final impacts = <List<int>>[];
+    final sync = ObjectSyncService(
+      database,
+      onCanonicalObjectsMirrored: (objectIds) async {
+        final ids = objectIds.toSet().toList()..sort();
+        impacts.add(ids);
+        await search.refreshObjectLabelDependentsFor(ids);
+      },
+    );
+    addTearDown(sync.dispose);
+
+    await sync.syncWorkspace(workspaceId);
+    final bookmarkType = (await sync.systemObjectStore.getSystemObjectType(
+      workspaceId: workspaceId,
+      systemKey: CoreObjectBridge.bookmarkSystemKey,
+    ))!;
+    final bookmark =
+        (await sync.objectStore.listObjects(bookmarkType.id)).single;
+    await search.rebuildWorkspace(workspaceId);
+
+    final indexedBefore = await database.customSelect(
+      '''SELECT COUNT(*) AS count
+         FROM object_search_fts
+         WHERE CAST(object_id AS INTEGER) = ?''',
+      variables: [Variable<int>(bookmark.id)],
+    ).getSingle();
+    expect(indexedBefore.read<int>('count'), 1);
+
+    impacts.clear();
+    await database.customStatement(
+      'DELETE FROM bookmarks WHERE id = ?',
+      <Object>[legacyBookmarkId],
+    );
+
+    // Re-entering sync for an already-watched workspace is the same public
+    // completion path used by live mirror work, but unlike waiting on debounce
+    // it is deterministic for this previous-snapshot cleanup invariant.
+    await sync.syncWorkspace(workspaceId);
+
+    expect(impacts, isNotEmpty);
+    expect(
+      impacts.any((ids) => ids.contains(bookmark.id)),
+      isTrue,
+      reason:
+          'the previous mirror snapshot must carry deleted canonical ids into focused invalidation',
+    );
+    expect(await sync.objectStore.listObjects(bookmarkType.id), isEmpty);
+
+    final indexedAfter = await database.customSelect(
+      '''SELECT COUNT(*) AS count
+         FROM object_search_fts
+         WHERE CAST(object_id AS INTEGER) = ?''',
+      variables: [Variable<int>(bookmark.id)],
+    ).getSingle();
+    expect(
+      indexedAfter.read<int>('count'),
+      0,
+      reason:
+          'focused refresh must physically remove the deleted mirror row rather than relying only on result resolution',
+    );
+  });
+
+  test('canonical mirror survives a throwing Search impact callback', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final callbackStarted = Completer<void>();
+    var mutationStarted = false;
+
+    final sync = ObjectSyncService(
+      database,
+      onCanonicalObjectsMirrored: (_) async {
+        if (!mutationStarted) return;
+        if (!callbackStarted.isCompleted) callbackStarted.complete();
+        throw StateError('private downstream Search failure');
+      },
+    );
+    addTearDown(sync.dispose);
+
+    await sync.syncWorkspace(workspaceId);
+    mutationStarted = true;
+    await database.customStatement(
+      '''INSERT INTO bookmarks(url, title)
+         VALUES (?, ?)''',
+      <Object>[
+        'local-file://drop/StillCanonical.pdf',
+        'Still canonical after Search failure',
+      ],
+    );
+    final bookmarkId = (await database.customSelect(
+      'SELECT id FROM bookmarks ORDER BY id DESC LIMIT 1',
+    ).getSingle())
+        .read<int>('id');
+    await database.customStatement(
+      'INSERT INTO bookmark_workspace(bookmark_id, workspace_id) VALUES (?, ?)',
+      <Object>[bookmarkId, workspaceId],
+    );
+
+    await callbackStarted.future.timeout(const Duration(seconds: 3));
+
+    final bookmarkType = (await sync.systemObjectStore.getSystemObjectType(
+      workspaceId: workspaceId,
+      systemKey: CoreObjectBridge.bookmarkSystemKey,
+    ))!;
+    final weblinkType = (await sync.systemObjectStore.getSystemObjectType(
+      workspaceId: workspaceId,
+      systemKey: WeblinkObjectService.systemKey,
+    ))!;
+    final bookmark =
+        (await sync.objectStore.listObjects(bookmarkType.id)).single;
+    final weblink = (await sync.objectStore.listObjects(weblinkType.id)).single;
+    final relation = bookmarkType.properties.singleWhere(
+      (property) => property.name == 'Weblink',
+    );
+
+    expect(
+      ObjectRelationValue.fromJson(bookmark.values[relation.id]).objectIds,
+      <int>[weblink.id],
+      reason:
+          'downstream Search refresh failure must not roll back the completed canonical Bookmark -> Weblink mirror',
+    );
+  });
+}

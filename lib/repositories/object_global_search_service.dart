@@ -65,6 +65,24 @@ class ObjectGlobalSearchService {
     await refreshObjects(await _refreshPlanner.forObjectLabelChange(objectId));
   }
 
+  /// Refreshes multiple canonical mutation roots plus their current Relation
+  /// label dependents in one deterministic focused pass.
+  ///
+  /// Live compatibility mirrors can update several canonical Objects at once
+  /// (for example Bookmark + reusable Weblink). The producer reports only ids;
+  /// Search owns expanding those roots through its existing invalidation
+  /// planner and de-duplicating the resulting projections.
+  Future<void> refreshObjectLabelDependentsFor(
+    Iterable<int> objectIds,
+  ) async {
+    final roots = objectIds.toSet().toList()..sort();
+    final affected = <int>{};
+    for (final objectId in roots) {
+      affected.addAll(await _refreshPlanner.forObjectLabelChange(objectId));
+    }
+    await refreshObjects(affected);
+  }
+
   /// Refreshes the focused set of projections that a Search-opened detail may
   /// have affected: the opened Object, its label dependents, trustworthy current
   /// outgoing Relation targets, and each target's label dependents.
