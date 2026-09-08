@@ -98,12 +98,28 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p ci-artifacts
+          SECONDS=0
+          set +e
           flutter test \
             --timeout 2m \
             --reporter expanded \
             --total-shards 4 \
             --shard-index ${{ matrix.shard }} \
             2>&1 | tee ci-artifacts/flutter-test-shard-${{ matrix.shard }}.log
+          status=$?
+          set -e
+          echo "elapsed-seconds=$SECONDS" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+      - name: Report CI shard timing
+        if: always()
+        run: |
+          {
+            echo '## Flutter Test shard ${{ matrix.shard }} of 4 timing'
+            echo
+            echo '- Drift generated cache hit: `${{ steps.drift-generated-cache.outputs.cache-hit }}`'
+            echo '- Flutter Test elapsed: `${{ steps.flutter-test.outputs.elapsed-seconds || 'not-run' }}s`'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Summarize Flutter test failure
         if: ${{ failure() && steps.flutter-test.outcome == 'failure' }}
