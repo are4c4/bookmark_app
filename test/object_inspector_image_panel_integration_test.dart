@@ -22,10 +22,7 @@ Future<void> _pumpUntil(
   expect(condition(), isTrue);
 }
 
-void _closeDatabaseAfterUnmount(
-  WidgetTester tester,
-  AppDatabase database,
-) {
+void _closeDatabaseAfterUnmount(WidgetTester tester, AppDatabase database) {
   addTearDown(() async {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
@@ -94,10 +91,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      Future<void> pumpInspector(
-        int objectId,
-        bool Function() ready,
-      ) async {
+      Future<void> pumpInspector(int objectId, bool Function() ready) async {
         await tester.pumpWidget(
           MaterialApp(
             home: ObjectInspectorPage(
@@ -111,8 +105,9 @@ void main() {
         await _pumpUntil(tester, ready);
       }
 
-      final nativePanel =
-          find.byKey(ValueKey('object-image-detail-panel-${nativeImage.id}'));
+      final nativePanel = find.byKey(
+        ValueKey('object-image-detail-panel-${nativeImage.id}'),
+      );
       await pumpInspector(
         nativeImage.id,
         () => nativePanel.evaluate().isNotEmpty,
@@ -123,8 +118,9 @@ void main() {
         findsOneWidget,
       );
 
-      final legacyPanel =
-          find.byKey(ValueKey('object-image-detail-panel-${legacyImage.id}'));
+      final legacyPanel = find.byKey(
+        ValueKey('object-image-detail-panel-${legacyImage.id}'),
+      );
       await pumpInspector(
         legacyImage.id,
         () => legacyPanel.evaluate().isNotEmpty,
