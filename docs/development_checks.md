@@ -68,6 +68,20 @@ On pull requests, the cheap `ci-scope` job audits these fields before Flutter se
 
 Docs-only handoff PRs may omit a related Issue, but they still declare a primary lane, hotspot state, dependencies, and migration/data impact. Formatting/fixups belong in the implementation environment; repository CI should validate autonomous branches rather than mutate them.
 
+## Durable AI handoffs
+
+GitHub Issues, pull requests, commits, and CI remain the live source of truth. Lane `docs/AI_PROGRESS*.md` files are durable resumable checkpoints rather than a second live dashboard. See [`ai_handoff_policy.md`](ai_handoff_policy.md) for the durable schema and supersede rules.
+
+The lightweight `AI Handoff Audit` workflow is advisory and runs independently of the Flutter matrix. When a pull request changes a durable handoff file it warns if:
+
+- another open PR changes the same handoff file;
+- the same handoff file changed on `main` after the branch diverged;
+- the handoff branch is materially behind `main` (initially 20 commits).
+
+Prefer carrying a known durable handoff update in the same implementation PR. A separate post-merge handoff should contain only facts that genuinely depended on merge/CI completion. Volatile statements such as “no open PRs”, “CI is running”, or “this PR is the only current hotspot owner” must not be preserved as timeless truth; re-read live GitHub state on every implementation run.
+
+When a handoff warning identifies a stale or competing checkpoint, choose the newer authoritative checkpoint and close/supersede the stale PR rather than merging snapshots in sequence.
+
 ## CI coordination and test-health diagnostics
 
 Flutter CI also provides non-product coordination/diagnostic signals for the multi-lane workflow:
@@ -85,5 +99,6 @@ These diagnostics must not be used to remove tests from the required merge gate 
 - If local Flutter execution is unavailable, record that explicitly in the PR and rely on GitHub Flutter CI.
 - Treat a shared-hotspot warning as a prompt to re-audit open PR ownership and overlapping behavior, not as proof that the PRs necessarily conflict.
 - Treat lane/dependency/metadata warnings as coordination debt to resolve before merge rather than as reasons to add exceptions casually.
+- Treat durable-handoff warnings as a prompt to refresh or supersede the checkpoint before merge.
 - Investigate persistent shard-skew or flake warnings as developer-loop debt rather than increasing thresholds reflexively.
 - CI reruns should use GitHub's rerun mechanism; never create no-op commits merely to trigger checks.
