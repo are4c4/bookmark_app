@@ -11,8 +11,7 @@ class LegacyPhotoImageDeletionSafetyException implements Exception {
   const LegacyPhotoImageDeletionSafetyException();
 
   @override
-  String toString() =>
-      'この画像の従来データとの対応を安全に確認できないため削除できません。';
+  String toString() => 'この画像の従来データとの対応を安全に確認できないため削除できません。';
 }
 
 /// Resolves and removes only the exact legacy Photo row represented by one
@@ -40,7 +39,8 @@ class LegacyPhotoImageDeletionService {
     required int objectId,
   }) async {
     final objectType = await objectStore.getObjectType(objectTypeId);
-    if (objectType == null || objectType.workspaceId != workspaceId) return null;
+    if (objectType == null || objectType.workspaceId != workspaceId)
+      return null;
     final systemKey = await systemObjects.systemKeyForObjectType(objectTypeId);
     if (systemKey != ImageObjectService.systemKey) return null;
 
@@ -65,13 +65,15 @@ class LegacyPhotoImageDeletionService {
     }
 
     try {
-      final table = await database.customSelect(
-        '''SELECT 1 AS present
+      final table = await database
+          .customSelect(
+            '''SELECT 1 AS present
            FROM sqlite_master
            WHERE type = 'table' AND name = ?
            LIMIT 1''',
-        variables: const [Variable<String>('photo_object_links')],
-      ).getSingleOrNull();
+            variables: const [Variable<String>('photo_object_links')],
+          )
+          .getSingleOrNull();
       if (table == null) {
         if (storedLegacyPhotoId != null) {
           throw const LegacyPhotoImageDeletionSafetyException();
@@ -79,13 +81,15 @@ class LegacyPhotoImageDeletionService {
         return null;
       }
 
-      final objectMappings = await database.customSelect(
-        '''SELECT workspace_id, photo_id
+      final objectMappings = await database
+          .customSelect(
+            '''SELECT workspace_id, photo_id
            FROM photo_object_links
            WHERE object_id = ?
            ORDER BY workspace_id, photo_id''',
-        variables: [Variable<int>(objectId)],
-      ).get();
+            variables: [Variable<int>(objectId)],
+          )
+          .get();
       if (objectMappings.isEmpty) {
         if (storedLegacyPhotoId != null) {
           throw const LegacyPhotoImageDeletionSafetyException();
@@ -109,22 +113,24 @@ class LegacyPhotoImageDeletionService {
       // One legacy Photo may be promoted independently into multiple
       // workspaces. Deleting that shared Photo row from one workspace would
       // invalidate the other workspace's mirror, so retain both sides.
-      final photoMappings = await database.customSelect(
-        '''SELECT workspace_id, object_id
+      final photoMappings = await database
+          .customSelect(
+            '''SELECT workspace_id, object_id
            FROM photo_object_links
            WHERE photo_id = ?
            ORDER BY workspace_id, object_id''',
-        variables: [Variable<int>(mappedPhotoId)],
-      ).get();
+            variables: [Variable<int>(mappedPhotoId)],
+          )
+          .get();
       if (photoMappings.length != 1 ||
           photoMappings.single.read<int>('workspace_id') != workspaceId ||
           photoMappings.single.read<int>('object_id') != objectId) {
         throw const LegacyPhotoImageDeletionSafetyException();
       }
 
-      final photoRows = await (database.select(database.photos)
-            ..where((photo) => photo.id.equals(mappedPhotoId)))
-          .get();
+      final photoRows = await (database.select(
+        database.photos,
+      )..where((photo) => photo.id.equals(mappedPhotoId))).get();
       if (photoRows.length != 1) {
         throw const LegacyPhotoImageDeletionSafetyException();
       }
@@ -148,9 +154,9 @@ class LegacyPhotoImageDeletionService {
     await (database.update(database.people)
           ..where((person) => person.profilePhotoId.equals(photoId)))
         .write(const PeopleCompanion(profilePhotoId: Value(null)));
-    final deleted = await (database.delete(database.photos)
-          ..where((photo) => photo.id.equals(photoId)))
-        .go();
+    final deleted = await (database.delete(
+      database.photos,
+    )..where((photo) => photo.id.equals(photoId))).go();
     if (deleted != 1) {
       throw const LegacyPhotoImageDeletionSafetyException();
     }
