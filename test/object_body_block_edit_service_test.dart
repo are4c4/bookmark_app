@@ -59,6 +59,52 @@ void main() {
     expect(stored.blocks.last.text, 'changed');
   });
 
+  test('paragraph split persists both halves in one document update', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final objectTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Note',
+    );
+    final objectId = await objectStore.createObject(
+      objectTypeId: objectTypeId,
+      title: 'Split test',
+    );
+    final bodyStore = ObjectBodyStore(genericStore);
+    final service = ObjectBodyBlockEditService(bodyStore: bodyStore);
+    await bodyStore.write(
+      objectId: objectId,
+      document: const ObjectBodyDocument(
+        blocks: <ObjectBodyBlock>[
+          ObjectBodyBlock(
+            id: 'p1',
+            type: 'paragraph',
+            text: 'hello world',
+            attributes: <String, dynamic>{'align': 'center'},
+          ),
+          ObjectBodyBlock(id: 'p3', type: 'paragraph', text: 'after'),
+        ],
+      ),
+    );
+
+    final result = await service.splitParagraph(
+      objectId: objectId,
+      blockId: 'p1',
+      newBlockId: 'p2',
+      offset: 5,
+    );
+
+    expect(result.blocks.map((block) => block.id), ['p1', 'p2', 'p3']);
+    expect(result.blocks[0].text, 'hello');
+    expect(result.blocks[0].attributes, {'align': 'center'});
+    expect(result.blocks[1].text, ' world');
+    expect(result.blocks[2].text, 'after');
+    expect((await bodyStore.read(objectId)).toJson(), result.toJson());
+  });
+
   test('failed block edit leaves persisted Body unchanged', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
