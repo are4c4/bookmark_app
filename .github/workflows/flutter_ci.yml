@@ -37,6 +37,14 @@ jobs:
           CI_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: python3 tool/classify_ci_scope.py
 
+      - name: AI PR coordination audit
+        if: github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          CI_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python3 tool/pr_coordination_guard.py
+
   docs-only:
     name: docs-only-fast-path
     needs: scope
@@ -83,6 +91,7 @@ jobs:
       - name: Developer workflow diagnostic tests
         run: |
           python3 tool/classify_ci_scope_test.py
+          python3 tool/pr_coordination_guard_test.py
           python3 tool/shared_hotspot_conflict_guard_test.py
           python3 tool/report_test_health_test.py
 
