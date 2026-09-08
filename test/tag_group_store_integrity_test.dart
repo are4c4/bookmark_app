@@ -1,6 +1,4 @@
 import 'package:bookmark_app/data/app_database.dart';
-import 'package:bookmark_app/data/saved_view_read_store.dart';
-import 'package:bookmark_app/data/saved_view_write_store.dart';
 import 'package:bookmark_app/data/tag_group_store.dart';
 import 'package:bookmark_app/services/auto_organize_service.dart';
 import 'package:drift/native.dart';
@@ -107,7 +105,7 @@ void main() {
     );
   });
 
-  test('merge updates bookmarks views rules and child tags atomically',
+  test('merge updates bookmarks legacy views rules and child tags atomically',
       () async {
     final sourceId = await database.createTag('Source');
     final targetId = await database.createTag('Target');
@@ -132,11 +130,21 @@ void main() {
             tagId: targetId,
           ),
         );
-    await SavedViewWriteStore(database).create(
-      name: 'Source view',
-      layoutType: 'gallery',
-      tagIds: [sourceId, targetId],
-    );
+    final savedViewId = await database.into(database.savedViews).insert(
+          SavedViewsCompanion.insert(name: 'Source view'),
+        );
+    await database.into(database.savedViewTags).insert(
+          SavedViewTagsCompanion.insert(
+            savedViewId: savedViewId,
+            tagId: sourceId,
+          ),
+        );
+    await database.into(database.savedViewTags).insert(
+          SavedViewTagsCompanion.insert(
+            savedViewId: savedViewId,
+            tagId: targetId,
+          ),
+        );
     final auto = AutoOrganizeService(database);
     await auto.createRule(
       name: 'Source rule',
@@ -168,8 +176,10 @@ void main() {
           ..where((row) => row.bookmarkId.equals(bookmarkId)))
         .get();
     expect(relations.map((row) => row.tagId), [targetId]);
-    final views = await SavedViewReadStore(database).watchConfigs().first;
-    expect(views.single.tags.map((item) => item.id), [targetId]);
+    final savedViewTags = await (database.select(database.savedViewTags)
+          ..where((row) => row.savedViewId.equals(savedViewId)))
+        .get();
+    expect(savedViewTags.map((row) => row.tagId), [targetId]);
     expect((await auto.listRules()).single.tagName, 'Target');
   });
 
