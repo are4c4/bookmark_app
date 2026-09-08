@@ -60,7 +60,8 @@ void main() {
       document: document,
       blockId: 'p1',
       newBlockId: 'p2',
-      offset: 5,
+      selectionStart: 5,
+      selectionEnd: 5,
     );
 
     expect(split.blocks.map((block) => block.id), ['p1', 'p2', 'future']);
@@ -70,6 +71,25 @@ void main() {
     expect(split.blocks[1].text, ' world');
     expect(split.blocks[1].attributes, isEmpty);
     expect(split.blocks[2].toJson(), future.toJson());
+  });
+
+  test('split paragraph replaces selected text with the paragraph break', () {
+    const document = ObjectBodyDocument(
+      blocks: <ObjectBodyBlock>[
+        ObjectBodyBlock(id: 'p1', type: 'paragraph', text: 'hello brave world'),
+      ],
+    );
+
+    final split = editor.splitParagraph(
+      document: document,
+      blockId: 'p1',
+      newBlockId: 'p2',
+      selectionStart: 5,
+      selectionEnd: 11,
+    );
+
+    expect(split.blocks[0].text, 'hello');
+    expect(split.blocks[1].text, ' world');
   });
 
   test('move reorders blocks without rewriting their payload', () {
@@ -127,7 +147,8 @@ void main() {
         document: document,
         blockId: 'h',
         newBlockId: 'new',
-        offset: 0,
+        selectionStart: 0,
+        selectionEnd: 0,
       ),
       throwsStateError,
     );
@@ -136,7 +157,18 @@ void main() {
         document: document,
         blockId: 'a',
         newBlockId: 'new',
-        offset: 5,
+        selectionStart: 5,
+        selectionEnd: 5,
+      ),
+      throwsRangeError,
+    );
+    expect(
+      () => editor.splitParagraph(
+        document: document,
+        blockId: 'a',
+        newBlockId: 'new',
+        selectionStart: 3,
+        selectionEnd: 2,
       ),
       throwsRangeError,
     );
@@ -145,7 +177,8 @@ void main() {
         document: document,
         blockId: 'a',
         newBlockId: 'h',
-        offset: 2,
+        selectionStart: 2,
+        selectionEnd: 2,
       ),
       throwsStateError,
     );
