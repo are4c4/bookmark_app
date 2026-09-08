@@ -1,117 +1,114 @@
 # AI Progress — Database, View & Schema UX Lane
 
-> Lane C durable handoff. Always re-read `AGENTS.md`, the active GitHub Issue, `docs/AI_PROGRESS.md`, latest `main`, open PR ownership, and current CI before changing code. GitHub is the source of truth; commit SHAs below are checkpoints only.
+> Lane C durable handoff. Always re-read `AGENTS.md`, the active GitHub Issue, `docs/AI_PROGRESS.md`, latest `main`, open PR ownership, and current CI before changing code. GitHub Issues/PRs/CI are the live source of truth; branch/commit/CI details below are dated checkpoints only.
 
 ## Lane goal
 Make ObjectType / Database / View / schema configuration expressive and safe enough that new domains normally require configuration/templates rather than dedicated management pages.
 
-## Current status
-**Lane C currently has no independent actionable implementation issue.**
+## Active focused work
+Lane C is **active on #949 — Photo→Image: make Images the single user-facing image collection**.
 
-The most recent C-owned product gaps are complete:
-- #896 — canonical Images first-run shared Gallery provisioning — completed/closed via PR #908.
-- #920 — canonical Weblinks first-run shared List provisioning — completed/closed via PR #925.
+The convergence target is deliberately generic:
+- canonical `画像` remains an ordinary persisted Database/View surface;
+- no new Image-specific management page or second View-settings authority is introduced;
+- user-owned Views and the first-use Images masonry/direct-Image Gallery contract remain intact;
+- legacy Photo storage/rows remain compatibility data during navigation retirement;
+- caller-zero deletion of the old Photo implementation belongs to Lane G after Lane C removes normal UI reachability.
 
-The broader composability/schema work is also complete for the current scope:
-- #484 — primitive-vs-user-owned-domain architecture.
-- #490 — user-owned ObjectType/Database/View templates.
-- #491 — Relation Property authoring + real target quick-create/import composition.
-- #492 — configurable Relation-backed Gallery cover in the real generic Database host.
-- #493 — safe/reversible schema evolution + real-host Property management.
-- #481 — universal Object Body, including Lane C side-peek composition.
+## Durable prerequisites and checkpoints
+The following prerequisites for #949 are already complete:
+- #896 / PR #908 (`12994803…`) — canonical Images seed exactly one ordinary shared masonry/direct-Image Gallery only when zero Views exist; existing user Views win unchanged.
+- #948 — People profile-photo UI no longer requires legacy Photo selection as its authority.
+- #999 / PR #1003 (`8e466f3d…`) — changed-Dart format validation is hunk-aware for existing tracked files, allowing patch-sized shared-hotspot edits without unrelated formatter churn while remaining strict on edited/new code.
 
-#56 remains the broader product umbrella, but the live Issue audit after #925 shows no open focused Issue independently owned by Lane C. Idle is intentional; do not invent speculative Database/View abstractions merely to keep the lane busy.
+The remaining product prerequisite for final Photo navigation retirement is #941, owned by Lane D. PR #1002 composes the canonical Image panel into the shared Object Inspector. Lane C must verify the live PR/Issue/CI state before treating that dependency as complete.
 
-## Latest completed checkpoints
-- #760 — failed Flutter Test runs retain diagnostic logs/artifacts.
-- #763 (`2fdd340b…`) — searchable Relation Property target authoring/editing with explicit cardinality and canonical Lane B schema evolution.
-- #776 (`0e61b0c6…`) — searchable template picker while preserving empty custom Database creation.
-- #792 (`9e35afa2…`) — real generic Gallery cover source wiring; #492 closed.
-- #793 (`5a19a86d…`) — explicit View Property-reference detach.
-- #800 (`321fda6d…`) — delete impact can detach View references then re-inspect.
-- #819 (`dfc07176…`) — real Relation picker quick-create for custom/Tag/Weblink/Image/File through canonical services; #491 closed.
-- #826 (`a2fd7e13…`) — explicit clear-values fallback for incompatible Value type migration with atomic rollback.
-- #832 (`83a44e0d…`) — safe Property schema-management substrate including Formula/Rollup, workspace View and secondary Collection-filter blockers.
-- #845 (`a320a5b8…`) — real `GenericDatabasePage` Property schema management; #493 closed.
-- #851 (`0ca36410…`) — template View Group defaults resolve template-local Property names to created canonical Property ids.
-- #856 (`7e103a02…`) — generic user-owned Bookmark template and generic-operation proof; #490/#484 subsequently closed.
-- #874 (`38c20b67…`) — reusable canonical `ObjectBodyEditorSection` composed into real Generic Database side peek; #481 subsequently closed.
-- #908 (`12994803b043c9da54da8c3175877512119d368b`) — canonical Images seed exactly one ordinary shared Gallery View on first use with `galleryMode=masonry` and `galleryCoverSource=directImage`; any existing user View wins unchanged. Flutter CI #2750 full green; #896 closed.
-- #925 (`b8646d370035940222921d49ba1812a78d056523`) — canonical Weblinks seed exactly one ordinary shared List View on first use; later user rename/layout/settings survive full host reopen without reseeding. Real `GenericDatabasePage` coverage uses the existing `SystemObjectListMedia` renderer. Flutter CI #2789 full green; #920 closed.
+## #949 implementation state — 2026-09-08 checkpoint
+### Generic command-palette parity
+PR #997, branch `feature/database-view-images-command-palette-949`, adds persisted generic Database destinations to the existing ⌘K command palette and routes them through the same `GenericDatabasePage` state as sidebar navigation.
 
-## Current system-collection View contract
-System collection first-use behavior remains normal persisted View configuration, not a second presentation authority:
+Durable behavior:
+- generic Database names/icons come from persisted definitions rather than Image-specific routing;
+- selecting canonical `画像` sets the selected generic Database id and opens page 11 through the existing generic host;
+- a real shell regression provisions canonical Images, searches `画像` in ⌘K, opens it, and verifies a canonical Image object is visible;
+- the test intentionally searches before selecting because generic Databases follow fixed destinations in the lazy command list and may otherwise be outside the initial viewport.
+
+Relevant checkpoints:
+- `610eedf0…` — fixes the regression to use the real search-first command-palette UX;
+- `49ef67b8…` — formats only the C-owned command-palette hunks after #1003 made the guard hunk-aware.
+
+Do not infer current merge/CI status from this file; re-read PR #997 and its latest checks.
+
+### Final legacy `写真` navigation retirement
+A production caller audit established that normal `PhotoManagementPage` reachability is concentrated in `lib/views/app_shell.dart`. Closed/unmerged PR #988 is diagnostic evidence only and must not be resurrected.
+
+After #941 is integrated, the intended final Lane C patch is limited to AppShell navigation reachability:
+1. remove the `photo_management_page.dart` import;
+2. remove expanded-sidebar `写真` destination (page 5);
+3. remove collapsed-sidebar page-5 Photo icon;
+4. remove fixed command-palette `写真` destination;
+5. remove the page-5 `PhotoManagementPage` route.
+
+Preserve the other numeric page ids and dynamic generic Database routing. Do **not** delete Photo rows, files, schema, compatibility bridges, or the old implementation file in this Lane C slice.
+
+Add focused real-host coverage proving:
+- legacy `写真` is not a normal AppShell navigation destination;
+- canonical `画像` remains reachable through generic Database navigation/⌘K;
+- existing Vault/Photo compatibility data is not mutated by the navigation change.
+
+After merge, re-audit production callers. If `PhotoManagementPage` is caller-zero, hand that deletion opportunity to Lane G.
+
+## Shared hotspot ownership
+`lib/views/app_shell.dart` is the active Lane C hotspot for #997 and the later final navigation-retirement slice. Treat ownership as time-sensitive: inspect every open PR diff immediately before editing or integration. Patch-sized changes may proceed only when the live overlap audit confirms the same behavior/region is not concurrently owned.
+
+Lane C does not own `object_inspector_page.dart`; #941/PR #1002 belongs to Lane D.
+
+## Existing Database/View contract to preserve
+System collection first-use behavior remains ordinary persisted View configuration:
 - canonical Images: first zero-View open -> `ギャラリー`, `layoutType=gallery`, masonry, direct Image cover;
 - canonical Weblinks: first zero-View open -> `リスト`, `layoutType=list`;
-- any existing persisted View is returned unchanged for either system collection;
-- ordinary custom ObjectTypes continue to use the Database definition/default View path;
-- system identity is recognized by stable system keys, never display names;
-- Lane C does not own Image/Weblink identity, import, metadata, Relation mutation, or media-resolution semantics.
+- any existing persisted View wins unchanged;
+- ordinary custom ObjectTypes continue through the normal Database definition/default View path;
+- system identity uses stable system keys, never display names.
 
-## What #856 proves
-The built-in `bookmark` starting experience is configuration, not a hard-coded domain engine:
-- user-owned custom ObjectType;
-- Weblink/Tag/Image/File Relations provisioned through existing primitive contracts;
-- generic Rating/Status/Favorite Properties;
-- generic `すべて` / `あとで読む` / `お気に入り` Views;
-- visible/order/filter/Gallery-cover references resolve to stable created Property ids;
-- canonical Weblink creation, Relation assignment, Property edits and View filtering work without introducing Bookmark-only persistence/presentation APIs;
-- template-derived schema remains editable by the user.
+Lane C owns generic Database/View/schema/navigation behavior, not Image/Weblink identity, media storage, editing semantics, Relation mutation, or Vault filesystem lifecycle.
 
-Together with Paper/Plant regressions, version/ownership tests, searchable template selection, Group/Layout defaults and empty custom Database creation, this satisfies the generic composability target.
+## Earlier completed Lane C milestones
+- #490 — user-owned ObjectType/Database/View templates and generic composability proof.
+- #491 — Relation Property authoring + canonical target quick-create/import composition.
+- #492 — configurable Relation-backed Gallery cover in the real generic Database host.
+- #493 — safe/reversible Property schema evolution and real-host schema management.
+- #481 — universal Object Body side-peek composition.
+- #896 — canonical Images first-use Gallery provisioning.
+- #920 — canonical Weblinks first-use List provisioning.
 
-## Remaining open work and ownership
-Repository Issue state is time-sensitive. Re-audit live Issues on resume; the durable architecture umbrellas relevant to Lane C remain #56, #155, #225, #242 and #245, none of which is a focused Lane C implementation assignment by itself.
+Do not resurrect completed work from stale umbrella checklists. Manual Database membership include/exclude remains deferred until real use demonstrates a concrete need.
 
-Do not take these merely to keep Lane C busy:
-- #155 Weblink/Image product presentation and legacy convergence — primarily Primitive/Object ownership. Lane C already delivered the current default Weblinks View in #920.
-- #245 Photo -> Image migration — Primitive/Object ownership; Lane C already delivered canonical Images default Gallery provisioning in #896.
-- #225 maintainability / legacy retirement / broad host extraction — Refactor lane.
-- #242 final real-macOS Vault lifecycle validation — Storage lane / real-machine validation.
-- #56 usage-driven umbrella — create or take a C slice only after a concrete Database/View/schema acceptance gap is identified.
+## Validation contract
+GitHub Flutter CI is the merge gate because local Flutter/Dart execution is unavailable in this automation environment.
 
-Completed issues such as #249, #877, #895, #896, #897, #907, #909, #920 and #218 must not be resurrected from stale handoff text or older umbrella prose.
+For #949 slices require:
+- shared-hotspot / maintainability / legacy-dependency / presentation-error guards;
+- changed-Dart format validation;
+- Drift generation + Flutter Analyze;
+- all required Flutter Test shards;
+- focused AppShell navigation regression.
 
-Manual Database membership include/exclude remains explicitly deferred in #56 until real use demonstrates a need; do not invent it speculatively.
+Use CI diagnostic logs/artifacts for deterministic failures rather than broad speculative code changes.
 
-## Shared hotspot lease
-Lane C currently holds **no shared-hotspot lease**.
+## Cross-lane dependencies
+- Lane D owns #941 Image Inspector parity and Image primitive behavior.
+- Lane G owns caller-zero legacy implementation deletion and general maintainability work.
+- Lane B owns Relation integrity; final navigation retirement must not alter Relation data.
+- Lane F owns Vault/filesystem lifecycle; final navigation retirement must not delete/move managed bytes.
 
-Open PR and hotspot ownership are time-sensitive and are intentionally not frozen as durable handoff state. Re-audit live PR diffs immediately before any future edit.
+## Next actions
+On resume, in priority order:
+1. inspect live PR #997 checks; if green, current, and mergeable, integrate the generic command-palette parity slice;
+2. inspect #941 / PR #1002 and help diagnose CI only as needed without taking Lane D ownership;
+3. once #941 is integrated, refresh from latest `main`, re-audit AppShell hotspot overlap, and create the focused final `写真` navigation-retirement slice described above;
+4. require full CI green, merge it, re-audit `PhotoManagementPage` callers, and close #949 when `画像` is the only normal user-facing image collection/navigation surface;
+5. hand caller-zero Photo implementation cleanup to Lane G without deleting compatibility data.
 
-Before future C work, re-audit open PRs for:
-- `lib/views/generic_database_page.dart`
-- `lib/views/app_shell.dart`
-- `lib/views/object_inspector_page.dart`
-- `lib/views/bookmark_unified_stage1_page.dart`
-- `lib/widgets/bookmark_reorderable_properties.dart`
-- `lib/views/people_management_page.dart`
-- `lib/views/settings_page.dart`
-- `lib/services/profile_manager.dart`
-- `lib/data/app_database.dart`
-
-Patch-sized changes in a shared host still require a live diff-overlap audit even when they belong to different lanes.
-
-## Cross-lane boundaries
-- Lane B owns Relation mutation/index/backlink/audit/reconcile and integrity-sensitive Relation schema changes; C consumes canonical services.
-- Lane A owns Object/ObjectType/Body/core identity and reusable opening/detail contracts; C may compose those contracts into Database/View hosts without taking over Object semantics.
-- Lane D owns Weblink/Image/File/Tag primitive product semantics, canonical create/import, metadata and media behavior; C owns only generic Database/View configuration and presentation contracts.
-- Lane E owns Search indexing/freshness orchestration.
-- Lane F owns Vault/filesystem lifecycle and managed-byte placement/ownership boundaries.
-- Lane G owns behavior-preserving refactor, hotspot reduction and legacy retirement.
-
-## Validation
-GitHub Flutter CI is the validation gate because local Flutter/Dart execution is unavailable in this automation environment. Use the #760 diagnostic artifact path for Test failures rather than requesting pasted logs.
-
-Latest functional Lane C checkpoint #925 passed maintainability guards, Drift generation, Flutter Analyze and the complete Flutter Test suite in CI #2789 before squash merge `b8646d37…`.
-
-## Stop reason / resume triggers
-Current stop reason matches the AGENTS stopping criteria: **Lane C has no remaining independent actionable work.** Idle is preferable to speculative abstractions or taking another lane's ownership.
-
-Resume Lane C when any of the following occurs:
-1. a new focused Database/View/schema/template Issue is opened or explicitly assigned to C;
-2. #56 gains a concrete Database/View acceptance gap not already routed elsewhere;
-3. another lane lands a capability that creates a specific C-owned View/schema composition obligation;
-4. ownership of another presentation slice is explicitly assigned to C.
-
-On every resume, start from live GitHub state rather than this checkpoint alone.
+## Stop / resume rule
+Lane C should not stop merely because one PR or CI run is pending. Continue independent #949 work when safe. A valid stop exists only when the remaining next step is genuinely blocked by the cross-lane #941 integration, an unavoidable hotspot conflict, external infrastructure, or another `AGENTS.md` stopping condition.
