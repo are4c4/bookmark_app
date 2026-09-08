@@ -1,15 +1,14 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 
 import '../data/app_database.dart';
 import '../data/bookmark_attachment_store.dart';
 import '../data/bookmark_repository.dart';
+import '../domain/object_identity_search.dart';
 import '../services/attachment_storage_service.dart';
 import '../services/bookmark_image_relation_service_factory.dart';
 import '../services/bookmark_metadata_service.dart';
 import '../services/pdf_metadata_service.dart';
-import 'photo_database_picker.dart';
+import 'bookmark_create_image_picker.dart';
 
 List<String> _splitNames(String value) => value
     .split(',')
@@ -49,8 +48,9 @@ Future<void> showBookmarkCreateDialog({
 }) async {
   final url = TextEditingController();
   final tags = TextEditingController();
-  var selectedPhotos = <PhotoRecord>[];
-  PhotoRecord? coverPhoto;
+  final imageRelations = createBookmarkImageRelationService(repository);
+  var selectedImages = <ObjectIdentitySearchResult>[];
+  int? coverImageObjectId;
   var saving = false;
   var status = 'unread';
   var rating = 0;
@@ -61,20 +61,18 @@ Future<void> showBookmarkCreateDialog({
     barrierDismissible: false,
     builder: (dialogContext) => StatefulBuilder(
       builder: (context, setLocalState) {
-        Future<void> choosePhotos() async {
-          final photos = await repository.watchPhotos().first;
-          if (!context.mounted) return;
-          final result = await showPhotoDatabasePicker(
+        Future<void> chooseImages() async {
+          final result = await showBookmarkCreateImagePicker(
             context: context,
-            photos: photos,
-            initiallySelectedIds: selectedPhotos.map((photo) => photo.id),
-            initialCoverPhotoId: coverPhoto?.id,
-            title: 'ブックマークに追加する写真',
+            service: imageRelations,
+            workspaceId: repository.workspaceId,
+            initiallySelected: selectedImages,
+            initialCoverImageObjectId: coverImageObjectId,
           );
           if (result == null) return;
           setLocalState(() {
-            selectedPhotos = result.photos;
-            coverPhoto = result.coverPhoto;
+            selectedImages = result.selectedImages;
+            coverImageObjectId = result.coverImageObjectId;
           });
         }
 
@@ -239,13 +237,12 @@ Future<void> showBookmarkCreateDialog({
               rating: rating,
               inbox: inbox,
             );
-            if (selectedPhotos.isNotEmpty) {
-              await createBookmarkImageRelationService(repository)
-                  .saveLegacyPhotosAfterCreate(
+            if (selectedImages.isNotEmpty) {
+              await imageRelations.saveImagesAfterCreate(
                 workspaceId: repository.workspaceId,
                 bookmarkId: bookmarkId,
-                photoIds: selectedPhotos.map((photo) => photo.id),
-                coverPhotoId: coverPhoto?.id,
+                imageObjectIds: selectedImages.map((image) => image.objectId),
+                coverImageObjectId: coverImageObjectId,
               );
             }
             if (dialogContext.mounted) Navigator.pop(dialogContext);
@@ -261,6 +258,12 @@ Future<void> showBookmarkCreateDialog({
             }
           }
         }
+
+        final coverImage = coverImageObjectId == null
+            ? null
+            : selectedImages
+                .where((image) => image.objectId == coverImageObjectId)
+                .firstOrNull;
 
         return AlertDialog(
           title: const Text('ブックマークを追加'),
@@ -370,34 +373,20 @@ Future<void> showBookmarkCreateDialog({
                   Row(
                     children: [
                       OutlinedButton.icon(
-                        onPressed: saving ? null : choosePhotos,
+                        onPressed: saving ? null : chooseImages,
                         icon: const Icon(Icons.photo_library_outlined),
-                        label: const Text('写真DBから選択'),
+                        label: const Text('Imagesから選択'),
                       ),
                       const SizedBox(width: 10),
-                      Text('${selectedPhotos.length}枚選択'),
+                      Text('${selectedImages.length}枚選択'),
                     ],
                   ),
-                  if (coverPhoto != null) ...[
-                    const SizedBox(height: 12),
+                  if (coverImage != null) ...[
+                    const SizedBox(height: 10),
                     Text(
-                      'カバー画像',
-                      style: Theme.of(context).textTheme.titleSmall,
-                    ),
-                    const SizedBox(height: 6),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: SizedBox(
-                        width: 220,
-                        height: 130,
-                        child: Image.file(
-                          File(coverPhoto!.path),
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const Center(
-                            child: Icon(Icons.broken_image_outlined),
-                          ),
-                        ),
-                      ),
+                      'カバー画像: ${coverImage.canonicalTitle}',
+                      key: const ValueKey('bookmark-create-cover-image-label'),
+                      style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ],
                 ],
