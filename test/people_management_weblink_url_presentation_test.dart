@@ -14,8 +14,10 @@ void main() {
     expect(source, contains("import '../widgets/bookmark_resolved_url_text.dart';"));
     expect(source, contains('late final BookmarkUrlResolve _resolveBookmarkUrl;'));
     expect(
-      source,
-      contains('_resolveBookmarkUrl = BookmarkPresentationResolverFactory.urlFor(repository);'),
+      RegExp(
+        r'_resolveBookmarkUrl\s*=\s*BookmarkPresentationResolverFactory\.urlFor\(repository\);',
+      ).hasMatch(source),
+      isTrue,
     );
     expect(source, contains('subtitle: BookmarkResolvedUrlText('));
     expect(source, contains('resolveUrl: _resolveBookmarkUrl'));
