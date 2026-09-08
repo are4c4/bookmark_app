@@ -2,6 +2,7 @@ import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/database_view_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/database/database_definition.dart';
+import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -99,6 +100,58 @@ void main() {
       databaseKey: 'photos',
     );
     expect(views.map((view) => view.id), [duplicate.id, configured.id, defaultView.id]);
+  });
+
+  test('legacy bookmark Saved Views import into canonical database views',
+      () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final store = DatabaseViewStore(database);
+    final tagId = await database.createTag('Legacy tag');
+    final legacyId = await database.into(database.savedViews).insert(
+          SavedViewsCompanion.insert(
+            name: 'Legacy view',
+            layoutType: const Value('table'),
+            searchQuery: const Value('needle'),
+            favoritesOnly: const Value(true),
+            tagMatchMode: const Value('and'),
+            sortField: const Value('title'),
+            sortDirection: const Value('asc'),
+            visibleProperties: const Value('url,title'),
+            statusFilter: const Value('unread'),
+            minRating: const Value(4),
+            includeDescendants: const Value(false),
+          ),
+        );
+    await database.into(database.savedViewTags).insert(
+          SavedViewTagsCompanion.insert(
+            savedViewId: legacyId,
+            tagId: tagId,
+          ),
+        );
+
+    await store.importLegacyBookmarkViews(workspaceId: workspaceId);
+    await store.importLegacyBookmarkViews(workspaceId: workspaceId);
+
+    final imported = (await store.listViews(
+      workspaceId: workspaceId,
+      databaseKey: BuiltInDatabases.bookmarks.key,
+    ))
+        .single;
+    expect(imported.name, 'Legacy view');
+    expect(imported.layoutType, 'table');
+    expect(imported.filters['query'], 'needle');
+    expect(imported.filters['favoritesOnly'], isTrue);
+    expect(imported.filters['tagIds'], [tagId]);
+    expect(imported.filters['tagMatchMode'], 'and');
+    expect(imported.filters['status'], 'unread');
+    expect(imported.filters['minRating'], 4);
+    expect(imported.filters['includeDescendants'], isFalse);
+    expect(imported.sorts, [
+      {'field': 'title', 'direction': 'asc'},
+    ]);
+    expect(imported.visibleProperties, ['url', 'title']);
   });
 
   test('corrupt persisted view JSON falls back without blocking view loading', () async {
