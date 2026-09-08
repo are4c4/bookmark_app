@@ -77,7 +77,7 @@ void main() {
     final secondGroup = await store.createGroup('Second');
     final parentId = await database.createTag('Parent');
     final childId = await createChildTag('Child', parentId);
-    await store.setTagGroup(parentId, firstGroup);
+    await store.moveTag(tagId: parentId, groupId: firstGroup);
 
     final snapshot = await store.moveTag(
       tagId: parentId,
@@ -112,7 +112,7 @@ void main() {
     final childId = await createChildTag('Source child', sourceId);
     final grandchildId = await createChildTag('Source grandchild', childId);
     final targetGroupId = await store.createGroup('Target group');
-    await store.setTagGroup(targetId, targetGroupId);
+    await store.moveTag(tagId: targetId, groupId: targetGroupId);
     final bookmarkId = await database.addBookmark(
       url: 'https://merge.example',
       title: 'Merge',
