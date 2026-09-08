@@ -163,15 +163,15 @@ void main() {
 
     // Re-entering sync for an already-watched workspace is the same public
     // completion path used by live mirror work, but unlike waiting on debounce
-    // it is deterministic for this previous-snapshot cleanup invariant.
+    // it is deterministic for the exact before/after deletion invariant.
     await sync.syncWorkspace(workspaceId);
 
-    expect(impacts, isNotEmpty);
+    expect(impacts, hasLength(1));
     expect(
-      impacts.any((ids) => ids.contains(bookmark.id)),
-      isTrue,
+      impacts.single,
+      <int>[bookmark.id],
       reason:
-          'the previous mirror snapshot must carry deleted canonical ids into focused invalidation',
+          'exact semantic impact must carry the deleted canonical Bookmark id without unrelated mirrored Objects',
     );
     expect(await sync.objectStore.listObjects(bookmarkType.id), isEmpty);
 
