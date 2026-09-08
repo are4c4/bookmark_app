@@ -17,6 +17,10 @@ typedef ObjectBodyParagraphSplitHandler = Future<void> Function(
   TextSelection selection,
 );
 
+typedef ObjectBodyParagraphMergeHandler = Future<void> Function(
+  ObjectBodyBlock block,
+);
+
 /// Shared renderer/editor shell for a whole Object Body document.
 ///
 /// Hosts can progressively add persistence and navigation around individual
@@ -29,6 +33,7 @@ class ObjectBodyDocumentView extends StatelessWidget {
     this.positionResolver = const ObjectBodyBlockPositionResolver(),
     this.onTextChanged,
     this.onParagraphSplit,
+    this.onParagraphMergeWithPrevious,
     this.onChecklistChanged,
     this.onObjectReferenceTap,
     this.onDatabaseViewTap,
@@ -36,6 +41,7 @@ class ObjectBodyDocumentView extends StatelessWidget {
     this.blockActionsBuilder,
     this.emptyBuilder,
     this.autofocusBlockId,
+    this.autofocusOffset,
   });
 
   final ObjectBodyDocument document;
@@ -43,6 +49,7 @@ class ObjectBodyDocumentView extends StatelessWidget {
   final ObjectBodyBlockPositionResolver positionResolver;
   final void Function(ObjectBodyBlock block, String text)? onTextChanged;
   final ObjectBodyParagraphSplitHandler? onParagraphSplit;
+  final ObjectBodyParagraphMergeHandler? onParagraphMergeWithPrevious;
   final void Function(ObjectBodyBlock block, bool checked)? onChecklistChanged;
   final ValueChanged<ObjectBodyBlock>? onObjectReferenceTap;
   final ValueChanged<ObjectBodyBlock>? onDatabaseViewTap;
@@ -50,6 +57,7 @@ class ObjectBodyDocumentView extends StatelessWidget {
   final ObjectBodyBlockActionsBuilder? blockActionsBuilder;
   final WidgetBuilder? emptyBuilder;
   final String? autofocusBlockId;
+  final int? autofocusOffset;
 
   @override
   Widget build(BuildContext context) {
@@ -77,6 +85,12 @@ class ObjectBodyDocumentView extends StatelessWidget {
                     ? null
                     : (selection) =>
                         onParagraphSplit!(presentation.block, selection),
+                onParagraphMergeWithPrevious:
+                    onParagraphMergeWithPrevious == null
+                        ? null
+                        : () => onParagraphMergeWithPrevious!(
+                              presentation.block,
+                            ),
                 onChecklistChanged: onChecklistChanged == null
                     ? null
                     : (checked) =>
@@ -91,6 +105,9 @@ class ObjectBodyDocumentView extends StatelessWidget {
                     ? null
                     : () => onAssetTap!(presentation.block),
                 autofocus: presentation.block.id == autofocusBlockId,
+                autofocusOffset: presentation.block.id == autofocusBlockId
+                    ? autofocusOffset
+                    : null,
               ),
               if (blockActionsBuilder != null)
                 blockActionsBuilder!(
