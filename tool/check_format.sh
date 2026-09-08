@@ -73,12 +73,7 @@ else
   git ls-files --others --exclude-standard -- '*.dart' >>"$files_tmp"
 fi
 
-mapfile_cmd_available=false
-if builtin help mapfile >/dev/null 2>&1; then
-  mapfile_cmd_available=true
-fi
-
-# macOS still ships Bash 3.2, so avoid relying on mapfile there.
+# macOS still ships Bash 3.2, so avoid mapfile/associative arrays here.
 files=()
 while IFS= read -r file; do
   [[ -n "$file" && -f "$file" ]] || continue
