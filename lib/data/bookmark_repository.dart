@@ -84,7 +84,6 @@ class BookmarkRepository {
 
   Stream<List<Tag>> watchTags() => _database.watchAllTags();
   Stream<List<Person>> watchPeople() => _database.watchAllPeople();
-  Stream<List<PhotoRecord>> watchPhotos() => _photoReads.watchAll();
   Stream<List<CollectionRecord>> watchCollections() => _database.watchAllCollections();
   Stream<List<BookmarkRelation>> watchRelationsForBookmark(int bookmarkId) =>
       _database.watchRelationsForBookmark(bookmarkId);
@@ -95,19 +94,18 @@ class BookmarkRepository {
   Stream<List<BookmarkItem>> watchBookmarksForPerson(Person person) => watchAll().map(
         (items) => items.where((item) => item.people.any((candidate) => candidate.id == person.id)).toList(),
       );
-  Stream<List<BookmarkItem>> watchBookmarksForPhoto(PhotoRecord photo) =>
-      Stream.fromFuture(
-        LegacyPhotoBookmarkBacklinkService(_database).bookmarkIdsForPhoto(
-          workspaceId: workspaceId,
-          photoId: photo.id,
-        ),
-      ).asyncExpand(
-        (bookmarkIds) => watchAll().map(
-          (items) => items
-              .where((item) => bookmarkIds.contains(item.id))
-              .toList(),
-        ),
-      );
+  Stream<List<BookmarkItem>> watchBookmarksForPhotoId(int photoId) async* {
+    final photo = await _photoReads.getById(photoId);
+    if (photo == null) {
+      yield const <BookmarkItem>[];
+      return;
+    }
+    final bookmarkIds = await LegacyPhotoBookmarkBacklinkService(_database)
+        .bookmarkIdsForPhoto(workspaceId: workspaceId, photoId: photo.id);
+    yield* watchAll().map(
+      (items) => items.where((item) => bookmarkIds.contains(item.id)).toList(),
+    );
+  }
   Stream<List<BookmarkItem>> watchBookmarksForCollection(CollectionRecord collection) => watchAll().map(
         (items) => items.where((item) => item.collections.any((candidate) => candidate.id == collection.id)).toList(),
       );

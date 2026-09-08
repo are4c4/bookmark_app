@@ -1,6 +1,6 @@
 import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/photo_read_store.dart';
-import 'package:drift/drift.dart';
+import 'package:drift/drift.dart' hide isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -47,6 +47,27 @@ void main() {
     expect(photos.last.note, 'old note');
     expect(photos.last.tags, 'one, two');
   });
+
+  test(
+    'getById resolves stored paths and returns null for missing rows',
+    () async {
+      final photoId = await database
+          .into(database.photos)
+          .insert(
+            PhotosCompanion.insert(
+              path: 'photos/focused.jpg',
+              title: const Value('Focused'),
+            ),
+          );
+
+      final photo = await store.getById(photoId);
+
+      expect(photo?.id, photoId);
+      expect(photo?.path, '/profiles/current/photos/focused.jpg');
+      expect(photo?.title, 'Focused');
+      expect(await store.getById(photoId + 1000), isNull);
+    },
+  );
 
   test('resolveRecord leaves absolute paths unchanged', () {
     final photo = PhotoRecord(
