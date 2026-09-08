@@ -23,10 +23,7 @@ Future<void> _pumpUntil(
   expect(condition(), isTrue);
 }
 
-void _closeDatabaseAfterUnmount(
-  WidgetTester tester,
-  AppDatabase database,
-) {
+void _closeDatabaseAfterUnmount(WidgetTester tester, AppDatabase database) {
   addTearDown(() async {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
@@ -72,8 +69,9 @@ void main() {
         ),
       ),
     );
-    final titleEditButton =
-        find.byKey(const ValueKey('object-title-edit-button'));
+    final titleEditButton = find.byKey(
+      const ValueKey('object-title-edit-button'),
+    );
     await _pumpUntil(tester, () => titleEditButton.evaluate().isNotEmpty);
 
     expect(titleEditButton, findsOneWidget);
@@ -103,8 +101,9 @@ void main() {
     );
 
     await tester.tap(titleEditButton);
-    final titleEditField =
-        find.byKey(const ValueKey('object-title-edit-field'));
+    final titleEditField = find.byKey(
+      const ValueKey('object-title-edit-field'),
+    );
     await _pumpUntil(tester, () => titleEditField.evaluate().isNotEmpty);
     await tester.enterText(titleEditField, 'Edited image');
     await tester.tap(find.byKey(const ValueKey('object-title-edit-save')));
@@ -112,8 +111,9 @@ void main() {
 
     final noteId = definition.noteProperty.id;
     await tester.tap(find.byKey(ValueKey('edit-object-value-$noteId')));
-    final noteEditField =
-        find.byKey(ValueKey('object-value-edit-field-$noteId'));
+    final noteEditField = find.byKey(
+      ValueKey('object-value-edit-field-$noteId'),
+    );
     await _pumpUntil(tester, () => noteEditField.evaluate().isNotEmpty);
     await tester.enterText(noteEditField, 'User note');
     await tester.tap(find.byKey(ValueKey('object-value-edit-save-$noteId')));
@@ -179,8 +179,9 @@ void main() {
         ),
       ),
     );
-    final imagePanel =
-        find.byKey(ValueKey('object-image-detail-panel-${image.id}'));
+    final imagePanel = find.byKey(
+      ValueKey('object-image-detail-panel-${image.id}'),
+    );
     await _pumpUntil(tester, () => imagePanel.evaluate().isNotEmpty);
 
     expect(
