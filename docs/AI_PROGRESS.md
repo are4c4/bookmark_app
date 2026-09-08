@@ -13,9 +13,9 @@ Core product direction:
 - Built-in code is reserved for irreducible native behavior; domain models such as Bookmark/Paper/Book/Project should normally be user-owned templates/configuration.
 
 ## Repository position — 2026-09-08
-The generic composition architecture is proven in production code. Remaining work is primarily Photo -> Image / Weblink convergence, exact live Object-sync impact, maintainability/caller-zero retirement, final Vault real-machine validation, and usage-driven daily-use finishing.
+The generic composition architecture is proven in production code. Remaining work is primarily Photo -> Image / Weblink convergence, maintainability/caller-zero retirement, final Vault real-machine validation, and usage-driven daily-use finishing.
 
-Completed focused milestones now include #249, #414, #481, #484, #489, #490, #491, #492, #493, #494, #495, #501, #877, #888, #895, #896, #897 and #218.
+Completed focused milestones now include #249, #414, #481, #484, #489, #490, #491, #492, #493, #494, #495, #501, #877, #888, #895, #896, #897, #909 and #218.
 
 Recent integration proof:
 - #856 (`7e103a02…`) proves Bookmark-like behavior can be expressed through user-owned template/Object/Relation/Database/View configuration rather than a new Bookmark-only persistence model.
@@ -27,16 +27,18 @@ Recent integration proof:
 - #895 / PR #922 (`bc09381b9eb77dee6b4ef12a94e7b9c06bc86c36`) hardens those Bookmark Image Relation writers with strict stored-value/index/target/cardinality mutation preflight and rollback-safe compatibility projection; Flutter CI #2793 Analyze + full Test green.
 - #896 is completed: canonical Images receive a useful shared default Gallery View without resetting user customization.
 - #897 is completed: legacy Photo physical deletion is constrained to proven active-Vault managed ownership and fails closed on external/ambiguous paths.
+- #909 / PR #923 (`03acb81633031cb833975196b29f66947d9de747`) provides exact Search-agnostic canonical Object impact from live mirror sync while preserving initial non-notifying bootstrap and callback failure isolation; Flutter CI #2795 full green.
 - #218 is completed after real-Mac release launch/data-preservation validation.
 
 ## Active architecture/product issues
-Live GitHub audit at this handoff shows **6 open Issues**:
+Live GitHub audit at this handoff shows **5 open Issues**:
 - `#56` — generic Object/Database/View daily-use integration umbrella.
 - `#155` — reusable Weblink Object; remaining rich Weblink/Image presentation and legacy Bookmark URL/media convergence.
 - `#225` — maintainability, hotspot reduction and legacy-path retirement.
 - `#242` — Vault/storage lifecycle; production implementation complete, final real-macOS Create/Open/Switch/Move/Recovery validation remains.
 - `#245` — legacy Photos -> canonical Image Objects.
-- `#909` — Object Core: report exact canonical Object impact from live mirror sync. Open PR #923 is the current implementation PR and must be verified live before parallel edits to its Object-sync files.
+
+There are no open PRs at the latest audit. Re-check live PR state before starting new work rather than relying on this snapshot.
 
 Do not treat completed architecture Issues as active merely because older umbrella bodies/comments still contain unchecked historical bullets.
 
@@ -53,9 +55,9 @@ Each implementation run/PR has exactly one primary lane. Issues may span lanes, 
 
 ## Current routing
 ### A — Object Core & Body
-**Active: #909.**
+#909 is **completed/closed**. Lane A is currently **idle by design** unless #56 or real usage exposes another concrete Object-core/Body/detail/sync correctness obligation.
 
-Lane A owns the Search-agnostic canonical Object-sync impact contract. Current PR #923 reports exact semantic canonical Object changes from live mirror sync and should remain independent of Search repositories/FTS writes. Re-check PR/CI state before touching `ObjectSyncService` or the new impact seam.
+The integrated #909 contract reports only canonical Object ids whose semantic persisted state changed during one successful live mirror pass. It excludes timestamps and legacy/user payload, preserves initial bootstrap as non-notifying, and keeps downstream callback failure outside the canonical persistence transaction.
 
 ### B — Relations & Data Integrity
 #895 is **completed/closed**. Lane B is currently **idle by design** unless new #245/#56 production work introduces a Relation writer/reader/delete/compatibility projection or a concrete corruption regression.
@@ -71,7 +73,7 @@ Primary active Issues remain **#155 and #245**.
 Recent Image migration checkpoints include canonical Bookmark detail/photo-management/create Image Relation writes (#881/#889/#892), #895 integrity hardening, #896 default Images Gallery UX, and #897 Vault-safe legacy Photo deletion. Continue canonical Image write/presentation parity and retire Photo-only callers only after replacement parity and safety are demonstrated.
 
 ### E — Search & Indexing
-No open Search-owned Issue is present in the current live Issue audit. Preserve focused Search-owned refresh rather than routine full-workspace rebuilds. If future live-mirror refresh work consumes #909 impact, Search owns FTS invalidation/writes while Lane A owns the canonical impact contract.
+No open Search-owned Issue is present in the current live Issue audit. Preserve focused Search-owned refresh rather than routine full-workspace rebuilds. The #909 canonical Object-sync impact contract is now available as a Search-agnostic invalidation input when future live-mirror Search work needs it.
 
 ### F — Storage, Vault & Delivery
 #897 and #218 are **completed/closed**. #242 remains open only for final real-macOS Vault preservation validation; repository implementation and automated regression coverage are otherwise complete. Do not invent additional Vault code solely because #242 is open for manual validation.
@@ -92,6 +94,7 @@ No open Search-owned Issue is present in the current live Issue audit. Preserve 
 - Bookmark detail, Photo Management attachment and Bookmark creation write image selection through canonical Image Relations (#881/#889/#892); #895 prevents corrupt canonical state or compatibility sync from silently overwriting those Relations.
 - Canonical Images have shared default Gallery configuration (#896) while retaining normal View customization.
 - Legacy Photo physical deletion is Vault-safe (#897); external/ambiguous files are preserved.
+- Live Object mirror sync can report exact semantic canonical Object impact without Search dependencies (#909).
 - Image and File remain distinct built-in primitives while sharing managed-file/Vault infrastructure.
 - PDF remains File + capabilities/enrichment/search; there is no separate PDF persistence model.
 - Global Search is canonical Object search; focused detail-return freshness covers root, trustworthy Relation-linked, and nested-visited Objects without routine workspace rebuilds.
@@ -101,11 +104,10 @@ No open Search-owned Issue is present in the current live Issue audit. Preserve 
 ## Remaining product edge
 Highest-value live work:
 1. **#245 Photo -> Image** — finish canonical Image presentation/write parity, migrate remaining Bookmark/People/Photo consumers, then hide/retire legacy `写真` only after caller parity.
-2. **#909 exact Object sync impact** — finish and integrate the Search-agnostic canonical impact contract through PR #923 when CI and concurrency state allow.
-3. **#155 Weblink convergence** — finish generic rich Weblink/Image presentation and retire remaining Bookmark URL/thumbnail compatibility only after caller-zero proof.
-4. **#225 Refactor** — delete superseded shims/legacy paths after replacement parity.
-5. **#242 validation** — final real-macOS Vault Create/Open/Switch/Move/Recovery preservation checks.
-6. **#56 usage-driven finishing** — create focused follow-ups only for demonstrated daily-use gaps.
+2. **#155 Weblink convergence** — finish generic rich Weblink/Image presentation and retire remaining Bookmark URL/thumbnail compatibility only after caller-zero proof.
+3. **#225 Refactor** — delete superseded shims/legacy paths after replacement parity.
+4. **#242 validation** — final real-macOS Vault Create/Open/Switch/Move/Recovery preservation checks.
+5. **#56 usage-driven finishing** — create focused follow-ups only for demonstrated daily-use gaps.
 
 ## Repository-wide design contract
 - Objects are global and are not owned/duplicated by Databases or Views.
@@ -124,7 +126,7 @@ Shared hotspots include `generic_database_page.dart`, `app_shell.dart`, `object_
 
 Before non-trivial edits, inspect current open PR ownership. One lane at a time may hold a broad hotspot lease. Patch-sized non-overlapping changes still require a fresh overlap audit.
 
-Current live coordination note: PR #923 owns `ObjectSyncService` and its exact-impact seam. It does not overlap Lane B Relation files, but future Object/Search work should not race those same Object-sync files.
+At the latest audit there is no open PR, so no repository-wide hotspot lease is recorded here. This is only a snapshot; always verify again immediately before editing.
 
 ## Cross-lane boundaries
 - Database/View owns generic presentation/configuration; Primitive owns Weblink/Image/File-specific product semantics.
@@ -138,14 +140,14 @@ Current live coordination note: PR #923 owns `ObjectSyncService` and its exact-i
 - Follow `AGENTS.md` autonomous-loop, lane ownership and stopping criteria.
 - Do not manufacture no-op/whitespace/temp commits to trigger CI; use workflow rerun controls or the next meaningful change.
 - Always re-read live GitHub state before implementation; handoff files are durable checkpoints, not substitutes for current Issues/PRs/CI.
-- Idle is correct when no concrete work exists. Lane B is idle after #895 and Lane C after #896 until a new concrete trigger appears; Lane A is currently active on #909.
+- Idle is correct when no concrete work exists. Lanes A/B/C are currently idle after #909/#895/#896 until new concrete triggers appear; D and G retain active repository implementation work, while F #242 is manual-validation gated.
 
 ## Known risks
 - legacy Bookmark URL/thumbnail/Photo compatibility data remains live while old callers still consume it;
 - Photo -> Image migration must not delete or rewrite user data before parity and ownership are proven;
 - malformed Relation state must fail closed rather than be silently projected/repaired by presentation or compatibility workflows;
 - Search freshness fixes must not reintroduce full-workspace rebuilds or Search dependencies into Object presentation/core contracts;
-- exact Object-sync impact must avoid timestamp/no-op false positives and must not expose legacy/user payload;
+- consumers of Object-sync impact must keep it as canonical ids/semantic impact rather than rebuilding broad timestamp-driven invalidation;
 - Vault changes must not silently replace inaccessible storage with a new empty database;
 - physical file deletion must not derive authority from an arbitrary legacy path;
 - large shared hosts remain conflict magnets; throughput comes from lane ownership + hotspot leases, not concurrent broad edits.
