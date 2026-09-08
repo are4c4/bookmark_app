@@ -86,6 +86,21 @@ def _read_profile(vault: Path) -> dict[str, Any]:
         raise ManifestError("profile.json is unreadable or invalid JSON") from exc
     if not isinstance(decoded, dict):
         raise ManifestError("profile.json must contain a JSON object")
+
+    profile_id = decoded.get("id")
+    name = decoded.get("name")
+    if (
+        decoded.get("formatVersion") != 1
+        or not isinstance(profile_id, str)
+        or not profile_id.strip()
+        or not isinstance(name, str)
+        or not name.strip()
+        or decoded.get("database") != "database.sqlite"
+        or decoded.get("photos") != "photos"
+        or decoded.get("attachments") != "attachments"
+    ):
+        raise ManifestError("profile.json does not match the Vault v1 metadata contract")
+
     return {key: decoded.get(key) for key in PROFILE_KEYS}
 
 
