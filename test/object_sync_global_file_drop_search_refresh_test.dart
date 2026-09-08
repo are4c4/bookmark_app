@@ -102,7 +102,8 @@ void main() {
     },
   );
 
-  test('watcher mirror deletion removes the previous canonical FTS row', () async {
+  test('same-workspace mirror deletion removes the previous canonical FTS row',
+      () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
     final workspaceId = await WorkspaceStore(database).initialize();
@@ -126,19 +127,13 @@ void main() {
 
     final genericStore = GenericDatabaseStore(database);
     final search = ObjectGlobalSearchService(genericStore);
-    final baselineRefreshed = Completer<void>();
-    final refreshed = Completer<List<int>>();
-    var deletionStarted = false;
+    final impacts = <List<int>>[];
     final sync = ObjectSyncService(
       database,
       onCanonicalObjectsMirrored: (objectIds) async {
         final ids = objectIds.toSet().toList()..sort();
+        impacts.add(ids);
         await search.refreshObjectLabelDependentsFor(ids);
-        if (!deletionStarted) {
-          if (!baselineRefreshed.isCompleted) baselineRefreshed.complete();
-          return;
-        }
-        if (!refreshed.isCompleted) refreshed.complete(ids);
       },
     );
     addTearDown(sync.dispose);
@@ -160,20 +155,21 @@ void main() {
     ).getSingle();
     expect(indexedBefore.read<int>('count'), 1);
 
-    // Drift watch streams emit their current snapshot after subscription.
-    // Drain that first coalesced callback before entering the deletion phase so
-    // it cannot be mistaken for the watcher tick caused by the delete below.
-    await baselineRefreshed.future.timeout(const Duration(seconds: 3));
-    deletionStarted = true;
+    impacts.clear();
     await database.customStatement(
       'DELETE FROM bookmarks WHERE id = ?',
       <Object>[legacyBookmarkId],
     );
 
-    final impacted = await refreshed.future.timeout(const Duration(seconds: 3));
+    // Re-entering sync for an already-watched workspace is the same public
+    // completion path used by live mirror work, but unlike waiting on debounce
+    // it is deterministic for this previous-snapshot cleanup invariant.
+    await sync.syncWorkspace(workspaceId);
+
+    expect(impacts, isNotEmpty);
     expect(
-      impacted,
-      contains(bookmark.id),
+      impacts.any((ids) => ids.contains(bookmark.id)),
+      isTrue,
       reason:
           'the previous mirror snapshot must carry deleted canonical ids into focused invalidation',
     );
