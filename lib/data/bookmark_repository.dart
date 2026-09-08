@@ -328,8 +328,8 @@ class BookmarkRepository {
   }
 
   Future<int> createPerson(String name, {String? note}) => _database.createPerson(name, note: note);
-  Future<void> updatePerson(Person person, String name, String? note, {PhotoRecord? profilePhoto, bool updateProfilePhoto = false}) =>
-      _database.updatePerson(person.id, name, note, profilePhotoId: profilePhoto?.id, updateProfilePhoto: updateProfilePhoto);
+  Future<void> updatePerson(Person person, String name, String? note) =>
+      _database.updatePerson(person.id, name, note);
   Future<void> deletePerson(Person person) => _database.deletePerson(person.id);
 
   Future<int> createCollection(String name, {String? note}) => _database.createCollection(name, note: note);
