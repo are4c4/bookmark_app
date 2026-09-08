@@ -122,6 +122,59 @@ void main() {
       );
     },
   );
+
+  test(
+    'mapped Photo file mismatch fails closed for a reused native Image',
+    () async {
+      final fixture = await _MappingFixture.create();
+      addTearDown(fixture.dispose);
+      final managedFile = await fixture.createManagedFile('native-path.png');
+      final nativeImage = await fixture.images.findOrCreateManaged(
+        workspaceId: fixture.workspaceId,
+        filePath: fixture.database.pathResolver.toStoredPath(managedFile.path),
+        title: 'Native path image',
+      );
+      final photoId = await fixture.database.addPhoto(path: managedFile.path);
+
+      await fixture.syncLegacyPhotoMirrors();
+
+      final differentFile = await fixture.createManagedFile('different.png');
+      await fixture.database.customStatement(
+        'UPDATE photos SET path = ? WHERE id = ?',
+        <Object>[
+          fixture.database.pathResolver.toStoredPath(differentFile.path),
+          photoId,
+        ],
+      );
+      final imageType = (await fixture.systemObjects.getSystemObjectType(
+        workspaceId: fixture.workspaceId,
+        systemKey: CoreObjectBridge.photoSystemKey,
+      ))!;
+
+      await expectLater(
+        fixture.services.relationMutations.deleteObject(
+          workspaceId: fixture.workspaceId,
+          objectTypeId: imageType.id,
+          objectId: nativeImage.id,
+        ),
+        throwsA(isA<LegacyPhotoImageDeletionSafetyException>()),
+      );
+
+      expect(await managedFile.exists(), isTrue);
+      expect(await differentFile.exists(), isTrue);
+      expect(
+        (await fixture.objectStore.listObjects(imageType.id))
+            .map((candidate) => candidate.id),
+        contains(nativeImage.id),
+      );
+      expect(
+        await fixture.database
+            .customSelect('SELECT id FROM photos WHERE id = $photoId')
+            .get(),
+        hasLength(1),
+      );
+    },
+  );
 }
 
 class _MappingFixture {
