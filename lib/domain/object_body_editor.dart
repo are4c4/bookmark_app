@@ -82,6 +82,35 @@ class ObjectBodyEditor {
     return document.copyWith(blocks: List.unmodifiable(next));
   }
 
+  /// Merges a plain paragraph into the previous plain paragraph.
+  ///
+  /// This is intentionally conservative: styled/attributed paragraphs or a
+  /// non-paragraph predecessor are left untouched so Backspace never discards
+  /// block-level semantics merely to mimic a text editor.
+  ObjectBodyDocument mergeParagraphIntoPrevious({
+    required ObjectBodyDocument document,
+    required String blockId,
+  }) {
+    final index = _indexOf(document, blockId);
+    if (index == 0) return document;
+
+    final current = document.blocks[index];
+    final previous = document.blocks[index - 1];
+    if (current.type != 'paragraph' ||
+        previous.type != 'paragraph' ||
+        current.attributes.isNotEmpty ||
+        previous.attributes.isNotEmpty) {
+      return document;
+    }
+
+    final next = List<ObjectBodyBlock>.of(document.blocks);
+    next[index - 1] = previous.copyWith(
+      text: '${previous.text ?? ''}${current.text ?? ''}',
+    );
+    next.removeAt(index);
+    return document.copyWith(blocks: List.unmodifiable(next));
+  }
+
   ObjectBodyDocument removeBlock({
     required ObjectBodyDocument document,
     required String blockId,
