@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../domain/object_body_block_contracts.dart';
 import '../../../../domain/object_body_block_presentation.dart';
+
+typedef ObjectBodyParagraphSplitCallback = Future<void> Function(
+  TextSelection selection,
+);
 
 /// Shared Flutter renderer/editor for one Object Body block.
 ///
@@ -14,29 +19,37 @@ class ObjectBodyBlockView extends StatelessWidget {
     super.key,
     required this.presentation,
     this.onTextChanged,
+    this.onParagraphSplit,
     this.onChecklistChanged,
     this.onObjectReferenceTap,
     this.onDatabaseViewTap,
     this.onAssetTap,
+    this.autofocus = false,
   });
 
   final ObjectBodyBlockPresentation presentation;
   final ValueChanged<String>? onTextChanged;
+  final ObjectBodyParagraphSplitCallback? onParagraphSplit;
   final ValueChanged<bool>? onChecklistChanged;
   final VoidCallback? onObjectReferenceTap;
   final VoidCallback? onDatabaseViewTap;
   final VoidCallback? onAssetTap;
+  final bool autofocus;
 
   @override
   Widget build(BuildContext context) {
     final block = presentation.block;
     switch (presentation.kind) {
       case ObjectBodyBlockPresentationKind.text:
+        final isParagraph = block.type == ObjectBodyBlockType.paragraph;
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: _textControl(
             initialValue: block.text ?? '',
             onChanged: onTextChanged,
+            onSplit: isParagraph ? onParagraphSplit : null,
+            maxLines: isParagraph ? null : 1,
+            autofocus: autofocus,
           ),
         );
       case ObjectBodyBlockPresentationKind.heading:
@@ -46,6 +59,7 @@ class ObjectBodyBlockView extends StatelessWidget {
             initialValue: block.text ?? '',
             onChanged: onTextChanged,
             style: _headingStyle(context, presentation.headingLevel),
+            autofocus: autofocus,
           ),
         );
       case ObjectBodyBlockPresentationKind.checklist:
@@ -64,6 +78,7 @@ class ObjectBodyBlockView extends StatelessWidget {
                 child: _textControl(
                   initialValue: block.text ?? '',
                   onChanged: onTextChanged,
+                  autofocus: autofocus,
                 ),
               ),
             ),
@@ -93,6 +108,7 @@ class ObjectBodyBlockView extends StatelessWidget {
                 initialValue: block.text ?? '',
                 onChanged: onTextChanged,
                 maxLines: null,
+                autofocus: autofocus,
               ),
             ],
           ),
@@ -138,23 +154,22 @@ class ObjectBodyBlockView extends StatelessWidget {
   Widget _textControl({
     required String initialValue,
     required ValueChanged<String>? onChanged,
+    ObjectBodyParagraphSplitCallback? onSplit,
     TextStyle? style,
     int? maxLines = 1,
+    bool autofocus = false,
   }) {
     if (onChanged == null) {
       return Text(initialValue, style: style);
     }
-    return TextFormField(
+    return _ObjectBodyTextControl(
       key: ValueKey('body-text-${presentation.block.id}'),
       initialValue: initialValue,
-      maxLines: maxLines,
-      style: style,
-      decoration: const InputDecoration(
-        isDense: true,
-        border: InputBorder.none,
-        contentPadding: EdgeInsets.zero,
-      ),
       onChanged: onChanged,
+      onSplit: onSplit,
+      style: style,
+      maxLines: maxLines,
+      autofocus: autofocus,
     );
   }
 
@@ -166,6 +181,148 @@ class ObjectBodyBlockView extends StatelessWidget {
       3 => textTheme.titleMedium,
       _ => textTheme.titleLarge,
     };
+  }
+}
+
+class _ObjectBodyTextControl extends StatefulWidget {
+  const _ObjectBodyTextControl({
+    super.key,
+    required this.initialValue,
+    required this.onChanged,
+    required this.maxLines,
+    this.onSplit,
+    this.style,
+    this.autofocus = false,
+  });
+
+  final String initialValue;
+  final ValueChanged<String> onChanged;
+  final ObjectBodyParagraphSplitCallback? onSplit;
+  final TextStyle? style;
+  final int? maxLines;
+  final bool autofocus;
+
+  @override
+  State<_ObjectBodyTextControl> createState() => _ObjectBodyTextControlState();
+}
+
+class _ObjectBodyTextControlState extends State<_ObjectBodyTextControl> {
+  late final TextEditingController _controller;
+  late final FocusNode _focusNode;
+  bool _splitPending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialValue);
+    _focusNode = FocusNode();
+    _requestAutofocusIfNeeded();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ObjectBodyTextControl oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialValue != oldWidget.initialValue &&
+        widget.initialValue != _controller.text) {
+      final oldOffset = _controller.selection.extentOffset;
+      final nextOffset = oldOffset < 0
+          ? widget.initialValue.length
+          : oldOffset.clamp(0, widget.initialValue.length).toInt();
+      _controller.value = TextEditingValue(
+        text: widget.initialValue,
+        selection: TextSelection.collapsed(offset: nextOffset),
+      );
+    }
+    if (widget.autofocus && !oldWidget.autofocus) {
+      _requestAutofocusIfNeeded();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _requestAutofocusIfNeeded() {
+    if (!widget.autofocus) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focusNode.requestFocus();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final field = TextField(
+      controller: _controller,
+      focusNode: _focusNode,
+      maxLines: widget.maxLines,
+      style: widget.style,
+      decoration: const InputDecoration(
+        isDense: true,
+        border: InputBorder.none,
+        contentPadding: EdgeInsets.zero,
+      ),
+      onChanged: widget.onChanged,
+    );
+
+    if (widget.onSplit == null) return field;
+    return Focus(
+      onKeyEvent: _handleKeyEvent,
+      child: field,
+    );
+  }
+
+  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent ||
+        event.logicalKey != LogicalKeyboardKey.enter ||
+        _hasActiveComposition) {
+      return KeyEventResult.ignored;
+    }
+    if (HardwareKeyboard.instance.isShiftPressed) {
+      _insertLineBreak();
+    } else {
+      _requestSplit();
+    }
+    return KeyEventResult.handled;
+  }
+
+  bool get _hasActiveComposition {
+    final composing = _controller.value.composing;
+    return composing.isValid && !composing.isCollapsed;
+  }
+
+  TextSelection get _normalizedSelection {
+    final value = _controller.value;
+    final selection = value.selection;
+    if (!selection.isValid) {
+      return TextSelection.collapsed(offset: value.text.length);
+    }
+    final start = selection.start.clamp(0, value.text.length).toInt();
+    final end = selection.end.clamp(start, value.text.length).toInt();
+    return TextSelection(baseOffset: start, extentOffset: end);
+  }
+
+  void _insertLineBreak() {
+    final selection = _normalizedSelection;
+    final value = _controller.value;
+    final text = value.text.replaceRange(selection.start, selection.end, '\n');
+    final offset = selection.start + 1;
+    _controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: offset),
+    );
+    widget.onChanged(text);
+  }
+
+  void _requestSplit() {
+    final split = widget.onSplit;
+    if (split == null || _splitPending) return;
+    _splitPending = true;
+    split(_normalizedSelection).whenComplete(() {
+      if (mounted) _splitPending = false;
+    });
   }
 }
 
