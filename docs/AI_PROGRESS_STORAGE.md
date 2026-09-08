@@ -31,6 +31,7 @@ Added:
 The helper is deliberately read-only with respect to the inspected Vault:
 - rejects a Vault root that is a symlink/file;
 - requires regular non-symlink `profile.json` and `database.sqlite`;
+- validates the Vault v1 metadata contract before snapshotting;
 - opens SQLite with `mode=ro` and requires `PRAGMA quick_check == ok`;
 - records database size/SHA-256 for diagnostics but does not require identical SQLite bytes after legitimate reopen/migration/path rewrite;
 - recursively inventories `photos/` and `attachments/` using `lstat` and never follows symlinks;
@@ -45,14 +46,15 @@ Privacy note: manifests may contain relative managed filenames and literal symli
 
 Validation coverage currently includes:
 1. SQLite quick-check + managed-file hashing.
-2. unchanged comparison success.
-3. changed/missing managed-file detection.
-4. optional profile-id change for Duplicate/restore.
-5. symlink observation without traversal.
-6. symlink database rejection.
-7. symlink Vault-root rejection.
-8. direct manifest-output-inside-Vault rejection.
-9. symlink-parent manifest-output redirection rejection.
+2. invalid Vault v1 metadata rejection.
+3. unchanged comparison success.
+4. changed/missing managed-file detection.
+5. optional profile-id change for Duplicate/restore.
+6. symlink observation without traversal.
+7. symlink database rejection.
+8. symlink Vault-root rejection.
+9. direct manifest-output-inside-Vault rejection.
+10. symlink-parent manifest-output redirection rejection.
 
 The Python regression is wired into the existing `Developer workflow diagnostic tests` CI step so the repository's normal full gate validates it.
 
@@ -131,14 +133,15 @@ Current F branch does not edit `profile_manager.dart`, `settings_page.dart`, `ap
 ## Current checkpoint / validation
 - baseline refreshed to main `10bae52808a0176a94163228d348c988de516498` after #1019 merged;
 - current branch: `feature/storage-vault-preservation-manifest-951`;
-- current branch includes the read-only manifest helper, nine focused Python regressions, validation guide, and CI invocation;
-- an earlier local version of the helper passed its first eight Python unit tests; the ninth symlink-parent containment regression was added during safety review and is now covered by normal PR CI;
+- PR: #1026 `Add read-only Vault preservation manifest tool`;
+- current branch includes the read-only manifest helper, ten focused Python regressions, validation guide, and CI invocation;
+- CI #2999 proved the initial nine-test helper suite executed successfully in `Developer workflow diagnostic tests`; a follow-up safety review added explicit Vault v1 metadata validation plus the tenth regression, now awaiting the latest full CI run;
 - production app/Vault behavior changed: **none**;
 - migration/data impact: **none**;
 - shared hotspot lease: **none**.
 
 ## Next actions
-1. Open/integrate the focused F PR after normal CI proves the Python regression plus Analyze/full Flutter Test remain green.
+1. Integrate PR #1026 after the latest normal CI proves all ten Python regressions plus Analyze/full Flutter Test remain green.
 2. Run the combined #951 + #242 real-macOS preservation matrix using `docs/vault_preservation_validation.md`, retaining the source Vault throughout destructive-looking Move/recovery exercises.
 3. Record filesystem/Vault results on #242 and Photo -> Image semantic-preservation results on #951.
 4. If a reproducible filesystem/Vault defect appears, create/follow a focused Lane F Issue and add a regression-backed fix. Otherwise close #242/#951 once the real-machine criteria are confirmed.
