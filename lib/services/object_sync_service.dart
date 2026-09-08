@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:drift/drift.dart';
 import 'package:rxdart/rxdart.dart';
 
 import '../data/app_database.dart';
@@ -13,11 +12,11 @@ import '../data/generic_database_store.dart';
 import '../data/object_store.dart';
 import '../data/object_type_defaults_store.dart';
 import '../data/photo_read_store.dart';
-import '../data/relation_read_service.dart';
 import '../data/system_object_store.dart';
 import '../data/tag_object_bridge.dart';
 import '../data/weblink_object_service.dart';
 import '../data/workspace_store.dart';
+import 'object_sync_impact.dart';
 import 'remote_image_storage_service.dart';
 import 'weblink_preview_image_pipeline.dart';
 
@@ -70,15 +69,13 @@ class ObjectSyncService {
   /// it does not know whether a caller uses Search, analytics, or no consumer.
   final Future<void> Function(int imageObjectId)? _onPreviewImageIngested;
 
-  /// Optional composition callback for a completed live legacy -> canonical
-  /// mirror pass. The ids are invalidation metadata only: current mapped
-  /// Tag/Image/Bookmark Objects, canonical Bookmark Weblink targets, plus ids
-  /// remembered from the preceding pass so deleted mirror rows can be cleared.
+  /// Optional composition callback for canonical Objects whose persisted
+  /// semantic state actually changed during one successful live mirror pass.
   ///
-  /// Initial bootstrap/workspace activation records the baseline without
-  /// notifying. Later watcher-driven or explicit same-workspace syncs notify
-  /// only after canonical mutation has succeeded. Callback failure is isolated
-  /// from the already-committed Object sync.
+  /// Initial bootstrap/workspace activation does not notify. Later
+  /// watcher-driven or explicit same-workspace syncs notify only the exact
+  /// changed canonical ids after every bridge has completed. Callback failure
+  /// is isolated from the already-committed Object sync.
   final Future<void> Function(Iterable<int> objectIds)?
       _onCanonicalObjectsMirrored;
 
@@ -97,7 +94,6 @@ class ObjectSyncService {
   final Map<String, String> _attemptedPreviewUrls = <String, String>{};
   StreamSubscription<Object?>? _subscription;
   Future<void>? _previewSyncFuture;
-  Set<int>? _lastCanonicalMirrorObjectIds;
   int? _queuedPreviewWorkspaceId;
   int? _watchedWorkspaceId;
   bool _syncing = false;
@@ -176,8 +172,16 @@ class ObjectSyncService {
     int workspaceId, {
     bool notifyCanonicalImpact = false,
   }) async {
-    await coreBridge.syncAll(workspaceId);
-    await bookmarkWeblinkBridge.syncWorkspace(workspaceId);
+    final before = await ObjectSyncSemanticSnapshot.capture(
+      objectStore: objectStore,
+      systemObjects: systemObjectStore,
+      workspaceId: workspaceId,
+      systemKeys: objectSyncMirrorSystemKeys,
+    );
+
+    final coreImpact = await coreBridge.syncAllWithImpact(workspaceId);
+    final weblinkSync =
+        await bookmarkWeblinkBridge.syncWorkspaceWithImpact(workspaceId);
 
     // Daily Notes are a normal system ObjectType and should be available to the
     // generic sidebar/Database host even before the user opens the first note.
@@ -189,8 +193,19 @@ class ObjectSyncService {
       defaultsStore: ObjectTypeDefaultsStore(genericStore),
     ).ensureDefinition(workspaceId);
 
-    await _recordCanonicalSyncImpact(
-      workspaceId,
+    final bridgeCandidates = coreImpact.combine(weblinkSync.impact);
+    final after = await ObjectSyncSemanticSnapshot.capture(
+      objectStore: objectStore,
+      systemObjects: systemObjectStore,
+      workspaceId: workspaceId,
+      systemKeys: objectSyncMirrorSystemKeys,
+    );
+    final exactImpact = before.changesTo(
+      after,
+      candidates: bridgeCandidates.objectIds,
+    );
+    await _notifyCanonicalSyncImpact(
+      exactImpact,
       notify: notifyCanonicalImpact,
     );
 
@@ -201,96 +216,20 @@ class ObjectSyncService {
     }
   }
 
-  Future<void> _recordCanonicalSyncImpact(
-    int workspaceId, {
+  Future<void> _notifyCanonicalSyncImpact(
+    ObjectSyncImpact impact, {
     required bool notify,
   }) async {
-    Set<int> current;
-    try {
-      current = await _collectCanonicalMirrorObjectIds(workspaceId);
-    } catch (_, stackTrace) {
-      // Impact reporting is a derived notification seam. Never make a healthy
-      // canonical mirror fail because optional downstream invalidation metadata
-      // could not be collected. Keep the previous baseline for a later retry.
-      _debugCanonicalImpactFailure('collection', stackTrace);
-      return;
-    }
-
-    final previous = _lastCanonicalMirrorObjectIds;
-    _lastCanonicalMirrorObjectIds = Set<int>.unmodifiable(current);
     final callback = _onCanonicalObjectsMirrored;
-    if (!notify || callback == null) return;
-
-    final affected = <int>{
-      ...?previous,
-      ...current,
-    };
-    if (affected.isEmpty) return;
-    final ordered = affected.toList()..sort();
+    if (!notify || callback == null || impact.isEmpty) return;
     try {
-      await callback(List<int>.unmodifiable(ordered));
+      await callback(impact.objectIds);
     } catch (_, stackTrace) {
-      // Canonical mirror mutation has already succeeded. Search/projection
+      // Canonical mirror mutation has already succeeded. Downstream projection
       // refresh is rebuildable and must not make the watcher retry or roll back
       // legacy/Object authority. Do not include ids or user content in logs.
       _debugCanonicalImpactFailure('notification', stackTrace);
     }
-  }
-
-  Future<Set<int>> _collectCanonicalMirrorObjectIds(int workspaceId) async {
-    final result = <int>{};
-    List<int> bookmarkObjectIds = const <int>[];
-    for (final table in const <String>[
-      'tag_object_links',
-      'photo_object_links',
-      'bookmark_object_links',
-    ]) {
-      final rows = await database.customSelect(
-        'SELECT object_id FROM $table WHERE workspace_id = ? ORDER BY object_id',
-        variables: <Variable<Object>>[Variable<int>(workspaceId)],
-      ).get();
-      final ids = rows
-          .map((row) => row.read<int>('object_id'))
-          .toList(growable: false);
-      result.addAll(ids);
-      if (table == 'bookmark_object_links') bookmarkObjectIds = ids;
-    }
-
-    if (bookmarkObjectIds.isEmpty) return result;
-    final bookmarkType = await systemObjectStore.getSystemObjectType(
-      workspaceId: workspaceId,
-      systemKey: CoreObjectBridge.bookmarkSystemKey,
-    );
-    if (bookmarkType == null) return result;
-    final weblinkRelations = bookmarkType.properties
-        .where(
-          (property) =>
-              property.name == BookmarkWeblinkObjectBridge.relationName &&
-              property.isRelation,
-        )
-        .toList(growable: false);
-    if (weblinkRelations.length != 1) return result;
-
-    final relationId = weblinkRelations.single.id;
-    final relationReads = RelationReadService(objectStore);
-    for (final bookmarkObjectId in bookmarkObjectIds) {
-      try {
-        final outgoing = await relationReads.outgoing(
-          sourceObjectTypeId: bookmarkType.id,
-          sourceObjectId: bookmarkObjectId,
-        );
-        for (final relation in outgoing) {
-          if (relation.property.id == relationId) {
-            result.add(relation.targetObject.id);
-          }
-        }
-      } on FormatException {
-        // Relation owns persisted/index/schema trust. Corrupt optional relation
-        // state contributes no target invalidation instead of becoming a second
-        // raw-edge authority inside Object sync.
-      }
-    }
-    return result;
   }
 
   /// Runs the optional Weblink preview ingestion queue and can be awaited by
@@ -410,7 +349,6 @@ class ObjectSyncService {
     _watchedWorkspaceId = null;
     _syncQueued = false;
     _queuedPreviewWorkspaceId = null;
-    _lastCanonicalMirrorObjectIds = null;
     final subscription = _subscription;
     _subscription = null;
     await subscription?.cancel();
