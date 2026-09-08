@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$repo_root"
 
@@ -26,8 +27,10 @@ while [[ $# -gt 0 ]]; do
 Usage: bash tool/check_format.sh [--all] [--base <git-ref>]
 
 By default, checks Dart files changed from a sensible local base plus staged,
-unstaged, and untracked Dart files. Set CHECK_BASE_REF or pass --base to make
-the comparison explicit. --all checks every tracked Dart file.
+unstaged, and untracked Dart files. Existing tracked files are checked only
+where `dart format` changes overlap edited lines, so historical formatter debt
+outside the patch does not force unrelated churn. New/untracked files and
+--all remain whole-file checks.
 EOF
       exit 0
       ;;
@@ -43,8 +46,9 @@ if ! command -v dart >/dev/null 2>&1; then
   exit 127
 fi
 
-files_tmp="$(mktemp)"
-trap 'rm -f "$files_tmp"' EXIT
+tmp_dir="$(mktemp -d)"
+files_tmp="$tmp_dir/files"
+trap 'rm -rf "$tmp_dir"' EXIT
 
 if [[ "$check_all" == true ]]; then
   git ls-files '*.dart' >"$files_tmp"
@@ -64,7 +68,8 @@ else
     if git rev-parse --verify --quiet "${base_ref}^{commit}" >/dev/null; then
       git diff --name-only --diff-filter=ACMR "${base_ref}...HEAD" -- '*.dart' >>"$files_tmp"
     else
-      echo "check_format: base ref '$base_ref' is unavailable; checking working-tree Dart changes only" >&2
+      echo "check_format: base ref '$base_ref' is unavailable; checking working-tree Dart changes as whole files" >&2
+      base_ref=''
     fi
   fi
 
@@ -95,15 +100,79 @@ if [[ ${#files[@]} -eq 0 ]]; then
 fi
 
 echo "check_format: checking ${#files[@]} Dart file(s)"
-set +e
-dart format --output=none --set-exit-if-changed "${files[@]}"
-format_status=$?
-set -e
+failed=false
+index=0
 
-if [[ $format_status -ne 0 ]]; then
-  echo
-  echo "check_format: formatting differs; suggested diff follows"
-  dart format "${files[@]}" >/dev/null 2>&1 || true
-  git --no-pager diff -- "${files[@]}" || true
-  exit "$format_status"
+for file in "${files[@]}"; do
+  index=$((index + 1))
+  original="$tmp_dir/original-$index.dart"
+  source_patch="$tmp_dir/source-$index.patch"
+  format_patch="$tmp_dir/format-$index.patch"
+  format_stderr="$tmp_dir/format-$index.stderr"
+  cp "$file" "$original"
+
+  whole_file="$check_all"
+  if [[ "$whole_file" != true ]]; then
+    if [[ -z "$base_ref" ]] \
+      || ! git ls-files --error-unmatch "$file" >/dev/null 2>&1 \
+      || ! git cat-file -e "${base_ref}:${file}" 2>/dev/null; then
+      whole_file=true
+    else
+      git diff --unified=0 "$base_ref" -- "$file" >"$source_patch"
+    fi
+  fi
+
+  set +e
+  dart format "$file" >/dev/null 2>"$format_stderr"
+  format_status=$?
+  set -e
+
+  if [[ $format_status -ne 0 ]]; then
+    cat "$original" >"$file"
+    echo "check_format: dart format failed for $file" >&2
+    cat "$format_stderr" >&2
+    failed=true
+    continue
+  fi
+
+  set +e
+  git diff --no-index --unified=0 -- "$original" "$file" >"$format_patch"
+  diff_status=$?
+  set -e
+  cat "$original" >"$file"
+
+  if [[ $diff_status -gt 1 ]]; then
+    echo "check_format: could not inspect formatter diff for $file" >&2
+    failed=true
+    continue
+  fi
+  if [[ ! -s "$format_patch" ]]; then
+    continue
+  fi
+
+  if [[ "$whole_file" == true ]]; then
+    echo "check_format: $file requires dart format (whole-file check)" >&2
+    cat "$format_patch" >&2
+    failed=true
+    continue
+  fi
+
+  set +e
+  python3 "$script_dir/check_format_hunks.py" \
+    --source-diff "$source_patch" \
+    --format-diff "$format_patch" \
+    --path "$file"
+  hunk_status=$?
+  set -e
+
+  if [[ $hunk_status -eq 1 ]]; then
+    failed=true
+  elif [[ $hunk_status -ne 0 ]]; then
+    echo "check_format: hunk comparison failed for $file" >&2
+    failed=true
+  fi
+done
+
+if [[ "$failed" == true ]]; then
+  exit 1
 fi
