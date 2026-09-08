@@ -32,7 +32,7 @@ Recent integration proof:
 - #218 is completed after real-Mac release launch/data-preservation validation.
 
 ## Active architecture/product issues
-Live GitHub audit at this handoff shows **5 open Issues**:
+Durable repository-wide routing centers on these architecture/product Issues; focused child Issues may open or close between handoff updates:
 - `#56` — generic Object/Database/View daily-use integration umbrella.
 - `#155` — reusable Weblink Object; remaining rich Weblink/Image presentation and legacy Bookmark URL/media convergence.
 - `#225` — maintainability, hotspot reduction and legacy-path retirement.
