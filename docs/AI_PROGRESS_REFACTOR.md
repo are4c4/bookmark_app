@@ -9,15 +9,18 @@ Primary lane: **G — Refactor & Architecture Health**. Own behavior-preserving 
 
 ## Active checkpoint — 2026-09-08
 
-Latest `main` at this handoff: **`b42ca9bdb70a080d8a9ab186d70ab610b1a82994`** (`#940`).
+Latest `main` at this handoff: **`d705fd5c539a9274c024a36a155a2e4197e037b5`** (`#944`).
 
-Current open PR audit at this checkpoint: **none**. Re-check live state before every non-trivial edit because other lanes move quickly.
+Current open PR audit at this checkpoint:
+- **#943 — Lane D**, Bookmark detail/Weblink URL presentation. It does not own the data files changed by #944, but re-check its changed files before any Bookmark detail/attachment work.
+- **#946 — Lane A docs-only**, Object handoff refresh. It does not own Lane G runtime files.
 
-Lane G has just completed a sustained caller-zero/compatibility-retirement sequence. There is no active runtime branch at this checkpoint; the next implementation run should start from fresh `main` and select the next small behavior-preserving Issue #225 slice only after a new caller/ownership audit.
+Lane G merged #944 after green Analyze/full Test, then re-audited current small Store/Service candidates. The first follow-up candidates inspected (`DatabaseViewGroupAdapter`, `DatabaseViewTabOverflowPolicy`, `AppSettingsService`, Bookmark Image Relation factory, Image/PDF service boundaries) all still have production callers or are live canonical composition dependencies, so they were deliberately retained rather than turned into speculative cleanup. There is no active Lane G runtime branch at this checkpoint; `docs/refactor-handoff-after-944` only refreshes durable documentation.
 
 ## Latest integrated Lane G checkpoints
 
 Recent integration sequence:
+- **#944 / `d705fd5c…` — caller-zero Bookmark Saved View + Workspace facades retired.** Removed four Saved View forwarding APIs and their read/write fields from `BookmarkRepository`, plus caller-zero `WorkspaceStore` Saved View/workspace helper APIs. The only test fixture that used the forwarding API now writes through `SavedViewWriteStore` directly. Production diff: **110 LOC deleted** across the two data boundaries. `analyze-test` completed successfully before squash merge.
 - **#940 / `b42ca9bd…` — caller-zero Person role reverse query retired.** Removed `BookmarkRepository.watchRolesForPerson(...)` and its now-caller-zero `AppDatabasePersonRoles.watchRoleAssignmentsForPerson(...)`; live Bookmark -> Person role reads remain unchanged. Production diff: 15 LOC deleted. Flutter CI #2831 full green.
 - **#938 / `4f01eee6…` — legacy Bookmark-create Photo entry point retired.** Removed caller-zero `BookmarkImageRelationService.saveLegacyPhotosAfterCreate(...)`; production service diff deleted 116 LOC. The important corrupt-Cover fail-closed regression moved to canonical `saveImagesAfterCreate(...)`. Flutter CI #2826 full green.
 - **#915 / `545e07e1…` — legacy `AppDatabase` Bookmark↔Photo mutation helpers retired.** Removed five caller-zero mutation helpers after the only test fixture caller was converted to direct legacy-row fixture setup. Production diff: 42 LOC deleted; legacy compatibility reads/schema remain.
@@ -74,7 +77,8 @@ Examples of deliberately retained live APIs from the latest audit:
 - `watchBookmarksForPerson(...)`, `watchBookmarksForPhoto(...)`, `watchBookmarksForCollection(...)` — live management/backlink UI callers remain;
 - Photo CRUD / `watchPhotos()` — `PhotoManagementPage` and compatibility hosts still use them;
 - `BookmarkAttachmentStore.initialize()/dispose()` — bodies are currently trivial/no-op but live presentation code treats them as lifecycle contract; deleting them would require broader host edits for little responsibility reduction;
-- `BookmarkRepository.addRelation/removeRelation` — live through Backlink UI; #931 proved they are not dead.
+- `BookmarkRepository.addRelation/removeRelation` — live through Backlink UI; #931 proved they are not dead;
+- current View policy/adapters and primitive media/PDF services inspected after #944 — live production composition remains, so do not delete them based on names such as “compatibility” alone.
 
 Prefer deleting a real responsibility over introducing another pass-through abstraction just to improve a metric.
 
@@ -91,6 +95,8 @@ Still open and high-value:
 
 ### P2 — dependency composition
 Continue reducing presentation reach-through such as `repository.workspaceStore.database` when a real application facade can remove responsibility. Do not add a facade whose only purpose is forwarding one existing call.
+
+The post-#944 audit still finds live reach-through in known hotspots/management hosts. Prior audits already rejected wrapper-only `DatabaseViewStore` composition for Photo/People/Collection because it would hide the metric without reducing responsibility; keep that decision unless a meaningful existing boundary changes the equation.
 
 ### P2 — `AppDatabase` narrowing
 Major responsibilities have already moved out. Continue only where a real caller-zero or responsibility-removal slice exists, with regression coverage. Historical migration semantics remain compatibility contracts.
@@ -113,7 +119,7 @@ Always re-check open PR changed files immediately before non-trivial edits to:
 - `lib/services/profile_manager.dart`;
 - `lib/data/app_database.dart`.
 
-At this checkpoint there are no open PRs, but this fact is time-sensitive and must not be reused without a fresh audit.
+At this checkpoint, open runtime PR **#943** is Lane D and owns Bookmark detail/attachment URL presentation; open **#946** is Lane A docs-only. Neither currently owns the Lane G data boundaries changed by #944. This fact is time-sensitive and must not be reused without a fresh audit.
 
 ## Cross-lane boundaries
 - Lane A owns Object/ObjectType/Body and Object-owned presentation behavior.
@@ -128,6 +134,7 @@ At this checkpoint there are no open PRs, but this fact is time-sensitive and mu
 Local Flutter/Dart execution is unavailable in this connector environment; GitHub Flutter CI is the merge gate.
 
 Recent validation checkpoints:
+- #944: `analyze-test` success before squash merge.
 - #940: Flutter CI #2831 full green.
 - #938: Flutter CI #2826 full green.
 - #903: final Flutter CI #2748 full green.
@@ -137,12 +144,13 @@ Recent validation checkpoints:
 For caller-zero deletion, a green Analyze is especially important because it catches missed live callers that code search may not surface reliably (#931).
 
 ## Exact next actions
-1. Start from current `main`; re-read Issue #225 and live open PR ownership.
-2. Continue fresh caller-zero audit in small Store/Repository/Service boundaries. Delete only when wrapper-to-real-host tracing plus Analyze can prove zero callers.
+1. Start from current `main`; re-read Issue #225 and live open PR ownership because #943/#946 may have merged or changed.
+2. Continue fresh caller-zero audit in small Store/Repository/Service boundaries. Delete only when wrapper-to-real-host tracing plus Analyze can prove zero callers; do not repeat already-rejected live candidates from the post-#944 audit without new evidence.
 3. If no true deletion exists, select a patch-sized `GenericDatabasePage` P1 extraction that removes real responsibility without adding a pass-through layer; defer if hotspot ownership or connector whole-file risk makes the slice unsafe.
-4. Re-audit presentation/database reach-through for a focused composition improvement only where an application facade genuinely removes low-level construction.
+4. Re-audit presentation/database reach-through for a focused composition improvement only where an application facade genuinely removes low-level construction. Do not create wrappers solely to ratchet the metric.
 5. Keep Photo/Bookmark compatibility storage and reads until the owning product lane proves full replacement parity.
-6. Update Issue #225 and this handoff after the next material integration checkpoint.
+6. Refresh `docs/LEGACY_BOOKMARK_INVENTORY.md` when next naturally touched: its historical “remaining Database-presentation shims” narrative predates #899; the authoritative current state is zero shim imports/files.
+7. Update Issue #225 and this handoff after the next material integration checkpoint.
 
 ## Risks / stop conditions
 - Parallel lanes move `main` quickly; historical caller/ownership conclusions expire immediately.
