@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../domain/object_body.dart';
 import '../../../../domain/object_body_block_actions.dart';
@@ -9,6 +10,11 @@ typedef ObjectBodyBlockActionsBuilder = Widget Function(
   BuildContext context,
   ObjectBodyBlock block,
   ObjectBodyBlockPosition position,
+);
+
+typedef ObjectBodyParagraphSplitHandler = Future<void> Function(
+  ObjectBodyBlock block,
+  TextSelection selection,
 );
 
 /// Shared renderer/editor shell for a whole Object Body document.
@@ -22,24 +28,28 @@ class ObjectBodyDocumentView extends StatelessWidget {
     this.presenter = const ObjectBodyBlockPresenter(),
     this.positionResolver = const ObjectBodyBlockPositionResolver(),
     this.onTextChanged,
+    this.onParagraphSplit,
     this.onChecklistChanged,
     this.onObjectReferenceTap,
     this.onDatabaseViewTap,
     this.onAssetTap,
     this.blockActionsBuilder,
     this.emptyBuilder,
+    this.autofocusBlockId,
   });
 
   final ObjectBodyDocument document;
   final ObjectBodyBlockPresenter presenter;
   final ObjectBodyBlockPositionResolver positionResolver;
   final void Function(ObjectBodyBlock block, String text)? onTextChanged;
+  final ObjectBodyParagraphSplitHandler? onParagraphSplit;
   final void Function(ObjectBodyBlock block, bool checked)? onChecklistChanged;
   final ValueChanged<ObjectBodyBlock>? onObjectReferenceTap;
   final ValueChanged<ObjectBodyBlock>? onDatabaseViewTap;
   final ValueChanged<ObjectBodyBlock>? onAssetTap;
   final ObjectBodyBlockActionsBuilder? blockActionsBuilder;
   final WidgetBuilder? emptyBuilder;
+  final String? autofocusBlockId;
 
   @override
   Widget build(BuildContext context) {
@@ -63,6 +73,10 @@ class ObjectBodyDocumentView extends StatelessWidget {
                 onTextChanged: onTextChanged == null
                     ? null
                     : (text) => onTextChanged!(presentation.block, text),
+                onParagraphSplit: onParagraphSplit == null
+                    ? null
+                    : (selection) =>
+                        onParagraphSplit!(presentation.block, selection),
                 onChecklistChanged: onChecklistChanged == null
                     ? null
                     : (checked) =>
@@ -76,6 +90,7 @@ class ObjectBodyDocumentView extends StatelessWidget {
                 onAssetTap: onAssetTap == null
                     ? null
                     : () => onAssetTap!(presentation.block),
+                autofocus: presentation.block.id == autofocusBlockId,
               ),
               if (blockActionsBuilder != null)
                 blockActionsBuilder!(
