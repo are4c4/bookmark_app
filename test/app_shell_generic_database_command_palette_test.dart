@@ -41,7 +41,9 @@ Future<BookmarkRepository> _repository(AppDatabase database) async {
 }
 
 void main() {
-  testWidgets('command palette opens generic Images database', (tester) async {
+  testWidgets('shell exposes Images without legacy Photo navigation', (
+    tester,
+  ) async {
     await tester.binding.setSurfaceSize(const Size(1400, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -84,6 +86,16 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.text('写真'), findsNothing);
+    expect(find.text('Images'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('サイドバーを閉じる'));
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.photo_library_outlined), findsNothing);
+
+    await tester.tap(find.byTooltip('サイドバーを開く'));
+    await tester.pumpAndSettle();
+
     await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
     await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
@@ -91,10 +103,22 @@ void main() {
 
     final dialog = find.byType(AlertDialog);
     expect(dialog, findsOneWidget);
-    await tester.enterText(
-      find.descendant(of: dialog, matching: find.byType(TextField)),
-      'Images',
+    final searchField = find.descendant(
+      of: dialog,
+      matching: find.byType(TextField),
     );
+
+    await tester.enterText(searchField, '写真');
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: dialog,
+        matching: find.widgetWithText(ListTile, '写真'),
+      ),
+      findsNothing,
+    );
+
+    await tester.enterText(searchField, 'Images');
     await tester.pumpAndSettle();
 
     final imageDestination = find.descendant(

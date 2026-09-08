@@ -16,7 +16,6 @@ import 'collection_management_page.dart';
 import 'global_search_page.dart';
 import 'generic_database_page.dart';
 import 'people_management_page.dart';
-import 'photo_management_page.dart';
 import 'profile_management_page.dart';
 import 'settings_page.dart';
 import 'tag_management_page.dart';
@@ -590,7 +589,6 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
               const SizedBox(height: UiTokens.space6),
               _sectionHeader('DATABASES'),
               _navTile(0, Icons.bookmarks_outlined, 'ブックマーク'),
-              _navTile(5, Icons.photo_library_outlined, '写真'),
               _navTile(7, Icons.people_outline, '人物'),
               _navTile(6, Icons.account_tree_outlined, 'タグ'),
               _navTile(8, Icons.collections_bookmark_outlined, 'コレクション'),
@@ -659,7 +657,6 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
     final scheme = Theme.of(context).colorScheme;
     const destinations = <(int, IconData)>[
       (0, Icons.bookmarks_outlined),
-      (5, Icons.photo_library_outlined),
       (7, Icons.people_outline),
       (6, Icons.account_tree_outlined),
       (8, Icons.collections_bookmark_outlined),
@@ -690,7 +687,6 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
     var query = '';
     const destinations = <(String, IconData, int)>[
       ('ブックマーク', Icons.bookmarks_outlined, 0),
-      ('写真', Icons.photo_library_outlined, 5),
       ('人物', Icons.people_outline, 7),
       ('タグ', Icons.account_tree_outlined, 6),
       ('コレクション', Icons.collections_bookmark_outlined, 8),
@@ -811,7 +807,6 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
         2 => BookmarkLifecyclePage.inbox(repository: widget.repository),
         3 => BookmarkLifecyclePage.archive(repository: widget.repository),
         4 => BookmarkLifecyclePage.trash(repository: widget.repository),
-        5 => PhotoManagementPage(repository: widget.repository),
         6 => TagManagementPage(repository: widget.repository),
         7 => PeopleManagementPage(repository: widget.repository),
         8 => CollectionManagementPage(repository: widget.repository),
