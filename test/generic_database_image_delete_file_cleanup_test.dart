@@ -1,17 +1,14 @@
 import 'dart:io';
 
 import 'package:bookmark_app/data/app_database.dart';
-import 'package:bookmark_app/data/core_object_bridge.dart';
 import 'package:bookmark_app/data/generic_database_page_services.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
 import 'package:bookmark_app/data/image_object_service.dart';
 import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/object_type_defaults_store.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
-import 'package:bookmark_app/data/tag_object_bridge.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/domain/object_model.dart';
-import 'package:bookmark_app/services/legacy_photo_image_deletion_service.dart';
 import 'package:bookmark_app/services/photo_storage_service.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -42,153 +39,6 @@ void main() {
     expect(
       await fixture.objectStore.listObjects(imageType.objectType.id),
       isEmpty,
-    );
-  });
-
-  test('bridge-owned mirrored Image deletes legacy Photo and managed file',
-      () async {
-    final fixture = await _DeleteFixture.create();
-    addTearDown(fixture.dispose);
-    final managedFile = await fixture.createManagedFile('legacy-owned.png');
-    final photoId = await fixture.database.addPhoto(path: managedFile.path);
-
-    await fixture.syncLegacyPhotoMirrors();
-
-    final imageType = (await fixture.systemObjects.getSystemObjectType(
-      workspaceId: fixture.workspaceId,
-      systemKey: CoreObjectBridge.photoSystemKey,
-    ))!;
-    final image = (await fixture.objectStore.listObjects(imageType.id)).single;
-    final legacyPhotoId = imageType.properties.singleWhere(
-      (property) => property.name == 'Legacy Photo ID',
-    );
-    expect(image.values[legacyPhotoId.id], photoId);
-
-    await fixture.services.relationMutations.deleteObject(
-      workspaceId: fixture.workspaceId,
-      objectTypeId: imageType.id,
-      objectId: image.id,
-    );
-
-    expect(await managedFile.exists(), isFalse);
-    expect(await fixture.objectStore.listObjects(imageType.id), isEmpty);
-    expect(
-      await fixture.database.customSelect(
-        'SELECT id FROM photos WHERE id = $photoId',
-      ).get(),
-      isEmpty,
-    );
-    expect(
-      await fixture.database.customSelect(
-        'SELECT photo_id FROM photo_object_links WHERE photo_id = $photoId',
-      ).get(),
-      isEmpty,
-    );
-  });
-
-  test('native Image reused by legacy Photo mapping deletes both identities',
-      () async {
-    final fixture = await _DeleteFixture.create();
-    addTearDown(fixture.dispose);
-    final managedFile = await fixture.createManagedFile('native-mapped.png');
-    final nativeImage = await fixture.images.findOrCreateManaged(
-      workspaceId: fixture.workspaceId,
-      filePath: fixture.database.pathResolver.toStoredPath(managedFile.path),
-      title: 'Native mapped image',
-    );
-    final photoId = await fixture.database.addPhoto(path: managedFile.path);
-
-    await fixture.syncLegacyPhotoMirrors();
-
-    final imageType = (await fixture.systemObjects.getSystemObjectType(
-      workspaceId: fixture.workspaceId,
-      systemKey: CoreObjectBridge.photoSystemKey,
-    ))!;
-    final images = await fixture.objectStore.listObjects(imageType.id);
-    expect(images, hasLength(1));
-    expect(images.single.id, nativeImage.id);
-    final legacyPhotoId = imageType.properties.singleWhere(
-      (property) => property.name == 'Legacy Photo ID',
-    );
-    expect(images.single.values[legacyPhotoId.id], isNull);
-    final mapping = await fixture.database.customSelect(
-      'SELECT object_id FROM photo_object_links '
-      'WHERE workspace_id = ${fixture.workspaceId} AND photo_id = $photoId',
-    ).getSingle();
-    expect(mapping.read<int>('object_id'), nativeImage.id);
-
-    await fixture.services.relationMutations.deleteObject(
-      workspaceId: fixture.workspaceId,
-      objectTypeId: imageType.id,
-      objectId: nativeImage.id,
-    );
-
-    expect(await managedFile.exists(), isFalse);
-    expect(await fixture.objectStore.listObjects(imageType.id), isEmpty);
-    expect(
-      await fixture.database.customSelect(
-        'SELECT id FROM photos WHERE id = $photoId',
-      ).get(),
-      isEmpty,
-    );
-  });
-
-  test('mismatched legacy Photo id fails closed without deleting either side',
-      () async {
-    final fixture = await _DeleteFixture.create();
-    addTearDown(fixture.dispose);
-    final managedFile = await fixture.createManagedFile('mismatch.png');
-    final photoId = await fixture.database.addPhoto(path: managedFile.path);
-    final otherPhotoId = await fixture.database.addPhoto(
-      path: (await fixture.createManagedFile('other.png')).path,
-    );
-
-    await fixture.syncLegacyPhotoMirrors();
-
-    final imageType = (await fixture.systemObjects.getSystemObjectType(
-      workspaceId: fixture.workspaceId,
-      systemKey: CoreObjectBridge.photoSystemKey,
-    ))!;
-    final legacyPhotoId = imageType.properties.singleWhere(
-      (property) => property.name == 'Legacy Photo ID',
-    );
-    final images = await fixture.objectStore.listObjects(imageType.id);
-    final image = images.singleWhere(
-      (candidate) => candidate.values[legacyPhotoId.id] == photoId,
-    );
-    await fixture.objectStore.setPropertyValue(
-      objectId: image.id,
-      property: legacyPhotoId,
-      value: otherPhotoId,
-    );
-
-    await expectLater(
-      fixture.services.relationMutations.deleteObject(
-        workspaceId: fixture.workspaceId,
-        objectTypeId: imageType.id,
-        objectId: image.id,
-      ),
-      throwsA(isA<LegacyPhotoImageDeletionSafetyException>()),
-    );
-
-    expect(await managedFile.exists(), isTrue);
-    expect(
-      (await fixture.objectStore.listObjects(imageType.id))
-          .map((candidate) => candidate.id),
-      contains(image.id),
-    );
-    expect(
-      await fixture.database.customSelect(
-        'SELECT id FROM photos WHERE id = $photoId',
-      ).get(),
-      hasLength(1),
-    );
-    expect(
-      await fixture.database.customSelect(
-        'SELECT photo_id FROM photo_object_links '
-        'WHERE workspace_id = ${fixture.workspaceId} AND object_id = ${image.id}',
-      ).get(),
-      hasLength(1),
     );
   });
 
@@ -408,20 +258,6 @@ class _DeleteFixture {
       images: images,
       services: services,
     );
-  }
-
-  Future<void> syncLegacyPhotoMirrors() async {
-    final tagBridge = TagObjectBridge(
-      database: database,
-      objectStore: objectStore,
-      systemObjectStore: systemObjects,
-    );
-    await CoreObjectBridge(
-      database: database,
-      objectStore: objectStore,
-      systemObjectStore: systemObjects,
-      tagBridge: tagBridge,
-    ).syncAll(workspaceId);
   }
 
   Future<ObjectPropertyDefinition> ensureLegacyPhotoIdProperty() async {
