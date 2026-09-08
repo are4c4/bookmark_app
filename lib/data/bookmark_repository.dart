@@ -3,8 +3,6 @@ import 'package:rxdart/rxdart.dart';
 import '../services/attachment_storage_service.dart';
 import '../services/auto_organize_service.dart';
 import '../services/legacy_photo_bookmark_backlink_service.dart';
-import '../services/photo_managed_file_deletion_policy.dart';
-import '../services/photo_storage_service.dart';
 
 import '../domain/bookmark_state.dart';
 import 'app_database.dart';
@@ -310,16 +308,6 @@ class BookmarkRepository {
   Future<void> batchDelete(Iterable<int> ids) async {
     for (final id in ids.toSet()) {
       await lifecycleStore.moveToTrash(id);
-    }
-  }
-
-  Future<void> deletePhoto(PhotoRecord photo) async {
-    final preserveManagedFile = await PhotoManagedFileDeletionPolicy(_database)
-        .shouldPreserve(legacyPhotoId: photo.id, filePath: photo.path);
-    await _database.deletePhoto(photo.id);
-    if (!preserveManagedFile) {
-      await PhotoStorageService(photoDirectoryPath: photoDirectoryPath)
-          .deleteManagedPhoto(photo.path);
     }
   }
 
