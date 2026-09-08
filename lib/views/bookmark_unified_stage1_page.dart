@@ -19,8 +19,8 @@ import '../features/database/presentation/widgets/database_view_tabs.dart';
 import '../features/database/presentation/widgets/object_gallery_view.dart';
 import '../features/object/presentation/object_open_presentation_host.dart';
 import '../services/bookmark_metadata_service.dart';
+import '../services/bookmark_stage1_image_drop_import_service.dart';
 import '../services/bookmark_url_resolver.dart';
-import '../services/photo_storage_service.dart';
 import '../widgets/app_toast.dart';
 import '../widgets/bookmark_create_dialog.dart';
 import '../widgets/bookmark_detail_panel.dart';
@@ -86,6 +86,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
   late final DatabaseViewStore _databaseViewStore;
   late final DatabaseViewOpenModeService _databaseViewOpenModeService;
   late final BookmarkUrlResolver _bookmarkUrlResolver;
+  late final BookmarkStage1ImageDropImportService _imageDropImport;
   int? _activeDatabaseViewId;
   DatabaseViewConfig? _activeDatabaseView;
 
@@ -109,6 +110,11 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
     _bookmarkUrlResolver = BookmarkUrlResolver(
       database: widget.repository.workspaceStore.database,
       workspaceId: widget.repository.workspaceId,
+    );
+    _imageDropImport = BookmarkStage1ImageDropImportService(
+      workspaceStore: widget.repository.workspaceStore,
+      workspaceId: widget.repository.workspaceId,
+      photoDirectoryPath: widget.repository.photoDirectoryPath,
     );
   }
 
@@ -1375,30 +1381,20 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
         .map((file) => file.path)
         .where((path) => path.isNotEmpty)
         .toList();
-    final imagePaths = paths.where((path) {
-      final lower = path.toLowerCase();
-      return const [
-        '.jpg',
-        '.jpeg',
-        '.png',
-        '.webp',
-        '.gif',
-        '.heic',
-        '.heif',
-      ].any(lower.endsWith);
-    }).toList();
 
-    if (imagePaths.isNotEmpty) {
-      final imported = await const PhotoStorageService().importPaths(imagePaths);
-      for (final photo in imported) {
-        await widget.repository.addPhoto(
-          path: photo.path,
-          title: photo.originalName,
+    try {
+      final imageObjectIds = await _imageDropImport.importDroppedPaths(paths);
+      if (mounted && imageObjectIds.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${imageObjectIds.length}枚をImagesへ追加しました'),
+          ),
         );
       }
+    } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${imported.length}枚を写真DBへ追加しました')),
+          const SnackBar(content: Text('画像を追加できませんでした。')),
         );
       }
     }
