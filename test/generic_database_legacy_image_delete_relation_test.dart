@@ -4,9 +4,7 @@ import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/core_object_bridge.dart';
 import 'package:bookmark_app/data/generic_database_page_services.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
-import 'package:bookmark_app/data/image_object_service.dart';
 import 'package:bookmark_app/data/object_store.dart';
-import 'package:bookmark_app/data/object_type_defaults_store.dart';
 import 'package:bookmark_app/data/relation_read_service.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
 import 'package:bookmark_app/data/tag_object_bridge.dart';
@@ -36,10 +34,6 @@ void main() {
     final systemObjects = SystemObjectStore(
       database: database,
       objectStore: objectStore,
-    );
-    final images = ImageObjectService(
-      systemObjects: systemObjects,
-      defaultsStore: ObjectTypeDefaultsStore(genericStore),
     );
     final services = GenericDatabasePageServices.fromStores(
       genericStore: genericStore,
