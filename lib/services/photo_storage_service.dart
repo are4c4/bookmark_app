@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:file_selector/file_selector.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../data/profile_path_resolver.dart';
+
 class ImportedPhoto {
   const ImportedPhoto({
     required this.path,
@@ -180,13 +182,115 @@ class PhotoStorageService {
     );
   }
 
+  /// Deletes a legacy Photo file only when the configured active managed-photo
+  /// root proves physical ownership of the target.
+  ///
+  /// This method intentionally fails closed. External absolute paths, relative
+  /// paths that resolve outside the active profile/Vault `photos/` directory,
+  /// traversal, symlinks, non-file entities and unavailable roots are preserved.
+  /// A missing managed file is idempotent and never causes the root to be
+  /// recreated. The optional edit backup is removed only when it independently
+  /// resolves to a regular file inside the same managed root.
   Future<void> deleteManagedPhoto(String path) async {
-    final file = File(path);
-    if (await file.exists()) await file.delete();
+    final photoDir = _configuredPhotoDirectory();
+    if (photoDir == null) return;
 
-    final originalBackup = File('$path.bookmark_original');
-    if (await originalBackup.exists()) await originalBackup.delete();
+    final root = photoDir.absolute;
+    final rootType = await FileSystemEntity.type(
+      root.path,
+      followLinks: false,
+    );
+    if (rootType != FileSystemEntityType.directory) return;
+
+    final candidate = path.trim();
+    if (candidate.isEmpty || _hasUnsafePathSegments(candidate)) return;
+
+    final profileRoot = _parentDirectoryPath(root.path);
+    if (profileRoot == null) return;
+    final resolvedPath =
+        ProfilePathResolver(profileRoot).resolveStoredPath(candidate);
+    if (!_isAbsolutePath(resolvedPath) ||
+        !_isWithinRoot(resolvedPath, root.path)) {
+      return;
+    }
+
+    final type = await FileSystemEntity.type(
+      resolvedPath,
+      followLinks: false,
+    );
+    if (type == FileSystemEntityType.notFound) return;
+    if (type != FileSystemEntityType.file) return;
+
+    final canonicalRoot = await root.resolveSymbolicLinks();
+    final canonicalTarget = await File(resolvedPath).resolveSymbolicLinks();
+    if (!_isWithinRoot(canonicalTarget, canonicalRoot)) return;
+
+    final originalBackup = File('$resolvedPath.bookmark_original');
+    final deleteBackup = await _isSafeManagedBackup(
+      originalBackup,
+      rootPath: root.path,
+      canonicalRootPath: canonicalRoot,
+    );
+
+    await File(resolvedPath).delete();
+    if (deleteBackup) {
+      await originalBackup.delete();
+    }
   }
+
+  Directory? _configuredPhotoDirectory() {
+    final explicit = photoDirectoryPath?.trim();
+    if (explicit != null && explicit.isNotEmpty) return Directory(explicit);
+    final active = activePhotoDirectoryPath?.trim();
+    if (active != null && active.isNotEmpty) return Directory(active);
+    return null;
+  }
+
+  Future<bool> _isSafeManagedBackup(
+    File backup, {
+    required String rootPath,
+    required String canonicalRootPath,
+  }) async {
+    if (!_isWithinRoot(backup.path, rootPath)) return false;
+    final type = await FileSystemEntity.type(
+      backup.path,
+      followLinks: false,
+    );
+    if (type != FileSystemEntityType.file) return false;
+    final canonicalBackup = await backup.resolveSymbolicLinks();
+    return _isWithinRoot(canonicalBackup, canonicalRootPath);
+  }
+
+  bool _hasUnsafePathSegments(String path) {
+    final normalized = path.replaceAll('\\', '/');
+    return normalized
+        .split('/')
+        .any((segment) => segment == '.' || segment == '..');
+  }
+
+  String? _parentDirectoryPath(String path) {
+    final normalized = path
+        .replaceAll('\\', '/')
+        .replaceAll(RegExp(r'/+$'), '');
+    final slash = normalized.lastIndexOf('/');
+    if (slash <= 0) return null;
+    return normalized.substring(0, slash);
+  }
+
+  bool _isWithinRoot(String candidate, String root) {
+    final normalizedCandidate = _normalizedAbsolutePath(candidate);
+    final normalizedRoot = _normalizedAbsolutePath(root);
+    return normalizedCandidate.startsWith('$normalizedRoot/');
+  }
+
+  String _normalizedAbsolutePath(String path) => File(path)
+      .absolute
+      .path
+      .replaceAll('\\', '/')
+      .replaceAll(RegExp(r'/+$'), '');
+
+  bool _isAbsolutePath(String path) =>
+      path.startsWith('/') || RegExp(r'^[A-Za-z]:[\\/]').hasMatch(path);
 
   Future<Directory> _resolvePhotoDirectory() async {
     final explicit = photoDirectoryPath?.trim();

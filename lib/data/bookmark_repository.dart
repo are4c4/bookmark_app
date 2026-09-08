@@ -339,7 +339,8 @@ class BookmarkRepository {
         .shouldPreserve(legacyPhotoId: photo.id, filePath: photo.path);
     await _database.deletePhoto(photo.id);
     if (!preserveManagedFile) {
-      await const PhotoStorageService().deleteManagedPhoto(photo.path);
+      await PhotoStorageService(photoDirectoryPath: photoDirectoryPath)
+          .deleteManagedPhoto(photo.path);
     }
   }
 
