@@ -115,8 +115,6 @@ class AppDatabase extends _$AppDatabase {
     return result;
   }
 
-  static String _normalizeNamesText(Iterable<String> names) => _normalizeNames(names).join(', ');
-
   Future<int> _ensureTag(String name) async {
     final existing = await (select(tags)..where((t) => t.name.equals(name))).getSingleOrNull();
     if (existing != null) return existing.id;
