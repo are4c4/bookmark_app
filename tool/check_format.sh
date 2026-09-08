@@ -26,8 +26,13 @@ while [[ $# -gt 0 ]]; do
 Usage: bash tool/check_format.sh [--all] [--base <git-ref>]
 
 By default, checks Dart files changed from a sensible local base plus staged,
-unstaged, and untracked Dart files. Set CHECK_BASE_REF or pass --base to make
-the comparison explicit. --all checks every tracked Dart file.
+unstaged, and untracked Dart files. Existing files are checked only for
+formatter differences that overlap lines changed since the merge base, so
+pre-existing formatting debt elsewhere in a touched file does not force broad
+churn. New files are always checked in full.
+
+Set CHECK_BASE_REF or pass --base to make the comparison explicit. --all checks
+every tracked Dart file in full.
 EOF
       exit 0
       ;;
@@ -42,9 +47,18 @@ if ! command -v dart >/dev/null 2>&1; then
   echo "check_format: dart is required (install Flutter/Dart first)" >&2
   exit 127
 fi
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "check_format: python3 is required for hunk-aware formatting checks" >&2
+  exit 127
+fi
 
-files_tmp="$(mktemp)"
-trap 'rm -f "$files_tmp"' EXIT
+work_tmp="$(mktemp -d)"
+files_tmp="$work_tmp/files"
+trap 'rm -rf "$work_tmp"' EXIT
+: >"$files_tmp"
+
+base_available=false
+comparison_base=""
 
 if [[ "$check_all" == true ]]; then
   git ls-files '*.dart' >"$files_tmp"
@@ -62,9 +76,11 @@ else
 
   if [[ -n "$base_ref" ]]; then
     if git rev-parse --verify --quiet "${base_ref}^{commit}" >/dev/null; then
-      git diff --name-only --diff-filter=ACMR "${base_ref}...HEAD" -- '*.dart' >>"$files_tmp"
+      base_available=true
+      comparison_base="$(git merge-base "$base_ref" HEAD)"
+      git diff --name-only --diff-filter=ACMR "${comparison_base}...HEAD" -- '*.dart' >>"$files_tmp"
     else
-      echo "check_format: base ref '$base_ref' is unavailable; checking working-tree Dart changes only" >&2
+      echo "check_format: base ref '$base_ref' is unavailable; checking working-tree Dart changes in full" >&2
     fi
   fi
 
@@ -95,15 +111,79 @@ if [[ ${#files[@]} -eq 0 ]]; then
 fi
 
 echo "check_format: checking ${#files[@]} Dart file(s)"
-set +e
-dart format --output=none --set-exit-if-changed "${files[@]}"
-format_status=$?
-set -e
+failed=false
+ignored_legacy_drift=0
+index=0
 
-if [[ $format_status -ne 0 ]]; then
+for file in "${files[@]}"; do
+  index=$((index + 1))
+  file_tmp="$work_tmp/file-$index"
+  mkdir -p "$file_tmp"
+  current="$file_tmp/current.dart"
+  formatted="$file_tmp/formatted.dart"
+  changed_diff="$file_tmp/changed.diff"
+  format_diff="$file_tmp/format.diff"
+
+  cp "$file" "$current"
+  cp "$file" "$formatted"
+
+  if ! dart format "$formatted" >/dev/null 2>"$file_tmp/format-error.txt"; then
+    echo "check_format: dart format could not parse '$file'" >&2
+    cat "$file_tmp/format-error.txt" >&2 || true
+    failed=true
+    continue
+  fi
+
+  if cmp -s "$current" "$formatted"; then
+    continue
+  fi
+
+  full_file_check=false
+  if [[ "$check_all" == true || "$base_available" != true || -z "$comparison_base" ]]; then
+    full_file_check=true
+  elif ! git cat-file -e "${comparison_base}:${file}" 2>/dev/null; then
+    # New/untracked files have no historical formatting debt to preserve.
+    full_file_check=true
+  fi
+
+  if [[ "$full_file_check" == true ]]; then
+    echo
+    echo "check_format: '$file' is not dart-format compliant (full-file check)" >&2
+    diff -u --label "a/$file" --label "b/$file (dart format)" "$current" "$formatted" || true
+    failed=true
+    continue
+  fi
+
+  # Compare the merge-base version directly with the current working tree so
+  # committed, staged, and unstaged changes are all part of the changed-line
+  # contract. Zero context prevents historical neighboring formatter debt from
+  # being mistaken for this PR's edit.
+  git diff --unified=0 --no-ext-diff "$comparison_base" -- "$file" >"$changed_diff" || true
+  diff -U0 "$current" "$formatted" >"$format_diff" || true
+
+  set +e
+  python3 tool/check_format_hunks.py \
+    --changed-diff "$changed_diff" \
+    --format-diff "$format_diff"
+  overlap_status=$?
+  set -e
+
+  if [[ $overlap_status -eq 0 ]]; then
+    ignored_legacy_drift=$((ignored_legacy_drift + 1))
+    echo "check_format: '$file' has pre-existing formatter drift outside this change; changed hunks are compliant"
+    continue
+  fi
+
   echo
-  echo "check_format: formatting differs; suggested diff follows"
-  dart format "${files[@]}" >/dev/null 2>&1 || true
-  git --no-pager diff -- "${files[@]}" || true
-  exit "$format_status"
+  echo "check_format: '$file' needs dart format in lines changed by this work" >&2
+  diff -u --label "a/$file" --label "b/$file (dart format)" "$current" "$formatted" || true
+  failed=true
+done
+
+if [[ $ignored_legacy_drift -gt 0 ]]; then
+  echo "check_format: tolerated pre-existing formatter drift in $ignored_legacy_drift touched file(s); do not add unrelated format churn to this PR"
+fi
+
+if [[ "$failed" == true ]]; then
+  exit 1
 fi
