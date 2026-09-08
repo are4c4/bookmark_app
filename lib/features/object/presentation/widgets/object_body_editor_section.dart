@@ -61,6 +61,7 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
   bool _loadFailed = false;
   int _loadGeneration = 0;
   String? _autofocusBlockId;
+  int? _autofocusOffset;
   Future<void> _textMutationQueue = Future<void>.value();
 
   ObjectBodyStore get _bodyStore => ObjectBodyStore(widget.store);
@@ -117,6 +118,7 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
         _loading = true;
         _loadFailed = false;
         _autofocusBlockId = null;
+        _autofocusOffset = null;
       });
     }
     try {
@@ -209,8 +211,41 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
     });
     if (!mounted || widget.objectId != objectId || newBlockId == null) return;
     if (_document.blocks.any((item) => item.id == newBlockId)) {
-      setState(() => _autofocusBlockId = newBlockId);
+      setState(() {
+        _autofocusBlockId = newBlockId;
+        _autofocusOffset = 0;
+      });
     }
+  }
+
+  Future<void> _mergeParagraphIntoPrevious(ObjectBodyBlock block) async {
+    final objectId = widget.objectId;
+    final bodyStore = _bodyStore;
+    final edits = _bodyBlockEdits;
+    String? targetBlockId;
+    int? targetOffset;
+
+    await _enqueueTextMutation(objectId, () async {
+      final latest = await bodyStore.read(objectId);
+      final index = latest.blocks.indexWhere((item) => item.id == block.id);
+      if (index <= 0) return latest;
+      final previous = latest.blocks[index - 1];
+      targetBlockId = previous.id;
+      targetOffset = (previous.text ?? '').length;
+      return edits.mergeParagraphIntoPrevious(
+        objectId: objectId,
+        blockId: block.id,
+      );
+    });
+
+    if (!mounted || widget.objectId != objectId || targetBlockId == null) return;
+    final merged = !_document.blocks.any((item) => item.id == block.id) &&
+        _document.blocks.any((item) => item.id == targetBlockId);
+    if (!merged) return;
+    setState(() {
+      _autofocusBlockId = targetBlockId;
+      _autofocusOffset = targetOffset;
+    });
   }
 
   Future<void> _toggleChecklist(ObjectBodyBlock block, bool checked) =>
@@ -423,7 +458,9 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
           document: _document,
           onTextChanged: (block, text) => _editText(block, text),
           onParagraphSplit: _splitParagraph,
+          onParagraphMergeWithPrevious: _mergeParagraphIntoPrevious,
           autofocusBlockId: _autofocusBlockId,
+          autofocusOffset: _autofocusOffset,
           onChecklistChanged: (block, checked) =>
               _toggleChecklist(block, checked),
           onObjectReferenceTap: (block) {
