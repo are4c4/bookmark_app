@@ -1,0 +1,35 @@
+name: Temporary fix Body analyze #1049
+
+on:
+  push:
+    branches:
+      - feature/object-body-document-chrome-1049
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: feature/object-body-document-chrome-1049
+      - name: Remove redundant material re-export imports
+        run: |
+          sed -i "/import 'package:flutter\/services.dart';/d" \
+            lib/features/object/presentation/widgets/object_body_document_view.dart \
+            lib/features/object/presentation/widgets/object_body_editor_section.dart
+      - name: Commit analyze fix
+        run: |
+          if git diff --quiet; then
+            echo "No changes required"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            lib/features/object/presentation/widgets/object_body_document_view.dart \
+            lib/features/object/presentation/widgets/object_body_editor_section.dart
+          git commit -m "fix: remove redundant Body services imports"
+          git push origin HEAD:feature/object-body-document-chrome-1049
