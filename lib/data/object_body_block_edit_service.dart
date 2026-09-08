@@ -85,7 +85,8 @@ class ObjectBodyBlockEditService {
         );
       });
 
-  /// Splits one paragraph at [offset] against the latest persisted Body.
+  /// Splits one paragraph across the current selection against the latest
+  /// persisted Body.
   ///
   /// The source update and new paragraph insertion are persisted as one Body
   /// document write so Enter cannot leave a half-split document.
@@ -93,14 +94,16 @@ class ObjectBodyBlockEditService {
     required int objectId,
     required String blockId,
     required String newBlockId,
-    required int offset,
+    required int selectionStart,
+    required int selectionEnd,
   }) => _mutate(
         objectId,
         (document) => editor.splitParagraph(
           document: document,
           blockId: blockId,
           newBlockId: newBlockId,
-          offset: offset,
+          selectionStart: selectionStart,
+          selectionEnd: selectionEnd,
         ),
       );
 
