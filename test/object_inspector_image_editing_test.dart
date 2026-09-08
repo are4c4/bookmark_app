@@ -12,10 +12,32 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+Future<void> _pumpUntil(
+  WidgetTester tester,
+  bool Function() condition, {
+  int attempts = 40,
+}) async {
+  for (var attempt = 0; attempt < attempts && !condition(); attempt += 1) {
+    await tester.pump(const Duration(milliseconds: 20));
+  }
+  expect(condition(), isTrue);
+}
+
+void _closeDatabaseAfterUnmount(
+  WidgetTester tester,
+  AppDatabase database,
+) {
+  addTearDown(() async {
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await database.close();
+  });
+}
+
 void main() {
   testWidgets('canonical Image detail edits title and Note only', (tester) async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(database.close);
+    _closeDatabaseAfterUnmount(tester, database);
     final workspaceId = await WorkspaceStore(database).initialize();
     final genericStore = GenericDatabaseStore(database);
     final objectStore = ObjectStore(genericStore);
@@ -50,12 +72,11 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    final titleEditButton =
+        find.byKey(const ValueKey('object-title-edit-button'));
+    await _pumpUntil(tester, () => titleEditButton.evaluate().isNotEmpty);
 
-    expect(
-      find.byKey(const ValueKey('object-title-edit-button')),
-      findsOneWidget,
-    );
+    expect(titleEditButton, findsOneWidget);
     expect(
       find.byKey(
         ValueKey('edit-object-value-${definition.noteProperty.id}'),
@@ -81,24 +102,22 @@ void main() {
       findsNothing,
     );
 
-    await tester.tap(find.byKey(const ValueKey('object-title-edit-button')));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const ValueKey('object-title-edit-field')),
-      'Edited image',
-    );
+    await tester.tap(titleEditButton);
+    final titleEditField =
+        find.byKey(const ValueKey('object-title-edit-field'));
+    await _pumpUntil(tester, () => titleEditField.evaluate().isNotEmpty);
+    await tester.enterText(titleEditField, 'Edited image');
     await tester.tap(find.byKey(const ValueKey('object-title-edit-save')));
-    await tester.pumpAndSettle();
+    await _pumpUntil(tester, () => titleEditField.evaluate().isEmpty);
 
     final noteId = definition.noteProperty.id;
     await tester.tap(find.byKey(ValueKey('edit-object-value-$noteId')));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(ValueKey('object-value-edit-field-$noteId')),
-      'User note',
-    );
+    final noteEditField =
+        find.byKey(ValueKey('object-value-edit-field-$noteId'));
+    await _pumpUntil(tester, () => noteEditField.evaluate().isNotEmpty);
+    await tester.enterText(noteEditField, 'User note');
     await tester.tap(find.byKey(ValueKey('object-value-edit-save-$noteId')));
-    await tester.pumpAndSettle();
+    await _pumpUntil(tester, () => noteEditField.evaluate().isEmpty);
 
     final persisted = (await objectStore.listObjects(definition.objectType.id))
         .singleWhere((object) => object.id == image.id);
@@ -116,7 +135,7 @@ void main() {
 
   testWidgets('legacy-owned Image mirror stays read-only', (tester) async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(database.close);
+    _closeDatabaseAfterUnmount(tester, database);
     final workspaceId = await WorkspaceStore(database).initialize();
     final genericStore = GenericDatabaseStore(database);
     final objectStore = ObjectStore(genericStore);
@@ -160,7 +179,9 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    final imagePanel =
+        find.byKey(ValueKey('object-image-detail-panel-${image.id}'));
+    await _pumpUntil(tester, () => imagePanel.evaluate().isNotEmpty);
 
     expect(
       find.byKey(const ValueKey('object-title-edit-button')),
@@ -176,7 +197,7 @@ void main() {
 
   testWidgets('other system Object details remain read-only', (tester) async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(database.close);
+    _closeDatabaseAfterUnmount(tester, database);
     final workspaceId = await WorkspaceStore(database).initialize();
     final genericStore = GenericDatabaseStore(database);
     final objectStore = ObjectStore(genericStore);
@@ -208,7 +229,10 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await _pumpUntil(
+      tester,
+      () => find.text('Example article').evaluate().isNotEmpty,
+    );
 
     expect(
       find.byKey(const ValueKey('object-title-edit-button')),
