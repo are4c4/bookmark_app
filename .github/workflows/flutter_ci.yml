@@ -68,13 +68,13 @@ jobs:
         run: flutter analyze
 
   test:
-    name: test-shard-${{ matrix.shard }}-of-5
+    name: test-shard-${{ matrix.shard }}-of-4
     runs-on: ubuntu-latest
     timeout-minutes: 22
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2, 3, 4]
+        shard: [0, 1, 2, 3]
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -102,7 +102,7 @@ jobs:
       - name: Verify Drift generated code
         run: test -s lib/data/app_database.g.dart
 
-      - name: Test shard ${{ matrix.shard }} of 5
+      - name: Test shard ${{ matrix.shard }} of 4
         id: flutter-test
         timeout-minutes: 18
         run: |
@@ -113,7 +113,7 @@ jobs:
           flutter test \
             --timeout 2m \
             --reporter expanded \
-            --total-shards 5 \
+            --total-shards 4 \
             --shard-index ${{ matrix.shard }} \
             2>&1 | tee ci-artifacts/flutter-test-shard-${{ matrix.shard }}.log
           status=$?
@@ -125,7 +125,7 @@ jobs:
         if: always()
         run: |
           {
-            echo '## Flutter Test shard ${{ matrix.shard }} of 5 timing'
+            echo '## Flutter Test shard ${{ matrix.shard }} of 4 timing'
             echo
             echo '- Drift generated cache hit: `${{ steps.drift-generated-cache.outputs.cache-hit }}`'
             echo '- Flutter Test elapsed: `${{ steps.flutter-test.outputs.elapsed-seconds || 'not-run' }}s`'
@@ -135,7 +135,7 @@ jobs:
         if: ${{ failure() && steps.flutter-test.outcome == 'failure' }}
         run: |
           {
-            echo '## Flutter Test shard ${{ matrix.shard }} of 5 failure'
+            echo '## Flutter Test shard ${{ matrix.shard }} of 4 failure'
             echo
             echo 'Last 200 log lines:'
             echo
