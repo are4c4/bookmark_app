@@ -13,6 +13,8 @@ import 'package:bookmark_app/services/photo_storage_service.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/legacy_photo_fixture.dart';
+
 void main() {
   test('generic Image delete removes solely owned managed file and backup',
       () async {
