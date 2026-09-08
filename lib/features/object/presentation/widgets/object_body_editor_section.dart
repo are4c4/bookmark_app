@@ -48,7 +48,8 @@ class ObjectBodyEditorSection extends StatefulWidget {
   final bool showHeading;
 
   @override
-  State<ObjectBodyEditorSection> createState() => _ObjectBodyEditorSectionState();
+  State<ObjectBodyEditorSection> createState() =>
+      _ObjectBodyEditorSectionState();
 }
 
 class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
@@ -140,9 +141,8 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
 
   void _showError(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.maybeOf(context)
+        ?.showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _applyDocument(ObjectBodyDocument document) {
@@ -182,11 +182,7 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
     final edits = _bodyBlockEdits;
     return _enqueueTextMutation(
       objectId,
-      () => edits.updateText(
-        objectId: objectId,
-        blockId: block.id,
-        text: text,
-      ),
+      () => edits.updateText(objectId: objectId, blockId: block.id, text: text),
     );
   }
 
@@ -238,8 +234,10 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
       );
     });
 
-    if (!mounted || widget.objectId != objectId || targetBlockId == null) return;
-    final merged = !_document.blocks.any((item) => item.id == block.id) &&
+    if (!mounted || widget.objectId != objectId || targetBlockId == null)
+      return;
+    final merged =
+        !_document.blocks.any((item) => item.id == block.id) &&
         _document.blocks.any((item) => item.id == targetBlockId);
     if (!merged) return;
     setState(() {
@@ -345,25 +343,16 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
   }
 
   Future<void> _moveUp(ObjectBodyBlock block) => _runMutation(
-        () => _bodyActions.moveUp(
-          objectId: widget.objectId,
-          blockId: block.id,
-        ),
-      );
+    () => _bodyActions.moveUp(objectId: widget.objectId, blockId: block.id),
+  );
 
   Future<void> _moveDown(ObjectBodyBlock block) => _runMutation(
-        () => _bodyActions.moveDown(
-          objectId: widget.objectId,
-          blockId: block.id,
-        ),
-      );
+    () => _bodyActions.moveDown(objectId: widget.objectId, blockId: block.id),
+  );
 
   Future<void> _delete(ObjectBodyBlock block) => _runMutation(
-        () => _bodyActions.remove(
-          objectId: widget.objectId,
-          blockId: block.id,
-        ),
-      );
+    () => _bodyActions.remove(objectId: widget.objectId, blockId: block.id),
+  );
 
   Future<void> _duplicate(ObjectBodyBlock block) async {
     try {
@@ -432,9 +421,7 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
               children: [
                 const Icon(Icons.error_outline, size: 18),
                 const SizedBox(width: 8),
-                const Expanded(
-                  child: Text('Bodyを読み込めませんでした。内容は変更されていません。'),
-                ),
+                const Expanded(child: Text('Bodyを読み込めませんでした。内容は変更されていません。')),
                 TextButton(
                   key: const ValueKey('body-load-retry'),
                   onPressed: _load,
@@ -469,32 +456,28 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
           },
           blockActionsBuilder: (context, block, position) =>
               ObjectBodyBlockActionBar(
-            block: block,
-            position: position,
-            onMoveUp: () => _moveUp(block),
-            onMoveDown: () => _moveDown(block),
-            onDuplicate: () => _duplicate(block),
-            onDelete: () => _delete(block),
-            onInsertAfter: (kind) => _insertBlock(
-              kind,
-              afterBlockId: block.id,
-            ),
-            onInsertReferenceAfter: (kind) => _insertReference(
-              kind,
-              afterBlockId: block.id,
-            ),
-            referenceInsertKinds: const [
-              ObjectBodyReferenceInsertKind.object,
-              ObjectBodyReferenceInsertKind.databaseView,
-            ],
-          ),
+                block: block,
+                position: position,
+                onMoveUp: () => _moveUp(block),
+                onMoveDown: () => _moveDown(block),
+                onDuplicate: () => _duplicate(block),
+                onDelete: () => _delete(block),
+                onInsertAfter: (kind) =>
+                    _insertBlock(kind, afterBlockId: block.id),
+                onInsertReferenceAfter: (kind) =>
+                    _insertReference(kind, afterBlockId: block.id),
+                referenceInsertKinds: const [
+                  ObjectBodyReferenceInsertKind.object,
+                  ObjectBodyReferenceInsertKind.databaseView,
+                ],
+              ),
           emptyBuilder: (context) => Row(
             children: [
               Text(
                 'Bodyは空です',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
               const SizedBox(width: 8),
               ObjectBodyInsertMenuButton(

@@ -48,7 +48,11 @@ void main() {
     );
     await service.update(
       objectId: objectId,
-      block: const ObjectBodyBlock(id: 'p2', type: 'paragraph', text: 'changed'),
+      block: const ObjectBodyBlock(
+        id: 'p2',
+        type: 'paragraph',
+        text: 'changed',
+      ),
     );
     await service.move(objectId: objectId, blockId: 'embed-1', toIndex: 0);
     await service.remove(objectId: objectId, blockId: 'p1');
@@ -106,43 +110,46 @@ void main() {
     expect((await bodyStore.read(objectId)).toJson(), result.toJson());
   });
 
-  test('safe paragraph merge persists once and preserves later blocks', () async {
-    final database = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(database.close);
-    final workspaceId = await WorkspaceStore(database).initialize();
-    final genericStore = GenericDatabaseStore(database);
-    final objectStore = ObjectStore(genericStore);
-    final objectTypeId = await objectStore.createObjectType(
-      workspaceId: workspaceId,
-      name: 'Note',
-    );
-    final objectId = await objectStore.createObject(
-      objectTypeId: objectTypeId,
-      title: 'Merge test',
-    );
-    final bodyStore = ObjectBodyStore(genericStore);
-    final service = ObjectBodyBlockEditService(bodyStore: bodyStore);
-    await bodyStore.write(
-      objectId: objectId,
-      document: const ObjectBodyDocument(
-        blocks: <ObjectBodyBlock>[
-          ObjectBodyBlock(id: 'p1', type: 'paragraph', text: 'hello '),
-          ObjectBodyBlock(id: 'p2', type: 'paragraph', text: 'world'),
-          ObjectBodyBlock(id: 'p3', type: 'paragraph', text: 'after'),
-        ],
-      ),
-    );
+  test(
+    'safe paragraph merge persists once and preserves later blocks',
+    () async {
+      final database = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(database.close);
+      final workspaceId = await WorkspaceStore(database).initialize();
+      final genericStore = GenericDatabaseStore(database);
+      final objectStore = ObjectStore(genericStore);
+      final objectTypeId = await objectStore.createObjectType(
+        workspaceId: workspaceId,
+        name: 'Note',
+      );
+      final objectId = await objectStore.createObject(
+        objectTypeId: objectTypeId,
+        title: 'Merge test',
+      );
+      final bodyStore = ObjectBodyStore(genericStore);
+      final service = ObjectBodyBlockEditService(bodyStore: bodyStore);
+      await bodyStore.write(
+        objectId: objectId,
+        document: const ObjectBodyDocument(
+          blocks: <ObjectBodyBlock>[
+            ObjectBodyBlock(id: 'p1', type: 'paragraph', text: 'hello '),
+            ObjectBodyBlock(id: 'p2', type: 'paragraph', text: 'world'),
+            ObjectBodyBlock(id: 'p3', type: 'paragraph', text: 'after'),
+          ],
+        ),
+      );
 
-    final result = await service.mergeParagraphIntoPrevious(
-      objectId: objectId,
-      blockId: 'p2',
-    );
+      final result = await service.mergeParagraphIntoPrevious(
+        objectId: objectId,
+        blockId: 'p2',
+      );
 
-    expect(result.blocks.map((block) => block.id), ['p1', 'p3']);
-    expect(result.blocks.first.text, 'hello world');
-    expect(result.blocks.last.text, 'after');
-    expect((await bodyStore.read(objectId)).toJson(), result.toJson());
-  });
+      expect(result.blocks.map((block) => block.id), ['p1', 'p3']);
+      expect(result.blocks.first.text, 'hello world');
+      expect(result.blocks.last.text, 'after');
+      expect((await bodyStore.read(objectId)).toJson(), result.toJson());
+    },
+  );
 
   test('failed block edit leaves persisted Body unchanged', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());

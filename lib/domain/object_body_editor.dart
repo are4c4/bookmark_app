@@ -54,12 +54,7 @@ class ObjectBodyEditor {
     }
     final text = block.text ?? '';
     if (selectionStart < 0 || selectionStart > text.length) {
-      throw RangeError.range(
-        selectionStart,
-        0,
-        text.length,
-        'selectionStart',
-      );
+      throw RangeError.range(selectionStart, 0, text.length, 'selectionStart');
     }
     if (selectionEnd < selectionStart || selectionEnd > text.length) {
       throw RangeError.range(

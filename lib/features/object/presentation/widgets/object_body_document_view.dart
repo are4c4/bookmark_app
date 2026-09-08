@@ -84,17 +84,15 @@ class ObjectBodyDocumentView extends StatelessWidget {
                 onParagraphSplit: onParagraphSplit == null
                     ? null
                     : (selection) =>
-                        onParagraphSplit!(presentation.block, selection),
+                          onParagraphSplit!(presentation.block, selection),
                 onParagraphMergeWithPrevious:
                     onParagraphMergeWithPrevious == null
-                        ? null
-                        : () => onParagraphMergeWithPrevious!(
-                              presentation.block,
-                            ),
+                    ? null
+                    : () => onParagraphMergeWithPrevious!(presentation.block),
                 onChecklistChanged: onChecklistChanged == null
                     ? null
                     : (checked) =>
-                        onChecklistChanged!(presentation.block, checked),
+                          onChecklistChanged!(presentation.block, checked),
                 onObjectReferenceTap: onObjectReferenceTap == null
                     ? null
                     : () => onObjectReferenceTap!(presentation.block),

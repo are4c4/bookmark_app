@@ -140,11 +140,7 @@ class _BodyBlockMenuLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 18),
-        const SizedBox(width: 12),
-        Text(label),
-      ],
+      children: [Icon(icon, size: 18), const SizedBox(width: 12), Text(label)],
     );
   }
 }

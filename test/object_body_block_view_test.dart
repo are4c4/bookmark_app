@@ -33,28 +33,37 @@ void main() {
   }
 
   testWidgets('renders heading and code metadata', (tester) async {
-    await tester.pumpWidget(host(presenter.present(
-      factory.heading(id: 'h1', level: 2, text: 'Heading'),
-    )));
+    await tester.pumpWidget(
+      host(
+        presenter.present(factory.heading(id: 'h1', level: 2, text: 'Heading')),
+      ),
+    );
     expect(find.text('Heading'), findsOneWidget);
 
-    await tester.pumpWidget(host(presenter.present(
-      factory.code(id: 'c1', text: 'print(1)', language: 'dart'),
-    )));
+    await tester.pumpWidget(
+      host(
+        presenter.present(
+          factory.code(id: 'c1', text: 'print(1)', language: 'dart'),
+        ),
+      ),
+    );
     expect(find.text('dart'), findsOneWidget);
     expect(find.text('print(1)'), findsOneWidget);
   });
 
-  testWidgets('Enter requests paragraph split at the current selection',
-      (tester) async {
+  testWidgets('Enter requests paragraph split at the current selection', (
+    tester,
+  ) async {
     TextSelection? splitSelection;
-    await tester.pumpWidget(host(
-      presenter.present(factory.paragraph(id: 'p1', text: 'hello world')),
-      onTextChanged: (_) {},
-      onParagraphSplit: (selection) async {
-        splitSelection = selection;
-      },
-    ));
+    await tester.pumpWidget(
+      host(
+        presenter.present(factory.paragraph(id: 'p1', text: 'hello world')),
+        onTextChanged: (_) {},
+        onParagraphSplit: (selection) async {
+          splitSelection = selection;
+        },
+      ),
+    );
 
     await tester.tap(find.byType(TextField));
     await tester.pump();
@@ -70,13 +79,15 @@ void main() {
   testWidgets('Shift+Enter inserts an in-block line break', (tester) async {
     String? changed;
     var splitCount = 0;
-    await tester.pumpWidget(host(
-      presenter.present(factory.paragraph(id: 'p1', text: 'hello world')),
-      onTextChanged: (text) => changed = text,
-      onParagraphSplit: (_) async {
-        splitCount++;
-      },
-    ));
+    await tester.pumpWidget(
+      host(
+        presenter.present(factory.paragraph(id: 'p1', text: 'hello world')),
+        onTextChanged: (text) => changed = text,
+        onParagraphSplit: (_) async {
+          splitCount++;
+        },
+      ),
+    );
 
     await tester.tap(find.byType(TextField));
     await tester.pump();
@@ -91,20 +102,25 @@ void main() {
     expect(changed, 'hello\n world');
     expect(splitCount, 0);
     expect(editable.controller.text, 'hello\n world');
-    expect(editable.controller.selection,
-        const TextSelection.collapsed(offset: 6));
+    expect(
+      editable.controller.selection,
+      const TextSelection.collapsed(offset: 6),
+    );
   });
 
-  testWidgets('Backspace at paragraph start requests merge with previous',
-      (tester) async {
+  testWidgets('Backspace at paragraph start requests merge with previous', (
+    tester,
+  ) async {
     var mergeCount = 0;
-    await tester.pumpWidget(host(
-      presenter.present(factory.paragraph(id: 'p1', text: 'world')),
-      onTextChanged: (_) {},
-      onParagraphMergeWithPrevious: () async {
-        mergeCount++;
-      },
-    ));
+    await tester.pumpWidget(
+      host(
+        presenter.present(factory.paragraph(id: 'p1', text: 'world')),
+        onTextChanged: (_) {},
+        onParagraphMergeWithPrevious: () async {
+          mergeCount++;
+        },
+      ),
+    );
 
     await tester.tap(find.byType(TextField));
     await tester.pump();
@@ -118,16 +134,19 @@ void main() {
     expect(editable.controller.text, 'world');
   });
 
-  testWidgets('Backspace away from paragraph start does not request merge',
-      (tester) async {
+  testWidgets('Backspace away from paragraph start does not request merge', (
+    tester,
+  ) async {
     var mergeCount = 0;
-    await tester.pumpWidget(host(
-      presenter.present(factory.paragraph(id: 'p1', text: 'world')),
-      onTextChanged: (_) {},
-      onParagraphMergeWithPrevious: () async {
-        mergeCount++;
-      },
-    ));
+    await tester.pumpWidget(
+      host(
+        presenter.present(factory.paragraph(id: 'p1', text: 'world')),
+        onTextChanged: (_) {},
+        onParagraphMergeWithPrevious: () async {
+          mergeCount++;
+        },
+      ),
+    );
 
     await tester.tap(find.byType(TextField));
     await tester.pump();
@@ -142,10 +161,12 @@ void main() {
 
   testWidgets('dispatches checklist changes', (tester) async {
     bool? changed;
-    await tester.pumpWidget(host(
-      presenter.present(factory.checklist(id: 'check', text: 'Done')),
-      onChecklistChanged: (value) => changed = value,
-    ));
+    await tester.pumpWidget(
+      host(
+        presenter.present(factory.checklist(id: 'check', text: 'Done')),
+        onChecklistChanged: (value) => changed = value,
+      ),
+    );
 
     await tester.tap(find.byType(Checkbox));
     expect(changed, isTrue);
@@ -153,10 +174,12 @@ void main() {
 
   testWidgets('renders and opens Object references', (tester) async {
     var tapped = false;
-    await tester.pumpWidget(host(
-      presenter.present(factory.objectReference(id: 'ref', objectId: 42)),
-      onObjectReferenceTap: () => tapped = true,
-    ));
+    await tester.pumpWidget(
+      host(
+        presenter.present(factory.objectReference(id: 'ref', objectId: 42)),
+        onObjectReferenceTap: () => tapped = true,
+      ),
+    );
 
     expect(find.text('Object #42'), findsOneWidget);
     await tester.tap(find.text('Object #42'));

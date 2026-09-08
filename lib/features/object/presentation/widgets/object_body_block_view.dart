@@ -54,8 +54,9 @@ class ObjectBodyBlockView extends StatelessWidget {
             initialValue: block.text ?? '',
             onChanged: onTextChanged,
             onSplit: isParagraph ? onParagraphSplit : null,
-            onMergeWithPrevious:
-                isParagraph ? onParagraphMergeWithPrevious : null,
+            onMergeWithPrevious: isParagraph
+                ? onParagraphMergeWithPrevious
+                : null,
             maxLines: isParagraph ? null : 1,
             autofocus: autofocus,
             autofocusOffset: autofocusOffset,
@@ -296,10 +297,7 @@ class _ObjectBodyTextControlState extends State<_ObjectBodyTextControl> {
     if (widget.onSplit == null && widget.onMergeWithPrevious == null) {
       return field;
     }
-    return Focus(
-      onKeyEvent: _handleKeyEvent,
-      child: field,
-    );
+    return Focus(onKeyEvent: _handleKeyEvent, child: field);
   }
 
   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
@@ -307,7 +305,8 @@ class _ObjectBodyTextControlState extends State<_ObjectBodyTextControl> {
       return KeyEventResult.ignored;
     }
 
-    if (event.logicalKey == LogicalKeyboardKey.enter && widget.onSplit != null) {
+    if (event.logicalKey == LogicalKeyboardKey.enter &&
+        widget.onSplit != null) {
       if (HardwareKeyboard.instance.isShiftPressed) {
         _insertLineBreak();
       } else {
@@ -376,11 +375,7 @@ class _ObjectBodyTextControlState extends State<_ObjectBodyTextControl> {
 }
 
 class _ReferenceTile extends StatelessWidget {
-  const _ReferenceTile({
-    required this.icon,
-    required this.label,
-    this.onTap,
-  });
+  const _ReferenceTile({required this.icon, required this.label, this.onTap});
 
   final IconData icon;
   final String label;
