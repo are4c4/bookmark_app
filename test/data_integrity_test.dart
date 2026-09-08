@@ -89,13 +89,9 @@ void main() {
     expect(storedPhoto.path, 'photos/photo.jpg');
 
     final personId = await repository.createPerson('Author');
-    await database.updatePerson(
-      personId,
-      'Author',
-      null,
-      profilePhotoId: photoId,
-      updateProfilePhoto: true,
-    );
+    await (database.update(database.people)
+          ..where((person) => person.id.equals(personId)))
+        .write(PeopleCompanion(profilePhotoId: Value(photoId)));
     final photo = (await repository.watchPhotos().first)
         .firstWhere((item) => item.id == photoId);
 
