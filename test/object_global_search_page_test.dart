@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
 import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/repositories/object_global_search_service.dart';
+import 'package:bookmark_app/repositories/object_search_result_resolver.dart';
 import 'package:bookmark_app/views/object_global_search_page.dart';
 import 'package:bookmark_app/views/object_inspector_page.dart';
 import 'package:drift/native.dart';
@@ -116,6 +119,62 @@ void main() {
           'a Search-local projection change from another service instance must replay the active query',
     );
     expect(find.text('BackgroundVisible Token'), findsOneWidget);
+  });
+
+  testWidgets('superseded same-query result cannot overwrite projection replay',
+      (tester) async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final store = GenericDatabaseStore(database);
+    final objects = ObjectStore(store);
+    final pageSearch = _DelayedFirstQuerySearchService(store);
+    final producerSearch = ObjectGlobalSearchService(store);
+
+    final noteTypeId = await objects.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Note',
+      icon: '📝',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ObjectGlobalSearchPage(
+          store: store,
+          workspaceId: workspaceId,
+          searchService: pageSearch,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'generationtoken');
+    await tester.pump(const Duration(milliseconds: 250));
+    await pageSearch.firstSearchStarted.future;
+
+    final objectId = await objects.createObject(
+      objectTypeId: noteTypeId,
+      title: 'GenerationToken Current',
+    );
+    await producerSearch.refreshObject(objectId);
+
+    await tester.pump();
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(ValueKey('object-global-search-result-$objectId')),
+      findsOneWidget,
+      reason: 'the projection replay must win while the older query is delayed',
+    );
+
+    pageSearch.releaseFirstSearch.complete();
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(ValueKey('object-global-search-result-$objectId')),
+      findsOneWidget,
+      reason: 'the older empty result must be ignored after it completes',
+    );
   });
 
   testWidgets(
@@ -241,4 +300,33 @@ void main() {
     expect(find.text('一致するオブジェクトがありません'), findsOneWidget);
     expect(find.textContaining('一致するブックマーク'), findsNothing);
   });
+}
+
+class _DelayedFirstQuerySearchService extends ObjectGlobalSearchService {
+  _DelayedFirstQuerySearchService(super.genericStore);
+
+  final Completer<void> firstSearchStarted = Completer<void>();
+  final Completer<void> releaseFirstSearch = Completer<void>();
+  var _searchCalls = 0;
+
+  @override
+  Future<List<ResolvedObjectSearchHit>> search({
+    required int workspaceId,
+    required String rawQuery,
+    int? objectTypeId,
+    int limit = 100,
+  }) async {
+    final results = await super.search(
+      workspaceId: workspaceId,
+      rawQuery: rawQuery,
+      objectTypeId: objectTypeId,
+      limit: limit,
+    );
+    _searchCalls += 1;
+    if (_searchCalls == 1) {
+      firstSearchStarted.complete();
+      await releaseFirstSearch.future;
+    }
+    return results;
+  }
 }
