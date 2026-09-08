@@ -9,6 +9,8 @@ import 'package:drift/drift.dart' hide isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/legacy_photo_fixture.dart';
+
 void main() {
   late AppDatabase database;
   late BookmarkLifecycleStore lifecycleStore;
