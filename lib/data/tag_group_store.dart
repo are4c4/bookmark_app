@@ -109,11 +109,6 @@ class TagGroupStore {
           .watch()
           .map((rows) => rows.map(_toInfo).toList());
 
-  Future<Map<int, int?>> tagGroupIds() async {
-    final rows = await database.select(database.tags).get();
-    return {for (final row in rows) row.id: row.groupId};
-  }
-
   Stream<Map<int, int?>> watchTagGroupIds() =>
       database.select(database.tags).watch().map(
             (rows) => {for (final row in rows) row.id: row.groupId},
@@ -315,9 +310,6 @@ class TagGroupStore {
               .write(TagsCompanion(groupId: Value(entry.value)));
         }
       });
-
-  Future<void> setTagGroup(int tagId, int? groupId) =>
-      moveTag(tagId: tagId, groupId: groupId);
 
   Future<void> renameTag(int id, String name) async {
     final trimmed = name.trim();
