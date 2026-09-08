@@ -11,6 +11,7 @@ import '../data/daily_note_service.dart';
 import '../data/generic_database_store.dart';
 import '../data/object_store.dart';
 import '../data/object_type_defaults_store.dart';
+import '../data/person_object_bridge.dart';
 import '../data/photo_read_store.dart';
 import '../data/system_object_store.dart';
 import '../data/tag_object_bridge.dart';
@@ -36,6 +37,11 @@ class ObjectSyncService {
       objectStore: objectStore,
     );
     tagBridge = TagObjectBridge(
+      database: database,
+      objectStore: objectStore,
+      systemObjectStore: systemObjectStore,
+    );
+    personBridge = PersonObjectBridge(
       database: database,
       objectStore: objectStore,
       systemObjectStore: systemObjectStore,
@@ -81,6 +87,7 @@ class ObjectSyncService {
 
   late final SystemObjectStore systemObjectStore;
   late final TagObjectBridge tagBridge;
+  late final PersonObjectBridge personBridge;
   late final CoreObjectBridge coreBridge;
   late final BookmarkWeblinkObjectBridge bookmarkWeblinkBridge;
   late final WeblinkPreviewImagePipeline _previewImagePipeline =
@@ -157,6 +164,7 @@ class ObjectSyncService {
     final workspaceStore = WorkspaceStore(database);
     final changes = Rx.merge<Object?>([
       database.watchAllTags().map<Object?>((_) => null),
+      database.watchAllPeople().map<Object?>((_) => null),
       PhotoReadStore(database).watchAll().map<Object?>((_) => null),
       BookmarkReadStore(database).watchItems().map<Object?>((_) => null),
       workspaceStore.watchBookmarkIds(workspaceId).map<Object?>((_) => null),
@@ -179,6 +187,7 @@ class ObjectSyncService {
       systemKeys: objectSyncMirrorSystemKeys,
     );
 
+    final personObjectIds = await personBridge.syncLegacyPeople(workspaceId);
     final coreImpact = await coreBridge.syncAllWithImpact(workspaceId);
     final weblinkSync =
         await bookmarkWeblinkBridge.syncWorkspaceWithImpact(workspaceId);
@@ -193,7 +202,9 @@ class ObjectSyncService {
       defaultsStore: ObjectTypeDefaultsStore(genericStore),
     ).ensureDefinition(workspaceId);
 
-    final bridgeCandidates = coreImpact.combine(weblinkSync.impact);
+    final bridgeCandidates = ObjectSyncImpact(personObjectIds)
+        .combine(coreImpact)
+        .combine(weblinkSync.impact);
     final after = await ObjectSyncSemanticSnapshot.capture(
       objectStore: objectStore,
       systemObjects: systemObjectStore,
