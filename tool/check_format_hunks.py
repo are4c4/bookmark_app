@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Compare edited Dart lines with formatter-induced line changes."""
+"""Check whether dart format changes PR-added/replaced current lines."""
 
 from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 from pathlib import Path
 import re
 import sys
@@ -29,7 +30,18 @@ class LineRange:
 class Hunk:
     old_range: LineRange
     new_range: LineRange
+    old_count: int
+    new_count: int
     text: str
+
+
+@dataclass(frozen=True)
+class FormatterChange:
+    tag: str
+    current_range: LineRange
+    formatted_range: LineRange
+    before: tuple[str, ...]
+    after: tuple[str, ...]
 
 
 def _line_range(start: int, count: int) -> LineRange:
@@ -61,6 +73,8 @@ def parse_hunks(patch: str) -> list[Hunk]:
             Hunk(
                 old_range=_line_range(old_start, old_count),
                 new_range=_line_range(new_start, new_count),
+                old_count=old_count,
+                new_count=new_count,
                 text="\n".join(lines[index:end]),
             )
         )
@@ -68,31 +82,113 @@ def parse_hunks(patch: str) -> list[Hunk]:
     return hunks
 
 
-def formatter_hunks_overlapping_edits(
-    source_patch: str,
-    formatter_patch: str,
-) -> list[Hunk]:
-    """Return formatter hunks that touch lines edited by the source patch.
+def edited_current_ranges(source_patch: str) -> list[LineRange]:
+    """Return only current-file lines introduced/replaced by the source diff.
 
-    Source hunks use their new/current-file coordinates. Formatter hunks use
-    their old/pre-format coordinates, so both sets refer to the same file
-    before `dart format` mutates the temporary working copy.
+    Pure deletions have no current lines and therefore cannot introduce new
+    formatting debt by themselves.
+    """
+    return [
+        hunk.new_range
+        for hunk in parse_hunks(source_patch)
+        if hunk.new_count > 0
+    ]
+
+
+def _range_for_opcode(start: int, end: int, fallback: int) -> LineRange:
+    if start < end:
+        return LineRange(start + 1, end)
+    anchor = max(1, fallback)
+    return LineRange(anchor, anchor)
+
+
+def formatter_changes_touching_edits(
+    source_patch: str,
+    original_text: str,
+    formatted_text: str,
+) -> list[FormatterChange]:
+    """Return formatter operations that affect PR-added/replaced current lines.
+
+    The formatter is still authoritative. The important distinction is that
+    we compare line sequences before/after formatting instead of trusting the
+    coarse spans of a unified formatter diff. Git/diff may coalesce unrelated
+    historical formatting into a large hunk that happens to span an edited
+    coordinate even when the edited line itself survives formatting unchanged.
     """
     source_hunks = parse_hunks(source_patch)
-    formatter_hunks = parse_hunks(formatter_patch)
-    if not formatter_hunks:
+    if original_text == formatted_text:
         return []
+
     if not source_hunks:
         # A selected tracked file should have source hunks. Fail closed if the
         # caller cannot establish them rather than silently ignoring drift.
-        return formatter_hunks
+        original_lines = original_text.splitlines(keepends=True)
+        formatted_lines = formatted_text.splitlines(keepends=True)
+        return [
+            FormatterChange(
+                tag="missing-source-diff",
+                current_range=LineRange(1, max(1, len(original_lines))),
+                formatted_range=LineRange(1, max(1, len(formatted_lines))),
+                before=tuple(original_lines[:8]),
+                after=tuple(formatted_lines[:8]),
+            )
+        ]
 
-    edited_ranges = [hunk.new_range for hunk in source_hunks]
-    return [
-        hunk
-        for hunk in formatter_hunks
-        if any(hunk.old_range.overlaps(edited) for edited in edited_ranges)
-    ]
+    edited_ranges = edited_current_ranges(source_patch)
+    if not edited_ranges:
+        return []
+
+    original_lines = original_text.splitlines(keepends=True)
+    formatted_lines = formatted_text.splitlines(keepends=True)
+    matcher = SequenceMatcher(
+        None,
+        original_lines,
+        formatted_lines,
+        autojunk=False,
+    )
+
+    relevant: list[FormatterChange] = []
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == "equal":
+            continue
+
+        if i1 < i2:
+            current_range = LineRange(i1 + 1, i2)
+            touches = any(current_range.overlaps(edited) for edited in edited_ranges)
+        else:
+            # An insertion has no old/current lines. Treat the boundary on
+            # either side as affected so formatter-only inserted structure
+            # adjacent to newly edited code still fails conservatively.
+            boundary_after_lines = i1
+            touches = any(
+                edited.start - 1 <= boundary_after_lines <= edited.end
+                for edited in edited_ranges
+            )
+            current_range = _range_for_opcode(
+                i1,
+                i2,
+                min(max(1, i1 + 1), max(1, len(original_lines))),
+            )
+
+        if not touches:
+            continue
+
+        formatted_range = _range_for_opcode(
+            j1,
+            j2,
+            min(max(1, j1 + 1), max(1, len(formatted_lines))),
+        )
+        relevant.append(
+            FormatterChange(
+                tag=tag,
+                current_range=current_range,
+                formatted_range=formatted_range,
+                before=tuple(original_lines[i1:i2]),
+                after=tuple(formatted_lines[j1:j2]),
+            )
+        )
+
+    return relevant
 
 
 def _format_range(line_range: LineRange) -> str:
@@ -101,33 +197,63 @@ def _format_range(line_range: LineRange) -> str:
     return f"{line_range.start}-{line_range.end}"
 
 
+def _print_lines(label: str, lines: tuple[str, ...]) -> None:
+    if not lines:
+        print(f"  {label}: <no lines>", file=sys.stderr)
+        return
+    print(f"  {label}:", file=sys.stderr)
+    for line in lines[:8]:
+        print(f"    {line.rstrip()}", file=sys.stderr)
+    if len(lines) > 8:
+        print(f"    ... ({len(lines) - 8} more line(s))", file=sys.stderr)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source-diff", required=True)
-    parser.add_argument("--format-diff", required=True)
+    parser.add_argument("--original", required=True)
+    parser.add_argument("--formatted", required=True)
     parser.add_argument("--path", required=True)
     args = parser.parse_args(argv)
 
     source_patch = Path(args.source_diff).read_text(encoding="utf-8")
-    formatter_patch = Path(args.format_diff).read_text(encoding="utf-8")
-    relevant = formatter_hunks_overlapping_edits(source_patch, formatter_patch)
+    original_text = Path(args.original).read_text(encoding="utf-8")
+    formatted_text = Path(args.formatted).read_text(encoding="utf-8")
+    relevant = formatter_changes_touching_edits(
+        source_patch,
+        original_text,
+        formatted_text,
+    )
     if not relevant:
         print(
             f"check_format: {args.path}: formatter drift exists only outside "
-            "edited lines; preserving the focused patch"
+            "PR-added/replaced current lines (or the PR only deletes lines); "
+            "preserving the focused patch"
         )
         return 0
 
-    source_hunks = parse_hunks(source_patch)
-    edited = ", ".join(_format_range(hunk.new_range) for hunk in source_hunks)
+    edited_ranges = edited_current_ranges(source_patch)
+    edited = ", ".join(_format_range(line_range) for line_range in edited_ranges)
     print(
-        f"check_format: {args.path}: dart format changes overlap edited "
-        f"line(s) {edited or 'unknown'}",
+        f"check_format: {args.path}: dart format changes PR-added/replaced "
+        f"current line(s) {edited or 'unknown'}",
         file=sys.stderr,
     )
-    print("check_format: relevant formatter diff:", file=sys.stderr)
-    for hunk in relevant:
-        print(hunk.text, file=sys.stderr)
+    for change in relevant[:4]:
+        print(
+            "check_format: formatter "
+            f"{change.tag} current lines {_format_range(change.current_range)} "
+            f"-> formatted lines {_format_range(change.formatted_range)}",
+            file=sys.stderr,
+        )
+        _print_lines("before", change.before)
+        _print_lines("formatted", change.after)
+    if len(relevant) > 4:
+        print(
+            f"check_format: ... {len(relevant) - 4} additional formatter "
+            "change(s) touching edited code",
+            file=sys.stderr,
+        )
     return 1
 
 

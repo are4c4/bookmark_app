@@ -4,76 +4,150 @@ import unittest
 
 from check_format_hunks import (
     LineRange,
-    formatter_hunks_overlapping_edits,
+    edited_current_ranges,
+    formatter_changes_touching_edits,
     parse_hunks,
 )
 
 
 class CheckFormatHunksTest(unittest.TestCase):
-    def test_formatted_new_hunk_ignores_pre_existing_formatter_drift(self):
-        source = """@@ -20 +20 @@
--old
-+new
+    def test_formatted_edit_survives_pre_existing_formatter_drift(self):
+        source = """@@ -6 +6 @@
+-  print('old');
++  print('new');
 """
-        formatter = """@@ -3,2 +3,3 @@
--old debt
-+formatted debt
-+continued
+        original = """void main() {
+  final legacy = <int>[
+1,
+2,
+];
+  print('new');
+}
 """
-        self.assertEqual(formatter_hunks_overlapping_edits(source, formatter), [])
+        formatted = """void main() {
+  final legacy = <int>[1, 2];
+  print('new');
+}
+"""
+        self.assertEqual(
+            formatter_changes_touching_edits(source, original, formatted),
+            [],
+        )
 
-    def test_unformatted_new_hunk_fails_when_formatter_touches_edit(self):
-        source = """@@ -20 +20 @@
--old
-+new
+    def test_unformatted_edit_fails_when_formatter_changes_that_line(self):
+        source = """@@ -6 +6 @@
+-  print('old');
++  print(  'bad'  );
 """
-        formatter = """@@ -20 +20 @@
--new
-+new formatted
+        original = """void main() {
+  final legacy = <int>[
+1,
+2,
+];
+  print(  'bad'  );
+}
 """
-        relevant = formatter_hunks_overlapping_edits(source, formatter)
+        formatted = """void main() {
+  final legacy = <int>[1, 2];
+  print('bad');
+}
+"""
+        relevant = formatter_changes_touching_edits(source, original, formatted)
         self.assertEqual(len(relevant), 1)
-        self.assertEqual(relevant[0].old_range, LineRange(20, 20))
+        self.assertEqual(relevant[0].current_range, LineRange(2, 6))
 
-    def test_deletion_anchor_detects_formatter_change_at_same_location(self):
-        source = """@@ -8 +8,0 @@
--removed
+    def test_pure_deletion_does_not_introduce_format_debt(self):
+        source = """@@ -4 +4,0 @@
+-  print('remove');
 """
-        formatter = """@@ -8 +8 @@
--before
-+after
+        original = """void main() {
+  final legacy = <int>[
+1,
+2,
+];
+}
 """
-        self.assertEqual(len(formatter_hunks_overlapping_edits(source, formatter)), 1)
+        formatted = """void main() {
+  final legacy = <int>[1, 2];
+}
+"""
+        self.assertEqual(edited_current_ranges(source), [])
+        self.assertEqual(
+            formatter_changes_touching_edits(source, original, formatted),
+            [],
+        )
 
-    def test_only_overlapping_formatter_hunk_is_reported(self):
-        source = """@@ -30,2 +30,2 @@
--old a
--old b
-+new a
-+new b
+    def test_equal_edited_block_survives_large_surrounding_reformat(self):
+        source = """@@ -9,3 +9,3 @@
+-  final person = 'old';
+-  print(person);
+-  print('done');
++  final person = 'new';
++  print(person);
++  print('done');
 """
-        formatter = """@@ -4 +4 @@
--old debt
-+formatted debt
-@@ -31 +31 @@
--new b
-+new b formatted
+        original = """void main() {
+  final legacy = <int>[
+1,
+2,
+3,
+4,
+5,
+];
+  final person = 'new';
+  print(person);
+  print('done');
+}
 """
-        relevant = formatter_hunks_overlapping_edits(source, formatter)
+        formatted = """void main() {
+  final legacy = <int>[1, 2, 3, 4, 5];
+  final person = 'new';
+  print(person);
+  print('done');
+}
+"""
+        self.assertEqual(
+            formatter_changes_touching_edits(source, original, formatted),
+            [],
+        )
+
+    def test_formatter_insertion_at_edit_boundary_fails_conservatively(self):
+        source = """@@ -2 +2 @@
+-  callOld();
++  callNew();
+"""
+        original = """void main() {
+  callNew();
+}
+"""
+        formatted = """void main() {
+  callNew();
+  // formatter inserted structure
+}
+"""
+        relevant = formatter_changes_touching_edits(source, original, formatted)
         self.assertEqual(len(relevant), 1)
-        self.assertIn("@@ -31 +31 @@", relevant[0].text)
+        self.assertEqual(relevant[0].tag, "insert")
 
     def test_missing_source_hunks_fails_closed(self):
-        formatter = """@@ -4 +4 @@
--old
-+new
-"""
-        self.assertEqual(len(formatter_hunks_overlapping_edits("", formatter)), 1)
+        relevant = formatter_changes_touching_edits(
+            "",
+            "void main(){ }\n",
+            "void main() {}\n",
+        )
+        self.assertEqual(len(relevant), 1)
+        self.assertEqual(relevant[0].tag, "missing-source-diff")
+
+    def test_hunk_parser_preserves_zero_new_count(self):
+        hunks = parse_hunks("@@ -8 +8,0 @@\n-removed\n")
+        self.assertEqual(hunks[0].new_count, 0)
+        self.assertEqual(hunks[0].new_range, LineRange(8, 8))
 
     def test_hunk_parser_uses_new_and_old_coordinates(self):
         hunks = parse_hunks("@@ -10,2 +12,3 @@\n-a\n-b\n+c\n+d\n+e\n")
         self.assertEqual(hunks[0].old_range, LineRange(10, 11))
         self.assertEqual(hunks[0].new_range, LineRange(12, 14))
+        self.assertEqual(hunks[0].new_count, 3)
 
 
 if __name__ == "__main__":
