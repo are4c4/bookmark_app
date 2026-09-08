@@ -92,6 +92,76 @@ void main() {
     expect(split.blocks[1].text, ' world');
   });
 
+  test('Backspace merge combines adjacent plain paragraphs', () {
+    const document = ObjectBodyDocument(
+      blocks: <ObjectBodyBlock>[
+        ObjectBodyBlock(id: 'p1', type: 'paragraph', text: 'hello'),
+        ObjectBodyBlock(id: 'p2', type: 'paragraph', text: ' world'),
+        ObjectBodyBlock(id: 'p3', type: 'paragraph', text: 'after'),
+      ],
+    );
+
+    final merged = editor.mergeParagraphIntoPrevious(
+      document: document,
+      blockId: 'p2',
+    );
+
+    expect(merged.blocks.map((block) => block.id), ['p1', 'p3']);
+    expect(merged.blocks[0].text, 'hello world');
+    expect(merged.blocks[1].text, 'after');
+  });
+
+  test('Backspace merge leaves unsafe block boundaries unchanged', () {
+    const first = ObjectBodyDocument(
+      blocks: <ObjectBodyBlock>[
+        ObjectBodyBlock(id: 'p1', type: 'paragraph', text: 'first'),
+      ],
+    );
+    expect(
+      identical(
+        editor.mergeParagraphIntoPrevious(document: first, blockId: 'p1'),
+        first,
+      ),
+      isTrue,
+    );
+
+    const styled = ObjectBodyDocument(
+      blocks: <ObjectBodyBlock>[
+        ObjectBodyBlock(
+          id: 'p1',
+          type: 'paragraph',
+          text: 'styled',
+          attributes: <String, dynamic>{'align': 'center'},
+        ),
+        ObjectBodyBlock(id: 'p2', type: 'paragraph', text: 'plain'),
+      ],
+    );
+    expect(
+      identical(
+        editor.mergeParagraphIntoPrevious(document: styled, blockId: 'p2'),
+        styled,
+      ),
+      isTrue,
+    );
+
+    const headingBoundary = ObjectBodyDocument(
+      blocks: <ObjectBodyBlock>[
+        ObjectBodyBlock(id: 'h1', type: 'heading', text: 'Heading'),
+        ObjectBodyBlock(id: 'p1', type: 'paragraph', text: 'plain'),
+      ],
+    );
+    expect(
+      identical(
+        editor.mergeParagraphIntoPrevious(
+          document: headingBoundary,
+          blockId: 'p1',
+        ),
+        headingBoundary,
+      ),
+      isTrue,
+    );
+  });
+
   test('move reorders blocks without rewriting their payload', () {
     const document = ObjectBodyDocument(
       blocks: <ObjectBodyBlock>[
