@@ -39,7 +39,7 @@ Live GitHub audit at this handoff shows **5 open Issues**:
 - `#242` — Vault/storage lifecycle; production implementation complete, final real-macOS Create/Open/Switch/Move/Recovery validation remains.
 - `#245` — legacy Photos -> canonical Image Objects.
 
-There are no open PRs at the latest audit. Re-check live PR state before starting new work rather than relying on this snapshot.
+Open PR and hotspot ownership are time-sensitive and are intentionally not frozen as repository-wide handoff state. Re-check live PRs and diffs immediately before starting work.
 
 Do not treat completed architecture Issues as active merely because older umbrella bodies/comments still contain unchecked historical bullets.
 
@@ -136,7 +136,7 @@ Shared hotspots include `generic_database_page.dart`, `app_shell.dart`, `object_
 
 Before non-trivial edits, inspect current open PR ownership. One lane at a time may hold a broad hotspot lease. Patch-sized non-overlapping changes still require a fresh overlap audit.
 
-At the latest audit there is no open PR, so no repository-wide hotspot lease is recorded here. This is only a snapshot; always verify again immediately before editing.
+Do not infer hotspot availability from this handoff. Open PRs and ownership leases are time-sensitive; always verify live PR diffs immediately before editing and record a lease only when active work actually claims one.
 
 ## Cross-lane boundaries
 - Database/View owns generic presentation/configuration; Primitive owns Weblink/Image/File-specific product semantics.
