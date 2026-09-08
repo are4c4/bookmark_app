@@ -107,7 +107,6 @@ void main() {
     await producerSearch.refreshObject(objectId);
 
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 50));
     await tester.pumpAndSettle();
 
     expect(
