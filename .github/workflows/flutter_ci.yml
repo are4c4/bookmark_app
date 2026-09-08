@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   quality:
-    name: analyze-test
+    name: analyze-guards
     runs-on: ubuntu-latest
     timeout-minutes: 22
     steps:
@@ -57,24 +57,53 @@ jobs:
       - name: Analyze
         run: flutter analyze
 
-      - name: Test
+  test:
+    name: test-shard-${{ matrix.shard }}-of-3
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Generate Drift code
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Test shard ${{ matrix.shard }} of 3
         id: flutter-test
         timeout-minutes: 18
         run: |
           set -o pipefail
           mkdir -p ci-artifacts
-          flutter test --timeout 2m --reporter expanded 2>&1 | tee ci-artifacts/flutter-test.log
+          flutter test \
+            --timeout 2m \
+            --reporter expanded \
+            --total-shards 3 \
+            --shard-index ${{ matrix.shard }} \
+            2>&1 | tee ci-artifacts/flutter-test-shard-${{ matrix.shard }}.log
 
       - name: Summarize Flutter test failure
         if: ${{ failure() && steps.flutter-test.outcome == 'failure' }}
         run: |
           {
-            echo '## Flutter Test failure'
+            echo '## Flutter Test shard ${{ matrix.shard }} of 3 failure'
             echo
             echo 'Last 200 log lines:'
             echo
             echo '```text'
-            tail -n 200 ci-artifacts/flutter-test.log
+            tail -n 200 ci-artifacts/flutter-test-shard-${{ matrix.shard }}.log
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -82,8 +111,8 @@ jobs:
         if: ${{ failure() && steps.flutter-test.outcome == 'failure' }}
         uses: actions/upload-artifact@v4
         with:
-          name: flutter-test-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ci-artifacts/flutter-test.log
+          name: flutter-test-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}-shard-${{ matrix.shard }}
+          path: ci-artifacts/flutter-test-shard-${{ matrix.shard }}.log
           if-no-files-found: warn
           retention-days: 7
 
