@@ -6,16 +6,36 @@
 Own physical data-location lifecycle, Vault portability/recovery, filesystem-level managed storage contracts shared by primitives, and app delivery plumbing without taking over Object/Relation product semantics.
 
 ## Current status — 2026-09-08
-Lane F has no known independent repository implementation work at this checkpoint.
+Lane F now has one explicit active follow-up, **#951**, but the final real-macOS preservation pass is dependency-gated by the remaining Photo -> Image product/caller retirement work rather than by missing Storage production code.
 
+Current checkpoint was re-audited from latest `main` `b35506224323d5e0c10c9dd527a18dca95f5db39` and live PR/Issue state:
+- **#951 — active, dependency-gated.** Final real-macOS Vault/data-preservation validation for Photo -> Image consolidation. #941 Image Inspector parity is now completed/closed via `a74abec4cc231af91acbee956b4aaf131be87608`. Lane C #949 remains open with PR #997, and Lane G #950 remains active with current caller-zero cleanup PR #1005. Run the final #951 matrix only after #949 has retired normal legacy `写真` navigation and the applicable #950 caller-zero cleanup has integrated far enough to validate the intended final product path.
+- **#242 — implementation complete; real-macOS validation remains.** Create/Open/Switch/Move/Recovery production code and automated regressions are integrated. Its remaining validation overlaps the Vault lifecycle portion of #951 and should be recorded together where practical.
 - **#897 — completed/closed.** PR #906 was squash-merged as `b04ebeb1f354156873c51ca0eaaadb32e7cfb63e` after final rebased Flutter CI #2756 passed the complete suite.
-- **#242 — implementation complete; real-macOS validation remains.** Create/Open/Switch/Move/Recovery production code and automated regressions are integrated.
 - **#218 — completed/closed.** Repository release/DMG packaging is green, and the user already validated the release `Bookmark.app` on the actual Mac with existing data preserved. Finder installation is the safe fallback when automated `/Applications` copy lacks permission.
 
-Do not invent new Storage abstractions merely to keep this lane active. Resume only for a concrete filesystem/Vault obligation, an implementation defect found during real-machine validation, or an explicit cross-lane Storage dependency.
+No open PR currently gives Lane F a shared-hotspot lease. Current open work is C/G-owned; do not edit `app_shell.dart`, `app_database.dart`, Inspector hosts or primitive migration code from Lane F merely to accelerate #951.
+
+Do not invent new Storage abstractions merely to keep this lane active. Resume Storage implementation only for a concrete filesystem/Vault defect found by validation or an explicit cross-lane Storage dependency.
+
+## #951 — Photo -> Image final preservation gate
+#951 is a real-machine preservation checkpoint, not a request to redesign Vault storage.
+
+Required final matrix after #949/#950 are sufficiently integrated:
+1. Existing legacy Photos promoted to canonical Images still resolve after app restart.
+2. Existing Bookmark Images / Cover Image migrated from legacy Photo data still render after restart.
+3. Existing Person profile images migrated through canonical Image Relations still render after restart.
+4. Native canonical Images that never had legacy Photos remain intact.
+5. Move a Vault and confirm canonical Image paths plus remaining legacy compatibility paths resolve correctly at the target.
+6. Switch between default/custom Vaults and confirm image/profile/cover data remains isolated to the correct Vault.
+7. External absolute image/file references are not silently copied, rebased or deleted.
+8. Missing/offline Vault behavior remains fail-closed and does not manufacture an empty replacement data set.
+9. Duplicate/reopen/backup-restore behavior does not lose Image/Photo mapping required for migration compatibility.
+
+If the pass exposes a reproducible repository defect, record it as a focused owner-lane Issue before changing code. Storage owns physical path/byte/Vault-lifecycle defects; Image identity/presentation belongs to Lane D, Relation corruption belongs to Lane B, navigation belongs to Lane C, and caller-zero compatibility cleanup belongs to Lane G.
 
 ## #897 — legacy Photo deletion safety
-The remaining legacy Photo physical-delete path is now Vault-safe.
+The remaining legacy Photo physical-delete path is Vault-safe.
 
 `PhotoStorageService.deleteManagedPhoto(...)`:
 - accepts deletion authority only from an explicit/active managed `photos/` root; the import-time application-support fallback is never deletion authority;
@@ -69,6 +89,8 @@ Real macOS only:
 4. Move a Vault, restart from the target and verify photos/attachments/external references.
 5. Exercise invalid/non-empty Move target plus missing/moved-folder recovery and verify the source/current Vault stays intact.
 
+These checks should be combined with the #951 image-preservation matrix rather than run as two unrelated destructive-looking exercises. The source Vault must remain intact throughout Move/recovery validation.
+
 ## Shared managed-file filesystem contract
 The generic managed-file seam is integrated on `main`:
 - **#750** `VaultManagedFileCopyService` copies arbitrary regular files into `<Vault>/attachments`, returns portable stored paths plus explicit `vault-managed-copy-v1` ownership, and can roll back only the exact newly-created copy.
@@ -98,17 +120,28 @@ Optional branded icon artwork, Developer ID signing/notarization and automatic u
 - Generic File physical delete requires explicit managed ownership, not path location alone.
 - Removing a Vault from the registered/recent list never deletes its bytes.
 - Raw filesystem/database exception details are not exposed in user-facing recovery/Settings messages.
+- Final Photo -> Image preservation validation must not delete legacy schema/data; destructive schema retirement is a separate explicit migration decision.
 
 ## Cross-lane boundaries
 - Lane D owns Image/Photo/File product migration, mappings, Object identity, MIME/content routing and user-facing primitive semantics.
 - Lane B owns Relation mutation/index/delete integrity.
-- Lane F owns byte placement, portable paths, Vault lifecycle/recovery and physical-delete safety.
-- Do not broaden Storage work into Photo UI, canonical Image identity or Relation design.
+- Lane C owns generic Images navigation and final legacy `写真` navigation retirement (#949).
+- Lane G owns caller-zero legacy compatibility deletion (#950) and tooling/refactor work.
+- Lane F owns byte placement, portable paths, Vault lifecycle/recovery, physical-delete safety and the #951 preservation gate.
+- Do not broaden Storage work into Photo UI, canonical Image identity, Relation design, AppShell navigation or caller-zero deletion.
+
+## Active branch / checkpoint
+- branch: `docs/storage-handoff-image-preservation-951`
+- baseline: `main` `b35506224323d5e0c10c9dd527a18dca95f5db39`
+- production code changed in this checkpoint: none
+- shared hotspot lease: none
+- validation performed: live Issue/PR/main/handoff audit; #941 completion confirmed, #949/#950 still open, no new independent Storage defect identified
 
 ## Next actions
-1. If the user can run the remaining real macOS Vault checks, complete #242 validation and record the results on that Issue.
-2. If another lane reports a concrete filesystem/Vault contract gap, re-read current `main`, open PR ownership and the reporting Issue before implementing.
-3. If real-machine Vault validation finds a reproducible defect, create/follow a focused Storage Issue and resume with a small regression-backed slice.
+1. Track #949 and #950 from live GitHub state; do not begin the final #951 pass from an intermediate product state.
+2. Once `画像` is the single normal user-facing image collection and the applicable caller-zero cleanup has integrated, run the combined #951 + #242 real-macOS preservation matrix on a non-destructive test Vault while retaining the source Vault.
+3. Record each matrix result on #951 and the overlapping Vault-lifecycle results on #242.
+4. If a reproducible filesystem/Vault defect appears, open/follow a focused Lane F child Issue and implement a regression-backed fix; otherwise close #951/#242 when the manual validation criteria are satisfied.
 
 ## Stop reason
-Lane F is **idle by design** at this checkpoint. #897 and #218 are integrated/closed; #242 is blocked only on its final real user-machine Vault lifecycle validation, and the latest open-Issue audit found no additional Storage/Vault/filesystem implementation obligation.
+Lane F is **dependency-gated**, not idle: #951 is now the active F-owned completion gate, but the final real-machine preservation pass must wait for Lane C #949 and the applicable Lane G #950 retirement state. There is no safe independent Storage production-code change to make before those dependencies settle, and speculative Vault changes are explicitly out of scope.
