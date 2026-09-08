@@ -95,6 +95,7 @@ jobs:
           python3 tool/pr_coordination_guard_test.py
           python3 tool/shared_hotspot_conflict_guard_test.py
           python3 tool/report_test_health_test.py
+          python3 tool/vault_preservation_manifest_test.py
 
       - name: Shared hotspot overlap audit
         if: github.event_name == 'pull_request'
