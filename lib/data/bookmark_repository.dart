@@ -351,10 +351,6 @@ class BookmarkRepository {
 
   Future<int> createCollection(String name, {String? note}) => _database.createCollection(name, note: note);
   Future<void> deleteCollection(CollectionRecord collection) => _database.deleteCollection(collection.id);
-  Future<void> addRelation(BookmarkItem source, BookmarkItem target, String type) =>
-      _database.addBookmarkRelation(source.id, target.id, type);
-  Future<void> removeRelation(int sourceId, int targetId, String type) =>
-      _database.removeBookmarkRelation(sourceId, targetId, type);
 
   Future<int> createTag(String name, {Tag? parent}) async {
     final id = await _database.createTag(name);
