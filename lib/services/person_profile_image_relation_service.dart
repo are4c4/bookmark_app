@@ -60,7 +60,7 @@ class PersonProfileImageRelationService {
   }) async {
     final person = await _requirePerson(personId);
     await _people.syncLegacyPeople(workspaceId);
-    final schema = await _ensureRelationSchema(workspaceId);
+    final profileImageProperty = await _ensureProfileImageProperty(workspaceId);
     final personObjectId = await _requirePersonObjectId(
       workspaceId: workspaceId,
       personId: personId,
@@ -68,7 +68,7 @@ class PersonProfileImageRelationService {
     final relation = await _targets.selectionFor(
       workspaceId: workspaceId,
       sourceObjectId: personObjectId,
-      property: schema.profileImageProperty,
+      property: profileImageProperty,
     );
     return PersonProfileImageRelationState(
       workspaceId: workspaceId,
@@ -82,13 +82,13 @@ class PersonProfileImageRelationService {
   /// Migrates all healthy legacy Person profile photos in one fail-closed pass.
   ///
   /// Every candidate is strictly preflighted before the first Relation write.
-  /// A missing/ambiguous Photo -> Image mapping, corrupt Relation value/index,
-  /// wrong target, or conflicting existing canonical selection aborts the whole
+  /// Missing/ambiguous Photo -> Image mappings, corrupt Relation value/index,
+  /// wrong targets, or conflicting existing canonical selections abort the whole
   /// migration transaction. Existing matching selections are left untouched,
   /// making repeated migration deterministic and idempotent.
   Future<void> migrateLegacyProfilePhotos(int workspaceId) async {
     await _people.syncLegacyPeople(workspaceId);
-    final schema = await _ensureRelationSchema(workspaceId);
+    final profileImageProperty = await _ensureProfileImageProperty(workspaceId);
     final people = await database.select(database.people).get();
     final candidates = people
         .where((person) => person.profilePhotoId != null)
@@ -109,7 +109,7 @@ class PersonProfileImageRelationService {
         final trusted = await _targets.selectionForMutation(
           workspaceId: workspaceId,
           sourceObjectId: personObjectId,
-          property: schema.profileImageProperty,
+          property: profileImageProperty,
         );
         final imageObjectId = await _imageObjectIdForLegacyPhoto(
           workspaceId: workspaceId,
@@ -136,21 +136,21 @@ class PersonProfileImageRelationService {
       for (final plan in plans) {
         await _mutations.setRelation(
           objectId: plan.personObjectId,
-          property: schema.profileImageProperty,
+          property: profileImageProperty,
           targetObjectIds: <int>[plan.imageObjectId],
         );
       }
     });
   }
 
-  /// Migrates one Person through the same workspace migration contract.
+  /// Migrates one Person through the established Photo -> Image mapping.
   Future<PersonProfileImageRelationState> migrateLegacyProfilePhoto({
     required int workspaceId,
     required int personId,
   }) async {
     await _requirePerson(personId);
     await _people.syncLegacyPeople(workspaceId);
-    final schema = await _ensureRelationSchema(workspaceId);
+    final profileImageProperty = await _ensureProfileImageProperty(workspaceId);
 
     await database.transaction(() async {
       final person = await _requirePerson(personId);
@@ -163,7 +163,7 @@ class PersonProfileImageRelationService {
       final trusted = await _targets.selectionForMutation(
         workspaceId: workspaceId,
         sourceObjectId: personObjectId,
-        property: schema.profileImageProperty,
+        property: profileImageProperty,
       );
       final imageObjectId = await _imageObjectIdForLegacyPhoto(
         workspaceId: workspaceId,
@@ -174,7 +174,7 @@ class PersonProfileImageRelationService {
       if (trusted.selectedObjectIds.isEmpty) {
         await _mutations.setRelation(
           objectId: personObjectId,
-          property: schema.profileImageProperty,
+          property: profileImageProperty,
           targetObjectIds: <int>[imageObjectId],
         );
         return;
@@ -202,7 +202,7 @@ class PersonProfileImageRelationService {
   }) async {
     await _requirePerson(personId);
     await _people.syncLegacyPeople(workspaceId);
-    final schema = await _ensureRelationSchema(workspaceId);
+    final profileImageProperty = await _ensureProfileImageProperty(workspaceId);
 
     await database.transaction(() async {
       final personObjectId = await _requirePersonObjectId(
@@ -212,7 +212,7 @@ class PersonProfileImageRelationService {
       final trusted = await _targets.selectionForMutation(
         workspaceId: workspaceId,
         sourceObjectId: personObjectId,
-        property: schema.profileImageProperty,
+        property: profileImageProperty,
       );
       if (!trusted.candidates.any((image) => image.id == imageObjectId)) {
         throw ArgumentError.value(
@@ -228,7 +228,7 @@ class PersonProfileImageRelationService {
 
       await _mutations.setRelation(
         objectId: personObjectId,
-        property: schema.profileImageProperty,
+        property: profileImageProperty,
         targetObjectIds: <int>[imageObjectId],
       );
       await _writeLegacyProfilePhoto(
@@ -247,7 +247,7 @@ class PersonProfileImageRelationService {
   }) async {
     await _requirePerson(personId);
     await _people.syncLegacyPeople(workspaceId);
-    final schema = await _ensureRelationSchema(workspaceId);
+    final profileImageProperty = await _ensureProfileImageProperty(workspaceId);
 
     await database.transaction(() async {
       final personObjectId = await _requirePersonObjectId(
@@ -257,11 +257,11 @@ class PersonProfileImageRelationService {
       await _targets.selectionForMutation(
         workspaceId: workspaceId,
         sourceObjectId: personObjectId,
-        property: schema.profileImageProperty,
+        property: profileImageProperty,
       );
       await _mutations.setRelation(
         objectId: personObjectId,
-        property: schema.profileImageProperty,
+        property: profileImageProperty,
         targetObjectIds: const <int>[],
       );
       await _writeLegacyProfilePhoto(personId: personId, photoId: null);
@@ -270,19 +270,16 @@ class PersonProfileImageRelationService {
     return load(workspaceId: workspaceId, personId: personId);
   }
 
-  Future<_PersonProfileImageSchema> _ensureRelationSchema(int workspaceId) async {
+  Future<ObjectPropertyDefinition> _ensureProfileImageProperty(
+    int workspaceId,
+  ) async {
     final personSchema = await _people.ensurePersonObjectType(workspaceId);
     final imageDefinition = await _images.ensureDefinition(workspaceId);
-    final profileImageProperty = await _systemObjects.ensureRelationProperty(
+    return _systemObjects.ensureRelationProperty(
       objectTypeId: personSchema.objectType.id,
       name: profileImagePropertyName,
       targetObjectTypeId: imageDefinition.objectType.id,
       multiple: false,
-    );
-    return _PersonProfileImageSchema(
-      personObjectType: personSchema.objectType,
-      imageObjectType: imageDefinition.objectType,
-      profileImageProperty: profileImageProperty,
     );
   }
 
@@ -291,7 +288,11 @@ class PersonProfileImageRelationService {
           ..where((row) => row.id.equals(personId)))
         .getSingleOrNull();
     if (person == null) {
-      throw ArgumentError.value(personId, 'personId', 'Legacy Person does not exist.');
+      throw ArgumentError.value(
+        personId,
+        'personId',
+        'Legacy Person does not exist.',
+      );
     }
     return person;
   }
@@ -318,7 +319,9 @@ class PersonProfileImageRelationService {
           ..where((row) => row.id.equals(photoId)))
         .getSingleOrNull();
     if (photo == null) {
-      throw StateError('Legacy Person profile Photo points to a missing Photo row.');
+      throw StateError(
+        'Legacy Person profile Photo points to a missing Photo row.',
+      );
     }
     if (!await _photoMappingTableExists()) {
       throw StateError(
@@ -356,7 +359,9 @@ class PersonProfileImageRelationService {
     ).get();
     if (reverseRows.length != 1 ||
         reverseRows.single.read<int>('photo_id') != photoId) {
-      throw StateError('Legacy Photo -> Image mapping is ambiguous or inconsistent.');
+      throw StateError(
+        'Legacy Photo -> Image mapping is ambiguous or inconsistent.',
+      );
     }
     return imageObjectId;
   }
@@ -433,20 +438,15 @@ class PersonProfileImageRelationState {
   ObjectPropertyDefinition get property => relation.property;
   AppObjectType get imageObjectType => relation.targetObjectType;
   List<AppObject> get selectedImages => relation.selectedObjects;
-  int? get selectedImageObjectId =>
-      relation.selectedObjectIds.length == 1 ? relation.selectedObjectIds.single : null;
-}
 
-class _PersonProfileImageSchema {
-  const _PersonProfileImageSchema({
-    required this.personObjectType,
-    required this.imageObjectType,
-    required this.profileImageProperty,
-  });
-
-  final AppObjectType personObjectType;
-  final AppObjectType imageObjectType;
-  final ObjectPropertyDefinition profileImageProperty;
+  int? get selectedImageObjectId {
+    if (relation.hasCardinalityViolation ||
+        relation.missingTargetObjectIds.isNotEmpty ||
+        relation.selectedObjects.length != 1) {
+      return null;
+    }
+    return relation.selectedObjects.single.id;
+  }
 }
 
 class _ProfileImageMigrationPlan {
