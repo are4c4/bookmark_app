@@ -46,6 +46,10 @@ if ! command -v dart >/dev/null 2>&1; then
   exit 127
 fi
 
+if [[ "${CI:-}" == "true" && "${CHECK_FORMAT_SKIP_SELF_TESTS:-}" != "1" ]]; then
+  CHECK_FORMAT_SKIP_SELF_TESTS=1 bash "$script_dir/check_format_test.sh"
+fi
+
 tmp_dir="$(mktemp -d)"
 files_tmp="$tmp_dir/files"
 trap 'rm -rf "$tmp_dir"' EXIT
