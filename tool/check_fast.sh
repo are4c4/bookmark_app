@@ -14,7 +14,7 @@ bash tool/feature_presentation_error_privacy_guard_test.sh
 
 echo '==> Maintainability regression ceilings'
 bash tool/maintainability_report.sh \
-  --max-boundary-refs 9 \
+  --max-boundary-refs 8 \
   --max-feature-presentation-db-imports 4 \
   --max-legacy-shim-imports 0 \
   --max-legacy-shims 0
