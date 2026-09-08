@@ -192,17 +192,15 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
       setState(() => _content = refreshed);
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('画像情報を再読み込みできませんでした。')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('画像情報を再読み込みできませんでした。')));
     }
   }
 
   void _showImageEditError(Object _) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('画像を編集できませんでした。')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('画像を編集できませんでした。')));
   }
 
   @override
