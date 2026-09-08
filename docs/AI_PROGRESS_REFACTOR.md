@@ -9,21 +9,23 @@ Primary lane: **G — Refactor & Architecture Health**. Own behavior-preserving 
 
 ## Active checkpoint — 2026-09-08
 
-Latest integrated `main` at this checkpoint: **`1f03e9254e49791d55f699b092b28a6d69681ddb`** (`#968`).
+Latest integrated `main` at this checkpoint: **`1c4fed0a3271f7e371fe6eac93a1b32f6669f16f`** (`#971`).
 
-Current Lane G handoff branch: **`docs/refactor-handoff-after-968`**, docs-only from the checkpoint above.
+Lane G is now intentionally operated from **one implementation lane/chat**. Treat duplicate historical G branches/PR context as obsolete unless the branch is still open and explicitly adopted here.
 
-Open PR ownership at this checkpoint is docs-only outside Lane G runtime ownership:
-- #959 — Lane A handoff, `docs/AI_PROGRESS_OBJECT.md` only;
-- #956 — Lane D handoff, `docs/AI_PROGRESS_PRIMITIVES.md` only.
+Current open ownership at this checkpoint:
+- #973 — Lane D People profile-image migration; owns `people_management_page.dart`, `person_profile_image_relation_service.dart`, its factory/widget and focused regression. Lane G must not touch that runtime surface while the PR is open;
+- #959 — Lane A handoff, docs-only;
+- #956 — Lane D handoff, docs-only.
 
 This list is time-sensitive. Re-run the open-PR audit before every non-trivial edit; do not treat this handoff as a lock on future ownership.
 
-Lane G has completed another caller-zero retirement sequence through #968. Fresh post-#968 audits found the obvious Bookmark People/Collection/Tag/engagement/read forwarders still have real production hosts, and the remaining Tag/Person-group/Photo/Attachment compatibility APIs inspected in this run are also live. Do not delete them merely because adjacent conveniences disappeared.
+Lane G has completed the caller-zero retirement sequence through #968 and the measured CI feedback optimization through #971. Fresh audits still find the obvious Bookmark People/Collection/Tag/engagement/read forwarders live. Re-audit People/Photo compatibility immediately after #973 integrates because that owning-lane migration may legitimately release new caller-zero seams.
 
 ## Latest integrated Lane G checkpoints
 
 Recent integration sequence:
+- **#971 / `1c4fed0a…` — Drift cache + four required Flutter test shards.** Follow-up Issue #970 is completed/closed. `analyze-guards` still performs fresh Drift generation plus Analyze every PR. Required test jobs restore exact generated `app_database.g.dart` cache keyed from resolved package configuration and AppDatabase generator inputs, regenerate on cache miss, and run the complete suite across four required shards with `fail-fast: false` and the existing two-minute per-test timeout. Final-head CI #2886 was fully green; all four test shards hit the generated-code cache and skipped Drift generation. Flutter Test elapsed times were 261 / 306 / 255 / 232 seconds, with the slowest required job about 5m36s versus the #967 three-shard baseline about 6m29s — roughly 53 seconds / 14% faster. No no-op CI-trigger commit was used.
 - **#968 / `1f03e925…` — caller-zero PDF annotation list helper retired.** Removed `PdfAnnotationStore.listForAttachment(...)` after a current-main caller audit found only its definition. The live PDF viewer continues to use `watchForAttachment(...)`, `add(...)`, and `remove(...)`; its no-op `initialize()/dispose()` lifecycle calls remain because they are live and removing them would require a low-value broad viewer edit. Production diff: exactly 11 LOC deleted from one file. Flutter CI #2875 full green, including Analyze + full Test.
 - **#964 / `a547eb89…` — durable Lane G handoff and legacy inventory reconciled.** Corrected the runtime Saved View retirement state, preserved legacy Saved View tables as compatibility/migration data, recorded the completed 0/0 Database-presentation shim state, and refreshed caller-zero exclusions. Flutter CI #2870 full green.
 - **#963 / `22c94632…` — caller-zero Tag-group conveniences retired.** Removed `TagGroupStore.tagGroupIds()` and `setTagGroup(...)`; two test fixtures now use canonical `moveTag(...)`. Live `watchTagGroupIds()`, group management, move/restore, usage stats, merge/delete behavior, expansion state, Auto-organize references, and legacy Saved View tag compatibility remain. Production diff: 8 LOC deleted; test diff +2/-2. Flutter CI #2869 full green.
@@ -52,9 +54,10 @@ Current intended boundaries:
 3. Database-presentation legacy shim imports: **0 maximum**;
 4. Database-presentation re-export shim files: **0 maximum**;
 5. canonical feature-presentation caught-error interpolation: **forbidden**;
-6. legacy `lib/views` / `lib/widgets` caught-error interpolation: **forbidden; allowlist size 0**.
+6. legacy `lib/views` / `lib/widgets` caught-error interpolation: **forbidden; allowlist size 0**;
+7. required CI coverage remains fresh Analyze + the complete Flutter suite. Generated Drift caching is only a test/build optimization; cache miss must regenerate normally.
 
-Never relax a numeric ceiling, recreate a compatibility shim under a new filename, or reintroduce an error-privacy allowlist entry merely to land unrelated work.
+Never relax a numeric ceiling, recreate a compatibility shim under a new filename, reintroduce an error-privacy allowlist entry, or weaken the full-suite merge gate merely to land unrelated work.
 
 ## Completed compatibility tracks
 
@@ -83,16 +86,16 @@ Fresh caller proof is required before every deletion:
 4. keep schema/read/migration compatibility when only runtime APIs are caller-zero;
 5. use Analyze and full Test as the final proof before merge.
 
-Examples of deliberately retained live APIs from the latest audit:
+Examples of deliberately retained live APIs from the latest completed audit:
 - `BookmarkRepository.watchPersonRoles(...)` / `watchPersonRoleAssignments(...)` — used by Bookmark Person-role presentation;
 - `setPeopleForRole(...)`, `batchAddPeople(...)`, `batchRemovePeople(...)` — live mutation paths;
-- `watchBookmarksForPerson(...)`, `watchBookmarksForPhoto(...)`, `watchBookmarksForCollection(...)` — live management/backlink UI callers;
+- `watchBookmarksForPerson(...)`, `watchBookmarksForPhoto(...)`, `watchBookmarksForCollection(...)` — live management/backlink UI callers at the #968 checkpoint; re-audit People/Photo-facing paths after #973 merges;
 - `findDuplicateUrl(...)` — live create/import/Stage1 duplicate detection;
 - `setBookmarkCollections(...)` and Collection CRUD — live Collection/transfer UI;
 - `createTag(...)` — live Bookmark Property/Stage1 tag creation; canonical Tag Object bridge also uses the lower-level Tag persistence API;
 - `TagGroupStore.watchTagGroupIds()`, `listGroups()`, usage stats, move/restore and mutation APIs — live Tag-management/service contracts after #963;
 - `PersonGroupStore.memberIds()`, `groupsForPerson()`, `setGroupsForPerson()` and group CRUD — live People management/filter/edit contracts after #958;
-- Photo CRUD / `watchPhotos()` and `PhotoReadStore.resolveRecord(...)` — live Photo management, Bookmark aggregation, and Object sync;
+- Photo CRUD / `watchPhotos()` and `PhotoReadStore.resolveRecord(...)` — still compatibility-sensitive; #973 removes one People UI Photo dependency but is not permission to retire global Photo storage/read behavior;
 - `BookmarkAttachmentStore.initialize()/dispose()` — trivial bodies but live bootstrap/presentation lifecycle contract; broader host edits would buy little responsibility reduction;
 - `PdfAnnotationStore.initialize()/dispose()` — no-op today but live viewer lifecycle calls; removing them would require a large host edit for negligible ownership reduction. The truly caller-zero synchronous list helper was removed in #968 instead;
 - `BookmarkRepository.addRelation/removeRelation` — live through Backlink UI; #931 proved they are not dead.
@@ -108,12 +111,12 @@ Still open and high-value:
 - Property-create/edit/dialog workflow extraction;
 - further state/projection responsibility reduction where it measurably shrinks the page.
 
-Existing progress includes `GenericDatabasePageStateLoader` and `GenericDatabasePageServices.fromWorkspaceStore(...)`. `GenericDatabasePage` remains a large conflict-prone hotspot. Do not force a broad extraction in the connector environment; prefer a patch-sized independent slice with a clear ownership window.
+Existing progress includes `GenericDatabasePageStateLoader` and `GenericDatabasePageServices.fromWorkspaceStore(...)`. `GenericDatabasePage` remains a large conflict-prone hotspot. A current audit found Gallery cover-source discovery is still a separate `_reload()` responsibility after the state loader returns. Moving that discovery into the existing state-loader/composition boundary is a valid future P1 slice, but do it only when the editing method can preserve the 2,000+ line host exactly and the base diff proves a patch-sized change.
 
 ### P2 — dependency composition
 Continue reducing presentation reach-through such as `repository.workspaceStore.database` only when a real application boundary removes responsibility. Do not add a facade whose only purpose is forwarding one existing call.
 
-The post-#968 audit still finds presentation reach-through in large/shared hosts such as `app_shell.dart`, `people_management_page.dart`, `photo_management_page.dart`, `generic_database_page.dart`, `collection_management_page.dart`, and Stage1. Service/factory-layer database access is not itself the presentation violation. Prefer a naturally scoped host/service ownership change over a cosmetic forwarding wrapper.
+The latest audit still finds presentation reach-through in large/shared hosts such as `app_shell.dart`, `people_management_page.dart`, `photo_management_page.dart`, `generic_database_page.dart`, `collection_management_page.dart`, and Stage1. Service/factory-layer database access is not itself the presentation violation. #973 currently owns People profile-image runtime work, so defer People composition cleanup until it lands and then re-audit the resulting surface rather than editing underneath Lane D.
 
 ### P2 — `AppDatabase` narrowing
 Major responsibilities have already moved out. Continue only where a real caller-zero or responsibility-removal slice exists, with regression coverage. Historical migration semantics remain compatibility contracts.
@@ -137,7 +140,7 @@ Always re-check open PR changed files immediately before non-trivial edits to:
 - `lib/services/profile_manager.dart`;
 - `lib/data/app_database.dart`.
 
-At this checkpoint the visible open PRs #959/#956 are docs-only and do not touch Lane G handoff files or runtime hotspots, but that fact expires as soon as another PR opens or main advances.
+At this checkpoint #973 holds the People profile-image hotspot lease. #959/#956 are docs-only. This snapshot expires immediately when PRs merge/open or main advances.
 
 ## Cross-lane boundaries
 - Lane A owns Object/ObjectType/Body and Object-owned presentation behavior.
@@ -153,6 +156,7 @@ At this checkpoint the visible open PRs #959/#956 are docs-only and do not touch
 Local Flutter/Dart execution is unavailable in the connector environment; GitHub Flutter CI is the merge gate.
 
 Recent validation checkpoints:
+- #971: Flutter CI #2886 full green; fresh Analyze plus 4/4 complete Test shards green, all generated-code cache hits;
 - #968: Flutter CI #2875 full green;
 - #963: Flutter CI #2869 full green;
 - #964: Flutter CI #2870 full green;
@@ -167,11 +171,11 @@ For caller-zero deletion, a green Analyze is especially important because it cat
 
 ## Exact next actions
 1. Start from current `main`; re-read Issue #225 and live open PR ownership.
-2. Treat the obvious small G-owned Store/Repository caller-zero seam as substantially re-audited through #968. Re-open deletion work only when a fresh default-branch caller audit proves a real new candidate; do not manufacture tiny cleanups from live no-op lifecycle contracts.
-3. If no new true deletion appears, select a patch-sized `GenericDatabasePage` P1 extraction or dependency-composition slice that **removes real responsibility/reach-through**, not a pass-through facade. Proceed only with a clear hotspot ownership window and a safe editing method; whole-file connector reconstruction risk is a valid reason to defer that particular slice.
-4. Do not revisit the already-complete Database shim or broad error-privacy tracks; keep their zero guardrails intact.
-5. Keep legacy Saved View tables and Photo/Bookmark compatibility storage/reads until their migration/import/export/backup and owning-lane retirement conditions are explicitly satisfied.
-6. Continue to prefer independent small service/domain/test work if another lane leases a shared hotspot.
+2. Let Lane D #973 own People profile-image semantics. Once it integrates, immediately re-audit `BookmarkRepository` Person/Photo/profile-image wrappers and lower-level legacy Photo helpers for newly caller-zero runtime APIs. Preserve schema/migration/backup compatibility even if a runtime facade becomes dead.
+3. Treat the obvious small G-owned Store/Repository caller-zero seam as substantially re-audited through #968. Re-open deletion work only when a fresh default-branch caller audit proves a real new candidate; do not manufacture tiny cleanups from live no-op lifecycle contracts.
+4. If no new true deletion appears, take a patch-sized `GenericDatabasePage` P1 extraction or dependency-composition slice that **removes real responsibility/reach-through**, not a pass-through facade. Gallery cover-source discovery inside `_reload()` is a concrete candidate, but proceed only with a safe exact-file editing path and narrow base diff.
+5. Do not revisit the already-complete Database shim or broad error-privacy tracks; keep their zero guardrails intact. Keep the new full-suite/Analyze CI contract from #971 intact as well.
+6. Keep legacy Saved View tables and Photo/Bookmark compatibility storage/reads until their migration/import/export/backup and owning-lane retirement conditions are explicitly satisfied.
 7. Refresh this handoff after the next material integration checkpoint; avoid publishing transient “no open PRs” claims as durable state.
 
 ## Risks / stop conditions
@@ -180,5 +184,6 @@ For caller-zero deletion, a green Analyze is especially important because it cat
 - Whole-file connector writes require exact-current-source preservation plus base-diff verification; do not accept unrelated formatting churn.
 - Artificial/no-op CI-trigger commits are forbidden; use workflow rerun controls or the next meaningful change.
 - Small caller-zero cleanup is now relatively sparse; do not turn live APIs/no-op lifecycle contracts into churn simply to keep Lane G busy.
+- #973 may release meaningful legacy Person/Photo seams; do not pre-delete them before the owning product migration is actually integrated.
 
 Stop only when no independent safe Issue #225 slice remains, a genuine product/external blocker exists, an unavoidable hotspot conflict blocks the next step, validation is externally blocked with no independent work left, or the runtime/tool limit is reached. Pending CI by itself is not a stop reason.
