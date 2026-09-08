@@ -1,7 +1,5 @@
 import 'dart:developer' as developer;
 
-import 'package:drift/drift.dart' show Variable;
-
 import '../services/bookmark_metadata_service.dart';
 import '../services/generic_database_file_import_service.dart';
 import '../services/generic_database_image_import_service.dart';
