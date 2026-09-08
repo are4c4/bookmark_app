@@ -71,18 +71,4 @@ extension AppDatabasePersonRoles on AppDatabase {
           );
         }
       });
-
-  Future<void> removePersonRole(
-    int bookmarkId,
-    Person person, {
-    String? role,
-  }) {
-    final query = delete(bookmarkPeople)
-      ..where((relation) =>
-          relation.bookmarkId.equals(bookmarkId) & relation.personId.equals(person.id));
-    if (role != null) {
-      query.where((relation) => relation.role.equals(normalizePersonRole(role)));
-    }
-    return query.go();
-  }
 }
