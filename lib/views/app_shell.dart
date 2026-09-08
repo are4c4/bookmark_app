@@ -42,10 +42,11 @@ class BookmarkAppShell extends StatefulWidget {
   final ValueChanged<ThemeMode> onThemeModeChanged;
   final Future<void> Function(DatabaseProfile profile) onSwitchProfile;
   final Future<void> Function(String name) onCreateProfile;
-  final Future<void> Function(DatabaseProfile profile, String name) onRenameProfile;
+  final Future<void> Function(DatabaseProfile profile, String name)
+  onRenameProfile;
   final Future<void> Function(DatabaseProfile profile) onDuplicateProfile;
   final Future<void> Function(String archivePath, String name)
-      onImportProfileBackup;
+  onImportProfileBackup;
   final Future<void> Function(DatabaseProfile profile) onDeleteProfile;
   final Future<void> Function(WorkspaceInfo workspace) onSwitchWorkspace;
 
@@ -56,7 +57,18 @@ class BookmarkAppShell extends StatefulWidget {
 class _BookmarkAppShellState extends State<BookmarkAppShell> {
   static const _transfer = BookmarkTransferService();
   static const _profileBackup = ProfileBackupService();
-  static const _workspaceIcons = ['🏠', '📁', '📚', '🎬', '💻', '🧪', '⭐', '🗂️', '✍️', '🌱'];
+  static const _workspaceIcons = [
+    '🏠',
+    '📁',
+    '📚',
+    '🎬',
+    '💻',
+    '🧪',
+    '⭐',
+    '🗂️',
+    '✍️',
+    '🌱',
+  ];
   static const _workspaceColors = <int>[
     0xFF9B9A97,
     0xFF5B8DEF,
@@ -108,7 +120,9 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
   }
 
   Future<void> _reloadGenericDatabases() async {
-    final store = GenericDatabaseStore(widget.repository.workspaceStore.database);
+    final store = GenericDatabaseStore(
+      widget.repository.workspaceStore.database,
+    );
     final databases = await store.listDatabases(widget.repository.workspaceId);
     if (!mounted) return;
     setState(() {
@@ -125,7 +139,9 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
     final choice = await showObjectTypeTemplatePicker(context);
     if (!mounted || choice == null) return;
 
-    final store = GenericDatabaseStore(widget.repository.workspaceStore.database);
+    final store = GenericDatabaseStore(
+      widget.repository.workspaceStore.database,
+    );
     try {
       late final int id;
       if (choice is EmptyObjectTypeChoice) {
@@ -164,9 +180,8 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
       });
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('データベースを作成できませんでした。')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('データベースを作成できませんでした。')));
     }
   }
 
@@ -177,7 +192,11 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
     return _workspaces.isEmpty ? null : _workspaces.first;
   }
 
-  Future<String?> _askName(String title, {String initial = '', String hint = ''}) async {
+  Future<String?> _askName(
+    String title, {
+    String initial = '',
+    String hint = '',
+  }) async {
     var value = initial;
     return showDialog<String>(
       context: context,
@@ -191,8 +210,14 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
           onFieldSubmitted: (_) => Navigator.pop(dialogContext, value.trim()),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('キャンセル')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, value.trim()), child: const Text('保存')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, value.trim()),
+            child: const Text('保存'),
+          ),
         ],
       ),
     );
@@ -207,7 +232,10 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
       final workspace = _workspaces.firstWhere((item) => item.id == id);
       await widget.onSwitchWorkspace(workspace);
     } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Workspaceを作成できませんでした。')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Workspaceを作成できませんでした。')));
     }
   }
 
@@ -222,53 +250,99 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
           title: const Text('Workspaceを編集'),
           content: SizedBox(
             width: 420,
-            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-              TextFormField(initialValue: name, decoration: const InputDecoration(labelText: '名前'), onChanged: (value) => name = value),
-              const SizedBox(height: UiTokens.space16),
-              const Text('アイコン', style: TextStyle(fontSize: UiTokens.textSm, fontWeight: FontWeight.w600)),
-              const SizedBox(height: UiTokens.space6),
-              Wrap(
-                spacing: 7,
-                runSpacing: 7,
-                children: _workspaceIcons.map((value) => ChoiceChip(
-                  label: Text(value, style: const TextStyle(fontSize: UiTokens.iconNormal)),
-                  selected: icon == value,
-                  onSelected: (_) => setLocalState(() => icon = value),
-                )).toList(),
-              ),
-              const SizedBox(height: UiTokens.space16),
-              const Text('色', style: TextStyle(fontSize: UiTokens.textSm, fontWeight: FontWeight.w600)),
-              const SizedBox(height: UiTokens.space6),
-              Wrap(
-                spacing: 9,
-                children: _workspaceColors.map((value) => InkWell(
-                  onTap: () => setLocalState(() => color = value),
-                  borderRadius: BorderRadius.circular(20),
-                  child: Container(
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      color: Color(value),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: color == value ? Theme.of(context).colorScheme.onSurface : Colors.transparent,
-                        width: 2.5,
-                      ),
-                    ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextFormField(
+                  initialValue: name,
+                  decoration: const InputDecoration(labelText: '名前'),
+                  onChanged: (value) => name = value,
+                ),
+                const SizedBox(height: UiTokens.space16),
+                const Text(
+                  'アイコン',
+                  style: TextStyle(
+                    fontSize: UiTokens.textSm,
+                    fontWeight: FontWeight.w600,
                   ),
-                )).toList(),
-              ),
-            ]),
+                ),
+                const SizedBox(height: UiTokens.space6),
+                Wrap(
+                  spacing: 7,
+                  runSpacing: 7,
+                  children: _workspaceIcons
+                      .map(
+                        (value) => ChoiceChip(
+                          label: Text(
+                            value,
+                            style: const TextStyle(
+                              fontSize: UiTokens.iconNormal,
+                            ),
+                          ),
+                          selected: icon == value,
+                          onSelected: (_) => setLocalState(() => icon = value),
+                        ),
+                      )
+                      .toList(),
+                ),
+                const SizedBox(height: UiTokens.space16),
+                const Text(
+                  '色',
+                  style: TextStyle(
+                    fontSize: UiTokens.textSm,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: UiTokens.space6),
+                Wrap(
+                  spacing: 9,
+                  children: _workspaceColors
+                      .map(
+                        (value) => InkWell(
+                          onTap: () => setLocalState(() => color = value),
+                          borderRadius: BorderRadius.circular(20),
+                          child: Container(
+                            width: 28,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              color: Color(value),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: color == value
+                                    ? Theme.of(context).colorScheme.onSurface
+                                    : Colors.transparent,
+                                width: 2.5,
+                              ),
+                            ),
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ],
+            ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('キャンセル')),
-            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('保存')),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('キャンセル'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('保存'),
+            ),
           ],
         ),
       ),
     );
     if (saved != true || name.trim().isEmpty) return;
-    await widget.repository.updateWorkspace(workspace, name: name, icon: icon, colorValue: color);
+    await widget.repository.updateWorkspace(
+      workspace,
+      name: name,
+      icon: icon,
+      colorValue: color,
+    );
     await _reloadWorkspaces();
   }
 
@@ -280,15 +354,22 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
         title: Text('「${workspace.name}」を削除しますか？'),
         content: const Text('中のブックマークと保存ビューは別のWorkspaceへ移動されます。'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('キャンセル')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('削除')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('削除'),
+          ),
         ],
       ),
     );
     if (ok != true) return;
     await widget.repository.deleteWorkspace(workspace);
     await _reloadWorkspaces();
-    if (workspace.id == widget.repository.workspaceId && _workspaces.isNotEmpty) {
+    if (workspace.id == widget.repository.workspaceId &&
+        _workspaces.isNotEmpty) {
       await widget.onSwitchWorkspace(_workspaces.first);
     }
   }
@@ -296,7 +377,9 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
   Future<void> _moveBookmark(int bookmarkId, WorkspaceInfo workspace) async {
     if (workspace.id == widget.repository.workspaceId) return;
     await widget.repository.moveBookmarksToWorkspace([bookmarkId], workspace);
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('「${workspace.name}」へ移動しました')));
+    if (mounted)
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('「${workspace.name}」へ移動しました')));
   }
 
   Future<void> _reorder(int oldIndex, int newIndex) async {
@@ -304,7 +387,9 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
     final item = updated.removeAt(oldIndex);
     updated.insert(newIndex, item);
     setState(() => _workspaces = updated);
-    await widget.repository.reorderWorkspaces(updated.map((e) => e.id).toList());
+    await widget.repository.reorderWorkspaces(
+      updated.map((e) => e.id).toList(),
+    );
   }
 
   Future<void> _handleProfileAction(String value) async {
@@ -317,7 +402,9 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
       setState(() => _index = 9);
       return;
     }
-    final matches = widget.profileState.profiles.where((profile) => profile.id == value);
+    final matches = widget.profileState.profiles.where(
+      (profile) => profile.id == value,
+    );
     if (matches.isNotEmpty) await widget.onSwitchProfile(matches.first);
   }
 
@@ -326,11 +413,18 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
       if (value == 'export') {
         final path = await _transfer.exportJson(widget.repository);
         if (!mounted || path == null) return;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('ブックマークを書き出しました: $path')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('ブックマークを書き出しました: $path')));
       } else if (value == 'import') {
         final result = await _transfer.importFile(widget.repository);
         if (!mounted || result == null) return;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${result.imported}件を取り込みました（重複 ${result.skipped}件をスキップ）')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${result.imported}件を取り込みました（重複 ${result.skipped}件をスキップ）',
+            ),
+          ),
+        );
       } else if (value == 'profile_export') {
         final active = widget.profileState.activeProfile;
         final path = await _profileBackup.exportProfile(
@@ -339,21 +433,19 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
           database: widget.repository.lifecycleStore.database,
         );
         if (!mounted || path == null) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Vaultバックアップを保存しました: $path')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Vaultバックアップを保存しました: $path')));
       } else if (value == 'profile_import') {
         final archivePath = await _profileBackup.pickBackupFile();
         if (!mounted || archivePath == null) return;
-        final name = await _askName(
-          '復元するVault名',
-          initial: '復元したVault',
-        );
+        final name = await _askName('復元するVault名', initial: '復元したVault');
         if (name?.isNotEmpty != true) return;
         await widget.onImportProfileBackup(archivePath, name!);
       }
     } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('データ操作に失敗しました。')));
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('データ操作に失敗しました。')));
     }
   }
 
@@ -363,14 +455,21 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
       tooltip: 'Vaultを切り替え',
       onSelected: _handleProfileAction,
       itemBuilder: (_) => [
-        ...widget.profileState.profiles.map((profile) => PopupMenuItem(
-          value: profile.id,
-          child: Row(children: [
-            Icon(profile.id == active.id ? Icons.check : Icons.circle_outlined, size: UiTokens.iconSmall),
-            const SizedBox(width: UiTokens.space8),
-            Expanded(child: Text(profile.name)),
-          ]),
-        )),
+        ...widget.profileState.profiles.map(
+          (profile) => PopupMenuItem(
+            value: profile.id,
+            child: Row(
+              children: [
+                Icon(
+                  profile.id == active.id ? Icons.check : Icons.circle_outlined,
+                  size: UiTokens.iconSmall,
+                ),
+                const SizedBox(width: UiTokens.space8),
+                Expanded(child: Text(profile.name)),
+              ],
+            ),
+          ),
+        ),
         const PopupMenuDivider(),
         const PopupMenuItem(value: '__create__', child: Text('＋ Vaultを追加')),
         const PopupMenuItem(value: '__manage__', child: Text('Vaultを管理')),
@@ -379,12 +478,24 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
         height: 42,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: UiTokens.space8),
-          child: Row(children: [
-            const Icon(Icons.account_circle_outlined, size: UiTokens.iconLarge),
-            const SizedBox(width: UiTokens.space8),
-            Expanded(child: Text(active.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600))),
-            const Icon(Icons.keyboard_arrow_down, size: 17),
-          ]),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.account_circle_outlined,
+                size: UiTokens.iconLarge,
+              ),
+              const SizedBox(width: UiTokens.space8),
+              Expanded(
+                child: Text(
+                  active.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+              const Icon(Icons.keyboard_arrow_down, size: 17),
+            ],
+          ),
         ),
       ),
     );
@@ -402,35 +513,62 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
         child: SizedBox(
           height: UiTokens.sidebarRowHeight,
           child: Padding(
-            padding: const EdgeInsets.only(left: UiTokens.space8, right: UiTokens.space2),
-            child: Row(children: [
-              ReorderableDragStartListener(
-                index: index,
-                child: Padding(
-                  padding: const EdgeInsets.only(right: 5),
-                  child: Icon(Icons.drag_indicator, size: 14, color: scheme.onSurfaceVariant),
+            padding: const EdgeInsets.only(
+              left: UiTokens.space8,
+              right: UiTokens.space2,
+            ),
+            child: Row(
+              children: [
+                ReorderableDragStartListener(
+                  index: index,
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 5),
+                    child: Icon(
+                      Icons.drag_indicator,
+                      size: 14,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
                 ),
-              ),
-              Text(workspace.icon, style: const TextStyle(fontSize: 15)),
-              const SizedBox(width: 7),
-              Container(width: 6, height: 6, decoration: BoxDecoration(color: Color(workspace.colorValue), shape: BoxShape.circle)),
-              const SizedBox(width: UiTokens.space6),
-              Expanded(child: Text(workspace.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.5, fontWeight: selected ? FontWeight.w600 : FontWeight.w400))),
-              PopupMenuButton<String>(
-                tooltip: 'Workspace設定',
-                iconSize: UiTokens.iconSmall,
-                padding: EdgeInsets.zero,
-                onSelected: (value) {
-                  if (value == 'edit') _editWorkspace(workspace);
-                  if (value == 'delete') _deleteWorkspace(workspace);
-                },
-                itemBuilder: (_) => [
-                  const PopupMenuItem(value: 'edit', child: Text('編集')),
-                  if (_workspaces.length > 1) const PopupMenuItem(value: 'delete', child: Text('削除')),
-                ],
-                icon: const Icon(Icons.more_horiz),
-              ),
-            ]),
+                Text(workspace.icon, style: const TextStyle(fontSize: 15)),
+                const SizedBox(width: 7),
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: Color(workspace.colorValue),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: UiTokens.space6),
+                Expanded(
+                  child: Text(
+                    workspace.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                    ),
+                  ),
+                ),
+                PopupMenuButton<String>(
+                  tooltip: 'Workspace設定',
+                  iconSize: UiTokens.iconSmall,
+                  padding: EdgeInsets.zero,
+                  onSelected: (value) {
+                    if (value == 'edit') _editWorkspace(workspace);
+                    if (value == 'delete') _deleteWorkspace(workspace);
+                  },
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(value: 'edit', child: Text('編集')),
+                    if (_workspaces.length > 1)
+                      const PopupMenuItem(value: 'delete', child: Text('削除')),
+                  ],
+                  icon: const Icon(Icons.more_horiz),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -438,14 +576,20 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
 
     return DragTarget<int>(
       key: ValueKey(workspace.id),
-      onWillAcceptWithDetails: (_) => workspace.id != widget.repository.workspaceId,
+      onWillAcceptWithDetails: (_) =>
+          workspace.id != widget.repository.workspaceId,
       onAcceptWithDetails: (details) => _moveBookmark(details.data, workspace),
       builder: (context, candidates, rejected) => AnimatedContainer(
         duration: const Duration(milliseconds: 100),
-        margin: const EdgeInsets.symmetric(horizontal: UiTokens.space6, vertical: 1),
+        margin: const EdgeInsets.symmetric(
+          horizontal: UiTokens.space6,
+          vertical: 1,
+        ),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(UiTokens.radiusSm),
-          border: candidates.isNotEmpty ? Border.all(color: Color(workspace.colorValue), width: 1.5) : null,
+          border: candidates.isNotEmpty
+              ? Border.all(color: Color(workspace.colorValue), width: 1.5)
+              : null,
         ),
         child: tile,
       ),
@@ -457,38 +601,64 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
     return SizedBox(
       height: UiTokens.sidebarSectionHeight,
       child: Padding(
-        padding: const EdgeInsets.only(left: UiTokens.space12, right: UiTokens.space6),
-        child: Row(children: [
-          Expanded(child: Text(label, style: TextStyle(fontSize: UiTokens.textXs, fontWeight: FontWeight.w600, color: scheme.onSurfaceVariant, letterSpacing: .3))),
-          if (onAdd != null)
-            IconButton(
-              tooltip: tooltip,
-              visualDensity: VisualDensity.compact,
-              iconSize: 17,
-              padding: EdgeInsets.zero,
-              onPressed: onAdd,
-              icon: const Icon(Icons.add),
+        padding: const EdgeInsets.only(
+          left: UiTokens.space12,
+          right: UiTokens.space6,
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: UiTokens.textXs,
+                  fontWeight: FontWeight.w600,
+                  color: scheme.onSurfaceVariant,
+                  letterSpacing: .3,
+                ),
+              ),
             ),
-        ]),
+            if (onAdd != null)
+              IconButton(
+                tooltip: tooltip,
+                visualDensity: VisualDensity.compact,
+                iconSize: 17,
+                padding: EdgeInsets.zero,
+                onPressed: onAdd,
+                icon: const Icon(Icons.add),
+              ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _workspaceList() {
     if (_loadingWorkspaces) {
-      return const Padding(padding: EdgeInsets.all(UiTokens.space16), child: LinearProgressIndicator());
+      return const Padding(
+        padding: EdgeInsets.all(UiTokens.space16),
+        child: LinearProgressIndicator(),
+      );
     }
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      _sectionHeader('WORKSPACES', onAdd: _createWorkspace, tooltip: 'Workspaceを追加'),
-      ReorderableListView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        buildDefaultDragHandles: false,
-        itemCount: _workspaces.length,
-        onReorderItem: _reorder,
-        itemBuilder: (context, index) => _workspaceTile(_workspaces[index], index),
-      ),
-    ]);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _sectionHeader(
+          'WORKSPACES',
+          onAdd: _createWorkspace,
+          tooltip: 'Workspaceを追加',
+        ),
+        ReorderableListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          buildDefaultDragHandles: false,
+          itemCount: _workspaces.length,
+          onReorderItem: _reorder,
+          itemBuilder: (context, index) =>
+              _workspaceTile(_workspaces[index], index),
+        ),
+      ],
+    );
   }
 
   void _selectPage(int index) {
@@ -505,7 +675,10 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
     final scheme = Theme.of(context).colorScheme;
     final selected = _index == index;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: UiTokens.space6, vertical: 1),
+      padding: const EdgeInsets.symmetric(
+        horizontal: UiTokens.space6,
+        vertical: 1,
+      ),
       child: Material(
         color: selected ? scheme.surfaceContainerHigh : Colors.transparent,
         borderRadius: BorderRadius.circular(UiTokens.radiusSm),
@@ -516,11 +689,25 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
             height: UiTokens.sidebarRowHeight,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 9),
-              child: Row(children: [
-                Icon(icon, size: UiTokens.iconNormal, color: selected ? scheme.onSurface : scheme.onSurfaceVariant),
-                const SizedBox(width: 9),
-                Text(label, style: TextStyle(fontSize: UiTokens.textMd, fontWeight: selected ? FontWeight.w600 : FontWeight.w400)),
-              ]),
+              child: Row(
+                children: [
+                  Icon(
+                    icon,
+                    size: UiTokens.iconNormal,
+                    color: selected
+                        ? scheme.onSurface
+                        : scheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 9),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: UiTokens.textMd,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -532,7 +719,10 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
     final scheme = Theme.of(context).colorScheme;
     final selected = _index == 11 && _selectedGenericDatabaseId == database.id;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: UiTokens.space6, vertical: 1),
+      padding: const EdgeInsets.symmetric(
+        horizontal: UiTokens.space6,
+        vertical: 1,
+      ),
       child: Material(
         color: selected ? scheme.surfaceContainerHigh : Colors.transparent,
         borderRadius: BorderRadius.circular(UiTokens.radiusSm),
@@ -547,21 +737,25 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
             height: UiTokens.sidebarRowHeight,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 9),
-              child: Row(children: [
-                Text(database.icon, style: const TextStyle(fontSize: 14)),
-                const SizedBox(width: 9),
-                Expanded(
-                  child: Text(
-                    database.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: UiTokens.textMd,
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+              child: Row(
+                children: [
+                  Text(database.icon, style: const TextStyle(fontSize: 14)),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Text(
+                      database.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: UiTokens.textMd,
+                        fontWeight: selected
+                            ? FontWeight.w600
+                            : FontWeight.w400,
+                      ),
                     ),
                   ),
-                ),
-              ]),
+                ],
+              ),
             ),
           ),
         ),
@@ -575,80 +769,116 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
       color: scheme.surfaceContainerLow,
       child: SizedBox(
         width: UiTokens.sidebarWidth,
-        child: Column(children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(7, UiTokens.space8, UiTokens.space4, UiTokens.space4),
-            child: Row(children: [
-              Expanded(child: _profileHeader()),
-              IconButton(tooltip: 'サイドバーを閉じる', visualDensity: VisualDensity.compact, onPressed: () => setState(() => _sidebarCollapsed = true), icon: const Icon(Icons.keyboard_double_arrow_left, size: 17)),
-            ]),
-          ),
-          Expanded(
-            child: ListView(padding: const EdgeInsets.only(bottom: UiTokens.space12), children: [
-              _workspaceList(),
-              const SizedBox(height: UiTokens.space6),
-              _sectionHeader('DATABASES'),
-              _navTile(0, Icons.bookmarks_outlined, 'ブックマーク'),
-              _navTile(7, Icons.people_outline, '人物'),
-              _navTile(6, Icons.account_tree_outlined, 'タグ'),
-              _navTile(8, Icons.collections_bookmark_outlined, 'コレクション'),
-              ..._genericDatabases.map(_genericDatabaseTile),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: UiTokens.space6, vertical: 1),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(UiTokens.radiusSm),
-                  onTap: _createGenericDatabase,
-                  child: const SizedBox(
-                    height: UiTokens.sidebarRowHeight,
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 9),
-                      child: Row(children: [
-                        Icon(Icons.add, size: UiTokens.iconNormal),
-                        SizedBox(width: 9),
-                        Text('データベースを追加', style: TextStyle(fontSize: UiTokens.textMd)),
-                      ]),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                7,
+                UiTokens.space8,
+                UiTokens.space4,
+                UiTokens.space4,
+              ),
+              child: Row(
+                children: [
+                  Expanded(child: _profileHeader()),
+                  IconButton(
+                    tooltip: 'サイドバーを閉じる',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => setState(() => _sidebarCollapsed = true),
+                    icon: const Icon(
+                      Icons.keyboard_double_arrow_left,
+                      size: 17,
                     ),
                   ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.only(bottom: UiTokens.space12),
+                children: [
+                  _workspaceList(),
+                  const SizedBox(height: UiTokens.space6),
+                  _sectionHeader('DATABASES'),
+                  _navTile(0, Icons.bookmarks_outlined, 'ブックマーク'),
+                  _navTile(7, Icons.people_outline, '人物'),
+                  _navTile(6, Icons.account_tree_outlined, 'タグ'),
+                  _navTile(8, Icons.collections_bookmark_outlined, 'コレクション'),
+                  ..._genericDatabases.map(_genericDatabaseTile),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: UiTokens.space6,
+                      vertical: 1,
+                    ),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(UiTokens.radiusSm),
+                      onTap: _createGenericDatabase,
+                      child: const SizedBox(
+                        height: UiTokens.sidebarRowHeight,
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 9),
+                          child: Row(
+                            children: [
+                              Icon(Icons.add, size: UiTokens.iconNormal),
+                              SizedBox(width: 9),
+                              Text(
+                                'データベースを追加',
+                                style: TextStyle(fontSize: UiTokens.textMd),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: UiTokens.space6),
+                  _navTile(1, Icons.search, '全文検索'),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: UiTokens.space12,
+                      vertical: UiTokens.space6,
+                    ),
+                    child: Divider(height: 1),
+                  ),
+                  _sectionHeader('管理'),
+                  _navTile(4, Icons.delete_outline, 'ゴミ箱'),
+                  _navTile(9, Icons.manage_accounts_outlined, 'Vault管理'),
+                  _navTile(10, Icons.settings_outlined, '設定'),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            PopupMenuButton<String>(
+              tooltip: 'データ',
+              onSelected: _handleDataAction,
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'import', child: Text('ブックマークをインポート')),
+                PopupMenuItem(value: 'export', child: Text('ブックマークをJSON書き出し')),
+                PopupMenuDivider(),
+                PopupMenuItem(
+                  value: 'profile_export',
+                  child: Text('Vaultを完全バックアップ'),
+                ),
+                PopupMenuItem(
+                  value: 'profile_import',
+                  child: Text('バックアップからVaultを復元'),
+                ),
+              ],
+              child: const Padding(
+                padding: EdgeInsets.fromLTRB(14, 10, 10, 12),
+                child: Row(
+                  children: [
+                    Icon(Icons.import_export, size: 17),
+                    SizedBox(width: UiTokens.space8),
+                    Text('データ', style: TextStyle(fontSize: 12.5)),
+                    Spacer(),
+                    Icon(Icons.more_horiz, size: UiTokens.iconSmall),
+                  ],
                 ),
               ),
-              const SizedBox(height: UiTokens.space6),
-              _navTile(1, Icons.search, '全文検索'),
-              const Padding(padding: EdgeInsets.symmetric(horizontal: UiTokens.space12, vertical: UiTokens.space6), child: Divider(height: 1)),
-              _sectionHeader('管理'),
-              _navTile(4, Icons.delete_outline, 'ゴミ箱'),
-              _navTile(9, Icons.manage_accounts_outlined, 'Vault管理'),
-              _navTile(10, Icons.settings_outlined, '設定'),
-            ]),
-          ),
-          const Divider(height: 1),
-          PopupMenuButton<String>(
-            tooltip: 'データ',
-            onSelected: _handleDataAction,
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'import', child: Text('ブックマークをインポート')),
-              PopupMenuItem(value: 'export', child: Text('ブックマークをJSON書き出し')),
-              PopupMenuDivider(),
-              PopupMenuItem(
-                value: 'profile_export',
-                child: Text('Vaultを完全バックアップ'),
-              ),
-              PopupMenuItem(
-                value: 'profile_import',
-                child: Text('バックアップからVaultを復元'),
-              ),
-            ],
-            child: const Padding(
-              padding: EdgeInsets.fromLTRB(14, 10, 10, 12),
-              child: Row(children: [
-                Icon(Icons.import_export, size: 17),
-                SizedBox(width: UiTokens.space8),
-                Text('データ', style: TextStyle(fontSize: 12.5)),
-                Spacer(),
-                Icon(Icons.more_horiz, size: UiTokens.iconSmall),
-              ]),
             ),
-          ),
-        ]),
+          ],
+        ),
       ),
     );
   }
@@ -669,16 +899,31 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
       color: scheme.surfaceContainerLow,
       child: SizedBox(
         width: UiTokens.collapsedSidebarWidth,
-        child: Column(children: [
-          const SizedBox(height: UiTokens.space8),
-          IconButton(tooltip: 'サイドバーを開く', onPressed: () => setState(() => _sidebarCollapsed = false), icon: const Icon(Icons.keyboard_double_arrow_right, size: UiTokens.iconNormal)),
-          const SizedBox(height: UiTokens.space8),
-          ...destinations.map((entry) => IconButton(
-            onPressed: () => _selectPage(entry.$1),
-            style: IconButton.styleFrom(backgroundColor: _index == entry.$1 ? scheme.surfaceContainerHigh : Colors.transparent),
-            icon: Icon(entry.$2, size: 19),
-          )),
-        ]),
+        child: Column(
+          children: [
+            const SizedBox(height: UiTokens.space8),
+            IconButton(
+              tooltip: 'サイドバーを開く',
+              onPressed: () => setState(() => _sidebarCollapsed = false),
+              icon: const Icon(
+                Icons.keyboard_double_arrow_right,
+                size: UiTokens.iconNormal,
+              ),
+            ),
+            const SizedBox(height: UiTokens.space8),
+            ...destinations.map(
+              (entry) => IconButton(
+                onPressed: () => _selectPage(entry.$1),
+                style: IconButton.styleFrom(
+                  backgroundColor: _index == entry.$1
+                      ? scheme.surfaceContainerHigh
+                      : Colors.transparent,
+                ),
+                icon: Icon(entry.$2, size: 19),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -721,8 +966,7 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
                       prefixIcon: Icon(Icons.search),
                       hintText: '移動先を検索',
                     ),
-                    onChanged: (value) =>
-                        setLocalState(() => query = value),
+                    onChanged: (value) => setLocalState(() => query = value),
                   ),
                   const SizedBox(height: UiTokens.space8),
                   Expanded(
@@ -759,47 +1003,48 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
   }
 
   Widget _buildPage(int index, WorkspaceInfo? workspace) => switch (index) {
-        0 => BookmarkUnifiedStage1Page(
-            repository: widget.repository,
-            profileName: widget.profileState.activeProfile.name,
-            workspaceName: workspace?.name ?? 'Workspace',
-          ),
-        1 => GlobalSearchPage(repository: widget.repository),
-        2 => BookmarkLifecyclePage.inbox(repository: widget.repository),
-        3 => BookmarkLifecyclePage.archive(repository: widget.repository),
-        4 => BookmarkLifecyclePage.trash(repository: widget.repository),
-        6 => TagManagementPage(repository: widget.repository),
-        7 => PeopleManagementPage(repository: widget.repository),
-        8 => CollectionManagementPage(repository: widget.repository),
-        9 => ProfileManagementPage(
-            state: widget.profileState,
-            onSwitch: widget.onSwitchProfile,
-            onCreate: widget.onCreateProfile,
-            onRename: widget.onRenameProfile,
-            onDuplicate: widget.onDuplicateProfile,
-            onDelete: widget.onDeleteProfile,
-          ),
-        10 => SettingsPage(
-            themeMode: widget.themeMode,
-            onThemeModeChanged: widget.onThemeModeChanged,
-            repository: widget.repository,
-          ),
-        11 => _selectedGenericDatabaseId == null
-            ? Center(
-                child: FilledButton.icon(
-                  onPressed: _createGenericDatabase,
-                  icon: const Icon(Icons.add),
-                  label: const Text('データベースを作成'),
-                ),
-              )
-            : GenericDatabasePage(
-                key: ValueKey(_selectedGenericDatabaseId),
-                repository: widget.repository,
-                databaseId: _selectedGenericDatabaseId!,
-                onDatabaseChanged: _reloadGenericDatabases,
+    0 => BookmarkUnifiedStage1Page(
+      repository: widget.repository,
+      profileName: widget.profileState.activeProfile.name,
+      workspaceName: workspace?.name ?? 'Workspace',
+    ),
+    1 => GlobalSearchPage(repository: widget.repository),
+    2 => BookmarkLifecyclePage.inbox(repository: widget.repository),
+    3 => BookmarkLifecyclePage.archive(repository: widget.repository),
+    4 => BookmarkLifecyclePage.trash(repository: widget.repository),
+    6 => TagManagementPage(repository: widget.repository),
+    7 => PeopleManagementPage(repository: widget.repository),
+    8 => CollectionManagementPage(repository: widget.repository),
+    9 => ProfileManagementPage(
+      state: widget.profileState,
+      onSwitch: widget.onSwitchProfile,
+      onCreate: widget.onCreateProfile,
+      onRename: widget.onRenameProfile,
+      onDuplicate: widget.onDuplicateProfile,
+      onDelete: widget.onDeleteProfile,
+    ),
+    10 => SettingsPage(
+      themeMode: widget.themeMode,
+      onThemeModeChanged: widget.onThemeModeChanged,
+      repository: widget.repository,
+    ),
+    11 =>
+      _selectedGenericDatabaseId == null
+          ? Center(
+              child: FilledButton.icon(
+                onPressed: _createGenericDatabase,
+                icon: const Icon(Icons.add),
+                label: const Text('データベースを作成'),
               ),
-        _ => const SizedBox.shrink(),
-      };
+            )
+          : GenericDatabasePage(
+              key: ValueKey(_selectedGenericDatabaseId),
+              repository: widget.repository,
+              databaseId: _selectedGenericDatabaseId!,
+              onDatabaseChanged: _reloadGenericDatabases,
+            ),
+    _ => const SizedBox.shrink(),
+  };
 
   List<Widget> _lazyPages(WorkspaceInfo? workspace) {
     if (_index == 11) {
@@ -819,24 +1064,24 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
     final scheme = Theme.of(context).colorScheme;
     return CallbackShortcuts(
       bindings: {
-        const SingleActivator(
-          LogicalKeyboardKey.keyK,
-          meta: true,
-        ): _showCommandPalette,
+        const SingleActivator(LogicalKeyboardKey.keyK, meta: true):
+            _showCommandPalette,
       },
       child: Focus(
         autofocus: true,
         child: Scaffold(
-          body: Row(children: [
-            _sidebarCollapsed ? _collapsedSidebar() : _expandedSidebar(),
-            VerticalDivider(width: 1, color: scheme.outlineVariant),
-            Expanded(
-              child: IndexedStack(
-                index: _index,
-                children: _lazyPages(workspace),
+          body: Row(
+            children: [
+              _sidebarCollapsed ? _collapsedSidebar() : _expandedSidebar(),
+              VerticalDivider(width: 1, color: scheme.outlineVariant),
+              Expanded(
+                child: IndexedStack(
+                  index: _index,
+                  children: _lazyPages(workspace),
+                ),
               ),
-            ),
-          ]),
+            ],
+          ),
         ),
       ),
     );

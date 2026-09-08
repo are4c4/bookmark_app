@@ -8,7 +8,10 @@ void main() {
 
     expect(source, isNot(contains("import 'photo_management_page.dart';")));
     expect(source, isNot(contains('PhotoManagementPage(')));
-    expect(source, isNot(contains("_navTile(5, Icons.photo_library_outlined, '写真')")));
+    expect(
+      source,
+      isNot(contains("_navTile(5, Icons.photo_library_outlined, '写真')")),
+    );
     expect(source, isNot(contains('(5, Icons.photo_library_outlined)')));
     expect(source, isNot(contains("('写真', Icons.photo_library_outlined, 5)")));
 
