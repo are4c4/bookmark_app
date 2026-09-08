@@ -50,6 +50,23 @@ void main() {
 1,
 2,
 ];
+}
+EOF
+
+before="$(cat sample.dart)"
+CHECK_FORMAT_SKIP_SELF_TESTS=1 CHECK_BASE_REF=HEAD bash "$guard"
+after="$(cat sample.dart)"
+[[ "$before" == "$after" ]] || {
+  echo "check_format_test: pure-deletion guard mutated the file" >&2
+  exit 1
+}
+
+cat >sample.dart <<'EOF'
+void main() {
+  final legacy = <int>[
+1,
+2,
+];
   print(  'bad'  );
 }
 EOF

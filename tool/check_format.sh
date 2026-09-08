@@ -27,10 +27,11 @@ while [[ $# -gt 0 ]]; do
 Usage: bash tool/check_format.sh [--all] [--base <git-ref>]
 
 By default, checks Dart files changed from a sensible local base plus staged,
-unstaged, and untracked Dart files. Existing tracked files are checked only
-where `dart format` changes overlap edited lines, so historical formatter debt
-outside the patch does not force unrelated churn. New/untracked files and
---all remain whole-file checks.
+unstaged, and untracked Dart files. Existing tracked files are checked by
+mapping PR-added/replaced current lines through `dart format`, so historical
+formatter debt outside those lines does not force unrelated churn. Pure
+deletions introduce no new formatting debt. New/untracked files and --all
+remain whole-file checks.
 EOF
       exit 0
       ;;
@@ -143,18 +144,20 @@ for file in "${files[@]}"; do
   git diff --no-index --unified=0 -- "$original" "$file" >"$format_patch"
   diff_status=$?
   set -e
-  cat "$original" >"$file"
 
   if [[ $diff_status -gt 1 ]]; then
+    cat "$original" >"$file"
     echo "check_format: could not inspect formatter diff for $file" >&2
     failed=true
     continue
   fi
   if [[ ! -s "$format_patch" ]]; then
+    cat "$original" >"$file"
     continue
   fi
 
   if [[ "$whole_file" == true ]]; then
+    cat "$original" >"$file"
     echo "check_format: $file requires dart format (whole-file check)" >&2
     cat "$format_patch" >&2
     failed=true
@@ -164,10 +167,12 @@ for file in "${files[@]}"; do
   set +e
   python3 "$script_dir/check_format_hunks.py" \
     --source-diff "$source_patch" \
-    --format-diff "$format_patch" \
+    --original "$original" \
+    --formatted "$file" \
     --path "$file"
   hunk_status=$?
   set -e
+  cat "$original" >"$file"
 
   if [[ $hunk_status -eq 1 ]]; then
     failed=true
