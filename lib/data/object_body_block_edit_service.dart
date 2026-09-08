@@ -85,6 +85,25 @@ class ObjectBodyBlockEditService {
         );
       });
 
+  /// Splits one paragraph at [offset] against the latest persisted Body.
+  ///
+  /// The source update and new paragraph insertion are persisted as one Body
+  /// document write so Enter cannot leave a half-split document.
+  Future<ObjectBodyDocument> splitParagraph({
+    required int objectId,
+    required String blockId,
+    required String newBlockId,
+    required int offset,
+  }) => _mutate(
+        objectId,
+        (document) => editor.splitParagraph(
+          document: document,
+          blockId: blockId,
+          newBlockId: newBlockId,
+          offset: offset,
+        ),
+      );
+
   /// Updates checklist state without replacing its text or other attributes.
   Future<ObjectBodyDocument> setChecklistChecked({
     required int objectId,
