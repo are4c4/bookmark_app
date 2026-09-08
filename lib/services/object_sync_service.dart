@@ -18,6 +18,7 @@ import '../data/tag_object_bridge.dart';
 import '../data/weblink_object_service.dart';
 import '../data/workspace_store.dart';
 import 'object_sync_impact.dart';
+import 'person_profile_image_relation_service.dart';
 import 'remote_image_storage_service.dart';
 import 'weblink_preview_image_pipeline.dart';
 
@@ -46,6 +47,7 @@ class ObjectSyncService {
       objectStore: objectStore,
       systemObjectStore: systemObjectStore,
     );
+    personProfileImages = PersonProfileImageRelationService(database);
     coreBridge = CoreObjectBridge(
       database: database,
       objectStore: objectStore,
@@ -88,6 +90,7 @@ class ObjectSyncService {
   late final SystemObjectStore systemObjectStore;
   late final TagObjectBridge tagBridge;
   late final PersonObjectBridge personBridge;
+  late final PersonProfileImageRelationService personProfileImages;
   late final CoreObjectBridge coreBridge;
   late final BookmarkWeblinkObjectBridge bookmarkWeblinkBridge;
   late final WeblinkPreviewImagePipeline _previewImagePipeline =
@@ -189,6 +192,10 @@ class ObjectSyncService {
 
     final personObjectIds = await personBridge.syncLegacyPeople(workspaceId);
     final coreImpact = await coreBridge.syncAllWithImpact(workspaceId);
+    // Photo promotion runs in CoreObjectBridge. Only after those stable
+    // photo_object_links exist can legacy Person profile photos be projected to
+    // the canonical single Profile Image Relation without inventing identities.
+    await personProfileImages.migrateLegacyProfilePhotos(workspaceId);
     final weblinkSync =
         await bookmarkWeblinkBridge.syncWorkspaceWithImpact(workspaceId);
 
