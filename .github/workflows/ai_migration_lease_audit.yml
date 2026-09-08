@@ -1,0 +1,36 @@
+name: AI Migration Lease Audit
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ai-migration-lease-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  migration-lease-audit:
+    name: migration-lease-audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Test migration lease logic
+        run: python3 tool/migration_lease_guard_test.py
+
+      - name: Audit migration single-writer lease
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          CURRENT_PR_NUMBER: ${{ github.event.pull_request.number }}
+          CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          CI_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python3 tool/migration_lease_guard.py
