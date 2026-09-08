@@ -149,7 +149,7 @@ For caller-zero deletion, a green Analyze is especially important because it cat
 3. If no true deletion exists, select a patch-sized `GenericDatabasePage` P1 extraction that removes real responsibility without adding a pass-through layer; defer if hotspot ownership or connector whole-file risk makes the slice unsafe.
 4. Re-audit presentation/database reach-through for a focused composition improvement only where an application facade genuinely removes low-level construction. Do not create wrappers solely to ratchet the metric.
 5. Keep Photo/Bookmark compatibility storage and reads until the owning product lane proves full replacement parity.
-6. Refresh `docs/LEGACY_BOOKMARK_INVENTORY.md` when next naturally touched: its historical “remaining Database-presentation shims” narrative predates #899; the authoritative current state is zero shim imports/files.
+6. Keep `docs/LEGACY_BOOKMARK_INVENTORY.md` synchronized with integrated retirements; this handoff branch reconciles the stale Database-presentation shim narrative with #899 and records #944.
 7. Update Issue #225 and this handoff after the next material integration checkpoint.
 
 ## Risks / stop conditions
