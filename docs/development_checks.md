@@ -30,7 +30,19 @@ Runs `check_fast` first, then:
 3. `flutter analyze`;
 4. the complete Flutter Test suite with the repository's 2-minute per-test timeout.
 
-This is the local equivalent of the authoritative merge gate. Do not replace it with changed-files-only testing for final validation.
+This is the local equivalent of the authoritative runtime/configuration merge gate. Do not replace it with changed-files-only testing for final validation.
+
+## Pull-request CI paths
+
+Flutter CI classifies the **complete pull-request diff**, not only the latest commit.
+
+- A PR qualifies for the docs-only fast path only when every changed path matches `docs/**/*.md`.
+- Mixed docs + code/tool/workflow/config PRs always use the full Flutter gate.
+- Pushes to `main` and manual workflow runs always use the full gate.
+- Docs-only PRs run a cheap complete-diff classification plus `git diff --check`; they intentionally skip Flutter setup, Drift generation, Analyze, and full Flutter Test.
+- `merge-gate` is the stable aggregate status for both paths. Future branch protection should require this stable check rather than shard-count-specific job names.
+
+The classifier is deliberately fail-closed: if the complete PR diff cannot be determined, CI does not silently grant the fast path.
 
 ## CI coordination and test-health diagnostics
 
