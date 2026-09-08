@@ -32,7 +32,7 @@ class BookmarkRepository {
         _photoReads = PhotoReadStore(_database),
         _savedViewReads = SavedViewReadStore(_database),
         _savedViewWrites = SavedViewWriteStore(_database),
-        autoOrganize = autoOrganizeService ?? AutoOrganizeService(_database);
+        _autoOrganize = autoOrganizeService ?? AutoOrganizeService(_database);
 
   final AppDatabase _database;
   final BookmarkReadStore _bookmarkReads;
@@ -44,9 +44,9 @@ class BookmarkRepository {
   final BookmarkLifecycleStore lifecycleStore;
   final int workspaceId;
   final String? profileDirectoryPath;
-  final AutoOrganizeService autoOrganize;
+  final AutoOrganizeService _autoOrganize;
 
-  String? get photoDirectoryPath =>
+  String? get _photoDirectoryPath =>
       profileDirectoryPath == null ? null : '$profileDirectoryPath/photos';
 
   Future<List<WorkspaceInfo>> listWorkspaces() => workspaceStore.listWorkspaces();
@@ -185,7 +185,7 @@ class BookmarkRepository {
     );
     await workspaceStore.assignBookmark(id, workspaceId);
     await lifecycleStore.ensureBookmark(id, inbox: inbox);
-    await autoOrganize.applyToBookmark(
+    await _autoOrganize.applyToBookmark(
       bookmarkId: id,
       url: url,
       title: title,
@@ -219,7 +219,7 @@ class BookmarkRepository {
       final people = await _resolvePeople(personNames);
       await _database.setPeopleForRole(id, '出演者', people);
     }
-    await autoOrganize.applyToBookmark(
+    await _autoOrganize.applyToBookmark(
       bookmarkId: id,
       url: url,
       title: title,
@@ -228,7 +228,7 @@ class BookmarkRepository {
   }
 
   Future<List<AutoOrganizeRule>> listAutoOrganizeRules() =>
-      autoOrganize.listRules();
+      _autoOrganize.listRules();
 
   Future<int> createAutoOrganizeRule({
     required String name,
@@ -237,7 +237,7 @@ class BookmarkRepository {
     String tagName = '',
     String genre = '',
   }) =>
-      autoOrganize.createRule(
+      _autoOrganize.createRule(
         name: name,
         matchField: matchField,
         keyword: keyword,
@@ -246,13 +246,13 @@ class BookmarkRepository {
       );
 
   Future<void> setAutoOrganizeRuleEnabled(int id, bool enabled) =>
-      autoOrganize.setEnabled(id, enabled);
+      _autoOrganize.setEnabled(id, enabled);
 
   Future<void> deleteAutoOrganizeRule(int id) =>
-      autoOrganize.deleteRule(id);
+      _autoOrganize.deleteRule(id);
 
   Future<AutoOrganizeResult> applyAutoOrganizeToAll() async =>
-      autoOrganize.applyToAll(await watchAll().first);
+      _autoOrganize.applyToAll(await watchAll().first);
 
   Future<void> setBookmarkTagsFromDatabase(BookmarkItem bookmark, Iterable<Tag> selectedTags) =>
       _database.setBookmarkTags(bookmark.id, selectedTags.map((tag) => tag.name));
@@ -339,7 +339,7 @@ class BookmarkRepository {
         .shouldPreserve(legacyPhotoId: photo.id, filePath: photo.path);
     await _database.deletePhoto(photo.id);
     if (!preserveManagedFile) {
-      await PhotoStorageService(photoDirectoryPath: photoDirectoryPath)
+      await PhotoStorageService(photoDirectoryPath: _photoDirectoryPath)
           .deleteManagedPhoto(photo.path);
     }
   }
