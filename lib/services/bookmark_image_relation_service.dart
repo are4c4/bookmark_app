@@ -10,6 +10,7 @@ import '../data/object_alias_store.dart';
 import '../data/object_identity_search_service.dart';
 import '../data/object_relation_editor_service.dart';
 import '../data/object_store.dart';
+import '../data/object_type_defaults_store.dart';
 import '../data/relation_mutation_service.dart';
 import '../data/relation_target_service.dart';
 import '../data/system_object_store.dart';
@@ -133,6 +134,32 @@ class BookmarkImageRelationService {
         query: query,
       );
 
+  /// Searches canonical Image Objects without requiring a Bookmark source Object.
+  /// Bookmark creation uses this before the new Bookmark has been mirrored.
+  Future<List<ObjectIdentitySearchResult>> searchAvailableImages({
+    required int workspaceId,
+    required String query,
+  }) async {
+    final existingType = await _systemObjects.getSystemObjectType(
+      workspaceId: workspaceId,
+      systemKey: ImageObjectService.systemKey,
+    );
+    final imageType = existingType ??
+        (await ImageObjectService(
+          systemObjects: _systemObjects,
+          defaultsStore: ObjectTypeDefaultsStore(_genericStore),
+        ).ensureDefinition(workspaceId))
+            .objectType;
+    return ObjectIdentitySearchService(
+      objectStore: objectStore,
+      aliasStore: ObjectAliasStore(_genericStore),
+    ).search(
+      workspaceId: workspaceId,
+      objectTypeId: imageType.id,
+      query: query,
+    );
+  }
+
   Future<BookmarkImageRelationState> _trustedStateForMutation(
     BookmarkImageRelationState state,
   ) async {
@@ -153,6 +180,96 @@ class BookmarkImageRelationService {
       images: images,
       cover: cover,
     );
+  }
+
+  /// Attaches an already-canonical Image selection to a freshly-created legacy
+  /// Bookmark without routing the selection through legacy Photo ids.
+  ///
+  /// The compatibility bridge establishes the canonical Bookmark Object
+  /// synchronously. If a watcher already mirrored the Bookmark, strict Relation
+  /// preflight runs before that bridge may project compatibility state back into
+  /// canonical Relations. Images, Cover Image and the temporary legacy
+  /// projection are then committed from fresh strict state in one transaction.
+  Future<void> saveImagesAfterCreate({
+    required int workspaceId,
+    required int bookmarkId,
+    required Iterable<int> imageObjectIds,
+    int? coverImageObjectId,
+  }) async {
+    final selectedImageObjectIds = <int>[];
+    final seen = <int>{};
+    for (final imageObjectId in imageObjectIds) {
+      if (seen.add(imageObjectId)) selectedImageObjectIds.add(imageObjectId);
+    }
+    if (coverImageObjectId != null && !seen.contains(coverImageObjectId)) {
+      throw ArgumentError.value(
+        coverImageObjectId,
+        'coverImageObjectId',
+        'Cover Image must also be included in the selected Images.',
+      );
+    }
+    if (selectedImageObjectIds.isEmpty) return;
+
+    final existingState = await load(
+      workspaceId: workspaceId,
+      bookmarkId: bookmarkId,
+    );
+    if (existingState != null) {
+      await database.transaction(() async {
+        await _trustedStateForMutation(existingState);
+      });
+    }
+
+    await _coreBridge.syncAll(workspaceId);
+    final state = await load(
+      workspaceId: workspaceId,
+      bookmarkId: bookmarkId,
+    );
+    if (state == null) {
+      throw StateError(
+        'New Bookmark could not be mirrored before Image Relation creation.',
+      );
+    }
+
+    await database.transaction(() async {
+      final trusted = await _trustedStateForMutation(state);
+      final candidateImageIds =
+          trusted.images.candidates.map((image) => image.id).toSet();
+      for (final imageObjectId in selectedImageObjectIds) {
+        if (!candidateImageIds.contains(imageObjectId)) {
+          throw ArgumentError.value(
+            imageObjectId,
+            'imageObjectIds',
+            'Selected Object is not a canonical Image candidate in this workspace.',
+          );
+        }
+      }
+
+      final mergedImageObjectIds = trusted.images.selectedObjectIds.toList();
+      for (final imageObjectId in selectedImageObjectIds) {
+        if (!mergedImageObjectIds.contains(imageObjectId)) {
+          mergedImageObjectIds.add(imageObjectId);
+        }
+      }
+      final effectiveCoverImageObjectId =
+          coverImageObjectId ?? trusted.validCoverImageObjectId;
+
+      await _editor.save(
+        context: trusted.images,
+        selectedObjectIds: mergedImageObjectIds,
+      );
+      await _editor.save(
+        context: trusted.cover,
+        selectedObjectIds: effectiveCoverImageObjectId == null
+            ? const <int>[]
+            : <int>[effectiveCoverImageObjectId],
+      );
+      await _replaceLegacyBookmarkPhotoProjection(
+        state: trusted,
+        selectedImageObjectIds: mergedImageObjectIds,
+        coverImageObjectId: effectiveCoverImageObjectId,
+      );
+    });
   }
 
   /// Compatibility entry point for legacy Photo hosts during #245 migration.
