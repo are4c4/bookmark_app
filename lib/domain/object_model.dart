@@ -45,6 +45,9 @@ class ObjectPropertyDefinition {
 
   static const String identityManagedConfigKey = 'identityManaged';
 
+  static bool isIdentityManagedConfig(Map<String, dynamic> config) =>
+      config[identityManagedConfigKey] == true;
+
   final int id;
   final int objectTypeId;
   final String name;
@@ -79,7 +82,7 @@ class ObjectPropertyDefinition {
   /// Identity-managed Values are written only through the owning Object
   /// lifecycle service. Generic detail/property editors must treat them as
   /// read-only so one field cannot be changed independently of Object identity.
-  bool get isIdentityManaged => config[identityManagedConfigKey] == true;
+  bool get isIdentityManaged => isIdentityManagedConfig(config);
 
   int? get targetObjectTypeId {
     final value = config['targetObjectTypeId'];
