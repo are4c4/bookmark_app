@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../data/generic_database_store.dart';
 import '../data/object_graph_query_store.dart';
 import '../data/object_store.dart';
@@ -5,6 +7,29 @@ import '../services/canonical_file_pdf_search_indexer.dart';
 import 'object_search_refresh_planner.dart';
 import 'object_search_repository.dart';
 import 'object_search_result_resolver.dart';
+
+final Expando<_ObjectSearchProjectionChangeChannel>
+    _objectSearchProjectionChangeChannels =
+    Expando<_ObjectSearchProjectionChangeChannel>(
+      'object-search-projection-changes',
+    );
+
+_ObjectSearchProjectionChangeChannel _projectionChangesFor(
+  GenericDatabaseStore genericStore,
+) {
+  final database = genericStore.database;
+  return _objectSearchProjectionChangeChannels[database] ??=
+      _ObjectSearchProjectionChangeChannel();
+}
+
+class _ObjectSearchProjectionChangeChannel {
+  final StreamController<void> _controller =
+      StreamController<void>.broadcast();
+
+  Stream<void> get stream => _controller.stream;
+
+  void notify() => _controller.add(null);
+}
 
 /// Canonical application-facing search boundary for global Object search.
 ///
@@ -15,44 +40,61 @@ class ObjectGlobalSearchService {
   ObjectGlobalSearchService(
     GenericDatabaseStore genericStore, {
     CanonicalFilePdfSearchIndexer? pdfSearchIndexer,
-  })  : _index = ObjectSearchRepository(genericStore),
+  })  : _projectionChanges = _projectionChangesFor(genericStore),
+        _index = ObjectSearchRepository(genericStore),
         _resolver = ObjectSearchResultResolver(ObjectStore(genericStore)),
         _refreshPlanner = ObjectSearchRefreshPlanner(ObjectStore(genericStore)),
         _graphStore = ObjectGraphQueryStore(genericStore),
         _pdfSearchIndexer =
             pdfSearchIndexer ?? CanonicalFilePdfSearchIndexer.forStore(genericStore);
 
+  final _ObjectSearchProjectionChangeChannel _projectionChanges;
   final ObjectSearchRepository _index;
   final ObjectSearchResultResolver _resolver;
   final ObjectSearchRefreshPlanner _refreshPlanner;
   final ObjectGraphQueryStore _graphStore;
   final CanonicalFilePdfSearchIndexer _pdfSearchIndexer;
 
+  /// Search-local notification emitted after a successful focused projection
+  /// refresh. Separate service instances backed by the same AppDatabase share
+  /// this stream, allowing a mounted Search page to replay its active query
+  /// after background producers update FTS through another service instance.
+  ///
+  /// This is intentionally not a domain/workspace mutation event bus: Object,
+  /// Relation and Primitive producers remain unaware of Search presentation and
+  /// report only canonical ids to Search-owned refresh methods.
+  Stream<void> get projectionChanges => _projectionChanges.stream;
+
   /// Rebuilds canonical Object search for one workspace after reconciling the
   /// optional PDF-derived contribution of canonical File Objects.
   Future<void> rebuildWorkspace(int workspaceId) =>
       _pdfSearchIndexer.rebuildWorkspace(workspaceId);
 
-  Future<void> refreshObject(int objectId) => _index.refreshObject(objectId);
+  Future<void> refreshObject(int objectId) => refreshObjects(<int>[objectId]);
 
   /// Re-extracts and reindexes one canonical File's optional PDF text without
   /// rebuilding unrelated Objects.
   Future<bool> refreshFilePdfText({
     required int fileObjectTypeId,
     required int fileObjectId,
-  }) =>
-      _pdfSearchIndexer.refresh(
-        fileObjectTypeId: fileObjectTypeId,
-        fileObjectId: fileObjectId,
-      );
+  }) async {
+    final available = await _pdfSearchIndexer.refresh(
+      fileObjectTypeId: fileObjectTypeId,
+      fileObjectId: fileObjectId,
+    );
+    _projectionChanges.notify();
+    return available;
+  }
 
   /// Refreshes a deterministic set of canonical Object ids without rebuilding
   /// unrelated workspace rows.
   Future<void> refreshObjects(Iterable<int> objectIds) async {
     final ordered = objectIds.toSet().toList()..sort();
+    if (ordered.isEmpty) return;
     for (final objectId in ordered) {
       await _index.refreshObject(objectId);
     }
+    _projectionChanges.notify();
   }
 
   /// Refreshes an Object whose display label changed plus every source Object
