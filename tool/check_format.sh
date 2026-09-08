@@ -95,4 +95,15 @@ if [[ ${#files[@]} -eq 0 ]]; then
 fi
 
 echo "check_format: checking ${#files[@]} Dart file(s)"
+set +e
 dart format --output=none --set-exit-if-changed "${files[@]}"
+format_status=$?
+set -e
+
+if [[ $format_status -ne 0 ]]; then
+  echo
+  echo "check_format: formatting differs; suggested diff follows"
+  dart format "${files[@]}" >/dev/null 2>&1 || true
+  git --no-pager diff -- "${files[@]}" || true
+  exit "$format_status"
+fi
