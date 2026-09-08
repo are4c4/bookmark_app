@@ -20,7 +20,7 @@ void main() {
     final person = (await database.watchAllPeople().first).single;
     final groups = PersonGroupStore(database);
     final groupId = await groups.createGroup('サカナクション');
-    await groups.addPerson(groupId, person.id);
+    await groups.setGroupsForPerson(person.id, [groupId]);
 
     final snapshot = await DatabaseBackupService(database).createSnapshot();
     expect(snapshot['format'], 'bookmark_app_backup');

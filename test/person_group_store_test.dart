@@ -31,7 +31,7 @@ void main() {
 
     final personId = await database.createPerson('山口一郎');
     final groupId = await store.createGroup('サカナクション');
-    await store.addPerson(groupId, personId);
+    await store.setGroupsForPerson(personId, [groupId]);
 
     await store.deleteGroup(groupId);
 
