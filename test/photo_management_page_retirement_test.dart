@@ -39,9 +39,9 @@ void main() {
     final repository = File('lib/data/bookmark_repository.dart')
         .readAsStringSync();
     final database = File('lib/data/app_database.dart').readAsStringSync();
-    final canonicalDeletion =
-        File('lib/services/legacy_photo_image_deletion_service.dart')
-            .readAsStringSync();
+    final canonicalDeletion = File(
+      'lib/services/legacy_photo_image_deletion_service.dart',
+    ).readAsStringSync();
 
     expect(repository, isNot(contains('deletePhoto(')));
     expect(database, isNot(contains('deletePhoto(')));
