@@ -434,6 +434,4 @@ class BookmarkRepository {
         personFilterId: personFilterId,
         photoFilterId: photoFilterId,
       );
-
-  Future<int> deleteSavedView(int id) => _savedViewWrites.delete(id);
 }
