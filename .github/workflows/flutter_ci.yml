@@ -83,6 +83,14 @@ jobs:
       - name: Analyze
         run: flutter analyze
 
+      - name: Seed Drift generated cache from main
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        continue-on-error: true
+        uses: actions/cache/save@v5
+        with:
+          path: lib/data/app_database.g.dart
+          key: drift-generated-${{ runner.os }}-${{ hashFiles('.dart_tool/package_config.json', 'lib/data/app_database.dart', 'lib/data/app_database_schema.dart', 'lib/data/app_database_migrations.dart', 'lib/data/profile_path_resolver.dart') }}
+
   test:
     name: test-shard-${{ matrix.shard }}-of-4
     runs-on: ubuntu-latest
