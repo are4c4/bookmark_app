@@ -18,8 +18,57 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  scope:
+    name: ci-scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      docs_only: ${{ steps.classify.outputs.docs_only }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Classify complete change scope
+        id: classify
+        env:
+          CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          CI_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python3 tool/classify_ci_scope.py
+
+  docs-only:
+    name: docs-only-fast-path
+    needs: scope
+    if: ${{ needs.scope.outputs.docs_only == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Validate docs-only diff whitespace
+        env:
+          CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          CI_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: git diff --check "$CI_BASE_SHA" "$CI_HEAD_SHA"
+
+      - name: Summarize fast path
+        run: |
+          {
+            echo '## Docs-only fast path'
+            echo
+            echo '- Complete PR diff is limited to `docs/**/*.md`.'
+            echo '- Flutter setup, Drift generation, Analyze, and full Flutter Test are intentionally skipped.'
+            echo '- Any code/tool/workflow/config file in the PR automatically selects the full gate.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
   quality:
     name: analyze-guards
+    needs: scope
+    if: ${{ needs.scope.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 22
     steps:
@@ -33,6 +82,7 @@ jobs:
 
       - name: Developer workflow diagnostic tests
         run: |
+          python3 tool/classify_ci_scope_test.py
           python3 tool/shared_hotspot_conflict_guard_test.py
           python3 tool/report_test_health_test.py
 
@@ -93,6 +143,8 @@ jobs:
 
   test:
     name: test-shard-${{ matrix.shard }}-of-4
+    needs: scope
+    if: ${{ needs.scope.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 22
     strategy:
@@ -249,8 +301,8 @@ jobs:
 
   test-health:
     name: test-health
-    if: always()
-    needs: test
+    needs: [scope, test]
+    if: ${{ always() && needs.scope.result == 'success' && needs.scope.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
@@ -270,6 +322,39 @@ jobs:
           TEST_SHARD_SKEW_WARN: 1.25
           TEST_SHARD_WALL_WARN_SECONDS: 360
         run: python3 tool/report_test_health.py --directory ci-artifacts
+
+  merge-gate:
+    name: merge-gate
+    needs: [scope, docs-only, quality, test, test-health]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Verify selected CI path
+        env:
+          DOCS_ONLY: ${{ needs.scope.outputs.docs_only }}
+          SCOPE_RESULT: ${{ needs.scope.result }}
+          DOCS_RESULT: ${{ needs.docs-only.result }}
+          QUALITY_RESULT: ${{ needs.quality.result }}
+          TEST_RESULT: ${{ needs.test.result }}
+          TEST_HEALTH_RESULT: ${{ needs.test-health.result }}
+        run: |
+          echo "scope=$SCOPE_RESULT docs_only=$DOCS_ONLY docs=$DOCS_RESULT quality=$QUALITY_RESULT test=$TEST_RESULT test_health=$TEST_HEALTH_RESULT"
+          if [[ "$SCOPE_RESULT" != "success" ]]; then
+            echo "CI scope classification did not succeed."
+            exit 1
+          fi
+          if [[ "$DOCS_ONLY" == "true" ]]; then
+            [[ "$DOCS_RESULT" == "success" ]]
+            [[ "$QUALITY_RESULT" == "skipped" ]]
+            [[ "$TEST_RESULT" == "skipped" ]]
+            [[ "$TEST_HEALTH_RESULT" == "skipped" ]]
+          else
+            [[ "$DOCS_RESULT" == "skipped" ]]
+            [[ "$QUALITY_RESULT" == "success" ]]
+            [[ "$TEST_RESULT" == "success" ]]
+            [[ "$TEST_HEALTH_RESULT" == "success" ]]
+          fi
 
   build-macos:
     name: build-macos-release
