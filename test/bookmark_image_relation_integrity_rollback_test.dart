@@ -56,7 +56,7 @@ void main() {
   );
 
   test(
-    'Bookmark create compatibility path rejects corrupt Cover before syncAll can overwrite it',
+    'canonical Bookmark create path rejects corrupt Cover before syncAll can overwrite it',
     () async {
       final fixture = await _fixture();
       addTearDown(fixture.database.close);
@@ -91,11 +91,11 @@ void main() {
       final before = await _snapshot(fixture);
 
       await expectLater(
-        fixture.service.saveLegacyPhotosAfterCreate(
+        fixture.service.saveImagesAfterCreate(
           workspaceId: fixture.workspaceId,
           bookmarkId: fixture.bookmarkId,
-          photoIds: <int>[fixture.legacyPhotoId],
-          coverPhotoId: fixture.legacyPhotoId,
+          imageObjectIds: <int>[fixture.legacyImageObjectId],
+          coverImageObjectId: fixture.legacyImageObjectId,
         ),
         throwsStateError,
       );
@@ -189,7 +189,6 @@ Future<_Fixture> _fixture() async {
     database: database,
     workspaceId: workspaceId,
     bookmarkId: bookmarkId,
-    legacyPhotoId: legacyPhotoId,
     bookmarkObjectId: bookmarkObjectId,
     legacyImageObjectId: legacyImageObjectId,
     bookmarkType: bookmarkType,
@@ -305,7 +304,6 @@ class _Fixture {
     required this.database,
     required this.workspaceId,
     required this.bookmarkId,
-    required this.legacyPhotoId,
     required this.bookmarkObjectId,
     required this.legacyImageObjectId,
     required this.bookmarkType,
@@ -319,7 +317,6 @@ class _Fixture {
   final AppDatabase database;
   final int workspaceId;
   final int bookmarkId;
-  final int legacyPhotoId;
   final int bookmarkObjectId;
   final int legacyImageObjectId;
   final AppObjectType bookmarkType;

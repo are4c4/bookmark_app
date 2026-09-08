@@ -6,6 +6,8 @@ void main() {
   test('Bookmark create selects and saves canonical Image Objects directly', () {
     final source =
         File('lib/widgets/bookmark_create_dialog.dart').readAsStringSync();
+    final imageRelations =
+        File('lib/services/bookmark_image_relation_service.dart').readAsStringSync();
 
     expect(
       source,
@@ -38,5 +40,9 @@ void main() {
     expect(source, isNot(contains('.saveLegacyPhotosAfterCreate(')));
     expect(source, isNot(contains('写真DBから選択')));
     expect(source, isNot(contains('Image.file(')));
+
+    expect(imageRelations, contains('Future<void> saveImagesAfterCreate({'));
+    expect(imageRelations, contains('Future<void> attachLegacyPhoto({'));
+    expect(imageRelations, isNot(contains('saveLegacyPhotosAfterCreate(')));
   });
 }
