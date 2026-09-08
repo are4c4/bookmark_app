@@ -170,8 +170,6 @@ class WorkspaceStore {
     );
   }
 
-  Future<void> renameWorkspace(int id, String name) => updateWorkspace(id, name: name);
-
   Future<void> reorderWorkspaces(List<int> orderedIds) => database.transaction(() async {
         for (var i = 0; i < orderedIds.length; i++) {
           await (database.update(database.workspaces)..where((workspace) => workspace.id.equals(orderedIds[i]))).write(
@@ -218,33 +216,10 @@ class WorkspaceStore {
           .watch()
           .map((rows) => rows.map((row) => row.bookmarkId).toSet());
 
-  Future<Set<int>> bookmarkIds(int workspaceId) async =>
-      (await (database.select(database.bookmarkWorkspaces)..where((relation) => relation.workspaceId.equals(workspaceId))).get())
-          .map((row) => row.bookmarkId)
-          .toSet();
-
-  Stream<Set<int>> watchSavedViewIds(int workspaceId) =>
-      (database.select(database.savedViewWorkspaces)..where((relation) => relation.workspaceId.equals(workspaceId)))
-          .watch()
-          .map((rows) => rows.map((row) => row.savedViewId).toSet());
-
-  Future<Set<int>> savedViewIds(int workspaceId) async =>
-      (await (database.select(database.savedViewWorkspaces)..where((relation) => relation.workspaceId.equals(workspaceId))).get())
-          .map((row) => row.savedViewId)
-          .toSet();
-
   Future<void> assignBookmark(int bookmarkId, int workspaceId) =>
       database.into(database.bookmarkWorkspaces).insertOnConflictUpdate(
             BookmarkWorkspacesCompanion.insert(
               bookmarkId: Value(bookmarkId),
-              workspaceId: workspaceId,
-            ),
-          );
-
-  Future<void> assignSavedView(int savedViewId, int workspaceId) =>
-      database.into(database.savedViewWorkspaces).insertOnConflictUpdate(
-            SavedViewWorkspacesCompanion.insert(
-              savedViewId: Value(savedViewId),
               workspaceId: workspaceId,
             ),
           );

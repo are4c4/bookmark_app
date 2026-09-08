@@ -4,6 +4,7 @@ import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/bookmark_attachment_store.dart';
 import 'package:bookmark_app/data/bookmark_lifecycle_store.dart';
 import 'package:bookmark_app/data/bookmark_repository.dart';
+import 'package:bookmark_app/data/saved_view_write_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -149,7 +150,7 @@ void main() {
     await photoFile.writeAsBytes([1]);
     final photoId = await repository.addPhoto(path: photoFile.path);
 
-    final viewId = await repository.createSavedView(
+    final viewId = await SavedViewWriteStore(database).create(
       name: 'Author photos',
       layoutType: 'table',
       tagMatchMode: 'and',

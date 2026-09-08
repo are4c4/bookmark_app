@@ -14,8 +14,6 @@ import 'bookmark_read_store.dart';
 import 'bookmark_lifecycle_store.dart';
 import 'person_roles.dart';
 import 'photo_read_store.dart';
-import 'saved_view_read_store.dart';
-import 'saved_view_write_store.dart';
 import 'tag_group_store.dart';
 import 'workspace_store.dart';
 
@@ -30,16 +28,12 @@ class BookmarkRepository {
   })  : _bookmarkReads = BookmarkReadStore(_database),
         _engagement = BookmarkEngagementStore(_database),
         _photoReads = PhotoReadStore(_database),
-        _savedViewReads = SavedViewReadStore(_database),
-        _savedViewWrites = SavedViewWriteStore(_database),
         autoOrganize = autoOrganizeService ?? AutoOrganizeService(_database);
 
   final AppDatabase _database;
   final BookmarkReadStore _bookmarkReads;
   final BookmarkEngagementStore _engagement;
   final PhotoReadStore _photoReads;
-  final SavedViewReadStore _savedViewReads;
-  final SavedViewWriteStore _savedViewWrites;
   final WorkspaceStore workspaceStore;
   final BookmarkLifecycleStore lifecycleStore;
   final int workspaceId;
@@ -96,13 +90,6 @@ class BookmarkRepository {
   Stream<List<CollectionRecord>> watchCollections() => _database.watchAllCollections();
   Stream<List<BookmarkRelation>> watchRelationsForBookmark(int bookmarkId) =>
       _database.watchRelationsForBookmark(bookmarkId);
-
-  Stream<List<SavedViewConfig>> watchSavedViews() =>
-      Rx.combineLatest2<List<SavedViewConfig>, Set<int>, List<SavedViewConfig>>(
-        _savedViewReads.watchConfigs(),
-        workspaceStore.watchSavedViewIds(workspaceId),
-        (views, ids) => views.where((config) => ids.contains(config.view.id)).toList(),
-      );
 
   Stream<List<PersonRoleAssignment>> watchPersonRoles(BookmarkItem bookmark) =>
       _database.watchPersonRoleAssignments(bookmark.id);
@@ -364,76 +351,4 @@ class BookmarkRepository {
     }
     return id;
   }
-
-  Future<int> createSavedView({
-    required String name,
-    required String layoutType,
-    String searchQuery = '',
-    bool favoritesOnly = false,
-    Iterable<int> tagIds = const [],
-    String tagMatchMode = 'or',
-    String sortField = 'createdAt',
-    String sortDirection = 'desc',
-    String visibleProperties = 'image,url,tags,favorite',
-    String statusFilter = '',
-    int minRating = 0,
-    bool includeDescendants = true,
-    int? personFilterId,
-    int? photoFilterId,
-  }) async {
-    final id = await _savedViewWrites.create(
-      name: name,
-      layoutType: layoutType,
-      searchQuery: searchQuery,
-      favoritesOnly: favoritesOnly,
-      tagIds: tagIds,
-      tagMatchMode: tagMatchMode,
-      sortField: sortField,
-      sortDirection: sortDirection,
-      visibleProperties: visibleProperties,
-      statusFilter: statusFilter,
-      minRating: minRating,
-      includeDescendants: includeDescendants,
-      personFilterId: personFilterId,
-      photoFilterId: photoFilterId,
-    );
-    await workspaceStore.assignSavedView(id, workspaceId);
-    return id;
-  }
-
-  Future<void> updateSavedView({
-    required int id,
-    required String name,
-    required String layoutType,
-    required String searchQuery,
-    required bool favoritesOnly,
-    required Iterable<int> tagIds,
-    required String tagMatchMode,
-    required String sortField,
-    required String sortDirection,
-    required String visibleProperties,
-    String statusFilter = '',
-    int minRating = 0,
-    bool includeDescendants = true,
-    int? personFilterId,
-    int? photoFilterId,
-  }) => _savedViewWrites.update(
-        id: id,
-        name: name,
-        layoutType: layoutType,
-        searchQuery: searchQuery,
-        favoritesOnly: favoritesOnly,
-        tagIds: tagIds,
-        tagMatchMode: tagMatchMode,
-        sortField: sortField,
-        sortDirection: sortDirection,
-        visibleProperties: visibleProperties,
-        statusFilter: statusFilter,
-        minRating: minRating,
-        includeDescendants: includeDescendants,
-        personFilterId: personFilterId,
-        photoFilterId: photoFilterId,
-      );
-
-  Future<int> deleteSavedView(int id) => _savedViewWrites.delete(id);
 }
