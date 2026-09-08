@@ -9,12 +9,15 @@ import '../data/bookmark_repository.dart';
 import '../data/database_view_store.dart';
 import '../database/database_definition.dart';
 import '../data/person_group_store.dart';
+import '../services/bookmark_presentation_resolver_factory.dart';
+import '../services/bookmark_url_resolver.dart';
 import '../features/database/presentation/widgets/database_create_tiles.dart';
 import '../features/database/presentation/widgets/database_page_toolbar.dart';
 import '../features/database/presentation/widgets/database_view_tabs.dart';
 import '../features/database/presentation/widgets/resizable_detail_pane.dart';
 import '../ui/ui_tokens.dart';
 import '../widgets/app_empty_state.dart';
+import '../widgets/bookmark_resolved_url_text.dart';
 import '../widgets/bookmark_reverse_lookup_dialog.dart';
 import '../widgets/detail_section.dart';
 import '../widgets/inline_rename_text.dart';
@@ -38,6 +41,7 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
   int? _selectedGroupId;
   late final PersonGroupStore _personGroups;
   late final DatabaseViewStore _databaseViewStore;
+  late final BookmarkUrlResolve _resolveBookmarkUrl;
   DatabaseViewConfig? _activeDatabaseView;
   int? _activeDatabaseViewId;
   Timer? _viewSaveTimer;
@@ -49,6 +53,8 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
     super.initState();
     _personGroups = PersonGroupStore(repository.workspaceStore.database);
     _databaseViewStore = DatabaseViewStore(repository.workspaceStore.database);
+    _resolveBookmarkUrl =
+        BookmarkPresentationResolverFactory.urlFor(repository);
   }
 
   @override
@@ -879,8 +885,9 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
-                                  subtitle: Text(
-                                    bookmark.url,
+                                  subtitle: BookmarkResolvedUrlText(
+                                    bookmark: bookmark,
+                                    resolveUrl: _resolveBookmarkUrl,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
