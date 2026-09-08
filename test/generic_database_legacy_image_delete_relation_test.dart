@@ -16,9 +16,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test(
-      'legacy-mirrored Image deletion detaches canonical Relations and clears legacy Person photo',
-      () async {
+  test('legacy-mirrored Image deletion detaches canonical Relations and clears legacy Person photo', () async {
     final root = await Directory.systemTemp.createTemp(
       'legacy_image_delete_relation_',
     );
@@ -122,16 +120,18 @@ void main() {
       isEmpty,
     );
     expect(
-      await database.customSelect(
-        'SELECT id FROM photos WHERE id = $photoId',
-      ).get(),
+      await database
+          .customSelect('SELECT id FROM photos WHERE id = $photoId')
+          .get(),
       isEmpty,
     );
     expect(
-      await database.customSelect(
-        'SELECT id FROM people '
-        'WHERE id = $legacyPersonId AND profile_photo_id IS NULL',
-      ).get(),
+      await database
+          .customSelect(
+            'SELECT id FROM people '
+            'WHERE id = $legacyPersonId AND profile_photo_id IS NULL',
+          )
+          .get(),
       hasLength(1),
     );
     expect(await managedFile.exists(), isFalse);
