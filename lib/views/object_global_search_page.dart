@@ -36,6 +36,8 @@ class _ObjectGlobalSearchPageState extends State<ObjectGlobalSearchPage> {
   late ObjectGlobalSearchService _searchService;
   final TextEditingController _controller = TextEditingController();
   Timer? _debounce;
+  Timer? _projectionReplayDebounce;
+  StreamSubscription<void>? _projectionChangesSubscription;
   List<ResolvedObjectSearchHit> _results = const <ResolvedObjectSearchHit>[];
   bool _indexing = true;
   bool _searching = false;
@@ -44,8 +46,9 @@ class _ObjectGlobalSearchPageState extends State<ObjectGlobalSearchPage> {
   @override
   void initState() {
     super.initState();
-    _searchService =
-        widget.searchService ?? ObjectGlobalSearchService(widget.store);
+    _useSearchService(
+      widget.searchService ?? ObjectGlobalSearchService(widget.store),
+    );
     _prepareIndex();
   }
 
@@ -55,15 +58,28 @@ class _ObjectGlobalSearchPageState extends State<ObjectGlobalSearchPage> {
     if (oldWidget.store != widget.store ||
         oldWidget.workspaceId != widget.workspaceId ||
         oldWidget.searchService != widget.searchService) {
-      _searchService =
-          widget.searchService ?? ObjectGlobalSearchService(widget.store);
+      _useSearchService(
+        widget.searchService ?? ObjectGlobalSearchService(widget.store),
+      );
       _prepareIndex();
     }
+  }
+
+  void _useSearchService(ObjectGlobalSearchService service) {
+    final previous = _projectionChangesSubscription;
+    if (previous != null) unawaited(previous.cancel());
+    _searchService = service;
+    _projectionChangesSubscription = _searchService.projectionChanges.listen((_) {
+      _scheduleProjectionReplay();
+    });
   }
 
   @override
   void dispose() {
     _debounce?.cancel();
+    _projectionReplayDebounce?.cancel();
+    final subscription = _projectionChangesSubscription;
+    if (subscription != null) unawaited(subscription.cancel());
     _controller.dispose();
     super.dispose();
   }
@@ -86,6 +102,7 @@ class _ObjectGlobalSearchPageState extends State<ObjectGlobalSearchPage> {
   }
 
   Future<void> _prepareIndex() async {
+    _projectionReplayDebounce?.cancel();
     if (mounted) {
       setState(() {
         _indexing = true;
@@ -104,10 +121,24 @@ class _ObjectGlobalSearchPageState extends State<ObjectGlobalSearchPage> {
     }
   }
 
+  void _scheduleProjectionReplay() {
+    if (!mounted || _indexing || _controller.text.trim().isEmpty) return;
+    _projectionReplayDebounce?.cancel();
+    _projectionReplayDebounce = Timer(
+      const Duration(milliseconds: 40),
+      () {
+        if (!mounted || _indexing) return;
+        final query = _controller.text.trim();
+        if (query.isNotEmpty) unawaited(_search(query));
+      },
+    );
+  }
+
   void _onQueryChanged(String value) {
     _debounce?.cancel();
     if (mounted) setState(() {});
     if (value.trim().isEmpty) {
+      _projectionReplayDebounce?.cancel();
       setState(() {
         _results = const <ResolvedObjectSearchHit>[];
         _searching = false;
@@ -166,12 +197,6 @@ class _ObjectGlobalSearchPageState extends State<ObjectGlobalSearchPage> {
         'Object global search result refresh failed.',
         stackTrace,
       );
-      return;
-    }
-
-    final query = _controller.text.trim();
-    if (query.isNotEmpty) {
-      await _search(query);
     }
   }
 
