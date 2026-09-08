@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../data/bookmark_weblink_object_bridge.dart';
 import '../data/core_object_bridge.dart';
 import '../data/object_store.dart';
+import '../data/person_object_bridge.dart';
 import '../data/system_object_store.dart';
 import '../data/tag_object_bridge.dart';
 import '../data/weblink_object_service.dart';
@@ -164,6 +165,7 @@ extension BookmarkWeblinkObjectBridgeSyncImpact on BookmarkWeblinkObjectBridge {
 
 const objectSyncMirrorSystemKeys = <String>[
   TagObjectBridge.systemKey,
+  PersonObjectBridge.systemKey,
   CoreObjectBridge.photoSystemKey,
   CoreObjectBridge.bookmarkSystemKey,
   WeblinkObjectService.systemKey,
