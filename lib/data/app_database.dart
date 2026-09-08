@@ -291,13 +291,12 @@ class AppDatabase extends _$AppDatabase {
     return id;
   }
 
-  Future<void> updatePerson(int id, String name, String? note, {int? profilePhotoId, bool updateProfilePhoto = false}) async {
+  Future<void> updatePerson(int id, String name, String? note) async {
     final trimmed = name.trim();
     if (trimmed.isEmpty) return;
     await (update(people)..where((p) => p.id.equals(id))).write(PeopleCompanion(
       name: Value(trimmed),
       note: Value(note?.trim().isEmpty == true ? null : note?.trim()),
-      profilePhotoId: updateProfilePhoto ? Value(profilePhotoId) : const Value.absent(),
     ));
   }
   Future<void> deletePerson(int id) => (delete(people)..where((p) => p.id.equals(id))).go();
