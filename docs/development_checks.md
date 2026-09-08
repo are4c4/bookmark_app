@@ -44,6 +44,26 @@ Flutter CI classifies the **complete pull-request diff**, not only the latest co
 
 The classifier is deliberately fail-closed: if the complete PR diff cannot be determined, CI does not silently grant the fast path.
 
+## AI PR coordination contract
+
+The pull-request template begins with five machine-readable coordination fields:
+
+- `Primary lane: A|B|C|D|E|F|G`
+- `Related issue: #...`
+- `Depends on: none` or explicit `#...` dependencies
+- `Shared hotspots: none` or comma-separated AGENTS.md hotspot paths
+- `Migration/data impact: yes|no`
+
+On pull requests, the cheap `ci-scope` job audits these fields before Flutter setup. The audit is advisory initially and surfaces:
+
+- missing/invalid lane metadata or a lane that contradicts the normal branch prefix;
+- runtime/configuration work without a related Issue;
+- declared dependencies that are still open;
+- declared hotspot metadata that does not match the actual complete PR diff;
+- PR-specific GitHub Actions workflows that combine `contents: write` with a branch `git push` pattern.
+
+Docs-only handoff PRs may omit a related Issue, but they still declare a primary lane, hotspot state, dependencies, and migration/data impact. Formatting/fixups belong in the implementation environment; repository CI should validate autonomous branches rather than mutate them.
+
 ## CI coordination and test-health diagnostics
 
 Flutter CI also provides non-product coordination/diagnostic signals for the multi-lane workflow:
@@ -60,5 +80,6 @@ These diagnostics must not be used to remove tests from the required merge gate 
 - Before opening/updating a runtime PR: run `check_full` when the local environment supports Flutter.
 - If local Flutter execution is unavailable, record that explicitly in the PR and rely on GitHub Flutter CI.
 - Treat a shared-hotspot warning as a prompt to re-audit open PR ownership and overlapping behavior, not as proof that the PRs necessarily conflict.
+- Treat lane/dependency/metadata warnings as coordination debt to resolve before merge rather than as reasons to add exceptions casually.
 - Investigate persistent shard-skew or flake warnings as developer-loop debt rather than increasing thresholds reflexively.
 - CI reruns should use GitHub's rerun mechanism; never create no-op commits merely to trigger checks.

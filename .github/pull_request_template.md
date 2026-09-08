@@ -1,11 +1,15 @@
-## Primary lane
+## AI coordination contract
 
-<!-- Exactly one: A Object / B Relation / C Database-View / D Primitives / E Search / F Storage / G Refactor -->
-- Lane: 
+<!-- Keep these five machine-readable lines. Use exactly one primary lane. -->
+- Primary lane: 
+- Related issue: #
+- Depends on: none
+- Shared hotspots: none
+- Migration/data impact: no
 
-## Related issue
-
-- Closes/Related: #
+<!-- Lane values: A Object / B Relation / C Database-View / D Primitives / E Search / F Storage / G Refactor -->
+<!-- Shared hotspots: use `none` or comma-separated repository paths from AGENTS.md. -->
+<!-- Migration/data impact: exactly `yes` or `no`; explain `yes` below. -->
 
 ## Change
 
@@ -14,13 +18,11 @@
 ## Shared hotspot ownership
 
 - [ ] This PR does not touch a shared hotspot, **or** I re-audited current open PR ownership immediately before editing.
-- Shared hotspot(s), if any: 
 - Overlap/lease notes: 
 
-## Migration / data impact
+## Migration / data impact details
 
-- [ ] No schema/data/migration impact.
-- If there is impact, describe compatibility, rollback, and preservation requirements: 
+- Compatibility / preservation requirements: 
 
 ## Validation
 
