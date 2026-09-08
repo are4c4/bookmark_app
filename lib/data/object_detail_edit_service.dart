@@ -1,5 +1,6 @@
 import '../domain/object_detail_content.dart';
 import '../domain/object_model.dart';
+import '../domain/object_property_management.dart';
 import 'object_body_store.dart';
 import 'object_detail_content_loader.dart';
 import 'object_store.dart';
@@ -162,6 +163,11 @@ class ObjectDetailEditService {
         canonical.type,
         'property',
         'Object detail Value editing does not mutate Relation or Computed properties.',
+      );
+    }
+    if (canonical.isIdentityManaged) {
+      throw StateError(
+        'Identity-managed Object Properties cannot be edited through generic detail Value editing.',
       );
     }
     if (canonical.type == ObjectPropertyType.createdTime ||
