@@ -10,7 +10,6 @@ import 'package:bookmark_app/data/object_type_defaults_store.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/domain/object_model.dart';
-import 'package:bookmark_app/domain/object_property_management.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
