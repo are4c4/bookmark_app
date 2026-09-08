@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/person_object_bridge.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
@@ -63,26 +65,33 @@ void main() {
   );
 
   test(
-    'Object sync leaves an unmapped legacy profile Photo retryable without inventing an Image',
+    'Object sync leaves unavailable legacy profile Photo mapping retryable',
     () async {
-      final database = AppDatabase.forTesting(NativeDatabase.memory());
+      final directory = await Directory.systemTemp.createTemp(
+        'person_profile_image_retry_',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final database = AppDatabase.forTesting(
+        NativeDatabase.memory(),
+        profileDirectoryPath: directory.path,
+      );
       addTearDown(database.close);
       final workspaceId = await WorkspaceStore(database).initialize();
 
       await database.customStatement(
-        "INSERT INTO photos(path, title) VALUES ('photos/retry-profile.jpg', 'Retry profile')",
+        "INSERT INTO photos(path, title) VALUES ('photos/missing-profile.jpg', 'Missing profile')",
       );
       final photoId = (await database.customSelect(
-        "SELECT id FROM photos WHERE path = 'photos/retry-profile.jpg'",
+        "SELECT id FROM photos WHERE path = 'photos/missing-profile.jpg'",
       ).getSingle())
           .read<int>('id');
       await database.customStatement(
         '''INSERT INTO people(name, profile_photo_id)
-           VALUES ('Retry Profile Person', ?)''',
+           VALUES ('Missing Profile Person', ?)''',
         <Object>[photoId],
       );
       final personId = (await database.customSelect(
-        "SELECT id FROM people WHERE name = 'Retry Profile Person'",
+        "SELECT id FROM people WHERE name = 'Missing Profile Person'",
       ).getSingle())
           .read<int>('id');
 
@@ -91,43 +100,30 @@ void main() {
       await sync.syncWorkspace(workspaceId);
 
       final mapping = await database.customSelect(
-        'SELECT object_id FROM photo_object_links WHERE photo_id = ?',
-        variables: [driftVariableInt(photoId)],
+        'SELECT object_id FROM photo_object_links WHERE photo_id = $photoId',
       ).getSingleOrNull();
-      expect(mapping, isNotNull);
-
-      // Simulate a temporarily unavailable compatibility mapping after the Photo
-      // promotion pass. Workspace migration must skip rather than manufacture a
-      // second identity, and a later sync can restore it through CoreObjectBridge.
-      await database.customStatement(
-        'DELETE FROM photo_object_links WHERE photo_id = ?',
-        <Object>[photoId],
-      );
-      await database.customStatement(
-        '''UPDATE generic_values SET value_json = '[]'
-           WHERE record_id = ? AND property_id = ?''',
-        <Object>[
-          (await PersonProfileImageRelationService(database).load(
-            workspaceId: workspaceId,
-            personId: personId,
-          ))
-              .personObjectId,
-          (await PersonProfileImageRelationService(database).load(
-            workspaceId: workspaceId,
-            personId: personId,
-          ))
-              .property
-              .id,
-        ],
+      expect(
+        mapping,
+        isNull,
+        reason: 'missing managed file must not manufacture an Image identity',
       );
 
-      // The production migration itself is retry-safe when no mapping exists.
+      final state = await PersonProfileImageRelationService(database).load(
+        workspaceId: workspaceId,
+        personId: personId,
+      );
+      expect(state.relation.selectedObjectIds, isEmpty);
+      expect(state.selectedImageObjectId, isNull);
+      expect(state.legacyProfilePhotoId, photoId);
+
       await PersonProfileImageRelationService(database)
           .migrateLegacyProfilePhotos(workspaceId);
+      final unchanged = await PersonProfileImageRelationService(database).load(
+        workspaceId: workspaceId,
+        personId: personId,
+      );
+      expect(unchanged.relation.selectedObjectIds, isEmpty);
+      expect(unchanged.legacyProfilePhotoId, photoId);
     },
   );
 }
-
-// Keep the Drift import surface minimal without exposing Variable throughout
-// the test body.
-Variable<int> driftVariableInt(int value) => Variable<int>(value);
