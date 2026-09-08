@@ -13,7 +13,7 @@ Core product direction:
 - Built-in code is reserved for irreducible native behavior; domain models such as Bookmark/Paper/Book/Project should normally be user-owned templates/configuration.
 
 ## Repository position — 2026-09-08
-The generic composition architecture is proven in production code. Current highest-value work is Photo -> Image caller-zero consolidation/final preservation, Weblink convergence, maintainability, and usage-driven finishing.
+The generic composition architecture is proven in production code. Current highest-value work is Photo -> Image final preservation/caller-zero consolidation, Weblink convergence, maintainability, and usage-driven finishing.
 
 Recent completion checkpoints:
 - #895 hardens Bookmark Image Relation writers with strict fail-closed integrity preflight and rollback-safe compatibility projection.
@@ -24,13 +24,14 @@ Recent completion checkpoints:
 - #941 / PR #1002 (`a74abec4cc231af91acbee956b4aaf131be87608`) composes canonical Image preview/editing into the shared Object Inspector.
 - #948 moves People/profile imagery to canonical Person -> Image Relations; subsequent refactor work retired the legacy picker/mutation APIs.
 - #949 is **completed/closed**. PR #997 (`8d52f75f683851cecc8a65955bd8c509183b4a14`) adds generic Database command-palette navigation and PR #1015 (`5f03dccc55e9333c51ce3db2a2e8d8f6f2216f0f`) removes normal legacy `写真` AppShell navigation. Canonical `画像` is now the single normal user-facing image collection.
+- #1019 (`10bae52808a0176a94163228d348c988de516498`) removes the now caller-zero `PhotoManagementPage` while preserving Photo schema/data, Vault files, migrations and backup/import/export compatibility.
 - #218 is completed after real-Mac release launch/data-preservation validation.
 
 ## Active architecture/product issues
 - `#56` — generic Object/Database/View daily-use integration umbrella.
 - `#155` — reusable Weblink Object; remaining rich Weblink/Image presentation and legacy Bookmark URL/media convergence.
 - `#225` — maintainability, hotspot reduction and legacy-path retirement.
-- `#242` — Vault/storage lifecycle; implementation complete, final real-macOS Create/Open/Switch/Move/Recovery validation remains.
+- `#242` — Vault/storage lifecycle; production implementation complete, final real-macOS Create/Open/Switch/Move/Recovery validation remains.
 - `#245` — legacy Photos -> canonical Image Objects umbrella.
 - `#950` — Lane G caller-zero legacy Photo compatibility retirement; destructive schema removal is explicitly separate.
 - `#951` — Lane F final real-macOS Vault/data-preservation validation for Photo -> Image consolidation.
@@ -67,12 +68,12 @@ No open Search-owned Issue is present in the current live audit. Preserve focuse
 ### F — Storage, Vault & Delivery
 #242 production implementation is complete. #951 is the active Photo -> Image preservation gate.
 
-With #949 complete, Lane F has added a focused read-only preservation-manifest helper on `feature/storage-vault-preservation-manifest-951` so the final real-Mac pass can mechanically verify SQLite integrity plus exact `photos/` / `attachments/` bytes before/after Move/Duplicate/restore. It does not alter production Storage semantics and still requires the real app semantic checks. See `docs/AI_PROGRESS_STORAGE.md` and `docs/vault_preservation_validation.md`.
+The normal product prerequisites are now integrated: #949 makes canonical `画像` the sole normal image collection, and #1019 removes the caller-zero Photo management UI without changing Storage/data compatibility. The repository side of #951 is therefore ready for the final real-macOS pass.
 
-The final real-machine pass should follow the applicable #950 caller-zero cleanup so it validates the intended end state.
+Lane F is adding a focused read-only preservation-manifest helper on `feature/storage-vault-preservation-manifest-951` so the final #242/#951 pass can mechanically verify SQLite integrity plus exact `photos/` / `attachments/` bytes before/after Move/Duplicate/restore. It does not alter production Storage semantics and still requires real app semantic checks. See `docs/AI_PROGRESS_STORAGE.md` and `docs/vault_preservation_validation.md`.
 
 ### G — Refactor & Architecture Health
-#225 and #950 remain active. Current #950 work may delete caller-zero presentation/API code only after parity is proven and must preserve Photo schema/data, Vault files, backup/import/export, migration behavior and Storage policy. Destructive legacy schema retirement is a separate explicit migration decision.
+#225 and #950 remain active. PR #1019 has already retired the caller-zero legacy Photo management page. Further #950 work may delete caller-zero presentation/API code only after parity is proven and must preserve Photo schema/data, Vault files, backup/import/export, migration behavior and Storage policy. Destructive legacy schema retirement is a separate explicit migration decision.
 
 ## Major integrated state
 - Object/ObjectType/Database/View foundations are live in real hosts.
@@ -86,6 +87,7 @@ The final real-machine pass should follow the applicable #950 caller-zero cleanu
 - Canonical Images use ordinary persisted Database/View configuration, generic navigation, shared media rendering and shared Inspector preview/edit behavior.
 - People profile imagery is canonical Image/Relation-based.
 - Legacy Photo physical deletion is Vault-safe; external/ambiguous files are preserved.
+- Normal legacy Photo navigation and Photo management presentation are retired while compatibility schema/data remains intact.
 - Image and File remain distinct built-in primitives while sharing managed-file/Vault infrastructure.
 - Global Search is canonical Object search with focused freshness behavior.
 - macOS release/DMG packaging and real-Mac launch/data-preservation validation are complete.
@@ -93,7 +95,7 @@ The final real-machine pass should follow the applicable #950 caller-zero cleanu
 
 ## Remaining product edge
 Highest-value live work:
-1. **#245 Photo -> Image** — finish safe applicable #950 caller-zero cleanup, then run Lane F #951 real-macOS preservation validation before closing the umbrella.
+1. **#245 Photo -> Image** — run Lane F #951 real-macOS preservation validation and continue only safe #950 caller-zero cleanup before closing the umbrella.
 2. **#155 Weblink convergence** — finish generic rich Weblink/Image presentation and retire remaining Bookmark URL/thumbnail compatibility only after caller-zero proof.
 3. **#225 / #950 Refactor** — delete superseded shims/legacy paths only after replacement parity; keep destructive schema retirement separate.
 4. **#242 / #951 validation** — final real-macOS Vault Create/Open/Switch/Move/Recovery plus Photo -> Image preservation checks.
