@@ -77,7 +77,7 @@ Manual Database membership include/exclude remains explicitly deferred in #56 un
 ## Shared hotspot lease
 Lane C currently holds **no shared-hotspot lease**.
 
-At the latest live audit there are no open PRs, so no current shared-host lease is recorded. This is only a snapshot; re-audit immediately before any future edit.
+Open PR and hotspot ownership are time-sensitive and are intentionally not frozen as durable handoff state. Re-audit live PR diffs immediately before any future edit.
 
 Before future C work, re-audit open PRs for:
 - `lib/views/generic_database_page.dart`
