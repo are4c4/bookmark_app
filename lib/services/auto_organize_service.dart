@@ -1,5 +1,6 @@
 import '../data/app_database.dart';
 import '../data/bookmark_lifecycle_store.dart';
+import 'bookmark_url_resolver.dart';
 
 enum AutoOrganizeMatchField {
   url('url', 'URL'),
@@ -50,11 +51,26 @@ class AutoOrganizeResult {
 }
 
 class AutoOrganizeService {
-  AutoOrganizeService(this._database)
-      : _lifecycleStore = BookmarkLifecycleStore(_database);
+  AutoOrganizeService(
+    this._database, {
+    int? workspaceId,
+    BookmarkUrlResolve? resolveUrl,
+  })  : assert(
+          workspaceId == null || resolveUrl == null,
+          'Provide workspaceId or resolveUrl, not both.',
+        ),
+        _resolveUrl = resolveUrl ??
+            (workspaceId == null
+                ? null
+                : BookmarkUrlResolver(
+                    database: _database,
+                    workspaceId: workspaceId,
+                  ).resolve),
+        _lifecycleStore = BookmarkLifecycleStore(_database);
 
   final AppDatabase _database;
   final BookmarkLifecycleStore _lifecycleStore;
+  final BookmarkUrlResolve? _resolveUrl;
   bool _initialized = false;
 
   Future<void> initialize() async {
@@ -165,6 +181,18 @@ class AutoOrganizeService {
     return value.toLowerCase().contains(rule.keyword.toLowerCase());
   }
 
+  Future<String> _preferredUrl(BookmarkItem bookmark) async {
+    final resolver = _resolveUrl;
+    if (resolver == null) return bookmark.url;
+    try {
+      final resolved = await resolver(bookmark);
+      final value = resolved?.value.trim();
+      return value == null || value.isEmpty ? bookmark.url : value;
+    } catch (_) {
+      return bookmark.url;
+    }
+  }
+
   Future<int> applyToBookmark({
     required int bookmarkId,
     required String url,
@@ -201,7 +229,7 @@ class AutoOrganizeService {
     for (final bookmark in bookmarks) {
       final count = await applyToBookmark(
         bookmarkId: bookmark.id,
-        url: bookmark.url,
+        url: await _preferredUrl(bookmark),
         title: bookmark.title,
         description: bookmark.description,
       );

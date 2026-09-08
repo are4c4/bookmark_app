@@ -28,7 +28,8 @@ class BookmarkRepository {
   })  : _bookmarkReads = BookmarkReadStore(_database),
         _engagement = BookmarkEngagementStore(_database),
         _photoReads = PhotoReadStore(_database),
-        autoOrganize = autoOrganizeService ?? AutoOrganizeService(_database);
+        autoOrganize = autoOrganizeService ??
+            AutoOrganizeService(_database, workspaceId: workspaceId);
 
   final AppDatabase _database;
   final BookmarkReadStore _bookmarkReads;
