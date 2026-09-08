@@ -41,17 +41,6 @@ class PdfAnnotationStore {
         createdAt: DateTime.tryParse(row.createdAt) ?? DateTime.now(),
       );
 
-  Future<List<PdfAnnotationRecord>> listForAttachment(int attachmentId) async =>
-      (await (database.select(database.pdfAnnotations)
-                ..where((annotation) => annotation.attachmentId.equals(attachmentId))
-                ..orderBy([
-                  (annotation) => OrderingTerm.asc(annotation.pageNumber),
-                  (annotation) => OrderingTerm.asc(annotation.createdAt),
-                ]))
-              .get())
-          .map(_fromRow)
-          .toList();
-
   Stream<List<PdfAnnotationRecord>> watchForAttachment(int attachmentId) =>
       (database.select(database.pdfAnnotations)
             ..where((annotation) => annotation.attachmentId.equals(attachmentId))
