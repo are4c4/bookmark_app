@@ -21,6 +21,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
+      - name: Developer check script syntax
+        run: bash -n tool/check_format.sh tool/check_fast.sh tool/check_full.sh
 
       - name: Maintainability guardrail tests
         run: |
@@ -47,6 +52,11 @@ jobs:
         with:
           channel: stable
           cache: true
+
+      - name: Format changed Dart
+        env:
+          CHECK_BASE_REF: HEAD^1
+        run: bash tool/check_format.sh
 
       - name: Install dependencies
         run: flutter pub get
