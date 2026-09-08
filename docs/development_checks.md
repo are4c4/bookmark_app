@@ -62,9 +62,15 @@ On pull requests, the cheap `ci-scope` job audits these fields before Flutter se
 
 - missing/invalid lane metadata or a lane that contradicts the normal branch prefix;
 - runtime/configuration work without a related Issue;
+- implementation/config branches whose Related Issue number is missing from the branch name as a delimited token;
+- another open PR already declaring the same Related Issue;
 - declared dependencies that are still open;
 - declared hotspot metadata that does not match the actual complete PR diff;
 - PR-specific GitHub Actions workflows that combine `contents: write` with a branch `git push` pattern.
+
+For non-doc implementation/config work, make the focused Issue discoverable in the branch name, for example `feature/primitives-image-inspector-941-v2` or `refactor/issue-1007-duplicate-ownership`. Before creating the branch, search live open PRs and remote branches for that focused Issue number. A local Git checkout can use a command such as `git ls-remote --heads origin '*1007*'`; connector-only runs should use the live GitHub PR/branch search APIs instead. Finding the same Issue elsewhere is a coordination prompt: confirm an intentional sequenced/umbrella split or reuse/supersede the existing branch rather than starting duplicate implementation.
+
+The same-Issue signal is deliberately advisory. Broad umbrella Issues can legitimately have more than one coherent PR, but a focused child Issue should normally have one active implementation owner unless explicit sequencing is documented.
 
 Docs-only handoff PRs may omit a related Issue, but they still declare a primary lane, hotspot state, dependencies, and migration/data impact. Formatting/fixups belong in the implementation environment; repository CI should validate autonomous branches rather than mutate them.
 
@@ -98,6 +104,7 @@ These diagnostics must not be used to remove tests from the required merge gate 
 - Before opening/updating a runtime PR: run `check_full` when the local environment supports Flutter.
 - If local Flutter execution is unavailable, record that explicitly in the PR and rely on GitHub Flutter CI.
 - Treat a shared-hotspot warning as a prompt to re-audit open PR ownership and overlapping behavior, not as proof that the PRs necessarily conflict.
+- Treat same-Issue/branch-token warnings as a prompt to reuse, sequence, or explicitly justify competing work before integration.
 - Treat lane/dependency/metadata warnings as coordination debt to resolve before merge rather than as reasons to add exceptions casually.
 - Treat durable-handoff warnings as a prompt to refresh or supersede the checkpoint before merge.
 - Investigate persistent shard-skew or flake warnings as developer-loop debt rather than increasing thresholds reflexively.

@@ -38,8 +38,19 @@ class Contract:
     migration_impact: str | None
 
 
+@dataclass(frozen=True)
+class OpenPullClaim:
+    number: int
+    title: str
+    related_issue: int | None
+    branch: str
+
+
 def _extract_value(body: str, key: str) -> str | None:
-    pattern = re.compile(rf"^\s*-\s*{re.escape(key)}\s*:\s*(.*?)\s*$", re.MULTILINE | re.IGNORECASE)
+    pattern = re.compile(
+        rf"^\s*(?:-\s*)?{re.escape(key)}\s*:\s*(.*?)\s*$",
+        re.MULTILINE | re.IGNORECASE,
+    )
     match = pattern.search(body)
     return match.group(1).strip() if match else None
 
@@ -90,6 +101,24 @@ def expected_lane_for_branch(branch: str) -> str | None:
     return None
 
 
+def branch_has_issue_token(branch: str, issue_number: int) -> bool:
+    return bool(re.search(rf"(?:^|[-_/]){issue_number}(?:$|[-_/])", branch))
+
+
+def duplicate_issue_claims(
+    current_number: int,
+    related_issue: int | None,
+    open_pulls: list[OpenPullClaim],
+) -> list[OpenPullClaim]:
+    if related_issue is None:
+        return []
+    return [
+        pull
+        for pull in open_pulls
+        if pull.number != current_number and pull.related_issue == related_issue
+    ]
+
+
 def is_docs_only(paths: list[str]) -> bool:
     return bool(paths) and all(path.startswith("docs/") and path.endswith(".md") for path in paths)
 
@@ -130,6 +159,32 @@ def _request_json(url: str, token: str) -> object:
         return json.load(response)
 
 
+def _open_pull_claims(api_root: str, token: str) -> list[OpenPullClaim]:
+    payload = _request_json(f"{api_root}/pulls?state=open&per_page=100", token)
+    if not isinstance(payload, list):
+        raise ValueError("Open pull request response was not a list")
+
+    claims: list[OpenPullClaim] = []
+    for row in payload:
+        if not isinstance(row, dict):
+            continue
+        number = row.get("number")
+        if not isinstance(number, int):
+            continue
+        contract = parse_contract(str(row.get("body") or ""))
+        head = row.get("head")
+        branch = str(head.get("ref") or "") if isinstance(head, dict) else ""
+        claims.append(
+            OpenPullClaim(
+                number=number,
+                title=str(row.get("title") or ""),
+                related_issue=contract.related_issue,
+                branch=branch,
+            )
+        )
+    return claims
+
+
 def _warn(message: str) -> None:
     escaped = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
     print(f"::warning title=AI PR coordination::{escaped}")
@@ -149,9 +204,11 @@ def collect_warnings(
     paths: list[str],
     open_dependencies: set[int],
     mutating_workflows: list[str],
+    duplicate_claims: list[OpenPullClaim] | None = None,
 ) -> list[str]:
     warnings: list[str] = []
     docs_only = is_docs_only(paths)
+    duplicates = duplicate_claims or []
 
     if contract.lane not in LANES:
         warnings.append("Missing or invalid `Primary lane`; use exactly one of A/B/C/D/E/F/G.")
@@ -161,6 +218,18 @@ def collect_warnings(
 
     if not docs_only and contract.related_issue is None:
         warnings.append("Runtime/configuration PR is missing `Related issue: #...` metadata.")
+    elif not docs_only and contract.related_issue is not None and not branch_has_issue_token(branch, contract.related_issue):
+        warnings.append(
+            f"Branch `{branch}` does not include Related issue #{contract.related_issue} as a delimited token; "
+            "include the focused Issue number so pre-PR remote-branch audits can discover active ownership."
+        )
+
+    if duplicates:
+        rendered = ", ".join(f"#{pull.number} {pull.title}" for pull in duplicates)
+        warnings.append(
+            f"Related issue #{contract.related_issue} is also claimed by open PR(s): {rendered}. "
+            "Confirm this is intentional umbrella/sequenced work or supersede the duplicate before integration."
+        )
 
     if contract.migration_impact not in {"yes", "no"}:
         warnings.append("`Migration/data impact` must be explicitly `yes` or `no`.")
@@ -205,16 +274,23 @@ def main() -> int:
         body = str(pull.get("body") or "")
         head = pull.get("head", {})
         branch = str(head.get("ref") or "")
+        current_number = int(event.get("number") or pull.get("number") or 0)
         paths = changed_paths(base_sha, head_sha)
         contract = parse_contract(body)
 
         open_dependencies: set[int] = set()
+        duplicates: list[OpenPullClaim] = []
         if repository and token:
             api_root = f"https://api.github.com/repos/{repository}"
             for number in contract.dependencies:
                 payload = _request_json(f"{api_root}/issues/{number}", token)
                 if isinstance(payload, dict) and payload.get("state") == "open":
                     open_dependencies.add(number)
+            duplicates = duplicate_issue_claims(
+                current_number,
+                contract.related_issue,
+                _open_pull_claims(api_root, token),
+            )
 
         mutating_workflows: list[str] = []
         for path in paths:
@@ -224,7 +300,14 @@ def main() -> int:
             if file_path.exists() and detects_branch_mutating_workflow(path, file_path.read_text(encoding="utf-8")):
                 mutating_workflows.append(path)
 
-        warnings = collect_warnings(contract, branch, paths, open_dependencies, mutating_workflows)
+        warnings = collect_warnings(
+            contract,
+            branch,
+            paths,
+            open_dependencies,
+            mutating_workflows,
+            duplicates,
+        )
         for warning in warnings:
             _warn(warning)
 
@@ -235,6 +318,8 @@ def main() -> int:
                 f"- Primary lane: `{contract.lane or 'missing'}`",
                 f"- Branch: `{branch or 'unknown'}`",
                 f"- Related issue: `{('#' + str(contract.related_issue)) if contract.related_issue else 'missing/optional-docs'}`",
+                f"- Branch contains issue token: `{'yes' if contract.related_issue and branch_has_issue_token(branch, contract.related_issue) else 'n/a/no'}`",
+                f"- Other open PRs claiming Related issue: `{', '.join('#' + str(pull.number) for pull in duplicates) if duplicates else 'none'}`",
                 f"- Declared dependencies: `{', '.join('#' + str(number) for number in contract.dependencies) if contract.dependencies else 'none'}`",
                 f"- Actual shared hotspots: `{', '.join(sorted(actual_hotspots(paths))) if actual_hotspots(paths) else 'none'}`",
                 f"- Coordination warnings: `{len(warnings)}`",
