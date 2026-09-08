@@ -46,7 +46,9 @@ import '../features/object/presentation/widgets/object_body_object_reference_pic
 import '../features/object/presentation/widgets/object_body_reference_insert_menu_button.dart';
 import '../features/object/presentation/widgets/object_detail_property_view.dart';
 import '../features/object/presentation/widgets/object_file_detail_panel_host.dart';
+import '../features/object/presentation/widgets/object_image_detail_panel.dart';
 import '../services/canonical_file_detail_capabilities.dart';
+import '../services/canonical_image_edit_service.dart';
 
 class ObjectInspectorPage extends StatefulWidget {
   const ObjectInspectorPage({
@@ -176,6 +178,29 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
     if (legacyIdProperties.isEmpty) return true;
     if (legacyIdProperties.length != 1) return false;
     return content.object.values[legacyIdProperties.single.id] == null;
+  }
+
+  Future<void> _refreshImageMetadata() async {
+    final current = _content;
+    if (current == null) return;
+    try {
+      final refreshed = await _contentLoader.load(
+        objectTypeId: current.objectType.id,
+        objectId: current.object.id,
+      );
+      if (!mounted || refreshed == null) return;
+      setState(() => _content = refreshed);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('画像情報を再読み込みできませんでした。')));
+    }
+  }
+
+  void _showImageEditError(Object _) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('画像を編集できませんでした。')));
   }
 
   @override
@@ -884,6 +909,24 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
                   : null,
             );
           }),
+          if (_isImage) ...[
+            const SizedBox(height: 24),
+            ObjectImageDetailPanel(
+              pathResolver: widget.store.database.pathResolver,
+              objectStore: widget.objectStore,
+              workspaceId: type.workspaceId,
+              objectTypeId: type.id,
+              objectId: object.id,
+              editService: CanonicalImageEditService.fromStores(
+                genericStore: widget.store,
+                objectStore: widget.objectStore,
+              ),
+              onChanged: () {
+                _refreshImageMetadata();
+              },
+              onError: _showImageEditError,
+            ),
+          ],
           ObjectFileDetailPanelHost(
             capabilities: CanonicalFileDetailCapabilities.fromDatabase(
               database: widget.store.database,

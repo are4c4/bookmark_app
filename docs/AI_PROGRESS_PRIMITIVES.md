@@ -7,10 +7,11 @@ Provide Weblink/Image/File/Tag primitives whose irreducible native behavior can 
 
 ## Current issue status — 2026-09-08
 - #484 — built-in primitive boundary / canonical File: **completed/closed**.
-- #495 — MIME/content-aware Image/File import: **completed/closed**. Shared content-first classification/routing is established and the final canonical Images collection picker inconsistency was closed by #866.
-- #245 — Photo -> Image consolidation: **open**. Canonical Image is established and Bookmark-facing Photo authority is now largely migrated. Remaining work is People/profile-photo parity plus safe retirement of residual legacy Photo presentation/storage compatibility.
-- #155 — Weblink Objectization / legacy Bookmark convergence: **open**. Canonical Weblink identity/media/action behavior is established; remaining work should be generic presentation or caller-zero retirement, not another Weblink persistence path.
 - #489 — shared native capabilities: **completed/closed**.
+- #495 — MIME/content-aware Image/File import: **completed/closed**.
+- #245 — Photo -> Image consolidation umbrella: **open**. Canonical Image, Bookmark-facing migration, canonical Person/Profile Image migration, and legacy Photo picker retirement are established. The active D-owned completion slice is #941 Image Inspector parity.
+- #941 — canonical Image preview/editing in shared Object Inspector: **active**, draft PR #1002.
+- #155 — Weblink Objectization / legacy Bookmark convergence: **open**. Continue only for concrete remaining presentation/caller-zero work after the current #941 slice or when it can proceed independently without conflicting shared hotspots.
 
 ## Architecture contract
 - Image and File are distinct system ObjectTypes but reuse shared file-backed/native infrastructure.
@@ -18,92 +19,91 @@ Provide Weblink/Image/File/Tag primitives whose irreducible native behavior can 
 - Lane D owns primitive identity, metadata, MIME/content routing and primitive-native behavior.
 - Lane F owns Vault/filesystem byte placement, portable paths, explicit ownership, rollback and physical-delete boundaries.
 - Lane C owns generic Database/View/schema presentation; Lane B owns Relation lifecycle/integrity; Lane E owns search persistence/reconciliation.
-- Canonical Bookmark `Images` / `Cover Image` Relations are the editing authority. `bookmark_photos` is only a temporary compatibility projection for Image Objects that still map to legacy Photos.
-- Never infer physical-delete authority merely from a Vault-looking path or content hash.
+- Canonical Bookmark `Images` / `Cover Image` Relations are the editing authority. `bookmark_photos` is compatibility projection only where legacy mapping still requires it.
+- Canonical Person `Profile Image` Relation is the profile-photo authority; legacy `Person.profilePhotoId` is compatibility data, not a D-owned second identity path.
+- Never infer physical-delete authority merely from a Vault-looking path, content hash, or arbitrary stored path.
 
-## Image / legacy Photo — current #245 state
-Canonical Image now has managed import/create/reuse, provenance, portable stored-path identity, content-first classified import, geometry, preview/edit/rotate/flip/restore/crop behavior, shared-file safety, generic collection media and Bookmark Relation integration.
+## #245 integrated state
+Canonical Image now has managed import/create/reuse, provenance, portable stored-path identity, content-first classified import, geometry, preview/edit/rotate/flip/restore/crop behavior, shared-file safety, generic collection media, Bookmark Relation integration, and Person profile-image integration.
 
-### Completed migration slices
-- #866 — canonical Images collection picker classifies selected content before mutation. Misleading extensions route by content, mixed Image/File selections fail before mutation, and legacy Photo picker behavior remains isolated. Squash merge `51b8e41d8a500b905f2e96d005a559d04d6aa743`; Flutter CI #2632 full green. This completed #495.
-- #869 — canonical Image/Weblink media in Database List rows. Squash merge `36588e0d89e4f95e204d72d7a00194d7c7a2f0ba`; Flutter CI #2649 full green.
-- #876 — shared canonical media host in Database Table name cells. Squash merge `3506974e…`; Flutter CI #2677 full green.
-- #879 — `CoreObjectBridge` preserves native Bookmark Image Relations while synchronizing only the legacy-mapped subset still required for compatibility. Squash merge `3be71f12…`; Flutter CI #2674 full green.
-- #881 — Bookmark detail image editing moved to canonical `Images` / `Cover Image` Relations. Canonical Relation is the editing authority; only legacy-mapped Images maintain a `bookmark_photos` projection. Squash merge `47d31345dbaa602e99d00c6199650d9e6b329d32`; Flutter CI #2710 full green.
-- #889 — PhotoManagement “attach to Bookmark” routes through canonical Image Relations rather than legacy Bookmark Photo mutation. Squash merge `fcd0eb34c8ed79cbf67a8595f730f6c08cb7e7ff`; Flutter CI #2717 full green.
-- #892 — Bookmark creation stopped writing selected Photos directly into `bookmark_photos`; the compatibility create path mirrors first and commits canonical Image Relations. Squash merge `94b3833106683745291470732331aef3d28d66d5`; Flutter CI #2730 full green.
-- #901 — Photo -> Bookmark reverse lookup resolves `photo_object_links -> canonical Image Relation backlinks -> Bookmark`, not `BookmarkItem.photos`. Squash merge `0fa47d01ecf49d47c6b2cc0173505219590e59de`; Flutter CI #2747 full green.
-- #903 — Lane G removed six caller-zero legacy Bookmark Photo forwarding APIs after the above migrations. Squash merge `48e945fdf8aa2496120ca60297e65f8e1cd31585`.
-- #914 — Stage1 saved Photo filter uses canonical Image backlinks and no longer filters through `bookmark.photos`. Squash merge `d91cb79a5add08bac0d2ca6dbcfd9a00f2f4a04f`; Flutter CI #2759 full green.
-- #921 — Stage1 image drops route through canonical content-aware Image import and do not create legacy Photo rows. Squash merge `2b5500957f58c41a12a9ae1c6c02bfc71343f4a8`; Flutter CI #2774 full green.
-- #908 — Lane C established the canonical Images collection’s first-run shared masonry/direct-Image Gallery View, so first-class Images have generic collection presentation parity without reviving the Photo page as the primary collection.
-- #922 / #895 — Lane B added strict stored-value/index/target/cardinality preflight for Bookmark Image Relation mutations. Squash merge `bc09381b9eb77dee6b4ef12a94e7b9c06bc86c36`; Flutter CI #2793 full green. Lane D Bookmark Image writers must preserve this fail-closed contract.
-- #930 — Bookmark creation now selects canonical Image Objects directly instead of `PhotoRecord` / `photo_database_picker.dart`. `saveImagesAfterCreate(...)` establishes the canonical Bookmark Object and atomically persists Images/Cover plus only necessary legacy-mapped projection; native Images create no `photos` or `bookmark_photos` rows. Relation #922 strict preflight is preserved before compatibility sync and again from fresh state inside the final transaction. Squash merge `63760af94358945d8ca83d8a4d2cc58245c51baf`; Flutter CI #2806 full green.
+Recent relevant integrated checkpoints:
+- #866 completed the canonical content-first Images collection picker and closed #495.
+- #869 / #876 routed canonical Image/Weblink media through generic List/Table hosts.
+- #881 / #889 / #892 / #901 / #914 / #921 / #930 migrated Bookmark-facing image selection, mutation, reverse lookup, Stage1 filtering/drop, and create flow to canonical Image/Relation authority.
+- #895 / PR #922 established strict fail-closed Relation mutation preflight and rollback-safe compatibility projection for Bookmark Image writes.
+- #896 / PR #908 established first-run canonical Images masonry Gallery defaults without resetting user View customization.
+- #945 / #947 established canonical Person identity and Person -> `Profile Image` Relation.
+- #948 / PR #973 moved People profile imagery/mutations to canonical Image/Relation behavior.
+- #981 retired the now caller-zero legacy Photo picker.
+- Legacy `Photos`, `bookmark_photos`, `Person.profilePhotoId`, `photo_object_links` and selected compatibility reads remain until caller-zero proof, navigation retirement, preservation validation and any separate destructive-schema decision.
 
-### Remaining legacy boundary
-- Post-#930 production caller audit finds `photo_database_picker.dart` used by **People profile-photo selection only**. Bookmark detail/create no longer use it.
-- `Person.profilePhotoId` remains a direct legacy Photo reference, and `PeopleManagementPage` still resolves/chooses profile images through `PhotoRecord` + `photo_database_picker.dart`.
-- There is currently no canonical Person Object/Relation identity contract on main. Do **not** invent a second Person->Image mapping inside Lane D merely to remove `profilePhotoId`; sequence that migration with the lane that owns Person/Object identity.
-- `PhotoManagementPage` still owns legacy Photo import plus legacy title/note/tag/image-edit presentation. It cannot be deleted while People profile photos still require legacy Photo supply and until explicit presentation parity/caller-zero is proven.
+## Active slice — #941 / PR #1002
+Goal: compose the existing canonical `ObjectImageDetailPanel` into the real shared `ObjectInspectorPage` without creating another preview/edit path.
 
-Compatibility warning: do not remove `Photos`, `Person.profilePhotoId`, `PhotoManagementPage`, `photo_database_picker.dart`, `photo_object_links` or compatibility bridge rules until replacement parity/caller-zero is explicit. `CoreObjectBridge` also preserves a special relative-path/no-profile-root compatibility rule; do not mechanically replace it with ordinary filesystem-existence semantics.
+Branch: `feature/primitives-image-inspector-941-v2`.
 
-## MIME/content routing — #495 completed
-`PrimitiveObjectImportService` remains the canonical ambiguous-file decision boundary:
-1. validate a real regular-file source;
-2. classify once with `strong content signature > meaningful declared MIME > extension fallback`;
-3. invoke exactly one Image/File importer;
-4. never fall through after the selected importer fails.
+Current branch commits from this run:
+- production composition already present: canonical Image-only panel, `CanonicalImageEditService.fromStores(...)`, active path resolver/ObjectStore reuse, metadata refresh after edits, privacy-safe edit/reload failure messages;
+- `5754441a3ce44aed7c5bd7623dc478bee93cd99a` — replace `pumpAndSettle()` in existing Image Inspector editability coverage with bounded readiness pumping and unmount-before-DB-close cleanup;
+- `56e4f0ff9fced2d077c94ee925e46f1287397960` — apply the same bounded readiness strategy to the focused native/legacy/custom Image Inspector integration regression.
 
-Current behavior includes:
-- supported image content routes to canonical Image even with misleading extension;
-- non-image/unknown safe content routes to canonical File;
-- explicit Image/File target pickers fail before mutation when selected content belongs to the other primitive;
-- content-classified Image import uses a codec-appropriate managed extension while preserving source filename provenance;
-- File picker and Relation target quick-create reuse the same routing boundary;
-- no raw user path belongs in ordinary diagnostics.
+Why the test change is required:
+- CI #2932 test-shard 0 failed deterministically on first pass and identical rerun because `object_inspector_image_editing_test.dart` waited for the entire widget tree to settle after the Image panel introduced asynchronous preview/edit-availability state and progress animation;
+- the regression needs to wait only for the specific Inspector state under assertion, not for every descendant animation to become globally idle;
+- assertions are preserved: canonical Image title/Note editability, legacy-mirror read-only behavior, canonical panel presence, and custom Image-like ObjectType exclusion remain explicit.
 
-#495 is closed/completed. Reopen only if a concrete real import entry point is found to bypass the shared classifier contract; do not extend the routing architecture speculatively.
+## Tooling dependency status
+#999 / PR #1003 is **resolved and merged**.
 
-## Canonical File — integrated state
-Canonical File is production-capable with managed/Vault-relative identity, original filename, strict MIME/content type, extension/size/import timestamp/SHA-256 metadata, typed ownership, open/reveal/export, missing-file-safe projection, PDF metadata/preview/text capabilities, shared-reference-aware deletion, real generic File collection import and Object Inspector presentation.
+- PR #1003 Flutter CI #2936: full green.
+- Squash merge: `8e466f3dcbb8fdb8bb22fdffbed59d4ab07f3b13`.
+- Normal changed-Dart formatting is now hunk-aware for existing tracked files, so a patch-sized change to historically unformatted `object_inspector_page.dart` no longer requires unrelated broad formatter churn.
+- New/untracked Dart files and explicit repository-wide format checks remain strict whole-file checks.
 
-Key integrated slices include #512, #528, #553, #557, Lane F #750/#771, #778, #788, #794, #798, #804, #824, #830, #834, #837, #841, #853 and #862. File identity remains stored-path based; SHA-256 is metadata, not implicit identity/delete authority.
-
-## Weblink / Tag
-- Weblink has normalized identity/reuse, fail-soft enrichment, Representative/Related Images through canonical Relations, shared visual resolution and native actions. Continue #155 only for concrete generic presentation or caller-zero compatibility work.
-- Tag remains canonical Object storage with hierarchy through canonical self-Relation. Do not invent parallel tag-edge storage or native uniqueness semantics without an explicit product decision.
-
-## Validation / environment
-- Recent #245 validation: #869 CI #2649, #876 #2677, #879 #2674, #881 #2710, #889 #2717, #892 #2730, #901 #2747, #914 #2759, #921 #2774, Relation #922 #2793 and #930 #2806 all completed successfully before their respective merges.
+## Validation / CI
 - Local Flutter/Dart execution is unavailable in this connector runtime; GitHub Actions is the executable validation source.
+- PR #1002 CI #2932 before the test fix:
+  - shared-hotspot overlap audit: pass;
+  - maintainability guards: pass;
+  - legacy dependency guard: pass;
+  - presentation-error privacy guard: pass;
+  - old whole-file format gate: fail due pre-existing Inspector formatter drift;
+  - test-shard 3/4: pass;
+  - test-shard 0/4: deterministic `pumpAndSettle()` timeout in existing `object_inspector_image_editing_test.dart` on first pass and rerun.
+- Current meaningful head: `56e4f0ff9fced2d077c94ee925e46f1287397960`.
+- CI #2940 was triggered for the bounded-pump test fix; because #1003 merged after that run was queued, the next meaningful checkpoint on this branch must be validated against current main `8e466f3dcbb8fdb8bb22fdffbed59d4ab07f3b13` before #1002 leaves draft.
 
 ## Current hotspot / concurrency state
-Latest audited main when this handoff was refreshed: `ec27e886519e9d1af31ba551e91533687294dcab`.
+Latest audited main: `8e466f3dcbb8fdb8bb22fdffbed59d4ab07f3b13`.
 
-At this checkpoint GitHub reported no open PRs. Treat that only as a snapshot: always re-audit live PR ownership immediately before editing shared hotspots.
+Live open PR audit at this checkpoint:
+- #1002 — Lane D, `lib/views/object_inspector_page.dart` plus focused Image Inspector tests; this is the active Inspector hotspot lease.
+- #997 — Lane C, patch-sized `app_shell.dart` command-palette work; no Inspector overlap.
+- #990 — Lane G, `app_database.dart` Person legacy Photo mutation narrowing; no Inspector overlap.
 
-Shared hotspots requiring a fresh lease audit include `PhotoManagementPage`, `PeopleManagementPage`, `bookmark_create_dialog.dart`, `app_database.dart`, `app_shell.dart`, `generic_database_page.dart` and Object/Relation core files.
+No other open PR currently owns `object_inspector_page.dart`. Re-audit live state before further hotspot edits.
 
 ## Exact next actions
-1. #245 People dependency: coordinate an explicit canonical Person identity/Relation contract before migrating `Person.profilePhotoId`. Do not invent Lane-D-only Person->Image persistence.
-2. Audit PhotoManagement legacy-only features (new Photo import, title/note/tags, image editing/deletion) against canonical Images. Retire only features with proven canonical parity and no People dependency.
-3. Keep compatibility projection/import paths fail-closed and preserve #922 Relation integrity preflight for every Bookmark Image writer.
-4. Once Person profile-photo parity exists, re-audit `photo_database_picker.dart`, `PhotoManagementPage`, `Photos` and `photo_object_links` for true caller-zero retirement.
-5. Continue #155 only for concrete Weblink presentation/caller-zero work if #245 is blocked on Person identity.
+1. Read CI #2940 and distinguish old-base format failure from D-owned test/analyze failures.
+2. Ensure a meaningful current-main validation run exists after #1003 integration; use the required handoff/PR metadata checkpoint rather than a no-op CI trigger.
+3. Fix any D-owned Analyze/test failure without broad Inspector formatting or unrelated refactoring.
+4. When format + Analyze + all four Flutter Test shards are green on current main, mark PR #1002 ready and merge it.
+5. Close #941 only after merged-current-main verification, then update #245 to remove #941/#999 as active blockers.
+6. Re-audit #245/#155 and live PR ownership for the next D-owned concrete slice; do not perform Lane C navigation retirement or Lane G caller-zero deletion from D.
 
-## Cross-lane dependencies / blockers
-- Lane B: owns Relation integrity; #922 strict mutation preflight is a required contract for Lane D Bookmark Image writers.
-- Lane C: canonical Images first-run Gallery and shared collection presentation are on main; generic Database/View remains a shared hotspot.
-- Lane F: Vault copy/ownership/rollback/delete boundaries are on main; no generic File blocker is active.
-- Lane E: owns Search persistence/reconciliation; Lane D should emit primitive/domain facts only, never write FTS directly.
-- Person/Object identity: current blocker for fully removing `Person.profilePhotoId` / People’s legacy Photo picker. Coordinate before inventing a new Person->Image persistence path.
+## Cross-lane dependencies
+- Lane B: preserve #895/#922 strict Relation mutation preflight for every Bookmark Image writer.
+- Lane C: #949 owns making canonical `Images` the single normal user-facing collection/navigation surface; final legacy `写真` navigation retirement waits for #941 merge.
+- Lane G: #999 is complete; #950 owns behavior-preserving caller-zero legacy Photo cleanup after product parity.
+- Lane F: #951 owns final real-macOS/Vault preservation validation before the #245 umbrella can close.
+- Lane E: owns Search persistence/reconciliation; Lane D emits primitive facts and does not write FTS directly.
 
-## Run checkpoint
-Latest Lane D production merge: #930, squash merge `63760af94358945d8ca83d8a4d2cc58245c51baf`, Flutter CI #2806 full green.
+## Known risks / boundaries
+- Do not delete legacy Photo schema/data merely because replacement UI exists.
+- Do not bypass canonical Relation APIs or shared-file edit/delete ownership checks.
+- Do not expose raw filesystem paths or exceptions in user-facing Image errors.
+- Keep the #941 patch focused; no broad refactor of `ObjectInspectorPage` in this product PR.
+- Legacy Photo mirrors may preview through canonical Image resolution but must not gain an edit-safety bypass.
 
-Immediately preceding Lane D production merge: #921, squash merge `2b5500957f58c41a12a9ae1c6c02bfc71343f4a8`, Flutter CI #2774 full green.
-
-Cross-lane integrity prerequisite on main: Relation #922 / #895, squash merge `bc09381b9eb77dee6b4ef12a94e7b9c06bc86c36`, Flutter CI #2793 full green.
-
-#495 is complete. #245 is now primarily a People/profile-photo and residual Photo-presentation retirement problem rather than a Bookmark Image Relation/import problem.
+## Current run state
+Work is **in progress**, not stopped. The immediate checkpoint is current-main CI validation for PR #1002 after the bounded-readiness test fix and the merged #1003 format-guard dependency.
