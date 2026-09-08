@@ -1,11 +1,10 @@
 import 'dart:developer' as developer;
 
-import 'package:drift/drift.dart' show Variable;
-
 import '../services/bookmark_metadata_service.dart';
 import '../services/generic_database_file_import_service.dart';
 import '../services/generic_database_image_import_service.dart';
 import '../services/image_managed_file_deletion_policy.dart';
+import '../services/legacy_photo_image_deletion_service.dart';
 import '../services/photo_storage_service.dart';
 import '../services/relation_target_quick_create_host_service.dart';
 import '../services/remote_image_storage_service.dart';
@@ -145,6 +144,11 @@ class GenericDatabasePageServices {
         database: genericStore.database,
         objectStore: objectStore,
         photoStorage: photoStorage,
+      ),
+      legacyPhotoDeletion: LegacyPhotoImageDeletionService(
+        database: genericStore.database,
+        objectStore: objectStore,
+        systemObjects: systemObjects,
       ),
     );
     final viewStore = DatabaseViewStore(genericStore.database);
@@ -333,18 +337,9 @@ class GenericDatabasePageServices {
   final ObjectBoardMoveService boardMoveService;
 }
 
-/// Stable user-facing boundary when a generic Images host tries to delete an
-/// Image still participating in the legacy Photo compatibility lifecycle.
-class LegacyPhotoCompatibilityImageDeletionException implements Exception {
-  const LegacyPhotoCompatibilityImageDeletionException();
-
-  @override
-  String toString() =>
-      'この画像は従来の写真との互換同期で使用されています。写真管理から削除してください。';
-}
-
 /// Keeps the generic page's existing Relation-safe Object deletion API while
-/// layering Object-owned managed-Image file cleanup at the composition boundary.
+/// layering Object-owned managed-Image file cleanup and the explicit legacy
+/// Photo compatibility deletion seam at the composition boundary.
 /// Relation semantics stay delegated to [RelationMutationService].
 class _GenericDatabaseRelationMutationService extends RelationMutationService {
   _GenericDatabaseRelationMutationService({
@@ -354,6 +349,7 @@ class _GenericDatabaseRelationMutationService extends RelationMutationService {
     required this.systemObjects,
     required this.photoStorage,
     required this.imageDeletionPolicy,
+    required this.legacyPhotoDeletion,
   }) : super(
           objectStore: objectStore,
           bidirectionalStore: bidirectionalStore,
@@ -363,6 +359,7 @@ class _GenericDatabaseRelationMutationService extends RelationMutationService {
   final SystemObjectStore systemObjects;
   final PhotoStorageService photoStorage;
   final ImageManagedFileDeletionPolicy imageDeletionPolicy;
+  final LegacyPhotoImageDeletionService legacyPhotoDeletion;
 
   @override
   Future<void> deleteObject({
@@ -370,34 +367,46 @@ class _GenericDatabaseRelationMutationService extends RelationMutationService {
     required int objectTypeId,
     required int objectId,
   }) async {
-    await _ensureImageDeletionAllowed(
+    final legacyPhotoId = await legacyPhotoDeletion.mappedPhotoIdForDeletion(
       workspaceId: workspaceId,
       objectTypeId: objectTypeId,
       objectId: objectId,
     );
 
     String? managedFileToDelete;
-    try {
-      managedFileToDelete = await _managedImageCleanupCandidate(
+    if (legacyPhotoId == null) {
+      managedFileToDelete = await _optionalManagedImageCleanupCandidate(
         workspaceId: workspaceId,
         objectTypeId: objectTypeId,
         objectId: objectId,
       );
-    } catch (_) {
-      // File ownership is an optional destructive-cleanup audit. Never make an
-      // otherwise valid Object deletion fail because ownership cannot be proven.
-      managedFileToDelete = null;
+      await super.deleteObject(
+        workspaceId: workspaceId,
+        objectTypeId: objectTypeId,
+        objectId: objectId,
+      );
+    } else {
+      // The Photo row can otherwise recreate this canonical Image on the next
+      // compatibility sync. Remove both database identities atomically, while
+      // preserving RelationMutationService as the canonical detach/delete path.
+      await genericStore.database.transaction(() async {
+        await legacyPhotoDeletion.deletePhotoCompatibilityRow(legacyPhotoId);
+        managedFileToDelete = await _optionalManagedImageCleanupCandidate(
+          workspaceId: workspaceId,
+          objectTypeId: objectTypeId,
+          objectId: objectId,
+        );
+        await super.deleteObject(
+          workspaceId: workspaceId,
+          objectTypeId: objectTypeId,
+          objectId: objectId,
+        );
+      });
     }
-
-    await super.deleteObject(
-      workspaceId: workspaceId,
-      objectTypeId: objectTypeId,
-      objectId: objectId,
-    );
 
     if (managedFileToDelete == null) return;
     try {
-      await photoStorage.deleteManagedPhoto(managedFileToDelete);
+      await photoStorage.deleteManagedPhoto(managedFileToDelete!);
     } catch (_, stackTrace) {
       // The canonical Object is already deleted successfully. A secondary file
       // cleanup failure must not turn that completed deletion into a UI error.
@@ -412,68 +421,21 @@ class _GenericDatabaseRelationMutationService extends RelationMutationService {
     }
   }
 
-  Future<void> _ensureImageDeletionAllowed({
+  Future<String?> _optionalManagedImageCleanupCandidate({
     required int workspaceId,
     required int objectTypeId,
     required int objectId,
   }) async {
-    final objectType = await objectStore.getObjectType(objectTypeId);
-    if (objectType == null || objectType.workspaceId != workspaceId) return;
-    final systemKey = await systemObjects.systemKeyForObjectType(objectTypeId);
-    if (systemKey != ImageObjectService.systemKey) return;
-
-    if (await _isActiveLegacyPhotoTarget(
-      workspaceId: workspaceId,
-      objectId: objectId,
-    )) {
-      throw const LegacyPhotoCompatibilityImageDeletionException();
-    }
-
-    final legacyIdProperties = objectType.properties
-        .where((property) => property.name == 'Legacy Photo ID')
-        .toList(growable: false);
-    if (legacyIdProperties.length > 1) {
-      throw const LegacyPhotoCompatibilityImageDeletionException();
-    }
-    if (legacyIdProperties.isEmpty) return;
-
-    final objects = await objectStore.listObjects(objectTypeId);
-    for (final object in objects) {
-      if (object.id != objectId) continue;
-      if (object.values[legacyIdProperties.single.id] != null) {
-        throw const LegacyPhotoCompatibilityImageDeletionException();
-      }
-      return;
-    }
-  }
-
-  Future<bool> _isActiveLegacyPhotoTarget({
-    required int workspaceId,
-    required int objectId,
-  }) async {
     try {
-      final table = await systemObjects.database.customSelect(
-        '''SELECT 1 AS present
-           FROM sqlite_master
-           WHERE type = 'table' AND name = ?
-           LIMIT 1''',
-        variables: const [Variable<String>('photo_object_links')],
-      ).getSingleOrNull();
-      if (table == null) return false;
-
-      final mapping = await systemObjects.database.customSelect(
-        '''SELECT 1 AS present
-           FROM photo_object_links
-           WHERE workspace_id = ? AND object_id = ?
-           LIMIT 1''',
-        variables: [Variable<int>(workspaceId), Variable<int>(objectId)],
-      ).getSingleOrNull();
-      return mapping != null;
+      return await _managedImageCleanupCandidate(
+        workspaceId: workspaceId,
+        objectTypeId: objectTypeId,
+        objectId: objectId,
+      );
     } catch (_) {
-      // This audit protects a destructive user action. If compatibility
-      // ownership cannot be read safely, retain the Image and expose the same
-      // stable product boundary rather than leaking a database exception.
-      return true;
+      // File ownership is an optional destructive-cleanup audit. Never make an
+      // otherwise valid Object deletion fail because ownership cannot be proven.
+      return null;
     }
   }
 

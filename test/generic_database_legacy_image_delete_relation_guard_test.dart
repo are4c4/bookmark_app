@@ -14,9 +14,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test(
-    'blocked legacy Image deletion preserves Bookmark Relations and backlinks',
-    () async {
+  test('legacy Image deletion detaches Bookmark Relations and backlinks', () async {
       final database = AppDatabase.forTesting(NativeDatabase.memory());
       addTearDown(database.close);
       final workspaceId = await WorkspaceStore(database).initialize();
@@ -158,20 +156,41 @@ void main() {
 
       await expectRelationsPreserved();
 
-      await expectLater(
-        pageServices.relationMutations.deleteObject(
-          workspaceId: workspaceId,
-          objectTypeId: imageType.id,
-          objectId: imageObjectId,
-        ),
-        throwsA(isA<LegacyPhotoCompatibilityImageDeletionException>()),
-      );
+    await pageServices.relationMutations.deleteObject(
+      workspaceId: workspaceId,
+      objectTypeId: imageType.id,
+      objectId: imageObjectId,
+    );
 
-      expect(
-        (await objectStore.listObjects(imageType.id)).map((object) => object.id),
-        contains(imageObjectId),
-      );
-      await expectRelationsPreserved();
-    },
-  );
+    expect(
+      (await objectStore.listObjects(imageType.id)).map((object) => object.id),
+      isNot(contains(imageObjectId)),
+    );
+    expect(
+      await database
+          .customSelect('SELECT id FROM photos WHERE id = $photoId')
+          .get(),
+      isEmpty,
+    );
+    final outgoingAfterDelete = await reads.outgoing(
+      sourceObjectTypeId: bookmarkType.id,
+      sourceObjectId: bookmarkObjectId,
+    );
+    expect(
+      outgoingAfterDelete.where(
+        (item) =>
+            item.property.id == imagesProperty.id ||
+            item.property.id == coverProperty.id,
+      ),
+      isEmpty,
+    );
+    expect(
+      await reads.backlinks(
+        workspaceId: workspaceId,
+        targetObjectId: imageObjectId,
+      ),
+      isEmpty,
+    );
+    expect((await integrity.auditWorkspace(workspaceId)).isHealthy, isTrue);
+  });
 }
