@@ -8,25 +8,24 @@ Own physical data-location lifecycle, Vault portability/recovery, filesystem-lev
 ## Current status — 2026-09-08
 Lane F is active on **#951 — final Photo -> Image Vault/data-preservation validation**, coordinated with the remaining real-macOS checks in **#242**.
 
-Latest repository audit is based on `main` `10bae52808a0176a94163228d348c988de516498`:
-- **#949 is completed/closed.** PR #1015 merged as `5f03dccc55e9333c51ce3db2a2e8d8f6f2216f0f`, so canonical `画像` is now the single normal user-facing image collection and legacy `写真` AppShell navigation is retired.
+Latest repository audit is based on `main` `dc9a330896bb79b146b692b47b7fd38464311995`:
+- **#949 is completed/closed.** Canonical `画像` is the single normal user-facing image collection and legacy `写真` AppShell navigation is retired.
 - **#941 is completed/closed.** Shared Object Inspector canonical Image preview/edit parity is integrated.
-- **#950 remains active, but its current product-retirement gate is integrated.** PR #1019 merged as `10bae52808a0176a94163228d348c988de516498`, deleting the caller-zero `PhotoManagementPage` implementation while explicitly preserving Photo schema/data, `bookmark_photos`, `photo_object_links`, Person legacy photo data, Vault files, migrations, backup/import/export behavior and Storage policy.
+- **#950 remains active, but the product-retirement gate required by F is integrated.** `PhotoManagementPage` is caller-zero and deleted; later G cleanup continues to preserve Photo schema/data, Vault files, migrations and backup/import/export compatibility.
+- **#1021 is D-owned.** Draft PR #1025 adds safe canonical deletion for legacy-mirrored Images. It reuses the existing Storage ownership/deletion boundary and does not create a new F implementation obligation unless a concrete filesystem defect is found.
 - **#242 implementation remains complete.** Only real-macOS Create/Open/Switch/Move/Recovery validation remains.
 - **#897 and #218 remain completed/closed.** Legacy Photo physical deletion is Vault-safe, and macOS packaging/real-Mac launch/data preservation has already been validated.
 
-The repository-side prerequisite for the final #951 preservation pass is now effectively released: canonical Images own normal product navigation/detail, and the legacy Photo management UI is caller-zero and removed. Remaining #950 refactor work must continue to preserve migration/Vault compatibility but does not block starting #951.
+The repository-side prerequisite for the final #951 preservation pass is released. Remaining closure work is the actual real-macOS preservation exercise plus any regression-backed defect found by that pass.
 
-## Active implementation — read-only Vault preservation manifest
-Branch: `feature/storage-vault-preservation-manifest-951`
+## Integrated validation tooling — #1026
+PR #1026 `Add read-only Vault preservation manifest tool` is squash-merged as `dc9a330896bb79b146b692b47b7fd38464311995` after Flutter CI #3004 passed Analyze, all four Flutter Test shards, test-health and merge-gate. Both AI coordination audits were green.
 
-Goal: make the final #242/#951 real-machine preservation pass reproducible and machine-checkable without changing production Vault semantics.
-
-Added:
+Integrated files:
 - `tool/vault_preservation_manifest.py`
 - `tool/vault_preservation_manifest_test.py`
 - `docs/vault_preservation_validation.md`
-- one patch-sized CI diagnostic-test invocation in `.github/workflows/flutter_ci.yml`
+- one diagnostic-test invocation in the existing Flutter CI quality job
 
 The helper is deliberately read-only with respect to the inspected Vault:
 - rejects a Vault root that is a symlink/file;
@@ -37,29 +36,41 @@ The helper is deliberately read-only with respect to the inspected Vault:
 - recursively inventories `photos/` and `attachments/` using `lstat` and never follows symlinks;
 - hashes every regular managed file with SHA-256 and records size;
 - detects missing, changed, type-changed and unexpected managed entries;
-- writes the manifest only to an explicitly supplied location outside the Vault;
-- canonicalizes the output path so a symlinked parent cannot redirect the manifest back inside the Vault;
-- supports `--allow-profile-id-change` for Duplicate/backup-restore flows where a new Vault identity is expected;
-- keeps unexpected additions strict by default; `--allow-extra` is explicit and should only be used when the validation operation intentionally creates managed files.
+- writes manifests only outside the inspected Vault, including protection against a symlinked output parent redirecting back into the Vault;
+- supports `--allow-profile-id-change` for Duplicate/backup-restore flows;
+- keeps unexpected additions strict by default through explicit `--allow-extra`.
 
-Privacy note: manifests may contain relative managed filenames and literal symlink target strings. Keep them local; GitHub comments should contain only the pass/fail summary or deliberately redacted failure details.
+Privacy note: manifests are local diagnostics and may contain relative filenames or literal symlink targets. Do not attach raw manifests publicly.
 
-Validation coverage currently includes:
-1. SQLite quick-check + managed-file hashing.
-2. invalid Vault v1 metadata rejection.
-3. unchanged comparison success.
-4. changed/missing managed-file detection.
-5. optional profile-id change for Duplicate/restore.
-6. symlink observation without traversal.
-7. symlink database rejection.
-8. symlink Vault-root rejection.
-9. direct manifest-output-inside-Vault rejection.
-10. symlink-parent manifest-output redirection rejection.
+## Active follow-up — database path-reference preservation
+Branch: `feature/storage-vault-path-reference-manifest-951`
+Baseline: `main` `dc9a330896bb79b146b692b47b7fd38464311995`
 
-The Python regression is wired into the existing `Developer workflow diagnostic tests` CI step so the repository's normal full gate validates it.
+The first manifest slice proves SQLite integrity and exact managed bytes, but #242 also requires persisted Photo/attachment references to survive Move correctly. The current follow-up extends the same read-only helper rather than changing production storage semantics.
+
+Implemented on the branch:
+- snapshot `photos.path` and `bookmark_attachments.path` from SQLite read-only;
+- classify each persisted path as Vault-owned or external absolute;
+- normalize Vault-owned paths to one canonical relative identity;
+- allow the expected legacy source-Vault absolute -> portable relative representation change after Move when both resolve to the same Vault-relative identity;
+- require external absolute path text to remain exactly unchanged;
+- detect missing/retargeted/unexpected database path references;
+- reject relative `..` traversal instead of normalizing it into an apparently valid Vault identity;
+- count persisted path references/external references in snapshot summaries;
+- keep compatibility with manifests created by the first #1026 helper version by skipping path-reference comparison only when the *before* manifest predates the field.
+
+Focused regression coverage on this branch adds:
+1. database Photo/attachment path snapshotting;
+2. Vault-contained absolute -> equivalent relative Move rebase acceptance;
+3. exact external absolute path text preservation;
+4. missing database path-reference detection;
+5. traversing relative path rejection;
+while retaining the ten #1026 safety/integrity regressions.
+
+No production Dart/Vault behavior is changed. The branch does not edit `profile_manager.dart`, `settings_page.dart`, `app_database.dart`, AppShell, Image/Relation services or primitive hosts.
 
 ## #951 — final Photo -> Image preservation matrix
-The repository state is now ready for the real app/macOS pass. Verify:
+The repository state is ready for the real app/macOS pass. Verify:
 1. existing legacy Photos promoted to canonical Images still resolve after restart;
 2. existing Bookmark `Images` / `Cover Image` media migrated from Photo data still renders after restart;
 3. existing Person profile Images still render after restart;
@@ -70,7 +81,7 @@ The repository state is now ready for the real app/macOS pass. Verify:
 8. missing/offline Vault behavior remains fail-closed and does not manufacture an empty replacement data set;
 9. Duplicate/reopen/backup-restore does not lose Image/Photo mapping required for migration compatibility.
 
-Use the preservation manifest before/after filesystem-sensitive operations to verify SQLite integrity and exact managed-file bytes. The helper does **not** replace the manual semantic/UI checks above.
+Use the preservation manifest before/after filesystem-sensitive operations. After the active path-reference follow-up integrates, it will verify not only SQLite integrity and exact managed bytes but also the persisted legacy Photo/Bookmark attachment path-rebasing contract. Object/Relation/UI meaning still requires the manual semantic checks above.
 
 ## Vault lifecycle (#242)
 The production lifecycle remains integrated:
@@ -122,29 +133,28 @@ Do not infer generic File ownership from path location alone. Lane D owns Image/
 - #951 validation must not delete legacy schema/data; any destructive schema retirement is a separate explicit migration decision.
 
 ## Cross-lane boundaries / concurrency
-- Lane D owns Image/Photo/File identity, promotion/mapping, MIME/content routing and user-facing primitive semantics.
+- Lane D owns Image/Photo/File identity, promotion/mapping, MIME/content routing and user-facing primitive semantics. #1021/#1025 remain D-owned.
 - Lane B owns Relation mutation/index/delete integrity.
 - Lane C completed #949 and owns no remaining legacy `写真` navigation work.
-- Lane G owns further #950 caller-zero compatibility deletion. #1019 is integrated and changed no Vault/Storage behavior.
-- Lane F owns byte placement, portable paths, Vault lifecycle/recovery, physical-delete safety, and #951 preservation validation/tooling.
+- Lane G owns further #950 caller-zero compatibility deletion. Open PR #1028 touches `app_database.dart`; the current F branch does not touch that hotspot.
+- Lane F owns byte placement, portable paths, Vault lifecycle/recovery, physical-delete safety and #951 preservation validation/tooling.
 
-Current F branch does not edit `profile_manager.dart`, `settings_page.dart`, `app_database.dart`, AppShell or primitive hosts. The only shared CI file edit is one non-overlapping diagnostic-test line after G PR #1017 merged.
+The active F branch changes only the preservation helper/tests/guide/handoff. Shared hotspot lease: none.
 
 ## Current checkpoint / validation
-- baseline refreshed to main `10bae52808a0176a94163228d348c988de516498` after #1019 merged;
-- current branch: `feature/storage-vault-preservation-manifest-951`;
-- PR: #1026 `Add read-only Vault preservation manifest tool`;
-- current branch includes the read-only manifest helper, ten focused Python regressions, validation guide, and CI invocation;
-- CI #2999 proved the initial nine-test helper suite executed successfully in `Developer workflow diagnostic tests`; a follow-up safety review added explicit Vault v1 metadata validation plus the tenth regression, now awaiting the latest full CI run;
-- production app/Vault behavior changed: **none**;
+- #1026 merged as `dc9a330896bb79b146b692b47b7fd38464311995` after Flutter CI #3004 full green;
+- current branch: `feature/storage-vault-path-reference-manifest-951`;
+- production app/Vault behavior changed on current branch: **none**;
 - migration/data impact: **none**;
-- shared hotspot lease: **none**.
+- shared hotspot lease: **none**;
+- path-reference normalization/comparison logic was prototyped against temporary SQLite Vaults before repository update: managed source absolute -> target relative compared cleanly; changed external target was detected;
+- normal repository CI remains the authoritative validation for the committed branch.
 
 ## Next actions
-1. Integrate PR #1026 after the latest normal CI proves all ten Python regressions plus Analyze/full Flutter Test remain green.
-2. Run the combined #951 + #242 real-macOS preservation matrix using `docs/vault_preservation_validation.md`, retaining the source Vault throughout destructive-looking Move/recovery exercises.
+1. Open and integrate the focused path-reference manifest PR after normal CI proves the expanded Python regression plus Analyze/full Flutter Test green.
+2. Run the combined #951 + #242 real-macOS preservation matrix using `docs/vault_preservation_validation.md`, retaining the source Vault throughout Move/recovery exercises.
 3. Record filesystem/Vault results on #242 and Photo -> Image semantic-preservation results on #951.
 4. If a reproducible filesystem/Vault defect appears, create/follow a focused Lane F Issue and add a regression-backed fix. Otherwise close #242/#951 once the real-machine criteria are confirmed.
 
 ## Stop condition
-Do not stop merely because the validation-tool PR is opened or CI is pending. Continue with any independent F-owned work. Once the helper is integrated, no known repository-side dependency remains for #951; the remaining closure work requires actual real-macOS app/Vault interaction, which is the legitimate remaining boundary if no defect is found.
+Do not stop merely because a validation-tool PR is opened or CI is pending. Continue with independent F-owned work when present. After the path-reference helper is integrated, no known repository-side F implementation obligation remains; the remaining closure boundary is actual real-macOS app/Vault interaction unless that validation exposes a concrete defect.

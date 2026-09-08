@@ -2,7 +2,8 @@
 
 This guide supports the final real-macOS preservation checks in #242 and #951.
 It complements the user-visible validation matrix with a read-only manifest of the
-Vault's SQLite integrity and managed file bytes.
+Vault's SQLite integrity, managed file bytes, and persisted Photo/attachment path
+references.
 
 ## Safety rules
 
@@ -15,10 +16,10 @@ Vault's SQLite integrity and managed file bytes.
   or backed up.
 - The helper opens `database.sqlite` read-only and never writes into the Vault.
 - Managed-directory symlinks are recorded but never followed.
-- Manifest files may contain relative managed filenames and literal symlink target
-  strings. Treat them as local diagnostic data; do not attach a raw manifest to a
-  public Issue/PR. Report only the command result and any deliberately redacted
-  failure summary.
+- Manifest files may contain relative managed filenames, persisted absolute path
+  references, and literal symlink target strings. Treat them as local diagnostic
+  data; do not attach a raw manifest to a public Issue/PR. Report only the command
+  result and any deliberately redacted failure summary.
 
 ## What the helper verifies
 
@@ -31,12 +32,24 @@ Vault's SQLite integrity and managed file bytes.
 - the database size/SHA-256 for diagnostics;
 - every entry beneath `photos/` and `attachments/` without following symlinks;
 - regular managed-file size and SHA-256;
-- missing, changed, type-changed, removed, or unexpectedly added managed entries.
+- persisted `photos.path` and `bookmark_attachments.path` references;
+- whether each persisted path is Vault-owned or an external absolute reference;
+- one canonical Vault-relative identity for managed paths so a legacy absolute
+  source path and the expected portable relative target path compare equal after
+  Move;
+- exact text preservation for external absolute references;
+- missing, changed, type-changed, removed, or unexpectedly added managed entries
+  and database path references.
 
 The comparison deliberately does **not** require identical SQLite bytes. Reopen,
 migration, and proven path-rewrite flows may legitimately change database bytes;
-SQLite `quick_check` is the storage-integrity gate while the app/UI checks below
-verify semantic preservation.
+SQLite `quick_check` is the storage-integrity gate. Likewise, a Vault-contained
+legacy absolute Photo/attachment path may legitimately become the equivalent
+portable relative path after Move. External absolute references, however, must
+remain unchanged.
+
+The helper rejects relative database path references that traverse outside the
+Vault rather than normalizing them into an apparently valid identity.
 
 ## Snapshot before an operation
 
@@ -48,8 +61,9 @@ python3 tool/vault_preservation_manifest.py snapshot \
   --output /tmp/bookmark-vault-before.json
 ```
 
-A successful snapshot prints `SQLite quick_check: ok` plus the number of managed
-files hashed.
+A successful snapshot prints `SQLite quick_check: ok`, the number of managed files
+hashed, the number of database path references recorded, and the count of external
+absolute references.
 
 ## Snapshot after restart/open/switch/move
 
@@ -67,8 +81,10 @@ python3 tool/vault_preservation_manifest.py compare \
 ```
 
 For a pure restart/open/switch/move preservation check, the strict comparison is
-preferred. It fails if managed entries disappear, change bytes/type, or appear
-unexpectedly.
+preferred. It fails if managed entries disappear/change, if database Photo or
+attachment references disappear/retarget, or if an external absolute reference is
+rewritten. A managed source-Vault absolute path may become its equivalent relative
+stored path without failing the comparison.
 
 ## Duplicate / backup-restore
 
@@ -83,12 +99,12 @@ python3 tool/vault_preservation_manifest.py compare \
 ```
 
 Use `--allow-extra` only when the validation flow intentionally created new
-managed files between snapshots. Do not use it merely to make an unexplained
-comparison failure disappear.
+managed files/database path references between snapshots. Do not use it merely to
+make an unexplained comparison failure disappear.
 
 ## Manual semantic checks still required
 
-The manifest validates filesystem/database preservation, not Object/Relation/UI
+The manifest validates filesystem/database path preservation, not Object/Relation/UI
 meaning. For #951, still verify in the real app that:
 
 1. an existing legacy Photo promoted to a canonical Image renders after restart;
@@ -97,8 +113,9 @@ meaning. For #951, still verify in the real app that:
 4. a native canonical Image with no legacy Photo remains intact;
 5. after Vault Move, the same canonical/compatibility media resolves at the target;
 6. switching default/custom Vaults keeps their data isolated;
-7. external absolute image/file references remain external and are not copied,
-   rebased, or deleted;
+7. external absolute image/file references remain usable and external; the manifest
+   now independently checks that legacy Photo/Bookmark attachment path text was not
+   rebased;
 8. a missing/offline Vault fails closed instead of creating an empty replacement;
 9. duplicate/reopen/backup-restore preserves the Photo/Image compatibility mapping
    needed by the migration path.
