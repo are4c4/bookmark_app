@@ -32,7 +32,6 @@ class BookmarkQuery {
     this.statusFilter = '',
     this.minRating = 0,
     this.personFilterId,
-    this.photoFilterId,
     this.selectedTagIds = const {},
     this.includeDescendants = true,
     this.tagMatchMode = 'or',
@@ -45,7 +44,6 @@ class BookmarkQuery {
   final String statusFilter;
   final int minRating;
   final int? personFilterId;
-  final int? photoFilterId;
   final Set<int> selectedTagIds;
   final bool includeDescendants;
   final String tagMatchMode;
@@ -77,10 +75,6 @@ class BookmarkQuery {
       if (bookmark.rating < minRating) return false;
       if (personFilterId != null &&
           !bookmark.people.any((person) => person.id == personFilterId)) {
-        return false;
-      }
-      if (photoFilterId != null &&
-          !bookmark.photos.any((photo) => photo.id == photoFilterId)) {
         return false;
       }
       if (normalizedQuery.isNotEmpty) {
