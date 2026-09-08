@@ -16,14 +16,6 @@ class WorkspaceInfo {
   final String icon;
   final int colorValue;
   final int sortOrder;
-
-  WorkspaceInfo copyWith({String? name, String? icon, int? colorValue, int? sortOrder}) => WorkspaceInfo(
-        id: id,
-        name: name ?? this.name,
-        icon: icon ?? this.icon,
-        colorValue: colorValue ?? this.colorValue,
-        sortOrder: sortOrder ?? this.sortOrder,
-      );
 }
 
 class WorkspaceStore {
@@ -106,15 +98,6 @@ class WorkspaceStore {
     await setActiveWorkspace(activeId);
     return activeId;
   }
-
-  Stream<List<WorkspaceInfo>> watchWorkspaces() => (database.select(database.workspaces)
-        ..orderBy([
-          (workspace) => OrderingTerm.asc(workspace.sortOrder),
-          (workspace) => OrderingTerm.asc(workspace.createdAt),
-          (workspace) => OrderingTerm.asc(workspace.id),
-        ]))
-      .watch()
-      .map((rows) => rows.map(_toInfo).toList());
 
   Future<List<WorkspaceInfo>> listWorkspaces() async =>
       (await (database.select(database.workspaces)
