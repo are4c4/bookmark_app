@@ -57,11 +57,26 @@ class PersonObjectBridge {
       name: '人物',
       icon: '👤',
     );
+    _assertExistingPropertyCompatible(
+      type: type,
+      name: 'Legacy Person ID',
+      matches: _isCanonicalLegacyIdProperty,
+    );
+    _assertExistingPropertyCompatible(
+      type: type,
+      name: 'Note',
+      matches: (property) => property.type == ObjectPropertyType.text,
+    );
+
     await systemObjectStore.ensureProperty(
       objectTypeId: type.id,
       name: 'Legacy Person ID',
       type: ObjectPropertyType.number,
-      config: const {'system': true, 'hidden': true},
+      config: const <String, dynamic>{
+        'system': true,
+        'hidden': true,
+        ObjectPropertyDefinition.identityManagedConfigKey: true,
+      },
     );
     await systemObjectStore.ensureProperty(
       objectTypeId: type.id,
@@ -75,9 +90,7 @@ class PersonObjectBridge {
     ))!;
     final legacyId = _requiredProperty(refreshed, 'Legacy Person ID');
     final note = _requiredProperty(refreshed, 'Note');
-    if (legacyId.type != ObjectPropertyType.number ||
-        legacyId.config['system'] != true ||
-        legacyId.config['hidden'] != true) {
+    if (!_isCanonicalLegacyIdProperty(legacyId)) {
       throw StateError(
         'Existing system Property "Legacy Person ID" does not match the required Person identity schema.',
       );
@@ -264,6 +277,28 @@ class PersonObjectBridge {
       );
     }
   }
+
+  void _assertExistingPropertyCompatible({
+    required AppObjectType type,
+    required String name,
+    required bool Function(ObjectPropertyDefinition property) matches,
+  }) {
+    final existing = type.properties
+        .where((property) => property.name == name)
+        .toList(growable: false);
+    if (existing.isEmpty) return;
+    if (existing.length != 1 || !matches(existing.single)) {
+      throw StateError(
+        'Existing system Property "$name" does not match the required Person schema.',
+      );
+    }
+  }
+
+  bool _isCanonicalLegacyIdProperty(ObjectPropertyDefinition property) =>
+      property.type == ObjectPropertyType.number &&
+      property.config['system'] == true &&
+      property.config['hidden'] == true &&
+      property.isIdentityManaged;
 
   ObjectPropertyDefinition _requiredProperty(AppObjectType type, String name) {
     final matches = type.properties
