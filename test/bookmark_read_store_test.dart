@@ -21,7 +21,10 @@ void main() {
       path: 'photos/cover.jpg',
       title: 'Cover',
     );
-    await database.attachPhotoToBookmark(bookmarkId, photoId, asCover: true);
+    await database.customStatement(
+      'INSERT INTO bookmark_photos(bookmark_id, photo_id, is_cover) VALUES (?, ?, 1)',
+      <Object>[bookmarkId, photoId],
+    );
     await database.setBookmarkCollections(
       bookmarkId,
       const ['Zulu collection', 'alpha collection'],
