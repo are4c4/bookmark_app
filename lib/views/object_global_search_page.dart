@@ -38,6 +38,7 @@ class _ObjectGlobalSearchPageState extends State<ObjectGlobalSearchPage> {
   Timer? _debounce;
   StreamSubscription<void>? _projectionChangesSubscription;
   bool _projectionReplayScheduled = false;
+  int _searchGeneration = 0;
   List<ResolvedObjectSearchHit> _results = const <ResolvedObjectSearchHit>[];
   bool _indexing = true;
   bool _searching = false;
@@ -101,6 +102,7 @@ class _ObjectGlobalSearchPageState extends State<ObjectGlobalSearchPage> {
   }
 
   Future<void> _prepareIndex() async {
+    _searchGeneration += 1;
     if (mounted) {
       setState(() {
         _indexing = true;
@@ -139,6 +141,7 @@ class _ObjectGlobalSearchPageState extends State<ObjectGlobalSearchPage> {
     _debounce?.cancel();
     if (mounted) setState(() {});
     if (value.trim().isEmpty) {
+      _searchGeneration += 1;
       setState(() {
         _results = const <ResolvedObjectSearchHit>[];
         _searching = false;
@@ -154,6 +157,7 @@ class _ObjectGlobalSearchPageState extends State<ObjectGlobalSearchPage> {
   Future<void> _search(String rawQuery) async {
     final query = rawQuery.trim();
     if (query.isEmpty || _indexing) return;
+    final generation = ++_searchGeneration;
     if (mounted) {
       setState(() {
         _searching = true;
@@ -166,12 +170,21 @@ class _ObjectGlobalSearchPageState extends State<ObjectGlobalSearchPage> {
         rawQuery: query,
         limit: 120,
       );
-      if (!mounted || _controller.text.trim() != query) return;
+      if (!mounted ||
+          generation != _searchGeneration ||
+          _controller.text.trim() != query) {
+        return;
+      }
       setState(() {
         _results = results;
         _searching = false;
       });
     } catch (_, stackTrace) {
+      if (!mounted ||
+          generation != _searchGeneration ||
+          _controller.text.trim() != query) {
+        return;
+      }
       _recordSearchFailure('Object global search query failed.', stackTrace);
     }
   }
