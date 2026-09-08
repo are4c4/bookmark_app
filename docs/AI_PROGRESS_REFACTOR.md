@@ -5,25 +5,27 @@
 ## Current goal
 Issue #225 — reduce maintenance hotspots and retire duplicate/unused legacy paths while preserving product behavior.
 
-Primary lane: **G — Refactor & Architecture Health**. Own behavior-preserving extraction/deletion, caller-zero retirement, measurable dependency reduction, `AppDatabase` narrowing, failure/privacy policy guardrails, and incremental legacy convergence. Do not redesign Relation semantics, primitive identity/storage behavior, Search semantics, Database/View product behavior, or Vault recovery policy from this lane.
+Primary lane: **G — Refactor & Architecture Health**. Own behavior-preserving extraction/deletion, caller-zero retirement, measurable dependency reduction, `AppDatabase` narrowing, failure/privacy policy guardrails, CI/developer-loop health, and incremental legacy convergence. Do not redesign Relation semantics, primitive identity/storage behavior, Search semantics, Database/View product behavior, or Vault recovery policy from this lane.
 
 ## Active checkpoint — 2026-09-08
 
-Latest integrated `main` at this checkpoint: **`1f03e9254e49791d55f699b092b28a6d69681ddb`** (`#968`).
+Latest integrated `main` at this checkpoint: **`1c4fed0a3271f7e371fe6eac93a1b32f6669f16f`** (`#971`).
 
-Current Lane G handoff branch: **`docs/refactor-handoff-after-968`**, docs-only from the checkpoint above.
+Current Lane G handoff branch: **`docs/refactor-handoff-after-ci-971`**, docs-only from the checkpoint above.
 
-Open PR ownership at this checkpoint is docs-only outside Lane G runtime ownership:
-- #959 — Lane A handoff, `docs/AI_PROGRESS_OBJECT.md` only;
-- #956 — Lane D handoff, `docs/AI_PROGRESS_PRIMITIVES.md` only.
+At this refresh, the live open-PR audit showed:
+- #973 — Lane D People profile Image migration, runtime work;
+- #959 — Lane A handoff, docs-only;
+- #956 — Lane D handoff, docs-only.
 
 This list is time-sensitive. Re-run the open-PR audit before every non-trivial edit; do not treat this handoff as a lock on future ownership.
 
-Lane G has completed another caller-zero retirement sequence through #968. Fresh post-#968 audits found the obvious Bookmark People/Collection/Tag/engagement/read forwarders still have real production hosts, and the remaining Tag/Person-group/Photo/Attachment compatibility APIs inspected in this run are also live. Do not delete them merely because adjacent conveniences disappeared.
+Lane G has completed another caller-zero retirement sequence through #968 and a CI feedback-loop optimization sequence through #971. Fresh post-#968 audits found the obvious Bookmark People/Collection/Tag/engagement/read forwarders still have real production hosts, and the remaining Tag/Person-group/Photo/Attachment compatibility APIs inspected in this run are also live. Do not delete them merely because adjacent conveniences disappeared.
 
 ## Latest integrated Lane G checkpoints
 
 Recent integration sequence:
+- **#971 / `1c4fed0a…` — full Flutter CI keeps full coverage while reducing repeated generated-code work.** Test execution moved from three to four required shards, `lib/data/app_database.g.dart` is restored from an exact generated-code cache in test/macOS jobs, cache miss still regenerates normally, and `analyze-guards` remains authoritative with fresh Drift generation before Analyze. The cache-hit validation run #2886 was full green. Test-only elapsed times were approximately shard 0 `261s`, shard 1 `306s`, shard 2 `255s`, shard 3 `232s`; all four cache-hit jobs skipped repeated Drift generation. CI now emits shard/cache timing summaries so the next optimization is evidence-driven. No tests were dropped and no changed-files-only merge gate was introduced.
 - **#968 / `1f03e925…` — caller-zero PDF annotation list helper retired.** Removed `PdfAnnotationStore.listForAttachment(...)` after a current-main caller audit found only its definition. The live PDF viewer continues to use `watchForAttachment(...)`, `add(...)`, and `remove(...)`; its no-op `initialize()/dispose()` lifecycle calls remain because they are live and removing them would require a low-value broad viewer edit. Production diff: exactly 11 LOC deleted from one file. Flutter CI #2875 full green, including Analyze + full Test.
 - **#964 / `a547eb89…` — durable Lane G handoff and legacy inventory reconciled.** Corrected the runtime Saved View retirement state, preserved legacy Saved View tables as compatibility/migration data, recorded the completed 0/0 Database-presentation shim state, and refreshed caller-zero exclusions. Flutter CI #2870 full green.
 - **#963 / `22c94632…` — caller-zero Tag-group conveniences retired.** Removed `TagGroupStore.tagGroupIds()` and `setTagGroup(...)`; two test fixtures now use canonical `moveTag(...)`. Live `watchTagGroupIds()`, group management, move/restore, usage stats, merge/delete behavior, expansion state, Auto-organize references, and legacy Saved View tag compatibility remain. Production diff: 8 LOC deleted; test diff +2/-2. Flutter CI #2869 full green.
@@ -52,9 +54,11 @@ Current intended boundaries:
 3. Database-presentation legacy shim imports: **0 maximum**;
 4. Database-presentation re-export shim files: **0 maximum**;
 5. canonical feature-presentation caught-error interpolation: **forbidden**;
-6. legacy `lib/views` / `lib/widgets` caught-error interpolation: **forbidden; allowlist size 0**.
+6. legacy `lib/views` / `lib/widgets` caught-error interpolation: **forbidden; allowlist size 0**;
+7. merge-gate Flutter Test remains **full-suite coverage** across required shards; do not replace it with changed-files-only selection;
+8. test/macOS jobs may reuse exact generated Drift output, but Analyze must continue from a fresh generated-code pass.
 
-Never relax a numeric ceiling, recreate a compatibility shim under a new filename, or reintroduce an error-privacy allowlist entry merely to land unrelated work.
+Never relax a numeric ceiling, recreate a compatibility shim under a new filename, reintroduce an error-privacy allowlist entry, or reduce merge-gate test coverage merely to land unrelated work faster.
 
 ## Completed compatibility tracks
 
@@ -110,6 +114,15 @@ Still open and high-value:
 
 Existing progress includes `GenericDatabasePageStateLoader` and `GenericDatabasePageServices.fromWorkspaceStore(...)`. `GenericDatabasePage` remains a large conflict-prone hotspot. Do not force a broad extraction in the connector environment; prefer a patch-sized independent slice with a clear ownership window.
 
+### P1 — CI/developer feedback loop
+#971 removed repeated Drift generation from cache-hit test jobs without reducing coverage and added timing telemetry. Current measured test-only imbalance is approximately `261s / 306s / 255s / 232s`; shard 1 is the clear current tail.
+
+Next CI work should be measurement-led:
+- improve the longest-shard wall clock without changed-files-only coverage reduction;
+- prefer a simple required-shard rebalance over a hand-maintained test allowlist;
+- compare both wall-clock latency and total runner work before adding permanent matrix fan-out;
+- keep test failure diagnostics and the current full-suite correctness contract.
+
 ### P2 — dependency composition
 Continue reducing presentation reach-through such as `repository.workspaceStore.database` only when a real application boundary removes responsibility. Do not add a facade whose only purpose is forwarding one existing call.
 
@@ -137,7 +150,7 @@ Always re-check open PR changed files immediately before non-trivial edits to:
 - `lib/services/profile_manager.dart`;
 - `lib/data/app_database.dart`.
 
-At this checkpoint the visible open PRs #959/#956 are docs-only and do not touch Lane G handoff files or runtime hotspots, but that fact expires as soon as another PR opens or main advances.
+At this refresh, #973 owns People profile-image runtime files while #959/#956 are docs-only. Re-audit before relying on that ownership state; it expires as soon as another PR opens or `main` advances.
 
 ## Cross-lane boundaries
 - Lane A owns Object/ObjectType/Body and Object-owned presentation behavior.
@@ -153,6 +166,7 @@ At this checkpoint the visible open PRs #959/#956 are docs-only and do not touch
 Local Flutter/Dart execution is unavailable in the connector environment; GitHub Flutter CI is the merge gate.
 
 Recent validation checkpoints:
+- #971: Flutter CI #2886 cache-hit validation full green; all four test jobs restored generated Drift code and skipped regeneration, with test-only elapsed `261s / 306s / 255s / 232s`;
 - #968: Flutter CI #2875 full green;
 - #963: Flutter CI #2869 full green;
 - #964: Flutter CI #2870 full green;
@@ -167,18 +181,20 @@ For caller-zero deletion, a green Analyze is especially important because it cat
 
 ## Exact next actions
 1. Start from current `main`; re-read Issue #225 and live open PR ownership.
-2. Treat the obvious small G-owned Store/Repository caller-zero seam as substantially re-audited through #968. Re-open deletion work only when a fresh default-branch caller audit proves a real new candidate; do not manufacture tiny cleanups from live no-op lifecycle contracts.
-3. If no new true deletion appears, select a patch-sized `GenericDatabasePage` P1 extraction or dependency-composition slice that **removes real responsibility/reach-through**, not a pass-through facade. Proceed only with a clear hotspot ownership window and a safe editing method; whole-file connector reconstruction risk is a valid reason to defer that particular slice.
-4. Do not revisit the already-complete Database shim or broad error-privacy tracks; keep their zero guardrails intact.
-5. Keep legacy Saved View tables and Photo/Bookmark compatibility storage/reads until their migration/import/export/backup and owning-lane retirement conditions are explicitly satisfied.
-6. Continue to prefer independent small service/domain/test work if another lane leases a shared hotspot.
-7. Refresh this handoff after the next material integration checkpoint; avoid publishing transient “no open PRs” claims as durable state.
+2. Use #971 telemetry to improve the current longest test-shard tail without weakening full-suite coverage. Prefer a simple measurable shard rebalance first; keep it only if the measured critical path improves enough to justify any extra runner fan-out.
+3. Treat the obvious small G-owned Store/Repository caller-zero seam as substantially re-audited through #968. Re-open deletion work only when a fresh default-branch caller audit proves a real new candidate; do not manufacture tiny cleanups from live no-op lifecycle contracts.
+4. If no new true deletion appears, select a patch-sized `GenericDatabasePage` P1 extraction or dependency-composition slice that **removes real responsibility/reach-through**, not a pass-through facade. Proceed only with a clear hotspot ownership window and a safe editing method; whole-file connector reconstruction risk is a valid reason to defer that particular slice.
+5. Do not revisit the already-complete Database shim or broad error-privacy tracks; keep their zero guardrails intact.
+6. Keep legacy Saved View tables and Photo/Bookmark compatibility storage/reads until their migration/import/export/backup and owning-lane retirement conditions are explicitly satisfied.
+7. Continue to prefer independent small service/domain/test work if another lane leases a shared hotspot.
+8. Refresh this handoff after the next material integration checkpoint; avoid publishing transient “no open PRs” claims as durable state.
 
 ## Risks / stop conditions
 - Parallel lanes move `main` quickly; historical caller/ownership conclusions expire immediately.
 - GitHub code-search indexing can lag; prefer direct current-ref file inspection for critical caller-zero decisions.
 - Whole-file connector writes require exact-current-source preservation plus base-diff verification; do not accept unrelated formatting churn.
 - Artificial/no-op CI-trigger commits are forbidden; use workflow rerun controls or the next meaningful change.
+- CI optimization must not trade away full-suite correctness, useful failure diagnostics, or deterministic generated-code validation just to improve headline wall-clock time.
 - Small caller-zero cleanup is now relatively sparse; do not turn live APIs/no-op lifecycle contracts into churn simply to keep Lane G busy.
 
 Stop only when no independent safe Issue #225 slice remains, a genuine product/external blocker exists, an unavoidable hotspot conflict blocks the next step, validation is externally blocked with no independent work left, or the runtime/tool limit is reached. Pending CI by itself is not a stop reason.
