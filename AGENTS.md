@@ -6,275 +6,238 @@ This repository is developed with AI-assisted planning and implementation.
 
 Before changing code, read these in order:
 
-1. The active GitHub Issue and its acceptance criteria.
-2. `docs/AI_PROGRESS.md` for repository-wide integration state.
-3. The progress file for the active implementation lane:
+1. The active focused GitHub Issue and its acceptance criteria.
+2. `docs/product_architecture.md` for the durable product architecture constitution.
+3. `docs/AI_PROGRESS.md` for repository-wide integration/routing state.
+4. The progress file for the active implementation lane:
    - `docs/AI_PROGRESS_OBJECT.md` — Object Core & Body.
    - `docs/AI_PROGRESS_RELATION.md` — Relations & Data Integrity.
    - `docs/AI_PROGRESS_DATABASE_VIEW.md` — Database, View & Schema UX.
-   - `docs/AI_PROGRESS_PRIMITIVES.md` — Weblink/Image/File/Tag primitives and native media behavior.
+   - `docs/AI_PROGRESS_PRIMITIVES.md` — Weblink/Image/File native-capability Objects and media behavior.
    - `docs/AI_PROGRESS_SEARCH.md` — Search & Indexing.
    - `docs/AI_PROGRESS_STORAGE.md` — Storage, Vault & Delivery.
    - `docs/AI_PROGRESS_REFACTOR.md` — Refactor & Architecture Health.
-4. Existing code, tests, and repository documentation.
+5. Existing code, tests, and other repository documentation.
 
-`docs/AI_PROGRESS_OBJECT_RELATION.md` is legacy combined context only. New implementation runs should not use it as their primary writable handoff file.
+`docs/product_architecture.md` is a stable product contract. A focused Issue may refine implementation details, but it must not silently contradict that architecture. Resolve a real conflict explicitly before implementation.
 
-GitHub is the durable handoff layer between chat sessions. Do not rely on chat history alone.
+`docs/AI_PROGRESS_OBJECT_RELATION.md` is legacy combined context only. New runs must not use it as their primary writable handoff.
+
+GitHub is the durable handoff layer between chat sessions. Live Issues, PRs, CI and `main` are authoritative for transient state; do not rely on chat history or stale handoff snapshots alone.
+
+## Product architecture baseline
+
+The product is a local-first, Object-first personal knowledge/database application, not a Bookmark-centric application.
+
+- Every durable user-facing entity is an Object.
+- One Object has one primary ObjectType.
+- ObjectType answers “what is this?”; roles/classifications normally belong to Relations, Properties, Tags or Database/query context.
+- Objects are global inside a Vault and are not owned or duplicated by Databases or Views.
+- Database defines an Object set/context; View defines presentation/query configuration over it.
+- Object content is structured Properties/Relations plus a free-form versioned Body.
+- Weblink, Image and File are Objects with native capabilities.
+- Person, Book, Paper, Project, Recipe, Tag, TagGroup and similar concepts use the generic ObjectType system; specialized UX may exist without creating a parallel persistence subsystem.
+- `Bookmark` is legacy compatibility/migration input, not a final ObjectType. Normal URL capture creates/reuses a canonical Weblink Object.
+- Tag is not a native media primitive. Tag hierarchy uses canonical Object/Relation persistence; B owns integrity and C owns hierarchy-aware query/UX.
+- Historical Bookmark/People/Photo schema/data remains until replacement parity, caller-zero proof, preservation validation and any explicit destructive migration are complete.
 
 ## Seven-lane development model
 
-The project may be implemented concurrently in seven focused lanes. The split is by responsibility, not by file count. Each PR must have exactly one primary lane even when an Issue spans multiple lanes.
+Each implementation run/PR has exactly one primary lane. The split is by responsibility, not by file count.
 
 ### Lane A — Object Core & Body
 
-Primary scope:
-- Object/ObjectType identity and core semantics
-- Property value/type semantics that are not presentation-specific
-- Body/block/reference model and universal Body capability
-- aliases and shared Object identity/search metadata contracts
-- Daily Note identity/navigation/time-based Object patterns
-- generic Object opening/detail contracts
-- user-defined ObjectType core behavior
-- Value-to-Object promotion contracts when they are not primitive-specific
+Owns:
+- Object/ObjectType identity and core lifecycle semantics;
+- generic Property value/type semantics that are not presentation-specific;
+- universal Body/block/reference model and document-edit contracts;
+- aliases/shared Object identity metadata;
+- Daily Note identity/navigation/time-based Object patterns;
+- generic Object opening/detail contracts;
+- user-defined ObjectType core behavior;
+- migration/reconciliation contracts when generic Object identity is authoritative.
 
-Progress file: `docs/AI_PROGRESS_OBJECT.md`
-
-Does not own Weblink/Image/File product implementation, Database/View layout UX, search indexing, Vault/filesystem lifecycle, or generic refactoring.
+Does not own Weblink/Image/File native behavior, Relation integrity, Database/View UX, FTS, Vault lifecycle or broad refactoring.
 
 ### Lane B — Relations & Data Integrity
 
-Primary scope:
-- canonical Relation mutation/read/index/backlink/audit/reconcile lifecycle
-- bidirectional Relation integrity
-- Relation write validation and target/source/cardinality constraints
-- delete/detach/retarget/retry/idempotency correctness
-- stale/inconsistent Relation metadata handling
-- Relation-producing workflow regressions
-- Tag hierarchy integrity where expressed through Relations
-- data-integrity side of schema evolution, especially Relation target/cardinality changes
-- cross-object deletion/reference integrity and fail-closed corruption behavior
+Owns:
+- canonical Relation mutation/read/index/backlink/audit/reconcile lifecycle;
+- bidirectional Relation integrity;
+- target/source/cardinality/order constraints;
+- delete/detach/retarget/retry/idempotency correctness;
+- fail-closed corruption handling;
+- integrity-sensitive schema evolution;
+- Tag hierarchy parent/group integrity and cycle prevention;
+- Relation-producing workflow atomicity.
 
-Progress file: `docs/AI_PROGRESS_RELATION.md`
-
-This lane may remain production-code-light when the Relation subsystem is stable, but it should take independent integrity/test work when schema evolution or new Relation-producing workflows create correctness obligations. Do not invent speculative Relation abstractions merely to keep the lane busy.
+Preserve the canonical Relation subsystem. Do not invent parallel edge stores or speculative Relation abstractions.
 
 ### Lane C — Database, View & Schema UX
 
-Primary scope:
-- Database collection semantics
-- View persistence and behavior
-- Table/List/Gallery/Board presentation contracts
-- Filter/Sort/Group/Layout/visible Properties
-- Property-authoring UX, including Relation Property authoring surfaces
-- user-owned template/domain schema instantiation
-- generic Gallery cover/media-source configuration
-- safe schema-editing UX and migration prompts, coordinated with Lane B for integrity-sensitive changes
+Owns:
+- Database collection/query semantics;
+- View persistence and Table/List/Gallery/Board presentation contracts;
+- Filter/Sort/Group/Layout/visible Properties;
+- Property-authoring and schema-editing UX;
+- user-owned template/domain schema instantiation UX;
+- generic Gallery cover/media-source configuration;
+- Tag hierarchy query/filter/picker/tree UX;
+- generic Person/Weblink/Object collection/navigation surfaces and legacy dedicated-page replacement after parity.
 
-Progress file: `docs/AI_PROGRESS_DATABASE_VIEW.md`
-
-This lane owns generic presentation/configuration contracts, not Weblink/Image/File-specific product semantics.
+C owns generic presentation/configuration, not native Weblink/Image/File semantics or Relation integrity.
 
 ### Lane D — Primitive Objects & Media
 
-Primary scope:
-- Weblink identity, URL normalization, metadata/enrichment and media orchestration
-- Image identity/provenance/import/editing and Photo -> Image migration
-- canonical generic File primitive
-- Tag built-in/default semantics where work is not purely Relation-integrity
-- managed-file/native capability infrastructure shared by Image/File
-- MIME/content import classification and routing
-- PDF/File preview, thumbnail, metadata and extracted-text production behavior
+Owns:
+- Weblink identity, URL normalization, metadata/enrichment and capture-native behavior;
+- Image identity/provenance/import/editing and Photo -> Image primitive migration behavior;
+- canonical File primitive;
+- managed-file/native capability infrastructure shared by Image/File;
+- MIME/content import classification and routing;
+- PDF/File preview, thumbnail, metadata and extracted-text producer behavior.
 
-Progress file: `docs/AI_PROGRESS_PRIMITIVES.md`
-
-This lane owns primitive Object product semantics and services. It does not own generic Gallery/View settings or Vault switching lifecycle.
+Tag/TagGroup are generic ObjectTypes, not D-owned native primitives. D may provide only a concrete native-capability prerequisite explicitly required by another issue.
 
 ### Lane E — Search & Indexing
 
-Primary scope:
-- canonical Object search architecture
-- FTS correctness, incremental refresh and stale-token behavior
-- indexing title/aliases/Properties/Body/Weblink metadata
-- derived File/PDF extracted-text indexing
-- ranking/filter context and search-result opening behavior
-- search rebuild/reconciliation behavior
+Owns:
+- canonical Object search architecture;
+- FTS correctness, ranking and stale-token behavior;
+- indexing title/aliases/Properties/Body/Weblink metadata and derived extracted text;
+- focused refresh/rebuild/reconciliation;
+- search-result resolution/opening behavior.
 
-Progress file: `docs/AI_PROGRESS_SEARCH.md`
-
-New domains should contribute to the canonical Object search projection rather than adding separate long-term search repositories.
+New domains contribute to canonical Object search rather than creating domain-specific long-term indexes.
 
 ### Lane F — Storage, Vault & Delivery
 
-Primary scope:
-- Vault/Profile directory lifecycle and user-selectable storage
-- filesystem-level managed storage boundaries shared by primitives
-- profile-relative/Vault-relative path handling
-- backup/restore/profile duplication
-- missing/offline path recovery
-- app release/install packaging and delivery plumbing
+Owns:
+- Vault/Profile directory lifecycle and user-selectable storage;
+- filesystem-level managed storage boundaries;
+- profile/Vault-relative path handling;
+- backup/restore/duplication/move/recovery;
+- app packaging/delivery;
+- preservation validation before destructive legacy schema retirement.
 
-Progress file: `docs/AI_PROGRESS_STORAGE.md`
-
-Coordinate with Lane D: Lane F owns filesystem/Vault lifecycle; Lane D owns Image/File/Weblink Object identity and product semantics.
+F owns byte/location lifecycle, not Object identity or native media semantics.
 
 ### Lane G — Refactor & Architecture Health
 
-Primary scope:
-- Issue #225 maintainability work
-- behavior-preserving extraction and responsibility reduction
-- legacy Bookmark/Photo dependency inventory and caller-zero retirement after replacement parity
-- `AppDatabase` narrowing and migration-body extraction with regression coverage
-- error/fallback observability improvements
-- maintainability guardrails and architecture-boundary enforcement
-- temporary shim retirement and incremental movement toward `lib/features/...` ownership
+Owns:
+- Issue #225 maintainability work;
+- behavior-preserving extraction/responsibility reduction;
+- legacy Bookmark/People/Photo caller-zero retirement after owning-lane parity;
+- `AppDatabase` narrowing and migration-body extraction with regressions;
+- failure/privacy observability guardrails;
+- CI/developer-loop and architecture-boundary enforcement;
+- temporary shim retirement and incremental movement toward `lib/features/...` ownership;
+- repository-wide architecture/handoff synchronization such as #1048.
 
-Progress file: `docs/AI_PROGRESS_REFACTOR.md`
-
-The Refactor lane must not redesign working Relation semantics or hide product changes inside refactor PRs. Prefer deletion and small extraction over adding abstraction for its own sake.
+G must not redesign working product semantics under a refactor label.
 
 ## Ownership and concurrency rules
 
-Each implementation run must identify exactly one primary lane before editing code.
-
-- Do not modify another lane's progress file unless recording a cross-lane dependency or repository-wide coordination change.
-- An Issue may span multiple lanes; split implementation by coherent acceptance slices and sequence dependencies rather than creating a broad cross-lane PR.
+- Identify exactly one primary lane before editing.
+- One focused Issue has one active implementation owner/branch/PR. Umbrellas may have many focused child Issues.
+- Do not modify another lane's progress file except for a repository-wide coordination/architecture change or an explicit cross-lane dependency.
+- Split cross-lane work by coherent acceptance slices and sequence dependencies.
 - Before non-trivial edits to shared hotspots such as `generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, `bookmark_unified_stage1_page.dart`, `bookmark_reorderable_properties.dart`, `people_management_page.dart`, `settings_page.dart`, `profile_manager.dart`, or `app_database.dart`, inspect current open PR ownership.
-- Shared hotspots use a temporary ownership lease: only one lane at a time may own a broad edit to the same hotspot. Other lanes should choose service/domain/test slices or wait for the lease to clear.
-- A patch-sized non-overlapping hunk may proceed only after confirming the active PR does not overlap the same behavior/region.
-- If a change necessarily spans lanes, document the dependency in both the Issue and active lane handoff, then prefer sequencing.
-- Shared architectural decisions belong in the active GitHub Issue and may also be summarized in `docs/AI_PROGRESS.md`.
-- Relation subsystem redesign is not a Refactor-lane goal; preserve canonical Relation APIs unless a concrete Relation issue explicitly requires otherwise.
-- Do not create another lane solely because a file is busy. Split by responsibility, not by temporary file ownership.
-- Idle is acceptable when a lane has no independent safe work; never create speculative abstractions merely to keep a lane active.
+- Shared hotspots use temporary ownership leases. Patch-sized non-overlapping work may proceed only after confirming behavior/region non-overlap.
+- Schema/migration writer work is single-writer.
+- Relation subsystem redesign is not a Refactor-lane goal.
+- Idle is acceptable when no independent safe work exists; never invent speculative abstractions to keep a lane busy.
 
-## Initial issue routing
+## Current issue routing
 
-This routing is a starting point, not a substitute for reading each active Issue.
+Always verify live Issues because this list is a routing aid, not transient ownership state.
 
-- **Object Core & Body:** #481 and core #56 slices.
-- **Relations & Data Integrity:** integrity side of #493; Relation regressions from #491/#492/new primitive workflows.
-- **Database, View & Schema UX:** #490, #491 UX, #492, and generic presentation portions of #249/#56.
-- **Primitive Objects & Media:** #155, #245, #484, #489, #495.
-- **Search & Indexing:** #414, #494.
-- **Storage, Vault & Delivery:** #242, #218 and filesystem/backup slices.
-- **Refactor & Architecture Health:** #225.
+- **A:** #1041 Bookmark→Weblink/generic Object migration contract; #1044 generic Person authority; #1049 document-like Body UX; #56 core follow-ups.
+- **B:** #1042 Bookmark-era Relation convergence; #1045 Person groups/roles; #1052 Tag hierarchy integrity.
+- **C:** #1043 Stage1→generic Weblink/Object Database/View + Inbox; #1046 People→generic Person Database/View; #1053 hierarchy-aware Tag filtering/UX.
+- **D:** #1054 direct canonical Weblink capture; #155/#245 only for concrete native Weblink/Image/File obligations.
+- **E:** focused Search issues when canonical FTS correctness/freshness obligations are demonstrated.
+- **F:** #951/#242 preservation and real-machine Vault validation; later preservation gates for destructive legacy migration.
+- **G:** #1048 architecture/handoff alignment, #1047/#225 maintainability, #950 and future caller-zero Bookmark/People/Photo retirement.
+
+Umbrellas #56, #1039, #1040, #1050, #155, #225, #245 organize broader direction; implement through focused child Issues when possible.
 
 ## Autonomous implementation loop
 
-When an implementation task is active, continue without asking for confirmation for routine engineering decisions that are reversible and scoped to the active Issue.
+When a focused task is active, continue without asking for confirmation for routine reversible engineering decisions inside its contract.
 
-1. Inspect the latest `main`, active branch, Issue, PRs, and relevant CI state.
-2. Read the repository-wide handoff and the active lane handoff.
-3. Identify the next unfinished acceptance criterion for that lane.
+1. Inspect latest `main`, active Issue/branch, open PR ownership and relevant CI.
+2. Read `docs/product_architecture.md`, repository handoff and active lane handoff.
+3. Select the next unfinished acceptance criterion.
 4. Implement one coherent slice.
-5. Add or update tests when practical.
-6. Run the most relevant validation available in the environment.
+5. Add/update tests where practical.
+6. Run the most relevant validation available.
 7. Fix failures caused by the change.
-8. Commit and push the coherent slice.
-9. Record the checkpoint in the active lane progress file.
-10. **Do not end the run merely because one slice, one commit, or one PR is complete.** Immediately select the next safe, non-conflicting slice and continue.
-11. If CI is pending, do not wait idly and do not treat pending CI alone as a reason to end the run. Continue with another task that does not depend on that CI result.
-12. Repeat steps 3–11 for as many safe slices as the execution allows.
-13. Update `docs/AI_PROGRESS.md` when repository-wide integration state, dependencies, routing, or priorities changed.
+8. Commit/push the coherent slice.
+9. Update the active lane handoff with durable facts.
+10. Do not stop merely because one slice/commit/PR is complete; continue to the next safe non-conflicting slice.
+11. If CI is pending, continue independent work rather than waiting idly.
+12. Update `docs/AI_PROGRESS.md` when architecture/routing/global priority materially changes.
 
-### Expected run length / stopping criteria
+### Stop only when
 
-The goal is useful sustained progress, not one tiny PR per chat turn. A normal implementation run should attempt multiple coherent checkpoints when work remains.
+- the active focused Issue/lane has no actionable work;
+- a genuine product decision requires user input;
+- the next step is destructive/irreversible or deletes user data and lacks explicit approval;
+- an unavoidable cross-lane conflict/dependency blocks safe work;
+- external infrastructure failure blocks all independent safe work;
+- runtime/tool/session limits are reached.
 
-Stop only when at least one of these is true:
-
-- the active lane has no remaining actionable work in the Issue;
-- a genuine blocker requires user/product input not already resolved in the Issue;
-- the next step would require a destructive migration, deletion of user data, secrets, or another materially risky irreversible action;
-- the next safe step is blocked by an unavoidable cross-lane conflict or dependency;
-- a failing validation must be resolved by external infrastructure and no independent safe work remains;
-- the runtime/tool/session limit is actually reached.
-
-The following are **not** sufficient reasons to stop by themselves:
-
-- one PR was opened;
-- one commit was pushed;
-- one test suite passed;
-- CI is merely pending or queued;
-- the current slice is complete while other lane work is clearly available;
-- a task can be continued safely on the same branch or a new focused branch.
-
-Prefer several small commits and reviewable checkpoints during one sustained run rather than one oversized commit or ending after the first checkpoint.
+One PR, one commit, one passing test suite or pending CI is not by itself a stop reason.
 
 ## Handoff requirement
 
-Before a run ends, always update the active lane progress file with:
+Before a run ends, keep the active lane progress file usable without chat history. Record:
+- current goal/focused Issue;
+- durable branch/commit/PR checkpoint when one exists;
+- completed checkpoints;
+- work in progress and exact next actions;
+- validation/results;
+- cross-lane dependencies and hotspot/migration ownership;
+- blockers/risks;
+- stop reason.
 
-- current goal and active Issue
-- branch and latest relevant commit
-- all checkpoints completed during this run
-- work in progress
-- exact next actions in priority order
-- tests/validation performed and results
-- cross-lane dependencies
-- hotspot lease/ownership if relevant
-- known blockers or risks
-- explicit reason the run stopped, matching one of the stopping criteria above
+Avoid durable claims such as “no PR currently exists” or “lane X is running now” unless they are explicitly labeled as time-sensitive and necessary. Live GitHub state must be rechecked on resume.
 
-The next AI run should be able to resume from GitHub state without needing the user to restate context.
+## Migration and legacy-retirement safety
+
+Use this sequence:
+
+```text
+replacement contract
+→ parity
+→ caller-zero proof
+→ legacy UI/API/code deletion
+→ preservation validation
+→ explicit destructive schema migration
+```
+
+Do not delete user data merely because replacement UI exists. Existing historical migrations are compatibility contracts; preserve semantics/order and add historical regressions when refactoring or retiring them.
+
+## Branch, commit and CI hygiene
+
+- Use dedicated branches for non-trivial work; prefer lane-identifiable names (`feature/object-*`, `feature/relation-*`, `feature/database-view-*`, `feature/primitives-*`, `feature/search-*`, `feature/storage-*`, `refactor/issue-*`, `docs/*`).
+- Keep `main` releasable and refresh from latest `main` before integration when overlapping foundations changed.
+- Do not create commits solely to trigger CI or manufacture activity.
+- Do not add/remove temporary marker files, whitespace churn, unrelated formatting or meaningless comments as CI triggers.
+- Rerun CI through workflow/check mechanisms when available; otherwise wait for the next meaningful change.
+- Never merge artificial no-op commits.
+- Prefer several small coherent commits over one oversized change.
+- Merge only after relevant checks pass, unless the user explicitly directs otherwise.
 
 ## Safety and scope
 
 - Do not expose secrets or credentials.
-- Do not delete user data or perform destructive migrations without explicit approval.
-- Do not silently broaden scope beyond the active Issue.
-- Prefer reversible changes and focused PRs/checkpoints.
-- Existing historical migrations are compatibility contracts: extract/refactor them only with regression coverage and preserve semantics/order.
-- If a product/design decision is genuinely ambiguous and materially changes behavior, record the alternatives and blocker in the relevant progress file instead of inventing a major requirement.
+- Do not silently broaden a focused Issue.
+- Do not perform destructive migration/user-data deletion without explicit approval and preservation evidence.
+- If a major product decision is genuinely ambiguous, record alternatives/blocker instead of inventing semantics.
+- Prefer deletion/small extraction over abstraction for its own sake.
 
-## Branch and integration policy
+## Planning vs implementation chats
 
-- Use dedicated branches for non-trivial implementation work.
-- Prefer lane-identifiable branch names:
-  - `feature/object-*`
-  - `feature/relation-*`
-  - `feature/database-view-*`
-  - `feature/primitives-*`
-  - `feature/search-*`
-  - `feature/storage-*`
-  - `refactor/issue-*`
-- A sustained run may create multiple focused commits and, when appropriate, multiple sequential PRs; opening a PR does not automatically end the run.
-- Keep `main` releasable.
-- Rebase or refresh from latest `main` before integration when another lane has merged overlapping foundation changes.
-- Merge after relevant checks pass or when the user explicitly directs integration.
-- When multiple agents are working, avoid editing unrelated areas merely to reformat them.
-- Do not let two lanes concurrently own a broad refactor of the same core file; split or sequence the work first.
-
-## Commit hygiene and CI reruns
-
-This policy applies to every implementation lane A–G.
-
-- Every commit must represent a coherent repository change with a real code, test, documentation, migration, or configuration purpose.
-- Do **not** create commits solely to trigger CI, create activity, advance `main`, or force another workflow run.
-- Do **not** add temporary marker files such as `noop`, `tmp`, `oops`, `x`, `ignore`, or equivalent files and then remove them in a follow-up commit.
-- Do **not** use meaningless whitespace, formatting churn, comment churn, or unrelated documentation edits as a CI trigger.
-- If CI should be rerun, use the existing GitHub workflow/check rerun mechanism when available. If rerun tooling is unavailable, wait for the next meaningful repository change rather than manufacturing one.
-- Never merge an artificial CI-trigger/no-op commit into `main`.
-- A cancelled superseded CI run is acceptable; the latest meaningful commit is the one that needs to become green.
-
-See `docs/noop_commit_policy.md` and Issue #225 for the maintenance rationale and examples.
-
-## Planning chat vs implementation chats
-
-Planning work should produce or refine a GitHub Issue with a clear goal, scope, acceptance criteria, lane ownership, and implementation notes.
-
-Implementation chats should each adopt one lane, treat the Issue as the contract, continue through multiple safe slices per run, and keep the matching lane progress file current.
-
-A practical chat split is:
-
-- Planning / design chat
-- Implementation chat A: Object Core & Body
-- Implementation chat B: Relations & Data Integrity
-- Implementation chat C: Database, View & Schema UX
-- Implementation chat D: Primitive Objects & Media
-- Implementation chat E: Search & Indexing
-- Implementation chat F: Storage, Vault & Delivery
-- Implementation chat G: Refactor & Architecture Health
-
-Creating separate chats is recommended for concurrent work, but it is not required for the repository workflow to function.
+Planning/design work should refine durable Issues and `docs/product_architecture.md` when architecture changes. Implementation chats adopt one lane and one focused Issue, execute it through multiple safe checkpoints, and keep the matching lane handoff current. Separate lane chats are useful for parallelism but are not required.
