@@ -8,6 +8,8 @@ typedef ObjectBodyParagraphSplitCallback = Future<void> Function(
   TextSelection selection,
 );
 
+typedef ObjectBodyParagraphMergeCallback = Future<void> Function();
+
 /// Shared Flutter renderer/editor for one Object Body block.
 ///
 /// This widget deliberately depends on the widget-independent presentation
@@ -20,21 +22,25 @@ class ObjectBodyBlockView extends StatelessWidget {
     required this.presentation,
     this.onTextChanged,
     this.onParagraphSplit,
+    this.onParagraphMergeWithPrevious,
     this.onChecklistChanged,
     this.onObjectReferenceTap,
     this.onDatabaseViewTap,
     this.onAssetTap,
     this.autofocus = false,
+    this.autofocusOffset,
   });
 
   final ObjectBodyBlockPresentation presentation;
   final ValueChanged<String>? onTextChanged;
   final ObjectBodyParagraphSplitCallback? onParagraphSplit;
+  final ObjectBodyParagraphMergeCallback? onParagraphMergeWithPrevious;
   final ValueChanged<bool>? onChecklistChanged;
   final VoidCallback? onObjectReferenceTap;
   final VoidCallback? onDatabaseViewTap;
   final VoidCallback? onAssetTap;
   final bool autofocus;
+  final int? autofocusOffset;
 
   @override
   Widget build(BuildContext context) {
@@ -48,8 +54,11 @@ class ObjectBodyBlockView extends StatelessWidget {
             initialValue: block.text ?? '',
             onChanged: onTextChanged,
             onSplit: isParagraph ? onParagraphSplit : null,
+            onMergeWithPrevious:
+                isParagraph ? onParagraphMergeWithPrevious : null,
             maxLines: isParagraph ? null : 1,
             autofocus: autofocus,
+            autofocusOffset: autofocusOffset,
           ),
         );
       case ObjectBodyBlockPresentationKind.heading:
@@ -60,6 +69,7 @@ class ObjectBodyBlockView extends StatelessWidget {
             onChanged: onTextChanged,
             style: _headingStyle(context, presentation.headingLevel),
             autofocus: autofocus,
+            autofocusOffset: autofocusOffset,
           ),
         );
       case ObjectBodyBlockPresentationKind.checklist:
@@ -79,6 +89,7 @@ class ObjectBodyBlockView extends StatelessWidget {
                   initialValue: block.text ?? '',
                   onChanged: onTextChanged,
                   autofocus: autofocus,
+                  autofocusOffset: autofocusOffset,
                 ),
               ),
             ),
@@ -109,6 +120,7 @@ class ObjectBodyBlockView extends StatelessWidget {
                 onChanged: onTextChanged,
                 maxLines: null,
                 autofocus: autofocus,
+                autofocusOffset: autofocusOffset,
               ),
             ],
           ),
@@ -155,9 +167,11 @@ class ObjectBodyBlockView extends StatelessWidget {
     required String initialValue,
     required ValueChanged<String>? onChanged,
     ObjectBodyParagraphSplitCallback? onSplit,
+    ObjectBodyParagraphMergeCallback? onMergeWithPrevious,
     TextStyle? style,
     int? maxLines = 1,
     bool autofocus = false,
+    int? autofocusOffset,
   }) {
     if (onChanged == null) {
       return Text(initialValue, style: style);
@@ -167,9 +181,11 @@ class ObjectBodyBlockView extends StatelessWidget {
       initialValue: initialValue,
       onChanged: onChanged,
       onSplit: onSplit,
+      onMergeWithPrevious: onMergeWithPrevious,
       style: style,
       maxLines: maxLines,
       autofocus: autofocus,
+      autofocusOffset: autofocusOffset,
     );
   }
 
@@ -191,16 +207,20 @@ class _ObjectBodyTextControl extends StatefulWidget {
     required this.onChanged,
     required this.maxLines,
     this.onSplit,
+    this.onMergeWithPrevious,
     this.style,
     this.autofocus = false,
+    this.autofocusOffset,
   });
 
   final String initialValue;
   final ValueChanged<String> onChanged;
   final ObjectBodyParagraphSplitCallback? onSplit;
+  final ObjectBodyParagraphMergeCallback? onMergeWithPrevious;
   final TextStyle? style;
   final int? maxLines;
   final bool autofocus;
+  final int? autofocusOffset;
 
   @override
   State<_ObjectBodyTextControl> createState() => _ObjectBodyTextControlState();
@@ -209,7 +229,7 @@ class _ObjectBodyTextControl extends StatefulWidget {
 class _ObjectBodyTextControlState extends State<_ObjectBodyTextControl> {
   late final TextEditingController _controller;
   late final FocusNode _focusNode;
-  bool _splitPending = false;
+  bool _structuralEditPending = false;
 
   @override
   void initState() {
@@ -233,7 +253,9 @@ class _ObjectBodyTextControlState extends State<_ObjectBodyTextControl> {
         selection: TextSelection.collapsed(offset: nextOffset),
       );
     }
-    if (widget.autofocus && !oldWidget.autofocus) {
+    if (widget.autofocus &&
+        (!oldWidget.autofocus ||
+            oldWidget.autofocusOffset != widget.autofocusOffset)) {
       _requestAutofocusIfNeeded();
     }
   }
@@ -248,7 +270,11 @@ class _ObjectBodyTextControlState extends State<_ObjectBodyTextControl> {
   void _requestAutofocusIfNeeded() {
     if (!widget.autofocus) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _focusNode.requestFocus();
+      if (!mounted) return;
+      final requestedOffset = widget.autofocusOffset ?? _controller.text.length;
+      final offset = requestedOffset.clamp(0, _controller.text.length).toInt();
+      _controller.selection = TextSelection.collapsed(offset: offset);
+      _focusNode.requestFocus();
     });
   }
 
@@ -267,7 +293,9 @@ class _ObjectBodyTextControlState extends State<_ObjectBodyTextControl> {
       onChanged: widget.onChanged,
     );
 
-    if (widget.onSplit == null) return field;
+    if (widget.onSplit == null && widget.onMergeWithPrevious == null) {
+      return field;
+    }
     return Focus(
       onKeyEvent: _handleKeyEvent,
       child: field,
@@ -275,17 +303,29 @@ class _ObjectBodyTextControlState extends State<_ObjectBodyTextControl> {
   }
 
   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
-    if (event is! KeyDownEvent ||
-        event.logicalKey != LogicalKeyboardKey.enter ||
-        _hasActiveComposition) {
+    if (event is! KeyDownEvent || _hasActiveComposition) {
       return KeyEventResult.ignored;
     }
-    if (HardwareKeyboard.instance.isShiftPressed) {
-      _insertLineBreak();
-    } else {
-      _requestSplit();
+
+    if (event.logicalKey == LogicalKeyboardKey.enter && widget.onSplit != null) {
+      if (HardwareKeyboard.instance.isShiftPressed) {
+        _insertLineBreak();
+      } else {
+        _requestSplit();
+      }
+      return KeyEventResult.handled;
     }
-    return KeyEventResult.handled;
+
+    if (event.logicalKey == LogicalKeyboardKey.backspace &&
+        widget.onMergeWithPrevious != null) {
+      final selection = _normalizedSelection;
+      if (selection.isCollapsed && selection.start == 0) {
+        _requestMerge();
+        return KeyEventResult.handled;
+      }
+    }
+
+    return KeyEventResult.ignored;
   }
 
   bool get _hasActiveComposition {
@@ -318,10 +358,19 @@ class _ObjectBodyTextControlState extends State<_ObjectBodyTextControl> {
 
   void _requestSplit() {
     final split = widget.onSplit;
-    if (split == null || _splitPending) return;
-    _splitPending = true;
+    if (split == null || _structuralEditPending) return;
+    _structuralEditPending = true;
     split(_normalizedSelection).whenComplete(() {
-      if (mounted) _splitPending = false;
+      if (mounted) _structuralEditPending = false;
+    });
+  }
+
+  void _requestMerge() {
+    final merge = widget.onMergeWithPrevious;
+    if (merge == null || _structuralEditPending) return;
+    _structuralEditPending = true;
+    merge().whenComplete(() {
+      if (mounted) _structuralEditPending = false;
     });
   }
 }
