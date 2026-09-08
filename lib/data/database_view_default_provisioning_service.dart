@@ -5,6 +5,7 @@ import 'generic_database_store.dart';
 import 'image_object_service.dart';
 import 'object_store.dart';
 import 'system_object_store.dart';
+import 'weblink_object_service.dart';
 
 /// Seeds the first persisted View for generic Database hosts without taking
 /// ownership away from user-created View configuration.
@@ -49,34 +50,60 @@ class DatabaseViewDefaultProvisioningService {
     final objectType = resolvedObjectTypeId == null
         ? null
         : await systemObjects.objectStore.getObjectType(resolvedObjectTypeId);
-    final isCanonicalImage = objectType != null &&
-        objectType.workspaceId == workspaceId &&
-        await systemObjects.systemKeyForObjectType(resolvedObjectTypeId!) ==
-            ImageObjectService.systemKey;
-    if (!isCanonicalImage) {
-      return viewStore.ensureDefaultView(
+    final systemKey = objectType != null && objectType.workspaceId == workspaceId
+        ? await systemObjects.systemKeyForObjectType(resolvedObjectTypeId!)
+        : null;
+
+    if (systemKey == ImageObjectService.systemKey) {
+      final id = await viewStore.createView(
         workspaceId: workspaceId,
         definition: definition,
+        name: 'ギャラリー',
+        layoutType: 'gallery',
+        settings: <String, dynamic>{
+          DatabaseViewGalleryAdapter.settingsKey:
+              GalleryViewMode.masonry.storageValue,
+          DatabaseViewGalleryAdapter.coverSourceSettingsKey:
+              const GalleryCoverSource.directImage().toStorage(),
+        },
+      );
+      return _createdView(
+        workspaceId: workspaceId,
+        databaseKey: definition.key,
+        viewId: id,
       );
     }
 
-    final id = await viewStore.createView(
+    if (systemKey == WeblinkObjectService.systemKey) {
+      final id = await viewStore.createView(
+        workspaceId: workspaceId,
+        definition: definition,
+        name: 'リスト',
+        layoutType: 'list',
+      );
+      return _createdView(
+        workspaceId: workspaceId,
+        databaseKey: definition.key,
+        viewId: id,
+      );
+    }
+
+    return viewStore.ensureDefaultView(
       workspaceId: workspaceId,
       definition: definition,
-      name: 'ギャラリー',
-      layoutType: 'gallery',
-      settings: <String, dynamic>{
-        DatabaseViewGalleryAdapter.settingsKey:
-            GalleryViewMode.masonry.storageValue,
-        DatabaseViewGalleryAdapter.coverSourceSettingsKey:
-            const GalleryCoverSource.directImage().toStorage(),
-      },
     );
+  }
+
+  Future<DatabaseViewConfig> _createdView({
+    required int workspaceId,
+    required String databaseKey,
+    required int viewId,
+  }) async {
     final views = await viewStore.listViews(
       workspaceId: workspaceId,
-      databaseKey: definition.key,
+      databaseKey: databaseKey,
     );
-    return views.firstWhere((view) => view.id == id);
+    return views.firstWhere((view) => view.id == viewId);
   }
 
   int? _objectTypeId(String databaseKey) {
