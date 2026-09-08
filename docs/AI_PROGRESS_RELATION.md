@@ -8,10 +8,12 @@ Own cross-Object correctness and fail-closed data integrity: canonical Relation 
 ## Current issue state
 - #56 — open umbrella for the generic Object/Database/Relation architecture and the continuing canonical Relation contract.
 - #895 — completed/closed by PR #922. Newly-live Bookmark `Images` / `Cover Image` writers now fail closed on untrusted stored/index/target/cardinality state and cannot partially rewrite canonical Relations or the temporary `bookmark_photos` projection.
+- #947 — completed/closed by PR #965. Canonical Person `Profile Image` is now a single Relation to Image with strict preflight, deterministic legacy Photo migration, atomic compatibility projection, and Relation-safe delete/detach coverage.
 - #491 — completed/closed. Generic Relation Property authoring and inline target creation are integrated; future changes are regression triggers, not unfinished acceptance work.
 - #492 — completed/closed. Generic Gallery Relation cover-source architecture is integrated; future Relation-backed media readers are regression triggers.
 - #493 — completed/closed. Safe Relation schema-evolution acceptance criteria are integrated; future target/cardinality changes remain integrity triggers.
 - #245 and future primitive/domain work may reactivate Lane B when they add a new production Relation writer, reader, delete/detach flow, or compatibility projection.
+- #948 is now unblocked for Lane D. People profile-photo UI can consume the #947 canonical Person/Image Relation contract; Lane B should re-enter only if that UI integration exposes a concrete Relation/data-integrity defect.
 
 ## Canonical Relation contract
 - Feature Relation writes go through `RelationMutationService`.
@@ -27,7 +29,7 @@ Own cross-Object correctness and fail-closed data integrity: canonical Relation 
 - No parallel serialized-id Relation writer or alternate edge/index store.
 
 ## Integrated integrity state — 2026-09-08
-Latest audited main at this handoff: `bc09381b9eb77dee6b4ef12a94e7b9c06bc86c36` (PR #922 / Issue #895).
+Latest audited main at this handoff: `09de5d4fdec3cd019f43102e2d7437c63a438064` (PR #965 / Issue #947).
 
 Foundation already integrated:
 - #506/#568/#577/#590/#601/#628/#662: fail-closed Relation schema evolution, managed bidirectional pair lifecycle, canonical system Relation schema creation, and Gallery/template structural validation.
@@ -49,6 +51,7 @@ Recent Lane B checkpoints:
 - #865 — Relation-backed Rollups no longer evaluate through permissive `ObjectStore.resolveRelation(...)`; corrupt/unresolved Relation state returns `null`, while healthy empty Relation still yields `count == 0`. Merge `aa94499e73931438aa88992ec448b1578dd65018`; CI #2620 green.
 - #871 — wrong-type/missing targets and serialized/index drift fail closed in canonical reads/backlinks without repair. Merge `eaf70d24cbceb2cdd1e9a74a71e220005553bdb7`; CI #2647 green.
 - #895 — Bookmark Image Relation writers now enforce shared strict mutation preflight and rollback safety. PR #922 squash merge `bc09381b9eb77dee6b4ef12a94e7b9c06bc86c36`; Flutter CI #2793 Analyze + full Test green.
+- #947 — Person profile imagery now uses one canonical Person -> `Profile Image` single Relation. Legacy `profilePhotoId` migration consumes only the established Photo -> Image mapping, missing mappings remain retryable, retarget/clear keeps the temporary legacy projection atomic, corruption/index drift fails closed, and Relation-safe Image deletion detaches the Person backlink. PR #965 squash merge `09de5d4fdec3cd019f43102e2d7437c63a438064`; Flutter CI #2873 Analyze + full Test green.
 
 ## #895 completed contract
 `RelationTargetService.selectionForMutation(...)` is the shared integrity seam added for integrity-sensitive editor writes. Before returning a `RelationSelectionContext`, it rejects:
@@ -70,6 +73,19 @@ It performs no repair. Ordinary `selectionFor(...)` remains the picker/diagnosti
 
 Regression coverage proves healthy strict selection plus edge position drift, wrong-type target, single-cardinality corruption, and Bookmark-specific rollback. Failed operations leave stored Relation values, normalized edges, and `bookmark_photos` unchanged.
 
+## #947 completed contract
+`PersonProfileImageRelationService` is the B-lane integrity boundary for canonical Person profile imagery:
+- provisions/reuses one system `Profile Image` single Relation from canonical Person to canonical Image;
+- migrates legacy `Person.profilePhotoId` only through the existing one-to-one `photo_object_links` mapping and never manufactures a replacement Image identity;
+- leaves temporarily unavailable/missing Photo -> Image mappings retryable during workspace sync;
+- strict-preflights persisted Relation/index/target/cardinality state before migration, retarget, or clear mutations;
+- performs canonical Relation mutation and temporary `Person.profilePhotoId` compatibility projection updates in one database transaction;
+- selecting a native canonical Image clears the legacy projection because no safe Photo identity exists;
+- rejects conflicting canonical-vs-legacy selection, ambiguous/wrong-type mappings, malformed/cardinality-unsafe Relation state, and edge order/position drift without partial mutation;
+- uses canonical Relation-safe Object deletion semantics so a deleted Image is detached from surviving Person backlinks without inventing Person-specific delete/index behavior.
+
+`ObjectSyncService` runs this migration only after `CoreObjectBridge` has attempted legacy Photo -> canonical Image promotion, so stable `photo_object_links` mapping exists before Person Relation migration. This keeps unavailable managed media retry-safe and preserves one canonical Image identity.
+
 ## Cross-lane audit
 - #491 production quick-create/attach reloads canonical selection context before save and persists through canonical mutation; Tag quick-create is additionally atomic after #854.
 - #492 Gallery discovery/resolution remains read-only and inherits strict stored/index integrity filtering.
@@ -80,6 +96,8 @@ Regression coverage proves healthy strict selection plus edge position drift, wr
 - #869 canonical Image/Weblink media presentation is presentation-only and adds no Relation authority.
 - #881/#889/#892 introduced the Bookmark Image production Relation writers; #895 is the completed integrity follow-up for those paths.
 - #896 Database/View Images default Gallery and #897 Storage Photo deletion safety are completed cross-lane work and do not introduce new Relation authority.
+- #945 canonical Person Object identity is integrated and #947 now adds the integrity-safe Person -> Image Relation contract on top of it.
+- #948 is Lane D UI integration. It should consume `PersonProfileImageRelationService` rather than add direct serialized-id writes or a parallel Person/Image relationship path.
 - Production direct `ObjectStore.setRelation(...)` callers remain subsystem/internal. Production `BidirectionalRelationStore.setRelation(...)` is still reached through `RelationMutationService`, which performs strict validation first.
 - No shared hotspot lease is currently held by Lane B.
 
@@ -93,6 +111,7 @@ Regression coverage proves healthy strict selection plus edge position drift, wr
 - #865 Flutter CI #2620 green.
 - #871 Flutter CI #2647 Analyze + full Test green.
 - #895 Flutter CI #2793 Analyze + full Test green. The superseded #2786 run reached Analyze green but failed only because the new rollback snapshot helper assumed a single Relation was stored as `List`; commit `517823ab71c82760dff36202d82d3397d230cb05` changed the test helper to compare raw JSON value shape, after which #2793 was fully green. Production logic was unchanged by that correction.
+- #947 first PR run #2871 failed Analyze only on one unused test import. Commit `d3067325ffd22f42d92aeb070dc84fe09365b609` removed that import; rerun Flutter CI #2873 passed maintainability guards, Drift generation, Analyze, and full Flutter Test before merge.
 - Local Flutter execution is unavailable in this connector environment; GitHub Actions is the executable validation source.
 
 ## Exact next triggers
@@ -106,12 +125,13 @@ Regression coverage proves healthy strict selection plus edge position drift, wr
 ## Cross-lane dependencies / risks
 - Lane C owns schema-authoring UX; Lane B owns destructive Relation target/cardinality correctness and corruption behavior.
 - Lane D owns Image/Weblink/File product semantics and #245 migration; new Relation-producing production paths from that work should trigger a focused Lane B audit rather than duplicate primitive logic in Lane B.
+- #948 is now unblocked by #945 + #947. `people_management_page.dart` remains a shared hotspot owned by Lane D for that slice; Lane B should not edit it merely to continue work.
 - Ordinary semantic Relation parsing remains permissive for compatibility. Integrity-sensitive audit/write/read projections use strict persisted-value inspection; do not silently normalize malformed persisted data.
 - Relation adapters must preserve malformed/duplicate caller input until canonical mutation validation.
 - `RelationReadService` is an integrity-filtered projection, not an index authority or repair service. UI/graph/computed consumers should not bypass it with raw edges unless they are themselves an integrity service.
 
 ## Work in progress / next actions
-There is no open Lane B production PR after #922 and no currently identified independent Lane B defect. Before starting new code, re-scan latest main, open Issues/PRs, and new #245/#56 production workflows for one of the exact triggers above. If no concrete trigger exists, do not invent a Relation abstraction merely to keep the lane active.
+There is no open Lane B production PR after #965. #947 is closed and #948 has been explicitly notified that its B-lane prerequisite is integrated. Before starting new B code, re-scan latest main, open Issues/PRs, and new #245/#56 production workflows for one of the exact triggers above. If no concrete trigger exists, do not invent a Relation abstraction merely to keep the lane active.
 
 ## Stop reason
-#895 acceptance is complete and merged. Latest audited main `bc09381b9eb77dee6b4ef12a94e7b9c06bc86c36`, current open Issue routing, Bookmark Image compatibility paths, canonical Relation readers/writers, rollback behavior, and current cross-lane work were re-audited. No additional independent feature-level Relation/data-integrity defect is currently identified. This satisfies the AGENTS stop condition: Lane B has no remaining actionable safe work until a new concrete trigger lands.
+#947 acceptance is complete and merged. Latest audited main `09de5d4fdec3cd019f43102e2d7437c63a438064`, current open Issue routing, Person Profile Image compatibility paths, canonical Relation readers/writers, rollback behavior, delete/detach behavior, and current cross-lane work were re-audited. #948 is correctly handed back to Lane D and no additional independent feature-level Relation/data-integrity defect is currently identified. This satisfies the AGENTS stop condition: Lane B has no remaining actionable safe work until a new concrete trigger lands.
