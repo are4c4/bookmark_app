@@ -1,27 +1,39 @@
 # AI Progress — Search & Indexing Lane
 
-> Lane E durable handoff. Before implementation, read `AGENTS.md`, the active Issue, `docs/AI_PROGRESS.md`, current `main`, and open PRs touching Object/Body/Relation/primitive contracts.
+> Lane E durable handoff. Before implementation, read `AGENTS.md`, the active focused Issue, `docs/AI_PROGRESS.md`, current `main`, this file, and live PR diffs touching Object/Body/Relation/primitive/Search contracts.
 
 ## Lane goal
-Keep one canonical Object-level search/index architecture correct, stale-safe, privacy-safe, and reusable by built-in primitives and user-defined ObjectTypes. Search owns FTS projection, invalidation planning, reconciliation and result behavior; mutation producers expose only narrow canonical impact and never write FTS directly.
+Keep one canonical Object-level search/index architecture correct, stale-safe, privacy-safe, and reusable by built-in primitives and user-defined ObjectTypes.
 
-## Current issue state — 2026-09-08
-Completed/closed Search correctness issues include:
-- #414 / #494 — canonical Object search is the live product path; legacy Bookmark-only FTS is retired.
-- #753/#757 — malformed persisted Body is isolated to the `body` bucket.
-- #769/#774 and #782/#785 — malformed/inconsistent Relation values fail closed for relation-label projection without duplicating Relation authority.
+Search owns:
+- canonical FTS projection and query behavior;
+- trustworthy source contribution rules;
+- focused invalidation planning and FTS writes;
+- Search-local projection freshness notification;
+- mounted Global Search query replay after focused refresh;
+- fail-closed result resolution and privacy-safe error behavior.
+
+Mutation producers own their domain state and expose only narrow canonical impact. They do **not** import Search presentation or write Search FTS directly.
+
+## Current checkpoint — 2026-09-08
+The latest focused Search correctness issue, #934, is completed through PR #935.
+
+Recent completed checkpoints:
+- #414 / #494 — canonical Object search became the live product path; legacy Bookmark-only FTS was retired later by Refactor #654.
+- #753/#757 — malformed Body is isolated to the `body` contribution.
+- #769/#774 and #782/#785 — malformed/inconsistent Relation state fails closed for Relation-label projection.
 - #797/#799 — system-maintained Property metadata is non-searchable by default unless explicitly opted in.
-- #807/#822 — Search-opened detail return performs focused refresh and replays the active query.
+- #807/#822 — Search-opened detail return performs focused refresh.
 - #828/#831 — re-entering cached Global Search after edits outside Search recreates Search so cross-page edits are visible.
-- #847/#849 — corrupt ObjectType schema is isolated across projection, Relation labels, optional PDF reconciliation and result resolution.
-- #877/#884 — detail-return refresh expands to trustworthy outgoing Relation targets and their label dependents.
+- #847/#849 — corrupt ObjectType schema is isolated across projection, optional PDF reconciliation and result resolution.
+- #877/#884 — detail-return refresh expands to trustworthy outgoing Relation targets and label dependents.
 - #888/#894 — nested Inspector visits, including non-Relation Daily Note navigation, participate in focused return refresh.
-- #900/#902 — background Weblink preview Image ingestion refreshes the canonical Image plus label dependents after delayed remote completion.
-- #907/#913 — live legacy Bookmark mirror changes produced while Search stays mounted trigger focused canonical Object refresh.
+- #900/#902 — delayed Weblink preview Image ingestion refreshes Search after remote completion.
+- #907/#913 — live legacy Bookmark mirror changes while Search remains mounted trigger focused canonical refresh.
+- Object Core #909/#923 — the mirror callback reports only canonical Object ids whose semantic state actually changed.
+- #934/#935 — a mounted non-empty Global Search query automatically reruns after successful background focused Search refresh, even when producer and page use different `ObjectGlobalSearchService` instances.
 
-Object Core follow-up #909 is also completed through PR #923 and now makes the #913 mirror callback **exact** rather than broad: unchanged mirror passes do not emit false-positive Object ids.
-
-There is currently **no open Search-owned Issue** in the live audit. Lane E is idle by design until a concrete Search/Indexing correctness or product requirement appears.
+Do not infer future work from this snapshot. On resume, re-audit live Issues/PRs. Lane E should remain idle when there is no concrete Search/Indexing correctness or product obligation.
 
 ## Canonical Object search architecture
 `ObjectSearchRepository` owns one FTS5 projection shared by every ObjectType:
@@ -48,77 +60,99 @@ Contributors:
 - **Weblink metadata** — URL, Domain, Page title, Site name and Description in a dedicated bucket;
 - **derived text** — replaceable source-keyed metadata such as canonical File PDF `pdf-text`.
 
-Workspace/ObjectType filtering uses canonical ids. Query behavior remains prefix-based with FTS5 BM25 ranking.
+Workspace/ObjectType filtering uses canonical ids. Query behavior remains prefix-based with FTS5 BM25 ranking. Search result ids are resolved back through canonical Object/ObjectType state; stale or inconsistent hits fail closed.
 
-## Focused freshness architecture
-Search freshness now covers several distinct production mutation timings without routine workspace rebuilds.
+## Freshness architecture
+Search freshness has two layers:
+
+1. **Projection freshness** — affected FTS rows are rebuilt or removed after a trustworthy mutation impact.
+2. **Visible-query freshness** — if Global Search is already mounted with a non-empty query, successful focused projection refresh causes that active query to replay automatically.
+
+Routine background paths must use focused refresh. Do not regress to polling, timestamps, routine workspace rebuilds, or a domain/workspace mutation event bus.
 
 ### Search-opened detail mutations — #822/#884/#894
 On return from a Search-opened detail route:
-- refresh the root Object;
+- refresh every Object visited while that route was active;
 - include existing label dependents;
-- include trustworthy current outgoing Relation targets from canonical Relation reads and their dependents;
-- track every Object visited through nested Inspector navigation, including non-Relation Daily Note previous/next/today navigation;
-- keep missing/deleted visited ids in the refresh set so stale FTS rows are physically removed.
+- include trustworthy current outgoing Relation targets and their dependents;
+- support non-Relation nested navigation such as Daily Note previous/next/today;
+- keep missing/deleted visited ids refreshable so stale FTS rows are physically removed.
 
-The Inspector callback is generic navigation-impact metadata only. Presentation does not import Search services.
+The Inspector exposes generic navigation-impact metadata only. Presentation does not import Search services.
+
+Detail-return focused refresh now participates in the same Search-local projection-change mechanism used by background refresh; it no longer needs a separate manual query-replay authority.
 
 ### Background Weblink preview completion — #900/#902
 PR #902 merged as `c34ed6377db011dbff4c200a97fde91a06b2f4f2`; Flutter CI #2738 was full green.
 
-Production contract:
+Contract:
 - `ObjectSyncService` keeps remote preview ingestion unawaited/best-effort;
-- after `WeblinkPreviewImagePipeline.ingestIfMissing(...)` returns a durably verified canonical Image id, the optional `onPreviewImageIngested(int)` callback fires;
-- app composition wires that id to `ObjectGlobalSearchService.refreshObjectLabelDependents`;
-- this refreshes the Image itself plus current backlink sources, including the Weblink whose Representative Image relation changed;
-- callback failure cannot undo successful Image/Relation persistence and diagnostics exclude URL/path/id/user content;
-- repeated preview sync in one live service does not create duplicate completion impact for the same unchanged URL.
+- after `WeblinkPreviewImagePipeline.ingestIfMissing(...)` durably verifies a canonical Image, `onPreviewImageIngested(int)` reports only the Image Object id;
+- production composition calls `ObjectGlobalSearchService.refreshObjectLabelDependents(...)`;
+- Search refreshes the Image and current backlink/label dependents such as the Weblink whose Representative Image changed;
+- callback failure cannot roll back canonical Image/Relation persistence;
+- diagnostics must not expose URL/path/id/user content.
 
-Regression `test/object_sync_preview_image_search_refresh_test.dart` reproduces delayed network I/O: Search rebuild finishes first, preview ingestion finishes later, then both Image title and Weblink relation-label search become current without Search re-entry or workspace rebuild.
+Regression: `test/object_sync_preview_image_search_refresh_test.dart` reproduces Search rebuild first, delayed network completion second, focused Image/Weblink refresh third.
 
-### Live legacy mirror changes while Search remains mounted — #907/#913
-PR #913 merged as `53fde6f305fb745d31a1faf2597bd105922935fc`; #907 is completed/closed.
+### Live legacy mirror changes — #907/#913 + Object Core #909/#923
+PR #913 merged as `53fde6f305fb745d31a1faf2597bd105922935fc`; Flutter CI #2763 was full green.
 
-This covers the real global-file-drop ordering:
+Real ordering covered:
 1. live `ObjectSyncService` watcher is active;
 2. Global Search rebuild completes;
-3. `GlobalFileDropLayer` creates legacy Bookmark/workspace data while Search remains visible;
-4. the existing debounced mirror later creates/updates canonical Bookmark/Weblink Objects;
-5. the generic `onCanonicalObjectsMirrored(Iterable<int>)` callback forwards canonical impact to `ObjectGlobalSearchService.refreshObjectLabelDependentsFor(...)`;
-6. focused refresh updates only affected canonical rows and label dependents.
+3. a legacy producer such as `GlobalFileDropLayer` changes Bookmark/workspace data while Search remains mounted;
+4. the existing debounced mirror creates/updates canonical Bookmark/Weblink Objects;
+5. `onCanonicalObjectsMirrored(Iterable<int>)` reports canonical impact;
+6. `ObjectGlobalSearchService.refreshObjectLabelDependentsFor(...)` performs focused Search refresh.
 
-`GlobalFileDropLayer`, compatibility bridges and Object stores do not import Search or write FTS. The 250 ms live mirror debounce remains intact. No polling, timestamp heuristic or workspace mutation event bus was introduced.
-
-Regressions include:
-- `test/object_sync_global_file_drop_search_refresh_test.dart` — Search rebuild first, watcher mutation second, focused canonical Bookmark/Weblink refresh third;
-- deletion path physically removes stale FTS rows;
-- downstream Search callback failure cannot roll back canonical Bookmark -> Weblink persistence;
-- production wiring guard proves bootstrap/profile and workspace-switch Object sync hosts use the same composition boundary.
-
-### Exact canonical impact refinement — Object Core #909/#923
-PR #923 merged as `03acb81633031cb833975196b29f66947d9de747`; Flutter CI #2795 was full green.
-
-Lane A now owns exactness of the generic sync-impact seam:
-- immutable `ObjectSyncImpact` contains canonical Object ids only;
+Object Core #909 refined that impact in PR #923 (`03acb81633031cb833975196b29f66947d9de747`, CI #2795 full green):
+- impact contains canonical Object ids only;
 - semantic comparison uses canonical title + persisted Value state and excludes timestamps;
-- bridge-local candidates are filtered again by whole-pass before/after state, cancelling transient compatibility writes retired later in the same pass;
-- unchanged repeat sync produces no notification;
-- new target retarget reports changed Bookmark + new Weblink;
-- retarget to an already-existing unchanged Weblink reports only the changed Bookmark source;
-- deletion reports the deleted canonical id so Search can remove its row;
+- unchanged repeat sync emits nothing;
+- transient compatibility writes cancelled within the same whole sync pass do not become false-positive impact;
+- retarget to a new Weblink reports changed Bookmark + new Weblink;
+- retarget to an already-existing unchanged Weblink reports only the changed Bookmark;
+- deletion reports the deleted canonical id so Search can physically remove stale FTS state;
 - callback failure remains post-persistence and isolated.
 
-Search **does not** own or reinterpret that semantic snapshot. It consumes the canonical ids as invalidation input and owns `refreshObjectLabelDependentsFor(...)` planning/FTS writes.
+Search consumes those ids as invalidation input. It does not own or reinterpret Object Core's semantic mirror snapshot.
+
+Regression: `test/object_sync_global_file_drop_search_refresh_test.dart` covers creation, deletion/stale-row cleanup and downstream Search callback failure isolation.
+
+### Mounted active-query replay — #934/#935
+PR #935 merged as `0b9e83e52728f8ea4afcc32a6d16f89b7284b9ca`; Flutter CI #2823 was full green.
+
+The remaining gap after #902/#913 was presentation freshness: focused refresh could make `object_search_fts` correct while `ObjectGlobalSearchPage` still displayed cached `_results` until query edit, re-entry, detail return or manual rebuild.
+
+The current contract:
+- `ObjectGlobalSearchService` exposes a **Search-owned, database-scoped projection-change stream**;
+- distinct `ObjectGlobalSearchService` instances backed by the same `AppDatabase` observe the same Search projection signal;
+- focused Search refresh emits only **after** its FTS work succeeds;
+- workspace rebuild remains explicit and does not become a generic mutation event source;
+- `ObjectGlobalSearchPage` subscribes to projection changes and replays only a non-empty active query;
+- replay is microtask-coalesced, with no artificial polling/timer latency;
+- clearing the query or starting a rebuild invalidates in-flight query results;
+- each search request receives a monotonically increasing generation; only the latest generation may update results or surface query failure;
+- therefore an older request for the **same query text** cannot finish late and overwrite fresher results produced after a projection refresh;
+- blank queries do not trigger background searches.
+
+This is deliberately a Search projection notification, not a domain mutation bus. Object/Relation/Primitive producers continue to expose only canonical mutation impact.
+
+Regressions in `test/object_global_search_page_test.dart` prove:
+- two separate Search service instances over one database: page query is initially empty-result, another service performs focused `refreshObject(...)`, and the mounted page shows the new Object without query edit/re-entry/manual rebuild;
+- an intentionally delayed pre-refresh request for the same query cannot overwrite the newer replay result when it completes later;
+- existing Search-opened detail-return Relation-label behavior still works through the unified projection replay path.
 
 ## Fail-closed source contracts
 ### Body
-Object Core owns Body persistence/parsing. Search catches source-local `FormatException` for malformed Body contribution, contributes an empty `body` bucket, and replaces the old FTS row so stale tokens disappear. Unrelated database/index failures still surface.
+Object Core owns Body persistence/parsing. Search catches source-local `FormatException` for malformed Body contribution, contributes an empty `body` bucket, and replaces the previous FTS row so stale Body tokens disappear. Unrelated persistence/index failures still surface.
 
 ### Relation labels
-Relation owns persisted Relation inspection, index consistency, target/cardinality validation, mutation and read authority. Search never falls back to raw ids or stale normalized edges. Untrusted Relation state contributes no relation label for that Property; healthy source buckets remain indexable.
+Relation owns Relation persistence, integrity, target/cardinality validation, mutation and read authority. Search never falls back to raw ids or stale normalized edges. Untrusted Relation state contributes no label for that Property while healthy source buckets remain indexable.
 
 ### System-maintained metadata
-Generic free-text Property search is default-deny for internal `system: true` metadata unless `searchable: true` explicitly opts it in. Managed paths, SHA-256, storage ownership and similar lifecycle metadata must not become accidental search tokens.
+Generic free-text Property search is default-deny for internal `system: true` metadata unless `searchable: true` explicitly opts it in. Managed paths, hashes, storage ownership and lifecycle metadata must not become accidental search tokens.
 
 ### Corrupt ObjectType schemas
 Unknown persisted Property storage types fail closed at Object Core. Search isolates corrupt ObjectTypes/source contributions where possible, removes stale rows on focused refresh, and does not reinterpret invalid schema metadata.
@@ -126,54 +160,62 @@ Unknown persisted Property storage types fail closed at Object Core. Search isol
 ## Incremental / stale-token contracts
 - focused Object refresh removes the previous FTS row by rowid and inserts the current projection;
 - changed/removed title, alias, Property, Body, Relation, Weblink and derived-text tokens must disappear;
-- label-change refresh may enumerate canonical backlink source ids, but each source reindex still passes through Relation trust checks;
+- label-change refresh may enumerate canonical backlink source ids, but each source reindex still passes Relation trust checks;
 - mutation/completion callbacks contain only invalidation metadata, never searchable text;
 - missing/deleted impacted ids remain refreshable so stale rows are physically removed;
 - derived producers replace only their own source key;
 - PDF re-extraction replaces `pdf-text`; blank/missing/non-PDF capability clears that contribution;
 - derived/search metadata is rebuildable and is never canonical Object identity;
-- routine background producers must prefer focused refresh over a full workspace rebuild.
+- successful focused refresh emits the Search-local projection signal used for mounted-query replay;
+- stale async query results cannot overwrite later query generations;
+- routine background producers must prefer focused refresh over full workspace rebuild.
 
 ## Live product routing
 `GlobalSearchPage` resolves canonical Object search context and renders `ObjectGlobalSearchPage`.
 
-There is no live Bookmark-only FTS repository after Refactor #654. New domains participate by contributing to the canonical Object projection rather than adding separate long-term search repositories.
+There is no live Bookmark-only FTS repository after Refactor #654. New domains participate by contributing to the canonical Object projection rather than creating domain-specific long-term search repositories.
 
-Global Search workspace rebuild still reconciles optional canonical File/PDF extracted text before rebuilding FTS. Corrupt optional File/PDF capability/schema must not prevent the canonical workspace FTS rebuild.
+Global Search workspace rebuild still reconciles optional canonical File/PDF extracted text before rebuilding FTS. Corrupt optional File/PDF capability/schema must not prevent canonical workspace FTS rebuild.
+
+The mounted page's visible-result freshness is now driven by the Search-local projection-change stream, so producer-side focused refresh and page-side Search service instances do not need to be the same object instance.
 
 ## Cross-lane dependencies / ownership
-- **Object Core:** Body/schema authority plus Search-agnostic canonical sync-impact truthfulness/exactness (#909). Search consumes ids only.
+- **Object Core:** Body/schema authority plus Search-agnostic canonical sync-impact truthfulness/exactness. Search consumes ids only.
 - **Relation:** Relation persistence/integrity/read consistency. Search owns trustworthy label indexing and dependent refresh planning.
 - **Primitive:** File/PDF/Weblink/Image identity, enrichment and native behavior. Search owns searchable projection/derived text and post-mutation refresh planning.
-- **Presentation:** exposes generic navigation-impact callbacks only; it does not own FTS invalidation.
-- **Refactor:** legacy Search retirement is complete; do not recreate a Bookmark/domain-specific search product.
+- **Presentation:** consumes Search result/query state and generic navigation-impact callbacks; domain presentation does not own FTS invalidation.
+- **Refactor:** legacy Search retirement is complete; do not recreate Bookmark/domain-specific search products.
 
-Lane E currently holds no shared-hotspot lease.
+Do not infer a shared-hotspot lease from this file. Always inspect live open PR diffs immediately before editing Search or shared Object/Relation/primitive hosts.
 
-## Validation
-Recent relevant CI checkpoints:
+## Validation checkpoints
+Recent relevant CI:
 - #884 / CI #2700 — related-Object detail-return focused refresh;
 - #894 / CI #2725 — nested visited-Object refresh;
 - #902 / CI #2738 — delayed background preview Image freshness;
 - #913 / CI #2763 — live legacy mirror -> focused Search refresh;
-- Object #923 / CI #2795 — exact canonical impact consumed by the same Search boundary.
+- Object #923 / CI #2795 — exact canonical impact;
+- #935 / CI #2823 — mounted active-query projection replay + latest-request-wins race protection.
 
-The final #923 CI passed maintainability/feature guards, Drift generation, `flutter analyze`, and the full Flutter test suite.
+CI #2823 passed maintainability/feature guards, Drift generation, `flutter analyze`, and the full Flutter test suite.
 
 ## Exact next actions
-1. Re-read current `main`, open Issues/PRs and recent cross-lane changes before creating Search work.
+1. Re-read current `main`, live open Issues/PRs, `AGENTS.md`, `docs/AI_PROGRESS.md`, and this handoff before creating Search work.
 2. Resume only for a concrete Search/Indexing issue or demonstrated cross-lane Search correctness obligation.
 3. Reuse canonical Object/Body/Relation/Primitive trust boundaries rather than duplicating parsing/integrity semantics in Search.
-4. Keep focused mutation/return invalidation; do not regress to routine workspace rebuilds, polling, timestamp same-second detection, or a workspace mutation event bus.
-5. Do not swallow unrelated persistence/index errors and do not log raw user content, extracted text, private paths, malformed payloads or internal metadata.
-6. Keep system-maintained metadata non-searchable unless a deliberate product requirement explicitly opts it in.
-7. Do not recreate domain-specific long-term search repositories.
+4. Preserve both layers of freshness: focused FTS projection update **and** mounted active-query replay.
+5. Do not regress to routine workspace rebuilds, polling, timestamp heuristics, or a domain/workspace mutation event bus.
+6. Do not swallow unrelated persistence/index errors and do not log raw user content, extracted text, private paths, malformed payloads or internal metadata.
+7. Keep system-maintained metadata non-searchable unless a deliberate product requirement explicitly opts it in.
+8. Do not recreate domain-specific long-term search repositories.
 
 Potential future work such as large-PDF rebuild caching, richer ranking/filter UX, semantic/vector search, or a general mutation bus requires a separately scoped Issue.
 
 ## Latest run checkpoint / stop reason — 2026-09-08
 - #900 completed through PR #902 / `c34ed6377db011dbff4c200a97fde91a06b2f4f2`; CI #2738 full green.
-- #907 completed through PR #913 / `53fde6f305fb745d31a1faf2597bd105922935fc`; CI #2763 green.
-- Object Core #909 completed through PR #923 / `03acb81633031cb833975196b29f66947d9de747`; CI #2795 full green and removes unchanged-pass false-positive mirror impact without changing Search ownership.
-- This handoff branch starts from main `5659edaf9bfc21a04592ca3d3cc7fbf13fcca80b`. Lane A handoff is owned separately by PR #928 and repository-wide/Lane C routing by PR #929, so this PR intentionally changes only `docs/AI_PROGRESS_SEARCH.md`.
-- **Lane E is idle under the `AGENTS.md` stopping criteria until a new concrete Search obligation appears.**
+- #907 completed through PR #913 / `53fde6f305fb745d31a1faf2597bd105922935fc`; CI #2763 full green.
+- Object Core #909 completed through PR #923 / `03acb81633031cb833975196b29f66947d9de747`; CI #2795 full green.
+- #934 completed through PR #935 / `0b9e83e52728f8ea4afcc32a6d16f89b7284b9ca`; CI #2823 full green.
+- The durable handoff refresh starts from main `4f01eee6f32525cb061771cdc75c350811b0101e`, which already contains #935 plus later non-Search #938.
+- Re-audit live Issue/PR state on every resume rather than treating the current open/closed set as durable routing.
+- **Lane E is idle under the `AGENTS.md` stopping criteria unless a new concrete Search obligation is found by that live audit.**
