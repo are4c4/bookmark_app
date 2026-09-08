@@ -25,6 +25,7 @@ Recent completion checkpoints:
 - #948 moves People/profile imagery to canonical Person -> Image Relations; subsequent refactor work retired the legacy picker/mutation APIs.
 - #949 is **completed/closed**. PR #997 (`8d52f75f683851cecc8a65955bd8c509183b4a14`) adds generic Database command-palette navigation and PR #1015 (`5f03dccc55e9333c51ce3db2a2e8d8f6f2216f0f`) removes normal legacy `写真` AppShell navigation. Canonical `画像` is now the single normal user-facing image collection.
 - #1019 (`10bae52808a0176a94163228d348c988de516498`) removes the now caller-zero `PhotoManagementPage` while preserving Photo schema/data, Vault files, migrations and backup/import/export compatibility.
+- #1021 / PR #1025 (`271afd42c29dc71a52e58b95ba057287c5b3c38a`) completes safe deletion of exactly mapped legacy-Photo-mirrored Images from the canonical Images surface while preserving canonical Relation deletion and managed-file ownership safety.
 - #218 is completed after real-Mac release launch/data-preservation validation.
 
 ## Active architecture/product issues
@@ -60,7 +61,7 @@ Each implementation run/PR has exactly one primary lane. Issues may span lanes, 
 #949 is completed/closed. Canonical `画像` is the single normal user-facing image collection through generic Database/View navigation, including ⌘K; legacy `写真` AppShell navigation is gone while compatibility data remains intact. Lane C should remain idle unless another concrete generic Database/View/schema UX gap appears.
 
 ### D — Primitive Objects & Media
-#941 and #948 are completed. Lane D retains #155/#245 primitive product work only where a concrete Weblink/Image/File identity, metadata, preview/editing or migration gap remains. Do not reintroduce a Photo-specific product surface.
+#941, #948 and #1021 are completed/closed. Canonical Images now own normal preview/editing, People/profile imagery and safe deletion of exactly mapped legacy Photo mirrors. The current live audit finds no independent actionable D-owned #245 slice. Lane D should remain idle unless #155/#245 or real usage exposes a concrete Weblink/Image/File/Tag identity, metadata, content-routing, preview/editing or migration correctness obligation. Do not reintroduce a Photo-specific product surface or duplicate Lane G/F work.
 
 ### E — Search & Indexing
 No open Search-owned Issue is present in the current live audit. Preserve focused refresh rather than routine workspace rebuilds.
@@ -68,12 +69,12 @@ No open Search-owned Issue is present in the current live audit. Preserve focuse
 ### F — Storage, Vault & Delivery
 #242 production implementation is complete. #951 is the active Photo -> Image preservation gate.
 
-The normal product prerequisites are now integrated: #949 makes canonical `画像` the sole normal image collection, and #1019 removes the caller-zero Photo management UI without changing Storage/data compatibility. The repository side of #951 is therefore ready for the final real-macOS pass.
+The normal product prerequisites are integrated: #949 makes canonical `画像` the sole normal image collection, #1019 removes the caller-zero Photo management UI, and #1021 makes canonical Images the safe deletion surface for exact legacy mirrors without changing Storage/data compatibility. The repository side of #951 is therefore ready for the final real-macOS pass.
 
-Lane F is adding a focused read-only preservation-manifest helper on `feature/storage-vault-preservation-manifest-951` so the final #242/#951 pass can mechanically verify SQLite integrity plus exact `photos/` / `attachments/` bytes before/after Move/Duplicate/restore. It does not alter production Storage semantics and still requires real app semantic checks. See `docs/AI_PROGRESS_STORAGE.md` and `docs/vault_preservation_validation.md`.
+Lane F owns the focused read-only preservation tooling/procedure and the final #242/#951 real-machine validation. It must not change Image identity or infer new physical-delete authority.
 
 ### G — Refactor & Architecture Health
-#225 and #950 remain active. PR #1019 has already retired the caller-zero legacy Photo management page. Further #950 work may delete caller-zero presentation/API code only after parity is proven and must preserve Photo schema/data, Vault files, backup/import/export, migration behavior and Storage policy. Destructive legacy schema retirement is a separate explicit migration decision.
+#225 and #950 remain active. Caller-zero Photo presentation/API retirement may continue only after parity/caller-zero proof and must preserve Photo schema/data, Vault files, backup/import/export, migration behavior and Storage policy. Destructive legacy schema retirement is a separate explicit migration decision.
 
 ## Major integrated state
 - Object/ObjectType/Database/View foundations are live in real hosts.
@@ -85,8 +86,9 @@ Lane F is adding a focused read-only preservation-manifest helper on `feature/st
 - Weblink is a reusable canonical Object with normalized URL identity, enrichment and managed Image Relations.
 - Bookmark image editing/creation paths use canonical Image Relations with strict integrity preflight while temporary compatibility projection remains where required.
 - Canonical Images use ordinary persisted Database/View configuration, generic navigation, shared media rendering and shared Inspector preview/edit behavior.
+- Canonical Images can safely delete one exact internally consistent legacy Photo mirror through the canonical Relation-safe Object deletion path; ambiguous or mismatched compatibility state fails closed.
 - People profile imagery is canonical Image/Relation-based.
-- Legacy Photo physical deletion is Vault-safe; external/ambiguous files are preserved.
+- Legacy Photo physical deletion is Vault-safe; external/shared/ambiguous files are preserved.
 - Normal legacy Photo navigation and Photo management presentation are retired while compatibility schema/data remains intact.
 - Image and File remain distinct built-in primitives while sharing managed-file/Vault infrastructure.
 - Global Search is canonical Object search with focused freshness behavior.
@@ -95,8 +97,8 @@ Lane F is adding a focused read-only preservation-manifest helper on `feature/st
 
 ## Remaining product edge
 Highest-value live work:
-1. **#245 Photo -> Image** — run Lane F #951 real-macOS preservation validation and continue only safe #950 caller-zero cleanup before closing the umbrella.
-2. **#155 Weblink convergence** — finish generic rich Weblink/Image presentation and retire remaining Bookmark URL/thumbnail compatibility only after caller-zero proof.
+1. **#245 Photo -> Image** — Lane D #1021 is complete; finish Lane F #951 real-macOS preservation validation and continue only safe Lane G #950 caller-zero cleanup before closing the umbrella.
+2. **#155 Weblink convergence** — finish generic rich Weblink/Image presentation and retire remaining Bookmark URL/thumbnail compatibility only after caller-zero proof; create D work only for a concrete primitive/media obligation.
 3. **#225 / #950 Refactor** — delete superseded shims/legacy paths only after replacement parity; keep destructive schema retirement separate.
 4. **#242 / #951 validation** — final real-macOS Vault Create/Open/Switch/Move/Recovery plus Photo -> Image preservation checks.
 5. **#56 usage-driven finishing** — create focused follow-ups only for demonstrated daily-use gaps.
@@ -131,11 +133,12 @@ Before non-trivial edits, inspect current open PR ownership. One lane at a time 
 - Follow `AGENTS.md` autonomous-loop, lane ownership and stopping criteria.
 - Do not manufacture no-op/whitespace/temp commits to trigger CI.
 - Always re-read live GitHub state before implementation; handoffs are durable checkpoints, not substitutes for current Issues/PRs/CI.
-- Idle is correct when no concrete work exists. A/B/C/E may currently be idle; D retains #155/#245 product work, G retains #225/#950 work, and F is preparing/running #951/#242 final preservation validation.
+- Idle is correct when no concrete work exists. A/B/C/D/E may currently be idle; G retains #225/#950 work, and F owns #951/#242 final preservation validation. D resumes only for a newly demonstrated primitive/media obligation.
 
 ## Known risks
 - legacy Bookmark URL/thumbnail/Photo compatibility data remains live where old callers still require it;
 - Photo -> Image migration must not delete or rewrite user data before parity and ownership are proven;
+- ambiguous or corrupt Photo/Image deletion mappings must fail closed rather than guessing a destructive target;
 - malformed Relation state must fail closed rather than be silently repaired by presentation/compatibility workflows;
 - Vault changes must not silently replace inaccessible storage with a new empty database;
 - physical file deletion must not derive authority from an arbitrary legacy path;
