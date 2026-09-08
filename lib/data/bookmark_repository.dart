@@ -315,8 +315,6 @@ class BookmarkRepository {
 
   Future<int> addPhoto({required String path, String? title, String? note, Iterable<String> tagNames = const []}) =>
       _database.addPhoto(path: path, title: title, note: note, tagNames: tagNames);
-  Future<void> updatePhoto(PhotoRecord photo, {String? title, String? note, Iterable<String>? tagNames}) =>
-      _database.updatePhoto(photo.id, title: title, note: note, tagNames: tagNames);
   Future<void> deletePhoto(PhotoRecord photo) async {
     final preserveManagedFile = await PhotoManagedFileDeletionPolicy(_database)
         .shouldPreserve(legacyPhotoId: photo.id, filePath: photo.path);
