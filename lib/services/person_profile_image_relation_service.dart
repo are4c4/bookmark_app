@@ -4,12 +4,15 @@ import '../data/app_database.dart';
 import '../data/bidirectional_relation_store.dart';
 import '../data/generic_database_store.dart';
 import '../data/image_object_service.dart';
+import '../data/object_alias_store.dart';
+import '../data/object_identity_search_service.dart';
 import '../data/object_store.dart';
 import '../data/object_type_defaults_store.dart';
 import '../data/person_object_bridge.dart';
 import '../data/relation_mutation_service.dart';
 import '../data/relation_target_service.dart';
 import '../data/system_object_store.dart';
+import '../domain/object_identity_search.dart';
 import '../domain/object_model.dart';
 
 /// Integrity boundary for the canonical Person -> Profile Image Relation.
@@ -51,6 +54,12 @@ class PersonProfileImageRelationService {
         ),
       );
 
+  late final ObjectIdentitySearchService _identitySearch =
+      ObjectIdentitySearchService(
+        objectStore: objectStore,
+        aliasStore: ObjectAliasStore(_genericStore),
+      );
+
   /// Loads the canonical profile-image Relation plus legacy compatibility state.
   /// Schema provisioning is deterministic and rejects an incompatible existing
   /// `Profile Image` Property rather than creating a second relationship path.
@@ -78,6 +87,16 @@ class PersonProfileImageRelationService {
       relation: relation,
     );
   }
+
+  Future<List<ObjectIdentitySearchResult>> searchImages({
+    required PersonProfileImageRelationState state,
+    required String query,
+  }) =>
+      _identitySearch.search(
+        workspaceId: state.workspaceId,
+        objectTypeId: state.imageObjectType.id,
+        query: query,
+      );
 
   /// Migrates every currently promotable legacy profile photo in one pass.
   ///
@@ -460,6 +479,10 @@ class PersonProfileImageRelationState {
     }
     return relation.selectedObjects.single.id;
   }
+
+  bool get hasDiagnostics =>
+      relation.hasCardinalityViolation ||
+      relation.missingTargetObjectIds.isNotEmpty;
 }
 
 class _ProfileImageMigrationPlan {

@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 
@@ -11,6 +9,8 @@ import '../database/database_definition.dart';
 import '../data/person_group_store.dart';
 import '../services/bookmark_presentation_resolver_factory.dart';
 import '../services/bookmark_url_resolver.dart';
+import '../services/person_profile_image_relation_service.dart';
+import '../services/person_profile_image_relation_service_factory.dart';
 import '../features/database/presentation/widgets/database_create_tiles.dart';
 import '../features/database/presentation/widgets/database_page_toolbar.dart';
 import '../features/database/presentation/widgets/database_view_tabs.dart';
@@ -22,7 +22,7 @@ import '../widgets/bookmark_reverse_lookup_dialog.dart';
 import '../widgets/detail_section.dart';
 import '../widgets/inline_rename_text.dart';
 import '../widgets/notion_inline_field.dart';
-import '../widgets/photo_database_picker.dart';
+import '../widgets/person_profile_image.dart';
 
 enum PeopleViewType { gallery, list, table }
 
@@ -42,6 +42,8 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
   late final PersonGroupStore _personGroups;
   late final DatabaseViewStore _databaseViewStore;
   late final BookmarkUrlResolve _resolveBookmarkUrl;
+  late final PersonProfileImageRelationService _profileImages;
+  int _profileImageRevision = 0;
   DatabaseViewConfig? _activeDatabaseView;
   int? _activeDatabaseViewId;
   Timer? _viewSaveTimer;
@@ -55,6 +57,7 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
     _databaseViewStore = DatabaseViewStore(repository.workspaceStore.database);
     _resolveBookmarkUrl =
         BookmarkPresentationResolverFactory.urlFor(repository);
+    _profileImages = createPersonProfileImageRelationService(repository);
   }
 
   @override
@@ -108,9 +111,6 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
         ),
       );
 
-  PhotoRecord? _profilePhoto(Person person, List<PhotoRecord> photos) =>
-      photos.where((photo) => photo.id == person.profilePhotoId).firstOrNull;
-
   List<BookmarkItem> _bookmarksFor(
     Person person,
     List<BookmarkItem> bookmarks,
@@ -141,37 +141,6 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
     final id = await repository.createPerson(value);
     if (mounted) setState(() => _selectedPersonId = id);
   }
-
-  Future<void> _chooseProfilePhoto(
-    Person person,
-    List<PhotoRecord> photos,
-  ) async {
-    final current = _profilePhoto(person, photos);
-    final result = await showPhotoDatabasePicker(
-      context: context,
-      photos: photos,
-      initiallySelectedIds: current == null ? const [] : [current.id],
-      initialCoverPhotoId: current?.id,
-      title: 'プロフィール画像を選択',
-    );
-    if (result == null) return;
-    final photo = result.coverPhoto ?? result.photos.firstOrNull;
-    await repository.updatePerson(
-      person,
-      person.name,
-      person.note,
-      profilePhoto: photo,
-      updateProfilePhoto: true,
-    );
-  }
-
-  Future<void> _clearProfilePhoto(Person person) => repository.updatePerson(
-        person,
-        person.name,
-        person.note,
-        profilePhoto: null,
-        updateProfilePhoto: true,
-      );
 
   Future<void> _delete(Person person) async {
     final ok = await showDialog<bool>(
@@ -376,37 +345,28 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
     );
   }
 
-  Widget _galleryImage(Person person, List<PhotoRecord> photos) {
-    final photo = _profilePhoto(person, photos);
-    if (photo == null) {
-      return SizedBox(
-        height: 180,
+  Widget _galleryImage(Person person) => PersonProfileImageMedia(
+        service: _profileImages,
+        workspaceId: repository.workspaceId,
+        personId: person.id,
+        revision: _profileImageRevision,
         width: double.infinity,
-        child: ColoredBox(
+        height: 180,
+      );
+
+  Widget _avatar(Person person) => PersonProfileImageMedia(
+        service: _profileImages,
+        workspaceId: repository.workspaceId,
+        personId: person.id,
+        revision: _profileImageRevision,
+        width: 44,
+        height: 44,
+        clipOval: true,
+        placeholderBuilder: (context) => ColoredBox(
           color: Theme.of(context).colorScheme.surfaceContainerLow,
-          child: const Center(child: Icon(Icons.person_outline, size: 52)),
+          child: const Center(child: Icon(Icons.person_outline, size: 22)),
         ),
       );
-    }
-    return Image.file(
-      File(photo.path),
-      width: double.infinity,
-      fit: BoxFit.fitWidth,
-      errorBuilder: (_, __, ___) => const SizedBox(
-        height: 180,
-        child: Center(child: Icon(Icons.person_outline, size: 52)),
-      ),
-    );
-  }
-
-  Widget _avatar(Person person, List<PhotoRecord> photos) {
-    final photo = _profilePhoto(person, photos);
-    return CircleAvatar(
-      radius: 22,
-      backgroundImage: photo == null ? null : FileImage(File(photo.path)),
-      child: photo == null ? const Icon(Icons.person_outline) : null,
-    );
-  }
 
   void _showRelated(Person person, List<BookmarkItem> bookmarks) {
     final related = _bookmarksFor(person, bookmarks);
@@ -437,7 +397,6 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
 
   Widget _personCard(
     Person person,
-    List<PhotoRecord> photos,
     List<BookmarkItem> bookmarks,
   ) {
     final related = _bookmarksFor(person, bookmarks);
@@ -461,7 +420,7 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _galleryImage(person, photos),
+              _galleryImage(person),
               Padding(
                 padding: const EdgeInsets.fromLTRB(10, 8, 4, 10),
                 child: Row(
@@ -505,7 +464,6 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
 
   Widget _gallery(
     List<Person> people,
-    List<PhotoRecord> photos,
     List<BookmarkItem> bookmarks,
   ) => LayoutBuilder(
         builder: (context, constraints) {
@@ -534,7 +492,7 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
                   onCreate: _createPersonInline,
                 );
               }
-              return _personCard(people[index], photos, bookmarks);
+              return _personCard(people[index], bookmarks);
             },
           );
         },
@@ -542,7 +500,6 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
 
   Widget _list(
     List<Person> people,
-    List<PhotoRecord> photos,
     List<BookmarkItem> bookmarks,
   ) => ListView.separated(
         padding: const EdgeInsets.fromLTRB(18, UiTokens.space12, 18, 100),
@@ -561,7 +518,7 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
           final related = _bookmarksFor(person, bookmarks);
           return ListTile(
             selected: _selectedPersonId == person.id,
-            leading: _avatar(person, photos),
+            leading: _avatar(person),
             title: InlineRenameText(
               value: person.name,
               style: const TextStyle(fontWeight: FontWeight.w600),
@@ -583,7 +540,6 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
 
   Widget _table(
     List<Person> people,
-    List<PhotoRecord> photos,
     List<BookmarkItem> bookmarks,
   ) => Column(
         children: [
@@ -608,7 +564,7 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
                       DataCell(
                         Row(
                           children: [
-                            _avatar(person, photos),
+                            _avatar(person),
                             const SizedBox(width: 10),
                             SizedBox(
                               width: 180,
@@ -649,73 +605,16 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
         ],
       );
 
-  Widget _profileImageEditor(Person person, List<PhotoRecord> photos) {
-    final photo = _profilePhoto(person, photos);
-    final scheme = Theme.of(context).colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Material(
-          color: scheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(UiTokens.radiusMd),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: () => _chooseProfilePhoto(person, photos),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                if (photo != null)
-                  Image.file(
-                    File(photo.path),
-                    width: double.infinity,
-                    fit: BoxFit.fitWidth,
-                  )
-                else
-                  const SizedBox(
-                    height: 220,
-                    width: double.infinity,
-                    child: Center(child: Icon(Icons.person_outline, size: 64)),
-                  ),
-                Positioned(
-                  right: 10,
-                  bottom: 10,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: scheme.surface.withValues(alpha: .92),
-                      borderRadius: BorderRadius.circular(5),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 9,
-                        vertical: 6,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.photo_camera_outlined, size: 16),
-                          const SizedBox(width: 5),
-                          Text(
-                            photo == null ? '画像を追加' : '画像を変更',
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        if (photo != null)
-          TextButton.icon(
-            onPressed: () => _clearProfilePhoto(person),
-            icon: const Icon(Icons.close, size: 15),
-            label: const Text('画像を解除'),
-          ),
-      ],
-    );
-  }
+  Widget _profileImageEditor(Person person) => PersonProfileImageEditor(
+        service: _profileImages,
+        workspaceId: repository.workspaceId,
+        person: person,
+        revision: _profileImageRevision,
+        onChanged: () {
+          if (!mounted) return;
+          setState(() => _profileImageRevision++);
+        },
+      );
 
   Widget _groupsSection(Person person) => FutureBuilder<List<PersonGroupInfo>>(
         future: _personGroups.groupsForPerson(person.id),
@@ -778,7 +677,6 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
 
   Widget _detail(
     Person person,
-    List<PhotoRecord> photos,
     List<BookmarkItem> bookmarks,
   ) {
     final related = _bookmarksFor(person, bookmarks);
@@ -819,7 +717,7 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(18, 18, 18, 30),
               children: [
-                _profileImageEditor(person, photos),
+                _profileImageEditor(person),
                 const SizedBox(height: 10),
                 InlineRenameText(
                   value: person.name,
@@ -996,69 +894,57 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
                 if (!peopleSnapshot.hasData) {
                   return const Center(child: CircularProgressIndicator());
                 }
-                return StreamBuilder<List<PhotoRecord>>(
-                  stream: repository.watchPhotos(),
-                  builder: (context, photoSnapshot) {
-                    final photos = photoSnapshot.data ?? const <PhotoRecord>[];
-                    return StreamBuilder<List<BookmarkItem>>(
-                      stream: repository.watchAll(),
-                      builder: (context, bookmarkSnapshot) {
-                        final bookmarks =
-                            bookmarkSnapshot.data ?? const <BookmarkItem>[];
-                        final all = peopleSnapshot.data!;
-                        return FutureBuilder<Set<int>>(
-                          future: _selectedGroupId == null
-                              ? Future.value(all.map((person) => person.id).toSet())
-                              : _personGroups.memberIds(_selectedGroupId!),
-                          builder: (context, groupSnapshot) {
-                            final allowedIds = groupSnapshot.data ?? <int>{};
-                            final q = _query.trim().toLowerCase();
-                            final people = all.where((person) {
-                              if (_selectedGroupId != null &&
-                                  !allowedIds.contains(person.id)) {
-                                return false;
-                              }
-                              return q.isEmpty ||
-                                  '${person.name} ${person.note ?? ''}'
-                                      .toLowerCase()
-                                      .contains(q);
-                            }).toList();
-                            final selected = all
-                                .where(
-                                  (person) => person.id == _selectedPersonId,
-                                )
-                                .firstOrNull;
+                return StreamBuilder<List<BookmarkItem>>(
+                  stream: repository.watchAll(),
+                  builder: (context, bookmarkSnapshot) {
+                    final bookmarks =
+                        bookmarkSnapshot.data ?? const <BookmarkItem>[];
+                    final all = peopleSnapshot.data!;
+                    return FutureBuilder<Set<int>>(
+                      future: _selectedGroupId == null
+                          ? Future.value(all.map((person) => person.id).toSet())
+                          : _personGroups.memberIds(_selectedGroupId!),
+                      builder: (context, groupSnapshot) {
+                        final allowedIds = groupSnapshot.data ?? <int>{};
+                        final q = _query.trim().toLowerCase();
+                        final people = all.where((person) {
+                          if (_selectedGroupId != null &&
+                              !allowedIds.contains(person.id)) {
+                            return false;
+                          }
+                          return q.isEmpty ||
+                              '${person.name} ${person.note ?? ''}'
+                                  .toLowerCase()
+                                  .contains(q);
+                        }).toList();
+                        final selected = all
+                            .where((person) => person.id == _selectedPersonId)
+                            .firstOrNull;
 
-                            return Row(
-                              children: [
-                                Expanded(
-                                  child: people.isEmpty && q.isNotEmpty
-                                      ? const AppEmptyState(
-                                          icon: Icons.search_off_outlined,
-                                          title: '条件に一致する人物がいません',
-                                        )
-                                      : switch (_viewType) {
-                                          PeopleViewType.gallery =>
-                                            _gallery(people, photos, bookmarks),
-                                          PeopleViewType.list =>
-                                            _list(people, photos, bookmarks),
-                                          PeopleViewType.table =>
-                                            _table(people, photos, bookmarks),
-                                        },
-                                ),
-                                if (selected != null)
-                                  ResizableDetailPane(
-                                    storageKey: 'people-detail-pane',
-                                    initialWidth: 400,
-                                    child: _detail(
-                                      selected,
-                                      photos,
-                                      bookmarks,
-                                    ),
-                                  ),
-                              ],
-                            );
-                          },
+                        return Row(
+                          children: [
+                            Expanded(
+                              child: people.isEmpty && q.isNotEmpty
+                                  ? const AppEmptyState(
+                                      icon: Icons.search_off_outlined,
+                                      title: '条件に一致する人物がいません',
+                                    )
+                                  : switch (_viewType) {
+                                      PeopleViewType.gallery =>
+                                        _gallery(people, bookmarks),
+                                      PeopleViewType.list =>
+                                        _list(people, bookmarks),
+                                      PeopleViewType.table =>
+                                        _table(people, bookmarks),
+                                    },
+                            ),
+                            if (selected != null)
+                              ResizableDetailPane(
+                                storageKey: 'people-detail-pane',
+                                initialWidth: 400,
+                                child: _detail(selected, bookmarks),
+                              ),
+                          ],
                         );
                       },
                     );
