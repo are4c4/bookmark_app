@@ -53,6 +53,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
+      find.byKey(ValueKey('object-image-detail-panel-${image.id}')),
+      findsOneWidget,
+    );
+    expect(
       find.byKey(const ValueKey('object-title-edit-button')),
       findsOneWidget,
     );
@@ -163,6 +167,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
+      find.byKey(ValueKey('object-image-detail-panel-${image.id}')),
+      findsOneWidget,
+    );
+    expect(
       find.byKey(const ValueKey('object-title-edit-button')),
       findsNothing,
     );
@@ -210,6 +218,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(
+      find.byKey(ValueKey('object-image-detail-panel-${weblink.id}')),
+      findsNothing,
+    );
     expect(
       find.byKey(const ValueKey('object-title-edit-button')),
       findsNothing,
