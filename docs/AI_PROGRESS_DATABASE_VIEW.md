@@ -61,7 +61,7 @@ The built-in `bookmark` starting experience is configuration, not a hard-coded d
 Together with Paper/Plant regressions, version/ownership tests, searchable template selection, Group/Layout defaults and empty custom Database creation, this satisfies the generic composability target.
 
 ## Remaining open work and ownership
-Live repository Issue audit currently shows only #56, #155, #225, #242 and #245 open. None is a focused Lane C implementation assignment.
+Repository Issue state is time-sensitive. Re-audit live Issues on resume; the durable architecture umbrellas relevant to Lane C remain #56, #155, #225, #242 and #245, none of which is a focused Lane C implementation assignment by itself.
 
 Do not take these merely to keep Lane C busy:
 - #155 Weblink/Image product presentation and legacy convergence — primarily Primitive/Object ownership. Lane C already delivered the current default Weblinks View in #920.
