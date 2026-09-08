@@ -243,8 +243,6 @@ class BookmarkRepository {
       _database.setBookmarkTags(bookmark.id, selectedTags.map((tag) => tag.name));
   Future<void> setPeopleForRole(BookmarkItem bookmark, String role, Iterable<Person> selectedPeople) =>
       _database.setPeopleForRole(bookmark.id, role, selectedPeople);
-  Future<void> removePersonFromBookmark(BookmarkItem bookmark, Person person, {String? role}) =>
-      _database.removePersonRole(bookmark.id, person, role: role);
   Future<void> setBookmarkCollections(BookmarkItem bookmark, Iterable<CollectionRecord> selected) =>
       _database.setBookmarkCollections(bookmark.id, selected.map((collection) => collection.name));
 
