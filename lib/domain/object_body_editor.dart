@@ -33,13 +33,18 @@ class ObjectBodyEditor {
     return document.copyWith(blocks: List.unmodifiable(next));
   }
 
-  /// Splits one paragraph at [offset] and inserts a new paragraph immediately
-  /// after it without rewriting any unrelated block payload.
+  /// Splits one paragraph across the current text selection and inserts a new
+  /// paragraph immediately after it without rewriting unrelated block payload.
+  ///
+  /// A collapsed selection behaves like a cursor split. A non-collapsed
+  /// selection is replaced by the paragraph break, matching ordinary document
+  /// editor behavior.
   ObjectBodyDocument splitParagraph({
     required ObjectBodyDocument document,
     required String blockId,
     required String newBlockId,
-    required int offset,
+    required int selectionStart,
+    required int selectionEnd,
   }) {
     _assertUniqueId(document, newBlockId);
     final index = _indexOf(document, blockId);
@@ -48,17 +53,30 @@ class ObjectBodyEditor {
       throw StateError('Object Body block $blockId is not a paragraph.');
     }
     final text = block.text ?? '';
-    if (offset < 0 || offset > text.length) {
-      throw RangeError.range(offset, 0, text.length, 'offset');
+    if (selectionStart < 0 || selectionStart > text.length) {
+      throw RangeError.range(
+        selectionStart,
+        0,
+        text.length,
+        'selectionStart',
+      );
+    }
+    if (selectionEnd < selectionStart || selectionEnd > text.length) {
+      throw RangeError.range(
+        selectionEnd,
+        selectionStart,
+        text.length,
+        'selectionEnd',
+      );
     }
 
     final next = List<ObjectBodyBlock>.of(document.blocks);
-    next[index] = block.copyWith(text: text.substring(0, offset));
+    next[index] = block.copyWith(text: text.substring(0, selectionStart));
     next.insert(
       index + 1,
       ObjectBodyBlock.paragraph(
         id: newBlockId,
-        text: text.substring(offset),
+        text: text.substring(selectionEnd),
       ),
     );
     return document.copyWith(blocks: List.unmodifiable(next));
