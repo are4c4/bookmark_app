@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Warn when this PR and another open PR touch the same shared hotspot."""
+"""Advisory coordination checks for shared hotspots in pull requests."""
 
 from __future__ import annotations
 
@@ -33,6 +33,26 @@ class PullRequestFiles:
     files: frozenset[str]
 
 
+@dataclass(frozen=True)
+class HotspotDiff:
+    path: str
+    additions: int
+    deletions: int
+
+    @property
+    def changed_lines(self) -> int:
+        return self.additions + self.deletions
+
+
+@dataclass(frozen=True)
+class BranchRisk:
+    compare_status: str
+    merge_base_sha: str
+    base_sha: str
+    main_changed_files: frozenset[str]
+    hotspot_diffs: tuple[HotspotDiff, ...]
+
+
 def hotspot_files(files: Iterable[str]) -> frozenset[str]:
     return frozenset(path for path in files if path in HOTSPOTS)
 
@@ -53,6 +73,21 @@ def find_overlaps(
         for path in sorted(current_hotspots.intersection(hotspot_files(pull.files))):
             overlaps.append((path, pull))
     return overlaps
+
+
+def stale_hotspot_paths(
+    current_files: Iterable[str], main_changed_files: Iterable[str]
+) -> list[str]:
+    return sorted(hotspot_files(current_files).intersection(hotspot_files(main_changed_files)))
+
+
+def oversized_hotspot_diffs(
+    diffs: Iterable[HotspotDiff], threshold: int
+) -> list[HotspotDiff]:
+    return sorted(
+        (diff for diff in diffs if diff.changed_lines > threshold),
+        key=lambda diff: diff.path,
+    )
 
 
 def _request_json(url: str, token: str) -> object:
@@ -84,14 +119,68 @@ def _paged_list(url: str, token: str) -> list[dict[str, object]]:
         page += 1
 
 
-def _fetch_live(repository: str, current_number: int, token: str) -> tuple[list[str], list[PullRequestFiles]]:
+def _compare_files(payload: object) -> frozenset[str]:
+    if not isinstance(payload, dict):
+        raise ValueError("GitHub compare response was not an object")
+    files = payload.get("files", [])
+    if not isinstance(files, list):
+        raise ValueError("GitHub compare files were not a list")
+    return frozenset(
+        str(row.get("filename", "")) for row in files if isinstance(row, dict)
+    )
+
+
+def _fetch_live(
+    repository: str, current_number: int, token: str
+) -> tuple[list[str], list[PullRequestFiles], BranchRisk | None]:
     api_root = f"https://api.github.com/repos/{repository}"
     current_file_rows = _paged_list(f"{api_root}/pulls/{current_number}/files", token)
     current_files = [str(row.get("filename", "")) for row in current_file_rows]
+    current_hotspots = hotspot_files(current_files)
 
-    # Avoid scanning every open PR when the current PR has no shared hotspot.
-    if not hotspot_files(current_files):
-        return current_files, []
+    # Avoid the more expensive PR/compare/open-PR scans when no shared hotspot is touched.
+    if not current_hotspots:
+        return current_files, [], None
+
+    hotspot_diffs = tuple(
+        HotspotDiff(
+            path=str(row.get("filename", "")),
+            additions=int(row.get("additions", 0) or 0),
+            deletions=int(row.get("deletions", 0) or 0),
+        )
+        for row in current_file_rows
+        if str(row.get("filename", "")) in current_hotspots
+    )
+
+    current_payload = _request_json(f"{api_root}/pulls/{current_number}", token)
+    if not isinstance(current_payload, dict):
+        raise ValueError("Current PR response was not an object")
+    base = current_payload.get("base")
+    head = current_payload.get("head")
+    if not isinstance(base, dict) or not isinstance(head, dict):
+        raise ValueError("Current PR base/head metadata unavailable")
+    base_sha = str(base.get("sha", ""))
+    head_sha = str(head.get("sha", ""))
+    if not base_sha or not head_sha:
+        raise ValueError("Current PR base/head SHA unavailable")
+
+    branch_compare = _request_json(f"{api_root}/compare/{base_sha}...{head_sha}", token)
+    if not isinstance(branch_compare, dict):
+        raise ValueError("Branch compare response was not an object")
+    compare_status = str(branch_compare.get("status", "unknown"))
+    merge_base = branch_compare.get("merge_base_commit")
+    if not isinstance(merge_base, dict):
+        raise ValueError("Merge-base metadata unavailable")
+    merge_base_sha = str(merge_base.get("sha", ""))
+    if not merge_base_sha:
+        raise ValueError("Merge-base SHA unavailable")
+
+    main_changed_files: frozenset[str] = frozenset()
+    if merge_base_sha != base_sha:
+        main_compare = _request_json(
+            f"{api_root}/compare/{merge_base_sha}...{base_sha}", token
+        )
+        main_changed_files = _compare_files(main_compare)
 
     pull_rows = _paged_list(f"{api_root}/pulls?state=open", token)
     open_prs: list[PullRequestFiles] = []
@@ -103,7 +192,15 @@ def _fetch_live(repository: str, current_number: int, token: str) -> tuple[list[
         file_rows = _paged_list(f"{api_root}/pulls/{number}/files", token)
         files = frozenset(str(file_row.get("filename", "")) for file_row in file_rows)
         open_prs.append(PullRequestFiles(number=number, title=str(title or ""), files=files))
-    return current_files, open_prs
+
+    risk = BranchRisk(
+        compare_status=compare_status,
+        merge_base_sha=merge_base_sha,
+        base_sha=base_sha,
+        main_changed_files=main_changed_files,
+        hotspot_diffs=hotspot_diffs,
+    )
+    return current_files, open_prs, risk
 
 
 def _fetch_fixture(path: Path) -> tuple[int, list[str], list[PullRequestFiles]]:
@@ -131,7 +228,16 @@ def _append_summary(lines: list[str]) -> None:
         summary.write("\n")
 
 
-def _emit_result(current_files: list[str], overlaps: list[tuple[str, PullRequestFiles]]) -> None:
+def _warning(title: str, message: str) -> None:
+    escaped = (
+        message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+    )
+    print(f"::warning title={title}::{escaped}")
+
+
+def _emit_overlap_result(
+    current_files: list[str], overlaps: list[tuple[str, PullRequestFiles]]
+) -> None:
     touched = sorted(hotspot_files(current_files))
     if not touched:
         print("shared_hotspot_guard: current PR touches no shared hotspot")
@@ -161,8 +267,7 @@ def _emit_result(current_files: list[str], overlaps: list[tuple[str, PullRequest
         "| --- | --- |",
     ]
     for path, pull in overlaps:
-        message = f"{path} also changed by #{pull.number} {pull.title}".replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
-        print(f"::warning title=Shared hotspot overlap::{message}")
+        _warning("Shared hotspot overlap", f"{path} also changed by #{pull.number} {pull.title}")
         summary_lines.append(f"| `{path}` | #{pull.number} — {pull.title} |")
     summary_lines.extend(
         [
@@ -173,12 +278,76 @@ def _emit_result(current_files: list[str], overlaps: list[tuple[str, PullRequest
     _append_summary(summary_lines)
 
 
+def _emit_branch_risk(current_files: list[str], risk: BranchRisk | None, large_diff_threshold: int) -> None:
+    if risk is None:
+        return
+
+    stale = stale_hotspot_paths(current_files, risk.main_changed_files)
+    oversized = oversized_hotspot_diffs(risk.hotspot_diffs, large_diff_threshold)
+    lines = [
+        "## Shared hotspot branch freshness",
+        "",
+        f"- Compare status against current base: `{risk.compare_status}`",
+        f"- Merge base: `{risk.merge_base_sha[:12]}`",
+        f"- Current base: `{risk.base_sha[:12]}`",
+    ]
+
+    if stale:
+        for path in stale:
+            _warning(
+                "Stale shared hotspot",
+                f"{path} changed on main after this branch diverged; refresh/re-audit before integration.",
+            )
+        lines.extend(
+            [
+                "- ⚠️ Shared hotspots changed on main after branch divergence:",
+                *[f"  - `{path}`" for path in stale],
+            ]
+        )
+    else:
+        lines.append("- No touched shared hotspot changed on main after branch divergence.")
+
+    if risk.hotspot_diffs:
+        lines.extend(
+            [
+                "",
+                "| Hotspot | Additions | Deletions | Changed lines |",
+                "| --- | ---: | ---: | ---: |",
+            ]
+        )
+        for diff in sorted(risk.hotspot_diffs, key=lambda item: item.path):
+            lines.append(
+                f"| `{diff.path}` | {diff.additions} | {diff.deletions} | {diff.changed_lines} |"
+            )
+
+    for diff in oversized:
+        _warning(
+            "Large shared hotspot diff",
+            f"{diff.path} changes {diff.changed_lines} lines (advisory threshold {large_diff_threshold}); check for unrelated formatter/refactor churn.",
+        )
+    if oversized:
+        lines.extend(
+            [
+                "",
+                f"⚠️ Hotspot diff exceeds the advisory `{large_diff_threshold}` changed-line threshold. Confirm that the breadth is intentional and not unrelated formatting churn.",
+            ]
+        )
+
+    _append_summary(lines)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--fixture", type=Path, help="Read deterministic PR/file data from JSON instead of GitHub")
+    parser.add_argument(
+        "--large-diff-threshold",
+        type=int,
+        default=int(os.environ.get("HOTSPOT_LARGE_DIFF_WARN", "200")),
+    )
     args = parser.parse_args()
 
     try:
+        risk: BranchRisk | None = None
         if args.fixture:
             current_number, current_files, open_prs = _fetch_fixture(args.fixture)
         else:
@@ -186,17 +355,28 @@ def main() -> int:
             token = os.environ.get("GITHUB_TOKEN", "")
             current_raw = os.environ.get("CURRENT_PR_NUMBER", "")
             if not repository or not token or not current_raw:
-                print("::warning title=Hotspot audit unavailable::Missing GITHUB_REPOSITORY, GITHUB_TOKEN, or CURRENT_PR_NUMBER")
+                _warning(
+                    "Hotspot audit unavailable",
+                    "Missing GITHUB_REPOSITORY, GITHUB_TOKEN, or CURRENT_PR_NUMBER",
+                )
                 return 0
             current_number = int(current_raw)
-            current_files, open_prs = _fetch_live(repository, current_number, token)
+            current_files, open_prs, risk = _fetch_live(repository, current_number, token)
 
-        _emit_result(current_files, find_overlaps(current_number, current_files, open_prs))
+        _emit_overlap_result(
+            current_files, find_overlaps(current_number, current_files, open_prs)
+        )
+        _emit_branch_risk(current_files, risk, args.large_diff_threshold)
         return 0
     except (OSError, ValueError, KeyError, json.JSONDecodeError, urllib.error.URLError) as error:
-        message = str(error).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
-        print(f"::warning title=Hotspot audit unavailable::{message}")
-        _append_summary(["## Shared hotspot audit", "", "⚠️ Hotspot ownership could not be inspected automatically; perform the normal manual open-PR audit."])
+        _warning("Hotspot audit unavailable", str(error))
+        _append_summary(
+            [
+                "## Shared hotspot audit",
+                "",
+                "⚠️ Hotspot ownership/freshness could not be inspected automatically; perform the normal manual open-PR and base-freshness audit.",
+            ]
+        )
         return 0
 
 
