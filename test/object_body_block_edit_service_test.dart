@@ -82,7 +82,7 @@ void main() {
           ObjectBodyBlock(
             id: 'p1',
             type: 'paragraph',
-            text: 'hello world',
+            text: 'hello brave world',
             attributes: <String, dynamic>{'align': 'center'},
           ),
           ObjectBodyBlock(id: 'p3', type: 'paragraph', text: 'after'),
@@ -94,7 +94,8 @@ void main() {
       objectId: objectId,
       blockId: 'p1',
       newBlockId: 'p2',
-      offset: 5,
+      selectionStart: 5,
+      selectionEnd: 11,
     );
 
     expect(result.blocks.map((block) => block.id), ['p1', 'p2', 'p3']);
