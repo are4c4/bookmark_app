@@ -11,12 +11,34 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+Future<void> _pumpUntil(
+  WidgetTester tester,
+  bool Function() condition, {
+  int attempts = 40,
+}) async {
+  for (var attempt = 0; attempt < attempts && !condition(); attempt += 1) {
+    await tester.pump(const Duration(milliseconds: 20));
+  }
+  expect(condition(), isTrue);
+}
+
+void _closeDatabaseAfterUnmount(
+  WidgetTester tester,
+  AppDatabase database,
+) {
+  addTearDown(() async {
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await database.close();
+  });
+}
+
 void main() {
   testWidgets(
     'Object inspector composes Image panel only for canonical Image Objects',
     (tester) async {
       final database = AppDatabase.forTesting(NativeDatabase.memory());
-      addTearDown(database.close);
+      _closeDatabaseAfterUnmount(tester, database);
       final workspaceId = await WorkspaceStore(database).initialize();
       final genericStore = GenericDatabaseStore(database);
       final objectStore = ObjectStore(genericStore);
@@ -72,7 +94,10 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      Future<void> pumpInspector(int objectId) async {
+      Future<void> pumpInspector(
+        int objectId,
+        bool Function() ready,
+      ) async {
         await tester.pumpWidget(
           MaterialApp(
             home: ObjectInspectorPage(
@@ -83,26 +108,33 @@ void main() {
             ),
           ),
         );
-        await tester.pumpAndSettle();
+        await _pumpUntil(tester, ready);
       }
 
-      await pumpInspector(nativeImage.id);
-      expect(
-        find.byKey(ValueKey('object-image-detail-panel-${nativeImage.id}')),
-        findsOneWidget,
+      final nativePanel =
+          find.byKey(ValueKey('object-image-detail-panel-${nativeImage.id}'));
+      await pumpInspector(
+        nativeImage.id,
+        () => nativePanel.evaluate().isNotEmpty,
       );
+      expect(nativePanel, findsOneWidget);
       expect(
         find.byKey(ValueKey('object-image-edit-actions-${nativeImage.id}')),
         findsOneWidget,
       );
 
-      await pumpInspector(legacyImage.id);
-      expect(
-        find.byKey(ValueKey('object-image-detail-panel-${legacyImage.id}')),
-        findsOneWidget,
+      final legacyPanel =
+          find.byKey(ValueKey('object-image-detail-panel-${legacyImage.id}'));
+      await pumpInspector(
+        legacyImage.id,
+        () => legacyPanel.evaluate().isNotEmpty,
       );
+      expect(legacyPanel, findsOneWidget);
 
-      await pumpInspector(customObjectId);
+      await pumpInspector(
+        customObjectId,
+        () => find.text('Custom image-like object').evaluate().isNotEmpty,
+      );
       expect(
         find.byKey(ValueKey('object-image-detail-panel-$customObjectId')),
         findsNothing,
