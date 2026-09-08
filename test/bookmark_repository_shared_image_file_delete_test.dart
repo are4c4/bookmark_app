@@ -27,10 +27,12 @@ void main() {
 
     final fixture = await _repositoryFixture(directory.path);
     addTearDown(fixture.database.close);
-    final photoId =
-        await fixture.repository.addPhoto(path: 'photos/legacy-only.jpg');
-    final photo = (await fixture.repository.watchPhotos().first)
-        .singleWhere((candidate) => candidate.id == photoId);
+    final photoId = await fixture.database.addPhoto(
+      path: 'photos/legacy-only.jpg',
+    );
+    final photo = (await fixture.repository.watchPhotos().first).singleWhere(
+      (candidate) => candidate.id == photoId,
+    );
 
     await fixture.repository.deletePhoto(photo);
 
@@ -68,7 +70,7 @@ void main() {
       filePath: 'photos/shared.jpg',
       title: 'Native owner',
     );
-    final photoId = await fixture.repository.addPhoto(path: 'photos/shared.jpg');
+    final photoId = await fixture.database.addPhoto(path: 'photos/shared.jpg');
     final bridge = CoreObjectBridge(
       database: fixture.database,
       objectStore: objectStore,
@@ -85,8 +87,9 @@ void main() {
       'SELECT object_id FROM photo_object_links WHERE photo_id = $photoId',
     ).getSingle();
     expect(link.read<int>('object_id'), nativeImage.id);
-    final photo = (await fixture.repository.watchPhotos().first)
-        .singleWhere((candidate) => candidate.id == photoId);
+    final photo = (await fixture.repository.watchPhotos().first).singleWhere(
+      (candidate) => candidate.id == photoId,
+    );
 
     await fixture.repository.deletePhoto(photo);
 
@@ -116,10 +119,10 @@ void main() {
 
     final fixture = await _repositoryFixture(directory.path);
     addTearDown(fixture.database.close);
-    final photoId =
-        await fixture.repository.addPhoto(path: externalFile.path);
-    final photo = (await fixture.repository.watchPhotos().first)
-        .singleWhere((candidate) => candidate.id == photoId);
+    final photoId = await fixture.database.addPhoto(path: externalFile.path);
+    final photo = (await fixture.repository.watchPhotos().first).singleWhere(
+      (candidate) => candidate.id == photoId,
+    );
 
     await fixture.repository.deletePhoto(photo);
 
