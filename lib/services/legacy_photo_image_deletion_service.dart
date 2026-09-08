@@ -4,6 +4,7 @@ import '../data/app_database.dart';
 import '../data/image_object_service.dart';
 import '../data/object_store.dart';
 import '../data/system_object_store.dart';
+import '../domain/object_model.dart';
 
 /// Fail-closed boundary for deleting a canonical Image that is still mapped to
 /// legacy Photo compatibility data.
@@ -51,9 +52,11 @@ class LegacyPhotoImageDeletionService {
       throw const LegacyPhotoImageDeletionSafetyException();
     }
 
+    AppObject? targetObject;
     int? storedLegacyPhotoId;
     for (final object in await objectStore.listObjects(objectTypeId)) {
       if (object.id != objectId) continue;
+      targetObject = object;
       if (legacyIdProperties.isEmpty) break;
       final raw = object.values[legacyIdProperties.single.id];
       if (raw == null) break;
@@ -96,7 +99,7 @@ class LegacyPhotoImageDeletionService {
         }
         return null;
       }
-      if (objectMappings.length != 1) {
+      if (objectMappings.length != 1 || targetObject == null) {
         throw const LegacyPhotoImageDeletionSafetyException();
       }
 
@@ -132,6 +135,23 @@ class LegacyPhotoImageDeletionService {
         database.photos,
       )..where((photo) => photo.id.equals(mappedPhotoId))).get();
       if (photoRows.length != 1) {
+        throw const LegacyPhotoImageDeletionSafetyException();
+      }
+
+      final fileProperties = objectType.properties
+          .where((property) => property.name == 'File')
+          .toList(growable: false);
+      if (fileProperties.length != 1) {
+        throw const LegacyPhotoImageDeletionSafetyException();
+      }
+      final imageFilePath =
+          '${targetObject.values[fileProperties.single.id] ?? ''}'.trim();
+      final photoFilePath = photoRows.single.path.trim();
+      if (imageFilePath.isEmpty || photoFilePath.isEmpty) {
+        throw const LegacyPhotoImageDeletionSafetyException();
+      }
+      if (database.pathResolver.canonicalStoredPath(imageFilePath) !=
+          database.pathResolver.canonicalStoredPath(photoFilePath)) {
         throw const LegacyPhotoImageDeletionSafetyException();
       }
 
