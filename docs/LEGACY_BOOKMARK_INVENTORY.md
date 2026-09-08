@@ -1,166 +1,196 @@
 # Legacy Bookmark production inventory
 
-Issue #225 tracks retirement of Bookmark-era dependencies without deleting still-live behavior prematurely. This inventory classifies **production** consumers; tests are evidence, not migration targets by themselves.
+Issue #225 tracks retirement of Bookmark-era dependencies without deleting still-live behavior prematurely. This inventory classifies **production** consumers and compatibility data. Tests are evidence, not migration targets by themselves.
 
 Classification meanings:
-- **canonical product behavior** — still owns a real Bookmark feature today; do not delete until Object-first replacement has parity.
-- **compatibility bridge** — intentionally connects a live Bookmark host to newer Object/Weblink/Image/Relation infrastructure.
-- **migration-only** — historical/import/export compatibility that may legitimately understand legacy storage.
-- **superseded duplicate** — duplicate presentation/read logic for which a canonical replacement already exists; delete/migrate first.
-- **retired caller-zero module** — production reference count reached zero and the module was removed rather than kept as a speculative wrapper.
+- **canonical product behavior** — still owns a real Bookmark feature today; do not delete until Object-first replacement has parity;
+- **compatibility bridge** — intentionally connects a live Bookmark host to newer Object/Weblink/Image/Relation infrastructure;
+- **migration-only / compatibility data** — historical/import/export/backup compatibility that may remain even after runtime APIs disappear;
+- **superseded duplicate** — duplicate presentation/read logic for which a canonical replacement already exists;
+- **retired caller-zero path** — production reference count reached zero and the path was removed instead of retained as a speculative wrapper.
 
-Re-run code search and inspect current files before deletion because parallel Object/Database/View/Primitive/Search/Storage work can make old classifications stale quickly.
+Re-run code search and inspect current files before deletion. Parallel Object/Database/View/Primitive/Search/Storage work changes these classifications quickly, and GitHub code-search indexing can lag behind current `main`.
 
 ## `BookmarkItem` / `BookmarkRepository` ownership map
 
 | Consumer | Classification | Current ownership / retirement condition |
 | --- | --- | --- |
 | `lib/data/bookmark_repository.dart` | canonical product behavior | Root repository for still-live Bookmark lifecycle/query/metadata flows. New Object-only features must not expand it. |
-| `lib/data/app_database_schema.dart` (`BookmarkItem`) | canonical product behavior | Compatibility/domain shape for live Bookmark rows. Delete only after production callers disappear and migration/import/export handling is explicit. |
-| `lib/data/bookmark_read_store.dart` | canonical product behavior / compatibility read boundary | Owns screen-ready Bookmark aggregation formerly implemented by `AppDatabase.watchBookmarkItems()`. Keep while Bookmark hosts need the aggregate shape. |
+| `lib/data/app_database_schema.dart` (`BookmarkItem`) | canonical product behavior / compatibility shape | Live Bookmark aggregate/domain shape. Delete only after production callers disappear and migration/import/export handling is explicit. |
+| `lib/data/bookmark_read_store.dart` | canonical product behavior / compatibility read boundary | Owns screen-ready Bookmark aggregation formerly implemented by `AppDatabase.watchBookmarkItems()`. |
 | `lib/views/bookmark_query_engine.dart` | canonical product behavior | Bookmark-specific filtering remains live until generic Database/View querying covers the same host. |
-| `lib/views/bookmark_lifecycle_page.dart` | canonical product behavior / compatibility host | Inbox/archive/trash remain live. Visual rendering is canonicalized and canonical Weblink URL is preferred with legacy fallback. |
-| `lib/views/global_search_page.dart` | compatibility entrypoint | Since Search #629, the live surface delegates to canonical `ObjectGlobalSearchPage` / `ObjectGlobalSearchService`. The wrapper still accepts `BookmarkRepository` from `AppShell`; retire only when composition can pass the canonical search context directly without hotspot churn. |
+| `lib/views/bookmark_lifecycle_page.dart` | canonical product behavior / compatibility host | Inbox/archive/trash remain live. Canonical visual/URL presentation is preferred with legacy fallback. |
+| `lib/views/global_search_page.dart` | compatibility entrypoint | Live surface delegates to canonical Object search; wrapper remains composition debt while `AppShell` passes Bookmark context. |
 | `lib/services/auto_organize_service.dart` | canonical product behavior | Bookmark automation remains live; do not extend it for Object-only workflows. |
-| `lib/services/bookmark_transfer_service.dart` | migration-only / compatibility | Import/export legitimately understands persisted Bookmark data. Keep isolated. |
-| `lib/repositories/backlink_repository.dart` | compatibility bridge | Bookmark-facing backlink model remains live through Bookmark Relation presentation. Delete only after its production presentation callers retire. |
-| `lib/widgets/bookmark_relation_section.dart` | compatibility bridge | Bookmark detail exposes Relation/backlink information through Bookmark-centric inputs; do not redesign canonical Relation here. |
-| `lib/widgets/bookmark_reorderable_properties.dart` | canonical product behavior / compatibility | Still-live Bookmark Property/Person-role host after #472 retired the unused `PersonRoleProperties` duplicate. |
-| `lib/widgets/bookmark_detail_panel.dart` | canonical product behavior / compatibility | Still-live Bookmark detail. Move metadata/URL responsibilities only with proven replacement parity. |
+| `lib/services/bookmark_transfer_service.dart` | migration-only / compatibility | Import/export legitimately understands persisted Bookmark data. |
+| `lib/repositories/backlink_repository.dart` | compatibility bridge | Bookmark-facing backlink model remains live through Bookmark Relation presentation. |
+| `lib/widgets/bookmark_relation_section.dart` | compatibility bridge | Bookmark detail exposes Relation/backlink information through Bookmark-centric inputs. Do not redesign canonical Relation here. |
+| `lib/widgets/bookmark_reorderable_properties.dart` | canonical product behavior / compatibility | Still-live Bookmark Property/Person-role host. |
+| `lib/widgets/bookmark_detail_panel.dart` | canonical product behavior / compatibility | Still-live Bookmark detail; canonical Weblink URL is preferred while Bookmark editing compatibility remains. |
 | `lib/widgets/bookmark_visual_image.dart` | compatibility bridge | Shared Bookmark-host visual boundary: user cover -> canonical managed visual -> legacy thumbnail fallback. |
-| `lib/services/bookmark_visual_resolver.dart` | compatibility bridge | Read-only canonical/legacy visual precedence resolver. New presentation must not bypass it. |
-| `lib/services/bookmark_url_resolver.dart` | compatibility bridge | Read-only canonical Bookmark→Weblink URL preference with legacy fallback. |
+| `lib/services/bookmark_visual_resolver.dart` | compatibility bridge | Read-only canonical/legacy visual precedence resolver. |
+| `lib/services/bookmark_url_resolver.dart` | compatibility bridge | Read-only canonical Bookmark -> Weblink URL preference with legacy fallback. |
 | `lib/widgets/global_file_drop_layer.dart` | canonical product behavior / composition | Current import/drop composition still receives `BookmarkRepository`. Narrow only with a real focused replacement. |
 | `lib/widgets/bookmark_attachment_section.dart` | canonical product behavior / compatibility | Attachment/PDF enrichment remains Bookmark-owned. |
 | `lib/views/settings_page.dart` | canonical product behavior / composition | Backup/export/settings still use repository capabilities. |
-| `lib/views/tag_management_page.dart` | canonical product behavior | Current management host still uses Bookmark capabilities; reverse-lookup image presentation is canonical. |
-| `lib/views/people_management_page.dart` | canonical product behavior | Large management hotspot combining People/Bookmark behavior. |
-| `lib/views/photo_management_page.dart` | canonical product behavior / legacy host | Photo management remains live; read/path aggregation has moved to `PhotoReadStore`. #695 removed only its temporary Database-presentation shim imports, not Photo/Bookmark behavior or persistence authority. |
-| `lib/views/collection_management_page.dart` | canonical product behavior | Collection management still consumes Bookmark data; #687 removed only its temporary Database-presentation shim imports, not Bookmark behavior. |
+| `lib/views/tag_management_page.dart` | canonical product behavior | Current Tag management remains live; canonical Tag Object work does not make the legacy management surface caller-zero by itself. |
+| `lib/views/people_management_page.dart` | canonical product behavior | Large management hotspot combining Person/Bookmark compatibility behavior. |
+| `lib/views/photo_management_page.dart` | canonical product behavior / legacy host | Photo management remains live; read/path aggregation is behind `PhotoReadStore`. |
+| `lib/views/collection_management_page.dart` | canonical product behavior | Collection management still consumes Bookmark capabilities. |
 | `lib/views/app_shell.dart` | composition hotspot | Passes `BookmarkRepository` through multiple live/compatibility screens. Always check open PR ownership. |
 | `lib/main.dart` | composition root | Root Bookmark repository construction remains expected while live Bookmark features exist. |
 
 ## Retired caller-zero modules / paths
 
+### Saved View runtime compatibility API — #944 / #952
+Legacy Saved View **runtime API** is retired, but legacy Saved View **data** is not.
+
+#944 removed caller-zero Saved View read/write facade responsibilities from `BookmarkRepository` and caller-zero Workspace convenience APIs. #952 then removed the now-caller-zero:
+- `lib/data/saved_view_read_store.dart`;
+- `lib/data/saved_view_write_store.dart`;
+- `SavedViewConfig` runtime DTO;
+- Store-only tests that no longer represented a production boundary.
+
+The following remain intentionally live compatibility contracts:
+- `SavedViews`, `SavedViewTags`, `SavedViewWorkspaces` schema/tables;
+- historical migrations and backup inclusion;
+- `WorkspaceStore` initialization/delete reassignment for legacy Saved View workspace rows;
+- `DatabaseViewStore.importLegacyBookmarkViews(...)`, which migrates persisted legacy Bookmark Saved Views into canonical Database Views;
+- `TagGroupStore` accounting/rewrites for legacy Saved View tag references.
+
+Do not recreate a legacy Saved View runtime Store/facade merely to manipulate old rows. New View behavior belongs to the canonical Database View model.
+
+### Workspace convenience/observer helpers — #944 / #957
+Caller-zero Workspace convenience APIs removed across the two slices include Saved View workspace helpers plus `renameWorkspace(...)`, synchronous `bookmarkIds(...)`, `WorkspaceInfo.copyWith(...)`, and `watchWorkspaces()`.
+
+Live Workspace list/create/update/reorder/delete, active Workspace state, `watchBookmarkIds(...)`, Bookmark assignment/moves, and legacy Saved View workspace compatibility remain.
+
+### Person-group single-membership helpers — #958
+`PersonGroupStore.addPerson(...)` / `removePerson(...)` had no production callers. Fixtures moved to the canonical set-based `setGroupsForPerson(...)` boundary. Group/member schema and People UI behavior remain unchanged.
+
+### Person-role reverse/removal paths — #940 / #962
+#940 removed caller-zero reverse Person-role query APIs. #962 removed caller-zero `BookmarkRepository.removePersonFromBookmark(...)` and its sole downstream `AppDatabasePersonRoles.removePersonRole(...)`.
+
+Still live and intentionally retained:
+- `BookmarkRepository.watchPersonRoles(...)`;
+- `AppDatabasePersonRoles.watchPersonRoleAssignments(...)`;
+- `setPeopleForRole(...)`;
+- Stage1 `batchAddPeople(...)` / `batchRemovePeople(...)`.
+
 ### `lib/data/saved_view_extensions.dart` — #417
-`SavedViewDuplication.duplicateSavedView(...)` had zero production callers; #417 removed the extension and its dead-only test instead of keeping a speculative wrapper.
+`SavedViewDuplication.duplicateSavedView(...)` had zero production callers; the extension and dead-only test were removed.
 
 ### `lib/widgets/person_role_properties.dart` — #472
-`PersonRoleProperties` reached zero production callers after Bookmark detail/property behavior converged on `BookmarkReorderableProperties` plus canonical Property-row components. #472 removed the widget and dead-only architecture test. Legacy Person-role persistence remains live elsewhere.
+`PersonRoleProperties` reached zero production callers after Bookmark detail/property behavior converged on `BookmarkReorderableProperties` plus canonical Property-row components.
 
 ### Plain-text Object Body edit path — #586
-After universal block-oriented Body editing landed, `ObjectDetailEditService.setPlainTextBody(...)` had no production caller and `ObjectBodyPlainTextAdapter` existed only for that dead method/tests. #586 removed the chain. Do not reintroduce paragraph/plain-text Body mutation beside the canonical block-oriented path.
+After universal block-oriented Body editing landed, `ObjectDetailEditService.setPlainTextBody(...)` and its dead adapter path were removed. Do not reintroduce a parallel paragraph/plain-text Body mutation route.
 
 ### Legacy Bookmark-only FTS — #654
-Search #629 routed live Global Search through canonical Object search. Current `GlobalSearchPage` is only a compatibility wrapper around `ObjectGlobalSearchPage`; `FullTextSearchRepository` had no production caller.
+Search #629 routed live Global Search through canonical Object search. #654 removed the caller-zero Bookmark-only `FullTextSearchRepository` and its dead-only tests. Do not recreate a Bookmark-only FTS index as a compatibility layer.
 
-#654 therefore removed:
-- `lib/repositories/full_text_search_repository.dart` (163 LOC);
-- `test/full_text_search_query_test.dart`;
-- `test/repositories/full_text_search_repository_projection_test.dart`;
-- only the old Bookmark-FTS smoke test/import from `test/data_integrity_test.dart`.
+### Database presentation re-export shims — completed by #899
+The historical `lib/widgets/` Database presentation shims are fully retired. Current intended state is:
+- legacy Database-presentation shim imports: **0**;
+- Database-presentation re-export shim files: **0**.
 
-PR #654 passed maintainability guards, Drift generation, Analyze and full Test. Canonical Object search retains focused stale-token/index regressions for title/aliases, Body, typed Properties, Relations, derived text and Weblink metadata.
+Earlier steps included #672 (`detail_property_row`), #735 (`database_page_toolbar`), #868 (Stage1 canonical imports), and #899 (final Generic imports/shims). Historical names remain guarded so compatibility shims cannot silently return.
 
-Do not recreate a Bookmark-only FTS index as a compatibility layer. If a search capability is missing, add it to the canonical Object search path under Search ownership.
+## Retired `AppDatabase` / root-repository responsibilities
 
-### `lib/widgets/detail_property_row.dart` re-export shim — #672
-The legacy `DetailPropertyRow` shim reached zero production/test imports after Bookmark callers and widget tests moved to `lib/features/database/presentation/widgets/detail_property_row.dart`.
+Completed architecture-cleanup slices include:
+- `AppDatabase.watchBookmarkItems()` -> removed by #281; `BookmarkReadStore` owns Bookmark aggregate reads;
+- profile-relative path conversion -> removed from `AppDatabase` by #282; `ProfilePathResolver` owns it;
+- `AppDatabase.watchSavedViewConfigs()` / Saved View tag aggregation -> removed by #283, followed by retirement of the later caller-zero Saved View runtime Store layer in #952;
+- `AppDatabase.watchAllPhotos()` and duplicate Photo path reconstruction -> removed by #289; `PhotoReadStore` owns resolved Photo reads;
+- historical migration bodies v2-v16 -> extracted to migration helpers; `AppDatabase` retains migration sequencing/wiring;
+- Bookmark favorite/status/rating/open-history mutations -> moved to `BookmarkEngagementStore` by #579;
+- caller-zero Bookmark People batch methods plus `_peopleForBookmark` -> removed by #637;
+- duplicate Tag hierarchy mutation -> removed by #705; `TagGroupStore.moveTag(...)` owns hierarchy mutation;
+- unreachable `updateBookmarkFields(... personNames ...)` branch -> removed by #728; live People edits remain role-aware;
+- legacy Bookmark Photo forwarding/mutation seams -> repeatedly narrowed by #903/#915/#938 after canonical Image Relation writers replaced them;
+- caller-zero Bookmark/Workspace Saved View facade -> removed by #944;
+- caller-zero Person-role removal seam -> removed by #962.
 
-#672 removed the one-line re-export and lowered the CI shim-file ceiling from **5 to 4**. The historical `detail_property_row` name remains in the guard scanner intentionally so a future reintroduction is detected rather than silently recreating compatibility debt.
-
-### `lib/widgets/database_page_toolbar.dart` re-export shim — #735
-After Collection, Photo and People management moved to the canonical Database toolbar, repository-wide exact import audit found no remaining legacy toolbar-shim caller. #735 deleted the one-line re-export and lowered the shim-file ceiling **4 → 3**. The historical name remains guarded so the compatibility path cannot silently return.
-
-## Retired AppDatabase responsibilities
-
-These architecture-cleanup candidates are complete:
-- `AppDatabase.watchBookmarkItems()` -> **removed** by #281; `BookmarkReadStore` owns Bookmark aggregate reads.
-- profile-relative path conversion -> **removed from AppDatabase** by #282; `ProfilePathResolver` owns it.
-- `AppDatabase.watchSavedViewConfigs()` / Saved View tag aggregation -> **removed** by #283; `SavedViewReadStore` owns it.
-- `AppDatabase.watchAllPhotos()` and duplicate Photo path reconstruction -> **removed** by #289; `PhotoReadStore` owns it.
-- historical migration bodies v2-v16 -> **extracted** to migration helpers; `AppDatabase` keeps migration sequencing/wiring.
-- Bookmark favorite/status/rating/open-history mutations -> **moved** to `BookmarkEngagementStore` by #579.
-- caller-zero Bookmark People batch methods plus `_peopleForBookmark` -> **removed** by #637.
-- duplicate Tag hierarchy mutation -> **removed** by #705; `TagGroupStore.moveTag(...)` owns hierarchy mutation.
-- unreachable `updateBookmarkFields(... personNames ...)` parameter/branch -> **removed** by #728; live People edits remain role-aware.
-
-Do not reintroduce these responsibilities into the database root.
+Do not reintroduce these responsibilities into the database root or Bookmark root repository.
 
 ## Retired Bookmark lifecycle / Repository seams
-#642 removed caller-zero `BookmarkLifecycleState`, `states()`, `watchStates()` and synchronous `genre()`. Live lifecycle mutations and `watchGenre()` remain.
 
-#731 removed caller-zero `BookmarkRepository.setBookmarkPeopleFromDatabase(...)`, empty `BookmarkLifecycleStore.remove(...)`, and the sole no-op permanent-delete call. Permanent deletion still performs attachment cleanup before the actual Bookmark row deletion, and `data_integrity_test.dart` covers attachment bytes, attachment rows and Bookmark row removal.
+#642 removed caller-zero `BookmarkLifecycleState`, `states()`, `watchStates()` and synchronous `genre()`.
 
-`BookmarkLifecycleStore.dispose()` is **not** caller-zero: #736 initially attempted to retire the empty method, but CI exposed eight production callers in `lib/main.dart`. #736 was closed without merge. Treat the method as a live bootstrap/lifecycle contract until a naturally scoped composition cleanup proves otherwise.
+#731 removed caller-zero `BookmarkRepository.setBookmarkPeopleFromDatabase(...)`, empty `BookmarkLifecycleStore.remove(...)`, and the sole no-op permanent-delete call. Permanent deletion still performs attachment cleanup before deleting the Bookmark row.
 
-## Superseded duplicate visual presentation paths — original inventory complete
+`BookmarkLifecycleStore.dispose()` is **not** caller-zero. #736 attempted to retire it, but CI exposed live production callers in bootstrap code. Treat it as a live lifecycle contract until a naturally scoped composition cleanup proves otherwise.
 
-All four direct Bookmark visual duplicates identified in the original audit are retired:
+## Superseded duplicate visual presentation paths
+
+Direct Bookmark visual duplicates from the original audit are retired:
 
 | Path | Status | Canonical replacement / constraint |
 | --- | --- | --- |
-| `lib/widgets/notion_bookmark_card.dart` | **retired duplicate slice** — #294 | Uses `BookmarkVisualImage`; preserve card sizing/selection/open behavior. |
-| `lib/widgets/bookmark_reverse_lookup_dialog.dart` | **retired duplicate slice** — #299 | Uses `BookmarkVisualImage`; management hosts pass repository explicitly. |
-| `lib/views/bookmark_lifecycle_page.dart` visual rows | **retired duplicate slice** — Object #296 | Uses canonical Bookmark visual component. |
-| `lib/views/bookmark_unified_stage1_page.dart` List/Table image helper | **retired duplicate slice** — #324 | Delegates to `BookmarkVisualImage`; deterministic guard preserves host geometry. |
+| `lib/widgets/notion_bookmark_card.dart` | retired duplicate slice — #294 | Uses `BookmarkVisualImage`; preserve card sizing/selection/open behavior. |
+| `lib/widgets/bookmark_reverse_lookup_dialog.dart` | retired duplicate slice — #299 | Uses `BookmarkVisualImage`; management hosts pass repository explicitly. |
+| `lib/views/bookmark_lifecycle_page.dart` visual rows | retired duplicate slice — #296 | Uses canonical Bookmark visual component. |
+| `lib/views/bookmark_unified_stage1_page.dart` List/Table image helper | retired duplicate slice — #324 | Delegates to `BookmarkVisualImage`; host geometry remains guarded. |
 
-The whole files above are not superseded. Only duplicated visual-resolution slices are retired until remaining host behavior has Object-first parity.
-
-`BookmarkVisualImage` legitimately retains a legacy remote-thumbnail fallback. That fallback is a compatibility boundary, not another duplicate presentation path.
+The whole host files remain live. `BookmarkVisualImage` intentionally retains legacy remote-thumbnail fallback as a compatibility boundary.
 
 ## Canonical URL adoption status
-Legacy `bookmarks.url` remains compatibility data. Canonical presentation has advanced host by host through `BookmarkUrlResolver`, including lifecycle, reverse lookup, Notion bookmark card, Stage1 and Bookmark list metadata.
 
-This is substantial presentation convergence, **not storage retirement**. Direct legacy URL reads/writes may still be legitimate in editing, lifecycle persistence, import/export, backup/migration or unconverted compatibility hosts. Before deleting/narrowing the column or write path, prove all production reads/writes and data portability requirements have replacements.
+Legacy `bookmarks.url` remains compatibility data. Canonical presentation has advanced host by host through `BookmarkUrlResolver` / shared presentation resolution, including lifecycle, reverse lookup, Notion bookmark card, Stage1, list metadata, People-related Bookmark presentation, Bookmark detail, and PDF metadata flows.
 
-Ambiguous/malformed Relation state must continue to fail closed to compatibility fallback rather than being repaired from presentation code.
+This is presentation convergence, **not storage retirement**. Direct legacy URL reads/writes may still be legitimate in editing, lifecycle persistence, import/export, backup/migration, or unconverted compatibility hosts. Before narrowing the column/write path, prove all production reads/writes and data portability requirements have replacements.
+
+Malformed/ambiguous Relation state must continue to fail closed to compatibility fallback rather than being repaired from presentation code.
 
 ## Recent compatibility-boundary cleanup
 
 ### Bookmark backlinks — #408
-`BacklinkRepository` no longer reaches through `BookmarkLifecycleStore` to `AppDatabase` or watches the complete legacy Bookmark relation table. It delegates focused reads through `BookmarkRepository.watchRelationsForBookmark(bookmarkId)` while preserving existing Bookmark-facing mapping/sorting and link/unlink semantics.
+`BacklinkRepository` delegates focused reads through `BookmarkRepository.watchRelationsForBookmark(bookmarkId)` while preserving Bookmark-facing mapping/sorting and link/unlink semantics.
 
-This is boundary reduction, not permission to redesign/delete canonical Relation infrastructure.
+`BookmarkRepository.addRelation/removeRelation` are **live** through this path. #931 attempted a deletion and Analyze caught the missed production route. Do not repeat that mistake or reinterpret Relation compatibility as permission to redesign canonical Relation storage.
 
 ### Global Search — Search #629, Refactor #654
-#629 switched live Global Search from Bookmark-only FTS to canonical Object search while retaining a thin `GlobalSearchPage(repository: ...)` compatibility entrypoint for the shell. #654 then retired the now-caller-zero Bookmark FTS implementation and dead-only tests.
-
-The remaining `GlobalSearchPage` wrapper is composition debt, not a second search implementation.
+Live Global Search uses canonical Object search. The remaining `GlobalSearchPage(repository: ...)` wrapper is composition debt, not a second search implementation.
 
 ## Remaining architecture cleanup candidates
 
 ### Repository-as-service-locator usage
-Several consumers still obtain lower-level capabilities through `BookmarkRepository`. Replacing every constructor at once would create churn. Fix only when a real caller can be simplified and a responsibility can be deleted or moved behind an existing focused boundary.
-
-Attachment UI still has lower-level store/service composition tied to Bookmark hosts. Do not solve this by making `BookmarkRepository` broader; wait for a focused boundary that removes responsibility.
-
-### Temporary Database-presentation re-export shims
-Three legacy re-export shim files remain under `lib/widgets/`:
-- `database_view_tabs.dart`;
-- `database_create_tiles.dart`;
-- `resizable_detail_pane.dart`.
-
-Canonical implementations live under `lib/features/database/presentation/widgets/`. #687 moved Collection management off four shim imports (**17 → 13**), #695 did the same for Photo management (**13 → 9**), and #707 moved People management off its four shim imports (**9 → 5**). #735 then deleted the caller-zero toolbar shim and lowered the shim-file ceiling **4 → 3**.
-
-The remaining five shim imports are concentrated in two large/shared hosts: `GenericDatabasePage` has create-tiles, view-tabs and resizable-pane imports; Stage1 has create-tiles and view-tabs imports. Do not reconstruct either host solely to lower a metric. Retire each shim only when all callers can be moved naturally through patch-sized edits.
+Several consumers still obtain lower-level capabilities through `BookmarkRepository`. Replacing every constructor at once would create churn. Fix only when a real caller can be simplified **and** a responsibility can be deleted/moved behind an existing focused boundary.
 
 ### GenericDatabasePage hotspot
 Refactor progress includes:
 - #310 — read/projection state loading -> `GenericDatabasePageStateLoader`;
 - #323 — low-level Store/Service graph construction -> `GenericDatabasePageServices.fromWorkspaceStore(...)`.
 
-Remaining high-value responsibilities include schema/database actions, Property-create/edit workflow orchestration and layout-specific host code. Continue as small focused slices coordinated with Database/View work.
+Remaining high-value responsibilities include schema/database actions, Property-create/edit workflow orchestration, and layout-specific host code. Continue only as small focused slices coordinated with Database/View ownership. Do not reconstruct the whole file to improve a metric.
+
+### Presentation/database reach-through
+Direct `repository.workspaceStore.database` composition still exists in compatibility hosts. Narrow only where a focused application boundary removes low-level construction or responsibility; do not add one-line forwarding facades.
 
 ### User-visible failure boundaries
-Global Search, Settings, attachment import, bootstrap/Profile-switch and Database Property-add raw-error boundaries have been stabilized in focused slices. #745 additionally guards canonical `lib/features/**/presentation/` from directly interpolating caught exception variables into strings while allowing typed forwarding such as `onError(error)`.
-
-Legacy `lib/views/` / `lib/widgets/` still contain raw-error debt. Re-audit before assuming an old candidate still exists, and prefer naturally scoped regression-backed edits rather than reconstructing large shared hosts solely to replace one string.
+Broad presentation caught-error privacy cleanup is complete and guarded at zero allowlist. Reopen only for a concrete failure/privacy/observability defect.
 
 ### Profile recovery policy
-`ProfileManager` intentionally fails soft when persisted profile-registry metadata cannot be decoded, but fallback can affect selected data location. Diagnostic privacy is sanitized; behavior changes still require explicit Storage/Vault recovery policy.
+`ProfileManager` fail-soft recovery can affect selected data location. Diagnostic privacy is sanitized, but behavior changes require explicit Storage/Vault recovery policy.
+
+## Current caller-zero audit exclusions
+
+Fresh post-#962 audit confirmed these are still live; do not treat them as cleanup candidates without new evidence:
+- `BookmarkRepository.watchPersonRoles(...)` / `watchPersonRoleAssignments(...)`;
+- `setPeopleForRole(...)`, `batchAddPeople(...)`, `batchRemovePeople(...)`;
+- `watchBookmarksForPerson(...)`, `watchBookmarksForPhoto(...)`, `watchBookmarksForCollection(...)`;
+- `findDuplicateUrl(...)`;
+- Person CRUD used by People management;
+- Collection CRUD / `setBookmarkCollections(...)` used by management/transfer/property UI;
+- Tag creation used by Stage1 / Bookmark Property UI, with lower-level Tag persistence also used by the canonical Tag Object bridge;
+- engagement methods such as `recordOpen`, lifecycle methods, and Stage1 batch delete/status/rating/favorite flows;
+- `PhotoReadStore.resolveRecord(...)` used by `BookmarkReadStore`; Photo CRUD/read paths remain live;
+- `BookmarkAttachmentStore.initialize()/dispose()` as live lifecycle contracts;
+- `BookmarkRepository.addRelation/removeRelation` through Bookmark backlink UI.
 
 ## No-new-dependency review checklist
+
 Before merging new Object/Database/View work, search the diff for newly added production references to:
 - `BookmarkItem`;
 - `BookmarkRepository` / `bookmark_repository.dart`;
@@ -168,14 +198,18 @@ Before merging new Object/Database/View work, search the diff for newly added pr
 - direct `bookmarks.url` reads/writes outside explicit compatibility/migration paths;
 - direct feature-presentation `AppDatabase` imports;
 - presentation `workspaceStore.database` reach-through;
-- direct caught-error string interpolation under canonical feature presentation.
+- direct caught-error string interpolation under canonical feature presentation;
+- recreated legacy Database presentation shim imports/files;
+- recreated Saved View runtime Store/facade APIs.
 
-A match is not automatically wrong outside the explicitly guarded feature boundaries, but the PR must classify it and state the retirement condition. `lib/features/**` is additionally protected by the feature legacy-dependency and feature-presentation error-privacy guards.
+A match is not automatically wrong outside explicitly guarded boundaries, but the PR must classify it and state the retirement condition.
 
 ## Next removal order
-1. Continue true production caller-zero audits and delete whole modules/shims only when independent canonical coverage exists.
-2. Ratchet the remaining Database-presentation shim imports below **5** only through naturally patch-sized caller changes; delete a shim only at true caller-zero.
-3. Re-audit remaining Bookmark URL/detail/backlink presentation only where Object/Database/Relation parity is proven.
-4. Continue GenericDatabasePage P1 decomposition as measurable responsibility/LOC reductions, coordinated with Database/View lane ownership.
-5. Continue Object-first Photo/Image and Bookmark/Image convergence through existing bridges; do not destructively remove legacy Photo storage.
-6. Treat bootstrap lifecycle seams such as `BookmarkLifecycleStore.dispose()` as live until current production callers are intentionally migrated in a naturally scoped composition cleanup.
+
+1. Continue true production caller-zero audits and delete whole modules/helpers only when wrapper-to-real-host tracing and Analyze/full Test prove zero callers.
+2. Do **not** spend work on Database presentation shims or broad error allowlists; both tracks are already at zero and should remain guarded.
+3. Re-audit Bookmark URL/detail/backlink/Photo compatibility only where owning Object/Primitive/Relation work proves replacement parity.
+4. Continue `GenericDatabasePage` P1 decomposition only as measurable patch-sized responsibility reductions coordinated with Database/View ownership.
+5. Reduce presentation/database reach-through only when a focused boundary eliminates real construction/ownership rather than adding pass-through APIs.
+6. Keep legacy Saved View tables and Photo/Bookmark compatibility data until migration/import/export/backup and owning-lane retirement conditions are explicitly satisfied.
+7. Treat bootstrap lifecycle seams such as `BookmarkLifecycleStore.dispose()` and `BookmarkAttachmentStore.initialize()/dispose()` as live until current production callers are intentionally migrated in a naturally scoped composition cleanup.
