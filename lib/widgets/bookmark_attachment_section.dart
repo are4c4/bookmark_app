@@ -5,6 +5,7 @@ import '../data/bookmark_attachment_store.dart';
 import '../data/bookmark_repository.dart';
 import '../features/database/presentation/widgets/detail_property_row.dart';
 import '../services/attachment_storage_service.dart';
+import '../services/bookmark_presentation_resolver_factory.dart';
 import '../services/pdf_metadata_service.dart';
 import '../views/attachment_viewer_page.dart';
 
@@ -89,9 +90,11 @@ class _BookmarkAttachmentSectionState extends State<BookmarkAttachmentSection> {
       ),
     );
     if (apply != true) return;
+    final resolvedUrl =
+        await BookmarkPresentationResolverFactory.urlFor(widget.repository)(widget.bookmark);
     await widget.repository.update(
       id: widget.bookmark.id,
-      url: widget.bookmark.url,
+      url: resolvedUrl?.value ?? widget.bookmark.url,
       title: metadata.title.trim().isEmpty ? widget.bookmark.title : metadata.title.trim(),
       thumbnail: widget.bookmark.thumbnail,
       description: widget.bookmark.description,
