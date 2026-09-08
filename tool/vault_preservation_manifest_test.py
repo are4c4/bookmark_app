@@ -28,12 +28,28 @@ def make_vault(root: Path, *, profile_id: str = "vault-1") -> Path:
     )
     connection = sqlite3.connect(vault / "database.sqlite")
     connection.execute("CREATE TABLE example (id INTEGER PRIMARY KEY, value TEXT)")
+    connection.execute("CREATE TABLE photos (id INTEGER PRIMARY KEY, path TEXT NOT NULL)")
+    connection.execute(
+        "CREATE TABLE bookmark_attachments (id INTEGER PRIMARY KEY, path TEXT NOT NULL)"
+    )
     connection.execute("INSERT INTO example(value) VALUES ('preserved')")
+    connection.execute("INSERT INTO photos(id, path) VALUES (1, 'photos/image.bin')")
+    connection.execute(
+        "INSERT INTO bookmark_attachments(id, path) "
+        "VALUES (1, 'attachments/file.bin')"
+    )
     connection.commit()
     connection.close()
     (vault / "photos" / "image.bin").write_bytes(b"image-bytes")
     (vault / "attachments" / "file.bin").write_bytes(b"attachment-bytes")
     return vault
+
+
+def update_path(vault: Path, table: str, row_id: int, path: str) -> None:
+    connection = sqlite3.connect(vault / "database.sqlite")
+    connection.execute(f"UPDATE {table} SET path = ? WHERE id = ?", (path, row_id))
+    connection.commit()
+    connection.close()
 
 
 class VaultPreservationManifestTest(unittest.TestCase):
@@ -53,6 +69,24 @@ class VaultPreservationManifestTest(unittest.TestCase):
             )
             self.assertEqual(len(files["photos/image.bin"]["sha256"]), 64)
 
+    def test_snapshot_records_database_storage_path_references(self):
+        with tempfile.TemporaryDirectory() as directory:
+            vault = make_vault(Path(directory))
+            snapshot = manifest.snapshot_vault(vault)
+            references = {
+                (entry["table"], entry["id"]): entry
+                for entry in snapshot["pathReferences"]
+            }
+            self.assertEqual(
+                references[("photos", 1)]["canonicalIdentity"],
+                "photos/image.bin",
+            )
+            self.assertEqual(references[("photos", 1)]["scope"], "vault")
+            self.assertEqual(
+                references[("bookmark_attachments", 1)]["canonicalIdentity"],
+                "attachments/file.bin",
+            )
+
     def test_snapshot_rejects_invalid_vault_metadata(self):
         with tempfile.TemporaryDirectory() as directory:
             vault = make_vault(Path(directory))
@@ -62,12 +96,75 @@ class VaultPreservationManifestTest(unittest.TestCase):
             with self.assertRaisesRegex(manifest.ManifestError, "Vault v1 metadata"):
                 manifest.snapshot_vault(vault)
 
+    def test_snapshot_rejects_traversing_database_path_reference(self):
+        with tempfile.TemporaryDirectory() as directory:
+            vault = make_vault(Path(directory))
+            update_path(vault, "photos", 1, "../outside.png")
+            with self.assertRaisesRegex(manifest.ManifestError, "escapes the Vault"):
+                manifest.snapshot_vault(vault)
+
     def test_compare_accepts_unchanged_managed_content(self):
         with tempfile.TemporaryDirectory() as directory:
             vault = make_vault(Path(directory))
             before = manifest.snapshot_vault(vault)
             after = manifest.snapshot_vault(vault)
             self.assertEqual(manifest.compare_manifests(before, after), [])
+
+    def test_compare_accepts_managed_absolute_to_relative_rebase_after_move(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            before_vault = make_vault(root / "before")
+            after_vault = make_vault(root / "after")
+            update_path(
+                before_vault,
+                "photos",
+                1,
+                str(before_vault / "photos" / "image.bin"),
+            )
+            before = manifest.snapshot_vault(before_vault)
+            after = manifest.snapshot_vault(after_vault)
+            self.assertEqual(manifest.compare_manifests(before, after), [])
+
+    def test_compare_reports_external_path_text_rewrite(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            external = root / "external.bin"
+            external.write_bytes(b"external")
+            before_vault = make_vault(root / "before")
+            after_vault = make_vault(root / "after")
+            update_path(before_vault, "photos", 1, str(external))
+            update_path(
+                after_vault,
+                "photos",
+                1,
+                f"{external.parent}//{external.name}",
+            )
+            before = manifest.snapshot_vault(before_vault)
+            after = manifest.snapshot_vault(after_vault)
+            problems = manifest.compare_manifests(before, after)
+            self.assertTrue(
+                any(
+                    "external database path reference text changed: photos#1" in item
+                    for item in problems
+                )
+            )
+
+    def test_compare_reports_missing_database_path_reference(self):
+        with tempfile.TemporaryDirectory() as directory:
+            vault = make_vault(Path(directory))
+            before = manifest.snapshot_vault(vault)
+            connection = sqlite3.connect(vault / "database.sqlite")
+            connection.execute("DELETE FROM bookmark_attachments WHERE id = 1")
+            connection.commit()
+            connection.close()
+            after = manifest.snapshot_vault(vault)
+            problems = manifest.compare_manifests(before, after)
+            self.assertTrue(
+                any(
+                    "database path reference missing: bookmark_attachments#1" in item
+                    for item in problems
+                )
+            )
 
     def test_compare_reports_missing_and_changed_files(self):
         with tempfile.TemporaryDirectory() as directory:
