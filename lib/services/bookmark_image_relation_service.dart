@@ -133,6 +133,28 @@ class BookmarkImageRelationService {
         query: query,
       );
 
+  Future<BookmarkImageRelationState> _trustedStateForMutation(
+    BookmarkImageRelationState state,
+  ) async {
+    final images = await _editor.targets.selectionForMutation(
+      workspaceId: state.workspaceId,
+      sourceObjectId: state.bookmarkObjectId,
+      property: state.images.property,
+    );
+    final cover = await _editor.targets.selectionForMutation(
+      workspaceId: state.workspaceId,
+      sourceObjectId: state.bookmarkObjectId,
+      property: state.cover.property,
+    );
+    return BookmarkImageRelationState(
+      workspaceId: state.workspaceId,
+      bookmarkId: state.bookmarkId,
+      bookmarkObjectId: state.bookmarkObjectId,
+      images: images,
+      cover: cover,
+    );
+  }
+
   /// Compatibility entry point for legacy Photo hosts during #245 migration.
   ///
   /// The Photo must already have a stable `photo_object_links` mapping. Missing
@@ -219,6 +241,22 @@ class BookmarkImageRelationService {
     }
     if (selectedPhotoIds.isEmpty) return;
 
+    // The debounced Object watcher may already have mirrored this Bookmark
+    // before the create callback reaches us. In that case CoreObjectBridge's
+    // compatibility sync is itself a Relation writer, so prove the current
+    // canonical Images/Cover state trustworthy before allowing syncAll() to
+    // project legacy bookmark_photos back into Relations. A brand-new Bookmark
+    // has no canonical link yet and still follows the normal initial mirror path.
+    final existingState = await load(
+      workspaceId: workspaceId,
+      bookmarkId: bookmarkId,
+    );
+    if (existingState != null) {
+      await database.transaction(() async {
+        await _trustedStateForMutation(existingState);
+      });
+    }
+
     // repository.create() writes legacy Bookmark/workspace rows synchronously,
     // while the app-wide Object watcher mirrors them on a debounce. Creation
     // needs deterministic Relation ownership immediately, so run the existing
@@ -261,30 +299,31 @@ class BookmarkImageRelationService {
       imageByPhotoId[photoId] = imageObjectId;
     }
 
-    final selectedImageObjectIds = state.images.selectedObjectIds.toList();
-    for (final photoId in selectedPhotoIds) {
-      final imageObjectId = imageByPhotoId[photoId]!;
-      if (!selectedImageObjectIds.contains(imageObjectId)) {
-        selectedImageObjectIds.add(imageObjectId);
-      }
-    }
-    final coverImageObjectId = coverPhotoId == null
-        ? state.validCoverImageObjectId
-        : imageByPhotoId[coverPhotoId];
-
     await database.transaction(() async {
+      final trusted = await _trustedStateForMutation(state);
+      final selectedImageObjectIds = trusted.images.selectedObjectIds.toList();
+      for (final photoId in selectedPhotoIds) {
+        final imageObjectId = imageByPhotoId[photoId]!;
+        if (!selectedImageObjectIds.contains(imageObjectId)) {
+          selectedImageObjectIds.add(imageObjectId);
+        }
+      }
+      final coverImageObjectId = coverPhotoId == null
+          ? trusted.validCoverImageObjectId
+          : imageByPhotoId[coverPhotoId];
+
       await _editor.save(
-        context: state.images,
+        context: trusted.images,
         selectedObjectIds: selectedImageObjectIds,
       );
       await _editor.save(
-        context: state.cover,
+        context: trusted.cover,
         selectedObjectIds: coverImageObjectId == null
             ? const <int>[]
             : <int>[coverImageObjectId],
       );
       await _replaceLegacyBookmarkPhotoProjection(
-        state: state,
+        state: trusted,
         selectedImageObjectIds: selectedImageObjectIds,
         coverImageObjectId: coverImageObjectId,
       );
@@ -304,25 +343,27 @@ class BookmarkImageRelationService {
       if (seen.add(objectId)) selected.add(objectId);
     }
     final selectedSet = selected.toSet();
-    final currentCoverId = state.validCoverImageObjectId;
-    final retainedCoverId = currentCoverId != null &&
-            selectedSet.contains(currentCoverId)
-        ? currentCoverId
-        : null;
 
     await database.transaction(() async {
+      final trusted = await _trustedStateForMutation(state);
+      final currentCoverId = trusted.validCoverImageObjectId;
+      final retainedCoverId = currentCoverId != null &&
+              selectedSet.contains(currentCoverId)
+          ? currentCoverId
+          : null;
+
       if (currentCoverId != null && retainedCoverId == null) {
         await _editor.save(
-          context: state.cover,
+          context: trusted.cover,
           selectedObjectIds: const <int>[],
         );
       }
       await _editor.save(
-        context: state.images,
+        context: trusted.images,
         selectedObjectIds: selected,
       );
       await _replaceLegacyBookmarkPhotoProjection(
-        state: state,
+        state: trusted,
         selectedImageObjectIds: selected,
         coverImageObjectId: retainedCoverId,
       );
@@ -335,59 +376,49 @@ class BookmarkImageRelationService {
     required BookmarkImageRelationState state,
     required int imageObjectId,
   }) async {
-    final candidateIds = state.images.candidates.map((item) => item.id).toSet();
-    if (!candidateIds.contains(imageObjectId)) {
-      throw ArgumentError.value(
-        imageObjectId,
-        'imageObjectId',
-        'Cover Image must be a canonical Image candidate in the same workspace.',
-      );
-    }
-
-    final imageIds = state.images.selectedObjectIds.toList(growable: true);
-    final needsImageAttach = !imageIds.contains(imageObjectId);
-    if (needsImageAttach && state.images.missingTargetObjectIds.isNotEmpty) {
-      throw StateError(
-        'Cannot add a cover while the Images Relation contains missing targets. Resolve the Images selection first.',
-      );
-    }
-    if (needsImageAttach) imageIds.add(imageObjectId);
-
     await database.transaction(() async {
+      final trusted = await _trustedStateForMutation(state);
+      final candidateIds = trusted.images.candidates.map((item) => item.id).toSet();
+      if (!candidateIds.contains(imageObjectId)) {
+        throw ArgumentError.value(
+          imageObjectId,
+          'imageObjectId',
+          'Cover Image must be a canonical Image candidate in the same workspace.',
+        );
+      }
+
+      final imageIds = trusted.images.selectedObjectIds.toList(growable: true);
+      final needsImageAttach = !imageIds.contains(imageObjectId);
+      if (needsImageAttach) imageIds.add(imageObjectId);
+
       if (needsImageAttach) {
         await _editor.save(
-          context: state.images,
+          context: trusted.images,
           selectedObjectIds: imageIds,
         );
       }
       await _editor.save(
-        context: state.cover,
+        context: trusted.cover,
         selectedObjectIds: <int>[imageObjectId],
       );
-      if (needsImageAttach || state.images.missingTargetObjectIds.isEmpty) {
-        await _replaceLegacyBookmarkPhotoProjection(
-          state: state,
-          selectedImageObjectIds: imageIds,
-          coverImageObjectId: imageObjectId,
-        );
-      } else {
-        await _setLegacyCoverProjection(
-          state: state,
-          coverImageObjectId: imageObjectId,
-        );
-      }
+      await _replaceLegacyBookmarkPhotoProjection(
+        state: trusted,
+        selectedImageObjectIds: imageIds,
+        coverImageObjectId: imageObjectId,
+      );
     });
   }
 
   Future<void> clearCover({required BookmarkImageRelationState state}) =>
       database.transaction(() async {
+        final trusted = await _trustedStateForMutation(state);
         await _editor.save(
-          context: state.cover,
+          context: trusted.cover,
           selectedObjectIds: const <int>[],
         );
         await database.customStatement(
           'UPDATE bookmark_photos SET is_cover = 0 WHERE bookmark_id = ?',
-          <Object>[state.bookmarkId],
+          <Object>[trusted.bookmarkId],
         );
       });
 
@@ -440,26 +471,6 @@ class BookmarkImageRelationService {
         ],
       );
     }
-  }
-
-  Future<void> _setLegacyCoverProjection({
-    required BookmarkImageRelationState state,
-    required int coverImageObjectId,
-  }) async {
-    await database.customStatement(
-      'UPDATE bookmark_photos SET is_cover = 0 WHERE bookmark_id = ?',
-      <Object>[state.bookmarkId],
-    );
-    final photoId = await _legacyPhotoIdForImage(
-      workspaceId: state.workspaceId,
-      imageObjectId: coverImageObjectId,
-    );
-    if (photoId == null) return;
-    await database.customStatement(
-      'INSERT OR REPLACE INTO bookmark_photos(bookmark_id, photo_id, is_cover) '
-      'VALUES (?, ?, 1)',
-      <Object>[state.bookmarkId, photoId],
-    );
   }
 
   Future<int?> _legacyPhotoIdForImage({

@@ -1,5 +1,6 @@
 import '../domain/object_model.dart';
 import 'object_store.dart';
+import 'relation_read_service.dart';
 import 'relation_stored_value_inspector.dart';
 
 class RelationTargetCandidates {
@@ -163,5 +164,47 @@ class RelationTargetService {
       hasCardinalityViolation: !resolved.property.allowsMultipleRelations &&
           selectedObjectIds.length > 1,
     );
+  }
+
+  /// Reloads one Relation selection for an integrity-sensitive mutation.
+  ///
+  /// Unlike [selectionFor], this is deliberately fail-closed: the persisted
+  /// value must be well-formed, every target must still exist in the declared
+  /// target ObjectType, cardinality must be valid, and the normalized edge
+  /// projection must exactly match stored target ids/order/positions. It never
+  /// repairs either side. Diagnostic picker surfaces should keep using
+  /// [selectionFor] so corruption remains visible until an explicit integrity
+  /// workflow handles it.
+  Future<RelationSelectionContext> selectionForMutation({
+    required int workspaceId,
+    required int sourceObjectId,
+    required ObjectPropertyDefinition property,
+  }) async {
+    final context = await selectionFor(
+      workspaceId: workspaceId,
+      sourceObjectId: sourceObjectId,
+      property: property,
+    );
+    if (context.missingTargetObjectIds.isNotEmpty ||
+        context.hasCardinalityViolation) {
+      throw StateError(
+        'Persisted Relation targets or cardinality are inconsistent for mutation.',
+      );
+    }
+
+    final propertyEdges = (await objectStore.outgoingRelations(sourceObjectId))
+        .where((edge) => edge.propertyId == context.property.id)
+        .toList(growable: false);
+    if (!relationStoredValueMatchesEdges(
+      source: context.sourceObject,
+      property: context.property,
+      edges: propertyEdges,
+    )) {
+      throw StateError(
+        'Persisted Relation value does not match its normalized edge index.',
+      );
+    }
+
+    return context;
   }
 }
