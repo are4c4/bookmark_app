@@ -58,13 +58,13 @@ jobs:
         run: flutter analyze
 
   test:
-    name: test-shard-${{ matrix.shard }}-of-3
+    name: test-shard-${{ matrix.shard }}-of-4
     runs-on: ubuntu-latest
     timeout-minutes: 22
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2]
+        shard: [0, 1, 2, 3]
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -78,10 +78,21 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Generate Drift code
+      - name: Restore Drift generated code
+        id: drift-generated-cache
+        uses: actions/cache@v5
+        with:
+          path: lib/data/app_database.g.dart
+          key: drift-generated-${{ runner.os }}-${{ hashFiles('.dart_tool/package_config.json', 'lib/data/app_database.dart', 'lib/data/app_database_schema.dart', 'lib/data/app_database_migrations.dart', 'lib/data/profile_path_resolver.dart') }}
+
+      - name: Generate Drift code on cache miss
+        if: steps.drift-generated-cache.outputs.cache-hit != 'true'
         run: dart run build_runner build --delete-conflicting-outputs
 
-      - name: Test shard ${{ matrix.shard }} of 3
+      - name: Verify Drift generated code
+        run: test -s lib/data/app_database.g.dart
+
+      - name: Test shard ${{ matrix.shard }} of 4
         id: flutter-test
         timeout-minutes: 18
         run: |
@@ -90,7 +101,7 @@ jobs:
           flutter test \
             --timeout 2m \
             --reporter expanded \
-            --total-shards 3 \
+            --total-shards 4 \
             --shard-index ${{ matrix.shard }} \
             2>&1 | tee ci-artifacts/flutter-test-shard-${{ matrix.shard }}.log
 
@@ -98,7 +109,7 @@ jobs:
         if: ${{ failure() && steps.flutter-test.outcome == 'failure' }}
         run: |
           {
-            echo '## Flutter Test shard ${{ matrix.shard }} of 3 failure'
+            echo '## Flutter Test shard ${{ matrix.shard }} of 4 failure'
             echo
             echo 'Last 200 log lines:'
             echo
@@ -134,8 +145,19 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Generate Drift code
+      - name: Restore Drift generated code
+        id: drift-generated-cache
+        uses: actions/cache@v5
+        with:
+          path: lib/data/app_database.g.dart
+          key: drift-generated-${{ runner.os }}-${{ hashFiles('.dart_tool/package_config.json', 'lib/data/app_database.dart', 'lib/data/app_database_schema.dart', 'lib/data/app_database_migrations.dart', 'lib/data/profile_path_resolver.dart') }}
+
+      - name: Generate Drift code on cache miss
+        if: steps.drift-generated-cache.outputs.cache-hit != 'true'
         run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Verify Drift generated code
+        run: test -s lib/data/app_database.g.dart
 
       - name: Build macOS release app and DMG
         run: bash tool/package_macos.sh
