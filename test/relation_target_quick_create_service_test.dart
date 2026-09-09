@@ -147,8 +147,9 @@ void main() {
       targetObjectTypeId: definition.objectType.id,
       multiple: false,
     );
-    final sourceRelation =
-        (await objectStore.getObjectType(sourceTypeId))!.properties.single;
+    final sourceRelation = (await objectStore.getObjectType(sourceTypeId))!
+        .properties
+        .single;
     final sourceId = await objectStore.createObject(
       objectTypeId: sourceTypeId,
       title: 'Source',
