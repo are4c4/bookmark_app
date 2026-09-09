@@ -8,12 +8,15 @@ workflow self-mutation safety checks.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import os
 import re
 import subprocess
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,7 +35,9 @@ PREFIX_TO_LANE = {
     "oversight/": "H",
 }
 WORKFLOW_SUFFIXES = (".yml", ".yaml")
-RISK_APPROVAL_MARKER = "Risk approval: approved"
+APPROVAL_POLICY_SENTINEL = "DESTRUCTIVE_APPROVAL_POLICY_V2"
+APPROVAL_GUARD_PATH = "tool/pr_coordination_guard.py"
+APPROVAL_ELIGIBLE_PERMISSIONS = frozenset({"write", "admin"})
 
 
 @dataclass(frozen=True)
@@ -208,28 +213,141 @@ def destructive_risks_for_patch(path: str, patch: str) -> list[str]:
     return reasons
 
 
-def destructive_risks(base: str, head: str, paths: list[str]) -> list[str]:
+def approval_policy_active(base: str) -> bool:
+    """Return whether a specific git base already contains the v2 approval contract."""
+    result = subprocess.run(
+        ["git", "show", f"{base}:{APPROVAL_GUARD_PATH}"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    return result.returncode == 0 and APPROVAL_POLICY_SENTINEL in result.stdout
+
+
+def approval_policy_sensitive_paths(paths: list[str]) -> bool:
+    return APPROVAL_GUARD_PATH in paths or any(
+        path.startswith(".github/workflows/") and path.endswith(WORKFLOW_SUFFIXES)
+        for path in paths
+    )
+
+
+def approval_policy_active_from_contents(payload: object) -> bool:
+    """Read the v2 sentinel from a GitHub contents API response."""
+    if not isinstance(payload, dict):
+        raise ValueError("Approval policy contents response was not an object")
+    if payload.get("encoding") != "base64":
+        raise ValueError("Approval policy contents response was not base64 encoded")
+    encoded = str(payload.get("content") or "").replace("\n", "")
+    try:
+        content = base64.b64decode(encoded).decode("utf-8")
+    except (binascii.Error, UnicodeDecodeError) as error:
+        raise ValueError("Approval policy contents response could not be decoded") from error
+    return APPROVAL_POLICY_SENTINEL in content
+
+
+def approval_policy_risks_for_patch(
+    path: str,
+    patch: str,
+    *,
+    policy_active: bool,
+) -> list[str]:
+    if not policy_active:
+        return []
+    if path == APPROVAL_GUARD_PATH:
+        return ["destructive-approval guard policy changes"]
+    if path.startswith(".github/workflows/") and re.search(
+        r"(?mi)^[+-].*(?:\bmerge-gate\b|pr_coordination_guard\.py|AI PR coordination audit)",
+        patch,
+    ):
+        return ["destructive-approval/required-gate workflow wiring changes"]
+    return []
+
+
+def destructive_risks(
+    base: str,
+    head: str,
+    paths: list[str],
+    *,
+    policy_active: bool | None = None,
+) -> list[str]:
     rendered: list[str] = []
+    if policy_active is None:
+        policy_active = approval_policy_active(base)
     for path in paths:
         patch = patch_for_path(base, head, path)
-        for reason in destructive_risks_for_patch(path, patch):
+        reasons = destructive_risks_for_patch(path, patch)
+        reasons.extend(
+            approval_policy_risks_for_patch(
+                path,
+                patch,
+                policy_active=policy_active,
+            )
+        )
+        for reason in reasons:
             rendered.append(f"{reason} in `{path}`")
     return rendered
 
 
-def owner_risk_approval(comments: object, owner_login: str) -> bool:
-    if not isinstance(comments, list):
-        return False
-    owner = owner_login.strip().lower()
-    for row in comments:
-        if not isinstance(row, dict):
+def _review_sort_key(row: dict[str, object]) -> tuple[str, int]:
+    return str(row.get("submitted_at") or ""), int(row.get("id") or 0)
+
+
+def current_distinct_approved_reviewers(
+    reviews: object,
+    author_login: str,
+    head_sha: str,
+) -> tuple[str, ...]:
+    """Return distinct reviewers whose latest review approves the current head."""
+    if not isinstance(reviews, list):
+        return ()
+    author = author_login.strip().lower()
+    latest: dict[str, dict[str, object]] = {}
+    for raw in reviews:
+        if not isinstance(raw, dict):
+            continue
+        user = raw.get("user")
+        if not isinstance(user, dict):
+            continue
+        login = str(user.get("login") or "").strip()
+        if not login or str(user.get("type") or "User") != "User":
+            continue
+        key = login.lower()
+        current = latest.get(key)
+        if current is None or _review_sort_key(raw) >= _review_sort_key(current):
+            latest[key] = raw
+
+    approved: list[str] = []
+    for key, row in latest.items():
+        if key == author:
+            continue
+        if str(row.get("state") or "").upper() != "APPROVED":
+            continue
+        if str(row.get("commit_id") or "") != head_sha:
             continue
         user = row.get("user")
-        login = str(user.get("login") or "").lower() if isinstance(user, dict) else ""
-        body = str(row.get("body") or "")
-        if login == owner and RISK_APPROVAL_MARKER.lower() in body.lower():
-            return True
-    return False
+        if isinstance(user, dict):
+            approved.append(str(user.get("login") or ""))
+    return tuple(sorted(set(approved), key=str.lower))
+
+
+def permission_allows_destructive_approval(payload: object) -> bool:
+    return (
+        isinstance(payload, dict)
+        and str(payload.get("permission") or "").lower() in APPROVAL_ELIGIBLE_PERMISSIONS
+    )
+
+
+def eligible_destructive_approver(
+    reviews: object,
+    author_login: str,
+    head_sha: str,
+    permission_by_login: dict[str, object],
+) -> str | None:
+    for login in current_distinct_approved_reviewers(reviews, author_login, head_sha):
+        payload = permission_by_login.get(login.lower())
+        if permission_allows_destructive_approval(payload):
+            return login
+    return None
 
 
 def _request_json(url: str, token: str) -> object:
@@ -244,6 +362,47 @@ def _request_json(url: str, token: str) -> object:
     )
     with urllib.request.urlopen(request, timeout=15) as response:
         return json.load(response)
+
+
+def _request_paginated_list(
+    url: str,
+    token: str,
+    *,
+    per_page: int = 100,
+) -> list[object]:
+    """Fetch every page of a GitHub list endpoint or fail closed."""
+    if per_page < 1 or per_page > 100:
+        raise ValueError("GitHub pagination page size must be between 1 and 100")
+    separator = "&" if "?" in url else "?"
+    rows: list[object] = []
+    page = 1
+    while True:
+        payload = _request_json(
+            f"{url}{separator}per_page={per_page}&page={page}",
+            token,
+        )
+        if not isinstance(payload, list):
+            raise ValueError("Paginated GitHub response was not a list")
+        rows.extend(payload)
+        if len(payload) < per_page:
+            return rows
+        page += 1
+
+
+def _current_base_approval_policy_active(
+    api_root: str,
+    token: str,
+    base_ref: str,
+) -> bool:
+    if not base_ref:
+        raise ValueError("Pull-request base ref is unavailable for approval policy authority")
+    quoted_path = urllib.parse.quote(APPROVAL_GUARD_PATH, safe="/")
+    quoted_ref = urllib.parse.quote(base_ref, safe="")
+    payload = _request_json(
+        f"{api_root}/contents/{quoted_path}?ref={quoted_ref}",
+        token,
+    )
+    return approval_policy_active_from_contents(payload)
 
 
 def _open_pull_claims(api_root: str, token: str) -> list[OpenPullClaim]:
@@ -395,6 +554,8 @@ def main() -> int:
         body = str(pull.get("body") or "")
         head = pull.get("head", {})
         branch = str(head.get("ref") or "")
+        base = pull.get("base", {})
+        base_ref = str(base.get("ref") or "") if isinstance(base, dict) else ""
         author = pull.get("user", {})
         author_login = str(author.get("login") or "") if isinstance(author, dict) else ""
         current_number = int(event.get("number") or pull.get("number") or 0)
@@ -441,21 +602,56 @@ def main() -> int:
             dependency_bot=dependency_bot,
         )
 
-        risks = destructive_risks(base_sha, head_sha, paths)
-        risk_approved = False
-        if risks and api_root and token and current_number:
-            owner_login = repository.split("/", 1)[0]
-            comments = _request_json(
-                f"{api_root}/issues/{current_number}/comments?per_page=100", token
+        policy_active_override: bool | None = None
+        if approval_policy_sensitive_paths(paths):
+            if not api_root or not token:
+                raise ValueError(
+                    "Current-base destructive approval policy cannot be verified without repository/token metadata"
+                )
+            policy_active_override = _current_base_approval_policy_active(
+                api_root,
+                token,
+                base_ref,
             )
-            risk_approved = owner_risk_approval(comments, owner_login)
 
-        if risks and not risk_approved:
+        risks = destructive_risks(
+            base_sha,
+            head_sha,
+            paths,
+            policy_active=policy_active_override,
+        )
+        risk_approver: str | None = None
+        review_candidates: tuple[str, ...] = ()
+        if risks and api_root and token and current_number:
+            reviews = _request_paginated_list(
+                f"{api_root}/pulls/{current_number}/reviews",
+                token,
+            )
+            review_candidates = current_distinct_approved_reviewers(
+                reviews,
+                author_login,
+                head_sha,
+            )
+            permission_by_login: dict[str, object] = {}
+            for login in review_candidates:
+                quoted = urllib.parse.quote(login, safe="")
+                permission_by_login[login.lower()] = _request_json(
+                    f"{api_root}/collaborators/{quoted}/permission", token
+                )
+            risk_approver = eligible_destructive_approver(
+                reviews,
+                author_login,
+                head_sha,
+                permission_by_login,
+            )
+
+        if risks and risk_approver is None:
             errors.append(
-                "High-confidence destructive/irreversible change detected: "
+                "High-confidence destructive/irreversible or approval-policy change detected: "
                 + "; ".join(risks)
-                + ". The repository owner must add a PR conversation comment containing exactly "
-                + f"`{RISK_APPROVAL_MARKER}` after reviewing preservation/rollback, then rerun CI."
+                + ". A GitHub user other than the PR author must submit an `APPROVED` pull-request review "
+                "for the current head commit and have repository write/admin permission. "
+                "PR-body markers, labels, conversation comments, self-review, stale reviews and read-only reviewers do not count."
             )
 
         for warning in warnings:
@@ -474,8 +670,10 @@ def main() -> int:
                 f"- Declared dependencies: `{', '.join('#' + str(number) for number in contract.dependencies) if contract.dependencies else 'none'}`",
                 f"- Other open PRs claiming Related issue: `{', '.join('#' + str(pull.number) for pull in duplicates) if duplicates else 'none'}`",
                 f"- Actual shared hotspots: `{', '.join(sorted(actual_hotspots(paths))) if actual_hotspots(paths) else 'none'}`",
-                f"- Destructive-risk findings: `{len(risks)}`",
-                f"- Owner risk approval: `{'yes' if risk_approved else 'no/not-required'}`",
+                f"- Current-base approval policy: `{('active' if policy_active_override else 'bootstrap/inactive') if policy_active_override is not None else 'not-sensitive'}`",
+                f"- Destructive/policy-risk findings: `{len(risks)}`",
+                f"- Current-head distinct approval candidates: `{', '.join(review_candidates) if review_candidates else 'none'}`",
+                f"- Eligible destructive-risk approver: `{risk_approver or 'none/not-required'}`",
                 f"- Blocking coordination errors: `{len(errors)}`",
                 f"- Advisory coordination warnings: `{len(warnings)}`",
                 "",
@@ -497,6 +695,7 @@ def main() -> int:
         OSError,
         ValueError,
         KeyError,
+        binascii.Error,
         json.JSONDecodeError,
         subprocess.CalledProcessError,
         urllib.error.URLError,
