@@ -63,7 +63,7 @@ Always re-check each Issue live before assuming state or ownership.
 - **#155** — Weblink native capability umbrella.
 - **#225** — maintainability, hotspot reduction, caller-zero legacy retirement, and developer-workflow health.
 - **#245** — Photo→Image convergence umbrella; destructive historical schema retirement remains separate.
-- **#242/#951** — real-macOS Vault/data-preservation validation before destructive legacy retirement.
+- **#242/#951** — completed real-macOS Vault/data-preservation checkpoints. They are evidence for the validated transitions, not blanket authorization for future destructive legacy retirement.
 
 ## Focused implementation routing
 
@@ -99,9 +99,9 @@ Tag/TagGroup are not D-owned native primitives.
 Canonical Object Search is established. Resume only for demonstrated FTS/search freshness/ranking/projection obligations; do not create domain-specific long-term search stores for Bookmark/Person/Tag.
 
 ### F — Storage, Vault & Delivery
-- #951/#242 real-machine preservation/validation gate.
-- #1063 open export/portability distinct from backup/restore.
-- Destructive Bookmark/People/Photo schema retirement requires preservation evidence before data removal.
+- #1063 open export/portability distinct from backup/restore is the current durable roadmap anchor; verify live ownership before taking it.
+- #242/#951 are completed preservation checkpoints, not active Lane F stop gates.
+- Destructive Bookmark/People/Photo schema retirement still requires preservation evidence appropriate to that future migration before data removal; completion of #242/#951 does not waive this.
 - Durable history may later require a focused F managed-byte retention/GC slice.
 
 ### G — Refactor & Architecture Health

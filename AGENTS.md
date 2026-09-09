@@ -194,7 +194,7 @@ Always verify live Issues because this list is a routing aid, not transient owne
 - **C:** #1043 Stage1→generic Weblink/Object Database/View + Inbox; #1046 People→generic Person Database/View; #1053 hierarchy-aware Tag filtering/UX; #1061 Home/start UX.
 - **D:** #1054 direct canonical Weblink capture; #155/#245 only for concrete native Weblink/Image/File obligations.
 - **E:** focused Search issues when canonical FTS correctness/freshness obligations are demonstrated.
-- **F:** #951/#242 preservation and real-machine Vault validation; #1063 export/portability; later preservation/managed-byte slices for destructive migration/history.
+- **F:** #1063 export/portability is the current durable roadmap anchor; #242/#951 are completed preservation checkpoints, not active stop gates; future destructive retirement still requires migration-specific preservation evidence and explicit single-writer/destructive-approval handling.
 - **G:** #1047/#225 maintainability, #950 and future caller-zero Bookmark/People/Photo retirement; repository-wide architecture/guardrail sync such as #1060.
 - **H:** continuous architecture/integration oversight via `docs/AI_PROGRESS_OVERSIGHT.md`; #1060 establishes the lane. H routes implementation findings to A–G.
 
