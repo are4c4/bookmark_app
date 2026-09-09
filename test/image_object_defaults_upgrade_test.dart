@@ -66,6 +66,7 @@ void main() {
       definition.noteProperty.id,
       definition.contentTypeProperty.id,
       definition.sourceUrlProperty.id,
+      definition.storageOwnershipProperty.id,
       definition.fileProperty.id,
     ]);
 
@@ -139,6 +140,7 @@ void main() {
       definition.noteProperty.id,
       definition.contentTypeProperty.id,
       definition.sourceUrlProperty.id,
+      definition.storageOwnershipProperty.id,
       definition.fileProperty.id,
     ]);
   });
