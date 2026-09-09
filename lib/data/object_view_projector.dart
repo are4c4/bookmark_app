@@ -44,6 +44,7 @@ class ObjectViewProjector {
     required Iterable<AppObject> objects,
     required DatabaseViewConfig view,
     ObjectViewValueResolver? valueResolver,
+    ObjectHierarchyDescendantMatcher? hierarchyDescendantMatcher,
   }) {
     final query = queryAdapter.decode(view);
     final groupRule = groupAdapter.decode(view);
@@ -62,6 +63,7 @@ class ObjectViewProjector {
       filters: query.filters,
       sorts: query.sorts,
       valueResolver: resolve,
+      hierarchyDescendantMatcher: hierarchyDescendantMatcher,
     );
 
     final groups = groupRule == null

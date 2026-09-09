@@ -15,6 +15,8 @@ enum ObjectFilterOperator {
   containsAll,
 }
 
+enum ObjectHierarchyMatchMode { exact, isOrBelow, belowOnly, excludeBranch }
+
 enum ObjectSortDirection {
   ascending,
   descending,
@@ -25,6 +27,7 @@ class ObjectFilterRule {
     required this.propertyId,
     required this.operator,
     this.value,
+    this.hierarchyMatchMode = ObjectHierarchyMatchMode.exact,
   });
 
   /// `null` targets the Object title. Otherwise this is a PropertyDefinition id.
@@ -32,10 +35,19 @@ class ObjectFilterRule {
   final ObjectFilterOperator operator;
   final dynamic value;
 
+  /// Optional hierarchy semantics for relation-valued filters.
+  ///
+  /// Existing saved rules omit this field and therefore remain exact. Callers
+  /// must provide a canonical hierarchy matcher before non-exact modes can
+  /// evaluate; the query engine otherwise fails closed.
+  final ObjectHierarchyMatchMode hierarchyMatchMode;
+
   Map<String, dynamic> toJson() => <String, dynamic>{
         'propertyId': propertyId,
         'operator': operator.name,
         if (value != null) 'value': value,
+        if (hierarchyMatchMode != ObjectHierarchyMatchMode.exact)
+          'hierarchyMatchMode': hierarchyMatchMode.name,
       };
 
   static ObjectFilterRule? fromJson(dynamic raw) {
@@ -49,6 +61,21 @@ class ObjectFilterRule {
       }
     }
     if (operator == null) return null;
+
+    var hierarchyMatchMode = ObjectHierarchyMatchMode.exact;
+    final hierarchyModeName = raw['hierarchyMatchMode'];
+    if (hierarchyModeName != null) {
+      ObjectHierarchyMatchMode? decodedMode;
+      for (final candidate in ObjectHierarchyMatchMode.values) {
+        if (candidate.name == '$hierarchyModeName') {
+          decodedMode = candidate;
+          break;
+        }
+      }
+      if (decodedMode == null) return null;
+      hierarchyMatchMode = decodedMode;
+    }
+
     final propertyRaw = raw['propertyId'];
     final propertyId = propertyRaw == null
         ? null
@@ -59,6 +86,7 @@ class ObjectFilterRule {
       propertyId: propertyId,
       operator: operator,
       value: raw['value'],
+      hierarchyMatchMode: hierarchyMatchMode,
     );
   }
 }
