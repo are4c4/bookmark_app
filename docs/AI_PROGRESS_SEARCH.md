@@ -54,3 +54,5 @@ Search changes require focused projection/freshness/restart regressions plus Ana
 4. avoid domain-specific permanent indexes;
 5. update this handoff with durable branch/commit/PR facts;
 6. if no concrete E issue exists, stop under the no-actionable-work condition.
+
+Lane E inherits the shared **Lane continuation and resume/stop contract** in `AGENTS.md`. Its legitimate idle behavior is intentional: do not invent Search features merely to keep the lane active. Before `idle-no-work`, however, perform the full final resume audit against live Issues, recent Object/Relation/native changes and the triggers above. Record `Stop reason: idle-no-work — <live evidence>` only when no concrete Search obligation exists; if a prerequisite is merely blocked, use the more precise dependency/conflict/external category instead.
