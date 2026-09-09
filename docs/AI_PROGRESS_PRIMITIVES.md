@@ -83,3 +83,5 @@ Changed-Dart format, Analyze, full Flutter Test and focused normalization/reuse/
 6. otherwise stop with `idle-no-work` and the live evidence that no independent D-native obligation remains.
 
 This sequence is not terminal. After any slice/PR/merge, apply the shared **Lane continuation and resume/stop contract** in `AGENTS.md` before ending the run. Lane D continues only through concrete native-capability obligations; it must not manufacture work from already-completed umbrellas or steal another lane's remaining caller.
+
+Stop reason: idle-no-work — #1054 is completed on main; #245 is completed; #155 has no remaining D-owned acceptance beyond newly demonstrated native defects; live open-Issue/PR audit found no independent D Weblink/Image/File focused work; the remaining direct Weblink `findOrCreate` production bypass is Relation target quick-create and is routed to Lane B in #1103.

@@ -233,8 +233,9 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
       );
     });
 
-    if (!mounted || widget.objectId != objectId || targetBlockId == null)
+    if (!mounted || widget.objectId != objectId || targetBlockId == null) {
       return;
+    }
     final merged =
         !_document.blocks.any((item) => item.id == block.id) &&
         _document.blocks.any((item) => item.id == targetBlockId);
@@ -349,6 +350,14 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
     () => _bodyActions.moveDown(objectId: widget.objectId, blockId: block.id),
   );
 
+  Future<void> _reorder(ObjectBodyBlock block, int toIndex) => _runMutation(
+    () => _bodyBlockEdits.move(
+      objectId: widget.objectId,
+      blockId: block.id,
+      toIndex: toIndex,
+    ),
+  );
+
   Future<void> _delete(ObjectBodyBlock block) => _runMutation(
     () => _bodyActions.remove(objectId: widget.objectId, blockId: block.id),
   );
@@ -453,6 +462,7 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
             final targetId = block.referencedObjectId;
             if (targetId != null) widget.onOpenObject?.call(targetId);
           },
+          onBlockReorder: _reorder,
           blockActionsBuilder: (context, block, position) =>
               ObjectBodyBlockActionBar(
                 block: block,

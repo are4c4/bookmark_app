@@ -29,6 +29,15 @@ Scope:
 - consume B/#1052 canonical hierarchy reader/integrity contract rather than creating a second traversal/tree store;
 - preserve View round-trip and existing exact filtering.
 
+Integrated foundation:
+- `ObjectFilterRule` can persist a hierarchy match mode while legacy/omitted rules remain exact;
+- `ObjectQueryEngine` accepts a read-only strict-descendant matcher and fails closed for non-exact hierarchy predicates when no canonical matcher is supplied;
+- exact / is-or-below / below-only / exclude-branch semantics are covered without persisting ancestor assignments;
+- reusable `ObjectHierarchyMatchModeField` presentation exposes `完全一致` / `配下を含む` / `配下のみ` / `枝を除外` without owning hierarchy traversal;
+- `ObjectViewProjector` / `GenericObjectViewCoordinator` can receive the same matcher, leaving the eventual canonical hierarchy reader wiring to B/#1052 integration rather than a C-owned tree store.
+
+Next #1053 action: once B/#1052 exposes the canonical hierarchy reader/integrity contract, compose a read-only hierarchy snapshot/matcher into generic Database/View projection and wire the reusable hierarchy mode field into canonical Tag relation filter editing. Do not use legacy Tag projection tables or introduce a closure/tree cache as an alternate authority.
+
 ### #1043 — replace Stage1 normal ownership
 Move ordinary saved-URL use to canonical Weblink Objects through generic Database/View/navigation and capture-first/Inbox organization. Preserve useful list/table/gallery/filter/sort/opening behavior through generic contracts. Retire Stage1 routing only after #1041/#1042/#1054 and daily-use parity make it caller-zero.
 
