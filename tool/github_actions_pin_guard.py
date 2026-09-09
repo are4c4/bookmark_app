@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 WORKFLOW_DIR = Path(".github/workflows")
-USES_RE = re.compile(r"^\s*uses:\s*([^\s#]+)")
+USES_RE = re.compile(r"^\s*(?:-\s*)?uses:\s*([^\s#]+)")
 REMOTE_PIN_RE = re.compile(
     r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.\-/]+)?@[0-9a-fA-F]{40}$"
 )
