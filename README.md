@@ -1,25 +1,29 @@
 # bookmark_app
 
-A Flutter bookmark/database manager built around a local Drift / SQLite database.
+A local-first Flutter personal knowledge/database application built around an Object-first model and a local Drift / SQLite store.
 
-## Current features
+The repository is migrating away from legacy Bookmark/People/Photo-specific authorities toward reusable Objects, ObjectTypes, Properties, Relations, Databases, Views, and a free-form Body. `Bookmark` remains a compatibility/migration input; normal URL capture is intended to converge on canonical Weblink Objects.
 
-- URL bookmarks with title / description / Open Graph metadata
-- Gallery / List / Table views
-- Full-text search, filters, favorites, status, rating, and saved views
-- Hierarchical tags and independent tag groups
-- People database with role-specific relations such as 著者 / 講師 / 出演者
-- Photo database and bookmark-photo relations
-- Collections and directional bookmark relations / backlinks
-- Multiple Profiles with physically isolated SQLite databases and photo folders
-- Workspaces inside each Profile
-- Inbox / archive / trash lifecycle state
-- File attachments and PDF annotations
-- Drag & drop for workspace, tag, person-role, collection, and photo relations
+See [`docs/product_architecture.md`](docs/product_architecture.md) for the durable product contract and [`AGENTS.md`](AGENTS.md) for AI-development rules.
+
+## Product direction
+
+- Global reusable Objects inside a Vault
+- One primary ObjectType per Object
+- Structured Properties and typed Relations
+- Free-form block Body on every Object
+- Generic Database/View presentation with Table / List / Gallery / Board
+- Canonical Weblink, Image, and File native-capability Objects
+- Generic Person, Tag, TagGroup, Book, Paper, Project, Recipe, and user-defined ObjectTypes
+- Canonical Object Search
+- Local-first Vault/Profile storage, backup/restore, and portable-storage boundaries
+- Inbox / archive / trash lifecycle and a roadmap toward Inbox / Recent / Favorites / Pinned Databases as the main work-start surface
+
+Legacy Bookmark/People/Photo runtime paths are retained only where migration parity, caller-zero proof, or preservation requirements still need them. Do not infer the current implementation state from this README; live GitHub Issues/PRs/CI and `main` are authoritative for transient status.
 
 ## Local update / development run
 
-To update the local checkout and run the latest development build:
+Use the repository-pinned Flutter version documented by the developer workflow. To update the local checkout and run the latest development build:
 
 ```bash
 cd ~/bookmark_app
@@ -29,7 +33,7 @@ dart run build_runner build
 flutter run -d macos
 ```
 
-Run the same generation step after Drift schema changes. `--delete-conflicting-outputs` is not required by the current build_runner setup.
+Run the same generation step after Drift schema changes. The authoritative current Drift schema version lives in `lib/data/app_database.dart`; this README intentionally does not duplicate that volatile number.
 
 ## Update the installed macOS app
 
@@ -42,7 +46,7 @@ To replace an already installed `Bookmark.app` with the latest version while kee
 cd ~/bookmark_app
 git pull
 flutter pub get
-dart run build_runner build --delete-conflicting-outputs
+dart run build_runner build
 ```
 
 3. Build the latest release app and DMG:
@@ -66,7 +70,7 @@ The generated files are:
 ~/bookmark_app/dist/macos/Bookmark-<version>.dmg
 ```
 
-The packaging script deliberately refuses to overwrite an existing `/Applications/Bookmark.app` automatically. It also preserves an existing Bundle Identifier when switching identifiers would make existing profile data appear missing. Replacing only the app bundle therefore normally keeps the existing Bookmark/Profile/Image database data intact.
+The packaging script deliberately refuses to overwrite an existing `/Applications/Bookmark.app` automatically. It also preserves an existing Bundle Identifier when switching identifiers would make existing profile data appear missing. Replacing only the app bundle therefore normally keeps existing profile/Vault/Image data intact.
 
 If `/Applications` rejects a terminal copy with a permission error, use Finder drag-and-drop instead. macOS may ask for administrator authentication.
 
@@ -92,6 +96,19 @@ dist/macos/Bookmark-<version>.dmg
 ```
 
 See [`docs/MACOS_RELEASE.md`](docs/MACOS_RELEASE.md) for Bundle Identifier safety, custom AppIcon input, DMG packaging, Gatekeeper notes, and update/install details.
+
+## Repository source-of-truth rules
+
+Durable documentation and live repository state have different jobs:
+
+- `docs/product_architecture.md` — long-lived product architecture and semantics.
+- `docs/architecture.md` — long-lived technical architecture.
+- `AGENTS.md` — AI development/ownership/concurrency rules.
+- `docs/AI_PROGRESS*.md` — durable handoff, routing, completed contracts, and exact resume guidance.
+- GitHub Issues — focused implementation contracts and acceptance criteria.
+- GitHub PRs / CI / current `main` — transient ownership, branch state, currently-open work, and validation status.
+
+Do not copy volatile open-PR counts, CI run numbers, or current main commit SHAs into durable docs unless the historical checkpoint itself is the point. A fresh AI run must re-read live GitHub state before implementation.
 
 ## Codebase size checks
 
@@ -153,6 +170,6 @@ Generated files such as Drift's `app_database.g.dart` can be very large and shou
 
 ## Database
 
-The current Drift schema version is **13**. Migration code preserves existing bookmark, workspace, lifecycle, tag-group, attachment, and PDF-annotation data while moving runtime CRUD toward typed Drift queries.
+Drift schema/migration code preserves historical user data while runtime CRUD moves toward canonical Object-first stores and services. The current schema version is intentionally not duplicated here; read `AppDatabase.schemaVersion` in `lib/data/app_database.dart` when an exact live value is required.
 
-Raw SQL is intentionally retained only where it is appropriate, such as legacy-schema discovery/migration and SQLite FTS5 queries.
+Raw SQL is intentionally retained where appropriate, such as legacy-schema discovery/migration and SQLite FTS5 queries.
