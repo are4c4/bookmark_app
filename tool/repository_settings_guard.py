@@ -88,6 +88,11 @@ def validates_default_branch_ruleset(ruleset: dict[str, object]) -> AuditResult:
     bypass = ruleset.get("bypass_actors")
     if bypass != []:
         errors.append("main ruleset must not define bypass actors")
+    if (
+        "current_user_can_bypass" in ruleset
+        and ruleset.get("current_user_can_bypass") not in ("never", False)
+    ):
+        errors.append("current audit identity must not be able to bypass main rules")
 
     return AuditResult(tuple(errors))
 
