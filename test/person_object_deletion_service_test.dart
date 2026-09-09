@@ -115,6 +115,13 @@ void main() {
 
     expect(await objectStore.listObjects(schema.objectType.id), isEmpty);
     expect(await database.select(database.people).get(), isEmpty);
+    expect(
+      (await database
+              .customSelect('SELECT COUNT(*) AS count FROM person_object_links')
+              .getSingle())
+          .read<int>('count'),
+      0,
+    );
     final survivingBook = (await objectStore.listObjects(bookTypeId)).single;
     expect(
       ObjectRelationValue.fromJson(survivingBook.values[authorPropertyId])
@@ -221,6 +228,13 @@ void main() {
 
     expect(await database.select(database.people).get(), hasLength(1));
     expect(await objectStore.listObjects(schema.objectType.id), hasLength(1));
+    expect(
+      (await database
+              .customSelect('SELECT COUNT(*) AS count FROM person_object_links')
+              .getSingle())
+          .read<int>('count'),
+      1,
+    );
     expect(
       await bridge.objectIdForLegacyPerson(workspaceId, personId),
       personObjectId,
