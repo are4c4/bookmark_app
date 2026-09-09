@@ -16,34 +16,43 @@ Own generic Object/ObjectType identity and lifecycle semantics, reusable Propert
 
 ## Active focused issues
 
-### #1058 — Body structural edit Undo
-Current primary Lane A Body slice after #1057.
-
-Required behavior:
-- normal block deletion remains confirmation-free and immediately exposes a short-lived Snackbar `元に戻す` action;
-- successful Undo restores the exact block ID/type/text/attributes/reference payload at its original position;
-- delete and inverse restoration use persisted Body as authority;
-- if any later mutation makes the inverse unsafe, Undo fails closed and never overwrites newer content;
-- the implementation remains local/in-memory rather than introducing a workspace command stack or durable history subsystem;
-- no Body/schema migration is introduced;
-- service and real widget regressions cover exact restoration, one-shot Undo and stale/conflicting Undo preservation.
-
-Current implementation boundary:
-- `ObjectBodyStore.writeIfUnchanged()` provides a narrow transactional compare-and-swap write over canonical Body JSON;
-- `ObjectBodyStructuralUndoService` owns short-lived delete inverse tokens and exact restoration;
-- the reusable `ObjectBodyEditorSection` uses the same service and user-facing recovery/error contract; current real hosts include Bookmark detail and Generic Database side-peek;
-- real shared-editor regressions cover both successful delete → Undo and delete → later mutation → rejected stale Undo;
-- #1058 deliberately does not modify `object_inspector_page.dart`; expanding Undo to additional hosts should reuse the shared service only when a concrete caller requires it.
-
 ### #1041 — Bookmark retirement A
-Define collision-safe legacy Bookmark -> canonical Weblink/generic Object authority. Do not create a permanent canonical Bookmark Object. Preserve conflicting legacy user-authored content when lossless convergence is not provable.
+Current primary Lane A slice. Define collision-safe legacy Bookmark -> canonical Weblink/generic Object authority without creating a permanent canonical Bookmark Object.
 
-D/#1054 is already integrated: `BookmarkWeblinkObjectBridge` consumes the canonical Weblink capture boundary. A must not reimplement or revert that wiring. The remaining A-owned work is legacy Bookmark user-state convergence, ambiguous multi-Bookmark collision/preservation policy, restart/reconciliation semantics and transition authority.
+D/#1054 is already integrated: `BookmarkWeblinkObjectBridge` consumes `CanonicalWeblinkCaptureService`. A must not reimplement URL normalization, canonical Weblink create/reuse or D-owned collision identity logic.
+
+Current A-owned implementation boundary on `feature/object-bookmark-state-convergence-1041`:
+- `BookmarkWeblinkObjectBridge` resolves canonical Weblink identities for the workspace before mutating mirrored Bookmark Relations or retiring mirrored direct URL Values;
+- when multiple legacy Bookmarks resolve to the same canonical Weblink, their saved-item scalar state (`Favorite`, `Reading Status`, `Storage State`, `Genre`, `Rating`) must be equivalent before convergence proceeds;
+- non-equivalent saved-item state fails closed before Bookmark -> Weblink Relation writes or mirrored URL retirement, leaving legacy Bookmark rows and mirrored state intact;
+- canonical Weblink identity remains D-owned and may already exist/be created by the shared capture boundary; the A preflight does not duplicate identity logic;
+- restart/reconciliation after the conflict is resolved must reuse the existing canonical Weblink rather than create another target;
+- title/description/thumbnail remain compatibility-preserved in the legacy Bookmark row/mirror and are only best-effort resource enrichment; this slice does not claim they have been losslessly collapsed into one saved-item identity;
+- direct Tag convergence remains B-owned (#1118/#1120); Images/Cover Image and other Relation-era convergence remain B/#1042 work.
+
+Focused regression: `test/bookmark_weblink_user_state_convergence_test.dart` covers each scalar-state conflict before Relation/URL retirement plus conflict resolution followed by restart-style reconciliation with one reused Weblink target.
+
+No schema/migration file is changed and no legacy Bookmark row/data is deleted.
 
 ### #1044 — Person migration A
 Move normal Person identity/write authority to generic Person ObjectType while preserving stable identity, Body/note, Profile Image Relation compatibility and restart/reconciliation safety. Do not retire People UI or redesign groups/roles here.
 
 ## Recently integrated
+
+### #1058 — Body structural edit Undo
+Completed and closed through PR #1104, merged as `6306a2d9c723a2f6218ced47d62fba8e15eb26e0`.
+
+Delivered:
+- confirmation-free block deletion with short-lived Snackbar `元に戻す` recovery;
+- exact block ID/type/text/attributes/reference payload/position restoration;
+- persisted Body remains authoritative through compare-and-swap delete/restore;
+- stale inverse restoration fails closed and preserves newer Body content;
+- `ObjectBodyStore.writeIfUnchanged()` is the narrow CAS boundary;
+- `ObjectBodyStructuralUndoService` owns in-memory delete inverse tokens;
+- reusable `ObjectBodyEditorSection` provides the shared interaction path without modifying `object_inspector_page.dart`;
+- focused service and real widget regressions cover successful Undo, one-shot behavior and later-mutation conflict preservation.
+
+Authoritative final synchronized head `acc23a40e8b1950081d613431ed83b49373133cb`: Flutter CI #3322, Analyze/guards, all four Flutter Test shards, test-health/merge-gate and repository audits were green before merge.
 
 ### #1057 — Body UX phase 2
 Merged through PR #1110 as squash commit `c871d68e54b35ac7f183f59a64ba00fb134dc661`.
@@ -57,8 +66,6 @@ Delivered:
 - contextual action subtrees stay mounted while hidden so opening a popup does not invalidate its command when hover/focus changes;
 - shared-editor and Inspector/reference regressions cover contextual visibility, focus preservation, popup survivability and persisted reorder.
 
-Authoritative final head `9c40f537af1ae187852db16f6a1a0672a4978bdb`: Flutter CI #3219 full green, including changed-Dart format, Analyze/guards, all four Flutter Test shards, test-health and merge-gate. AI Handoff Audit, AI Migration Lease Audit and Repository Settings Audit were also green.
-
 ### #1049 — Body UX phase 1
 Merged through PR #1056 as squash commit `2f6eb24a7ff7fda6997703edc37d91e2087fd305`.
 
@@ -71,38 +78,37 @@ Delivered:
 - text mutations are serialized so split/merge cannot race a stale paragraph save;
 - domain, persistence, widget and real editor integration regressions cover the primary keyboard flow.
 
-Undo and richer idle/drag interaction were intentionally split from #1049 rather than broadening the phase-1 change.
-
 ## Integrated foundation that remains authoritative
 - universal persisted Body model/opening surfaces;
 - fail-closed Body structural/version validation with unknown/future block preservation;
 - stable Object/ObjectType identity and generic Property semantics;
 - Daily Note identity-managed Date protection;
 - exact Search-agnostic canonical Object sync impact contract;
-- template/object creation integrity and shared Object detail/opening seams.
+- template/object creation integrity and shared Object detail/opening seams;
+- local Body structural Undo as interaction recovery, not durable history.
 
-Older handoff statements that “Lane A is idle after #909/#910” or that #1057 is still pending are obsolete. #1058 is the current Body slice, with #1041/#1044 and other focused A issues remaining after live dependency review.
+Older handoff statements that #1058 is still active are obsolete. #1041 is the current primary Lane A slice, with #1044 and later A-focused contracts remaining after live dependency review.
 
 ## Cross-lane boundaries
-- **B:** Relation mutation/read/index/backlink/audit/reconcile, Bookmark/Person relationship migration and Tag hierarchy integrity.
+- **B:** Relation mutation/read/index/backlink/audit/reconcile, Bookmark/Person relationship migration and Tag hierarchy integrity. #1120 owns direct Bookmark Tag -> Weblink Tag convergence; do not duplicate it in #1041.
 - **C:** Database/View/schema UX, Stage1/People generic collection replacement and Tag hierarchy query/filter/picker UX.
-- **D:** Weblink URL identity/normalization/capture-native behavior and Image/File native capabilities. D/#1054 canonical capture is already integrated and is a prerequisite consumed by A/#1041, not work to duplicate.
+- **D:** Weblink URL identity/normalization/capture-native behavior and Image/File native capabilities. D/#1054 canonical capture is integrated and consumed by A/#1041, not work to duplicate.
 - **E:** canonical Object Search projection/FTS freshness.
 - **F:** Vault/filesystem/preservation lifecycle.
 - **G:** behavior-preserving hotspot reduction and caller-zero legacy retirement after A/B/C/D parity.
 
 ## Hotspot / concurrency rule
-Recheck live PR ownership before editing `object_inspector_page.dart`, `generic_database_page.dart`, Stage1, People or `app_database.dart`. Body UX should prefer reusable Body widgets/services/tests and avoid unrelated Inspector redesign. #1058 intentionally remains off shared hotspots after validation showed the shared editor already satisfies its interaction acceptance.
+Recheck live PR ownership before editing `object_inspector_page.dart`, `generic_database_page.dart`, Stage1, People or `app_database.dart`. #1041 should remain in the focused Bookmark reconciliation boundary and tests unless a concrete acceptance gap proves another A-owned file is required. Do not take over B Relation convergence or D Weblink identity.
 
 ## Validation
-GitHub Actions is authoritative when local Flutter execution is unavailable. Body interaction slices require changed-Dart formatting, Analyze and full Flutter Test green plus real widget regressions for the changed interaction contract.
+GitHub Actions is authoritative when local Flutter execution is unavailable. #1041 requires changed-Dart format, Analyze/guards, focused preservation/restart regressions, full Flutter Test and authoritative merge-gate on an up-to-date head.
 
 ## Resume sequence
-1. verify latest `main`, open PR ownership and #1058 before editing;
-2. keep #1058 limited to local delete Undo and other already-demonstrated lossless inverse behavior; do not introduce durable history or a broad command-stack abstraction;
-3. keep shared hotspots untouched unless a concrete acceptance gap cannot be served through the reusable Body editor/service boundary;
-4. run changed-Dart format, Analyze/guards and full Flutter Test, then integrate #1058 only after the required merge-gate is green on an up-to-date head;
-5. after #1058 integrates, close it if needed and refresh live A dependencies rather than stopping;
-6. unless a newer dependency supersedes it, audit #1041 next against the already-integrated D/#1054 bridge and implement only the remaining A-owned preservation/reconciliation semantics; keep #1044 separate and avoid People UI/Relation redesign.
+1. verify latest `main`, #1041, open PR ownership and current CI before editing;
+2. validate the current saved-item scalar collision preflight and focused restart/reconciliation regressions;
+3. fix only demonstrated #1041 preservation/reconciliation gaps; do not broaden into Tag/Image/role Relation convergence, UI retirement, schema deletion or D-owned Weblink identity;
+4. integrate #1041 only after authoritative CI/merge-gate is green on a latest-main-synchronized head;
+5. after integration, re-audit #1041 acceptance before closing it: conflicting legacy values must remain compatibility-preserved and restart must not duplicate canonical targets;
+6. then refresh live A dependencies and continue the next safe A issue, normally #1044 unless another focused A obligation has become higher priority/unblocked.
 
 This sequence is not terminal. After any slice/PR/merge, apply the shared **Lane continuation and resume/stop contract** in `AGENTS.md` before ending the run. Lane A continues while concrete safe A work exists; a single completed Issue/PR is never sufficient stop evidence. If the final resume audit finds no actionable A work, record `Stop reason: idle-no-work — <live evidence>` (or another exact stop category from `AGENTS.md`) in the durable handoff before stopping.
