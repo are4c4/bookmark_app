@@ -364,6 +364,31 @@ def _request_json(url: str, token: str) -> object:
         return json.load(response)
 
 
+def _request_paginated_list(
+    url: str,
+    token: str,
+    *,
+    per_page: int = 100,
+) -> list[object]:
+    """Fetch every page of a GitHub list endpoint or fail closed."""
+    if per_page < 1 or per_page > 100:
+        raise ValueError("GitHub pagination page size must be between 1 and 100")
+    separator = "&" if "?" in url else "?"
+    rows: list[object] = []
+    page = 1
+    while True:
+        payload = _request_json(
+            f"{url}{separator}per_page={per_page}&page={page}",
+            token,
+        )
+        if not isinstance(payload, list):
+            raise ValueError("Paginated GitHub response was not a list")
+        rows.extend(payload)
+        if len(payload) < per_page:
+            return rows
+        page += 1
+
+
 def _current_base_approval_policy_active(
     api_root: str,
     token: str,
@@ -598,8 +623,9 @@ def main() -> int:
         risk_approver: str | None = None
         review_candidates: tuple[str, ...] = ()
         if risks and api_root and token and current_number:
-            reviews = _request_json(
-                f"{api_root}/pulls/{current_number}/reviews?per_page=100", token
+            reviews = _request_paginated_list(
+                f"{api_root}/pulls/{current_number}/reviews",
+                token,
             )
             review_candidates = current_distinct_approved_reviewers(
                 reviews,
