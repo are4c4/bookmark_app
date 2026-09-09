@@ -111,47 +111,84 @@ def validates_repository(repository: dict[str, object]) -> AuditResult:
     return AuditResult(tuple(errors))
 
 
+def _targets_default_branch(ruleset: dict[str, object]) -> bool:
+    if ruleset.get("target") != "branch" or ruleset.get("enforcement") != "active":
+        return False
+    conditions = ruleset.get("conditions")
+    ref_name = conditions.get("ref_name") if isinstance(conditions, dict) else None
+    includes = ref_name.get("include") if isinstance(ref_name, dict) else None
+    excludes = ref_name.get("exclude") if isinstance(ref_name, dict) else None
+    if not isinstance(includes, list) or "~DEFAULT_BRANCH" not in includes:
+        return False
+    if isinstance(excludes, list) and "~DEFAULT_BRANCH" in excludes:
+        return False
+    return True
+
+
 def select_default_branch_ruleset(
-    summaries: object,
+    rulesets: object,
 ) -> tuple[int | None, tuple[str, ...]]:
-    if not isinstance(summaries, list):
-        return None, ("rulesets API response was not a list",)
-    active = [
+    if not isinstance(rulesets, list):
+        return None, ("ruleset details were not a list",)
+    matches = [
         row
-        for row in summaries
-        if isinstance(row, dict)
-        and row.get("target") == "branch"
-        and row.get("enforcement") == "active"
+        for row in rulesets
+        if isinstance(row, dict) and _targets_default_branch(row)
     ]
-    if len(active) != 1:
+    if len(matches) != 1:
         return None, (
-            f"expected exactly one active repository branch ruleset, found {len(active)}",
+            "expected exactly one active branch ruleset targeting "
+            f"the default branch, found {len(matches)}",
         )
-    identifier = active[0].get("id")
+    identifier = matches[0].get("id")
     if not isinstance(identifier, int):
-        return None, ("active branch ruleset is missing an integer id",)
+        return None, ("default-branch ruleset is missing an integer id",)
     return identifier, ()
 
 
-def _request_json(url: str) -> object:
+def _active_branch_ruleset_ids(summaries: object) -> list[int]:
+    if not isinstance(summaries, list):
+        raise ValueError("rulesets API response was not a list")
+    identifiers: list[int] = []
+    for row in summaries:
+        if not isinstance(row, dict):
+            continue
+        if row.get("target") != "branch" or row.get("enforcement") != "active":
+            continue
+        identifier = row.get("id")
+        if not isinstance(identifier, int):
+            raise ValueError("active branch ruleset summary is missing an integer id")
+        identifiers.append(identifier)
+    return identifiers
+
+
+def _request_headers(token: str = "") -> dict[str, str]:
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "bookmark-app-repository-settings-guard",
+    }
+    normalized = token.strip()
+    if normalized:
+        headers["Authorization"] = f"Bearer {normalized}"
+    return headers
+
+
+def _request_json(url: str, token: str = "") -> object:
     request = urllib.request.Request(
         url,
-        headers={
-            "Accept": "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": "bookmark-app-repository-settings-guard",
-        },
+        headers=_request_headers(token),
     )
     with urllib.request.urlopen(request, timeout=20) as response:
         return json.load(response)
 
 
-def _error(message: str) -> None:
+def _error(message: str, *, title: str) -> None:
     escaped = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
-    print(f"::error title=Repository settings drift::{escaped}")
+    print(f"::error title={title}::{escaped}")
 
 
-def _append_summary(errors: list[str]) -> None:
+def _append_summary(errors: list[str], unavailable: list[str]) -> None:
     path = os.environ.get("GITHUB_STEP_SUMMARY")
     if not path:
         return
@@ -159,7 +196,12 @@ def _append_summary(errors: list[str]) -> None:
     if errors:
         lines.append("Drift detected:")
         lines.extend(f"- {error}" for error in errors)
-    else:
+    if unavailable:
+        if errors:
+            lines.append("")
+        lines.append("Audit unavailable:")
+        lines.extend(f"- {error}" for error in unavailable)
+    if not errors and not unavailable:
         lines.append("All observable protected-main integration settings match the contract.")
         lines.append(
             "Administration-only fields are also validated when GitHub includes them in the API payload."
@@ -171,24 +213,35 @@ def _append_summary(errors: list[str]) -> None:
 def main() -> int:
     repository_name = os.environ.get("GITHUB_REPOSITORY", "")
     if not repository_name:
-        _error("audit requires GITHUB_REPOSITORY")
+        _error(
+            "audit requires GITHUB_REPOSITORY",
+            title="Repository settings audit unavailable",
+        )
         return 1
 
     api_root = f"https://api.github.com/repos/{repository_name}"
+    token = os.environ.get("GITHUB_TOKEN", "")
     errors: list[str] = []
+    unavailable: list[str] = []
     try:
-        repository = _request_json(api_root)
+        repository = _request_json(api_root, token)
         if not isinstance(repository, dict):
             raise ValueError("repository API response was not an object")
         errors.extend(validates_repository(repository).errors)
 
-        summaries = _request_json(f"{api_root}/rulesets")
-        ruleset_id, selection_errors = select_default_branch_ruleset(summaries)
-        errors.extend(selection_errors)
-        if ruleset_id is not None:
-            ruleset = _request_json(f"{api_root}/rulesets/{ruleset_id}")
+        summaries = _request_json(f"{api_root}/rulesets", token)
+        active_ids = _active_branch_ruleset_ids(summaries)
+        rulesets: list[dict[str, object]] = []
+        for ruleset_id in active_ids:
+            ruleset = _request_json(f"{api_root}/rulesets/{ruleset_id}", token)
             if not isinstance(ruleset, dict):
                 raise ValueError("ruleset API response was not an object")
+            rulesets.append(ruleset)
+
+        ruleset_id, selection_errors = select_default_branch_ruleset(rulesets)
+        errors.extend(selection_errors)
+        if ruleset_id is not None:
+            ruleset = next(row for row in rulesets if row.get("id") == ruleset_id)
             errors.extend(validates_default_branch_ruleset(ruleset).errors)
     except (
         OSError,
@@ -196,12 +249,14 @@ def main() -> int:
         json.JSONDecodeError,
         urllib.error.URLError,
     ) as error:
-        errors.append(f"read-only GitHub settings audit unavailable: {error}")
+        unavailable.append(f"read-only GitHub settings audit unavailable: {error}")
 
     for error in errors:
-        _error(error)
-    _append_summary(errors)
-    if errors:
+        _error(error, title="Repository settings drift")
+    for error in unavailable:
+        _error(error, title="Repository settings audit unavailable")
+    _append_summary(errors, unavailable)
+    if errors or unavailable:
         return 1
     print("repository_settings_guard: observable protected-main settings match contract")
     return 0

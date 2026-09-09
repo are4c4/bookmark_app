@@ -27,5 +27,7 @@ jobs:
       - name: Test repository settings contract
         run: python3 tool/repository_settings_guard_test.py
 
-      - name: Audit live public repository settings
+      - name: Audit live repository settings
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: python3 tool/repository_settings_guard.py
