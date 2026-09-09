@@ -107,7 +107,7 @@ Canonical Object Search is established. Resume only for demonstrated FTS/search 
 ### G — Refactor & Architecture Health
 - #225 maintainability, hotspot reduction, developer workflow, architecture health.
 - #950 proven caller-zero Photo compatibility cleanup.
-- #1107 machine-strong non-self approval provenance for destructive/irreversible changes; existing destructive-risk detection is blocking, but owner-comment approval is not an independent authorization boundary.
+- #1107 Phase A non-self destructive approval is established: current-head approval must come from a distinct non-author GitHub User, complete paginated latest-review state is evaluated, and the reviewer must have write/admin permission. #1107 remains open for Phase B only: a trusted enforcement root/check or equivalent authorization boundary the implementation identity cannot modify or spoof.
 - retire caller-zero Bookmark/People/Photo repositories/pages/bridges only after owning-lane parity.
 - repository-wide handoff/guard synchronization belongs here when a focused Issue owns it.
 
@@ -145,7 +145,7 @@ Object-first constitution
                +--> #1062 [A/B] Object merge
                +--> #1063 [F + owning serializers] export
                +--> #1064 [A/B/F] durable history
-               +--> #1107 [G] trusted destructive approval
+               +--> #1107 [G] approval enforcement trust root
 ```
 
 Each focused Issue has one active implementation owner/branch/PR. Shared hotspots use temporary ownership leases. Schema/migration writing is single-writer: non-migration PRs do not contend, the oldest open migration-sensitive PR is the unique active owner, and later migration PRs are blocked by the required gate until ownership advances.
@@ -217,7 +217,7 @@ A focused PR can be complete while its umbrella is not. Important umbrellas revi
 - Current branch/ruleset/PR/CI details must be queried live rather than copied into this handoff.
 - GitHub CI is authoritative when local Flutter execution is unavailable.
 - Keep Drift generation/Analyze safeguards and architecture/AI audits intact.
-- Routine reversible AI work remains approval-free. High-confidence destructive/irreversible changes are already detected and blocked, but the current owner-comment approval signal is not a distinct authorization boundary; #1107 must establish trusted non-self approval before that acceptance can be considered complete.
+- Routine reversible AI work remains approval-free. High-confidence destructive/irreversible and approval-policy-sensitive changes require a distinct non-author current-head `APPROVED` review from a GitHub User whose complete latest-review history is evaluated and whose repository permission is write/admin. #1107 Phase B remains open because the repository-local workflow/guard enforcement root is still modifiable by the implementation authorization.
 
 ## Handoff rule
 
