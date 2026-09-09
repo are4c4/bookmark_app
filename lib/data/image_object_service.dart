@@ -1,3 +1,4 @@
+import '../domain/managed_file_ownership.dart';
 import '../domain/mime_type_normalizer.dart';
 import '../domain/object_model.dart';
 import '../domain/object_type_defaults.dart';
@@ -14,6 +15,7 @@ class ImageObjectDefinition {
     required this.contentTypeProperty,
     required this.pixelWidthProperty,
     required this.pixelHeightProperty,
+    required this.storageOwnershipProperty,
   });
 
   final AppObjectType objectType;
@@ -24,6 +26,7 @@ class ImageObjectDefinition {
   final ObjectPropertyDefinition contentTypeProperty;
   final ObjectPropertyDefinition pixelWidthProperty;
   final ObjectPropertyDefinition pixelHeightProperty;
+  final ObjectPropertyDefinition storageOwnershipProperty;
 
   double? aspectRatioFor(AppObject object) {
     final width = object.values[pixelWidthProperty.id];
@@ -97,13 +100,19 @@ class ImageObjectService {
       type: ObjectPropertyType.number,
       config: const <String, dynamic>{'system': true},
     );
+    final storageOwnership = await systemObjects.ensureProperty(
+      objectTypeId: type.id,
+      name: 'Storage ownership',
+      type: ObjectPropertyType.text,
+      config: const <String, dynamic>{'system': true},
+    );
     type = (await systemObjects.getSystemObjectType(
       workspaceId: workspaceId,
       systemKey: systemKey,
     ))!;
 
-    // Pixel dimensions are hidden system metadata for presentation geometry;
-    // adding them must not rewrite a user's visible Image Property defaults.
+    // Pixel dimensions and storage ownership are hidden native metadata. Adding
+    // them must not rewrite a user's visible Image Property defaults.
     await _ensureDefaults(
       objectTypeId: type.id,
       fileProperty: file,
@@ -111,6 +120,7 @@ class ImageObjectService {
       sourceUrlProperty: sourceUrl,
       originalFilenameProperty: originalFilename,
       contentTypeProperty: contentType,
+      storageOwnershipProperty: storageOwnership,
     );
 
     return ImageObjectDefinition(
@@ -122,6 +132,7 @@ class ImageObjectService {
       contentTypeProperty: contentType,
       pixelWidthProperty: pixelWidth,
       pixelHeightProperty: pixelHeight,
+      storageOwnershipProperty: storageOwnership,
     );
   }
 
@@ -163,7 +174,9 @@ class ImageObjectService {
   /// fragment distinctions remain identity-significant across different files.
   /// Existing non-empty metadata is preserved so retries or another Weblink
   /// cannot silently replace the managed file or provenance already owned by
-  /// an Image.
+  /// an Image. Physical-byte ownership is persisted only when a trusted caller
+  /// supplies the closed [ManagedFileOwnership] value; path location alone never
+  /// manufactures ownership.
   Future<AppObject> findOrCreateManaged({
     required int workspaceId,
     required String filePath,
@@ -173,12 +186,14 @@ class ImageObjectService {
     String? contentType,
     int? pixelWidth,
     int? pixelHeight,
+    ManagedFileOwnership? storageOwnership,
   }) async {
     final path = _canonicalStoredPath(filePath);
     final source = _validatedSourceUrl(sourceUrl);
     final normalizedContentType = MimeTypeNormalizer.normalize(contentType);
     final width = _validatedDimension(pixelWidth, 'pixelWidth');
     final height = _validatedDimension(pixelHeight, 'pixelHeight');
+    final ownershipStorageKey = storageOwnership?.storageKey;
     final definition = await ensureDefinition(workspaceId);
     final objects = await systemObjects.objectStore.listObjects(
       definition.objectType.id,
@@ -207,6 +222,11 @@ class ImageObjectService {
       );
       await _setNumberIfMissing(object, definition.pixelWidthProperty, width);
       await _setNumberIfMissing(object, definition.pixelHeightProperty, height);
+      await _setIfMissing(
+        object,
+        definition.storageOwnershipProperty,
+        ownershipStorageKey,
+      );
       return _reload(definition.objectType.id, object.id);
     }
 
@@ -234,6 +254,11 @@ class ImageObjectService {
     );
     await _setNumberIfMissing(created, definition.pixelWidthProperty, width);
     await _setNumberIfMissing(created, definition.pixelHeightProperty, height);
+    await _setIfMissing(
+      created,
+      definition.storageOwnershipProperty,
+      ownershipStorageKey,
+    );
     return _reload(definition.objectType.id, objectId);
   }
 
@@ -272,6 +297,7 @@ class ImageObjectService {
     required ObjectPropertyDefinition sourceUrlProperty,
     required ObjectPropertyDefinition originalFilenameProperty,
     required ObjectPropertyDefinition contentTypeProperty,
+    required ObjectPropertyDefinition storageOwnershipProperty,
   }) async {
     final desiredVisible = <int>[
       originalFilenameProperty.id,
@@ -288,11 +314,19 @@ class ImageObjectService {
       originalFilenameProperty.id,
       contentTypeProperty.id,
     ];
+    final preOwnershipOrder = <int>[
+      originalFilenameProperty.id,
+      noteProperty.id,
+      contentTypeProperty.id,
+      sourceUrlProperty.id,
+      fileProperty.id,
+    ];
     final desiredOrder = <int>[
       originalFilenameProperty.id,
       noteProperty.id,
       contentTypeProperty.id,
       sourceUrlProperty.id,
+      storageOwnershipProperty.id,
       fileProperty.id,
     ];
     final current = await defaultsStore.read(objectTypeId);
@@ -309,13 +343,14 @@ class ImageObjectService {
     }
 
     // Upgrade only defaults written by earlier Image definitions. Any user
-    // customization is preserved, while the internal managed File path stops
-    // being part of the default daily-use presentation.
+    // customization is preserved, while internal managed metadata stays hidden
+    // from the default daily-use presentation.
     final upgradeVisible = current.visiblePropertyIds == null ||
         _sameIds(current.visiblePropertyIds!, legacyVisible);
     final upgradeOrder = current.propertyOrder == null ||
         _sameIds(current.propertyOrder!, legacyOrder) ||
-        _sameIds(current.propertyOrder!, previousOrder);
+        _sameIds(current.propertyOrder!, previousOrder) ||
+        _sameIds(current.propertyOrder!, preOwnershipOrder);
     final needsWrite =
         upgradeVisible || upgradeOrder || current.openMode == null;
     if (!needsWrite) return;
