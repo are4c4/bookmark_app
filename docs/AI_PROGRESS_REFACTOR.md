@@ -46,6 +46,21 @@ Deterministic PR-contract failures and high-confidence destructive-risk detectio
 
 The remaining #1107 security gap is Phase B, not approval provenance itself: repository-local PR-controlled GitHub Actions and guard code are still modifiable through the implementation authorization, so that authorization boundary is not yet independently immutable. #1107 stays open until a distinct external/reviewer/check identity, organization-level protection, or equivalent enforcement root exists that the implementation identity cannot modify or spoof. Routine reversible PRs remain approval-free.
 
+### #1087 — CI Performance Phase 2 (completed checkpoint)
+Duration-aware full-suite execution is established. The required Flutter Test path uses exactly four jobs with deterministic **file-level** assignment instead of Flutter's built-in test-case sharding.
+
+Durable execution contract:
+- a compact repository-owned historical file-weight snapshot is versioned/integrity-checked and is planning input, not canonical test inventory;
+- every run discovers the current `test/**/*_test.dart` inventory and assigns each current file exactly once across four deterministic LPT bins;
+- unknown/new test files receive a deterministic fallback weight and are never omitted because history is stale;
+- each shard re-verifies the saved plan against the current inventory immediately before execution and fails closed on missing/duplicate/extra files;
+- runner count remains four; `fail-fast: false`, per-test timeout, first-pass failure authority, identical failed-shard diagnostic rerun, Drift generated-code cache behavior, per-shard/per-file timing, test-health and required `merge-gate` remain intact;
+- normal PR coverage is never changed-files-only, quarantined, selectively optional or weakened for speed;
+- the file-level cutover was adopted only after repeated cache-hit measurements showed a material critical-path and total-test-work reduction versus the built-in four-shard path;
+- rollback is workflow/tooling-only: if future evidence shows coverage, reliability or performance regression, restore the built-in execution command while retaining useful timing/planner diagnostics.
+
+Slow-test work remains evidence-backed rather than activity-driven. After the file-level cutover, the stable leading files are mostly intentional real-host Generic Database/AppShell widget/integration regressions with in-memory persistence and settled UI transitions. Do not split/combine/weaken them merely because they top the timing table. #1163/#1164 removed one genuinely unused fixture from a Bookmark error test, but the measured timing change was not material; retain it as responsibility cleanup, not as performance evidence. Create future slow-test PRs only when current timing plus source inspection identifies a concrete safe cost that can be removed without reducing assertion strength or isolation.
+
 Future G work after owning-lane parity:
 - retire caller-zero Bookmark repositories/items/pages/bridges from #1039;
 - retire caller-zero People-specific repositories/pages/bridges from #1040;
@@ -56,8 +71,8 @@ Future G work after owning-lane parity:
 - maintainability report/regression ceilings;
 - no-new-legacy and presentation/database boundary checks;
 - hunk-aware changed-Dart formatting;
-- full Flutter Test sharding + Drift generated-code cache;
-- test-health/flake artifacts;
+- deterministic duration-aware file-level 4-shard full Flutter Test execution with exact-once current-inventory verification, deterministic fallback for unknown files, and Drift generated-code cache;
+- test-health/flake artifacts and advisory per-file slow-test timing;
 - docs-only CI fast path and stable `merge-gate`;
 - `merge_group` workflow support;
 - repository-pinned Flutter toolchain via `pubspec.yaml`, tracked `pubspec.lock`, and machine checks that `flutter pub get` does not drift the committed lockfile;
@@ -118,13 +133,14 @@ G deletes superseded implementation only after the owning product/integrity lane
 Critical observable integration invariants are also checked by a read-only repository-settings audit. The audit intentionally distinguishes real drift from fields omitted by non-privileged GitHub API payloads; exact current ruleset/settings values remain live GitHub state rather than durable handoff prose.
 
 ## Validation
-Behavior-preserving refactors require changed-Dart format, Analyze and relevant/full Flutter Test. Workflow/guard changes must exercise focused regressions and the authoritative CI path. Docs-only architecture synchronization uses the docs-only CI path plus handoff/coordination audits.
+Behavior-preserving refactors require changed-Dart format, Analyze and relevant/full Flutter Test. Workflow/guard changes must exercise focused regressions and the authoritative CI path. Full Flutter Test currently means the deterministic exact-once four-file-list path above, not the retired built-in test-case shard flags. Docs-only architecture synchronization uses the docs-only CI path plus handoff/coordination audits.
 
 ## Resume sequence
 1. re-audit latest `main`, open PR ownership and shared-hotspot/migration ownership before taking new G work;
 2. treat #1107 Phase A non-self approval as established; do not treat #1082 as complete until Phase B provides an enforcement root the implementation identity cannot modify/spoof;
-3. take #225 or other live G work only through focused reversible child Issues; treat #1047 and #950 as completed checkpoints rather than active work queues;
-4. when #1039/#1040 owning-lane parity lands, create caller-zero retirement slices instead of combining product migration with cleanup;
-5. if historical branch cleanup is revisited, begin with a new read-only inventory and do not broaden deletion to ambiguous refs;
-6. keep destructive schema/data removal separate, preservation-gated, and independently approved;
-7. keep durable docs free of transient snapshots and route machine-certifiable drift to CI while H handles semantic drift.
+3. treat #1087 file-level CI performance work as a completed checkpoint; do not reopen shard-count or slow-test tuning without new measured evidence of a concrete regression/bottleneck;
+4. take #225 or other live G work only through focused reversible child Issues; treat #1047 and #950 as completed checkpoints rather than active work queues;
+5. when #1039/#1040 owning-lane parity lands, create caller-zero retirement slices instead of combining product migration with cleanup;
+6. if historical branch cleanup is revisited, begin with a new read-only inventory and do not broaden deletion to ambiguous refs;
+7. keep destructive schema/data removal separate, preservation-gated, and independently approved;
+8. keep durable docs free of transient snapshots and route machine-certifiable drift to CI while H handles semantic drift.
