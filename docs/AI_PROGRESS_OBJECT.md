@@ -31,8 +31,9 @@ Required behavior:
 Current implementation boundary:
 - `ObjectBodyStore.writeIfUnchanged()` provides a narrow transactional compare-and-swap write over canonical Body JSON;
 - `ObjectBodyStructuralUndoService` owns short-lived delete inverse tokens and exact restoration;
-- the shared Body editor and patch-sized Object Inspector delete path use the same service and user-facing recovery/error contract;
-- real shared-editor regressions cover both successful delete → Undo and delete → later mutation → rejected stale Undo.
+- the reusable `ObjectBodyEditorSection` uses the same service and user-facing recovery/error contract; current real hosts include Bookmark detail and Generic Database side-peek;
+- real shared-editor regressions cover both successful delete → Undo and delete → later mutation → rejected stale Undo;
+- #1058 deliberately does not modify `object_inspector_page.dart`; expanding Undo to additional hosts should reuse the shared service only when a concrete caller requires it.
 
 ### #1041 — Bookmark retirement A
 Define collision-safe legacy Bookmark -> canonical Weblink/generic Object authority. Do not create a permanent canonical Bookmark Object. Preserve conflicting legacy user-authored content when lossless convergence is not provable.
@@ -91,7 +92,7 @@ Older handoff statements that “Lane A is idle after #909/#910” or that #1057
 - **G:** behavior-preserving hotspot reduction and caller-zero legacy retirement after A/B/C/D parity.
 
 ## Hotspot / concurrency rule
-Recheck live PR ownership before editing `object_inspector_page.dart`, `generic_database_page.dart`, Stage1, People or `app_database.dart`. Body UX should prefer reusable Body widgets/services/tests and avoid unrelated Inspector redesign. #1058 uses only patch-sized Inspector wiring; if another live PR acquires that hotspot, resolve ownership before further edits.
+Recheck live PR ownership before editing `object_inspector_page.dart`, `generic_database_page.dart`, Stage1, People or `app_database.dart`. Body UX should prefer reusable Body widgets/services/tests and avoid unrelated Inspector redesign. #1058 intentionally remains off shared hotspots after validation showed the shared editor already satisfies its interaction acceptance.
 
 ## Validation
 GitHub Actions is authoritative when local Flutter execution is unavailable. Body interaction slices require changed-Dart formatting, Analyze and full Flutter Test green plus real widget regressions for the changed interaction contract.
@@ -99,7 +100,7 @@ GitHub Actions is authoritative when local Flutter execution is unavailable. Bod
 ## Resume sequence
 1. verify latest `main`, open PR ownership and #1058 before editing;
 2. keep #1058 limited to local delete Undo and other already-demonstrated lossless inverse behavior; do not introduce durable history or a broad command-stack abstraction;
-3. re-audit `object_inspector_page.dart` ownership before any further Inspector edit;
+3. keep shared hotspots untouched unless a concrete acceptance gap cannot be served through the reusable Body editor/service boundary;
 4. run changed-Dart format, Analyze/guards and full Flutter Test, then integrate #1058 only after the required merge-gate is green on an up-to-date head;
 5. after #1058 integrates, close it if needed and refresh live A dependencies rather than stopping;
 6. unless a newer dependency supersedes it, audit #1041 next against the already-integrated D/#1054 bridge and implement only the remaining A-owned preservation/reconciliation semantics; keep #1044 separate and avoid People UI/Relation redesign.
