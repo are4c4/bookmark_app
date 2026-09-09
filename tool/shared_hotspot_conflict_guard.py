@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -235,6 +236,12 @@ def _warning(title: str, message: str) -> None:
     print(f"::warning title={title}::{escaped}")
 
 
+def _run_migration_single_writer_gate() -> int:
+    gate = Path(__file__).with_name("migration_merge_gate.py")
+    result = subprocess.run([sys.executable, str(gate)], check=False)
+    return result.returncode
+
+
 def _emit_overlap_result(
     current_files: list[str], overlaps: list[tuple[str, PullRequestFiles]]
 ) -> None:
@@ -345,6 +352,11 @@ def main() -> int:
         default=int(os.environ.get("HOTSPOT_LARGE_DIFF_WARN", "200")),
     )
     args = parser.parse_args()
+
+    if not args.fixture:
+        migration_status = _run_migration_single_writer_gate()
+        if migration_status != 0:
+            return migration_status
 
     try:
         risk: BranchRisk | None = None
