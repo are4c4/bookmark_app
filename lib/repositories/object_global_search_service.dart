@@ -107,6 +107,24 @@ class ObjectGlobalSearchService {
     await refreshObjects(await _refreshPlanner.forObjectLabelChange(objectId));
   }
 
+  /// Refreshes canonical Search after a committed Object deletion.
+  ///
+  /// Relation-owning mutation code must collect [changedSourceObjectIds] from
+  /// its validated pre-delete detach plan before deleting the target. Search
+  /// then removes the deleted Object's stale FTS row and reprojects only the
+  /// source Objects whose serialized Relation values actually changed. No
+  /// post-delete backlink rediscovery is attempted here because the canonical
+  /// edges may already be gone.
+  Future<void> refreshCommittedDeletionImpact({
+    required int deletedObjectId,
+    required Iterable<int> changedSourceObjectIds,
+  }) async {
+    await refreshObjects(<int>{
+      deletedObjectId,
+      ...changedSourceObjectIds,
+    });
+  }
+
   /// Refreshes multiple canonical mutation roots plus their current Relation
   /// label dependents in one deterministic focused pass.
   ///
