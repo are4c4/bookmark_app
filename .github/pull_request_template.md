@@ -7,7 +7,8 @@
 - Shared hotspots: none
 - Migration/data impact: no
 
-<!-- Lane values: A Object / B Relation / C Database-View / D Primitives / E Search / F Storage / G Refactor -->
+<!-- Lane values: A Object / B Relation / C Database-View / D Primitives / E Search / F Storage / G Refactor / H Oversight -->
+<!-- H is for architecture/integration oversight or focused coordination work, not normal product/runtime implementation. -->
 <!-- Shared hotspots: use `none` or comma-separated repository paths from AGENTS.md. -->
 <!-- Migration/data impact: exactly `yes` or `no`; explain `yes` below. -->
 
