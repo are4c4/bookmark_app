@@ -30,6 +30,91 @@ void main() {
     expect(parentBacklinks.single.sourceObjectId, childId);
   });
 
+  test('canonical snapshot derives strict descendants from direct Parent edges',
+      () async {
+    final fixture = await _fixture();
+    addTearDown(fixture.database.close);
+    final rootId = await fixture.createTag('root');
+    final childId = await fixture.createTag('child');
+    final grandchildId = await fixture.createTag('grandchild');
+    await fixture.setParent(childId, rootId);
+    await fixture.setParent(grandchildId, childId);
+
+    final snapshot = await fixture.bridge.hierarchyIntegrity.loadSnapshot(
+      workspaceId: fixture.workspaceId,
+      parentProperty: fixture.schema.parentProperty,
+    );
+
+    expect(
+      snapshot.parentByTagObjectId,
+      <int, int?>{
+        rootId: null,
+        childId: rootId,
+        grandchildId: childId,
+      },
+    );
+    expect(snapshot.isStrictDescendant(childId, rootId), isTrue);
+    expect(snapshot.isStrictDescendant(grandchildId, rootId), isTrue);
+    expect(snapshot.isStrictDescendant(grandchildId, childId), isTrue);
+    expect(snapshot.isStrictDescendant(rootId, rootId), isFalse);
+    expect(snapshot.isStrictDescendant(rootId, childId), isFalse);
+    expect(snapshot.isStrictDescendant(999999, rootId), isFalse);
+  });
+
+  test('canonical snapshot fails closed on Parent index drift', () async {
+    final fixture = await _fixture();
+    addTearDown(fixture.database.close);
+    final rootId = await fixture.createTag('root');
+    final childId = await fixture.createTag('child');
+    await fixture.setParent(childId, rootId);
+    await fixture.database.customStatement(
+      'UPDATE object_relation_edges SET position = 7 '
+      'WHERE source_object_id = ? AND property_id = ?',
+      <Object>[childId, fixture.schema.parentProperty.id],
+    );
+
+    await expectLater(
+      fixture.bridge.hierarchyIntegrity.loadSnapshot(
+        workspaceId: fixture.workspaceId,
+        parentProperty: fixture.schema.parentProperty,
+      ),
+      throwsStateError,
+    );
+    expect(await fixture.parentId(childId), rootId);
+  });
+
+  test('canonical snapshot rejects a persistently indexed cycle', () async {
+    final fixture = await _fixture();
+    addTearDown(fixture.database.close);
+    final rootId = await fixture.createTag('root');
+    final childId = await fixture.createTag('child');
+    final propertyId = fixture.schema.parentProperty.id;
+    await fixture.setParent(childId, rootId);
+
+    await fixture.genericStore.setValue(
+      recordId: rootId,
+      propertyId: propertyId,
+      value: <int>[childId],
+    );
+    await fixture.objectStore.ensureRelationIndexSchema();
+    await fixture.database.customStatement(
+      'INSERT INTO object_relation_edges('
+      'source_object_id, property_id, target_object_id, position) '
+      'VALUES (?, ?, ?, 0)',
+      <Object>[rootId, propertyId, childId],
+    );
+
+    await expectLater(
+      fixture.bridge.hierarchyIntegrity.loadSnapshot(
+        workspaceId: fixture.workspaceId,
+        parentProperty: fixture.schema.parentProperty,
+      ),
+      throwsStateError,
+    );
+    expect(await fixture.parentId(rootId), childId);
+    expect(await fixture.parentId(childId), rootId);
+  });
+
   test('rejects self and indirect Tag parent cycles before mutation', () async {
     final fixture = await _fixture();
     addTearDown(fixture.database.close);
