@@ -109,11 +109,9 @@ class ObjectBodyDocumentView extends StatelessWidget {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       buildDefaultDragHandles: false,
-      onReorder: (oldIndex, newIndex) async {
-        var targetIndex = newIndex;
-        if (oldIndex < targetIndex) targetIndex -= 1;
-        if (targetIndex == oldIndex) return;
-        await onBlockReorder!(presentations[oldIndex].block, targetIndex);
+      onReorderItem: (oldIndex, newIndex) async {
+        if (newIndex == oldIndex) return;
+        await onBlockReorder!(presentations[oldIndex].block, newIndex);
       },
       children: entries,
     );
