@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Advisory single-writer lease checks for Drift schema migrations."""
+"""Deterministic single-writer gate for Drift schema migrations."""
 
 from __future__ import annotations
 
 import base64
-import difflib
 import json
 import os
 import re
@@ -60,18 +59,61 @@ def migration_reasons(
     return frozenset(reasons)
 
 
-def competing_claims(
+def active_migration_owner(
     current_number: int,
     current_reasons: frozenset[str],
     open_claims: Iterable[MigrationClaim],
-) -> list[MigrationClaim]:
+    *,
+    current_title: str = "Current migration PR",
+) -> MigrationClaim | None:
+    """Return the unique active migration owner, using the oldest open PR number."""
     if not current_reasons:
+        return None
+
+    claims_by_number = {
+        claim.number: claim for claim in open_claims if claim.reasons
+    }
+    existing_current = claims_by_number.get(current_number)
+    claims_by_number[current_number] = MigrationClaim(
+        number=current_number,
+        title=(existing_current.title if existing_current else current_title) or current_title,
+        reasons=current_reasons,
+    )
+    return min(claims_by_number.values(), key=lambda claim: claim.number)
+
+
+def blocking_migration_owner(
+    current_number: int,
+    current_reasons: frozenset[str],
+    open_claims: Iterable[MigrationClaim],
+    *,
+    current_title: str = "Current migration PR",
+) -> MigrationClaim | None:
+    owner = active_migration_owner(
+        current_number,
+        current_reasons,
+        open_claims,
+        current_title=current_title,
+    )
+    if owner is None or owner.number == current_number:
+        return None
+    return owner
+
+
+def queued_migration_claims(
+    active_owner: MigrationClaim | None,
+    open_claims: Iterable[MigrationClaim],
+) -> list[MigrationClaim]:
+    if active_owner is None:
         return []
-    return [
-        claim
-        for claim in open_claims
-        if claim.number != current_number and claim.reasons
-    ]
+    return sorted(
+        (
+            claim
+            for claim in open_claims
+            if claim.reasons and claim.number != active_owner.number
+        ),
+        key=lambda claim: claim.number,
+    )
 
 
 def changed_paths(base: str, head: str) -> list[str]:
@@ -200,6 +242,11 @@ def _warning(message: str) -> None:
     print(f"::warning title=Migration single-writer lease::{escaped}")
 
 
+def _error(message: str) -> None:
+    escaped = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+    print(f"::error title=Migration single-writer lease::{escaped}")
+
+
 def _append_summary(lines: list[str]) -> None:
     summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
     if not summary_path:
@@ -209,18 +256,13 @@ def _append_summary(lines: list[str]) -> None:
 
 
 def main() -> int:
-    repository = os.environ.get("GITHUB_REPOSITORY", "")
-    token = os.environ.get("GITHUB_TOKEN", "")
-    current_raw = os.environ.get("CURRENT_PR_NUMBER", "")
     base_sha = os.environ.get("CI_BASE_SHA", "")
     head_sha = os.environ.get("CI_HEAD_SHA", "")
-
-    if not repository or not token or not current_raw or not base_sha or not head_sha:
-        _warning("Audit unavailable because repository/token/PR/base/head metadata is missing.")
-        return 0
+    if not base_sha or not head_sha:
+        _error("Gate unavailable because base/head metadata is missing.")
+        return 1
 
     try:
-        current_number = int(current_raw)
         paths = changed_paths(base_sha, head_sha)
         app_patch = (
             changed_patch(base_sha, head_sha, APP_DATABASE_FILE)
@@ -228,7 +270,6 @@ def main() -> int:
             else ""
         )
         current_reasons = migration_reasons(paths, app_patch)
-
         lines = [
             "## Migration single-writer lease",
             "",
@@ -239,40 +280,56 @@ def main() -> int:
         if not current_reasons:
             lines.extend(
                 [
-                    "- No migration lease acquired; ordinary non-schema AppDatabase edits remain outside this lease.",
+                    "- Ownership arbitration: `skipped` (non-migration PR)",
                     "",
-                    "No migration lease warnings.",
+                    "Non-migration PR: no lease contention and no GitHub ownership query required.",
                 ]
             )
             _append_summary(lines)
-            print("migration_lease_guard: current PR does not change migration-sensitive state")
+            print("migration_lease_guard: non-migration PR passes without lease arbitration")
             return 0
 
+        repository = os.environ.get("GITHUB_REPOSITORY", "")
+        token = os.environ.get("GITHUB_TOKEN", "")
+        current_raw = os.environ.get("CURRENT_PR_NUMBER", "")
+        if not repository or not token or not current_raw:
+            _error(
+                "Migration-sensitive PR cannot arbitrate ownership because repository/token/PR metadata is missing."
+            )
+            return 1
+
+        current_number = int(current_raw)
         api_root = f"https://api.github.com/repos/{repository}"
         claims = open_migration_claims(api_root, token)
-        competing = competing_claims(current_number, current_reasons, claims)
+        owner = active_migration_owner(current_number, current_reasons, claims)
+        blocker = blocking_migration_owner(current_number, current_reasons, claims)
+        queued = queued_migration_claims(owner, claims)
 
-        if competing:
-            lines.extend(
-                [
-                    "",
-                    "### Competing migration owners",
-                    "",
-                    "| PR | Migration-sensitive reasons |",
-                    "| --- | --- |",
-                ]
+        lines.extend(
+            [
+                f"- Active migration owner: `#{owner.number if owner else current_number}`",
+                f"- Queued migration PRs: `{', '.join('#' + str(claim.number) for claim in queued) if queued else 'none'}`",
+            ]
+        )
+
+        if blocker is not None:
+            reasons = ", ".join(sorted(blocker.reasons))
+            message = (
+                f"PR #{blocker.number} {blocker.title} is the active migration owner ({reasons}). "
+                "This later migration PR is blocked until the active owner merges/closes; then rebase and rerun CI."
             )
-            for claim in competing:
-                reasons = ", ".join(sorted(claim.reasons))
-                _warning(
-                    f"PR #{claim.number} {claim.title} also owns migration-sensitive work ({reasons}). "
-                    "Sequence these migrations and rebase/re-audit after the active migration lands."
-                )
-                lines.append(f"| #{claim.number} — {claim.title} | `{reasons}` |")
-        else:
-            lines.extend(["", "No competing open migration owner detected."])
+            _error(message)
+            lines.extend(["", f"❌ {message}"])
+            _append_summary(lines)
+            return 1
 
+        if queued:
+            _warning(
+                "This PR remains the active migration owner; later migration PRs are queued and must not block this owner."
+            )
+        lines.extend(["", "Active migration owner confirmed; gate passes."])
         _append_summary(lines)
+        print(f"migration_lease_guard: PR #{current_number} owns the migration lease")
         return 0
     except (
         OSError,
@@ -283,8 +340,8 @@ def main() -> int:
         subprocess.CalledProcessError,
         urllib.error.URLError,
     ) as error:
-        _warning(f"Audit unavailable: {error}")
-        return 0
+        _error(f"Migration-sensitive ownership gate unavailable: {error}")
+        return 1
 
 
 if __name__ == "__main__":
