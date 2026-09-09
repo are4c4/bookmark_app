@@ -3,10 +3,7 @@ import 'dart:io';
 import '../data/profile_path_resolver.dart';
 import '../domain/managed_file_ownership.dart';
 
-enum PortableExportFileDisposition {
-  managedIncluded,
-  externalReference,
-}
+enum PortableExportFileDisposition { managedIncluded, externalReference }
 
 /// Immutable filesystem plan for one file-like reference in a portable export.
 ///
@@ -28,22 +25,21 @@ class PortableExportFilePlan {
     required String packageRelativePath,
     required String ownershipStorageKey,
   }) : this._(
-          disposition: PortableExportFileDisposition.managedIncluded,
-          referencePath: referencePath,
-          managedSourcePath: managedSourcePath,
-          packageRelativePath: packageRelativePath,
-          ownershipStorageKey: ownershipStorageKey,
-        );
+         disposition: PortableExportFileDisposition.managedIncluded,
+         referencePath: referencePath,
+         managedSourcePath: managedSourcePath,
+         packageRelativePath: packageRelativePath,
+         ownershipStorageKey: ownershipStorageKey,
+       );
 
-  const PortableExportFilePlan.external({
-    required String referencePath,
-  }) : this._(
-          disposition: PortableExportFileDisposition.externalReference,
-          referencePath: referencePath,
-          managedSourcePath: null,
-          packageRelativePath: null,
-          ownershipStorageKey: null,
-        );
+  const PortableExportFilePlan.external({required String referencePath})
+    : this._(
+        disposition: PortableExportFileDisposition.externalReference,
+        referencePath: referencePath,
+        managedSourcePath: null,
+        packageRelativePath: null,
+        ownershipStorageKey: null,
+      );
 
   final PortableExportFileDisposition disposition;
 
@@ -283,9 +279,7 @@ class PortableExportFilePlanner {
     required String vaultDirectoryPath,
   }) {
     final target = _normalizedAbsolute(resolvedPath);
-    final attachments = _normalizedAbsolute(
-      '$vaultDirectoryPath/attachments',
-    );
+    final attachments = _normalizedAbsolute('$vaultDirectoryPath/attachments');
     return target.startsWith('$attachments/');
   }
 
