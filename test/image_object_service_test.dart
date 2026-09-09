@@ -5,6 +5,7 @@ import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/object_type_defaults_store.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
+import 'package:bookmark_app/domain/managed_file_ownership.dart';
 import 'package:bookmark_app/domain/object_model.dart';
 import 'package:bookmark_app/domain/object_type_defaults.dart';
 import 'package:drift/native.dart';
@@ -37,12 +38,14 @@ void main() {
     expect(first.sourceUrlProperty.type, ObjectPropertyType.url);
     expect(first.originalFilenameProperty.type, ObjectPropertyType.text);
     expect(first.contentTypeProperty.type, ObjectPropertyType.text);
+    expect(first.storageOwnershipProperty.type, ObjectPropertyType.text);
     for (final name in <String>[
       'File',
       'Note',
       'Source URL',
       'Original filename',
       'Content type',
+      'Storage ownership',
     ]) {
       expect(
         second.objectType.properties.where((property) => property.name == name),
@@ -61,6 +64,7 @@ void main() {
       first.noteProperty.id,
       first.contentTypeProperty.id,
       first.sourceUrlProperty.id,
+      first.storageOwnershipProperty.id,
       first.fileProperty.id,
     ]);
     expect(defaults?.openMode, ObjectOpenMode.sidePeek);
@@ -111,6 +115,81 @@ void main() {
       'preview.jpg',
     );
     expect(stored.values[definition.contentTypeProperty.id], 'image/jpeg');
+  });
+
+  test('managed Image persists ownership only from explicit trusted provenance',
+      () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final service = ImageObjectService(
+      systemObjects: SystemObjectStore(
+        database: database,
+        objectStore: objectStore,
+      ),
+      defaultsStore: ObjectTypeDefaultsStore(genericStore),
+    );
+
+    final first = await service.findOrCreateManaged(
+      workspaceId: workspaceId,
+      filePath: '/managed/owned.png',
+    );
+    final definition = await service.ensureDefinition(workspaceId);
+    var stored = (await objectStore.listObjects(definition.objectType.id)).single;
+    expect(stored.id, first.id);
+    expect(stored.values[definition.storageOwnershipProperty.id], isNull);
+
+    final enriched = await service.findOrCreateManaged(
+      workspaceId: workspaceId,
+      filePath: '/managed/owned.png',
+      storageOwnership: ManagedFileOwnership.vaultManagedCopy,
+    );
+    stored = (await objectStore.listObjects(definition.objectType.id)).single;
+    expect(enriched.id, first.id);
+    expect(
+      stored.values[definition.storageOwnershipProperty.id],
+      ManagedFileOwnership.vaultManagedCopy.storageKey,
+    );
+  });
+
+  test('managed Image never overwrites existing non-empty ownership metadata',
+      () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final service = ImageObjectService(
+      systemObjects: SystemObjectStore(
+        database: database,
+        objectStore: objectStore,
+      ),
+      defaultsStore: ObjectTypeDefaultsStore(genericStore),
+    );
+
+    final object = await service.findOrCreateManaged(
+      workspaceId: workspaceId,
+      filePath: '/managed/preserved.png',
+    );
+    final definition = await service.ensureDefinition(workspaceId);
+    await objectStore.setPropertyValue(
+      objectId: object.id,
+      property: definition.storageOwnershipProperty,
+      value: 'future-managed-ownership-v2',
+    );
+
+    await service.findOrCreateManaged(
+      workspaceId: workspaceId,
+      filePath: '/managed/preserved.png',
+      storageOwnership: ManagedFileOwnership.vaultManagedCopy,
+    );
+    final stored = (await objectStore.listObjects(definition.objectType.id)).single;
+    expect(
+      stored.values[definition.storageOwnershipProperty.id],
+      'future-managed-ownership-v2',
+    );
   });
 
   test('managed Image source identity preserves query and fragment distinctions',
