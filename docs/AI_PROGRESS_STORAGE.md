@@ -54,6 +54,22 @@ The focused restore-preservation hardening is integrated. Restore proves the com
 - Invalid preflight input leaves an existing target untouched; extraction-stage cleanup/rollback remains best-effort without replacing the original failure.
 - App-generated regular-file Vault backups remain supported, and no schema/migration/Object/Relation semantics changed.
 
+### #1171 — Vault restore content extraction fail-closed
+The restore content-integrity follow-up is integrated with #1132's namespace contract preserved.
+
+- Bookmark restore no longer delegates regular-file extraction to `archive 4.2.0`'s `extractFileToDisk()` helper, whose regular-file path catches and discards `ArchiveFile.writeContent()` failures.
+- The complete archive namespace is still validated before any existing restore target is deleted or recreated.
+- The archive decoded for the extraction pass is fully revalidated again before the first extracted byte is written, so case-fold aliases, file/descendant conflicts, symlinks, unsafe member names and the top-level `database.sqlite` requirement apply to the bytes actually extracted rather than only an earlier file snapshot.
+- Every extraction destination is resolved under the restore root and fails closed if containment is not preserved.
+- Regular-file content is written through `ArchiveFile.writeContent()` directly so decompression/content/output failures propagate instead of becoming false restore success.
+- Output close remains best-effort when a write/decompression failure already exists, so cleanup errors do not replace the original failure explaining why restore failed.
+- Any extraction-stage failure enters the existing partial-target cleanup path and rethrows the original failure; preflight-invalid input still leaves a pre-existing target untouched.
+- A deterministic regression keeps ZIP namespace metadata valid while corrupting one raw DEFLATE payload to reserved BTYPE=3, proving preflight succeeds, content extraction fails, and the partial target is removed.
+- Existing app-generated backup restore continues to preserve `database.sqlite`, `profile.json`, `photos/...` and `attachments/...` bytes.
+- No schemaVersion, migration, Object/Relation semantics, Image/File identity, backup-format redesign or destructive active-Vault behavior changed.
+
+The latest implementation head before this durable handoff update was green for changed-Dart format, Analyze/guards, all four Flutter Test shards on first pass, test-health, handoff/migration/settings audits and authoritative `merge-gate`.
+
 ### #1146 — explicitly owned Image bytes under `photos/...`
 The downstream Image-byte filesystem slice is integrated by PR #1159 (`2b5ae87f1b65edf67c1ca02b4ab39d78b33a1f0c`) after D/#1141 established explicit Image ownership provenance.
 
@@ -112,6 +128,6 @@ Repository tests and tools are authoritative for repository-owned behavior; use 
 
 Lane F inherits the shared **Lane continuation and resume/stop contract** in `AGENTS.md`. A real-machine requirement may legitimately produce `external-infra`, a genuine prerequisite may produce `dependency`, and no concrete work after the final live audit may produce `idle-no-work`.
 
-Final resume audit after #1146 integration checked latest `main`, live F-focused Issues/PRs, #1063, #1064, open PR ownership, shared-hotspot/migration-writer state and current portability code. The only open F roadmap item found was umbrella #1063; no separate focused F implementation Issue/PR exists. #1064 has not yet split its future managed-byte retention/GC work to F. Current open implementation PRs are owned by A/B/C/E/G and do not own the F portable-export filesystem boundary. No open migration-sensitive writer was found. No independent safe F implementation slice is currently demonstrated.
+Final resume audit for the #1171 integration found only #1063 and #1171 as open F-primary Issues. #1063 remains an umbrella portability contract and still has no newly split focused F package-writer/filesystem slice whose logical prerequisites authorize independent implementation. No additional current-main Storage/Vault correctness defect was demonstrated in this audit.
 
-Stop reason: idle-no-work — #1146 is integrated and closed; resume when #1063 gains an explicit focused F filesystem/package contract with owning-lane logical prerequisites, #1064 splits a managed-byte retention/GC Issue to F, a destructive retirement requests focused preservation validation, or a concrete current-main Storage/Vault correctness defect appears.
+Stop reason: idle-no-work after #1171 integration — resume when #1063 gains an explicit focused F filesystem/package contract with owning-lane logical prerequisites, #1064 splits a managed-byte retention/GC Issue to F, a destructive retirement requests focused preservation validation, or a concrete current-main Storage/Vault correctness defect appears.

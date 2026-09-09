@@ -10,32 +10,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  late AppDatabase database;
-  late BookmarkLifecycleStore lifecycleStore;
-  late BookmarkRepository repository;
-
-  setUp(() async {
-    database = AppDatabase.forTesting(NativeDatabase.memory());
+  testWidgets('URL creation failure hides raw implementation details', (
+    tester,
+  ) async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
     final workspaceStore = WorkspaceStore(database);
     final workspaceId = await workspaceStore.initialize();
-    lifecycleStore = BookmarkLifecycleStore(database);
+    final lifecycleStore = BookmarkLifecycleStore(database);
     await lifecycleStore.initialize();
-    repository = BookmarkRepository(
+    addTearDown(lifecycleStore.dispose);
+    final repository = BookmarkRepository(
       database,
       workspaceStore: workspaceStore,
       lifecycleStore: lifecycleStore,
       workspaceId: workspaceId,
       profileDirectoryPath: '/tmp/bookmark-create-error-test',
     );
-  });
 
-  tearDown(() async {
-    await lifecycleStore.dispose();
-    await database.close();
-  });
-
-  testWidgets('URL creation failure hides raw implementation details',
-      (tester) async {
     var fetchCalls = 0;
     await tester.pumpWidget(
       MaterialApp(

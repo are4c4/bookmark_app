@@ -49,7 +49,14 @@ Integrated first slice (#1111):
 - Home has loading, empty, error/retry and pull-to-refresh behavior;
 - no Home-only Recent index, recently-opened history, Favorites state or Pinned Database state is persisted by this slice.
 
-Next #1061 action: split Inbox / Favorites / Pinned Databases into focused contracts only when their canonical persistence/query semantics are explicit. Do not fake durable user state in presentation memory merely to fill the Home surface.
+Focused interaction slice (#1125):
+- Home Recent focus traversal is explicitly ordered by the same visible deterministic Recent order;
+- the first Recent row receives autofocus so desktop keyboard users can resume work without crossing transition-only domain navigation first;
+- Enter, Space and pointer/touch activation converge on the same shared `ObjectInspectorPage` opening path;
+- Material row semantics/touch targets remain intact, and empty Home keyboard traversal does not create a focus trap;
+- this interaction layer adds no Home selection persistence, recently-opened history or alternate Object-opening authority.
+
+Next #1061 action: split Inbox / Favorites / Pinned Databases into focused contracts only when their canonical persistence/query semantics are explicit. Do not reuse legacy Bookmark `storageState`/favorite state as Home authority, and do not fake durable user state in presentation memory merely to fill the Home surface.
 
 ### #1043 — replace Stage1 normal ownership
 Move ordinary saved-URL use to canonical Weblink Objects through generic Database/View/navigation and capture-first/Inbox organization. Preserve useful list/table/gallery/filter/sort/opening behavior through generic contracts. Retire Stage1 routing only after #1041/#1042/#1054 and daily-use parity make it caller-zero.
