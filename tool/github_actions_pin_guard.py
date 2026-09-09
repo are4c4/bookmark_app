@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Fail when a repository workflow uses an unpinned remote GitHub Action."""
+"""Fail on mutable Actions or drift from the repository Flutter toolchain contract."""
 
 from __future__ import annotations
 
 import re
 import sys
 from pathlib import Path
+
+import flutter_toolchain_guard
 
 WORKFLOW_DIR = Path(".github/workflows")
 USES_RE = re.compile(r"^\s*(?:-\s*)?uses:\s*([^\s#]+)")
@@ -37,13 +39,25 @@ def audit_workflows(root: Path = WORKFLOW_DIR) -> list[str]:
 
 
 def main() -> int:
-    failures = audit_workflows()
-    if not failures:
-        print("github_actions_pin_guard: all remote actions use immutable commit SHAs")
+    action_failures = audit_workflows()
+    toolchain_failures = flutter_toolchain_guard.validate_repository(Path("."))
+    if not action_failures and not toolchain_failures:
+        print(
+            "github_actions_pin_guard: immutable remote Actions, tracked pubspec.lock, "
+            "and pinned Flutter setup are valid"
+        )
         return 0
-    print("Remote GitHub Actions must be pinned to a full 40-character commit SHA:")
-    for failure in failures:
-        print(f"- {failure}")
+
+    if action_failures:
+        print("Remote GitHub Actions must be pinned to a full 40-character commit SHA:")
+        for failure in action_failures:
+            print(f"- {failure}")
+
+    if toolchain_failures:
+        print("Flutter toolchain/dependency reproducibility contract failed:")
+        for failure in toolchain_failures:
+            print(f"- {failure}")
+
     return 1
 
 
