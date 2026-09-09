@@ -30,36 +30,35 @@ void main() {
     expect(parentBacklinks.single.sourceObjectId, childId);
   });
 
-  test('canonical snapshot derives strict descendants from direct Parent edges',
-      () async {
-    final fixture = await _fixture();
-    addTearDown(fixture.database.close);
-    final rootId = await fixture.createTag('root');
-    final childId = await fixture.createTag('child');
-    final grandchildId = await fixture.createTag('grandchild');
-    await fixture.setParent(childId, rootId);
-    await fixture.setParent(grandchildId, childId);
+  test(
+    'canonical snapshot derives strict descendants from direct Parent edges',
+    () async {
+      final fixture = await _fixture();
+      addTearDown(fixture.database.close);
+      final rootId = await fixture.createTag('root');
+      final childId = await fixture.createTag('child');
+      final grandchildId = await fixture.createTag('grandchild');
+      await fixture.setParent(childId, rootId);
+      await fixture.setParent(grandchildId, childId);
 
-    final snapshot = await fixture.bridge.hierarchyIntegrity.loadSnapshot(
-      workspaceId: fixture.workspaceId,
-      parentProperty: fixture.schema.parentProperty,
-    );
+      final snapshot = await fixture.bridge.hierarchyIntegrity.loadSnapshot(
+        workspaceId: fixture.workspaceId,
+        parentProperty: fixture.schema.parentProperty,
+      );
 
-    expect(
-      snapshot.parentByTagObjectId,
-      <int, int?>{
+      expect(snapshot.parentByTagObjectId, <int, int?>{
         rootId: null,
         childId: rootId,
         grandchildId: childId,
-      },
-    );
-    expect(snapshot.isStrictDescendant(childId, rootId), isTrue);
-    expect(snapshot.isStrictDescendant(grandchildId, rootId), isTrue);
-    expect(snapshot.isStrictDescendant(grandchildId, childId), isTrue);
-    expect(snapshot.isStrictDescendant(rootId, rootId), isFalse);
-    expect(snapshot.isStrictDescendant(rootId, childId), isFalse);
-    expect(snapshot.isStrictDescendant(999999, rootId), isFalse);
-  });
+      });
+      expect(snapshot.isStrictDescendant(childId, rootId), isTrue);
+      expect(snapshot.isStrictDescendant(grandchildId, rootId), isTrue);
+      expect(snapshot.isStrictDescendant(grandchildId, childId), isTrue);
+      expect(snapshot.isStrictDescendant(rootId, rootId), isFalse);
+      expect(snapshot.isStrictDescendant(rootId, childId), isFalse);
+      expect(snapshot.isStrictDescendant(999999, rootId), isFalse);
+    },
+  );
 
   test('canonical snapshot fails closed on Parent index drift', () async {
     final fixture = await _fixture();
