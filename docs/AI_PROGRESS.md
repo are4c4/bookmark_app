@@ -67,21 +67,20 @@ Always re-check each Issue live before assuming state or ownership.
 
 ## Focused implementation routing
 
-The Issue numbers below are durable roadmap/routing anchors, not claims that a PR is currently active. Verify live state before taking ownership.
+The Issue numbers below are durable roadmap/routing anchors, not claims that a PR is currently active. Verify live state before taking ownership. Completed Issues are retained only when their checkpoint context matters and are not active work queues.
 
 ### A — Object Core & Body
-- #1057 Body contextual block handles/drag reorder.
 - #1058 reversible local Body structural Undo.
-- #1041 legacy Bookmark → canonical Weblink/generic Object migration authority.
 - #1044 generic Person ObjectType normal write authority.
 - #1062 duplicate detection / Object merge / redirect semantics.
 - #1064 durable Object/Property/Body/Relation history contract; split B/F slices when required.
+- Completed checkpoints: #1041 legacy Bookmark → canonical Weblink/generic Object migration authority; #1057 Body contextual block handles/drag reorder.
 
 ### B — Relations & Data Integrity
-- #1052 canonical Tag Parent/TagGroup integrity and cycle prevention.
 - #1042 legacy Bookmark-era Relation convergence.
 - #1045 Person groups/roles convergence.
 - Future #1062/#1064 Relation rewiring/restore slices belong in focused B Issues.
+- Completed checkpoint: #1052 canonical Tag Parent/TagGroup integrity and cycle prevention.
 
 ### C — Database, View & Schema UX
 - #1053 hierarchy-aware Tag predicates/filter UX.
@@ -90,8 +89,8 @@ The Issue numbers below are durable roadmap/routing anchors, not claims that a P
 - #1061 Home/start UX centered on Inbox / Recent / Favorites / Pinned Databases.
 
 ### D — Primitive Objects & Media
-- #1054 direct canonical URL capture to Weblink Object.
-- #155/#245 only for concrete native Weblink/Image/File obligations.
+- #155 is the durable Weblink/Image/File native-capability umbrella; resume D only for concrete native Weblink/Image/File obligations proven by live focused Issues.
+- Completed checkpoints: #1054 direct canonical URL capture to Weblink Object; #245 product-facing Photo→Image convergence.
 
 Tag/TagGroup are not D-owned native primitives.
 
@@ -121,16 +120,16 @@ H audits architecture drift, duplicate ownership, cross-lane dependencies, share
 ```text
 Object-first constitution
         |
-        +--> Body #1057/#1058 [A]
+        +--> Body #1058 [A] (#1057 completed checkpoint)
         |
         +--> Tag #1050
-        |      +--> #1052 [B] integrity
+        |      +--> #1052 [B] integrity (completed checkpoint)
         |      +--> #1053 [C] query/UX
         |
         +--> Bookmark retirement #1039
-        |      +--> #1041 [A] identity/migration
+        |      +--> #1041 [A] identity/migration (completed checkpoint)
         |      +--> #1042 [B] relations
-        |      +--> #1054 [D] direct Weblink capture
+        |      +--> #1054 [D] direct Weblink capture (completed checkpoint)
         |      +--> #1043 [C] generic daily-use UX
         |      +--> G caller-zero retirement after parity
         |
