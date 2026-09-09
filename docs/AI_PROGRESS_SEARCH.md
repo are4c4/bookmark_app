@@ -13,7 +13,7 @@ Keep one canonical Object-level search/index architecture correct, stale-safe, p
 - Native producers such as Weblink metadata or File/PDF extracted text expose canonical facts/impact; they do not write Search storage directly.
 
 ## Current state
-Canonical Object Search is established and covers focused freshness, Body/Property/Relation projection, corruption isolation, background completion refresh, mounted-query replay and Japanese/CJK intra-token matching without a second persistent index.
+Canonical Object Search is established and covers focused freshness, Body/Property/Relation projection, corruption isolation, background completion refresh, mounted-query replay and Japanese/CJK intra-token matching, including ordinary surrounding query punctuation, without a second persistent index.
 
 Idle is a valid Lane E state when live Issues and a final current-main audit reveal no concrete Search obligation. Never infer that state from this handoff alone.
 
@@ -23,6 +23,7 @@ Idle is a valid Lane E state when live Issues and a final current-main audit rev
 - derived producer contributions such as Weblink preview/PDF extracted text with source-scoped replacement;
 - existing FTS prefix matching and ranking remain the primary path for normal queries;
 - Japanese/Han/Hiragana/Katakana terms that begin inside a `unicode61` token may use a query-time substring fallback over the **same canonical Object FTS projection**; non-CJK terms remain prefix-matched, mixed queries retain AND semantics, and no language/domain-specific persistent index is introduced;
+- CJK substring fallback may trim recognized punctuation only from the **leading/trailing boundary** of a CJK-containing query term so copy/pasted terms such as `大学。` or `「大学」` behave like tokenizer-delimited input; punctuation inside the meaningful term is preserved, a trim that leaves no CJK needle does not broaden the fallback, and the primary FTS query/ranking path is unchanged;
 - existing FTS-ranked hits retain their ordering and fallback-only hits are deterministic and de-duplicated;
 - focused canonical Object invalidation/refresh rather than routine workspace-wide rebuild;
 - stale/deleted impacted ids remain refreshable so rows can be removed;

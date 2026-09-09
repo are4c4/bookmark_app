@@ -123,7 +123,7 @@ Behavior-preserving refactors require changed-Dart format, Analyze and relevant/
 ## Resume sequence
 1. re-audit latest `main`, open PR ownership and shared-hotspot/migration ownership before taking new G work;
 2. treat #1107 Phase A non-self approval as established; do not treat #1082 as complete until Phase B provides an enforcement root the implementation identity cannot modify/spoof;
-3. take #225/#1047 or other live G work only through focused reversible child Issues; treat #950 as a completed checkpoint rather than an active work queue;
+3. take #225 or other live G work only through focused reversible child Issues; treat #1047 and #950 as completed checkpoints rather than active work queues;
 4. when #1039/#1040 owning-lane parity lands, create caller-zero retirement slices instead of combining product migration with cleanup;
 5. if historical branch cleanup is revisited, begin with a new read-only inventory and do not broaden deletion to ambiguous refs;
 6. keep destructive schema/data removal separate, preservation-gated, and independently approved;

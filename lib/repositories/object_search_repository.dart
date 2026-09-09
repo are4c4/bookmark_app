@@ -125,6 +125,40 @@ class ObjectSearchRepository {
     return false;
   }
 
+  bool _isCjkFallbackBoundaryPunctuation(int rune) =>
+      (rune >= 0x21 && rune <= 0x2f) ||
+      (rune >= 0x3a && rune <= 0x40) ||
+      (rune >= 0x5b && rune <= 0x60) ||
+      (rune >= 0x7b && rune <= 0x7e) ||
+      (rune >= 0x2000 && rune <= 0x206f) ||
+      (rune >= 0x2e00 && rune <= 0x2e7f) ||
+      rune == 0x3000 ||
+      (rune >= 0x3001 && rune <= 0x3004) ||
+      (rune >= 0x3008 && rune <= 0x3011) ||
+      (rune >= 0x3014 && rune <= 0x301f) ||
+      rune == 0x3030 ||
+      rune == 0x30fb ||
+      (rune >= 0xfe10 && rune <= 0xfe19) ||
+      (rune >= 0xfe30 && rune <= 0xfe4f) ||
+      (rune >= 0xff01 && rune <= 0xff0f) ||
+      (rune >= 0xff1a && rune <= 0xff20) ||
+      (rune >= 0xff3b && rune <= 0xff40) ||
+      (rune >= 0xff5b && rune <= 0xff65);
+
+  String _trimCjkFallbackBoundaryPunctuation(String term) {
+    final runes = term.runes.toList(growable: false);
+    var start = 0;
+    var end = runes.length;
+    while (start < end && _isCjkFallbackBoundaryPunctuation(runes[start])) {
+      start += 1;
+    }
+    while (end > start && _isCjkFallbackBoundaryPunctuation(runes[end - 1])) {
+      end -= 1;
+    }
+    if (start == 0 && end == runes.length) return term;
+    return String.fromCharCodes(runes.sublist(start, end));
+  }
+
   Future<String> _readBodySearchText(int objectId) async {
     try {
       return buildObjectBodySearchText(await _bodyStore.read(objectId));
@@ -453,14 +487,20 @@ class ObjectSearchRepository {
       objectTypeId: objectTypeId,
       limit: limit,
     );
-    final cjkTerms = terms.where(_containsCjk).toList(growable: false);
+    final cjkTerms = terms
+        .where(_containsCjk)
+        .map(_trimCjkFallbackBoundaryPunctuation)
+        .where((term) => term.isNotEmpty && _containsCjk(term))
+        .toList(growable: false);
     if (cjkTerms.isEmpty || prefixHits.length >= limit) return prefixHits;
 
     // unicode61 keeps ordinary Japanese text without whitespace in one token.
     // Prefix MATCH therefore misses a query that starts inside that token (for
     // example `漱石` in `夏目漱石`). Scan the same canonical projection only for
-    // CJK-containing terms, while keeping non-CJK terms on the existing prefix
-    // FTS path. This adds no second index and does not broaden Latin infix search.
+    // CJK-containing terms. Surrounding punctuation is a tokenizer boundary,
+    // so remove it only from fallback needles while keeping non-CJK terms on
+    // the existing prefix FTS path. This adds no second index and does not
+    // broaden Latin infix search or erase punctuation inside a CJK term.
     final fallbackHits = await _searchCjkSubstringFallback(
       workspaceId: workspaceId,
       cjkTerms: cjkTerms,
