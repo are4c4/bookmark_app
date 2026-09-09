@@ -18,13 +18,16 @@ Durable product implications for G:
 
 ## Active focused issues
 
-### #1072 — historical merged branch cleanup
-Repository-only maintenance slice:
-- GitHub native automatic head-branch deletion is now enabled for future merged PRs;
-- clean the pre-existing historical branch backlog only when a branch tip is already contained in current `main`;
-- never delete `main`, current open-PR heads, branches with unique commits, branches equal to the current `main` tip, or very recent tips;
-- dry-run the candidate set on the PR before the post-merge cleanup runs;
-- keep the cleanup idempotent and explicit via `workflow_dispatch` for future maintenance.
+### #1074 — classify remaining historical branches before further cleanup
+#1072 completed the proven-merged historical cleanup: 840 old branch refs were deleted after dry-run and full green CI, reducing the live inventory from 1,065 to 225 branches including `main`. GitHub native automatic merged-head deletion is enabled for future PRs.
+
+The 224 non-main survivors must not be treated as active ownership merely because their refs exist. #1074 is a read-only classification slice that separates:
+- current open-PR / Dependabot / recent / default-tip refs that should be retained;
+- any newly provable merged-safe refs;
+- exact heads of closed-unmerged PRs that may be reversible cleanup candidates;
+- branches advanced after PR history and branches with no PR history, which retain unique/ambiguous work and must not be auto-deleted.
+
+Do not broaden #1074 into deletion until the classification report provides concrete evidence and a separately justified destructive policy.
 
 ### #1047 — Generic Database gallery state-loader extraction
 Behavior-preserving extraction: move Gallery cover-source discovery into the existing `GenericDatabasePageStateLoader` snapshot without changing Gallery semantics. `generic_database_page.dart` edits must remain patch-sized and re-audited against live ownership.
@@ -54,7 +57,8 @@ Future G work after owning-lane parity:
 - migration single-writer lease audit;
 - durable handoff audit;
 - immutable GitHub Actions SHA pin audit;
-- weekly Dependabot updates for Dart/pub and GitHub Actions.
+- weekly Dependabot updates for Dart/pub and GitHub Actions;
+- historical proven-merged branch cleanup with exact merged-PR head recognition for squash merges.
 
 Do not relax a guardrail or create no-op commits to make unrelated work easier to merge.
 
@@ -96,8 +100,8 @@ The repository remains personal-account owned, so Merge Queue is not available. 
 Behavior-preserving refactors still require changed-Dart format, Analyze and relevant/full Flutter Test. Workflow/guard changes must exercise their focused regressions and the full authoritative CI path. Docs-only architecture synchronization should use the docs-only CI path plus handoff/coordination audits.
 
 ## Resume sequence
-1. finish #1072 by validating the branch-cleanup dry run, then let the post-merge cleanup remove only safely merged historical branches;
-2. recheck live branch count and close #1072 only after cleanup evidence is recorded;
+1. finish #1074's read-only live classification and inspect its category counts/lists;
+2. if the report proves a narrow reversible cleanup class, create a separate focused deletion slice instead of silently broadening #1074; otherwise retain ambiguous/unique branches;
 3. re-audit live open PR/hotspot ownership;
 4. continue #1047/#225/#950 only through small focused slices;
 5. when #1039/#1040 owning-lane parity lands, create caller-zero retirement slices instead of combining product migration with cleanup;
