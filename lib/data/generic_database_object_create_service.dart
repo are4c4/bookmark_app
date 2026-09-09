@@ -132,11 +132,7 @@ class GenericDatabaseObjectCreateService {
     }
     final object = await CanonicalWeblinkCaptureService(
       weblinks: service,
-    ).capture(
-      workspaceId: page.objectType.workspaceId,
-      url: url,
-      title: title,
-    );
+    ).capture(workspaceId: page.objectType.workspaceId, url: url, title: title);
     final enrich = weblinkCreateEnricher;
     if (enrich != null) {
       try {
