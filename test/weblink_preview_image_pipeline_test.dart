@@ -9,6 +9,7 @@ import 'package:bookmark_app/data/system_object_store.dart';
 import 'package:bookmark_app/data/weblink_image_schema_service.dart';
 import 'package:bookmark_app/data/weblink_object_service.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
+import 'package:bookmark_app/domain/managed_file_ownership.dart';
 import 'package:bookmark_app/domain/object_model.dart';
 import 'package:bookmark_app/services/photo_storage_service.dart';
 import 'package:bookmark_app/services/remote_image_storage_service.dart';
@@ -90,6 +91,10 @@ void main() {
       'https://cdn.example.com/cover.jpg',
     );
     expect(image.values[imageDefinition.contentTypeProperty.id], 'image/jpeg');
+    expect(
+      image.values[imageDefinition.storageOwnershipProperty.id],
+      ManagedFileOwnership.vaultManagedCopy.storageKey,
+    );
     final managedPath = '${image.values[imageDefinition.fileProperty.id]}';
     expect(await File(managedPath).exists(), isTrue);
     expect(File(managedPath).parent.path, directory.path);
