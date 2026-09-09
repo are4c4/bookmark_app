@@ -60,7 +60,13 @@ void main() {
 
     expect(
       navigation.map((item) => item.id),
-      [weblinkType.id, imageType.id, dailyNoteType.id, personType.id, customId],
+      [
+        weblinkType.id,
+        imageType.id,
+        dailyNoteType.id,
+        personType.id,
+        customId,
+      ],
     );
     expect(navigation[0].name, 'Weblinks');
     expect(navigation[0].icon, '🔗');
@@ -95,20 +101,23 @@ void main() {
     );
   });
 
-  test('workspace Object sync makes Daily Notes and People available before first item is opened', () async {
-    final database = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(database.close);
-    final workspaceId = await WorkspaceStore(database).initialize();
-    final sync = ObjectSyncService(database);
-    addTearDown(sync.dispose);
+  test(
+    'workspace Object sync makes Daily Notes and People available before first item is opened',
+    () async {
+      final database = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(database.close);
+      final workspaceId = await WorkspaceStore(database).initialize();
+      final sync = ObjectSyncService(database);
+      addTearDown(sync.dispose);
 
-    await sync.syncWorkspace(workspaceId);
+      await sync.syncWorkspace(workspaceId);
 
-    final navigation = await GenericDatabaseStore(database).listDatabases(workspaceId);
-    final dailyNotes = navigation.singleWhere((item) => item.name == 'Daily Notes');
-    final people = navigation.singleWhere((item) => item.name == 'People');
-    expect(dailyNotes.icon, '📅');
-    expect(people.icon, '👤');
-    expect(await database.select(database.people).get(), isEmpty);
-  });
+      final navigation = await GenericDatabaseStore(database).listDatabases(workspaceId);
+      final dailyNotes = navigation.singleWhere((item) => item.name == 'Daily Notes');
+      final people = navigation.singleWhere((item) => item.name == 'People');
+      expect(dailyNotes.icon, '📅');
+      expect(people.icon, '👤');
+      expect(await database.select(database.people).get(), isEmpty);
+    },
+  );
 }
