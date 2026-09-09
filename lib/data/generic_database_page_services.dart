@@ -387,12 +387,12 @@ class _GenericDatabaseRelationMutationService extends RelationMutationService {
     final systemKey = await systemObjects.systemKeyForObjectType(objectTypeId);
     if (systemKey == PersonObjectBridge.systemKey) {
       await genericStore.database.transaction(() async {
-        final legacyPersonId =
-            await personDeletionCompatibility.legacyPersonIdForCanonicalDeletion(
-          workspaceId: workspaceId,
-          objectTypeId: objectTypeId,
-          objectId: objectId,
-        );
+        final legacyPersonId = await personDeletionCompatibility
+            .legacyPersonIdForCanonicalDeletion(
+              workspaceId: workspaceId,
+              objectTypeId: objectTypeId,
+              objectId: objectId,
+            );
         await super.deleteObject(
           workspaceId: workspaceId,
           objectTypeId: objectTypeId,
