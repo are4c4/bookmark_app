@@ -52,6 +52,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
       MaterialApp(
+        theme: ThemeData(platform: TargetPlatform.macOS),
         home: ObjectInspectorPage(
           store: genericStore,
           objectStore: objectStore,
@@ -61,10 +62,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('body-block-more-a')), findsOneWidget);
+    expect(find.byKey(const ValueKey('body-block-more-a')), findsNothing);
     expect(find.byKey(const ValueKey('body-block-move-down-a')), findsNothing);
     expect(find.byKey(const ValueKey('body-block-duplicate-a')), findsNothing);
     expect(find.byKey(const ValueKey('body-block-delete-a')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('body-text-a')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('body-block-more-a')), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('body-block-more-a')));
     await tester.pumpAndSettle();
@@ -76,6 +81,8 @@ void main() {
     var document = await bodyStore.read(objectId);
     expect(document.blocks.map((block) => block.id).toList(), <String>['b', 'a']);
 
+    await tester.tap(find.byKey(const ValueKey('body-text-a')));
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('body-block-more-a')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('body-block-duplicate-a')));
@@ -85,6 +92,8 @@ void main() {
         <String>['b', 'a', 'paragraph-copy-1']);
     expect(document.blocks.last.text, 'A');
 
+    await tester.tap(find.byKey(const ValueKey('body-text-a')));
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('body-block-insert-after-a')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('見出し 1').last);
@@ -94,6 +103,8 @@ void main() {
     expect(document.blocks[aIndex + 1].type, ObjectBodyBlockType.heading);
     expect(document.blocks[aIndex + 1].attributes['level'], 1);
 
+    await tester.tap(find.byKey(const ValueKey('body-text-a')));
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('body-block-more-a')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('body-block-delete-a')));
