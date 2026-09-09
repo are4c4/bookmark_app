@@ -255,19 +255,22 @@ class _ObjectBodyDocumentEntryState extends State<_ObjectBodyDocumentEntry> {
               )
             else
               blockView,
-            if (showActions)
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (widget.canReorder) _buildDragHandle(context),
-                    widget.blockActionsBuilder!(
-                      context,
-                      _block,
-                      widget.position,
-                    ),
-                  ],
+            if (hasActions)
+              Offstage(
+                offstage: !showActions,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (widget.canReorder) _buildDragHandle(context),
+                      widget.blockActionsBuilder!(
+                        context,
+                        _block,
+                        widget.position,
+                      ),
+                    ],
+                  ),
                 ),
               ),
           ],
