@@ -187,18 +187,23 @@ class TagObjectBridge {
     required TagObjectSchema schema,
   }) async {
     final groups = await database.select(database.tagGroups).get();
-    final validGroupIds = groups.map((group) => group.id).toSet();
     for (final group in groups) {
-      final objectId = await _ensureObjectForTagGroup(
-        schema: schema,
-        group: group,
+      final existingObjectId = await _objectIdForLegacyTagGroup(
+        schema,
+        group.id,
       );
-      await objectStore.renameObject(objectId, group.name);
-      await objectStore.setPropertyValue(
-        objectId: objectId,
-        property: schema.legacyTagGroupIdProperty,
-        value: group.id,
-      );
+      final objectId = existingObjectId ??
+          await _ensureObjectForTagGroup(
+            schema: schema,
+            group: group,
+          );
+      if (existingObjectId == null) {
+        await objectStore.setPropertyValue(
+          objectId: objectId,
+          property: schema.legacyTagGroupIdProperty,
+          value: group.id,
+        );
+      }
     }
 
     final tags = await database.select(database.tags).get();
@@ -239,22 +244,45 @@ class TagObjectBridge {
           'Legacy Tag ${tag.id} references a TagGroup that has no canonical Object.',
         );
       }
-      await _hierarchyIntegrity.setParent(
-        workspaceId: workspaceId,
-        tagObjectId: objectId,
-        parentProperty: schema.parentProperty,
-        parentTagObjectId: parentObjectId,
-      );
-      await _hierarchyIntegrity.setGroup(
-        workspaceId: workspaceId,
-        tagObjectId: objectId,
-        groupProperty: schema.groupProperty,
-        tagGroupObjectId: groupObjectId,
-      );
+
+      if (await _hasStoredPropertyValue(
+        objectId: objectId,
+        propertyId: schema.parentProperty.id,
+      )) {
+        await _hierarchyIntegrity.relationTargets.selectionForMutation(
+          workspaceId: workspaceId,
+          sourceObjectId: objectId,
+          property: schema.parentProperty,
+        );
+      } else {
+        await _hierarchyIntegrity.setParent(
+          workspaceId: workspaceId,
+          tagObjectId: objectId,
+          parentProperty: schema.parentProperty,
+          parentTagObjectId: parentObjectId,
+        );
+      }
+
+      if (await _hasStoredPropertyValue(
+        objectId: objectId,
+        propertyId: schema.groupProperty.id,
+      )) {
+        await _hierarchyIntegrity.relationTargets.selectionForMutation(
+          workspaceId: workspaceId,
+          sourceObjectId: objectId,
+          property: schema.groupProperty,
+        );
+      } else {
+        await _hierarchyIntegrity.setGroup(
+          workspaceId: workspaceId,
+          tagObjectId: objectId,
+          groupProperty: schema.groupProperty,
+          tagGroupObjectId: groupObjectId,
+        );
+      }
     }
 
     await _removeOrphanTagObjects(workspaceId, schema, validTagIds);
-    await _removeOrphanTagGroupObjects(workspaceId, schema, validGroupIds);
   }
 
   Future<int?> objectIdForLegacyTag(int workspaceId, int tagId) async {
@@ -332,6 +360,18 @@ class TagObjectBridge {
     return matches.isEmpty ? null : matches.single.id;
   }
 
+  Future<bool> _hasStoredPropertyValue({
+    required int objectId,
+    required int propertyId,
+  }) async {
+    final row = await database.customSelect(
+      '''SELECT 1 FROM generic_values
+         WHERE record_id = ? AND property_id = ? LIMIT 1''',
+      variables: [Variable<int>(objectId), Variable<int>(propertyId)],
+    ).getSingleOrNull();
+    return row != null;
+  }
+
   Future<void> _removeOrphanTagObjects(
     int workspaceId,
     TagObjectSchema schema,
@@ -345,24 +385,6 @@ class TagObjectBridge {
       await _relationMutations.deleteObject(
         workspaceId: workspaceId,
         objectTypeId: schema.objectType.id,
-        objectId: object.id,
-      );
-    }
-  }
-
-  Future<void> _removeOrphanTagGroupObjects(
-    int workspaceId,
-    TagObjectSchema schema,
-    Set<int> validGroupIds,
-  ) async {
-    final objects = await objectStore.listObjects(schema.tagGroupObjectType.id);
-    for (final object in objects) {
-      final rawId = object.values[schema.legacyTagGroupIdProperty.id];
-      final legacyId = rawId is int ? rawId : int.tryParse('$rawId');
-      if (legacyId == null || validGroupIds.contains(legacyId)) continue;
-      await _relationMutations.deleteObject(
-        workspaceId: workspaceId,
-        objectTypeId: schema.tagGroupObjectType.id,
         objectId: object.id,
       );
     }
