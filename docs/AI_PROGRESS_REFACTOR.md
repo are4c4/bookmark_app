@@ -35,8 +35,8 @@ Always verify Issue state and active PR ownership live before taking work.
 ### #225 — architecture health umbrella
 Continue measurable hotspot reduction, `AppDatabase` narrowing, explicit failure/privacy policy and CI/AI workflow guardrails through focused child Issues/PRs. Prefer deletion or responsibility movement over another abstraction layer.
 
-### #950 — Photo compatibility caller-zero cleanup
-Continue only when current-main callers prove an API/path is dead. Preserve Photo schema/data, migration/import/export/backup and Vault preservation requirements.
+### #950 — Photo caller-zero cleanup (completed checkpoint)
+Safe caller-zero Photo mutation/presentation/read cleanup is complete. The surviving Photo-era paths are intentionally live compatibility/preservation infrastructure and must not be treated as spare cleanup merely to keep G active. Any future Photo code retirement requires a new focused current-main caller-zero proof; persisted Photo schema/data retirement is separately preservation-, migration-, and approval-gated.
 
 ### #1079 — durable AI documentation source-of-truth
 Synchronize stale repository docs and make handoffs structurally resistant to transient-state drift. Durable docs record contracts/resume guidance; live GitHub owns open PRs, CI, branch tips, repository settings and current ownership.
@@ -49,6 +49,7 @@ The remaining #1107 security gap is Phase B, not approval provenance itself: rep
 Future G work after owning-lane parity:
 - retire caller-zero Bookmark repositories/items/pages/bridges from #1039;
 - retire caller-zero People-specific repositories/pages/bridges from #1040;
+- revisit Photo compatibility only through a new focused current-main caller-zero audit rather than reopening completed #950;
 - ratchet maintainability ceilings as large hosts/dependencies genuinely disappear.
 
 ## Established guardrails that remain authoritative
@@ -122,7 +123,7 @@ Behavior-preserving refactors require changed-Dart format, Analyze and relevant/
 ## Resume sequence
 1. re-audit latest `main`, open PR ownership and shared-hotspot/migration ownership before taking new G work;
 2. treat #1107 Phase A non-self approval as established; do not treat #1082 as complete until Phase B provides an enforcement root the implementation identity cannot modify/spoof;
-3. take #225/#950 or other G work only through focused reversible child Issues;
+3. take #225/#1047 or other live G work only through focused reversible child Issues; treat #950 as a completed checkpoint rather than an active work queue;
 4. when #1039/#1040 owning-lane parity lands, create caller-zero retirement slices instead of combining product migration with cleanup;
 5. if historical branch cleanup is revisited, begin with a new read-only inventory and do not broaden deletion to ambiguous refs;
 6. keep destructive schema/data removal separate, preservation-gated, and independently approved;
