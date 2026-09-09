@@ -32,7 +32,7 @@ PREFIX_TO_LANE = {
     "oversight/": "H",
 }
 WORKFLOW_SUFFIXES = (".yml", ".yaml")
-HUMAN_RISK_APPROVAL_LABEL = "risk:human-approved"
+RISK_APPROVAL_MARKER = "Risk approval: approved"
 
 
 @dataclass(frozen=True)
@@ -182,9 +182,7 @@ def destructive_risks_for_patch(path: str, patch: str) -> list[str]:
     joined = "\n".join(added)
     reasons: list[str] = []
 
-    if path == "lib/data/app_database.dart" and re.search(
-        r"\bschemaVersion\b", joined
-    ):
+    if path == "lib/data/app_database.dart" and re.search(r"\bschemaVersion\b", joined):
         reasons.append("Drift schemaVersion changes")
 
     if path.endswith((".dart", ".sql")) and re.search(
@@ -204,9 +202,7 @@ def destructive_risks_for_patch(path: str, patch: str) -> list[str]:
         or "managed_file" in path.lower()
         or path.startswith("lib/features/storage/")
     )
-    if sensitive_storage_path and re.search(
-        r"\.(?:delete|deleteSync)\s*\(", joined
-    ):
+    if sensitive_storage_path and re.search(r"\.(?:delete|deleteSync)\s*\(", joined):
         reasons.append("physical Vault/managed-file deletion behavior")
 
     return reasons
@@ -219,6 +215,21 @@ def destructive_risks(base: str, head: str, paths: list[str]) -> list[str]:
         for reason in destructive_risks_for_patch(path, patch):
             rendered.append(f"{reason} in `{path}`")
     return rendered
+
+
+def owner_risk_approval(comments: object, owner_login: str) -> bool:
+    if not isinstance(comments, list):
+        return False
+    owner = owner_login.strip().lower()
+    for row in comments:
+        if not isinstance(row, dict):
+            continue
+        user = row.get("user")
+        login = str(user.get("login") or "").lower() if isinstance(user, dict) else ""
+        body = str(row.get("body") or "")
+        if login == owner and RISK_APPROVAL_MARKER.lower() in body.lower():
+            return True
+    return False
 
 
 def _request_json(url: str, token: str) -> object:
@@ -387,19 +398,14 @@ def main() -> int:
         author = pull.get("user", {})
         author_login = str(author.get("login") or "") if isinstance(author, dict) else ""
         current_number = int(event.get("number") or pull.get("number") or 0)
-        labels = {
-            str(row.get("name") or "")
-            for row in pull.get("labels", [])
-            if isinstance(row, dict)
-        }
         paths = changed_paths(base_sha, head_sha)
         contract = parse_contract(body)
         dependency_bot = is_dependency_bot(author_login, branch)
 
+        api_root = f"https://api.github.com/repos/{repository}" if repository else ""
         open_dependencies: set[int] = set()
         duplicates: list[OpenPullClaim] = []
-        if repository and token and not dependency_bot:
-            api_root = f"https://api.github.com/repos/{repository}"
+        if api_root and token and not dependency_bot:
             for number in contract.dependencies:
                 payload = _request_json(f"{api_root}/issues/{number}", token)
                 if isinstance(payload, dict) and payload.get("state") == "open":
@@ -436,11 +442,20 @@ def main() -> int:
         )
 
         risks = destructive_risks(base_sha, head_sha, paths)
-        if risks and HUMAN_RISK_APPROVAL_LABEL not in labels:
+        risk_approved = False
+        if risks and api_root and token and current_number:
+            owner_login = repository.split("/", 1)[0]
+            comments = _request_json(
+                f"{api_root}/issues/{current_number}/comments?per_page=100", token
+            )
+            risk_approved = owner_risk_approval(comments, owner_login)
+
+        if risks and not risk_approved:
             errors.append(
                 "High-confidence destructive/irreversible change detected: "
                 + "; ".join(risks)
-                + f". A human repository owner must add the `{HUMAN_RISK_APPROVAL_LABEL}` label, then rerun CI."
+                + ". The repository owner must add a PR conversation comment containing exactly "
+                + f"`{RISK_APPROVAL_MARKER}` after reviewing preservation/rollback, then rerun CI."
             )
 
         for warning in warnings:
@@ -460,7 +475,7 @@ def main() -> int:
                 f"- Other open PRs claiming Related issue: `{', '.join('#' + str(pull.number) for pull in duplicates) if duplicates else 'none'}`",
                 f"- Actual shared hotspots: `{', '.join(sorted(actual_hotspots(paths))) if actual_hotspots(paths) else 'none'}`",
                 f"- Destructive-risk findings: `{len(risks)}`",
-                f"- Human risk approval label present: `{'yes' if HUMAN_RISK_APPROVAL_LABEL in labels else 'no'}`",
+                f"- Owner risk approval: `{'yes' if risk_approved else 'no/not-required'}`",
                 f"- Blocking coordination errors: `{len(errors)}`",
                 f"- Advisory coordination warnings: `{len(warnings)}`",
                 "",
