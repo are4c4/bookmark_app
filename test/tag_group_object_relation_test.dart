@@ -51,28 +51,30 @@ void main() {
     );
     expect(tagObjectId, isNotNull);
     expect(groupObjectId, isNotNull);
+    final resolvedTagObjectId = tagObjectId!;
+    final resolvedGroupObjectId = groupObjectId!;
 
     final tagObject = (await objectStore.listObjects(schema.objectType.id))
-        .singleWhere((object) => object.id == tagObjectId);
+        .singleWhere((object) => object.id == resolvedTagObjectId);
     expect(
       ObjectRelationValue.fromJson(
         tagObject.values[schema.groupProperty.id],
       ).objectIds,
-      <int>[groupObjectId!],
+      <int>[resolvedGroupObjectId],
     );
 
     final groupObject = (await objectStore.listObjects(
       schema.tagGroupObjectType.id,
     ))
-        .singleWhere((object) => object.id == groupObjectId);
+        .singleWhere((object) => object.id == resolvedGroupObjectId);
     expect(groupObject.title, '分類');
     expect(groupObject.values[schema.legacyTagGroupIdProperty.id], groupId);
 
-    final backlinks = await objectStore.backlinks(groupObjectId);
+    final backlinks = await objectStore.backlinks(resolvedGroupObjectId);
     final groupBacklinks = backlinks
         .where((edge) => edge.propertyId == schema.groupProperty.id)
         .toList(growable: false);
     expect(groupBacklinks, hasLength(1));
-    expect(groupBacklinks.single.sourceObjectId, tagObjectId);
+    expect(groupBacklinks.single.sourceObjectId, resolvedTagObjectId);
   });
 }
