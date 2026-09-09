@@ -29,6 +29,16 @@ Backup/restore preserves an application Vault for recovery; portable export is a
 
 Keep export work aligned with the Object-first portability contract: preserve stable Object identity, typed Property/Relation/Body data and managed/external byte semantics without claiming lossy Markdown/CSV projections are round-trip complete.
 
+### #1128 — package path and managed-byte export boundary
+The first focused F-owned #1063 slice establishes the filesystem trust boundary without taking over logical Object/Relation/Database serialization.
+
+- Portable package members must be clean relative forward-slash paths; absolute/drive-qualified, traversal, dot/empty-segment and backslash-ambiguous paths fail closed.
+- Automatic byte inclusion requires explicit `vault-managed-copy-v1` ownership plus an existing regular non-symlink Vault-relative `attachments/...` source.
+- Path location alone is never managed-byte ownership authority, including for files that happen to sit inside the Vault.
+- Intermediate symlink parents, symlinked `attachments`, missing/offline Vaults, missing/non-file sources and escaping paths fail closed.
+- Unowned absolute references remain external reference-only by default and are not silently probed, copied or rebased.
+- This boundary is read-only with respect to the source Vault. Later serializers/package writers consume the validated plan instead of reimplementing containment or inferring ownership.
+
 ## Integrated foundation that remains authoritative
 - configurable user-selected Vault roots;
 - create/open/switch/rename/duplicate/remove-from-list lifecycle;
@@ -49,23 +59,25 @@ F should not:
 - redesign Person identity/groups/roles;
 - implement Tag hierarchy;
 - infer Image/File Object identity from paths;
-- create a parallel sync protocol from cloud-synced folders.
+- create a parallel sync protocol from cloud-synced folders;
+- define canonical graph serialization for another lane merely to make #1063 progress.
 
 ## Cross-lane boundaries
-- **A/B/C/D:** define semantic replacement/parity before F validates destructive retirement safety.
+- **A/B/C/D:** define semantic replacement/parity and, for #1063, logical serialization/reconstruction contracts for the canonical data they own.
 - **D:** native Image/File identity and product semantics; F owns bytes/paths/ownership only.
 - **G:** caller-zero code retirement; F verifies preservation before actual schema/data destruction.
 - **E:** Search may consume derived file content but storage unavailability must fail safely.
 
 ## Validation
-Repository tests and tools are authoritative for repository-owned behavior; use real-machine validation again whenever a focused F Issue or future destructive migration requires physical filesystem/platform evidence that CI cannot prove. Record concrete failures as focused owner-lane Issues rather than speculatively changing Storage semantics.
+Repository tests and tools are authoritative for repository-owned behavior; use real-machine validation again whenever a focused F Issue or future destructive migration requires physical filesystem/platform evidence that CI cannot prove. For Storage-owned portability slices, deterministic tests must prove path containment, explicit ownership and source-Vault non-mutation. Record concrete failures as focused owner-lane Issues rather than speculatively changing Storage semantics.
 
 ## Resume sequence
 1. re-read live F-focused Issues and current product state;
-2. prioritize #1063/open portability work when it remains open and unowned;
-3. check for other independent Vault/storage/export/delivery obligations before declaring Lane F blocked or idle;
-4. use preservation tooling and real-machine evidence when an active Issue or destructive-retirement gate specifically requires it;
-5. route concrete semantic defects to A/B/C/D/G as appropriate;
-6. keep destructive Bookmark/People/Photo schema retirement in a separate explicit single-writer migration with preservation evidence and required approval.
+2. if #1128 is active, finish its package path/managed-byte acceptance criteria without broadening into logical serializers;
+3. otherwise prioritize #1063/open portability work when it remains open and unowned;
+4. check for other independent Vault/storage/export/delivery obligations before declaring Lane F blocked or idle;
+5. use preservation tooling and real-machine evidence when an active Issue or destructive-retirement gate specifically requires it;
+6. route concrete semantic defects to A/B/C/D/G as appropriate;
+7. keep destructive Bookmark/People/Photo schema retirement in a separate explicit single-writer migration with preservation evidence and required approval.
 
 Lane F inherits the shared **Lane continuation and resume/stop contract** in `AGENTS.md`. A real-machine requirement may legitimately produce `external-infra` for a specific active Issue, but completed #242/#951 are not themselves current stop reasons. Re-read live Issues first and continue independent #1063 or other F work whenever available.
