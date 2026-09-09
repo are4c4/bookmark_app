@@ -46,7 +46,9 @@ The repository has durable foundations for:
 - canonical Object Search and focused freshness;
 - Vault lifecycle/portable managed storage and release delivery;
 - Photo→Image product-facing convergence while historical preservation remains intentional;
-- parallel-development CI with a stable aggregate `merge-gate`, full-test sharding, docs-only fast path, immutable GitHub Action pinning, migration leases, hotspot/Issue/dependency/handoff audits, and protected `main` integration.
+- parallel-development CI with a stable aggregate `merge-gate`, full-test sharding, docs-only fast path, immutable GitHub Action pinning, repository-pinned Flutter + tracked dependency lockfile reproducibility guards, deterministic AI PR-contract enforcement, a blocking deterministic migration single-writer gate, hotspot/Issue/dependency/handoff audits, and protected `main` integration;
+- a read-only repository-settings audit that checks the observable effective default-branch integration contract on PR/scheduled/manual runs without adding privileged administration credentials or guessing omitted administration-only fields;
+- a focused implementation Issue Form that captures lane ownership, dependencies, hotspots, migration/data impact, acceptance and non-goals before implementation.
 
 Historical implementations that modeled `Bookmark` as a canonical mirrored Object remain transition compatibility only and must not be extended into the final architecture.
 
@@ -105,6 +107,7 @@ Canonical Object Search is established. Resume only for demonstrated FTS/search 
 ### G — Refactor & Architecture Health
 - #225 maintainability, hotspot reduction, developer workflow, architecture health.
 - #950 proven caller-zero Photo compatibility cleanup.
+- #1107 machine-strong non-self approval provenance for destructive/irreversible changes; existing destructive-risk detection is blocking, but owner-comment approval is not an independent authorization boundary.
 - retire caller-zero Bookmark/People/Photo repositories/pages/bridges only after owning-lane parity.
 - repository-wide handoff/guard synchronization belongs here when a focused Issue owns it.
 
@@ -142,9 +145,10 @@ Object-first constitution
                +--> #1062 [A/B] Object merge
                +--> #1063 [F + owning serializers] export
                +--> #1064 [A/B/F] durable history
+               +--> #1107 [G] trusted destructive approval
 ```
 
-Each focused Issue has one active implementation owner/branch/PR. Shared hotspots use temporary ownership leases and schema/migration writing is single-writer.
+Each focused Issue has one active implementation owner/branch/PR. Shared hotspots use temporary ownership leases. Schema/migration writing is single-writer: non-migration PRs do not contend, the oldest open migration-sensitive PR is the unique active owner, and later migration PRs are blocked by the required gate until ownership advances.
 
 ## Core durable design contracts
 
@@ -207,10 +211,13 @@ A focused PR can be complete while its umbrella is not. Important umbrellas revi
 ## Repository integration contract
 
 - `main` is protected by an active repository ruleset; changes integrate through PRs and the required strict `merge-gate`.
+- The repository Flutter SDK is pinned through `pubspec.yaml`; `pubspec.lock` is tracked and CI verifies dependency resolution does not drift it.
+- Deterministic AI coordination contract violations and migration single-writer contention are blocking in the required CI path; heuristic hotspot/staleness signals remain advisory.
+- Critical observable protected-main settings are audited read-only on PR, scheduled and manual runs. Administration-only fields are validated whenever GitHub exposes them, but omission from non-privileged API payloads is not treated as a guessed configuration failure.
 - Current branch/ruleset/PR/CI details must be queried live rather than copied into this handoff.
 - GitHub CI is authoritative when local Flutter execution is unavailable.
 - Keep Drift generation/Analyze safeguards and architecture/AI audits intact.
-- Routine reversible AI work should remain approval-free where repository policy allows; destructive/irreversible work still stops for explicit human approval under `AGENTS.md` and should be strengthened by machine risk gates.
+- Routine reversible AI work remains approval-free. High-confidence destructive/irreversible changes are already detected and blocked, but the current owner-comment approval signal is not a distinct authorization boundary; #1107 must establish trusted non-self approval before that acceptance can be considered complete.
 
 ## Handoff rule
 
