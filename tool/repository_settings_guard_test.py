@@ -106,25 +106,80 @@ class RepositorySettingsGuardTest(unittest.TestCase):
             "current audit identity must not be able to bypass main rules", result.errors
         )
 
-    def test_exactly_one_active_repository_branch_ruleset_is_required(self) -> None:
-        identifier, errors = guard.select_default_branch_ruleset(
-            [{"id": 7, "target": "branch", "enforcement": "active"}]
-        )
-        self.assertEqual(identifier, 7)
+    def test_selects_default_branch_ruleset_with_unrelated_active_ruleset(self) -> None:
+        main = compliant_ruleset()
+        release = compliant_ruleset()
+        release["id"] = 8
+        release["conditions"] = {
+            "ref_name": {"exclude": [], "include": ["refs/heads/release"]},
+        }
+
+        identifier, errors = guard.select_default_branch_ruleset([main, release])
+
+        self.assertEqual(identifier, 1)
         self.assertEqual(errors, ())
 
-        identifier, errors = guard.select_default_branch_ruleset([])
-        self.assertIsNone(identifier)
-        self.assertTrue(errors)
+    def test_multiple_default_branch_rulesets_fail_closed(self) -> None:
+        first = compliant_ruleset()
+        second = compliant_ruleset()
+        second["id"] = 2
 
-        identifier, errors = guard.select_default_branch_ruleset(
-            [
-                {"id": 7, "target": "branch", "enforcement": "active"},
-                {"id": 8, "target": "branch", "enforcement": "active"},
-            ]
-        )
+        identifier, errors = guard.select_default_branch_ruleset([first, second])
+
         self.assertIsNone(identifier)
         self.assertTrue(errors)
+        self.assertIn("found 2", errors[0])
+
+    def test_missing_default_branch_ruleset_fails_closed(self) -> None:
+        release = compliant_ruleset()
+        release["conditions"] = {
+            "ref_name": {"exclude": [], "include": ["refs/heads/release"]},
+        }
+
+        identifier, errors = guard.select_default_branch_ruleset([release])
+
+        self.assertIsNone(identifier)
+        self.assertTrue(errors)
+        self.assertIn("found 0", errors[0])
+
+    def test_default_branch_with_extra_include_is_selected_then_rejected(self) -> None:
+        ruleset = compliant_ruleset()
+        ruleset["conditions"] = {
+            "ref_name": {
+                "exclude": [],
+                "include": ["~DEFAULT_BRANCH", "refs/heads/release"],
+            },
+        }
+
+        identifier, errors = guard.select_default_branch_ruleset([ruleset])
+
+        self.assertEqual(identifier, 1)
+        self.assertEqual(errors, ())
+        self.assertIn(
+            "main ruleset must target only the default branch",
+            guard.validates_default_branch_ruleset(ruleset).errors,
+        )
+
+    def test_active_branch_summary_ids_ignore_other_targets_and_inactive_rules(self) -> None:
+        self.assertEqual(
+            guard._active_branch_ruleset_ids(
+                [
+                    {"id": 1, "target": "branch", "enforcement": "active"},
+                    {"id": 2, "target": "tag", "enforcement": "active"},
+                    {"id": 3, "target": "branch", "enforcement": "disabled"},
+                ]
+            ),
+            [1],
+        )
+
+    def test_request_headers_use_read_only_actions_token_when_available(self) -> None:
+        headers = guard._request_headers("secret-token")
+        self.assertEqual(headers["Authorization"], "Bearer secret-token")
+        self.assertNotIn("secret-token", headers["User-Agent"])
+
+    def test_request_headers_allow_unauthenticated_local_fallback(self) -> None:
+        headers = guard._request_headers("")
+        self.assertNotIn("Authorization", headers)
 
 
 if __name__ == "__main__":
