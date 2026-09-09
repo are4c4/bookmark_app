@@ -25,7 +25,10 @@ def _commit_available(ref: str) -> bool:
 
 
 def _local_pull_merge_diff_refs(expected_merge_sha: str) -> tuple[str, str] | None:
-    """Return current-base -> synthetic-merge refs for a pull-request checkout."""
+    """Return current-base -> synthetic-merge refs for a verified PR checkout."""
+    if not expected_merge_sha:
+        return None
+
     head = subprocess.run(
         ["git", "rev-parse", "HEAD"],
         check=False,
@@ -35,7 +38,7 @@ def _local_pull_merge_diff_refs(expected_merge_sha: str) -> tuple[str, str] | No
     if head.returncode != 0:
         return None
     local_head = head.stdout.strip()
-    if expected_merge_sha and local_head != expected_merge_sha:
+    if local_head != expected_merge_sha:
         return None
 
     parents = subprocess.run(
