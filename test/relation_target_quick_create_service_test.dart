@@ -123,7 +123,7 @@ void main() {
     final second = await quickCreate.create(
       workspaceId: workspaceId,
       targetObjectTypeId: definition.objectType.id,
-      input: 'https://example.com/path',
+      input: 'HTTPS://EXAMPLE.COM:443/path',
     );
 
     expect(first, isNotNull);
@@ -133,6 +133,66 @@ void main() {
       (await objectStore.listObjects(definition.objectType.id)),
       hasLength(1),
     );
+  });
+
+  test('Weblink quick-create fails closed on canonical collision before enrichment', () async {
+    final definition = await weblinks.ensureDefinition(workspaceId);
+    final sourceTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Source',
+    );
+    await objectStore.createRelationProperty(
+      objectTypeId: sourceTypeId,
+      name: 'Source URL',
+      targetObjectTypeId: definition.objectType.id,
+      multiple: false,
+    );
+    final sourceRelation = (await objectStore.getObjectType(sourceTypeId))!
+        .properties
+        .single;
+    final sourceId = await objectStore.createObject(
+      objectTypeId: sourceTypeId,
+      title: 'Source',
+    );
+
+    await weblinks.findOrCreate(
+      workspaceId: workspaceId,
+      url: 'https://example.com/article',
+      title: 'First canonical candidate',
+    );
+    final duplicateId = await objectStore.createObject(
+      objectTypeId: definition.objectType.id,
+      title: 'Second canonical candidate',
+    );
+    await objectStore.setPropertyValue(
+      objectId: duplicateId,
+      property: definition.urlProperty,
+      value: 'HTTPS://EXAMPLE.COM:443/article',
+    );
+    var enrichCalls = 0;
+
+    await expectLater(
+      service(
+        enrich:
+            ({required workspaceId, required objectId, required url}) async {
+              enrichCalls++;
+            },
+      ).create(
+        workspaceId: workspaceId,
+        targetObjectTypeId: definition.objectType.id,
+        input: 'https://example.com/article',
+      ),
+      throwsA(isA<StateError>()),
+    );
+
+    expect(enrichCalls, 0);
+    expect(
+      await objectStore.listObjects(definition.objectType.id),
+      hasLength(2),
+    );
+    final sourceAfter = (await objectStore.listObjects(sourceTypeId)).single;
+    expect(sourceAfter.values[sourceRelation.id], isNull);
+    expect(await objectStore.outgoingRelations(sourceId), isEmpty);
   });
 
   test('Image quick-create requires managed import callback and validates result type', () async {
