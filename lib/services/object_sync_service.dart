@@ -6,6 +6,7 @@ import 'package:rxdart/rxdart.dart';
 import '../data/app_database.dart';
 import '../data/bookmark_read_store.dart';
 import '../data/bookmark_weblink_object_bridge.dart';
+import '../data/bookmark_weblink_tag_convergence_service.dart';
 import '../data/core_object_bridge.dart';
 import '../data/daily_note_service.dart';
 import '../data/generic_database_store.dart';
@@ -59,6 +60,11 @@ class ObjectSyncService {
       objectStore: objectStore,
       systemObjectStore: systemObjectStore,
     );
+    bookmarkWeblinkTags = BookmarkWeblinkTagConvergenceService(
+      database: database,
+      objectStore: objectStore,
+      systemObjectStore: systemObjectStore,
+    );
   }
 
   /// Only one profile/workspace is active in the app at a time. Keeping the
@@ -93,6 +99,7 @@ class ObjectSyncService {
   late final PersonProfileImageRelationService personProfileImages;
   late final CoreObjectBridge coreBridge;
   late final BookmarkWeblinkObjectBridge bookmarkWeblinkBridge;
+  late final BookmarkWeblinkTagConvergenceService bookmarkWeblinkTags;
   late final WeblinkPreviewImagePipeline _previewImagePipeline =
       WeblinkPreviewImagePipeline(
         database: database,
@@ -189,6 +196,8 @@ class ObjectSyncService {
       workspaceId: workspaceId,
       systemKeys: objectSyncMirrorSystemKeys,
     );
+    final previousBookmarkTagSource = await bookmarkWeblinkTags
+        .captureSourceSnapshot(workspaceId);
 
     final personObjectIds = await personBridge.syncLegacyPeople(workspaceId);
     final coreImpact = await coreBridge.syncAllWithImpact(workspaceId);
@@ -198,6 +207,10 @@ class ObjectSyncService {
     await personProfileImages.migrateLegacyProfilePhotos(workspaceId);
     final weblinkSync =
         await bookmarkWeblinkBridge.syncWorkspaceWithImpact(workspaceId);
+    final tagConvergence = await bookmarkWeblinkTags.reconcileAfterWeblinkSync(
+      workspaceId,
+      previousSource: previousBookmarkTagSource,
+    );
 
     // Daily Notes are a normal system ObjectType and should be available to the
     // generic sidebar/Database host even before the user opens the first note.
@@ -211,7 +224,8 @@ class ObjectSyncService {
 
     final bridgeCandidates = ObjectSyncImpact(personObjectIds)
         .combine(coreImpact)
-        .combine(weblinkSync.impact);
+        .combine(weblinkSync.impact)
+        .combine(ObjectSyncImpact(tagConvergence.mutatedWeblinkObjectIds));
     final after = await ObjectSyncSemanticSnapshot.capture(
       objectStore: objectStore,
       systemObjects: systemObjectStore,
