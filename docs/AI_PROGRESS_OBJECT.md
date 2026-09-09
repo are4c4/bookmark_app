@@ -15,42 +15,47 @@ Own generic Object/ObjectType identity and lifecycle semantics, reusable Propert
 
 ## Active focused issues
 
-### #1049 — Body UX phase 1
-Primary current Lane A implementation.
+### #1057 — Body UX phase 2: contextual block handles and drag reorder
+Primary next Lane A Body interaction slice after #1049.
 
-Goal: make ordinary paragraph editing feel like a document rather than a form/list of block toolbars.
+Goal: make an idle Body read as content-first while preserving discoverable and accessible structural actions.
 
 Required behavior:
-- Enter splits/creates the next paragraph at the current selection;
-- Shift+Enter inserts an in-block line break;
-- Backspace at the safe leading boundary merges/focuses the previous text block;
-- block actions are contextual rather than permanently occupying toolbar rows;
-- focus/caret order remains predictable after split/merge/delete;
-- existing persisted Body data opens unchanged.
+- repeated block chrome is hidden while idle;
+- desktop reveals a small block handle/add affordance on hover or focus;
+- touch retains an explicit discoverable overflow/long-press-compatible path;
+- drag reorder uses the canonical Body reorder mutation path and preserves block identity/payload/order;
+- menu-based move up/down remains as keyboard/screen-reader fallback;
+- insert/reference actions remain reachable without restoring a permanent full toolbar row;
+- widget regressions cover idle/contextual visibility, focus, reorder and fallback commands.
 
-Current implementation branch: `feature/object-body-document-chrome-1049`.
-Latest durable branch checkpoint at this refresh: `0dd7f82751c7fa2cb4bc5838a3b9204c0998de89` (`test: persist safe paragraph merge behavior`).
-
-Already implemented on that branch:
-- Enter paragraph split and next-block focus;
-- Shift+Enter in-block line break;
-- safe paragraph Backspace merge service/persistence behavior;
-- compact/contextual block action menu while insert remains close at hand;
-- persisted split/merge regressions and contextual-control tests.
-
-Exact remaining #1049 work:
-1. add a real widget-level Backspace interaction regression through `ObjectBodyBlockView`;
-2. add/complete editor integration coverage proving Backspace -> persisted merge -> previous paragraph focus/caret position;
-3. verify unsafe boundaries remain no-op/fail-safe and preserve Body data;
-4. run changed-Dart format, Analyze and full Flutter Test CI;
-5. refresh this handoff from final branch state, open PR and merge after green checks;
-6. split Undo/drag/slash-command work into follow-ups if it cannot be delivered cleanly inside #1049 without broadening the issue.
+### #1058 — Body structural edit Undo
+Add local reversible Body structural edits/delete Undo without redesigning persistence. Keep this separate from #1057 unless live dependency review proves a tiny shared prerequisite is unavoidable.
 
 ### #1041 — Bookmark retirement A
 Define collision-safe legacy Bookmark -> canonical Weblink/generic Object authority. Do not create a permanent canonical Bookmark Object. Preserve conflicting legacy user-authored content when lossless convergence is not provable.
 
 ### #1044 — Person migration A
 Move normal Person identity/write authority to generic Person ObjectType while preserving stable identity, Body/note, Profile Image Relation compatibility and restart/reconciliation safety. Do not retire People UI or redesign groups/roles here.
+
+## Recently integrated
+
+### #1049 — Body UX phase 1
+Merged through PR #1056 as squash commit `2f6eb24a7ff7fda6997703edc37d91e2087fd305`.
+
+Delivered:
+- Enter splits a paragraph at the caret and focuses the next paragraph;
+- Shift+Enter remains an in-block newline;
+- leading Backspace safely merges compatible plain paragraphs and restores the previous paragraph focus/caret;
+- styled/heading or otherwise unsafe merge boundaries fail closed without data loss;
+- lower-frequency move/duplicate/delete actions live in compact contextual overflow chrome while insertion remains nearby;
+- text mutations are serialized so split/merge cannot race a stale paragraph save;
+- domain, persistence, widget and real editor integration regressions cover the primary keyboard flow;
+- the Object Inspector shared-action regression now opens the contextual menu rather than assuming permanent toolbar actions.
+
+Authoritative validation for final PR head `85734340f2bbc49c48d5a4ee6a81590d1bf41149`: Flutter CI #3068 full green, including changed-Dart format, Analyze/guards and all four Flutter Test shards. AI Handoff Audit #91 and AI Migration Lease Audit #73 were also green.
+
+Undo and richer idle/drag interaction were intentionally split to #1058 and #1057 respectively rather than broadening #1056.
 
 ## Integrated foundation that remains authoritative
 - universal persisted Body model/opening surfaces;
@@ -60,7 +65,7 @@ Move normal Person identity/write authority to generic Person ObjectType while p
 - exact Search-agnostic canonical Object sync impact contract;
 - template/object creation integrity and shared Object detail/opening seams.
 
-Older handoff statements that “Lane A is idle after #909/#910” are obsolete because #1041/#1044/#1049 are now focused open A issues.
+Older handoff statements that “Lane A is idle after #909/#910” are obsolete because #1041/#1044/#1057/#1058 are focused open A issues.
 
 ## Cross-lane boundaries
 - **B:** Relation mutation/read/index/backlink/audit/reconcile, Bookmark/Person relationship migration and Tag hierarchy integrity.
@@ -71,15 +76,15 @@ Older handoff statements that “Lane A is idle after #909/#910” are obsolete 
 - **G:** behavior-preserving hotspot reduction and caller-zero legacy retirement after A/B/C/D parity.
 
 ## Hotspot / concurrency rule
-Recheck live PR ownership before editing `object_inspector_page.dart`, `generic_database_page.dart`, Stage1, People or `app_database.dart`. #1049 should prefer reusable Body widgets/services/tests and avoid unrelated Inspector redesign.
+Recheck live PR ownership before editing `object_inspector_page.dart`, `generic_database_page.dart`, Stage1, People or `app_database.dart`. Body UX should prefer reusable Body widgets/services/tests and avoid unrelated Inspector redesign.
 
 ## Validation
-GitHub Actions is authoritative when local Flutter execution is unavailable. #1049 acceptance requires changed-Dart formatting, Analyze and full Flutter Test green, plus interaction-focused regressions for the primary keyboard flow.
+GitHub Actions is authoritative when local Flutter execution is unavailable. Body interaction slices require changed-Dart formatting, Analyze and full Flutter Test green plus real widget regressions for the changed interaction contract.
 
 ## Resume sequence
-1. verify latest `main`, #1049, active branch head and live PR ownership;
-2. refresh/rebase branch if the Object-first docs/main foundation changed in an overlapping way;
-3. finish the two Backspace interaction/persistence-focus regressions;
-4. fix any failures, push coherent commits and open the focused PR;
-5. while CI runs, continue only independent #1049 work; do not jump into #1041/#1044 unless #1049 is complete or blocked;
-6. after #1049 merges, select the next A issue from live dependency order rather than assuming this handoff’s ordering is permanent.
+1. verify latest `main`, open PR ownership and the focused issue before editing;
+2. prefer #1057 as the next Body UX dependency unless a newer live A dependency supersedes it;
+3. implement idle/contextual chrome first without changing persisted Body format;
+4. add reorder only through the existing canonical mutation seam and keep accessible move commands;
+5. run changed-Dart format, Analyze and full Flutter Test CI, then merge only after green checks;
+6. after #1057, refresh live A dependency order between #1058, #1041 and #1044 rather than assuming this file’s ordering is permanent.
