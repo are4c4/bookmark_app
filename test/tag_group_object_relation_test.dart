@@ -346,69 +346,66 @@ void main() {
     expect(parentRelation.objectIds, <int>[secondRootObjectId]);
   });
 
-  test(
-    'legacy TagGroup deletion preserves Object but clears untouched legacy membership',
-    () async {
-      final database = AppDatabase.forTesting(NativeDatabase.memory());
-      addTearDown(database.close);
-      final workspaceId = await WorkspaceStore(database).initialize();
-      final objectStore = ObjectStore(GenericDatabaseStore(database));
-      final systemStore = SystemObjectStore(
-        database: database,
-        objectStore: objectStore,
-      );
-      final bridge = TagObjectBridge(
-        database: database,
-        objectStore: objectStore,
-        systemObjectStore: systemStore,
-      );
+  test('legacy TagGroup deletion preserves Object but clears untouched legacy membership', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final objectStore = ObjectStore(GenericDatabaseStore(database));
+    final systemStore = SystemObjectStore(
+      database: database,
+      objectStore: objectStore,
+    );
+    final bridge = TagObjectBridge(
+      database: database,
+      objectStore: objectStore,
+      systemObjectStore: systemStore,
+    );
 
-      await database.customStatement(
-        "INSERT INTO tag_groups(name, sort_order) VALUES ('分類', 0)",
-      );
-      final groupId =
-          (await database
-                  .customSelect("SELECT id FROM tag_groups WHERE name = '分類'")
-                  .getSingle())
-              .read<int>('id');
-      await database.customStatement(
-        "INSERT INTO tags(name, group_id) VALUES ('数学', ?)",
-        <Object>[groupId],
-      );
-      final tagId =
-          (await database
-                  .customSelect("SELECT id FROM tags WHERE name = '数学'")
-                  .getSingle())
-              .read<int>('id');
+    await database.customStatement(
+      "INSERT INTO tag_groups(name, sort_order) VALUES ('分類', 0)",
+    );
+    final groupId =
+        (await database
+                .customSelect("SELECT id FROM tag_groups WHERE name = '分類'")
+                .getSingle())
+            .read<int>('id');
+    await database.customStatement(
+      "INSERT INTO tags(name, group_id) VALUES ('数学', ?)",
+      <Object>[groupId],
+    );
+    final tagId =
+        (await database
+                .customSelect("SELECT id FROM tags WHERE name = '数学'")
+                .getSingle())
+            .read<int>('id');
 
-      await bridge.syncLegacyTags(workspaceId);
-      final schema = await bridge.ensureTagObjectType(workspaceId);
-      final tagObjectId = (await bridge.objectIdForLegacyTag(
-        workspaceId,
-        tagId,
-      ))!;
-      final groupObjectId = (await bridge.objectIdForLegacyTagGroup(
-        workspaceId,
-        groupId,
-      ))!;
+    await bridge.syncLegacyTags(workspaceId);
+    final schema = await bridge.ensureTagObjectType(workspaceId);
+    final tagObjectId = (await bridge.objectIdForLegacyTag(
+      workspaceId,
+      tagId,
+    ))!;
+    final groupObjectId = (await bridge.objectIdForLegacyTagGroup(
+      workspaceId,
+      groupId,
+    ))!;
 
-      await database.customStatement(
-        'DELETE FROM tag_groups WHERE id = ?',
-        <Object>[groupId],
-      );
-      await bridge.syncLegacyTags(workspaceId);
+    await database.customStatement(
+      'DELETE FROM tag_groups WHERE id = ?',
+      <Object>[groupId],
+    );
+    await bridge.syncLegacyTags(workspaceId);
 
-      final groupObjects = await objectStore.listObjects(
-        schema.tagGroupObjectType.id,
-      );
-      expect(groupObjects.any((object) => object.id == groupObjectId), isTrue);
-      final tagObject = (await objectStore.listObjects(schema.objectType.id))
-          .singleWhere((object) => object.id == tagObjectId);
-      final groupRelation = ObjectRelationValue.fromJson(
-        tagObject.values[schema.groupProperty.id],
-      );
-      expect(groupRelation.objectIds, isEmpty);
-      expect(await objectStore.backlinks(groupObjectId), isEmpty);
-    },
-  );
+    final groupObjects = await objectStore.listObjects(
+      schema.tagGroupObjectType.id,
+    );
+    expect(groupObjects.any((object) => object.id == groupObjectId), isTrue);
+    final tagObject = (await objectStore.listObjects(schema.objectType.id))
+        .singleWhere((object) => object.id == tagObjectId);
+    final groupRelation = ObjectRelationValue.fromJson(
+      tagObject.values[schema.groupProperty.id],
+    );
+    expect(groupRelation.objectIds, isEmpty);
+    expect(await objectStore.backlinks(groupObjectId), isEmpty);
+  });
 }
