@@ -35,7 +35,7 @@ Implemented on the active branch:
 - snapshot loading applies strict Relation value/index/target/cardinality validation to every Tag and rejects an already-persisted cycle rather than hiding corruption;
 - direct Object -> Tag assignments remain independent of derived ancestors.
 
-Validation evidence on head `4ea94151e5d5de1d2f0c76a48c932a4a9cdf16d5`:
+Validation evidence on runtime head `4ea94151e5d5de1d2f0c76a48c932a4a9cdf16d5`:
 - all four Flutter Test shards and `test-health` are green;
 - required Format/Analyze are currently prevented from starting by repository CI Issue #1106 (stale original PR base SHA absent from the shallow checkout), not by a B test failure;
 - do not recreate #1095 merely to bypass #1106 unless repository coordination explicitly changes; rerun authoritative Format/Analyze after the G-owned guard fix lands.
@@ -45,8 +45,12 @@ No descendant-filter UI/query implementation here; C/#1053 owns query semantics 
 ### #1042 — Bookmark retirement relations
 Audit legacy Bookmark -> Weblink, Images/Cover Image, Tags and Person/role relationships and define the canonical target for each retained relationship. Multiple legacy Bookmarks collapsing onto one normalized Weblink must never silently merge conflicting Relation state.
 
+Current dependency: relation convergence needs the D/#1054 canonical Weblink identity boundary and A/#1041 Bookmark -> canonical Weblink reconciliation semantics before B can safely choose/rewire canonical Relation sources in collision cases.
+
 ### #1045 — Person groups/roles
 Map Person groups and Bookmark-era Person roles onto generic Relation/Database/Tag contracts. Preserve visible role/cardinality/order semantics and Profile Image Relation. No dedicated People UI replacement here.
+
+Current dependency: Bookmark-era role convergence depends on #1042. The existing `PersonObjectBridge` still declares legacy People rows authoritative while A/#1044 owns the Person authority transition; do not create a second Person grouping authority or prematurely choose a lossy Tag/Database projection while that identity contract remains unsettled.
 
 ## Integrated foundation that remains authoritative
 The existing canonical Relation subsystem already provides:
@@ -85,3 +89,6 @@ Analyze + relevant Relation regressions + full Flutter Test are part of integrit
 6. remain idle rather than inventing Relation abstractions if all focused B work becomes dependency-blocked.
 
 This sequence is not terminal. After any slice/PR/merge, apply the shared **Lane continuation and resume/stop contract** in `AGENTS.md` before ending the run. Lane B must re-check unfinished acceptance, same-umbrella follow-ups, live B focused Issues and newly-unblocked integrity work before declaring idle. If no safe B work remains, record `Stop reason: idle-no-work — <live evidence>` or the more precise shared stop category in the durable handoff; dependency-blocked work is `Stop reason: dependency — <blocking Issue/PR/evidence>`, not generic idle.
+
+## Current stop state
+Stop reason: dependency — #1052 runtime/full Flutter Test is green but required Format/Analyze/merge-gate cannot execute because G-owned #1106 blocks stale-base PR #1095 before Flutter setup. Final live audit found #1042 dependent on open D/#1054 PR #1108 plus A/#1041 reconciliation semantics, and #1045 role work dependent on #1042 while its grouping authority should not precede A/#1044 Person authority convergence. Resume immediately by rechecking #1106; once fixed, rerun #1095 required validation and merge if green, then refresh #1042/#1045 and D's Relation-target quick-create handoff.
