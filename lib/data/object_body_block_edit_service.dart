@@ -85,6 +85,44 @@ class ObjectBodyBlockEditService {
         );
       });
 
+  /// Splits one paragraph across the current selection against the latest
+  /// persisted Body.
+  ///
+  /// The source update and new paragraph insertion are persisted as one Body
+  /// document write so Enter cannot leave a half-split document.
+  Future<ObjectBodyDocument> splitParagraph({
+    required int objectId,
+    required String blockId,
+    required String newBlockId,
+    required int selectionStart,
+    required int selectionEnd,
+  }) => _mutate(
+        objectId,
+        (document) => editor.splitParagraph(
+          document: document,
+          blockId: blockId,
+          newBlockId: newBlockId,
+          selectionStart: selectionStart,
+          selectionEnd: selectionEnd,
+        ),
+      );
+
+  /// Merges one plain paragraph into its plain predecessor when that operation
+  /// is lossless. Unsafe boundaries are returned unchanged and not persisted.
+  Future<ObjectBodyDocument> mergeParagraphIntoPrevious({
+    required int objectId,
+    required String blockId,
+  }) async {
+    final current = await bodyStore.read(objectId);
+    final next = editor.mergeParagraphIntoPrevious(
+      document: current,
+      blockId: blockId,
+    );
+    if (identical(next, current)) return current;
+    await bodyStore.write(objectId: objectId, document: next);
+    return next;
+  }
+
   /// Updates checklist state without replacing its text or other attributes.
   Future<ObjectBodyDocument> setChecklistChecked({
     required int objectId,

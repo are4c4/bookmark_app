@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../domain/object_body_block_contracts.dart';
 import '../../../../domain/object_body_block_presentation.dart';
+
+typedef ObjectBodyParagraphSplitCallback = Future<void> Function(
+  TextSelection selection,
+);
+
+typedef ObjectBodyParagraphMergeCallback = Future<void> Function();
 
 /// Shared Flutter renderer/editor for one Object Body block.
 ///
@@ -14,29 +21,45 @@ class ObjectBodyBlockView extends StatelessWidget {
     super.key,
     required this.presentation,
     this.onTextChanged,
+    this.onParagraphSplit,
+    this.onParagraphMergeWithPrevious,
     this.onChecklistChanged,
     this.onObjectReferenceTap,
     this.onDatabaseViewTap,
     this.onAssetTap,
+    this.autofocus = false,
+    this.autofocusOffset,
   });
 
   final ObjectBodyBlockPresentation presentation;
   final ValueChanged<String>? onTextChanged;
+  final ObjectBodyParagraphSplitCallback? onParagraphSplit;
+  final ObjectBodyParagraphMergeCallback? onParagraphMergeWithPrevious;
   final ValueChanged<bool>? onChecklistChanged;
   final VoidCallback? onObjectReferenceTap;
   final VoidCallback? onDatabaseViewTap;
   final VoidCallback? onAssetTap;
+  final bool autofocus;
+  final int? autofocusOffset;
 
   @override
   Widget build(BuildContext context) {
     final block = presentation.block;
     switch (presentation.kind) {
       case ObjectBodyBlockPresentationKind.text:
+        final isParagraph = block.type == ObjectBodyBlockType.paragraph;
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: _textControl(
             initialValue: block.text ?? '',
             onChanged: onTextChanged,
+            onSplit: isParagraph ? onParagraphSplit : null,
+            onMergeWithPrevious: isParagraph
+                ? onParagraphMergeWithPrevious
+                : null,
+            maxLines: isParagraph ? null : 1,
+            autofocus: autofocus,
+            autofocusOffset: autofocusOffset,
           ),
         );
       case ObjectBodyBlockPresentationKind.heading:
@@ -46,6 +69,8 @@ class ObjectBodyBlockView extends StatelessWidget {
             initialValue: block.text ?? '',
             onChanged: onTextChanged,
             style: _headingStyle(context, presentation.headingLevel),
+            autofocus: autofocus,
+            autofocusOffset: autofocusOffset,
           ),
         );
       case ObjectBodyBlockPresentationKind.checklist:
@@ -64,6 +89,8 @@ class ObjectBodyBlockView extends StatelessWidget {
                 child: _textControl(
                   initialValue: block.text ?? '',
                   onChanged: onTextChanged,
+                  autofocus: autofocus,
+                  autofocusOffset: autofocusOffset,
                 ),
               ),
             ),
@@ -93,6 +120,8 @@ class ObjectBodyBlockView extends StatelessWidget {
                 initialValue: block.text ?? '',
                 onChanged: onTextChanged,
                 maxLines: null,
+                autofocus: autofocus,
+                autofocusOffset: autofocusOffset,
               ),
             ],
           ),
@@ -138,23 +167,26 @@ class ObjectBodyBlockView extends StatelessWidget {
   Widget _textControl({
     required String initialValue,
     required ValueChanged<String>? onChanged,
+    ObjectBodyParagraphSplitCallback? onSplit,
+    ObjectBodyParagraphMergeCallback? onMergeWithPrevious,
     TextStyle? style,
     int? maxLines = 1,
+    bool autofocus = false,
+    int? autofocusOffset,
   }) {
     if (onChanged == null) {
       return Text(initialValue, style: style);
     }
-    return TextFormField(
+    return _ObjectBodyTextControl(
       key: ValueKey('body-text-${presentation.block.id}'),
       initialValue: initialValue,
-      maxLines: maxLines,
-      style: style,
-      decoration: const InputDecoration(
-        isDense: true,
-        border: InputBorder.none,
-        contentPadding: EdgeInsets.zero,
-      ),
       onChanged: onChanged,
+      onSplit: onSplit,
+      onMergeWithPrevious: onMergeWithPrevious,
+      style: style,
+      maxLines: maxLines,
+      autofocus: autofocus,
+      autofocusOffset: autofocusOffset,
     );
   }
 
@@ -169,12 +201,181 @@ class ObjectBodyBlockView extends StatelessWidget {
   }
 }
 
-class _ReferenceTile extends StatelessWidget {
-  const _ReferenceTile({
-    required this.icon,
-    required this.label,
-    this.onTap,
+class _ObjectBodyTextControl extends StatefulWidget {
+  const _ObjectBodyTextControl({
+    super.key,
+    required this.initialValue,
+    required this.onChanged,
+    required this.maxLines,
+    this.onSplit,
+    this.onMergeWithPrevious,
+    this.style,
+    this.autofocus = false,
+    this.autofocusOffset,
   });
+
+  final String initialValue;
+  final ValueChanged<String> onChanged;
+  final ObjectBodyParagraphSplitCallback? onSplit;
+  final ObjectBodyParagraphMergeCallback? onMergeWithPrevious;
+  final TextStyle? style;
+  final int? maxLines;
+  final bool autofocus;
+  final int? autofocusOffset;
+
+  @override
+  State<_ObjectBodyTextControl> createState() => _ObjectBodyTextControlState();
+}
+
+class _ObjectBodyTextControlState extends State<_ObjectBodyTextControl> {
+  late final TextEditingController _controller;
+  late final FocusNode _focusNode;
+  bool _structuralEditPending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialValue);
+    _focusNode = FocusNode();
+    _requestAutofocusIfNeeded();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ObjectBodyTextControl oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialValue != oldWidget.initialValue &&
+        widget.initialValue != _controller.text) {
+      final oldOffset = _controller.selection.extentOffset;
+      final nextOffset = oldOffset < 0
+          ? widget.initialValue.length
+          : oldOffset.clamp(0, widget.initialValue.length).toInt();
+      _controller.value = TextEditingValue(
+        text: widget.initialValue,
+        selection: TextSelection.collapsed(offset: nextOffset),
+      );
+    }
+    if (widget.autofocus &&
+        (!oldWidget.autofocus ||
+            oldWidget.autofocusOffset != widget.autofocusOffset)) {
+      _requestAutofocusIfNeeded();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _requestAutofocusIfNeeded() {
+    if (!widget.autofocus) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final requestedOffset = widget.autofocusOffset ?? _controller.text.length;
+      final offset = requestedOffset.clamp(0, _controller.text.length).toInt();
+      _controller.selection = TextSelection.collapsed(offset: offset);
+      _focusNode.requestFocus();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final field = TextField(
+      controller: _controller,
+      focusNode: _focusNode,
+      maxLines: widget.maxLines,
+      style: widget.style,
+      decoration: const InputDecoration(
+        isDense: true,
+        border: InputBorder.none,
+        contentPadding: EdgeInsets.zero,
+      ),
+      onChanged: widget.onChanged,
+    );
+
+    if (widget.onSplit == null && widget.onMergeWithPrevious == null) {
+      return field;
+    }
+    return Focus(onKeyEvent: _handleKeyEvent, child: field);
+  }
+
+  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent || _hasActiveComposition) {
+      return KeyEventResult.ignored;
+    }
+
+    if (event.logicalKey == LogicalKeyboardKey.enter &&
+        widget.onSplit != null) {
+      if (HardwareKeyboard.instance.isShiftPressed) {
+        _insertLineBreak();
+      } else {
+        _requestSplit();
+      }
+      return KeyEventResult.handled;
+    }
+
+    if (event.logicalKey == LogicalKeyboardKey.backspace &&
+        widget.onMergeWithPrevious != null) {
+      final selection = _normalizedSelection;
+      if (selection.isCollapsed && selection.start == 0) {
+        _requestMerge();
+        return KeyEventResult.handled;
+      }
+    }
+
+    return KeyEventResult.ignored;
+  }
+
+  bool get _hasActiveComposition {
+    final composing = _controller.value.composing;
+    return composing.isValid && !composing.isCollapsed;
+  }
+
+  TextSelection get _normalizedSelection {
+    final value = _controller.value;
+    final selection = value.selection;
+    if (!selection.isValid) {
+      return TextSelection.collapsed(offset: value.text.length);
+    }
+    final start = selection.start.clamp(0, value.text.length).toInt();
+    final end = selection.end.clamp(start, value.text.length).toInt();
+    return TextSelection(baseOffset: start, extentOffset: end);
+  }
+
+  void _insertLineBreak() {
+    final selection = _normalizedSelection;
+    final value = _controller.value;
+    final text = value.text.replaceRange(selection.start, selection.end, '\n');
+    final offset = selection.start + 1;
+    _controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: offset),
+    );
+    widget.onChanged(text);
+  }
+
+  void _requestSplit() {
+    final split = widget.onSplit;
+    if (split == null || _structuralEditPending) return;
+    _structuralEditPending = true;
+    split(_normalizedSelection).whenComplete(() {
+      if (mounted) _structuralEditPending = false;
+    });
+  }
+
+  void _requestMerge() {
+    final merge = widget.onMergeWithPrevious;
+    if (merge == null || _structuralEditPending) return;
+    _structuralEditPending = true;
+    merge().whenComplete(() {
+      if (mounted) _structuralEditPending = false;
+    });
+  }
+}
+
+class _ReferenceTile extends StatelessWidget {
+  const _ReferenceTile({required this.icon, required this.label, this.onTap});
 
   final IconData icon;
   final String label;
