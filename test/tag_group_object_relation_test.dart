@@ -9,8 +9,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('legacy TagGroup membership projects to canonical TagGroup Relation',
-      () async {
+  test('legacy TagGroup projects as a canonical Relation', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
     final workspaceId = await WorkspaceStore(database).initialize();
@@ -28,18 +27,18 @@ void main() {
     await database.customStatement(
       "INSERT INTO tag_groups(name, sort_order) VALUES ('分類', 0)",
     );
-    final groupId = (await database.customSelect(
+    final groupRow = await database.customSelect(
       "SELECT id FROM tag_groups WHERE name = '分類'",
-    ).getSingle())
-        .read<int>('id');
+    ).getSingle();
+    final groupId = groupRow.read<int>('id');
     await database.customStatement(
       "INSERT INTO tags(name, group_id) VALUES ('数学', ?)",
       <Object>[groupId],
     );
-    final tagId = (await database.customSelect(
+    final tagRow = await database.customSelect(
       "SELECT id FROM tags WHERE name = '数学'",
-    ).getSingle())
-        .read<int>('id');
+    ).getSingle();
+    final tagId = tagRow.read<int>('id');
 
     await bridge.syncLegacyTags(workspaceId);
 
@@ -54,26 +53,28 @@ void main() {
     final resolvedTagObjectId = tagObjectId!;
     final resolvedGroupObjectId = groupObjectId!;
 
-    final tagObject = (await objectStore.listObjects(schema.objectType.id))
-        .singleWhere((object) => object.id == resolvedTagObjectId);
-    expect(
-      ObjectRelationValue.fromJson(
-        tagObject.values[schema.groupProperty.id],
-      ).objectIds,
-      <int>[resolvedGroupObjectId],
+    final tagObjects = await objectStore.listObjects(schema.objectType.id);
+    final tagObject = tagObjects.singleWhere(
+      (object) => object.id == resolvedTagObjectId,
     );
+    final groupRelation = ObjectRelationValue.fromJson(
+      tagObject.values[schema.groupProperty.id],
+    );
+    expect(groupRelation.objectIds, <int>[resolvedGroupObjectId]);
 
-    final groupObject = (await objectStore.listObjects(
+    final groupObjects = await objectStore.listObjects(
       schema.tagGroupObjectType.id,
-    ))
-        .singleWhere((object) => object.id == resolvedGroupObjectId);
+    );
+    final groupObject = groupObjects.singleWhere(
+      (object) => object.id == resolvedGroupObjectId,
+    );
     expect(groupObject.title, '分類');
     expect(groupObject.values[schema.legacyTagGroupIdProperty.id], groupId);
 
     final backlinks = await objectStore.backlinks(resolvedGroupObjectId);
-    final groupBacklinks = backlinks
-        .where((edge) => edge.propertyId == schema.groupProperty.id)
-        .toList(growable: false);
+    final groupBacklinks = backlinks.where(
+      (edge) => edge.propertyId == schema.groupProperty.id,
+    );
     expect(groupBacklinks, hasLength(1));
     expect(groupBacklinks.single.sourceObjectId, resolvedTagObjectId);
   });

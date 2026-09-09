@@ -9,124 +9,50 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('creates root child grandchild hierarchy through canonical Relations',
-      () async {
+  test('creates a canonical root child grandchild hierarchy', () async {
     final fixture = await _fixture();
     addTearDown(fixture.database.close);
-
     final rootId = await fixture.createTag('くだもの');
     final childId = await fixture.createTag('りんご');
     final grandchildId = await fixture.createTag('青りんご');
 
-    await fixture.bridge.hierarchyIntegrity.setParent(
-      workspaceId: fixture.workspaceId,
-      tagObjectId: childId,
-      parentProperty: fixture.schema.parentProperty,
-      parentTagObjectId: rootId,
-    );
-    await fixture.bridge.hierarchyIntegrity.setParent(
-      workspaceId: fixture.workspaceId,
-      tagObjectId: grandchildId,
-      parentProperty: fixture.schema.parentProperty,
-      parentTagObjectId: childId,
-    );
+    await fixture.setParent(childId, rootId);
+    await fixture.setParent(grandchildId, childId);
 
-    final objects = await fixture.objectStore.listObjects(
-      fixture.schema.objectType.id,
+    expect(await fixture.parentId(rootId), isNull);
+    expect(await fixture.parentId(childId), rootId);
+    expect(await fixture.parentId(grandchildId), childId);
+    final backlinks = await fixture.objectStore.backlinks(rootId);
+    final parentBacklinks = backlinks.where(
+      (edge) => edge.propertyId == fixture.schema.parentProperty.id,
     );
-    final root = objects.singleWhere((object) => object.id == rootId);
-    final child = objects.singleWhere((object) => object.id == childId);
-    final grandchild = objects.singleWhere((object) => object.id == grandchildId);
-
-    expect(_parentId(root, fixture.schema.parentProperty), isNull);
-    expect(_parentId(child, fixture.schema.parentProperty), rootId);
-    expect(_parentId(grandchild, fixture.schema.parentProperty), childId);
-
-    final rootBacklinks = await fixture.objectStore.backlinks(rootId);
-    expect(
-      rootBacklinks.where(
-        (edge) => edge.propertyId == fixture.schema.parentProperty.id,
-      ),
-      hasLength(1),
-    );
-    expect(
-      rootBacklinks.singleWhere(
-        (edge) => edge.propertyId == fixture.schema.parentProperty.id,
-      ).sourceObjectId,
-      childId,
-    );
+    expect(parentBacklinks, hasLength(1));
+    expect(parentBacklinks.single.sourceObjectId, childId);
   });
 
-  test('rejects self and indirect cycles before mutating canonical state',
-      () async {
+  test('rejects self and indirect Tag parent cycles before mutation', () async {
     final fixture = await _fixture();
     addTearDown(fixture.database.close);
+    final rootId = await fixture.createTag('root');
+    final childId = await fixture.createTag('child');
+    final grandchildId = await fixture.createTag('grandchild');
+    await fixture.setParent(childId, rootId);
+    await fixture.setParent(grandchildId, childId);
 
-    final rootId = await fixture.createTag('くだもの');
-    final childId = await fixture.createTag('りんご');
-    final grandchildId = await fixture.createTag('青りんご');
-    await fixture.bridge.hierarchyIntegrity.setParent(
-      workspaceId: fixture.workspaceId,
-      tagObjectId: childId,
-      parentProperty: fixture.schema.parentProperty,
-      parentTagObjectId: rootId,
-    );
-    await fixture.bridge.hierarchyIntegrity.setParent(
-      workspaceId: fixture.workspaceId,
-      tagObjectId: grandchildId,
-      parentProperty: fixture.schema.parentProperty,
-      parentTagObjectId: childId,
-    );
-
+    await expectLater(fixture.setParent(rootId, rootId), throwsArgumentError);
     await expectLater(
-      fixture.bridge.hierarchyIntegrity.setParent(
-        workspaceId: fixture.workspaceId,
-        tagObjectId: rootId,
-        parentProperty: fixture.schema.parentProperty,
-        parentTagObjectId: rootId,
-      ),
-      throwsArgumentError,
-    );
-    await expectLater(
-      fixture.bridge.hierarchyIntegrity.setParent(
-        workspaceId: fixture.workspaceId,
-        tagObjectId: rootId,
-        parentProperty: fixture.schema.parentProperty,
-        parentTagObjectId: grandchildId,
-      ),
+      fixture.setParent(rootId, grandchildId),
       throwsStateError,
     );
 
-    final objects = await fixture.objectStore.listObjects(
-      fixture.schema.objectType.id,
-    );
-    expect(
-      _parentId(
-        objects.singleWhere((object) => object.id == rootId),
-        fixture.schema.parentProperty,
-      ),
-      isNull,
-    );
-    expect(
-      _parentId(
-        objects.singleWhere((object) => object.id == childId),
-        fixture.schema.parentProperty,
-      ),
-      rootId,
-    );
-    expect(
-      _parentId(
-        objects.singleWhere((object) => object.id == grandchildId),
-        fixture.schema.parentProperty,
-      ),
-      childId,
-    );
+    expect(await fixture.parentId(rootId), isNull);
+    expect(await fixture.parentId(childId), rootId);
+    expect(await fixture.parentId(grandchildId), childId);
   });
 
-  test('rejects wrong-type parent targets without partial mutation', () async {
+  test('rejects a wrong-type Tag parent target without mutation', () async {
     final fixture = await _fixture();
     addTearDown(fixture.database.close);
-
     final tagId = await fixture.createTag('数学');
     final otherTypeId = await fixture.objectStore.createObjectType(
       workspaceId: fixture.workspaceId,
@@ -134,99 +60,88 @@ void main() {
     );
     final wrongTargetId = await fixture.objectStore.createObject(
       objectTypeId: otherTypeId,
-      title: 'Not a Tag',
+      title: 'Wrong',
     );
 
     await expectLater(
-      fixture.bridge.hierarchyIntegrity.setParent(
-        workspaceId: fixture.workspaceId,
-        tagObjectId: tagId,
-        parentProperty: fixture.schema.parentProperty,
-        parentTagObjectId: wrongTargetId,
-      ),
+      fixture.setParent(tagId, wrongTargetId),
       throwsArgumentError,
     );
-
-    final tag = (await fixture.objectStore.listObjects(
-      fixture.schema.objectType.id,
-    ))
-        .singleWhere((object) => object.id == tagId);
-    expect(_parentId(tag, fixture.schema.parentProperty), isNull);
-    expect(
-      (await fixture.objectStore.outgoingRelations(tagId)).where(
-        (edge) => edge.propertyId == fixture.schema.parentProperty.id,
-      ),
-      isEmpty,
-    );
+    expect(await fixture.parentId(tagId), isNull);
   });
 
-  test('fails closed on Parent stored/index drift instead of repairing it',
-      () async {
+  test('rejects malformed Parent state instead of repairing it', () async {
     final fixture = await _fixture();
     addTearDown(fixture.database.close);
-
-    final rootId = await fixture.createTag('くだもの');
-    final childId = await fixture.createTag('りんご');
-    await fixture.bridge.hierarchyIntegrity.setParent(
-      workspaceId: fixture.workspaceId,
-      tagObjectId: childId,
-      parentProperty: fixture.schema.parentProperty,
-      parentTagObjectId: rootId,
+    final tagId = await fixture.createTag('数学');
+    await fixture.genericStore.setValue(
+      recordId: tagId,
+      propertyId: fixture.schema.parentProperty.id,
+      value: 'malformed',
     );
+
+    await expectLater(fixture.setParent(tagId, null), throwsStateError);
+    final tag = await fixture.tag(tagId);
+    expect(tag.values[fixture.schema.parentProperty.id], 'malformed');
+  });
+
+  test('rejects Parent index drift instead of repairing it', () async {
+    final fixture = await _fixture();
+    addTearDown(fixture.database.close);
+    final rootId = await fixture.createTag('root');
+    final childId = await fixture.createTag('child');
+    await fixture.setParent(childId, rootId);
     await fixture.database.customStatement(
       'UPDATE object_relation_edges SET position = 7 '
       'WHERE source_object_id = ? AND property_id = ?',
       <Object>[childId, fixture.schema.parentProperty.id],
     );
 
-    await expectLater(
-      fixture.bridge.hierarchyIntegrity.setParent(
-        workspaceId: fixture.workspaceId,
-        tagObjectId: childId,
-        parentProperty: fixture.schema.parentProperty,
-      ),
-      throwsStateError,
+    await expectLater(fixture.setParent(childId, null), throwsStateError);
+    expect(await fixture.parentId(childId), rootId);
+    final edges = await fixture.objectStore.outgoingRelations(childId);
+    final parentEdge = edges.singleWhere(
+      (edge) => edge.propertyId == fixture.schema.parentProperty.id,
     );
-
-    final child = (await fixture.objectStore.listObjects(
-      fixture.schema.objectType.id,
-    ))
-        .singleWhere((object) => object.id == childId);
-    expect(_parentId(child, fixture.schema.parentProperty), rootId);
-    final edges = (await fixture.objectStore.outgoingRelations(childId))
-        .where((edge) => edge.propertyId == fixture.schema.parentProperty.id)
-        .toList(growable: false);
-    expect(edges, hasLength(1));
-    expect(edges.single.targetObjectId, rootId);
-    expect(edges.single.position, 7);
+    expect(parentEdge.position, 7);
   });
 
-  test('Tag Group membership accepts only canonical TagGroup Objects', () async {
+  test('rejects corrupted multiple Parent targets', () async {
     final fixture = await _fixture();
     addTearDown(fixture.database.close);
+    final childId = await fixture.createTag('child');
+    final firstId = await fixture.createTag('first');
+    final secondId = await fixture.createTag('second');
+    final propertyId = fixture.schema.parentProperty.id;
+    await fixture.genericStore.setValue(
+      recordId: childId,
+      propertyId: propertyId,
+      value: <int>[firstId, secondId],
+    );
+    await fixture.objectStore.ensureRelationIndexSchema();
+    await fixture.database.customStatement(
+      'INSERT INTO object_relation_edges('
+      'source_object_id, property_id, target_object_id, position) '
+      'VALUES (?, ?, ?, 0), (?, ?, ?, 1)',
+      <Object>[childId, propertyId, firstId, childId, propertyId, secondId],
+    );
 
+    await expectLater(fixture.setParent(childId, firstId), throwsStateError);
+    final child = await fixture.tag(childId);
+    final stored = ObjectRelationValue.fromJson(child.values[propertyId]);
+    expect(stored.objectIds, <int>[firstId, secondId]);
+  });
+
+  test('accepts only canonical TagGroup targets', () async {
+    final fixture = await _fixture();
+    addTearDown(fixture.database.close);
     final tagId = await fixture.createTag('数学');
     final groupId = await fixture.objectStore.createObject(
       objectTypeId: fixture.schema.tagGroupObjectType.id,
       title: '分野',
     );
-    await fixture.bridge.hierarchyIntegrity.setGroup(
-      workspaceId: fixture.workspaceId,
-      tagObjectId: tagId,
-      groupProperty: fixture.schema.groupProperty,
-      tagGroupObjectId: groupId,
-    );
-
-    final tag = (await fixture.objectStore.listObjects(
-      fixture.schema.objectType.id,
-    ))
-        .singleWhere((object) => object.id == tagId);
-    expect(
-      ObjectRelationValue.fromJson(
-        tag.values[fixture.schema.groupProperty.id],
-      ).objectIds,
-      <int>[groupId],
-    );
+    await fixture.setGroup(tagId, groupId);
+    expect(await fixture.groupId(tagId), groupId);
 
     final otherTypeId = await fixture.objectStore.createObjectType(
       workspaceId: fixture.workspaceId,
@@ -234,85 +149,51 @@ void main() {
     );
     final wrongGroupId = await fixture.objectStore.createObject(
       objectTypeId: otherTypeId,
-      title: 'Not a TagGroup',
+      title: 'Wrong',
     );
     await expectLater(
-      fixture.bridge.hierarchyIntegrity.setGroup(
-        workspaceId: fixture.workspaceId,
-        tagObjectId: tagId,
-        groupProperty: fixture.schema.groupProperty,
-        tagGroupObjectId: wrongGroupId,
-      ),
+      fixture.setGroup(tagId, wrongGroupId),
       throwsArgumentError,
     );
-
-    final unchanged = (await fixture.objectStore.listObjects(
-      fixture.schema.objectType.id,
-    ))
-        .singleWhere((object) => object.id == tagId);
-    expect(
-      ObjectRelationValue.fromJson(
-        unchanged.values[fixture.schema.groupProperty.id],
-      ).objectIds,
-      <int>[groupId],
-    );
+    expect(await fixture.groupId(tagId), groupId);
   });
 
-  test('direct Object Tag assignment does not persist derived ancestors',
-      () async {
+  test('keeps direct Object Tag assignments independent of ancestors', () async {
     final fixture = await _fixture();
     addTearDown(fixture.database.close);
-
-    final rootId = await fixture.createTag('くだもの');
-    final childId = await fixture.createTag('りんご');
-    await fixture.bridge.hierarchyIntegrity.setParent(
-      workspaceId: fixture.workspaceId,
-      tagObjectId: childId,
-      parentProperty: fixture.schema.parentProperty,
-      parentTagObjectId: rootId,
-    );
-
+    final rootId = await fixture.createTag('root');
+    final childId = await fixture.createTag('child');
+    await fixture.setParent(childId, rootId);
     final noteTypeId = await fixture.objectStore.createObjectType(
       workspaceId: fixture.workspaceId,
       name: 'Note',
     );
-    final tagsPropertyId = await fixture.objectStore.createRelationProperty(
+    final propertyId = await fixture.objectStore.createRelationProperty(
       objectTypeId: noteTypeId,
       name: 'Tags',
       targetObjectTypeId: fixture.schema.objectType.id,
       multiple: true,
     );
-    final tagsProperty = (await fixture.objectStore.getObjectType(noteTypeId))!
-        .properties
-        .singleWhere((property) => property.id == tagsPropertyId);
+    final noteType = (await fixture.objectStore.getObjectType(noteTypeId))!;
+    final property = noteType.properties.singleWhere(
+      (candidate) => candidate.id == propertyId,
+    );
     final noteId = await fixture.objectStore.createObject(
       objectTypeId: noteTypeId,
       title: 'Apple note',
     );
     await fixture.objectStore.setRelation(
       objectId: noteId,
-      property: tagsProperty,
+      property: property,
       targetObjectIds: <int>[childId],
     );
 
-    final note = (await fixture.objectStore.listObjects(noteTypeId))
-        .singleWhere((object) => object.id == noteId);
-    expect(
-      ObjectRelationValue.fromJson(note.values[tagsProperty.id]).objectIds,
-      <int>[childId],
-    );
-    expect(
-      ObjectRelationValue.fromJson(note.values[tagsProperty.id]).objectIds,
-      isNot(contains(rootId)),
-    );
+    final notes = await fixture.objectStore.listObjects(noteTypeId);
+    final note = notes.singleWhere((object) => object.id == noteId);
+    final assigned = ObjectRelationValue.fromJson(note.values[propertyId]);
+    expect(assigned.objectIds, <int>[childId]);
+    expect(assigned.objectIds, isNot(contains(rootId)));
   });
-}
-
-int? _parentId(AppObject object, ObjectPropertyDefinition parentProperty) {
-  final ids = ObjectRelationValue.fromJson(
-    object.values[parentProperty.id],
-  ).objectIds;
-  return ids.isEmpty ? null : ids.single;
 }
 
 Future<_Fixture> _fixture() async {
@@ -333,6 +214,7 @@ Future<_Fixture> _fixture() async {
   return _Fixture(
     database: database,
     workspaceId: workspaceId,
+    genericStore: genericStore,
     objectStore: objectStore,
     bridge: bridge,
     schema: schema,
@@ -343,6 +225,7 @@ class _Fixture {
   const _Fixture({
     required this.database,
     required this.workspaceId,
+    required this.genericStore,
     required this.objectStore,
     required this.bridge,
     required this.schema,
@@ -350,12 +233,54 @@ class _Fixture {
 
   final AppDatabase database;
   final int workspaceId;
+  final GenericDatabaseStore genericStore;
   final ObjectStore objectStore;
   final TagObjectBridge bridge;
   final TagObjectSchema schema;
 
-  Future<int> createTag(String title) => objectStore.createObject(
-        objectTypeId: schema.objectType.id,
-        title: title,
-      );
+  Future<int> createTag(String title) {
+    return objectStore.createObject(
+      objectTypeId: schema.objectType.id,
+      title: title,
+    );
+  }
+
+  Future<void> setParent(int tagId, int? parentId) {
+    return bridge.hierarchyIntegrity.setParent(
+      workspaceId: workspaceId,
+      tagObjectId: tagId,
+      parentProperty: schema.parentProperty,
+      parentTagObjectId: parentId,
+    );
+  }
+
+  Future<void> setGroup(int tagId, int? groupId) {
+    return bridge.hierarchyIntegrity.setGroup(
+      workspaceId: workspaceId,
+      tagObjectId: tagId,
+      groupProperty: schema.groupProperty,
+      tagGroupObjectId: groupId,
+    );
+  }
+
+  Future<AppObject> tag(int tagId) async {
+    final tags = await objectStore.listObjects(schema.objectType.id);
+    return tags.singleWhere((object) => object.id == tagId);
+  }
+
+  Future<int?> parentId(int tagId) async {
+    final object = await tag(tagId);
+    final relation = ObjectRelationValue.fromJson(
+      object.values[schema.parentProperty.id],
+    );
+    return relation.objectIds.isEmpty ? null : relation.objectIds.single;
+  }
+
+  Future<int?> groupId(int tagId) async {
+    final object = await tag(tagId);
+    final relation = ObjectRelationValue.fromJson(
+      object.values[schema.groupProperty.id],
+    );
+    return relation.objectIds.isEmpty ? null : relation.objectIds.single;
+  }
 }

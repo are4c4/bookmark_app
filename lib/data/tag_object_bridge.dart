@@ -254,11 +254,7 @@ class TagObjectBridge {
     }
 
     await _removeOrphanTagObjects(workspaceId, schema, validTagIds);
-    await _removeOrphanTagGroupObjects(
-      workspaceId,
-      schema,
-      validGroupIds,
-    );
+    await _removeOrphanTagGroupObjects(workspaceId, schema, validGroupIds);
   }
 
   Future<int?> objectIdForLegacyTag(int workspaceId, int tagId) async {
@@ -321,11 +317,13 @@ class TagObjectBridge {
     int groupId,
   ) async {
     final objects = await objectStore.listObjects(schema.tagGroupObjectType.id);
-    final matches = objects.where((object) {
-      final rawId = object.values[schema.legacyTagGroupIdProperty.id];
-      final legacyId = rawId is int ? rawId : int.tryParse('$rawId');
-      return legacyId == groupId;
-    }).toList(growable: false);
+    final matches = objects
+        .where((object) {
+          final rawId = object.values[schema.legacyTagGroupIdProperty.id];
+          final legacyId = rawId is int ? rawId : int.tryParse('$rawId');
+          return legacyId == groupId;
+        })
+        .toList(growable: false);
     if (matches.length > 1) {
       throw StateError(
         'Multiple canonical TagGroup Objects map to legacy TagGroup $groupId.',
