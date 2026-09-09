@@ -4,7 +4,7 @@ Drift schema history is a compatibility contract. Concurrent AI development may 
 
 ## Migration-sensitive work
 
-The advisory migration lease currently covers:
+The migration single-writer gate covers:
 
 - `lib/data/app_database_schema.dart`;
 - `lib/data/app_database_migrations.dart`;
@@ -21,13 +21,26 @@ An ordinary `app_database.dart` refactor does **not** acquire the migration leas
 
 Do not reserve a migration number from chat history or a stale branch. GitHub `main` is authoritative.
 
-## Pull-request audit
+## Deterministic ownership and pull-request gate
 
-`AI Migration Lease Audit` runs a lightweight read-only check on pull requests. For a migration-sensitive PR it inspects other open PRs and warns when another migration owner exists.
+Migration ownership is now blocking rather than advisory. Open migration-sensitive PRs are ordered by PR number; the lowest open PR number is the unique **active migration owner**.
 
-The audit distinguishes a real `schemaVersion` diff from unrelated AppDatabase edits. For open PRs it uses the GitHub file patch and falls back to comparing the schemaVersion declaration in base/head file contents if GitHub omits the patch.
+- A non-migration PR passes without migration ownership arbitration.
+- A single migration PR owns the lease and passes.
+- If later migration PRs open, the active owner's gate remains green.
+- Each later migration PR is blocked and names the active owner it must sequence behind.
+- Once the active owner merges or closes, the next open migration PR becomes the owner after it refreshes/re-audits against current `main`.
 
-Warnings are advisory initially. They are a sequencing requirement to re-audit, not permission for automation to renumber or rewrite another lane's migration.
+This asymmetric rule is intentional: it prevents the deadlock that would result if every migration PR failed merely because another migration PR existed.
+
+The same migration logic runs in two places:
+
+- `AI Migration Lease Audit` provides the focused pull-request audit and summary;
+- the required Flutter CI quality path invokes the migration gate before the advisory shared-hotspot audit, so a blocked migration PR makes the aggregate `merge-gate` fail.
+
+Detection distinguishes a real `schemaVersion` diff from unrelated AppDatabase edits. For open PRs it uses the GitHub file patch and falls back to comparing the schemaVersion declaration in base/head file contents if GitHub omits the patch.
+
+Automation does not renumber or rewrite another lane's migration. A blocked PR must sequence behind the active owner, then refresh and re-audit after ownership advances.
 
 ## Ownership boundaries
 
