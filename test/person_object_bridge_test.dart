@@ -79,48 +79,76 @@ void main() {
     );
   });
 
-  test('legacy rename and note edit preserve canonical Person Object identity', () async {
+  test(
+    'canonical rename and note survive sync and project to legacy People',
+    () async {
+      await database.customStatement(
+        "INSERT INTO people(name, note) VALUES ('Before', 'old note')",
+      );
+      final personId =
+          (await database
+                  .customSelect("SELECT id FROM people WHERE name = 'Before'")
+                  .getSingle())
+              .read<int>('id');
+      await bridge.syncLegacyPeople(workspaceId);
+      final objectId = (await bridge.objectIdForLegacyPerson(
+        workspaceId,
+        personId,
+      ))!;
+      final schema = await bridge.ensurePersonObjectType(workspaceId);
+
+      await objectStore.renameObject(objectId, 'Canonical name');
+      await objectStore.setPropertyValue(
+        objectId: objectId,
+        property: schema.noteProperty,
+        value: 'canonical note',
+      );
+      await database.updatePerson(personId, 'Stale legacy name', 'stale note');
+
+      await bridge.syncLegacyPeople(workspaceId);
+
+      final sameObjectId = await bridge.objectIdForLegacyPerson(
+        workspaceId,
+        personId,
+      );
+      final object = (await objectStore.listObjects(schema.objectType.id))
+          .single;
+      expect(sameObjectId, objectId);
+      expect(object.id, objectId);
+      expect(object.title, 'Canonical name');
+      expect(object.values[schema.noteProperty.id], 'canonical note');
+
+      final legacy = await (database.select(
+        database.people,
+      )..where((person) => person.id.equals(personId))).getSingle();
+      expect(legacy.name, 'Canonical name');
+      expect(legacy.note, 'canonical note');
+    },
+  );
+
+  test('missing link is restored from one legacy id claim without overwriting canonical state', () async {
     await database.customStatement(
-      "INSERT INTO people(name, note) VALUES ('Before', 'old note')",
+      "INSERT INTO people(name, note) VALUES ('Mapped', 'legacy note')",
     );
-    final personId = (await database.customSelect(
-      "SELECT id FROM people WHERE name = 'Before'",
-    ).getSingle())
-        .read<int>('id');
-    await bridge.syncLegacyPeople(workspaceId);
-    final objectId =
-        (await bridge.objectIdForLegacyPerson(workspaceId, personId))!;
-
-    await database.updatePerson(personId, 'After', 'new note');
-    await bridge.syncLegacyPeople(workspaceId);
-
-    final sameObjectId =
-        await bridge.objectIdForLegacyPerson(workspaceId, personId);
-    final schema = await bridge.ensurePersonObjectType(workspaceId);
-    final object = (await objectStore.listObjects(schema.objectType.id)).single;
-    expect(sameObjectId, objectId);
-    expect(object.id, objectId);
-    expect(object.title, 'After');
-    expect(object.values[schema.noteProperty.id], 'new note');
-  });
-
-  test('missing link is restored only from one unambiguous legacy id claim', () async {
-    await database.customStatement(
-      "INSERT INTO people(name) VALUES ('Mapped')",
-    );
-    final personId = (await database.customSelect(
-      "SELECT id FROM people WHERE name = 'Mapped'",
-    ).getSingle())
-        .read<int>('id');
+    final personId =
+        (await database
+                .customSelect("SELECT id FROM people WHERE name = 'Mapped'")
+                .getSingle())
+            .read<int>('id');
     final schema = await bridge.ensurePersonObjectType(workspaceId);
     final existingObjectId = await objectStore.createObject(
       objectTypeId: schema.objectType.id,
-      title: 'Old canonical title',
+      title: 'Canonical title',
     );
     await objectStore.setPropertyValue(
       objectId: existingObjectId,
       property: schema.legacyPersonIdProperty,
       value: personId,
+    );
+    await objectStore.setPropertyValue(
+      objectId: existingObjectId,
+      property: schema.noteProperty,
+      value: 'canonical note',
     );
 
     await bridge.syncLegacyPeople(workspaceId);
@@ -131,7 +159,13 @@ void main() {
     );
     final objects = await objectStore.listObjects(schema.objectType.id);
     expect(objects, hasLength(1));
-    expect(objects.single.title, 'Mapped');
+    expect(objects.single.title, 'Canonical title');
+    expect(objects.single.values[schema.noteProperty.id], 'canonical note');
+    final legacy = await (database.select(
+      database.people,
+    )..where((person) => person.id.equals(personId))).getSingle();
+    expect(legacy.name, 'Canonical title');
+    expect(legacy.note, 'canonical note');
   });
 
   test('ambiguous legacy id claims fail closed without creating a replacement', () async {

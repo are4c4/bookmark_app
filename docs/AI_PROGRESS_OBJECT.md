@@ -16,28 +16,40 @@ Own generic Object/ObjectType identity and lifecycle semantics, reusable Propert
 
 ## Active focused issues
 
-### #1041 — Bookmark retirement A
-Current primary Lane A slice. Define collision-safe legacy Bookmark -> canonical Weblink/generic Object authority without creating a permanent canonical Bookmark Object.
-
-D/#1054 is already integrated: `BookmarkWeblinkObjectBridge` consumes `CanonicalWeblinkCaptureService`. A must not reimplement URL normalization, canonical Weblink create/reuse or D-owned collision identity logic.
-
-Current A-owned implementation boundary on `feature/object-bookmark-state-convergence-1041`:
-- `BookmarkWeblinkObjectBridge` resolves canonical Weblink identities for the workspace before mutating mirrored Bookmark Relations or retiring mirrored direct URL Values;
-- when multiple legacy Bookmarks resolve to the same canonical Weblink, their saved-item scalar state (`Favorite`, `Reading Status`, `Storage State`, `Genre`, `Rating`) must be equivalent before convergence proceeds;
-- non-equivalent saved-item state fails closed before Bookmark -> Weblink Relation writes or mirrored URL retirement, leaving legacy Bookmark rows and mirrored state intact;
-- canonical Weblink identity remains D-owned and may already exist/be created by the shared capture boundary; the A preflight does not duplicate identity logic;
-- restart/reconciliation after the conflict is resolved must reuse the existing canonical Weblink rather than create another target;
-- title/description/thumbnail remain compatibility-preserved in the legacy Bookmark row/mirror and are only best-effort resource enrichment; this slice does not claim they have been losslessly collapsed into one saved-item identity;
-- direct Tag convergence remains B-owned (#1118/#1120); Images/Cover Image and other Relation-era convergence remain B/#1042 work.
-
-Focused regression: `test/bookmark_weblink_user_state_convergence_test.dart` covers each scalar-state conflict before Relation/URL retirement plus conflict resolution followed by restart-style reconciliation with one reused Weblink target.
-
-No schema/migration file is changed and no legacy Bookmark row/data is deleted.
-
 ### #1044 — Person migration A
-Move normal Person identity/write authority to generic Person ObjectType while preserving stable identity, Body/note, Profile Image Relation compatibility and restart/reconciliation safety. Do not retire People UI or redesign groups/roles here.
+Current primary Lane A slice. Move normal Person identity/write authority to generic Person ObjectType while preserving stable identity, note/Body compatibility, restart/reconciliation safety and legacy compatibility projections. Do not retire People UI or redesign groups/roles here.
+
+Current implementation boundary on `feature/object-person-generic-write-authority-1044` / PR #1152:
+- `PersonObjectWriteService` creates the canonical generic Person Object first, then projects a compatibility `people` row and `person_object_links` mapping in the same transaction;
+- rename/note updates mutate the canonical Person Object first and then project legacy `people` state in the same transaction;
+- legacy projection failure (including legacy unique-name conflicts) rolls the transaction back so canonical title/note cannot advance independently;
+- existing legacy Persons are imported through the existing `PersonObjectBridge` and then reuse their canonical Person Object instead of creating a duplicate;
+- service reconstruction/restart preserves the same `person_object_links` identity;
+- normal `BookmarkRepository.createPerson` / `updatePerson` and internal `_resolvePeople()` creation now route through the generic-first boundary;
+- `deletePerson` intentionally remains outside this first slice because Bookmark/PersonGroup legacy FK/cascade compatibility must be proven before authority is reversed for deletion;
+- no schema/migration file or People UI is changed.
+
+Focused regressions:
+- `test/person_object_write_service_test.dart` covers canonical-first create/update, projection rollback and restart identity reuse;
+- `test/bookmark_repository_person_write_authority_test.dart` covers the real repository create/update path preserving one canonical Person identity.
+
+Next #1044 work after this create/update slice integrates: re-audit delete/profile-image/note compatibility and remaining normal Person write callers. Do not expand into B-owned role/group Relation semantics or C-owned People UI retirement.
 
 ## Recently integrated
+
+### #1041 — Bookmark retirement A
+Completed and closed through PR #1140, merged as `8f4dbd372e993e8463ba836eddf8df2e6be322d2`.
+
+Delivered:
+- canonical Weblink identity remains D/#1054-owned and is consumed rather than reimplemented;
+- every legacy Bookmark resolves canonical identity before mirrored Relation/legacy-URL mutation;
+- multiple Bookmarks converging on one Weblink must have equivalent `Favorite`, `Reading Status`, `Storage State`, `Genre` and `Rating` saved-item state;
+- conflicting saved-item state fails closed before Relation writes or mirrored URL retirement, preserving legacy compatibility evidence;
+- title/description/thumbnail remain compatibility-preserved/best-effort rather than silently collapsed;
+- restart/reconciliation reuses the existing canonical Weblink target;
+- no schema/migration or destructive Bookmark-row deletion.
+
+Authoritative final latest-main-synchronized head `238148cf2209fc2a176236e42c0a6b667078b6d9`: changed-Dart Format, Analyze/guards, all four Flutter Test shards, test-health and merge-gate green; repository audits were green before auto-merge.
 
 ### #1058 — Body structural edit Undo
 Completed and closed through PR #1104, merged as `6306a2d9c723a2f6218ced47d62fba8e15eb26e0`.
@@ -85,30 +97,31 @@ Delivered:
 - Daily Note identity-managed Date protection;
 - exact Search-agnostic canonical Object sync impact contract;
 - template/object creation integrity and shared Object detail/opening seams;
-- local Body structural Undo as interaction recovery, not durable history.
+- local Body structural Undo as interaction recovery, not durable history;
+- collision-safe Bookmark -> canonical Weblink convergence while compatibility data remains intact.
 
-Older handoff statements that #1058 is still active are obsolete. #1041 is the current primary Lane A slice, with #1044 and later A-focused contracts remaining after live dependency review.
+Older handoff statements that #1041 or #1058 are active are obsolete. #1044 is the current primary Lane A slice.
 
 ## Cross-lane boundaries
-- **B:** Relation mutation/read/index/backlink/audit/reconcile, Bookmark/Person relationship migration and Tag hierarchy integrity. #1120 owns direct Bookmark Tag -> Weblink Tag convergence; do not duplicate it in #1041.
-- **C:** Database/View/schema UX, Stage1/People generic collection replacement and Tag hierarchy query/filter/picker UX.
-- **D:** Weblink URL identity/normalization/capture-native behavior and Image/File native capabilities. D/#1054 canonical capture is integrated and consumed by A/#1041, not work to duplicate.
+- **B:** Relation mutation/read/index/backlink/audit/reconcile, Bookmark/Person relationship migration, Person roles/groups and Tag hierarchy integrity. A/#1044 must not redesign role/group Relation semantics.
+- **C:** Database/View/schema UX, Stage1/People generic collection replacement and Tag hierarchy query/filter/picker UX. Dedicated People UI retirement remains C-owned.
+- **D:** Weblink URL identity/normalization/capture-native behavior and Image/File native capabilities. D/#1054 is integrated; do not reopen it from A.
 - **E:** canonical Object Search projection/FTS freshness.
 - **F:** Vault/filesystem/preservation lifecycle.
 - **G:** behavior-preserving hotspot reduction and caller-zero legacy retirement after A/B/C/D parity.
 
 ## Hotspot / concurrency rule
-Recheck live PR ownership before editing `object_inspector_page.dart`, `generic_database_page.dart`, Stage1, People or `app_database.dart`. #1041 should remain in the focused Bookmark reconciliation boundary and tests unless a concrete acceptance gap proves another A-owned file is required. Do not take over B Relation convergence or D Weblink identity.
+Recheck live PR ownership before editing `object_inspector_page.dart`, `generic_database_page.dart`, Stage1, People or `app_database.dart`. #1044 should prefer the focused Person write boundary, repository routing and dedicated tests. Do not take over B role/group Relation convergence or C People UI work.
 
 ## Validation
-GitHub Actions is authoritative when local Flutter execution is unavailable. #1041 requires changed-Dart format, Analyze/guards, focused preservation/restart regressions, full Flutter Test and authoritative merge-gate on an up-to-date head.
+GitHub Actions is authoritative when local Flutter execution is unavailable. #1044 create/update authority requires changed-Dart format, Analyze/guards, focused service/repository regressions, full Flutter Test and authoritative merge-gate on an up-to-date head.
 
 ## Resume sequence
-1. verify latest `main`, #1041, open PR ownership and current CI before editing;
-2. validate the current saved-item scalar collision preflight and focused restart/reconciliation regressions;
-3. fix only demonstrated #1041 preservation/reconciliation gaps; do not broaden into Tag/Image/role Relation convergence, UI retirement, schema deletion or D-owned Weblink identity;
-4. integrate #1041 only after authoritative CI/merge-gate is green on a latest-main-synchronized head;
-5. after integration, re-audit #1041 acceptance before closing it: conflicting legacy values must remain compatibility-preserved and restart must not duplicate canonical targets;
-6. then refresh live A dependencies and continue the next safe A issue, normally #1044 unless another focused A obligation has become higher priority/unblocked.
+1. verify latest `main`, #1044, open PR ownership and current CI before editing;
+2. finish and integrate the generic-first Person create/update/note authority slice in PR #1152 without schema/migration or People UI changes;
+3. keep legacy `people` as a compatibility projection and fail closed/roll back when projection cannot remain consistent;
+4. after create/update integrates, re-audit #1044 acceptance for delete, Profile Image Relation compatibility, remaining legacy-first callers and restart/reconciliation gaps;
+5. split deletion into a separate focused slice unless legacy Bookmark/PersonGroup FK/cascade behavior is proven preservation-safe;
+6. continue Lane A until the shared `AGENTS.md` stop condition is actually reached.
 
 This sequence is not terminal. After any slice/PR/merge, apply the shared **Lane continuation and resume/stop contract** in `AGENTS.md` before ending the run. Lane A continues while concrete safe A work exists; a single completed Issue/PR is never sufficient stop evidence. If the final resume audit finds no actionable A work, record `Stop reason: idle-no-work — <live evidence>` (or another exact stop category from `AGENTS.md`) in the durable handoff before stopping.

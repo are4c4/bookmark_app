@@ -17,11 +17,22 @@ class PersonObjectSchema {
   final ObjectPropertyDefinition noteProperty;
 }
 
-/// Compatibility bridge from the legacy People table to canonical Objects.
+class _ResolvedPersonObject {
+  const _ResolvedPersonObject({
+    required this.objectId,
+    required this.seedFromLegacy,
+  });
+
+  final int objectId;
+  final bool seedFromLegacy;
+}
+
+/// Compatibility bridge between legacy People rows and canonical Person Objects.
 ///
-/// The legacy row remains authoritative while People UI still uses it. Canonical
-/// identity is stored in normal Object/ObjectType persistence; this bridge keeps
-/// only the stable legacy-id -> Object-id association needed during migration.
+/// Legacy rows may seed a Person Object once while no canonical identity exists.
+/// After a stable mapping exists, the generic Person Object is authoritative and
+/// this bridge only projects its title/Note back into `people` for compatibility
+/// with surviving legacy UI, role/group storage, and old Vaults.
 class PersonObjectBridge {
   PersonObjectBridge({
     required this.database,
@@ -107,32 +118,40 @@ class PersonObjectBridge {
     );
   }
 
-  /// Mirrors legacy People into canonical Person Objects and returns the
-  /// canonical ids visited by this pass. Callers may use these ids as mutation
-  /// candidates, but should compare semantic state before notifying downstream.
+  /// Reconciles legacy People with canonical Person Objects and returns the
+  /// canonical ids visited by this pass.
+  ///
+  /// A legacy row seeds title/Note only when no canonical Person identity exists.
+  /// Once mapped, canonical state wins. Compatibility projection is skipped when
+  /// already equal so the People watcher cannot create a no-op sync loop.
   Future<List<int>> syncLegacyPeople(int workspaceId) async {
     final schema = await ensurePersonObjectType(workspaceId);
     return database.transaction(() async {
       final people = await database.select(database.people).get();
       final touched = <int>[];
       for (final person in people) {
-        final objectId = await _ensureObjectForPerson(
+        final resolved = await _ensureObjectForPerson(
           workspaceId: workspaceId,
           schema: schema,
           person: person,
         );
-        await objectStore.renameObject(objectId, person.name);
-        await objectStore.setPropertyValue(
-          objectId: objectId,
-          property: schema.legacyPersonIdProperty,
-          value: person.id,
+        if (resolved.seedFromLegacy) {
+          await objectStore.setPropertyValue(
+            objectId: resolved.objectId,
+            property: schema.noteProperty,
+            value: person.note,
+          );
+        }
+        final object = await _canonicalPersonObject(
+          schema: schema,
+          objectId: resolved.objectId,
         );
-        await objectStore.setPropertyValue(
-          objectId: objectId,
-          property: schema.noteProperty,
-          value: person.note,
+        await _projectCanonicalToLegacy(
+          person: person,
+          object: object,
+          noteProperty: schema.noteProperty,
         );
-        touched.add(objectId);
+        touched.add(resolved.objectId);
       }
       touched.sort();
       return List<int>.unmodifiable(touched);
@@ -175,7 +194,7 @@ class PersonObjectBridge {
     return personId;
   }
 
-  Future<int> _ensureObjectForPerson({
+  Future<_ResolvedPersonObject> _ensureObjectForPerson({
     required int workspaceId,
     required PersonObjectSchema schema,
     required Person person,
@@ -193,7 +212,7 @@ class PersonObjectBridge {
         personId: person.id,
         objectId: objectId,
       );
-      return objectId;
+      return _ResolvedPersonObject(objectId: objectId, seedFromLegacy: false);
     }
 
     final matchingObjects = (await objectStore.listObjects(schema.objectType.id))
@@ -215,7 +234,7 @@ class PersonObjectBridge {
         personId: person.id,
         objectId: objectId,
       );
-      return objectId;
+      return _ResolvedPersonObject(objectId: objectId, seedFromLegacy: false);
     }
 
     final objectId = await objectStore.createObject(
@@ -232,7 +251,66 @@ class PersonObjectBridge {
       personId: person.id,
       objectId: objectId,
     );
-    return objectId;
+    return _ResolvedPersonObject(objectId: objectId, seedFromLegacy: true);
+  }
+
+  Future<AppObject> _canonicalPersonObject({
+    required PersonObjectSchema schema,
+    required int objectId,
+  }) async {
+    final matches = (await objectStore.listObjects(schema.objectType.id))
+        .where((object) => object.id == objectId)
+        .toList(growable: false);
+    if (matches.length != 1) {
+      throw StateError(
+        'Canonical Person mapping points to a missing or wrong-type Object.',
+      );
+    }
+    return matches.single;
+  }
+
+  Future<void> _projectCanonicalToLegacy({
+    required Person person,
+    required AppObject object,
+    required ObjectPropertyDefinition noteProperty,
+  }) async {
+    final canonicalName = object.title.trim();
+    if (canonicalName.isEmpty) {
+      throw StateError(
+        'Canonical Person title is empty; refusing an invalid legacy projection.',
+      );
+    }
+    final rawNote = object.values[noteProperty.id];
+    if (rawNote != null && rawNote is! String) {
+      throw StateError(
+        'Canonical Person Note is malformed; refusing an invalid legacy projection.',
+      );
+    }
+    final canonicalNote = rawNote as String?;
+    if (person.name == canonicalName && person.note == canonicalNote) return;
+
+    try {
+      final changed =
+          await (database.update(
+            database.people,
+          )..where((row) => row.id.equals(person.id))).write(
+            PeopleCompanion(
+              name: Value(canonicalName),
+              note: Value(canonicalNote),
+            ),
+          );
+      if (changed != 1) {
+        throw StateError(
+          'Legacy Person projection disappeared during canonical reconciliation.',
+        );
+      }
+    } on StateError {
+      rethrow;
+    } catch (_) {
+      throw StateError(
+        'Canonical Person cannot be projected to legacy People without a conflict.',
+      );
+    }
   }
 
   Future<void> _insertMapping({
