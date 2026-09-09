@@ -4,6 +4,7 @@ import 'package:archive/archive_io.dart';
 import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/services/profile_backup_service.dart';
 import 'package:bookmark_app/services/vault_backup_destination_guard.dart';
+import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Future<Directory> _createSandbox(String prefix) async {
@@ -17,7 +18,10 @@ Future<Directory> _createSandbox(String prefix) async {
 }
 
 AppDatabase _databaseFor(Directory vault) {
-  final database = AppDatabase(profileDirectoryPath: vault.path);
+  final database = AppDatabase.forTesting(
+    NativeDatabase.memory(),
+    profileDirectoryPath: vault.path,
+  );
   addTearDown(database.close);
   return database;
 }
@@ -181,6 +185,7 @@ void main() {
       );
       final vault = Directory('${sandbox.path}/vault');
       await vault.create();
+      await File('${vault.path}/database.sqlite').writeAsBytes([1, 2, 3]);
       await File('${vault.path}/profile.json').writeAsString('{}');
       final database = _databaseFor(vault);
       final destination = '${sandbox.path}/backup.zip';
