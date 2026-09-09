@@ -110,3 +110,5 @@ Repository tests and tools are authoritative for repository-owned behavior; use 
 7. keep destructive Bookmark/People/Photo schema retirement in a separate explicit single-writer migration with preservation evidence and required approval.
 
 Lane F inherits the shared **Lane continuation and resume/stop contract** in `AGENTS.md`. A real-machine requirement may legitimately produce `external-infra` for a specific active Issue, and an explicit cross-lane prerequisite may produce `dependency`, but only after the final live resume audit finds no other independent safe F work.
+
+Stop reason: dependency — #1146 is the only currently demonstrated focused F implementation slice and cannot start until D/#1141 is integrated; resume by re-reading live #1141/#1146 and current `main` before taking ownership.
