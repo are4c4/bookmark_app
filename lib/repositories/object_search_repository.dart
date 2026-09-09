@@ -14,6 +14,7 @@ import 'object_body_search_text.dart';
 import 'object_derived_search_text_store.dart';
 import 'object_property_search_text.dart';
 import 'object_relation_search_text.dart';
+import 'object_search_width_compatibility.dart';
 import 'weblink_search_text.dart';
 
 class ObjectSearchHit {
@@ -440,12 +441,15 @@ class ObjectSearchRepository {
       variables.add(Variable<int>(objectTypeId));
     }
     for (final term in cjkTerms) {
-      conditions.add(
-        '(${_searchTextColumns.map((column) => 'instr(lower($column), lower(?)) > 0').join(' OR ')})',
-      );
-      for (var index = 0; index < _searchTextColumns.length; index += 1) {
-        variables.add(Variable<String>(term));
+      final variants = buildCjkWidthCompatibilityVariants(term);
+      final predicates = <String>[];
+      for (final column in _searchTextColumns) {
+        for (final variant in variants) {
+          predicates.add('instr(lower($column), lower(?)) > 0');
+          variables.add(Variable<String>(variant));
+        }
       }
+      conditions.add('(${predicates.join(' OR ')})');
     }
     variables.add(Variable<int>(limit));
 
@@ -494,13 +498,14 @@ class ObjectSearchRepository {
         .toList(growable: false);
     if (cjkTerms.isEmpty || prefixHits.length >= limit) return prefixHits;
 
-    // unicode61 keeps ordinary Japanese text without whitespace in one token.
-    // Prefix MATCH therefore misses a query that starts inside that token (for
-    // example `漱石` in `夏目漱石`). Scan the same canonical projection only for
-    // CJK-containing terms. Surrounding punctuation is a tokenizer boundary,
-    // so remove it only from fallback needles while keeping non-CJK terms on
-    // the existing prefix FTS path. This adds no second index and does not
-    // broaden Latin infix search or erase punctuation inside a CJK term.
+    // unicode61 keeps ordinary Japanese text without whitespace in one token
+    // and does not fold half-width Katakana to ordinary full-width forms.
+    // Prefix MATCH therefore misses either intra-token CJK starts (for example
+    // `漱石` in `夏目漱石`) or compatible width variants such as `ｶﾀｶﾅ` versus
+    // `カタカナ`. Scan the same canonical projection only for CJK-containing
+    // terms, preserving punctuation inside the term and keeping non-CJK terms
+    // on the existing prefix FTS path. This adds no second index and does not
+    // broaden ordinary Latin infix search.
     final fallbackHits = await _searchCjkSubstringFallback(
       workspaceId: workspaceId,
       cjkTerms: cjkTerms,
