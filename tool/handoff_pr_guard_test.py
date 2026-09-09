@@ -15,10 +15,18 @@ class HandoffPrGuardTest(unittest.TestCase):
     def test_known_progress_files_are_handoffs(self) -> None:
         self.assertEqual(
             guard.handoff_files(
-                ["docs/AI_PROGRESS_OBJECT.md", "docs/AI_PROGRESS_REFACTOR.md"]
+                [
+                    "docs/AI_PROGRESS_OBJECT.md",
+                    "docs/AI_PROGRESS_REFACTOR.md",
+                    "docs/AI_PROGRESS_OVERSIGHT.md",
+                ]
             ),
             frozenset(
-                {"docs/AI_PROGRESS_OBJECT.md", "docs/AI_PROGRESS_REFACTOR.md"}
+                {
+                    "docs/AI_PROGRESS_OBJECT.md",
+                    "docs/AI_PROGRESS_REFACTOR.md",
+                    "docs/AI_PROGRESS_OVERSIGHT.md",
+                }
             ),
         )
 

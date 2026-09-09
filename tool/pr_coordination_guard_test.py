@@ -38,10 +38,31 @@ Migration/data impact: no
         self.assertEqual(contract.lane, "D")
         self.assertEqual(contract.related_issue, 941)
 
+    def test_parse_contract_accepts_oversight_lane(self) -> None:
+        contract = guard.parse_contract(
+            """
+Primary lane: H
+Related issue: #1060
+Depends on: none
+Shared hotspots: none
+Migration/data impact: no
+"""
+        )
+        self.assertEqual(contract.lane, "H")
+        warnings = guard.collect_warnings(
+            contract,
+            branch="oversight/issue-1060-contract",
+            paths=["docs/AI_PROGRESS_OVERSIGHT.md"],
+            open_dependencies=set(),
+            mutating_workflows=[],
+        )
+        self.assertFalse(any("Primary lane" in warning for warning in warnings))
+
     def test_branch_prefix_lane_mapping(self) -> None:
         self.assertEqual(guard.expected_lane_for_branch("feature/object-daily-note"), "A")
         self.assertEqual(guard.expected_lane_for_branch("feature/primitives-image"), "D")
         self.assertEqual(guard.expected_lane_for_branch("refactor/ci-health"), "G")
+        self.assertEqual(guard.expected_lane_for_branch("oversight/issue-1060-audit"), "H")
         self.assertIsNone(guard.expected_lane_for_branch("docs/object-handoff"))
 
     def test_branch_issue_token_matching(self) -> None:

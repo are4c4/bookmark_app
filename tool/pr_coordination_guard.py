@@ -15,7 +15,7 @@ from pathlib import Path
 
 from shared_hotspot_conflict_guard import HOTSPOTS
 
-LANES = {"A", "B", "C", "D", "E", "F", "G"}
+LANES = {"A", "B", "C", "D", "E", "F", "G", "H"}
 PREFIX_TO_LANE = {
     "feature/object-": "A",
     "feature/relation-": "B",
@@ -24,6 +24,7 @@ PREFIX_TO_LANE = {
     "feature/search-": "E",
     "feature/storage-": "F",
     "refactor/": "G",
+    "oversight/": "H",
 }
 WORKFLOW_SUFFIXES = (".yml", ".yaml")
 
@@ -211,7 +212,7 @@ def collect_warnings(
     duplicates = duplicate_claims or []
 
     if contract.lane not in LANES:
-        warnings.append("Missing or invalid `Primary lane`; use exactly one of A/B/C/D/E/F/G.")
+        warnings.append("Missing or invalid `Primary lane`; use exactly one of A/B/C/D/E/F/G/H.")
     expected = expected_lane_for_branch(branch)
     if contract.lane in LANES and expected and contract.lane != expected:
         warnings.append(f"Primary lane {contract.lane} conflicts with branch prefix, which implies lane {expected}.")
