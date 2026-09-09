@@ -68,3 +68,5 @@ Changed-Dart format, Analyze, full Flutter Test and focused serialization/widget
 4. prove persisted View/query round-trip and interaction behavior;
 5. update this handoff with durable implementation facts;
 6. do not reintroduce Bookmark/People-specific view engines or a parallel Tag tree store.
+
+This sequence is not terminal. After any slice/PR/merge, apply the shared **Lane continuation and resume/stop contract** in `AGENTS.md` before ending the run. Lane C must refresh dependencies because #1053/#1043/#1046 may become actionable as A/B/D work lands; a dependency that was blocked earlier is not a durable idle reason. Stop only after the final resume audit finds no independent safe C work, and record the exact shared stop category plus evidence in this handoff.
