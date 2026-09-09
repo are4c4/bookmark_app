@@ -158,42 +158,45 @@ void main() {
     expect(await fixture.groupId(tagId), groupId);
   });
 
-  test('keeps direct Object Tag assignments independent of ancestors', () async {
-    final fixture = await _fixture();
-    addTearDown(fixture.database.close);
-    final rootId = await fixture.createTag('root');
-    final childId = await fixture.createTag('child');
-    await fixture.setParent(childId, rootId);
-    final noteTypeId = await fixture.objectStore.createObjectType(
-      workspaceId: fixture.workspaceId,
-      name: 'Note',
-    );
-    final propertyId = await fixture.objectStore.createRelationProperty(
-      objectTypeId: noteTypeId,
-      name: 'Tags',
-      targetObjectTypeId: fixture.schema.objectType.id,
-      multiple: true,
-    );
-    final noteType = (await fixture.objectStore.getObjectType(noteTypeId))!;
-    final property = noteType.properties.singleWhere(
-      (candidate) => candidate.id == propertyId,
-    );
-    final noteId = await fixture.objectStore.createObject(
-      objectTypeId: noteTypeId,
-      title: 'Apple note',
-    );
-    await fixture.objectStore.setRelation(
-      objectId: noteId,
-      property: property,
-      targetObjectIds: <int>[childId],
-    );
+  test(
+    'keeps direct Object Tag assignments independent of ancestors',
+    () async {
+      final fixture = await _fixture();
+      addTearDown(fixture.database.close);
+      final rootId = await fixture.createTag('root');
+      final childId = await fixture.createTag('child');
+      await fixture.setParent(childId, rootId);
+      final noteTypeId = await fixture.objectStore.createObjectType(
+        workspaceId: fixture.workspaceId,
+        name: 'Note',
+      );
+      final propertyId = await fixture.objectStore.createRelationProperty(
+        objectTypeId: noteTypeId,
+        name: 'Tags',
+        targetObjectTypeId: fixture.schema.objectType.id,
+        multiple: true,
+      );
+      final noteType = (await fixture.objectStore.getObjectType(noteTypeId))!;
+      final property = noteType.properties.singleWhere(
+        (candidate) => candidate.id == propertyId,
+      );
+      final noteId = await fixture.objectStore.createObject(
+        objectTypeId: noteTypeId,
+        title: 'Apple note',
+      );
+      await fixture.objectStore.setRelation(
+        objectId: noteId,
+        property: property,
+        targetObjectIds: <int>[childId],
+      );
 
-    final notes = await fixture.objectStore.listObjects(noteTypeId);
-    final note = notes.singleWhere((object) => object.id == noteId);
-    final assigned = ObjectRelationValue.fromJson(note.values[propertyId]);
-    expect(assigned.objectIds, <int>[childId]);
-    expect(assigned.objectIds, isNot(contains(rootId)));
-  });
+      final notes = await fixture.objectStore.listObjects(noteTypeId);
+      final note = notes.singleWhere((object) => object.id == noteId);
+      final assigned = ObjectRelationValue.fromJson(note.values[propertyId]);
+      expect(assigned.objectIds, <int>[childId]);
+      expect(assigned.objectIds, isNot(contains(rootId)));
+    },
+  );
 }
 
 Future<_Fixture> _fixture() async {

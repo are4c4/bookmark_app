@@ -27,17 +27,17 @@ void main() {
     await database.customStatement(
       "INSERT INTO tag_groups(name, sort_order) VALUES ('分類', 0)",
     );
-    final groupRow = await database.customSelect(
-      "SELECT id FROM tag_groups WHERE name = '分類'",
-    ).getSingle();
+    final groupRow = await database
+        .customSelect("SELECT id FROM tag_groups WHERE name = '分類'")
+        .getSingle();
     final groupId = groupRow.read<int>('id');
     await database.customStatement(
       "INSERT INTO tags(name, group_id) VALUES ('数学', ?)",
       <Object>[groupId],
     );
-    final tagRow = await database.customSelect(
-      "SELECT id FROM tags WHERE name = '数学'",
-    ).getSingle();
+    final tagRow = await database
+        .customSelect("SELECT id FROM tags WHERE name = '数学'")
+        .getSingle();
     final tagId = tagRow.read<int>('id');
 
     await bridge.syncLegacyTags(workspaceId);
