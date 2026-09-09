@@ -14,6 +14,7 @@ import 'package:bookmark_app/data/object_type_defaults_store.dart';
 import 'package:bookmark_app/data/relation_mutation_service.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
+import 'package:bookmark_app/domain/managed_file_ownership.dart';
 import 'package:bookmark_app/services/generic_database_image_import_service.dart';
 import 'package:bookmark_app/services/photo_storage_service.dart';
 import 'package:bookmark_app/services/primitive_file_import_classifier.dart';
@@ -134,6 +135,10 @@ void main() {
     expect(object.values[definition.contentTypeProperty.id], 'image/png');
     expect(object.values[definition.pixelWidthProperty.id], 3);
     expect(object.values[definition.pixelHeightProperty.id], 2);
+    expect(
+      object.values[definition.storageOwnershipProperty.id],
+      ManagedFileOwnership.vaultManagedCopy.storageKey,
+    );
   });
 
   test('classified Image storage rejects unsupported content types', () async {
