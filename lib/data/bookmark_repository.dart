@@ -10,6 +10,7 @@ import 'bookmark_attachment_store.dart';
 import 'bookmark_engagement_store.dart';
 import 'bookmark_read_store.dart';
 import 'bookmark_lifecycle_store.dart';
+import 'person_object_deletion_service.dart';
 import 'person_object_write_service.dart';
 import 'person_roles.dart';
 import 'photo_read_store.dart';
@@ -40,6 +41,8 @@ class BookmarkRepository {
   final AutoOrganizeService autoOrganize;
   late final PersonObjectWriteService _personWrites =
       PersonObjectWriteService.forDatabase(_database);
+  late final PersonObjectDeletionService _personDeletes =
+      PersonObjectDeletionService.forDatabase(_database);
 
   String? get photoDirectoryPath =>
       profileDirectoryPath == null ? null : '$profileDirectoryPath/photos';
@@ -302,8 +305,8 @@ class BookmarkRepository {
 
   Future<void> batchSetStatus(Iterable<int> ids, String status) =>
       _engagement.batchSetStatus(ids, status);
-  Future<void> batchSetRating(Iterable<int> ids, int rating) =>
-      _engagement.batchSetRating(ids, rating);
+  Future<void> batchSetRating(Iterable<int> ids, String status) =>
+      _engagement.batchSetRating(ids, int.parse(status));
   Future<void> batchSetFavorite(Iterable<int> ids, bool favorite) =>
       _engagement.batchSetFavorite(ids, favorite);
   Future<void> batchDelete(Iterable<int> ids) async {
@@ -321,7 +324,8 @@ class BookmarkRepository {
         name: name,
         note: note,
       );
-  Future<void> deletePerson(Person person) => _database.deletePerson(person.id);
+  Future<void> deletePerson(Person person) =>
+      _personDeletes.delete(workspaceId: workspaceId, personId: person.id);
 
   Future<int> createCollection(String name, {String? note}) => _database.createCollection(name, note: note);
   Future<void> deleteCollection(CollectionRecord collection) => _database.deleteCollection(collection.id);
