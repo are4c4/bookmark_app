@@ -132,6 +132,14 @@ for file in "${files[@]}"; do
   format_status=$?
   set -e
 
+  case "$file" in
+    lib/features/object/presentation/widgets/object_body_document_view.dart|test/object_body_document_actions_test.dart|test/object_body_editor_section_reorder_test.dart)
+      echo "FORMAT_DUMP_BEGIN:$file"
+      cat "$file"
+      echo "FORMAT_DUMP_END:$file"
+      ;;
+  esac
+
   if [[ $format_status -ne 0 ]]; then
     cat "$original" >"$file"
     echo "check_format: dart format failed for $file" >&2
