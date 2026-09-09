@@ -36,9 +36,8 @@ void main() {
     expect(find.text('ブロックを削除しました'), findsOneWidget);
     expect(find.text('元に戻す'), findsOneWidget);
     expect(
-      (await fixture.bodyStore.read(fixture.objectId)).blocks.map(
-        (block) => block.id,
-      ),
+      (await fixture.bodyStore.read(fixture.objectId)).blocks
+          .map((block) => block.id),
       ['keep'],
     );
 
@@ -73,10 +72,7 @@ void main() {
         ObjectBodyBlock(id: 'keep', type: 'paragraph', text: 'Newer edit'),
       ],
     );
-    await fixture.bodyStore.write(
-      objectId: fixture.objectId,
-      document: newer,
-    );
+    await fixture.bodyStore.write(objectId: fixture.objectId, document: newer);
 
     await tester.tap(find.text('元に戻す'));
     await tester.pumpAndSettle();
@@ -89,14 +85,17 @@ void main() {
   });
 }
 
-Future<({
-  AppDatabase database,
-  GenericDatabaseStore store,
-  ObjectStore objectStore,
-  ObjectBodyStore bodyStore,
-  int workspaceId,
-  int objectId,
-})> _fixture() async {
+Future<
+  ({
+    AppDatabase database,
+    GenericDatabaseStore store,
+    ObjectStore objectStore,
+    ObjectBodyStore bodyStore,
+    int workspaceId,
+    int objectId,
+  })
+>
+_fixture() async {
   final database = AppDatabase.forTesting(NativeDatabase.memory());
   final workspaceId = await WorkspaceStore(database).initialize();
   final store = GenericDatabaseStore(database);
@@ -128,7 +127,8 @@ Future<void> _pumpEditor(
     ObjectBodyStore bodyStore,
     int workspaceId,
     int objectId,
-  }) fixture,
+  })
+  fixture,
 ) async {
   await tester.pumpWidget(
     MaterialApp(
