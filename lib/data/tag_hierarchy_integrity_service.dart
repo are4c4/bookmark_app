@@ -10,7 +10,7 @@ import 'relation_target_service.dart';
 /// tree/closure store.
 class TagHierarchySnapshot {
   TagHierarchySnapshot(Map<int, int?> parentByTagObjectId)
-      : parentByTagObjectId = Map.unmodifiable(parentByTagObjectId);
+    : parentByTagObjectId = Map.unmodifiable(parentByTagObjectId);
 
   final Map<int, int?> parentByTagObjectId;
 
