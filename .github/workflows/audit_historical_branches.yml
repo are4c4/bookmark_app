@@ -1,0 +1,188 @@
+name: Historical Branch Inventory Audit
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/audit_historical_branches.yml
+  workflow_dispatch:
+    inputs:
+      min_age_hours:
+        description: Minimum branch-tip age before historical classification
+        required: true
+        default: '24'
+        type: string
+
+concurrency:
+  group: historical-branch-inventory-audit
+  cancel-in-progress: false
+
+jobs:
+  classify:
+    name: classify-remaining-branches
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Classify live remote branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MIN_AGE_HOURS: ${{ inputs.min_age_hours || '24' }}
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          default_branch="${{ github.event.repository.default_branch }}"
+
+          if ! [[ "$MIN_AGE_HOURS" =~ ^[0-9]+$ ]]; then
+            echo "MIN_AGE_HOURS must be a non-negative integer, got: $MIN_AGE_HOURS" >&2
+            exit 2
+          fi
+
+          git init --quiet repo
+          git -C repo remote add origin "https://github.com/${repo}.git"
+          git -C repo fetch --quiet --no-tags --prune origin '+refs/heads/*:refs/remotes/origin/*'
+          cd repo
+
+          default_ref="refs/remotes/origin/${default_branch}"
+          git rev-parse --verify "$default_ref" >/dev/null
+          default_tip="$(git rev-parse "$default_ref")"
+          now="$(date +%s)"
+          cutoff="$((now - MIN_AGE_HOURS * 3600))"
+
+          declare -A open_heads=()
+          declare -A branch_has_pr=()
+          declare -A merged_exact=()
+          declare -A closed_unmerged_exact=()
+
+          while IFS=$'\t' read -r head_ref head_sha; do
+            [[ -z "$head_ref" || -z "$head_sha" ]] && continue
+            open_heads["$head_ref"]=1
+            branch_has_pr["$head_ref"]=1
+          done < <(
+            gh api --paginate "repos/${repo}/pulls?state=open&per_page=100" \
+              --jq '.[] | [.head.ref, .head.sha] | @tsv'
+          )
+
+          while IFS=$'\t' read -r pr_state head_ref head_sha; do
+            [[ -z "$head_ref" || -z "$head_sha" ]] && continue
+            branch_has_pr["$head_ref"]=1
+            key="${head_ref}|${head_sha}"
+            if [[ "$pr_state" == "merged" ]]; then
+              merged_exact["$key"]=1
+            else
+              closed_unmerged_exact["$key"]=1
+            fi
+          done < <(
+            gh api --paginate "repos/${repo}/pulls?state=closed&per_page=100" \
+              --jq '.[] | [(if .merged_at != null then "merged" else "closed-unmerged" end), .head.ref, .head.sha] | @tsv'
+          )
+
+          categories=(
+            open-pr
+            dependabot-transient
+            recent
+            default-tip
+            merged-safe
+            closed-unmerged-exact-head
+            advanced-after-pr
+            no-pr-history
+          )
+          for category in "${categories[@]}"; do
+            : > "/tmp/${category}.txt"
+          done
+
+          total=0
+          while IFS= read -r ref; do
+            branch="${ref#refs/remotes/origin/}"
+            [[ "$branch" == "$default_branch" ]] && continue
+            total=$((total + 1))
+
+            tip="$(git rev-parse "$ref")"
+            tip_epoch="$(git show -s --format=%ct "$tip")"
+            key="${branch}|${tip}"
+
+            if [[ -n "${open_heads[$branch]+x}" ]]; then
+              category="open-pr"
+            elif [[ "$tip" == "$default_tip" ]]; then
+              category="default-tip"
+            elif [[ "$branch" == dependabot/* ]]; then
+              category="dependabot-transient"
+            elif (( tip_epoch > cutoff )); then
+              category="recent"
+            elif git merge-base --is-ancestor "$tip" "$default_tip" || [[ -n "${merged_exact[$key]+x}" ]]; then
+              category="merged-safe"
+            elif [[ -n "${closed_unmerged_exact[$key]+x}" ]]; then
+              category="closed-unmerged-exact-head"
+            elif [[ -n "${branch_has_pr[$branch]+x}" ]]; then
+              category="advanced-after-pr"
+            else
+              category="no-pr-history"
+            fi
+
+            printf '%s\t%s\n' "$branch" "$tip" >> "/tmp/${category}.txt"
+          done < <(git for-each-ref --format='%(refname)' refs/remotes/origin/)
+
+          classified=0
+          echo "Historical branch inventory: ${total} non-default branches"
+          for category in "${categories[@]}"; do
+            count="$(wc -l < "/tmp/${category}.txt" | tr -d ' ')"
+            classified=$((classified + count))
+            echo "${category}=${count}"
+          done
+
+          if (( classified != total )); then
+            echo "Classification invariant failed: total=${total}, classified=${classified}" >&2
+            exit 1
+          fi
+
+          {
+            echo '## Historical branch inventory audit'
+            echo
+            echo "- Default branch: \`${default_branch}\`"
+            echo "- Non-default branches classified: \`${total}\`"
+            echo "- Historical age threshold: \`${MIN_AGE_HOURS}h\`"
+            echo '- This workflow is read-only; it deletes no branch refs.'
+            echo
+            echo '| Category | Count | Cleanup policy |'
+            echo '| --- | ---: | --- |'
+            for category in "${categories[@]}"; do
+              count="$(wc -l < "/tmp/${category}.txt" | tr -d ' ')"
+              case "$category" in
+                open-pr|dependabot-transient|recent|default-tip)
+                  policy='keep'
+                  ;;
+                merged-safe)
+                  policy='eligible only through the existing proven-merged cleanup path'
+                  ;;
+                closed-unmerged-exact-head)
+                  policy='review as reversible closed-PR cleanup candidate; do not auto-delete here'
+                  ;;
+                advanced-after-pr|no-pr-history)
+                  policy='unique/ambiguous work; do not auto-delete'
+                  ;;
+              esac
+              echo "| \`${category}\` | ${count} | ${policy} |"
+            done
+
+            for category in closed-unmerged-exact-head advanced-after-pr no-pr-history merged-safe dependabot-transient recent open-pr default-tip; do
+              count="$(wc -l < "/tmp/${category}.txt" | tr -d ' ')"
+              echo
+              echo "<details><summary>${category} (${count})</summary>"
+              echo
+              echo '```text'
+              cat "/tmp/${category}.txt"
+              echo '```'
+              echo '</details>'
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo
+          echo '--- closed-unmerged-exact-head ---'
+          cat /tmp/closed-unmerged-exact-head.txt
+          echo '--- advanced-after-pr ---'
+          cat /tmp/advanced-after-pr.txt
+          echo '--- no-pr-history ---'
+          cat /tmp/no-pr-history.txt
