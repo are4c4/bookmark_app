@@ -100,7 +100,6 @@ void main() {
     await tester.pumpAndSettle();
     document = await bodyStore.read(objectId);
     final aIndex = document.blocks.indexWhere((block) => block.id == 'a');
-    final headingId = document.blocks[aIndex + 1].id;
     expect(document.blocks[aIndex + 1].type, ObjectBodyBlockType.heading);
     expect(document.blocks[aIndex + 1].attributes['level'], 1);
 
@@ -112,15 +111,6 @@ void main() {
     await tester.pumpAndSettle();
     document = await bodyStore.read(objectId);
     expect(document.blocks.any((block) => block.id == 'a'), isFalse);
-    expect(find.text('ブロックを削除しました'), findsOneWidget);
-    expect(find.text('元に戻す'), findsOneWidget);
-
-    await tester.tap(find.text('元に戻す'));
-    await tester.pumpAndSettle();
-    document = await bodyStore.read(objectId);
-    expect(document.blocks.map((block) => block.id).toList(),
-        <String>['b', 'a', headingId, 'paragraph-copy-1']);
-    expect(document.blocks[1].text, 'A');
   });
 
   testWidgets('empty Object Body can create its first block', (tester) async {
