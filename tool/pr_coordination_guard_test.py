@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
+import base64
 import unittest
+from unittest import mock
 
 import pr_coordination_guard as guard
 
@@ -294,34 +296,276 @@ jobs:
         risks = guard.destructive_risks_for_patch("lib/features/search/cache.dart", patch)
         self.assertEqual(risks, [])
 
-    def test_owner_risk_approval_requires_exact_marker_from_owner(self) -> None:
-        comments = [
+    def test_non_self_current_head_approved_review_is_candidate(self) -> None:
+        reviews = [
             {
-                "user": {"login": "someone-else"},
-                "body": guard.RISK_APPROVAL_MARKER,
-            },
-            {
-                "user": {"login": "are4c4"},
-                "body": "Looks good, but no explicit marker.",
-            },
-        ]
-        self.assertFalse(guard.owner_risk_approval(comments, "are4c4"))
-        comments.append(
-            {
-                "user": {"login": "are4c4"},
-                "body": f"Reviewed preservation and rollback. {guard.RISK_APPROVAL_MARKER}",
+                "id": 1,
+                "state": "APPROVED",
+                "commit_id": "head-sha",
+                "submitted_at": "2026-09-09T00:00:00Z",
+                "user": {"login": "reviewer", "type": "User"},
             }
+        ]
+        self.assertEqual(
+            guard.current_distinct_approved_reviewers(reviews, "author", "head-sha"),
+            ("reviewer",),
         )
-        self.assertTrue(guard.owner_risk_approval(comments, "are4c4"))
 
-    def test_owner_risk_approval_is_case_insensitive(self) -> None:
-        comments = [
+    def test_self_stale_and_non_user_reviews_do_not_count(self) -> None:
+        reviews = [
             {
-                "user": {"login": "Are4c4"},
-                "body": "RISK APPROVAL: APPROVED",
-            }
+                "id": 1,
+                "state": "APPROVED",
+                "commit_id": "head-sha",
+                "submitted_at": "2026-09-09T00:00:00Z",
+                "user": {"login": "author", "type": "User"},
+            },
+            {
+                "id": 2,
+                "state": "APPROVED",
+                "commit_id": "old-sha",
+                "submitted_at": "2026-09-09T00:00:01Z",
+                "user": {"login": "stale-reviewer", "type": "User"},
+            },
+            {
+                "id": 3,
+                "state": "APPROVED",
+                "commit_id": "head-sha",
+                "submitted_at": "2026-09-09T00:00:02Z",
+                "user": {"login": "review-bot[bot]", "type": "Bot"},
+            },
         ]
-        self.assertTrue(guard.owner_risk_approval(comments, "are4c4"))
+        self.assertEqual(
+            guard.current_distinct_approved_reviewers(reviews, "author", "head-sha"),
+            (),
+        )
+
+    def test_latest_review_state_wins_for_reviewer(self) -> None:
+        reviews = [
+            {
+                "id": 1,
+                "state": "APPROVED",
+                "commit_id": "head-sha",
+                "submitted_at": "2026-09-09T00:00:00Z",
+                "user": {"login": "reviewer", "type": "User"},
+            },
+            {
+                "id": 2,
+                "state": "CHANGES_REQUESTED",
+                "commit_id": "head-sha",
+                "submitted_at": "2026-09-09T00:01:00Z",
+                "user": {"login": "reviewer", "type": "User"},
+            },
+        ]
+        self.assertEqual(
+            guard.current_distinct_approved_reviewers(reviews, "author", "head-sha"),
+            (),
+        )
+
+    def test_paginated_review_history_later_page_overrides_approval(self) -> None:
+        approval = {
+            "id": 1,
+            "state": "APPROVED",
+            "commit_id": "head-sha",
+            "submitted_at": "2026-09-09T00:00:00Z",
+            "user": {"login": "reviewer", "type": "User"},
+        }
+        first_page = [approval, *({"id": index} for index in range(2, 101))]
+        later_change_request = {
+            "id": 101,
+            "state": "CHANGES_REQUESTED",
+            "commit_id": "head-sha",
+            "submitted_at": "2026-09-09T01:00:00Z",
+            "user": {"login": "reviewer", "type": "User"},
+        }
+        with mock.patch.object(
+            guard,
+            "_request_json",
+            side_effect=[first_page, [later_change_request]],
+        ) as request:
+            reviews = guard._request_paginated_list(
+                "https://api.github.com/repos/owner/repo/pulls/42/reviews",
+                "token",
+            )
+
+        self.assertEqual(len(reviews), 101)
+        self.assertEqual(
+            guard.current_distinct_approved_reviewers(reviews, "author", "head-sha"),
+            (),
+        )
+        self.assertEqual(
+            request.call_args_list,
+            [
+                mock.call(
+                    "https://api.github.com/repos/owner/repo/pulls/42/reviews?per_page=100&page=1",
+                    "token",
+                ),
+                mock.call(
+                    "https://api.github.com/repos/owner/repo/pulls/42/reviews?per_page=100&page=2",
+                    "token",
+                ),
+            ],
+        )
+
+    def test_paginated_review_history_rejects_non_list_page(self) -> None:
+        with mock.patch.object(
+            guard,
+            "_request_json",
+            return_value={"message": "unexpected"},
+        ):
+            with self.assertRaises(ValueError):
+                guard._request_paginated_list(
+                    "https://api.github.com/repos/owner/repo/pulls/42/reviews",
+                    "token",
+                )
+
+    def test_destructive_approver_requires_write_or_admin(self) -> None:
+        reviews = [
+            {
+                "id": 1,
+                "state": "APPROVED",
+                "commit_id": "head-sha",
+                "submitted_at": "2026-09-09T00:00:00Z",
+                "user": {"login": "reader", "type": "User"},
+            },
+            {
+                "id": 2,
+                "state": "APPROVED",
+                "commit_id": "head-sha",
+                "submitted_at": "2026-09-09T00:00:01Z",
+                "user": {"login": "writer", "type": "User"},
+            },
+        ]
+        approver = guard.eligible_destructive_approver(
+            reviews,
+            "author",
+            "head-sha",
+            {
+                "reader": {"permission": "read"},
+                "writer": {"permission": "write"},
+            },
+        )
+        self.assertEqual(approver, "writer")
+        self.assertFalse(
+            guard.permission_allows_destructive_approval({"permission": "read"})
+        )
+        self.assertTrue(
+            guard.permission_allows_destructive_approval({"permission": "admin"})
+        )
+
+    def test_policy_self_protection_bootstrap_then_blocks_guard_changes(self) -> None:
+        patch = """@@ -1 +1 @@
+-old = 1
++new = 2
+"""
+        self.assertEqual(
+            guard.approval_policy_risks_for_patch(
+                guard.APPROVAL_GUARD_PATH,
+                patch,
+                policy_active=False,
+            ),
+            [],
+        )
+        risks = guard.approval_policy_risks_for_patch(
+            guard.APPROVAL_GUARD_PATH,
+            patch,
+            policy_active=True,
+        )
+        self.assertTrue(any("guard policy" in risk for risk in risks))
+
+    def test_required_gate_wiring_changes_are_policy_risk_after_bootstrap(self) -> None:
+        patch = """@@ -1 +1 @@
+-    name: merge-gate
++    name: anything-else
+"""
+        risks = guard.approval_policy_risks_for_patch(
+            ".github/workflows/flutter_ci.yml",
+            patch,
+            policy_active=True,
+        )
+        self.assertTrue(any("workflow wiring" in risk for risk in risks))
+        self.assertEqual(
+            guard.approval_policy_risks_for_patch(
+                ".github/workflows/flutter_ci.yml",
+                "@@ -1 +1 @@\n-uses: actions/cache@old\n+uses: actions/cache@new\n",
+                policy_active=True,
+            ),
+            [],
+        )
+
+    def test_current_base_policy_contents_detect_v2_sentinel(self) -> None:
+        active = base64.b64encode(
+            f"# {guard.APPROVAL_POLICY_SENTINEL}\n".encode("utf-8")
+        ).decode("ascii")
+        inactive = base64.b64encode(b"# old policy\n").decode("ascii")
+
+        self.assertTrue(
+            guard.approval_policy_active_from_contents(
+                {"encoding": "base64", "content": active}
+            )
+        )
+        self.assertFalse(
+            guard.approval_policy_active_from_contents(
+                {"encoding": "base64", "content": inactive}
+            )
+        )
+        with self.assertRaises(ValueError):
+            guard.approval_policy_active_from_contents(
+                {"encoding": "utf-8", "content": "plain text"}
+            )
+
+    def test_current_base_policy_lookup_uses_live_base_ref(self) -> None:
+        encoded = base64.b64encode(
+            f"# {guard.APPROVAL_POLICY_SENTINEL}\n".encode("utf-8")
+        ).decode("ascii")
+        with mock.patch.object(
+            guard,
+            "_request_json",
+            return_value={"encoding": "base64", "content": encoded},
+        ) as request:
+            self.assertTrue(
+                guard._current_base_approval_policy_active(
+                    "https://api.github.com/repos/owner/repo",
+                    "token",
+                    "main",
+                )
+            )
+
+        request.assert_called_once_with(
+            "https://api.github.com/repos/owner/repo/contents/tool/pr_coordination_guard.py?ref=main",
+            "token",
+        )
+
+    def test_current_base_policy_override_blocks_stale_base_bootstrap(self) -> None:
+        patch = """@@ -1 +1 @@
+-old = 1
++new = 2
+"""
+        with mock.patch.object(
+            guard, "approval_policy_active", return_value=False
+        ) as stale_base, mock.patch.object(
+            guard, "patch_for_path", return_value=patch
+        ):
+            risks = guard.destructive_risks(
+                "stale-pre-v2-base",
+                "head",
+                [guard.APPROVAL_GUARD_PATH],
+                policy_active=True,
+            )
+
+        stale_base.assert_not_called()
+        self.assertTrue(any("guard policy" in risk for risk in risks))
+
+    def test_runtime_paths_do_not_need_live_policy_lookup(self) -> None:
+        self.assertFalse(
+            guard.approval_policy_sensitive_paths(["lib/features/search/search.dart"])
+        )
+        self.assertTrue(
+            guard.approval_policy_sensitive_paths([guard.APPROVAL_GUARD_PATH])
+        )
+        self.assertTrue(
+            guard.approval_policy_sensitive_paths([".github/workflows/flutter_ci.yml"])
+        )
 
 
 if __name__ == "__main__":
