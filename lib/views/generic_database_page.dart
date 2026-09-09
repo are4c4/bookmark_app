@@ -169,17 +169,6 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
       databaseId: widget.databaseId,
       workspaceId: widget.repository.workspaceId,
     );
-    var galleryCoverSources = const <GalleryCoverSourceOption>[];
-    final objectType = state.objectType;
-    if (objectType != null) {
-      try {
-        galleryCoverSources = await _pageServices.galleryCoverSources.discover(
-          objectTypeId: objectType.id,
-        );
-      } catch (_) {
-        galleryCoverSources = const <GalleryCoverSourceOption>[];
-      }
-    }
 
     if (!mounted) return;
     setState(() {
@@ -191,7 +180,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
       _objectTypes = state.objectTypes;
       _recordsByType = state.recordsByType;
       _computedValues = state.computedValues;
-      _galleryCoverSources = galleryCoverSources;
+      _galleryCoverSources = state.galleryCoverSources;
       _createMode = state.createMode;
       if (_selectedRecordId != null &&
           !state.records.any((record) => record.id == _selectedRecordId)) {
