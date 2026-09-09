@@ -5,6 +5,10 @@ import '../domain/object_model.dart';
 import '../domain/object_query.dart';
 import 'object_query_dialog.dart';
 
+typedef HierarchyAwarePropertyIdsResolver = Future<Set<int>> Function(
+  AppObjectType objectType,
+);
+
 class DatabaseCollectionSettingsDraft {
   const DatabaseCollectionSettingsDraft({
     required this.targetObjectTypeId,
@@ -18,10 +22,15 @@ class DatabaseCollectionSettingsDraft {
 Future<DatabaseCollectionSettingsDraft?> showDatabaseCollectionSettingsDialog({
   required BuildContext context,
   required DatabaseCollectionConfigContext config,
+  HierarchyAwarePropertyIdsResolver? hierarchyAwarePropertyIdsForObjectType,
 }) {
   return showDialog<DatabaseCollectionSettingsDraft>(
     context: context,
-    builder: (_) => DatabaseCollectionSettingsDialog(config: config),
+    builder: (_) => DatabaseCollectionSettingsDialog(
+      config: config,
+      hierarchyAwarePropertyIdsForObjectType:
+          hierarchyAwarePropertyIdsForObjectType,
+    ),
   );
 }
 
@@ -29,9 +38,12 @@ class DatabaseCollectionSettingsDialog extends StatefulWidget {
   const DatabaseCollectionSettingsDialog({
     super.key,
     required this.config,
+    this.hierarchyAwarePropertyIdsForObjectType,
   });
 
   final DatabaseCollectionConfigContext config;
+  final HierarchyAwarePropertyIdsResolver?
+      hierarchyAwarePropertyIdsForObjectType;
 
   @override
   State<DatabaseCollectionSettingsDialog> createState() =>
@@ -54,10 +66,22 @@ class _DatabaseCollectionSettingsDialogState
       .singleWhere((type) => type.id == _targetObjectTypeId);
 
   Future<void> _editFilters() async {
+    var hierarchyAwarePropertyIds = const <int>{};
+    final resolver = widget.hierarchyAwarePropertyIdsForObjectType;
+    if (resolver != null) {
+      try {
+        hierarchyAwarePropertyIds = await resolver(_targetObjectType);
+      } catch (_) {
+        hierarchyAwarePropertyIds = const <int>{};
+      }
+    }
+    if (!mounted) return;
+
     final result = await showObjectQueryDialog(
       context,
       properties: _targetObjectType.properties,
       initialFilters: _filters,
+      hierarchyAwarePropertyIds: hierarchyAwarePropertyIds,
     );
     if (result == null || !mounted) return;
     setState(() => _filters = [...result.filters]);

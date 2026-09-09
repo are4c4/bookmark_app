@@ -19,6 +19,7 @@ class ObjectViewToolbar extends StatelessWidget {
     this.supportedLayouts = const <String>['gallery', 'list', 'table', 'board'],
     this.showLayoutSelector = true,
     this.galleryCoverSources = const <GalleryCoverSourceOption>[],
+    this.hierarchyAwarePropertyIds = const <int>{},
   });
 
   final DatabaseViewConfig view;
@@ -33,6 +34,12 @@ class ObjectViewToolbar extends StatelessWidget {
   /// behavior unchanged. Supplying even the explicit `none` option exposes the
   /// selector so a stale persisted source can be cleared safely.
   final List<GalleryCoverSourceOption> galleryCoverSources;
+
+  /// Relation Properties whose target is a validated canonical hierarchy.
+  ///
+  /// The toolbar only uses this capability to expose hierarchy modes in the
+  /// generic query dialog. It does not own or traverse the hierarchy itself.
+  final Set<int> hierarchyAwarePropertyIds;
 
   static const _queryAdapter = DatabaseViewQueryAdapter();
   static const _groupAdapter = DatabaseViewGroupAdapter();
@@ -90,6 +97,7 @@ class ObjectViewToolbar extends StatelessWidget {
       properties: properties,
       initialFilters: state.filters,
       initialSorts: state.sorts,
+      hierarchyAwarePropertyIds: hierarchyAwarePropertyIds,
     );
     if (result == null) return;
     onViewChanged(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../domain/object_model.dart';
 import '../domain/object_query.dart';
+import 'object_hierarchy_match_mode_field.dart';
 
 class ObjectQueryDraft {
   const ObjectQueryDraft({
@@ -18,6 +19,7 @@ Future<ObjectQueryDraft?> showObjectQueryDialog(
   required List<ObjectPropertyDefinition> properties,
   List<ObjectFilterRule> initialFilters = const <ObjectFilterRule>[],
   List<ObjectSortRule> initialSorts = const <ObjectSortRule>[],
+  Set<int> hierarchyAwarePropertyIds = const <int>{},
 }) {
   return showDialog<ObjectQueryDraft>(
     context: context,
@@ -25,6 +27,7 @@ Future<ObjectQueryDraft?> showObjectQueryDialog(
       properties: properties,
       initialFilters: initialFilters,
       initialSorts: initialSorts,
+      hierarchyAwarePropertyIds: hierarchyAwarePropertyIds,
     ),
   );
 }
@@ -35,11 +38,13 @@ class ObjectQueryDialog extends StatefulWidget {
     required this.properties,
     this.initialFilters = const <ObjectFilterRule>[],
     this.initialSorts = const <ObjectSortRule>[],
+    this.hierarchyAwarePropertyIds = const <int>{},
   });
 
   final List<ObjectPropertyDefinition> properties;
   final List<ObjectFilterRule> initialFilters;
   final List<ObjectSortRule> initialSorts;
+  final Set<int> hierarchyAwarePropertyIds;
 
   @override
   State<ObjectQueryDialog> createState() => _ObjectQueryDialogState();
@@ -147,6 +152,12 @@ class _ObjectQueryDialogState extends State<ObjectQueryDialog> {
       filter.operator = operators.first;
     }
     final needsValue = !_valueLessOperators.contains(filter.operator);
+    final hierarchyAware =
+        needsValue &&
+        property != null &&
+        widget.hierarchyAwarePropertyIds.contains(property.id) &&
+        (filter.operator == ObjectFilterOperator.containsAny ||
+            filter.operator == ObjectFilterOperator.containsAll);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -175,6 +186,7 @@ class _ObjectQueryDialogState extends State<ObjectQueryDialog> {
                   if (!nextOperators.contains(filter.operator)) {
                     filter.operator = nextOperators.first;
                   }
+                  filter.hierarchyMatchMode = ObjectHierarchyMatchMode.exact;
                   filter.value = '';
                 }),
               ),
@@ -186,13 +198,20 @@ class _ObjectQueryDialogState extends State<ObjectQueryDialog> {
                 initialValue: filter.operator,
                 decoration: const InputDecoration(labelText: '条件'),
                 items: operators
-                    .map((operator) => DropdownMenuItem(
-                          value: operator,
-                          child: Text(_operatorLabel(operator)),
-                        ))
+                    .map(
+                      (operator) => DropdownMenuItem(
+                        value: operator,
+                        child: Text(_operatorLabel(operator)),
+                      ),
+                    )
                     .toList(growable: false),
                 onChanged: (value) => setState(() {
-                  if (value != null) filter.operator = value;
+                  if (value == null) return;
+                  filter.operator = value;
+                  if (value != ObjectFilterOperator.containsAny &&
+                      value != ObjectFilterOperator.containsAll) {
+                    filter.hierarchyMatchMode = ObjectHierarchyMatchMode.exact;
+                  }
                 }),
               ),
             ),
@@ -200,7 +219,24 @@ class _ObjectQueryDialogState extends State<ObjectQueryDialog> {
             Expanded(
               flex: 4,
               child: needsValue
-                  ? _filterValueEditor(filter, property)
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (hierarchyAware) ...[
+                          ObjectHierarchyMatchModeField(
+                            key: ValueKey(
+                              'filter-hierarchy-${filter.propertyId}-${filter.revision}',
+                            ),
+                            value: filter.hierarchyMatchMode,
+                            onChanged: (mode) => setState(
+                              () => filter.hierarchyMatchMode = mode,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+                        _filterValueEditor(filter, property),
+                      ],
+                    )
                   : const SizedBox(height: 48),
             ),
             IconButton(
@@ -471,6 +507,7 @@ class _EditableFilter {
     required this.propertyId,
     required this.operator,
     required this.value,
+    this.hierarchyMatchMode = ObjectHierarchyMatchMode.exact,
     this.revision = 0,
   });
 
@@ -478,16 +515,19 @@ class _EditableFilter {
         propertyId: rule.propertyId,
         operator: rule.operator,
         value: rule.value,
+        hierarchyMatchMode: rule.hierarchyMatchMode,
       );
 
   int? propertyId;
   ObjectFilterOperator operator;
   dynamic value;
+  ObjectHierarchyMatchMode hierarchyMatchMode;
   int revision;
 
   ObjectFilterRule? toRule() => ObjectFilterRule(
         propertyId: propertyId,
         operator: operator,
         value: value,
+        hierarchyMatchMode: hierarchyMatchMode,
       );
 }
