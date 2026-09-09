@@ -8,6 +8,8 @@ workflow self-mutation safety checks.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import os
 import re
@@ -212,12 +214,7 @@ def destructive_risks_for_patch(path: str, patch: str) -> list[str]:
 
 
 def approval_policy_active(base: str) -> bool:
-    """Return whether the current base already contains the v2 approval contract.
-
-    The first PR that introduces this sentinel is the bootstrap. After it reaches
-    main, later edits to the guard or its merge-gate wiring are themselves
-    approval-sensitive.
-    """
+    """Return whether a specific git base already contains the v2 approval contract."""
     result = subprocess.run(
         ["git", "show", f"{base}:{APPROVAL_GUARD_PATH}"],
         check=False,
@@ -225,6 +222,27 @@ def approval_policy_active(base: str) -> bool:
         text=True,
     )
     return result.returncode == 0 and APPROVAL_POLICY_SENTINEL in result.stdout
+
+
+def approval_policy_sensitive_paths(paths: list[str]) -> bool:
+    return APPROVAL_GUARD_PATH in paths or any(
+        path.startswith(".github/workflows/") and path.endswith(WORKFLOW_SUFFIXES)
+        for path in paths
+    )
+
+
+def approval_policy_active_from_contents(payload: object) -> bool:
+    """Read the v2 sentinel from a GitHub contents API response."""
+    if not isinstance(payload, dict):
+        raise ValueError("Approval policy contents response was not an object")
+    if payload.get("encoding") != "base64":
+        raise ValueError("Approval policy contents response was not base64 encoded")
+    encoded = str(payload.get("content") or "").replace("\n", "")
+    try:
+        content = base64.b64decode(encoded).decode("utf-8")
+    except (binascii.Error, UnicodeDecodeError) as error:
+        raise ValueError("Approval policy contents response could not be decoded") from error
+    return APPROVAL_POLICY_SENTINEL in content
 
 
 def approval_policy_risks_for_patch(
@@ -245,9 +263,16 @@ def approval_policy_risks_for_patch(
     return []
 
 
-def destructive_risks(base: str, head: str, paths: list[str]) -> list[str]:
+def destructive_risks(
+    base: str,
+    head: str,
+    paths: list[str],
+    *,
+    policy_active: bool | None = None,
+) -> list[str]:
     rendered: list[str] = []
-    policy_active = approval_policy_active(base)
+    if policy_active is None:
+        policy_active = approval_policy_active(base)
     for path in paths:
         patch = patch_for_path(base, head, path)
         reasons = destructive_risks_for_patch(path, patch)
@@ -337,6 +362,22 @@ def _request_json(url: str, token: str) -> object:
     )
     with urllib.request.urlopen(request, timeout=15) as response:
         return json.load(response)
+
+
+def _current_base_approval_policy_active(
+    api_root: str,
+    token: str,
+    base_ref: str,
+) -> bool:
+    if not base_ref:
+        raise ValueError("Pull-request base ref is unavailable for approval policy authority")
+    quoted_path = urllib.parse.quote(APPROVAL_GUARD_PATH, safe="/")
+    quoted_ref = urllib.parse.quote(base_ref, safe="")
+    payload = _request_json(
+        f"{api_root}/contents/{quoted_path}?ref={quoted_ref}",
+        token,
+    )
+    return approval_policy_active_from_contents(payload)
 
 
 def _open_pull_claims(api_root: str, token: str) -> list[OpenPullClaim]:
@@ -488,6 +529,8 @@ def main() -> int:
         body = str(pull.get("body") or "")
         head = pull.get("head", {})
         branch = str(head.get("ref") or "")
+        base = pull.get("base", {})
+        base_ref = str(base.get("ref") or "") if isinstance(base, dict) else ""
         author = pull.get("user", {})
         author_login = str(author.get("login") or "") if isinstance(author, dict) else ""
         current_number = int(event.get("number") or pull.get("number") or 0)
@@ -534,7 +577,24 @@ def main() -> int:
             dependency_bot=dependency_bot,
         )
 
-        risks = destructive_risks(base_sha, head_sha, paths)
+        policy_active_override: bool | None = None
+        if approval_policy_sensitive_paths(paths):
+            if not api_root or not token:
+                raise ValueError(
+                    "Current-base destructive approval policy cannot be verified without repository/token metadata"
+                )
+            policy_active_override = _current_base_approval_policy_active(
+                api_root,
+                token,
+                base_ref,
+            )
+
+        risks = destructive_risks(
+            base_sha,
+            head_sha,
+            paths,
+            policy_active=policy_active_override,
+        )
         risk_approver: str | None = None
         review_candidates: tuple[str, ...] = ()
         if risks and api_root and token and current_number:
@@ -584,6 +644,7 @@ def main() -> int:
                 f"- Declared dependencies: `{', '.join('#' + str(number) for number in contract.dependencies) if contract.dependencies else 'none'}`",
                 f"- Other open PRs claiming Related issue: `{', '.join('#' + str(pull.number) for pull in duplicates) if duplicates else 'none'}`",
                 f"- Actual shared hotspots: `{', '.join(sorted(actual_hotspots(paths))) if actual_hotspots(paths) else 'none'}`",
+                f"- Current-base approval policy: `{('active' if policy_active_override else 'bootstrap/inactive') if policy_active_override is not None else 'not-sensitive'}`",
                 f"- Destructive/policy-risk findings: `{len(risks)}`",
                 f"- Current-head distinct approval candidates: `{', '.join(review_candidates) if review_candidates else 'none'}`",
                 f"- Eligible destructive-risk approver: `{risk_approver or 'none/not-required'}`",
@@ -608,6 +669,7 @@ def main() -> int:
         OSError,
         ValueError,
         KeyError,
+        binascii.Error,
         json.JSONDecodeError,
         subprocess.CalledProcessError,
         urllib.error.URLError,
