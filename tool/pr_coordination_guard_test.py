@@ -294,6 +294,35 @@ jobs:
         risks = guard.destructive_risks_for_patch("lib/features/search/cache.dart", patch)
         self.assertEqual(risks, [])
 
+    def test_owner_risk_approval_requires_exact_marker_from_owner(self) -> None:
+        comments = [
+            {
+                "user": {"login": "someone-else"},
+                "body": guard.RISK_APPROVAL_MARKER,
+            },
+            {
+                "user": {"login": "are4c4"},
+                "body": "Looks good, but no explicit marker.",
+            },
+        ]
+        self.assertFalse(guard.owner_risk_approval(comments, "are4c4"))
+        comments.append(
+            {
+                "user": {"login": "are4c4"},
+                "body": f"Reviewed preservation and rollback. {guard.RISK_APPROVAL_MARKER}",
+            }
+        )
+        self.assertTrue(guard.owner_risk_approval(comments, "are4c4"))
+
+    def test_owner_risk_approval_is_case_insensitive(self) -> None:
+        comments = [
+            {
+                "user": {"login": "Are4c4"},
+                "body": "RISK APPROVAL: APPROVED",
+            }
+        ]
+        self.assertTrue(guard.owner_risk_approval(comments, "are4c4"))
+
 
 if __name__ == "__main__":
     unittest.main()
