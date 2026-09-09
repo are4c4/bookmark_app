@@ -39,9 +39,8 @@ void main() {
       );
       final vault = Directory('${sandbox.path}/vault');
       await Directory('${vault.path}/photos').create(recursive: true);
-      await Directory('${vault.path}/attachments/nested').create(
-        recursive: true,
-      );
+      await Directory('${vault.path}/attachments/nested')
+          .create(recursive: true);
 
       for (final destination in <String>[
         '${vault.path}/backup.zip',
@@ -104,31 +103,28 @@ void main() {
     },
   );
 
-  test(
-    'rejects an existing destination symlink targeting the Vault',
-    () async {
-      if (Platform.isWindows) return;
+  test('rejects an existing destination symlink targeting the Vault', () async {
+    if (Platform.isWindows) return;
 
-      final sandbox = await _createSandbox(
-        'bookmark_vault_backup_destination_file_link_',
-      );
-      final vault = Directory('${sandbox.path}/vault');
-      await vault.create();
-      final target = File('${vault.path}/existing.zip');
-      await target.writeAsBytes([1, 2, 3]);
-      final destination = Link('${sandbox.path}/backup.zip');
-      await destination.create(target.path);
+    final sandbox = await _createSandbox(
+      'bookmark_vault_backup_destination_file_link_',
+    );
+    final vault = Directory('${sandbox.path}/vault');
+    await vault.create();
+    final target = File('${vault.path}/existing.zip');
+    await target.writeAsBytes([1, 2, 3]);
+    final destination = Link('${sandbox.path}/backup.zip');
+    await destination.create(target.path);
 
-      await expectLater(
-        guard.resolveSafeDestination(
-          sourceVaultPath: vault.path,
-          destinationPath: destination.path,
-        ),
-        throwsA(isA<FileSystemException>()),
-      );
-      expect(await target.readAsBytes(), [1, 2, 3]);
-    },
-  );
+    await expectLater(
+      guard.resolveSafeDestination(
+        sourceVaultPath: vault.path,
+        destinationPath: destination.path,
+      ),
+      throwsA(isA<FileSystemException>()),
+    );
+    expect(await target.readAsBytes(), [1, 2, 3]);
+  });
 
   test(
     'export rejects a Vault-local destination before checkpoint/output',
@@ -161,9 +157,7 @@ void main() {
   test(
     'export cancellation returns null without checkpointing the Vault',
     () async {
-      final sandbox = await _createSandbox(
-        'bookmark_profile_backup_cancel_',
-      );
+      final sandbox = await _createSandbox('bookmark_profile_backup_cancel_');
       final vault = Directory('${sandbox.path}/vault');
       await vault.create();
       final database = _databaseFor(vault);
@@ -222,7 +216,10 @@ void main() {
       final sourceBytes = <int>[11, 22, 33, 44];
       await source.writeAsBytes(sourceBytes);
       final destination = File('${sandbox.path}/backup.zip');
-      final linkResult = await Process.run('ln', [source.path, destination.path]);
+      final linkResult = await Process.run('ln', [
+        source.path,
+        destination.path,
+      ]);
       expect(linkResult.exitCode, 0, reason: '${linkResult.stderr}');
       final database = _databaseFor(vault);
 
