@@ -123,8 +123,10 @@ class PortableExportPackagePathPolicy {
 
     final relative = validateRelativePath(packageRelativePath);
     final root = _normalizedAbsolute(rootValue);
-    final resolved = _normalizedAbsolute('$root/$relative');
-    if (!resolved.startsWith('$root/')) {
+    final separator = root.endsWith('/') ? '' : '/';
+    final resolved = _normalizedAbsolute('$root$separator$relative');
+    final prefix = root.endsWith('/') ? root : '$root/';
+    if (!resolved.startsWith(prefix)) {
       throw StateError('Portable export package member escaped package root.');
     }
     return resolved;
@@ -133,11 +135,13 @@ class PortableExportPackagePathPolicy {
   bool _isAbsoluteOrDriveQualified(String path) =>
       path.startsWith('/') || RegExp(r'^[A-Za-z]:').hasMatch(path);
 
-  String _normalizedAbsolute(String path) => Directory(path)
-      .absolute
-      .path
-      .replaceAll('\\', '/')
-      .replaceAll(RegExp(r'/+$'), '');
+  String _normalizedAbsolute(String path) {
+    final normalized = Directory(path).absolute.path.replaceAll('\\', '/');
+    if (normalized == '/' || RegExp(r'^[A-Za-z]:/$').hasMatch(normalized)) {
+      return normalized;
+    }
+    return normalized.replaceAll(RegExp(r'/+$'), '');
+  }
 }
 
 /// Plans portable-export handling for persisted file references without mutating
@@ -226,6 +230,11 @@ class PortableExportFilePlanner {
       throw FileSystemException('Vault attachments directory is unavailable.');
     }
 
+    await _validateManagedParents(
+      attachmentsPath: attachments.path,
+      relativeSegments: segments,
+    );
+
     final resolvedPath = ProfilePathResolver(vault.path)
         .resolveStoredPath(safeStoredPath);
     if (!_isInsideAttachments(
@@ -253,6 +262,22 @@ class PortableExportFilePlanner {
     );
   }
 
+  Future<void> _validateManagedParents({
+    required String attachmentsPath,
+    required List<String> relativeSegments,
+  }) async {
+    var current = attachmentsPath;
+    for (var index = 1; index < relativeSegments.length - 1; index++) {
+      current = '$current/${relativeSegments[index]}';
+      final type = await FileSystemEntity.type(current, followLinks: false);
+      if (type != FileSystemEntityType.directory) {
+        throw FileSystemException(
+          'Managed-byte export parent directory is unavailable.',
+        );
+      }
+    }
+  }
+
   bool _isInsideAttachments({
     required String resolvedPath,
     required String vaultDirectoryPath,
@@ -269,9 +294,11 @@ class PortableExportFilePlanner {
       path.startsWith('\\\\') ||
       RegExp(r'^[A-Za-z]:[\\/]').hasMatch(path);
 
-  String _normalizedAbsolute(String path) => File(path)
-      .absolute
-      .path
-      .replaceAll('\\', '/')
-      .replaceAll(RegExp(r'/+$'), '');
+  String _normalizedAbsolute(String path) {
+    final normalized = File(path).absolute.path.replaceAll('\\', '/');
+    if (normalized == '/' || RegExp(r'^[A-Za-z]:/$').hasMatch(normalized)) {
+      return normalized;
+    }
+    return normalized.replaceAll(RegExp(r'/+$'), '');
+  }
 }
