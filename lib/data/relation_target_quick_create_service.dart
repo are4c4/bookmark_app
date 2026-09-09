@@ -1,6 +1,7 @@
 import 'dart:developer' as developer;
 
 import '../domain/object_model.dart';
+import 'canonical_weblink_capture_service.dart';
 import 'object_store.dart';
 import 'relation_target_quick_create_policy.dart';
 import 'tag_object_bridge.dart';
@@ -18,7 +19,7 @@ typedef RelationQuickCreateWeblinkEnricher = Future<void> Function({
 ///
 /// The read-only [RelationTargetQuickCreatePolicy] decides the canonical mode.
 /// Custom ObjectTypes use normal Object creation, Tag creation goes through the
-/// legacy-compatible Tag bridge, Weblinks use normalized/reusable URL identity,
+/// legacy-compatible Tag bridge, Weblinks use the canonical capture boundary,
 /// and Image/File require caller-supplied managed-import callbacks. Every result
 /// is reloaded from the configured target ObjectType before being returned.
 class RelationTargetQuickCreateService {
@@ -75,10 +76,8 @@ class RelationTargetQuickCreateService {
 
       case RelationTargetQuickCreateMode.weblinkUrl:
         final url = _requiredInput(input, 'Weblink URL');
-        final object = await weblinks.findOrCreate(
-          workspaceId: workspaceId,
-          url: url,
-        );
+        final object = await CanonicalWeblinkCaptureService(weblinks: weblinks)
+            .capture(workspaceId: workspaceId, url: url);
         final enrich = weblinkEnricher;
         if (enrich != null) {
           try {
