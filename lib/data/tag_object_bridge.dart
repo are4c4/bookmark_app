@@ -192,11 +192,9 @@ class TagObjectBridge {
         schema,
         group.id,
       );
-      final objectId = existingObjectId ??
-          await _ensureObjectForTagGroup(
-            schema: schema,
-            group: group,
-          );
+      final objectId =
+          existingObjectId ??
+          await _ensureObjectForTagGroup(schema: schema, group: group);
       if (existingObjectId == null) {
         await objectStore.setPropertyValue(
           objectId: objectId,
@@ -364,11 +362,13 @@ class TagObjectBridge {
     required int objectId,
     required int propertyId,
   }) async {
-    final row = await database.customSelect(
-      '''SELECT 1 FROM generic_values
+    final row = await database
+        .customSelect(
+          '''SELECT 1 FROM generic_values
          WHERE record_id = ? AND property_id = ? LIMIT 1''',
-      variables: [Variable<int>(objectId), Variable<int>(propertyId)],
-    ).getSingleOrNull();
+          variables: [Variable<int>(objectId), Variable<int>(propertyId)],
+        )
+        .getSingleOrNull();
     return row != null;
   }
 
