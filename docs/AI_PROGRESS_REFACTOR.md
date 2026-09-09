@@ -16,20 +16,30 @@ Durable product implications for G:
 - legacy UI/API/code deletion follows replacement parity + caller-zero proof;
 - destructive schema/data retirement is a separate preservation-proven migration, not routine refactor work.
 
+## Historical branch cleanup — completed
+#1072 removed 840 historical refs that were provably merged. #1074 then added a read-only inventory audit so remaining refs were classified from live branch state plus GitHub PR metadata instead of branch names.
+
+#1076 / PR #1077 completed the second narrow cleanup pass. The PR dry-run found 139 branches whose current tip exactly matched an old closed-unmerged PR head. After green authoritative CI and merge, the write job recomputed eligibility immediately before deletion and successfully deleted all 139 candidates. No application/user data or PR history was removed.
+
+The final live audit after cleanup reports 85 non-default branches (86 including `main`):
+- `open-pr`: 4
+- `dependabot-transient`: 0
+- `recent`: 27
+- `default-tip`: 0
+- `merged-safe`: 0
+- `closed-unmerged-exact-head`: 0
+- `advanced-after-pr`: 10
+- `no-pr-history`: 44
+
+Current retention policy:
+- open PR and recent refs remain untouched;
+- `advanced-after-pr` retains work added after recorded PR heads and must not be auto-deleted;
+- `no-pr-history` has no durable PR evidence proving intent or recoverability and must not be auto-deleted;
+- there are currently no remaining refs proven eligible by the merged-safe or exact closed-unmerged cleanup contracts.
+
+Future ordinary merged PR heads rely on GitHub's native automatic head-branch deletion. If a later cleanup is desired for ambiguous refs, begin with another read-only evidence pass; do not broaden the existing destructive contracts.
+
 ## Active focused issues
-
-### #1076 — remove stale exact heads of closed-unmerged PRs
-#1072 removed 840 historical branch refs that were provably merged. #1074 then added a read-only inventory audit and classified the remaining refs. Its live report found 139 old branches whose current tip exactly matched the recorded head SHA of a closed, unmerged PR, while separately retaining 10 branches advanced after PR history and 42 branches with no PR history as unique/ambiguous work.
-
-#1076 is the narrowly justified second cleanup pass. A branch is eligible only when live state still proves all of the following immediately before deletion:
-- not the default branch and not an open-PR head;
-- not equal to the current default tip;
-- at least 24 hours old;
-- exact `<branch>|<tip SHA>` matches a closed-unmerged PR head;
-- the same exact pair is not recorded as a merged PR head;
-- the branch has not advanced since that closed PR.
-
-The PR must dry-run first. Deletion occurs only after green integration and recomputes live eligibility. `advanced-after-pr`, `no-pr-history`, recent/default-tip and open-PR branches are never auto-deleted by this slice. Closed PR metadata preserves the historical head SHA needed to recreate a deleted ref if recovery is ever required.
 
 ### #1047 — Generic Database gallery state-loader extraction
 Behavior-preserving extraction: move Gallery cover-source discovery into the existing `GenericDatabasePageStateLoader` snapshot without changing Gallery semantics. `generic_database_page.dart` edits must remain patch-sized and re-audited against live ownership.
@@ -61,7 +71,8 @@ Future G work after owning-lane parity:
 - immutable GitHub Actions SHA pin audit;
 - weekly Dependabot updates for Dart/pub and GitHub Actions;
 - historical proven-merged branch cleanup with exact merged-PR head recognition for squash merges;
-- read-only historical branch inventory classification for ambiguous refs.
+- read-only historical branch inventory classification for ambiguous refs;
+- exact closed-unmerged PR-head cleanup with live SHA recheck immediately before deletion.
 
 Do not relax a guardrail or create no-op commits to make unrelated work easier to merge.
 
@@ -103,10 +114,8 @@ The repository remains personal-account owned, so Merge Queue is not available. 
 Behavior-preserving refactors still require changed-Dart format, Analyze and relevant/full Flutter Test. Workflow/guard changes must exercise their focused regressions and the full authoritative CI path. Docs-only architecture synchronization should use the docs-only CI path plus handoff/coordination audits.
 
 ## Resume sequence
-1. finish #1076 dry-run and verify the exact closed-unmerged candidate set against live PR/branch state;
-2. integrate only after the authoritative `merge-gate` is green, then verify the post-merge deletion job and recount live branches;
-3. close #1076 only after recording deleted/retained counts; do not auto-delete `advanced-after-pr` or `no-pr-history` survivors;
-4. re-audit live open PR/hotspot ownership;
-5. continue #1047/#225/#950 only through small focused slices;
-6. when #1039/#1040 owning-lane parity lands, create caller-zero retirement slices instead of combining product migration with cleanup;
-7. keep destructive schema/data removal separate and preservation-gated.
+1. re-audit latest `main`, open PR ownership and shared-hotspot ownership before taking new G work;
+2. continue #1047/#225/#950 only through small focused behavior-preserving slices;
+3. when #1039/#1040 owning-lane parity lands, create caller-zero retirement slices instead of combining product migration with cleanup;
+4. if historical branch cleanup is revisited, start from the read-only inventory and gather new evidence rather than deleting `advanced-after-pr` or `no-pr-history` refs;
+5. keep destructive schema/data removal separate and preservation-gated.
