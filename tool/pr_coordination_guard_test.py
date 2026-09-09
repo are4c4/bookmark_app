@@ -362,6 +362,63 @@ jobs:
             (),
         )
 
+    def test_paginated_review_history_later_page_overrides_approval(self) -> None:
+        approval = {
+            "id": 1,
+            "state": "APPROVED",
+            "commit_id": "head-sha",
+            "submitted_at": "2026-09-09T00:00:00Z",
+            "user": {"login": "reviewer", "type": "User"},
+        }
+        first_page = [approval, *({"id": index} for index in range(2, 101))]
+        later_change_request = {
+            "id": 101,
+            "state": "CHANGES_REQUESTED",
+            "commit_id": "head-sha",
+            "submitted_at": "2026-09-09T01:00:00Z",
+            "user": {"login": "reviewer", "type": "User"},
+        }
+        with mock.patch.object(
+            guard,
+            "_request_json",
+            side_effect=[first_page, [later_change_request]],
+        ) as request:
+            reviews = guard._request_paginated_list(
+                "https://api.github.com/repos/owner/repo/pulls/42/reviews",
+                "token",
+            )
+
+        self.assertEqual(len(reviews), 101)
+        self.assertEqual(
+            guard.current_distinct_approved_reviewers(reviews, "author", "head-sha"),
+            (),
+        )
+        self.assertEqual(
+            request.call_args_list,
+            [
+                mock.call(
+                    "https://api.github.com/repos/owner/repo/pulls/42/reviews?per_page=100&page=1",
+                    "token",
+                ),
+                mock.call(
+                    "https://api.github.com/repos/owner/repo/pulls/42/reviews?per_page=100&page=2",
+                    "token",
+                ),
+            ],
+        )
+
+    def test_paginated_review_history_rejects_non_list_page(self) -> None:
+        with mock.patch.object(
+            guard,
+            "_request_json",
+            return_value={"message": "unexpected"},
+        ):
+            with self.assertRaises(ValueError):
+                guard._request_paginated_list(
+                    "https://api.github.com/repos/owner/repo/pulls/42/reviews",
+                    "token",
+                )
+
     def test_destructive_approver_requires_write_or_admin(self) -> None:
         reviews = [
             {
