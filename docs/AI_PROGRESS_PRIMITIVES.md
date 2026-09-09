@@ -76,3 +76,5 @@ Changed-Dart format, Analyze, full Flutter Test and focused normalization/restar
 4. add reuse/collision/restart regressions;
 5. update this handoff with durable branch/commit/PR facts;
 6. take #155/#245 work only when a concrete native-capability defect remains after #1054.
+
+This sequence is not terminal. After any slice/PR/merge, apply the shared **Lane continuation and resume/stop contract** in `AGENTS.md` before ending the run. Lane D continues only through concrete native-capability obligations; after #1054, re-audit #155/#245 and newly-unblocked Weblink/Image/File work instead of assuming the lane is done. If no such work exists, record `Stop reason: idle-no-work — <live evidence>` or another precise shared stop category.

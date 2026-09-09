@@ -88,3 +88,5 @@ GitHub Actions is authoritative when local Flutter execution is unavailable. Bod
 4. add reorder only through the existing canonical mutation seam and keep accessible move commands;
 5. run changed-Dart format, Analyze and full Flutter Test CI, then merge only after green checks;
 6. after #1057, refresh live A dependency order between #1058, #1041 and #1044 rather than assuming this file’s ordering is permanent.
+
+This sequence is not terminal. After any slice/PR/merge, apply the shared **Lane continuation and resume/stop contract** in `AGENTS.md` before ending the run. Lane A continues while concrete safe A work exists; a single completed Issue/PR is never sufficient stop evidence. If the final resume audit finds no actionable A work, record `Stop reason: idle-no-work — <live evidence>` (or another exact stop category from `AGENTS.md`) in the durable handoff before stopping.

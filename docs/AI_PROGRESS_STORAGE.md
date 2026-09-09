@@ -60,3 +60,5 @@ Real-machine validation is still required for #951/#242; repository tests/tools 
 4. route concrete semantic defects to A/B/C/D/G as appropriate;
 5. update #951/#242 and this handoff with results;
 6. do not perform destructive schema retirement inside the validation issues.
+
+Lane F inherits the shared **Lane continuation and resume/stop contract** in `AGENTS.md`. Real-machine validation may legitimately block a specific F gate, but it is not permission to stop before re-checking for other independent F work such as an already-focused Vault/export/delivery obligation. When this execution environment cannot perform the required physical validation and no other safe F work exists, record the precise shared stop category and evidence (for example `Stop reason: external-infra — real macOS validation required for #951/#242`).
