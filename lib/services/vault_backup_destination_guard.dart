@@ -10,7 +10,7 @@ import 'dart:io';
 class VaultBackupDestinationGuard {
   const VaultBackupDestinationGuard();
 
-  Future<void> validate({
+  Future<String> resolveSafeDestination({
     required String sourceVaultPath,
     required String destinationPath,
   }) async {
@@ -21,39 +21,47 @@ class VaultBackupDestinationGuard {
 
     final sourceRoot = _normalized(await source.resolveSymbolicLinks());
     final destination = File(destinationPath).absolute;
+    final fileName = _fileName(destination.path);
+    if (fileName.isEmpty || fileName == '.' || fileName == '..') {
+      throw FileSystemException('Backup destination file name is invalid.');
+    }
 
-    // A save picker normally returns a path in an existing directory. Resolve
-    // that parent first so an outside-looking symlink alias into the Vault is
-    // rejected even when the destination file does not exist yet.
-    final resolvedParent =
-        _normalized(await destination.parent.resolveSymbolicLinks());
+    // Resolve the parent to its real filesystem location and use that resolved
+    // path for the eventual write. An outside-looking symlink alias into the
+    // Vault is rejected, and later archive staging never needs to traverse the
+    // alias again.
+    final resolvedParentPath = await destination.parent.resolveSymbolicLinks();
+    final resolvedParent = _normalized(resolvedParentPath);
     if (_sameOrInside(resolvedParent, sourceRoot)) {
       _reject();
     }
 
-    // If the selected destination already exists, resolve that entity as well.
-    // This specifically closes an existing file-symlink outside the Vault that
-    // redirects writes back into the source tree.
+    final resolvedDestinationPath =
+        '${Directory(resolvedParentPath).path}${Platform.pathSeparator}$fileName';
+    final resolvedDestination = File(resolvedDestinationPath);
     final type = await FileSystemEntity.type(
-      destination.path,
+      resolvedDestination.path,
       followLinks: false,
     );
-    String? resolvedDestination;
+    String? targetPath;
     if (type == FileSystemEntityType.link) {
-      resolvedDestination =
-          _normalized(await Link(destination.path).resolveSymbolicLinks());
+      targetPath = _normalized(
+        await Link(resolvedDestination.path).resolveSymbolicLinks(),
+      );
     } else if (type == FileSystemEntityType.file) {
-      resolvedDestination =
-          _normalized(await File(destination.path).resolveSymbolicLinks());
+      targetPath = _normalized(
+        await resolvedDestination.resolveSymbolicLinks(),
+      );
     } else if (type == FileSystemEntityType.directory) {
-      resolvedDestination =
-          _normalized(await Directory(destination.path).resolveSymbolicLinks());
+      targetPath = _normalized(
+        await Directory(resolvedDestination.path).resolveSymbolicLinks(),
+      );
     }
 
-    if (resolvedDestination != null &&
-        _sameOrInside(resolvedDestination, sourceRoot)) {
+    if (targetPath != null && _sameOrInside(targetPath, sourceRoot)) {
       _reject();
     }
+    return resolvedDestination.path;
   }
 
   Never _reject() {
@@ -66,6 +74,12 @@ class VaultBackupDestinationGuard {
     if (candidate == root) return true;
     final prefix = root == '/' ? '/' : '$root/';
     return candidate.startsWith(prefix);
+  }
+
+  String _fileName(String path) {
+    final normalized = path.replaceAll('\\', '/');
+    final index = normalized.lastIndexOf('/');
+    return index < 0 ? normalized : normalized.substring(index + 1);
   }
 
   String _normalized(String path) {
