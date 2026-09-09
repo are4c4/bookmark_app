@@ -95,6 +95,7 @@ jobs:
           python3 tool/pr_coordination_guard_test.py
           python3 tool/shared_hotspot_conflict_guard_test.py
           python3 tool/report_test_health_test.py
+          python3 tool/report_flutter_test_file_timings_test.py
           python3 tool/vault_preservation_manifest_test.py
           python3 tool/github_actions_pin_guard_test.py
           python3 tool/github_actions_pin_guard.py
@@ -207,6 +208,7 @@ jobs:
           flutter test \
             --timeout 2m \
             --reporter expanded \
+            --file-reporter json:ci-artifacts/flutter-test-events-${{ matrix.shard }}.jsonl \
             --total-shards 4 \
             --shard-index ${{ matrix.shard }} \
             2>&1 | tee ci-artifacts/flutter-test-shard-${{ matrix.shard }}.log
@@ -284,6 +286,24 @@ jobs:
           if-no-files-found: warn
           retention-days: 1
 
+      - name: Collect per-file Flutter test timing
+        if: always()
+        run: >-
+          python3 tool/report_flutter_test_file_timings.py collect
+          --events ci-artifacts/flutter-test-events-${{ matrix.shard }}.jsonl
+          --repo-root "$GITHUB_WORKSPACE"
+          --output ci-artifacts/test-file-timing-${{ matrix.shard }}.json
+          --shard ${{ matrix.shard }}
+
+      - name: Upload per-file Flutter test timing
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flutter-test-file-timing-${{ github.run_id }}-${{ github.run_attempt }}-shard-${{ matrix.shard }}
+          path: ci-artifacts/test-file-timing-${{ matrix.shard }}.json
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Summarize Flutter test failure
         if: ${{ always() && steps.flutter-test.outcome == 'failure' }}
         run: |
@@ -334,12 +354,26 @@ jobs:
           path: ci-artifacts
           merge-multiple: true
 
+      - name: Download per-file timings
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: flutter-test-file-timing-${{ github.run_id }}-${{ github.run_attempt }}-shard-*
+          path: ci-artifacts
+          merge-multiple: true
+
       - name: Report Flutter Test health
         env:
           EXPECTED_TEST_SHARDS: 4
           TEST_SHARD_SKEW_WARN: 1.25
           TEST_SHARD_WALL_WARN_SECONDS: 360
         run: python3 tool/report_test_health.py --directory ci-artifacts
+
+      - name: Report slowest Flutter test files
+        run: >-
+          python3 tool/report_flutter_test_file_timings.py summarize
+          --directory ci-artifacts
+          --limit 15
 
   merge-gate:
     name: merge-gate
