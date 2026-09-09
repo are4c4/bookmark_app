@@ -14,13 +14,20 @@ A Vault is one local Object universe containing database state and managed files
 - Permanent physical deletion requires explicit final lifecycle action plus proven active-Vault ownership/shared-reference safety.
 - Destructive legacy Bookmark/People/Photo schema retirement requires preservation evidence after caller-zero/parity; F validates preservation but does not define semantic migration mappings.
 
-## Active focused gates
+## Completed preservation checkpoints
 
-### #951 — Photo→Image final preservation validation
-Run the real-macOS preservation matrix proving existing legacy Photos, canonical Images, Bookmark covers/attachments, Person profile imagery and external references survive restart and Vault lifecycle operations.
+### #951 — Photo→Image preservation validation
+The focused preservation checkpoint is completed. Its evidence proved the supported Photo→Image preservation matrix through the intended real-machine validation path. Treat that completion as evidence for the validated transition, not as blanket authority to delete historical Photo/Bookmark/People data later.
 
-### #242 — Vault v1 final real-machine validation
-Production implementation is established. Remaining close gate is real-macOS Create/Open/Switch/Move/Recovery validation, coordinated with #951 where possible.
+### #242 — Vault v1 real-machine validation
+The focused Vault v1 real-machine validation checkpoint is completed. Create/Open/Switch/Move/Recovery validation is therefore no longer an active Lane F stop gate. Future destructive migration still requires preservation evidence appropriate to that migration and the normal single-writer/destructive-approval process.
+
+## Current durable roadmap anchor
+
+### #1063 — open export / portability
+Backup/restore preserves an application Vault for recovery; portable export is a separate user-facing capability. Resume Lane F from live #1063 and other currently open F Issues rather than treating completed #242/#951 as active work.
+
+Keep export work aligned with the Object-first portability contract: preserve stable Object identity, typed Property/Relation/Body data and managed/external byte semantics without claiming lossy Markdown/CSV projections are round-trip complete.
 
 ## Integrated foundation that remains authoritative
 - configurable user-selected Vault roots;
@@ -35,7 +42,7 @@ Production implementation is established. Remaining close gate is real-macOS Cre
 - release packaging/basic real-Mac launch path.
 
 ## Object-first migration implications
-Current Bookmark/People retirement work must not delete historical data merely because Weblink/Person generic UX becomes normal. When A/B/C/D/G eventually prove replacement parity and caller-zero, any destructive schema/data cleanup is a separate single-writer migration with F preservation validation.
+Current Bookmark/People retirement work must not delete historical data merely because Weblink/Person generic UX becomes normal. When A/B/C/D/G eventually prove replacement parity and caller-zero, any destructive schema/data cleanup is a separate single-writer migration with fresh preservation evidence appropriate to that retirement. Completion of #242/#951 does not waive that requirement.
 
 F should not:
 - decide how conflicting legacy Bookmark rows merge onto one Weblink;
@@ -51,14 +58,14 @@ F should not:
 - **E:** Search may consume derived file content but storage unavailability must fail safely.
 
 ## Validation
-Real-machine validation is still required for #951/#242; repository tests/tools cannot replace it. Record concrete failures as focused owner-lane Issues rather than speculatively changing Storage semantics.
+Repository tests and tools are authoritative for repository-owned behavior; use real-machine validation again whenever a focused F Issue or future destructive migration requires physical filesystem/platform evidence that CI cannot prove. Record concrete failures as focused owner-lane Issues rather than speculatively changing Storage semantics.
 
 ## Resume sequence
-1. re-read live #951/#242 and current product state;
-2. use the preservation procedure/tooling to record before/after evidence;
-3. execute Create/Open/Switch/Move/Recovery and image/profile/cover/external-reference matrix on real macOS;
-4. route concrete semantic defects to A/B/C/D/G as appropriate;
-5. update #951/#242 and this handoff with results;
-6. do not perform destructive schema retirement inside the validation issues.
+1. re-read live F-focused Issues and current product state;
+2. prioritize #1063/open portability work when it remains open and unowned;
+3. check for other independent Vault/storage/export/delivery obligations before declaring Lane F blocked or idle;
+4. use preservation tooling and real-machine evidence when an active Issue or destructive-retirement gate specifically requires it;
+5. route concrete semantic defects to A/B/C/D/G as appropriate;
+6. keep destructive Bookmark/People/Photo schema retirement in a separate explicit single-writer migration with preservation evidence and required approval.
 
-Lane F inherits the shared **Lane continuation and resume/stop contract** in `AGENTS.md`. Real-machine validation may legitimately block a specific F gate, but it is not permission to stop before re-checking for other independent F work such as an already-focused Vault/export/delivery obligation. When this execution environment cannot perform the required physical validation and no other safe F work exists, record the precise shared stop category and evidence (for example `Stop reason: external-infra — real macOS validation required for #951/#242`).
+Lane F inherits the shared **Lane continuation and resume/stop contract** in `AGENTS.md`. A real-machine requirement may legitimately produce `external-infra` for a specific active Issue, but completed #242/#951 are not themselves current stop reasons. Re-read live Issues first and continue independent #1063 or other F work whenever available.
