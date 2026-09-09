@@ -6,6 +6,7 @@ import 'bidirectional_relation_store.dart';
 import 'generic_database_store.dart';
 import 'object_store.dart';
 import 'relation_mutation_service.dart';
+import 'relation_target_service.dart';
 import 'system_object_store.dart';
 import 'tag_hierarchy_integrity_service.dart';
 
@@ -16,6 +17,7 @@ class TagObjectSchema {
     required this.parentProperty,
     required this.groupProperty,
     required this.legacyTagIdProperty,
+    required this.legacyParentTagIdProperty,
     required this.legacyTagGroupIdProperty,
     required this.groupIdProperty,
   });
@@ -25,6 +27,7 @@ class TagObjectSchema {
   final ObjectPropertyDefinition parentProperty;
   final ObjectPropertyDefinition groupProperty;
   final ObjectPropertyDefinition legacyTagIdProperty;
+  final ObjectPropertyDefinition legacyParentTagIdProperty;
   final ObjectPropertyDefinition legacyTagGroupIdProperty;
   final ObjectPropertyDefinition groupIdProperty;
 }
@@ -95,6 +98,12 @@ class TagObjectBridge {
       type: ObjectPropertyType.number,
       config: const {'system': true, 'hidden': true},
     );
+    final legacyParentTagId = await systemObjectStore.ensureProperty(
+      objectTypeId: type.id,
+      name: 'Legacy Parent Tag ID',
+      type: ObjectPropertyType.number,
+      config: const {'system': true, 'hidden': true},
+    );
     final legacyTagGroupId = await systemObjectStore.ensureProperty(
       objectTypeId: tagGroupType.id,
       name: 'Legacy TagGroup ID',
@@ -138,6 +147,9 @@ class TagObjectBridge {
       ),
       legacyTagIdProperty: refreshed.properties.firstWhere(
         (property) => property.id == legacyTagId.id,
+      ),
+      legacyParentTagIdProperty: refreshed.properties.firstWhere(
+        (property) => property.id == legacyParentTagId.id,
       ),
       legacyTagGroupIdProperty: refreshedTagGroup.properties.firstWhere(
         (property) => property.id == legacyTagGroupId.id,
@@ -214,13 +226,6 @@ class TagObjectBridge {
         property: schema.legacyTagIdProperty,
         value: tag.id,
       );
-      // Keep the pre-Object group id as compatibility metadata while canonical
-      // Object-first group membership is mirrored through Tag -> TagGroup.
-      await objectStore.setPropertyValue(
-        objectId: objectId,
-        property: schema.groupIdProperty,
-        value: tag.groupId,
-      );
     }
 
     for (final tag in tags) {
@@ -243,45 +248,188 @@ class TagObjectBridge {
         );
       }
 
-      if (await _hasStoredPropertyValue(
-        objectId: objectId,
-        propertyId: schema.parentProperty.id,
-      )) {
-        await _hierarchyIntegrity.relationTargets.selectionForMutation(
-          workspaceId: workspaceId,
-          sourceObjectId: objectId,
-          property: schema.parentProperty,
-        );
-      } else {
-        await _hierarchyIntegrity.setParent(
+      await _reconcileLegacyRelation(
+        workspaceId: workspaceId,
+        sourceObjectId: objectId,
+        relationProperty: schema.parentProperty,
+        checkpointProperty: schema.legacyParentTagIdProperty,
+        targetLegacyIdProperty: schema.legacyTagIdProperty,
+        currentLegacyId: tag.parentTagId,
+        currentLegacyTargetObjectId: parentObjectId,
+        label: 'Parent',
+        applyLegacyTarget: () => _hierarchyIntegrity.setParent(
           workspaceId: workspaceId,
           tagObjectId: objectId,
           parentProperty: schema.parentProperty,
           parentTagObjectId: parentObjectId,
-        );
-      }
-
-      if (await _hasStoredPropertyValue(
-        objectId: objectId,
-        propertyId: schema.groupProperty.id,
-      )) {
-        await _hierarchyIntegrity.relationTargets.selectionForMutation(
-          workspaceId: workspaceId,
-          sourceObjectId: objectId,
-          property: schema.groupProperty,
-        );
-      } else {
-        await _hierarchyIntegrity.setGroup(
+        ),
+      );
+      await _reconcileLegacyRelation(
+        workspaceId: workspaceId,
+        sourceObjectId: objectId,
+        relationProperty: schema.groupProperty,
+        checkpointProperty: schema.groupIdProperty,
+        targetLegacyIdProperty: schema.legacyTagGroupIdProperty,
+        currentLegacyId: tag.groupId,
+        currentLegacyTargetObjectId: groupObjectId,
+        label: 'Group',
+        applyLegacyTarget: () => _hierarchyIntegrity.setGroup(
           workspaceId: workspaceId,
           tagObjectId: objectId,
           groupProperty: schema.groupProperty,
           tagGroupObjectId: groupObjectId,
-        );
-      }
+        ),
+      );
     }
 
     await _removeOrphanTagObjects(workspaceId, schema, validTagIds);
   }
+
+  Future<void> _reconcileLegacyRelation({
+    required int workspaceId,
+    required int sourceObjectId,
+    required ObjectPropertyDefinition relationProperty,
+    required ObjectPropertyDefinition checkpointProperty,
+    required ObjectPropertyDefinition targetLegacyIdProperty,
+    required int? currentLegacyId,
+    required int? currentLegacyTargetObjectId,
+    required String label,
+    required Future<void> Function() applyLegacyTarget,
+  }) async {
+    final hasCanonicalValue = await _hasStoredPropertyValue(
+      objectId: sourceObjectId,
+      propertyId: relationProperty.id,
+    );
+    final checkpoint = await _legacyCheckpoint(
+      objectTypeId: relationProperty.objectTypeId,
+      objectId: sourceObjectId,
+      property: checkpointProperty,
+    );
+
+    if (!hasCanonicalValue) {
+      await applyLegacyTarget();
+      await _writeLegacyCheckpoint(
+        objectId: sourceObjectId,
+        property: checkpointProperty,
+        value: currentLegacyId,
+      );
+      return;
+    }
+
+    final canonical = await _hierarchyIntegrity.relationTargets.selectionForMutation(
+      workspaceId: workspaceId,
+      sourceObjectId: sourceObjectId,
+      property: relationProperty,
+    );
+
+    if (!checkpoint.present) {
+      if (!_selectionMatchesCurrentLegacy(
+        canonical,
+        currentLegacyId: currentLegacyId,
+        currentLegacyTargetObjectId: currentLegacyTargetObjectId,
+      )) {
+        throw StateError(
+          'Existing canonical Tag $label Relation diverges from legacy state before a reconciliation checkpoint exists.',
+        );
+      }
+      await _writeLegacyCheckpoint(
+        objectId: sourceObjectId,
+        property: checkpointProperty,
+        value: currentLegacyId,
+      );
+      return;
+    }
+
+    if (checkpoint.value == currentLegacyId) {
+      // Legacy state has not changed since its last successful projection.
+      // Preserve any canonical-only mutation while still strictly validating
+      // the Relation value/index/targets above.
+      return;
+    }
+
+    final canonicalStillMatchesCheckpoint = await _selectionMatchesCheckpoint(
+      canonical,
+      checkpointValue: checkpoint.value,
+      targetLegacyIdProperty: targetLegacyIdProperty,
+    );
+    if (!canonicalStillMatchesCheckpoint) {
+      throw StateError(
+        'Legacy Tag $label and canonical Relation changed independently; refusing to choose an authority.',
+      );
+    }
+
+    await applyLegacyTarget();
+    await _writeLegacyCheckpoint(
+      objectId: sourceObjectId,
+      property: checkpointProperty,
+      value: currentLegacyId,
+    );
+  }
+
+  bool _selectionMatchesCurrentLegacy(
+    RelationSelectionContext selection, {
+    required int? currentLegacyId,
+    required int? currentLegacyTargetObjectId,
+  }) {
+    if (currentLegacyId == null) return selection.selectedObjectIds.isEmpty;
+    return currentLegacyTargetObjectId != null &&
+        selection.selectedObjectIds.length == 1 &&
+        selection.selectedObjectIds.single == currentLegacyTargetObjectId;
+  }
+
+  Future<bool> _selectionMatchesCheckpoint(
+    RelationSelectionContext selection, {
+    required int? checkpointValue,
+    required ObjectPropertyDefinition targetLegacyIdProperty,
+  }) async {
+    if (selection.selectedObjectIds.isEmpty) return checkpointValue == null;
+    if (selection.selectedObjectIds.length != 1) return false;
+    final target = await _legacyCheckpoint(
+      objectTypeId: selection.targetObjectType.id,
+      objectId: selection.selectedObjectIds.single,
+      property: targetLegacyIdProperty,
+    );
+    return target.present && target.value == checkpointValue;
+  }
+
+  Future<_LegacyCheckpoint> _legacyCheckpoint({
+    required int objectTypeId,
+    required int objectId,
+    required ObjectPropertyDefinition property,
+  }) async {
+    final objects = await objectStore.listObjects(objectTypeId);
+    final matches = objects.where((object) => object.id == objectId).toList();
+    if (matches.length != 1) {
+      throw StateError('Canonical Object $objectId is missing or ambiguous.');
+    }
+    final object = matches.single;
+    if (!object.values.containsKey(property.id)) {
+      return const _LegacyCheckpoint.absent();
+    }
+    final raw = object.values[property.id];
+    if (raw == null) return const _LegacyCheckpoint.present(null);
+    if (raw is int) return _LegacyCheckpoint.present(raw);
+    if (raw is num && raw == raw.toInt()) {
+      return _LegacyCheckpoint.present(raw.toInt());
+    }
+    final parsed = int.tryParse('$raw');
+    if (parsed == null) {
+      throw StateError(
+        'Malformed legacy reconciliation checkpoint on Object $objectId / Property ${property.id}.',
+      );
+    }
+    return _LegacyCheckpoint.present(parsed);
+  }
+
+  Future<void> _writeLegacyCheckpoint({
+    required int objectId,
+    required ObjectPropertyDefinition property,
+    required int? value,
+  }) => objectStore.setPropertyValue(
+        objectId: objectId,
+        property: property,
+        value: value,
+      );
 
   Future<int?> objectIdForLegacyTag(int workspaceId, int tagId) async {
     await ensureSchema();
@@ -389,4 +537,12 @@ class TagObjectBridge {
       );
     }
   }
+}
+
+class _LegacyCheckpoint {
+  const _LegacyCheckpoint.absent() : present = false, value = null;
+  const _LegacyCheckpoint.present(this.value) : present = true;
+
+  final bool present;
+  final int? value;
 }
