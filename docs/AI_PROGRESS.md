@@ -204,6 +204,20 @@ Do not remove user data merely because replacement UI exists.
 
 A focused PR can be complete while its umbrella is not. Important umbrellas review every applicable dimension in `docs/product_architecture.md`: architecture, behavior, tests, UX, keyboard/accessibility/device interaction, error/recovery states, migration/reconciliation, parity, caller-zero, preservation before destruction, and durable docs/routing.
 
+## Strict-main integration window
+
+Protected `main` intentionally keeps strict/up-to-date `merge-gate`; do not weaken latest-main validation to reduce CI churn. Under parallel autonomous development, use this advisory merge-order convention instead:
+
+- A **product/code PR** is in its final integration window when it has been synchronized to current `main` and its authoritative final `merge-gate` is running, or is green and awaiting immediate integration.
+- An unrelated **non-urgent docs-only PR** is documentation/handoff/routing work that is file-disjoint from that product PR and does not correct an active safety, architecture, preservation, migration, ownership, or CI blocker.
+- While such a product PR is in its final integration window, non-urgent file-disjoint docs-only PRs should normally wait rather than advance `main` and force another strict full-CI cycle.
+- After the product PR integrates, coalesce waiting docs/handoff updates against the new `main` where practical instead of interleaving many tiny docs merges between product integrations.
+- Safety-critical coordination or architecture corrections may take priority when delaying them would permit unsafe work; record the reason in the focused Issue/PR rather than treating every handoff refresh as urgent.
+- Waiting docs work must never block the product PR through a declared dependency, shared-hotspot lease, duplicate focused-Issue claim, or migration ownership. If it would, resolve that coordination conflict rather than creating a circular wait.
+- This convention is advisory merge scheduling only. Multiple product PRs still obey normal ownership/hotspot/migration rules, and no stale code may merge merely because intervening changes are docs-only.
+
+This convention exists because strict latest-main validation is the safety property; repeated CI caused solely by merge ordering is the optimization target. It does not introduce a merge queue, bypass token, reduced test coverage, or weaker required checks.
+
 ## Repository integration contract
 
 - `main` is protected by an active repository ruleset; changes integrate through PRs and the required strict `merge-gate`.
