@@ -34,13 +34,8 @@ class WeblinkValuePromotionService {
       relationPropertyName: relationPropertyName,
       title: title,
     );
-    final weblink = await CanonicalWeblinkCaptureService(
-      weblinks: weblinks,
-    ).capture(
-      workspaceId: workspaceId,
-      url: url,
-      title: title,
-    );
+    final weblink = await CanonicalWeblinkCaptureService(weblinks: weblinks)
+        .capture(workspaceId: workspaceId, url: url, title: title);
     return executor.execute(
       plan: plan,
       sourceObjectId: sourceObjectId,
