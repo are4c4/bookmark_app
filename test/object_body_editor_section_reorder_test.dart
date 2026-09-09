@@ -69,7 +69,7 @@ void main() {
       final reorderable = tester.widget<ReorderableListView>(
         find.byType(ReorderableListView),
       );
-      reorderable.onReorder(0, 3);
+      reorderable.onReorderItem!(0, 2);
       await tester.pumpAndSettle();
 
       final stored = await bodyStore.read(objectId);
