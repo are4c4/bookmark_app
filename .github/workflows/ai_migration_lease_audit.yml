@@ -25,7 +25,9 @@ jobs:
           fetch-depth: 0
 
       - name: Test migration lease logic
-        run: python3 tool/migration_lease_guard_test.py
+        run: |
+          python3 tool/migration_lease_guard_test.py
+          python3 tool/migration_merge_gate_test.py
 
       - name: Audit migration single-writer lease
         env:
