@@ -1,12 +1,12 @@
 # AI Progress — Architecture & Integration Oversight
 
-> Durable H-lane handoff. H is the repository-wide control tower above the A–G implementation lanes. It observes, audits, discusses, routes and records; it does not normally own product/runtime implementation.
+> Durable H-lane handoff. H is the repository-wide control tower above the A–G implementation lanes. It observes, audits, routes, and records; it does not normally own product/runtime implementation.
 
 ## H lane goal
 
 Keep the whole application coherent while multiple specialized AI lanes work in parallel.
 
-H continuously checks whether the combined repository is still moving toward the Object-first product constitution, whether independently correct PRs compose safely, and whether new problems or opportunities are emerging between focused Issues.
+H continuously checks whether the combined repository is moving toward the Object-first product constitution, whether independently correct PRs compose safely, and whether new problems or opportunities are emerging between focused Issues.
 
 A fresh chat should be able to resume with only:
 
@@ -14,7 +14,7 @@ A fresh chat should be able to resume with only:
 Hレーンとして作業を続けて
 ```
 
-and recover the necessary context from GitHub without relying on chat history.
+and reconstruct the necessary context from GitHub without relying on chat history.
 
 ## Source of truth on every resume
 
@@ -24,17 +24,17 @@ Read/recheck in this order:
 2. `docs/product_architecture.md`.
 3. `docs/AI_PROGRESS.md`.
 4. this file.
-5. all active A–G lane handoffs when their state could affect the audit.
+5. relevant A–G lane handoffs.
 6. latest `main` and recent meaningful commits.
-7. all open PRs, their declared lane/Issue/dependencies/hotspots and current CI.
+7. all live open PRs, their declared lane/Issue/dependencies/hotspots, and current CI.
 8. relevant open umbrella/focused Issues and recently completed Issues that changed routing.
-9. current shared-hotspot and migration-writer ownership.
+9. current shared-hotspot, migration-writer, and repository-setting state.
 
-Live GitHub state overrides durable handoff snapshots for transient ownership.
+**Live GitHub state overrides durable handoff snapshots for all transient facts.** Do not copy current open-PR counts, CI run numbers, branch tips, or other short-lived ownership facts into this handoff as long-lived truth. Record durable findings, contracts, dependencies, and resume targets instead.
 
 ## H is not another product implementation lane
 
-A–G remain the implementation ownership lanes:
+A–G remain implementation ownership lanes:
 
 - A — Object Core & Body
 - B — Relations & Data Integrity
@@ -44,53 +44,52 @@ A–G remain the implementation ownership lanes:
 - F — Storage, Vault & Delivery
 - G — Refactor & Architecture Health
 
-H may create/refine Issues, review PRs, comment on cross-lane risks, update repository-wide routing/oversight documentation and make focused coordination/guardrail changes when a dedicated coordination Issue owns them.
+H may create/refine Issues, review PRs, comment on cross-lane risks, update repository-wide routing/oversight documentation, and make focused coordination/guardrail changes when a dedicated coordination Issue owns them.
 
-H should not normally:
+H should not normally implement runtime features, take product hotspot ownership away from A–G, perform schema/data migrations, redesign canonical Object/Relation semantics under an audit label, create duplicate persistence/query/search/index systems, merge another lane's PR merely for throughput, or invent speculative work because a lane is idle.
 
-- implement product/runtime features;
-- take broad shared-hotspot ownership away from A–G;
-- perform schema/data migrations;
-- directly mutate canonical Object/Relation semantics under an audit label;
-- create a second persistence/query/search/index subsystem;
-- merge another lane's PR just to keep throughput high;
-- invent speculative abstractions because a lane is idle.
-
-Concrete product or correctness defects found by H should be routed to exactly one owning implementation lane through an existing focused Issue or a new focused Issue.
+Concrete product/correctness defects found by H are routed to exactly one owning implementation lane through an existing or new focused Issue.
 
 ## Continuous audit checklist
 
 ### Architecture drift
-
 Check for:
 - Bookmark/People/Photo concepts being reintroduced as permanent product authorities;
-- ObjectType being used for roles/classifications that belong to Relation/Property/Tag/Database context;
+- ObjectType used for roles/classifications that belong to Relation/Property/Tag/Database context;
 - Databases accidentally owning or duplicating Object identity;
-- Tag hierarchy or other relationships creating parallel edge/tree stores;
+- Tag hierarchy or relationships creating parallel edge/tree stores;
 - domain-specific query/search engines growing instead of canonical Object/query contracts;
 - native-capability behavior leaking into unrelated generic persistence.
 
 ### Cross-lane integration
-
 Check for:
-- dependent Issues being implemented against incompatible contracts;
+- dependent Issues implemented against incompatible contracts;
 - individually green PRs that may fail when composed on latest `main`;
-- Relation/Object/Search/Vault lifecycle changes that require integration regressions across lane boundaries;
-- caller-zero cleanup occurring before replacement parity/preservation proof;
+- Relation/Object/Search/Vault lifecycle changes missing cross-lane regressions;
+- caller-zero cleanup before replacement parity/preservation proof;
 - schema/migration work without a single active writer.
 
 ### Parallel-development safety
-
 Check for:
 - duplicate active ownership of one focused Issue;
 - overlapping shared-hotspot edits;
-- stale branches/handoffs carrying obsolete architecture assumptions;
+- stale branches/handoffs carrying obsolete assumptions;
 - broad formatting/churn increasing conflict risk;
-- long-lived PRs that should be refreshed, split or superseded.
+- long-lived PRs that should be refreshed, split, or superseded;
+- machine-certifiable PR contract violations that are still only advisory and should be hardened by a focused G/H guardrail Issue.
+
+### Durable-document freshness
+Check for:
+- transient facts copied into `AI_PROGRESS*.md` as if permanent;
+- repository settings described differently from live GitHub;
+- schema/tool/dependency versions duplicated in prose where code/config should be the single source of truth;
+- completed Issues still listed as active blockers;
+- README/product descriptions drifting from `docs/product_architecture.md`.
+
+Prefer eliminating duplicated volatile facts over adding synchronization work. Machine-checkable drift should become a CI/repository-contract check where the signal is deterministic; semantic drift remains an H responsibility.
 
 ### Product and UX coherence
-
-Review the application as a whole rather than only Issue acceptance criteria:
+Review the application as a whole:
 - consistent create/select/edit/delete semantics;
 - consistent picker/search/inline-edit interactions;
 - remove-from-Database versus Object lifecycle clarity;
@@ -102,41 +101,17 @@ Review the application as a whole rather than only Issue acceptance criteria:
 - whether the generic Object Inspector remains the primary shared Object surface.
 
 ### Emerging technical debt
-
-Look for:
-- the same helper/adapter/translation logic appearing in multiple lanes;
-- new direct `AppDatabase`/workspace database reach-through;
-- shared hotspots growing again;
-- new legacy dependencies;
-- catches/failure policies that hide correctness problems;
-- speculative caches/indexes without measurement or rebuild semantics.
-
-Do not demand abstraction on first occurrence; create work only when repeated callers or measured debt justify it.
+Look for repeated helpers/adapters, new direct `AppDatabase` reach-through, shared hotspots growing again, new legacy dependencies, hidden-failure policies, and speculative caches/indexes without measurement/rebuild semantics. Do not demand abstraction on first occurrence.
 
 ### Correctness and preservation
+Check missing cross-cutting tests around restart/reconciliation, duplicate/collision handling, deletion/detach/backlinks, historical migration checkpoints, Vault move/switch/backup/restore, managed/external file ownership, and combined-state behavior.
 
-Check for missing cross-cutting tests around:
-- restart/reconciliation;
-- duplicate/collision handling;
-- deletion/detach/backlinks;
-- migration historical checkpoints;
-- Vault move/switch/backup/restore;
-- managed/external file ownership;
-- combined-state/merge behavior.
+Real-macOS preservation evidence remains required before destructive legacy data/schema retirement where #242/#951 or successor preservation contracts apply.
 
 ### Roadmap coherence
-
-Check:
-- what is currently blocking the Object-first target;
-- which lanes have independent safe work;
-- which work should wait for a contract/dependency;
-- whether an umbrella is being treated as Done too early;
-- whether newly discovered product gaps need focused Issues;
-- whether completed architecture has actually retired its legacy replacement path.
+Check what blocks the Object-first target, which lanes have independent safe work, which work must wait for a dependency, whether an umbrella is being declared Done too early, whether new product gaps need focused Issues, and whether completed replacement architecture actually retired its legacy normal-use path.
 
 ## H routing rules
-
-When H finds an actionable issue, route by responsibility:
 
 - A: Object/ObjectType identity, Property value semantics, Body/history/merge core contracts.
 - B: Relation integrity, backlinks, cardinality/order, hierarchy integrity, rewiring.
@@ -144,72 +119,44 @@ When H finds an actionable issue, route by responsibility:
 - D: Weblink/Image/File native identity/import/media behavior.
 - E: canonical Object Search/FTS/index freshness/ranking.
 - F: Vault/filesystem/backup/restore/export packaging/preservation/delivery.
-- G: behavior-preserving refactor, hotspot reduction, caller-zero runtime cleanup, architecture guardrails.
+- G: behavior-preserving refactor, hotspot reduction, caller-zero cleanup, CI/developer-loop and architecture/handoff guardrails.
 
-If responsibility genuinely spans lanes, split it into coherent focused Issues and sequence explicit dependencies instead of assigning one broad cross-lane implementation PR.
+If responsibility genuinely spans lanes, split it into coherent focused Issues with explicit dependencies rather than one broad cross-lane implementation PR.
 
 ## Product roadmap contracts H must protect
 
-The following are durable directions even when implementation is deferred:
+These are durable directions; H must still check their live Issue state before describing them as active:
 
 - #1061 — Home becomes a work-start surface centered on Inbox / Recent / Favorites / Pinned Databases.
 - #1062 — duplicate detection and explicit Object merge/redirect semantics become first-class and fail closed on conflicts.
 - #1063 — users get an open portable export path distinct from backup/restore.
-- #1064 — durable Object/Property/Body/Relation history is distinct from short-lived local Undo.
-- #980 — branch protection/required merge-gate settings remain the final repository-setting enforcement gap for fully controlled integration.
+- #1064 — durable Object/Property/Body/Relation history remains distinct from short-lived local Undo.
+
+Repository branch protection/required `merge-gate` is now established; treat live rulesets/settings as the authority rather than preserving old #980 blocker text here.
 
 ## Umbrella completion audit
 
-A focused implementation slice may be complete when its acceptance criteria and required validation are green.
-
-An umbrella/product capability should not be declared Done merely because one implementation PR merged. H should check the applicable dimensions:
-
-- architecture contract is explicit and consistent;
-- functional behavior is complete for the promised scope;
-- contract/unit/integration/real-host tests cover product meaning;
-- primary UX is efficient and coherent;
-- keyboard/focus/accessibility and desktop/mobile interaction are handled where applicable;
-- empty/loading/error/recovery states are intentional;
-- migration/reconciliation preserves existing user data;
-- replacement parity is proven;
-- old UI/API/runtime paths are caller-zero before deletion;
-- preservation validation precedes destructive schema/data retirement;
-- documentation/handoffs/routing reflect the final state.
-
-Not every small Issue needs every dimension. Umbrellas must explicitly mark non-applicable dimensions rather than silently ignoring them.
+A focused implementation slice may be complete when its acceptance criteria and required validation are green. An umbrella/product capability is not Done merely because one PR merged. H checks applicable architecture, behavior, tests, primary UX, accessibility/device interaction, empty/loading/error/recovery states, migration/reconciliation, replacement parity, caller-zero retirement, preservation before destructive changes, and durable documentation/routing.
 
 ## H autonomous loop
 
-1. Re-read the live source of truth listed above.
-2. Build a current map of active work, dependencies and hotspot/migration ownership.
-3. Inspect recent merged changes for architecture/product integration implications.
-4. Audit the checklist above, prioritizing concrete evidence over speculative redesign.
-5. For each finding:
-   - link it to an existing Issue if already owned;
-   - otherwise create one focused Issue with one primary implementation lane;
-   - record dependencies, hotspot/migration impact and acceptance criteria;
-   - avoid opening duplicate work.
-6. Review whether repository-wide routing or architecture docs need durable correction.
+1. Re-read the live source of truth above.
+2. Build a current map of active work, dependencies, hotspot leases, migration writer, and relevant repository settings.
+3. Inspect recent `main` changes for architecture/product integration implications.
+4. Audit architecture, integration, parallel safety, durable-doc freshness, UX, technical debt, correctness/preservation, and roadmap coherence.
+5. For each finding, link an existing Issue or create one focused Issue with one primary A–G owner; record dependencies, hotspot/migration impact, and acceptance criteria.
+6. Correct repository-wide durable routing/docs only when durable facts changed.
 7. Continue to another independent audit area instead of stopping after the first finding.
-8. Before ending, update this handoff with durable findings, exact next audit targets and blockers.
+8. Before ending, keep this handoff resumable without chat history.
 
 ## Stop conditions
 
-H stops only when:
-- the current audit found no further actionable evidence after checking the major areas above;
-- the next conclusion requires a genuine product decision from the user;
-- all meaningful next findings depend on active work that cannot yet be evaluated;
-- external/tool/session limits prevent further useful inspection.
+H stops only when the major oversight areas have been checked and no further actionable evidence exists, the next conclusion needs a genuine product decision, all meaningful findings depend on work that cannot yet be evaluated, or tooling/session limits prevent useful inspection.
 
-One clean PR, one green CI run, or one newly created Issue is not by itself a stop reason.
+One clean PR, one green CI run, one completed Issue, or one newly created Issue is not by itself a stop reason.
 
-## Current checkpoint — 2026-09-09
+## Durable checkpoint — 2026-09-09
 
-Issue #1060 introduces this H contract and reinforces the product roadmap. The focused follow-up roadmap is:
+The Object-first constitution, A–G lane ownership model, H oversight contract, strict protected-main `merge-gate`, migration/hotspot/handoff audits, and branch-cleanup policy are established. H should not preserve the exact current PR/branch/CI inventory here; every new run rebuilds it from live GitHub.
 
-- #1061 [C] Home/start surface.
-- #1062 [A, later B slices] Object duplicate/merge/redirect semantics.
-- #1063 [F with logical cross-lane contracts] open export/portability.
-- #1064 [A, later B/F slices] durable version history and restore.
-
-After #1060 reaches `main`, future H chats should begin with a fresh live audit rather than assuming these four Issues are the only remaining product gaps.
+Immediate oversight priority is to keep the repository's AI coordination and reproducibility guardrails aligned with the increasing number of parallel implementation lanes, while protecting the near-term product focus on Bookmark retirement, People retirement, Tag hierarchy, Body interaction follow-ups, and Home/start UX before expanding speculative feature scope.

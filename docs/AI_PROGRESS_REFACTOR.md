@@ -6,7 +6,7 @@
 Reduce maintenance hotspots and duplicate/caller-zero legacy paths while preserving product behavior. Own architecture guardrails, CI/developer-loop health, repository-wide handoff alignment and small responsibility extraction/deletion. Do not hide product redesign inside refactor work.
 
 ## Current architecture responsibility
-#1048 established the Object-first product constitution and its durable handoff alignment is complete. Lane G owns keeping repository instructions/handoffs consistent with that constitution so future agents do not follow superseded Bookmark-centric or Tag-as-native-primitive routing.
+The Object-first product constitution is established. Lane G owns keeping repository instructions/handoffs and architecture guardrails consistent with it so future agents do not follow superseded Bookmark-centric or Tag-as-native-primitive routing.
 
 Durable product implications for G:
 - `Bookmark` is legacy compatibility/migration input, not a final ObjectType;
@@ -16,39 +16,30 @@ Durable product implications for G:
 - legacy UI/API/code deletion follows replacement parity + caller-zero proof;
 - destructive schema/data retirement is a separate preservation-proven migration, not routine refactor work.
 
-## Historical branch cleanup — completed
-#1072 removed 840 historical refs that were provably merged. #1074 then added a read-only inventory audit so remaining refs were classified from live branch state plus GitHub PR metadata instead of branch names.
+## Historical branch cleanup — completed policy
+#1072/#1074/#1076 established and executed evidence-based historical branch cleanup. Proven merged refs and exact stale heads of closed-unmerged PRs were removed only after live SHA/PR checks; ambiguous refs were intentionally retained.
 
-#1076 / PR #1077 completed the second narrow cleanup pass. The PR dry-run found 139 branches whose current tip exactly matched an old closed-unmerged PR head. After green authoritative CI and merge, the write job recomputed eligibility immediately before deletion and successfully deleted all 139 candidates. No application/user data or PR history was removed.
-
-The final live audit after cleanup reports 85 non-default branches (86 including `main`):
-- `open-pr`: 4
-- `dependabot-transient`: 0
-- `recent`: 27
-- `default-tip`: 0
-- `merged-safe`: 0
-- `closed-unmerged-exact-head`: 0
-- `advanced-after-pr`: 10
-- `no-pr-history`: 44
-
-Current retention policy:
-- open PR and recent refs remain untouched;
+Durable retention policy:
+- never delete the default branch, current default tip, open-PR heads, or recent/transient work through historical cleanup;
 - `advanced-after-pr` retains work added after recorded PR heads and must not be auto-deleted;
-- `no-pr-history` has no durable PR evidence proving intent or recoverability and must not be auto-deleted;
-- there are currently no remaining refs proven eligible by the merged-safe or exact closed-unmerged cleanup contracts.
+- `no-pr-history` has no durable PR evidence proving intent/recoverability and must not be auto-deleted;
+- ordinary merged PR heads rely on GitHub's native automatic head-branch deletion;
+- any future historical cleanup starts with a new read-only live inventory and the narrowest proven reversible class.
 
-Future ordinary merged PR heads rely on GitHub's native automatic head-branch deletion. If a later cleanup is desired for ambiguous refs, begin with another read-only evidence pass; do not broaden the existing destructive contracts.
+Exact branch counts and current branch names are **not** durable handoff data. Recompute them live when needed.
 
-## Active focused issues
+## Active/future G routing
 
-### #1047 — Generic Database gallery state-loader extraction
-Behavior-preserving extraction: move Gallery cover-source discovery into the existing `GenericDatabasePageStateLoader` snapshot without changing Gallery semantics. `generic_database_page.dart` edits must remain patch-sized and re-audited against live ownership.
+Always verify Issue state and active PR ownership live before taking work.
 
 ### #225 — architecture health umbrella
-Continue measurable hotspot reduction, `AppDatabase` narrowing, explicit failure/privacy policy and CI/AI workflow guardrails through focused Issues/PRs. Prefer deletion or responsibility movement over another abstraction layer.
+Continue measurable hotspot reduction, `AppDatabase` narrowing, explicit failure/privacy policy and CI/AI workflow guardrails through focused child Issues/PRs. Prefer deletion or responsibility movement over another abstraction layer.
 
 ### #950 — Photo compatibility caller-zero cleanup
 Continue only when current-main callers prove an API/path is dead. Preserve Photo schema/data, migration/import/export/backup and Vault preservation requirements.
+
+### #1079 — durable AI documentation source-of-truth
+Synchronize stale repository docs and make handoffs structurally resistant to transient-state drift. Durable docs record contracts/resume guidance; live GitHub owns open PRs, CI, branch tips, repository settings and current ownership.
 
 Future G work after owning-lane parity:
 - retire caller-zero Bookmark repositories/items/pages/bridges from #1039;
@@ -59,22 +50,32 @@ Future G work after owning-lane parity:
 - maintainability report/regression ceilings;
 - no-new-legacy and presentation/database boundary checks;
 - hunk-aware changed-Dart formatting;
-- full Flutter Test sharding + exact Drift generated-code cache;
+- full Flutter Test sharding + Drift generated-code cache;
 - test-health/flake artifacts;
 - docs-only CI fast path and stable `merge-gate`;
-- merge-group support for a future organization-owned Merge Queue-capable repository;
-- AI PR lane/Issue/dependency/hotspot contract;
+- `merge_group` workflow support;
+- AI PR lane/Issue/dependency/hotspot/migration-impact contract;
 - hotspot overlap/stale-base/churn diagnostics;
-- duplicate focused-Issue ownership warning;
+- duplicate focused-Issue ownership detection;
 - migration single-writer lease audit;
 - durable handoff audit;
 - immutable GitHub Actions SHA pin audit;
 - weekly Dependabot updates for Dart/pub and GitHub Actions;
-- historical proven-merged branch cleanup with exact merged-PR head recognition for squash merges;
-- read-only historical branch inventory classification for ambiguous refs;
-- exact closed-unmerged PR-head cleanup with live SHA recheck immediately before deletion.
+- evidence-based historical branch cleanup and read-only ambiguous-ref inventory.
 
 Do not relax a guardrail or create no-op commits to make unrelated work easier to merge.
+
+## Durable-document policy
+
+G owns repository-wide developer-workflow/handoff hygiene when a focused Issue owns the edit.
+
+- Architecture semantics belong in `docs/product_architecture.md` / `docs/architecture.md`.
+- AI process/concurrency rules belong in `AGENTS.md`.
+- `AI_PROGRESS*.md` records durable contracts, completed checkpoints, dependencies/blockers that remain meaningful, and exact resume actions.
+- Focused acceptance criteria belong in Issues.
+- Current open PRs, branch tips, CI run IDs, live ruleset/settings values and transient ownership must be queried from GitHub rather than copied into handoffs as long-lived truth.
+- Prefer deleting duplicated volatile values (for example a schema version in README) over creating a synchronization burden.
+- Machine-certifiable drift belongs in CI/guards; semantic drift belongs in H oversight.
 
 ## Caller-zero proof standard
 Code search alone is insufficient. A deletion slice should prove:
@@ -101,21 +102,18 @@ Recheck live PR ownership before broad edits. G should usually reduce a hotspot 
 
 G deletes superseded implementation only after the owning product/integrity lane proves replacement parity.
 
-## Repository settings
-`main` is protected by the active `Protect main` ruleset. The default branch requires PR-only squash merging, strict/up-to-date `merge-gate`, blocks force pushes and deletion, and has no bypass actors. #980 is completed.
+## Repository integration contract
+`main` is protected by the active repository ruleset and integrates through PRs with strict/up-to-date `merge-gate`; #980 is completed. Automatic deletion of ordinary merged PR head branches is enabled.
 
-Repository-level housekeeping is also enabled:
-- automatic deletion of merged head branches is on;
-- auto-merge is allowed, but each PR must still opt into it and all ruleset requirements remain authoritative.
-
-The repository remains personal-account owned, so Merge Queue is not available. Existing `merge_group` workflow support remains ready for a future organization-owned repository.
+Treat the exact current ruleset/PR/branch/CI inventory as live GitHub state, not durable handoff prose. If repository settings become important to a future guard, query and validate the live settings against an explicit machine-readable contract rather than relying on this paragraph as operational truth.
 
 ## Validation
-Behavior-preserving refactors still require changed-Dart format, Analyze and relevant/full Flutter Test. Workflow/guard changes must exercise their focused regressions and the full authoritative CI path. Docs-only architecture synchronization should use the docs-only CI path plus handoff/coordination audits.
+Behavior-preserving refactors require changed-Dart format, Analyze and relevant/full Flutter Test. Workflow/guard changes must exercise focused regressions and the authoritative CI path. Docs-only architecture synchronization uses the docs-only CI path plus handoff/coordination audits.
 
 ## Resume sequence
-1. re-audit latest `main`, open PR ownership and shared-hotspot ownership before taking new G work;
-2. continue #1047/#225/#950 only through small focused behavior-preserving slices;
+1. re-audit latest `main`, open PR ownership and shared-hotspot/migration ownership before taking new G work;
+2. take #225/#950 or other G work only through focused reversible child Issues;
 3. when #1039/#1040 owning-lane parity lands, create caller-zero retirement slices instead of combining product migration with cleanup;
-4. if historical branch cleanup is revisited, start from the read-only inventory and gather new evidence rather than deleting `advanced-after-pr` or `no-pr-history` refs;
-5. keep destructive schema/data removal separate and preservation-gated.
+4. if historical branch cleanup is revisited, begin with a new read-only inventory and do not broaden deletion to ambiguous refs;
+5. keep destructive schema/data removal separate, preservation-gated, and human-approved;
+6. keep durable docs free of transient snapshots and route machine-certifiable drift to CI while H handles semantic drift.
