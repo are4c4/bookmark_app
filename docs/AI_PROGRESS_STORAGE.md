@@ -25,9 +25,11 @@ The focused Vault v1 real-machine validation checkpoint is completed. Create/Ope
 ## Current durable roadmap anchor
 
 ### #1063 — open export / portability
-Backup/restore preserves an application Vault for recovery; portable export is a separate user-facing capability. Resume Lane F from live #1063 and currently open focused F Issues rather than treating completed preservation/export slices as active work.
+Backup/restore preserves an application Vault for recovery; portable export is a separate user-facing capability. Resume Lane F from live #1063 and any newly created focused F Issues rather than treating completed filesystem slices as active work.
 
 Keep export work aligned with the Object-first portability contract: preserve stable Object identity, typed Property/Relation/Body data and managed/external byte semantics without claiming lossy Markdown/CSV projections are round-trip complete. F owns filesystem/package safety and byte inclusion policy; logical Object/Property/Relation/Body/Database/View serialization remains with the owning lanes.
+
+The remaining #1063 umbrella work is not permission for F to invent a canonical graph serializer, manifest or import/reconstruction contract. A later package writer becomes actionable only when the owning lanes expose an explicit lossless logical serialization/reconstruction contract or a separately focused F packaging contract defines what it consumes.
 
 ## Completed focused Storage contracts
 
@@ -42,7 +44,7 @@ The first focused F-owned #1063 slice is integrated and establishes the filesyst
 - This boundary is read-only with respect to the source Vault. Later serializers/package writers consume the validated plan instead of reimplementing containment or inferring ownership.
 
 ### #1132 — Vault restore archive preflight
-The focused restore-preservation hardening is integrated. Restore now proves the complete archive namespace before mutating its target.
+The focused restore-preservation hardening is integrated. Restore proves the complete archive namespace before mutating its target.
 
 - Every ZIP member is validated before target deletion/creation or extraction.
 - Symbolic-link entries are rejected; Bookmark Vault backup format has no supported symlink requirement.
@@ -52,22 +54,19 @@ The focused restore-preservation hardening is integrated. Restore now proves the
 - Invalid preflight input leaves an existing target untouched; extraction-stage cleanup/rollback remains best-effort without replacing the original failure.
 - App-generated regular-file Vault backups remain supported, and no schema/migration/Object/Relation semantics changed.
 
-## Current focused portability work
-
 ### #1146 — explicitly owned Image bytes under `photos/...`
-D/#1141 is integrated by PR #1143 (`c7c06e27e859640899c62bcb1c0b20d12a8c869e`), so Lane F is actively implementing the downstream filesystem-planner slice in PR #1159 on `feature/portable-export-image-bytes-1146`.
+The downstream Image-byte filesystem slice is integrated by PR #1159 (`2b5ae87f1b65edf67c1ca02b4ab39d78b33a1f0c`) after D/#1141 established explicit Image ownership provenance.
 
-The active contract is intentionally narrow:
-- accept explicit `vault-managed-copy-v1` provenance only under the closed Vault managed roots `attachments/...` and `photos/...`;
-- preserve existing File `attachments/...` behavior while allowing canonical managed Image `photos/...` bytes;
-- validate the selected managed root, intermediate parents and source as real non-symlink filesystem entries;
-- prove the resolved source remains inside the selected managed root;
-- keep unowned relative references fail-closed and unowned absolute references external-reference-only;
-- keep path traversal, absolute/drive-qualified, backslash-ambiguous and unsupported-root input fail-closed;
-- remain read-only with respect to the source Vault;
-- do not introduce Image identity logic, historical ownership backfill, logical Object serialization, package manifests or byte relocation.
+- `PortableExportFilePlanner` accepts explicit `vault-managed-copy-v1` provenance only under the closed Vault managed roots `attachments/...` and `photos/...`.
+- Existing File `attachments/...` behavior is preserved while canonical managed Image `photos/...` bytes can now be planned for inclusion.
+- The selected managed root, every intermediate parent and the source are validated as real non-symlink filesystem entries.
+- The resolved source must remain inside the selected managed root.
+- Unowned relative references remain fail-closed; unowned absolute references remain external-reference-only and are not probed/copied.
+- Traversal, absolute/drive-qualified, backslash-ambiguous and unsupported-root input remains fail-closed.
+- Planning remains read-only with respect to source Vault data and does not infer Image/File identity or ownership from path location.
+- No historical ownership backfill, byte relocation, logical Object serializer, package manifest, schema/migration or destructive filesystem behavior was introduced.
 
-Focused regressions cover managed `photos/...` success, unowned photo rejection, missing/offline/non-file photo sources, photo nested/source/root symlinks, preserved `attachments/...` behavior and unchanged external-reference semantics. GitHub Actions is authoritative for format/Analyze/full-test/merge-gate validation.
+Validation for the latest-main-synchronized implementation head was green for changed-Dart format, Analyze/guards, all four Flutter Test shards, test-health, handoff/migration/settings audits and authoritative `merge-gate` before squash integration.
 
 ## Integrated foundation that remains authoritative
 - configurable user-selected Vault roots;
@@ -98,19 +97,21 @@ F should not:
 - **D:** owns native Image/File identity and producer-side provenance from trusted primitive workflows. F consumes explicit provenance for filesystem/package eligibility but must not manufacture it.
 - **G:** caller-zero code retirement; F verifies preservation before actual schema/data destruction.
 - **E:** Search may consume derived file content but storage unavailability must fail safely.
+- **A/#1064:** durable history is still A-owned. If its retention/restore contract later splits managed-byte retention/GC to F, wait for a focused F Issue before implementing it.
 
 ## Validation
 Repository tests and tools are authoritative for repository-owned behavior; use real-machine validation again whenever a focused F Issue or future destructive migration requires physical filesystem/platform evidence that CI cannot prove. For Storage-owned portability slices, deterministic tests must prove path containment, explicit ownership and source-Vault non-mutation. Record concrete failures as focused owner-lane Issues rather than speculatively changing Storage semantics.
 
 ## Resume sequence
 1. re-read latest `main`, live F-focused Issues/PRs, current CI, shared-hotspot ownership and migration-writer state;
-2. while #1146 / PR #1159 is active, finish its filesystem-planner acceptance criteria, fix only failures caused by the focused change and integrate after authoritative green validation;
-3. after #1146 integrates, re-audit #1063 for another explicit F-owned filesystem/package slice whose logical prerequisites already exist;
-4. do not invent a canonical graph serializer, manifest or package writer before owning-lane logical contracts are explicitly available;
-5. use preservation tooling and real-machine evidence when an active Issue or destructive-retirement gate specifically requires it;
-6. route concrete semantic defects to A/B/C/D/G as appropriate;
-7. keep destructive Bookmark/People/Photo schema retirement in a separate explicit single-writer migration with preservation evidence and required approval.
+2. re-read #1063 and search for a newly split focused F filesystem/package contract whose logical prerequisites already exist;
+3. re-check #1064 only for a newly created F-owned managed-byte retention/GC slice; do not take over the A-owned history model;
+4. re-check any destructive Bookmark/People/Photo retirement work for a specifically requested F preservation-validation slice before schema/data removal;
+5. otherwise do not invent a canonical graph serializer, manifest, package writer, sync protocol, managed-byte history model or destructive cleanup merely to keep Lane F active;
+6. route concrete semantic defects to A/B/C/D/G as appropriate.
 
-Lane F inherits the shared **Lane continuation and resume/stop contract** in `AGENTS.md`. A real-machine requirement may legitimately produce `external-infra` for a specific active Issue, and an explicit cross-lane prerequisite may produce `dependency`, but only after the final live resume audit finds no other independent safe F work.
+Lane F inherits the shared **Lane continuation and resume/stop contract** in `AGENTS.md`. A real-machine requirement may legitimately produce `external-infra`, a genuine prerequisite may produce `dependency`, and no concrete work after the final live audit may produce `idle-no-work`.
 
-Work in progress: #1146 / PR #1159 — validate and integrate the explicitly-owned `photos/...` portable-export filesystem boundary.
+Final resume audit after #1146 integration checked latest `main`, live F-focused Issues/PRs, #1063, #1064, open PR ownership, shared-hotspot/migration-writer state and current portability code. The only open F roadmap item found was umbrella #1063; no separate focused F implementation Issue/PR exists. #1064 has not yet split its future managed-byte retention/GC work to F. Current open implementation PRs are owned by A/B/C/E/G and do not own the F portable-export filesystem boundary. No open migration-sensitive writer was found. No independent safe F implementation slice is currently demonstrated.
+
+Stop reason: idle-no-work — #1146 is integrated and closed; resume when #1063 gains an explicit focused F filesystem/package contract with owning-lane logical prerequisites, #1064 splits a managed-byte retention/GC Issue to F, a destructive retirement requests focused preservation validation, or a concrete current-main Storage/Vault correctness defect appears.
