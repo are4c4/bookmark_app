@@ -13,6 +13,7 @@ import '../data/object_body_block_duplicate_service.dart';
 import '../data/object_body_block_edit_service.dart';
 import '../data/object_body_reference_insert_controller.dart';
 import '../data/object_body_store.dart';
+import '../data/object_body_structural_undo_service.dart';
 import '../data/object_computed_value_store.dart';
 import '../data/object_detail_content_loader.dart';
 import '../data/object_detail_edit_service.dart';
@@ -129,6 +130,9 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
 
   ObjectBodyBlockDuplicateService get _bodyDuplicates =>
       ObjectBodyBlockDuplicateService(editService: _bodyBlockEdits);
+
+  ObjectBodyStructuralUndoService get _bodyUndo =>
+      ObjectBodyStructuralUndoService(bodyStore: _bodyStore);
 
   ObjectBodyReferenceInsertController get _bodyReferenceInserts =>
       ObjectBodyReferenceInsertController(editService: _bodyBlockEdits);
@@ -521,12 +525,53 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
         ),
       );
 
-  Future<void> _deleteBodyBlock(ObjectBodyBlock block) => _runBodyMutation(
-        () => _bodyActions.remove(
-          objectId: widget.objectId,
-          blockId: block.id,
+  Future<void> _deleteBodyBlock(ObjectBodyBlock block) async {
+    final objectId = widget.objectId;
+    final undoService = _bodyUndo;
+    try {
+      final result = await undoService.deleteWithUndo(
+        objectId: objectId,
+        blockId: block.id,
+      );
+      if (!mounted || widget.objectId != objectId) return;
+      _applyBodyDocument(result.document);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('ブロックを削除しました'),
+          action: SnackBarAction(
+            label: '元に戻す',
+            onPressed: () => _undoBodyDelete(undoService, result.undoToken),
+          ),
         ),
       );
+    } catch (_) {
+      if (!mounted || widget.objectId != objectId) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bodyを更新できませんでした。')),
+      );
+    }
+  }
+
+  Future<void> _undoBodyDelete(
+    ObjectBodyStructuralUndoService undoService,
+    ObjectBodyDeleteUndoToken token,
+  ) async {
+    try {
+      final document = await undoService.undoDelete(token);
+      if (!mounted || widget.objectId != token.objectId) return;
+      _applyBodyDocument(document);
+    } on ObjectBodyUndoConflict {
+      if (!mounted || widget.objectId != token.objectId) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('新しい変更があるため元に戻せませんでした。')),
+      );
+    } catch (_) {
+      if (!mounted || widget.objectId != token.objectId) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bodyを元に戻せませんでした。')),
+      );
+    }
+  }
 
   Future<void> _duplicateBodyBlock(ObjectBodyBlock block) async {
     try {
