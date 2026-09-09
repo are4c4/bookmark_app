@@ -16,6 +16,7 @@ void main() {
     );
     vault = Directory('${sandbox.path}/Vault');
     await Directory('${vault.path}/attachments').create(recursive: true);
+    await Directory('${vault.path}/photos').create(recursive: true);
     planner = const PortableExportFilePlanner();
   });
 
@@ -61,7 +62,7 @@ void main() {
   });
 
   test(
-    'explicit managed ownership plans only the existing Vault copy',
+    'explicit managed ownership plans only the existing Vault attachment copy',
     () async {
       final managedDirectory = Directory('${vault.path}/attachments/papers');
       await managedDirectory.create();
@@ -88,20 +89,56 @@ void main() {
     },
   );
 
-  test('unowned relative path is not guessed to be managed', () async {
-    final managed = File('${vault.path}/attachments/unowned.pdf');
-    await managed.writeAsString('keep');
+  test(
+    'explicit managed ownership plans an existing Vault photo copy',
+    () async {
+      final managedDirectory = Directory('${vault.path}/photos/previews');
+      await managedDirectory.create();
+      final managed = File('${managedDirectory.path}/cover.jpg');
+      const bytes = <int>[2, 4, 6, 8];
+      await managed.writeAsBytes(bytes);
 
-    await expectLater(
-      planner.plan(
-        storedPath: 'attachments/unowned.pdf',
-        ownershipStorageKey: null,
+      final plan = await planner.plan(
+        storedPath: 'photos/previews/cover.jpg',
+        ownershipStorageKey: ManagedFileOwnership.vaultManagedCopy.storageKey,
         vaultDirectoryPath: vault.path,
-      ),
-      throwsA(isA<StateError>()),
-    );
+      );
 
-    expect(await managed.readAsString(), 'keep');
+      expect(plan.disposition, PortableExportFileDisposition.managedIncluded);
+      expect(plan.includeBytes, isTrue);
+      expect(plan.referencePath, 'photos/previews/cover.jpg');
+      expect(plan.packageRelativePath, 'photos/previews/cover.jpg');
+      expect(plan.managedSourcePath, managed.absolute.path);
+      expect(
+        plan.ownershipStorageKey,
+        ManagedFileOwnership.vaultManagedCopy.storageKey,
+      );
+      expect(await managed.readAsBytes(), bytes);
+    },
+  );
+
+  test('unowned relative paths are not guessed to be managed', () async {
+    final attachment = File('${vault.path}/attachments/unowned.pdf');
+    final photo = File('${vault.path}/photos/unowned.jpg');
+    await attachment.writeAsString('keep attachment');
+    await photo.writeAsString('keep photo');
+
+    for (final storedPath in <String>[
+      'attachments/unowned.pdf',
+      'photos/unowned.jpg',
+    ]) {
+      await expectLater(
+        planner.plan(
+          storedPath: storedPath,
+          ownershipStorageKey: null,
+          vaultDirectoryPath: vault.path,
+        ),
+        throwsA(isA<StateError>()),
+      );
+    }
+
+    expect(await attachment.readAsString(), 'keep attachment');
+    expect(await photo.readAsString(), 'keep photo');
   });
 
   test('unknown ownership does not fall back to path inference', () async {
@@ -121,7 +158,7 @@ void main() {
   });
 
   test(
-    'managed plan rejects traversal absolute and non-attachment paths',
+    'managed plan rejects traversal absolute ambiguous and unsupported roots',
     () async {
       final outside = File('${vault.path}/database.sqlite');
       await outside.writeAsString('database');
@@ -129,8 +166,8 @@ void main() {
       for (final unsafePath in <String>[
         'attachments/../database.sqlite',
         outside.absolute.path,
-        'photos/image.jpg',
-        r'attachments\file.pdf',
+        'other/image.jpg',
+        r'photos\image.jpg',
       ]) {
         await expectLater(
           planner.plan(
@@ -153,7 +190,7 @@ void main() {
       final missingVault = Directory('${sandbox.path}/Missing Vault');
       await expectLater(
         planner.plan(
-          storedPath: 'attachments/missing.pdf',
+          storedPath: 'photos/missing.jpg',
           ownershipStorageKey: ManagedFileOwnership.vaultManagedCopy.storageKey,
           vaultDirectoryPath: missingVault.path,
         ),
@@ -161,29 +198,43 @@ void main() {
       );
       expect(missingVault.existsSync(), isFalse);
 
-      await expectLater(
-        planner.plan(
-          storedPath: 'attachments/missing.pdf',
-          ownershipStorageKey: ManagedFileOwnership.vaultManagedCopy.storageKey,
-          vaultDirectoryPath: vault.path,
-        ),
-        throwsA(isA<FileSystemException>()),
-      );
+      for (final storedPath in <String>[
+        'attachments/missing.pdf',
+        'photos/missing.jpg',
+      ]) {
+        await expectLater(
+          planner.plan(
+            storedPath: storedPath,
+            ownershipStorageKey:
+                ManagedFileOwnership.vaultManagedCopy.storageKey,
+            vaultDirectoryPath: vault.path,
+          ),
+          throwsA(isA<FileSystemException>()),
+        );
+      }
 
-      final folder = Directory('${vault.path}/attachments/folder');
-      await folder.create();
-      await expectLater(
-        planner.plan(
-          storedPath: 'attachments/folder',
-          ownershipStorageKey: ManagedFileOwnership.vaultManagedCopy.storageKey,
-          vaultDirectoryPath: vault.path,
-        ),
-        throwsA(isA<FileSystemException>()),
-      );
+      final attachmentFolder = Directory('${vault.path}/attachments/folder');
+      final photoFolder = Directory('${vault.path}/photos/folder');
+      await attachmentFolder.create();
+      await photoFolder.create();
+      for (final storedPath in <String>[
+        'attachments/folder',
+        'photos/folder',
+      ]) {
+        await expectLater(
+          planner.plan(
+            storedPath: storedPath,
+            ownershipStorageKey:
+                ManagedFileOwnership.vaultManagedCopy.storageKey,
+            vaultDirectoryPath: vault.path,
+          ),
+          throwsA(isA<FileSystemException>()),
+        );
+      }
     },
   );
 
-  test('managed plan refuses symlinked path components', () async {
+  test('managed attachment plan refuses symlinked path components', () async {
     if (Platform.isWindows) return;
 
     final outsideDirectory = Directory('${sandbox.path}/Outside');
@@ -229,6 +280,53 @@ void main() {
       throwsA(isA<FileSystemException>()),
     );
     expect(await outside.readAsString(), 'outside');
+  });
+
+  test('managed photo plan refuses symlinked path components', () async {
+    if (Platform.isWindows) return;
+
+    final outsideDirectory = Directory('${sandbox.path}/Outside Photos');
+    await outsideDirectory.create();
+    final outside = File('${outsideDirectory.path}/outside.jpg');
+    await outside.writeAsString('outside photo');
+
+    final nestedLink = Link('${vault.path}/photos/nested');
+    await nestedLink.create(outsideDirectory.path);
+    await expectLater(
+      planner.plan(
+        storedPath: 'photos/nested/outside.jpg',
+        ownershipStorageKey: ManagedFileOwnership.vaultManagedCopy.storageKey,
+        vaultDirectoryPath: vault.path,
+      ),
+      throwsA(isA<FileSystemException>()),
+    );
+    await nestedLink.delete();
+
+    final sourceLink = Link('${vault.path}/photos/link.jpg');
+    await sourceLink.create(outside.path);
+    await expectLater(
+      planner.plan(
+        storedPath: 'photos/link.jpg',
+        ownershipStorageKey: ManagedFileOwnership.vaultManagedCopy.storageKey,
+        vaultDirectoryPath: vault.path,
+      ),
+      throwsA(isA<FileSystemException>()),
+    );
+    await sourceLink.delete();
+
+    await Directory('${vault.path}/photos').delete();
+    final photosLink = Link('${vault.path}/photos');
+    await photosLink.create(outsideDirectory.path);
+    await expectLater(
+      planner.plan(
+        storedPath: 'photos/outside.jpg',
+        ownershipStorageKey: ManagedFileOwnership.vaultManagedCopy.storageKey,
+        vaultDirectoryPath: vault.path,
+      ),
+      throwsA(isA<FileSystemException>()),
+    );
+
+    expect(await outside.readAsString(), 'outside photo');
   });
 
   test(
