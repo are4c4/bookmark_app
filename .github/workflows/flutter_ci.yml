@@ -96,6 +96,7 @@ jobs:
           python3 tool/shared_hotspot_conflict_guard_test.py
           python3 tool/report_test_health_test.py
           python3 tool/report_flutter_test_file_timings_test.py
+          python3 tool/prepare_flutter_test_shards_test.py
           python3 tool/vault_preservation_manifest_test.py
           python3 tool/github_actions_pin_guard_test.py
           python3 tool/github_actions_pin_guard.py
@@ -197,20 +198,38 @@ jobs:
       - name: Verify Drift generated code
         run: test -s lib/data/app_database.g.dart
 
+      - name: Prepare deterministic file-level shard plan
+        run: >-
+          python3 tool/prepare_flutter_test_shards.py prepare
+          --snapshot tool/flutter_test_historical_weights_v1.json
+          --repo-root "$GITHUB_WORKSPACE"
+          --output ci-artifacts/flutter-test-plan.json
+          --lists-dir ci-artifacts/flutter-test-files
+          --shards 4
+
       - name: Test shard ${{ matrix.shard }} of 4
         id: flutter-test
         timeout-minutes: 18
         run: |
           set -o pipefail
-          mkdir -p ci-artifacts
+          python3 tool/prepare_flutter_test_shards.py verify \
+            --plan ci-artifacts/flutter-test-plan.json \
+            --repo-root "$GITHUB_WORKSPACE" \
+            --lists-dir ci-artifacts/flutter-test-files \
+            --shard ${{ matrix.shard }} \
+            --shards 4
+          mapfile -t TEST_FILES < "ci-artifacts/flutter-test-files/shard-${{ matrix.shard }}.txt"
+          if (( ${#TEST_FILES[@]} == 0 )); then
+            echo "Verified shard file list is empty." >&2
+            exit 1
+          fi
           SECONDS=0
           set +e
           flutter test \
             --timeout 2m \
             --reporter expanded \
             --file-reporter json:ci-artifacts/flutter-test-events-${{ matrix.shard }}.jsonl \
-            --total-shards 4 \
-            --shard-index ${{ matrix.shard }} \
+            "${TEST_FILES[@]}" \
             2>&1 | tee ci-artifacts/flutter-test-shard-${{ matrix.shard }}.log
           status=$?
           set -e
@@ -223,14 +242,23 @@ jobs:
         timeout-minutes: 18
         run: |
           set -o pipefail
-          mkdir -p ci-artifacts
+          python3 tool/prepare_flutter_test_shards.py verify \
+            --plan ci-artifacts/flutter-test-plan.json \
+            --repo-root "$GITHUB_WORKSPACE" \
+            --lists-dir ci-artifacts/flutter-test-files \
+            --shard ${{ matrix.shard }} \
+            --shards 4
+          mapfile -t TEST_FILES < "ci-artifacts/flutter-test-files/shard-${{ matrix.shard }}.txt"
+          if (( ${#TEST_FILES[@]} == 0 )); then
+            echo "Verified shard file list is empty." >&2
+            exit 1
+          fi
           SECONDS=0
           set +e
           flutter test \
             --timeout 2m \
             --reporter expanded \
-            --total-shards 4 \
-            --shard-index ${{ matrix.shard }} \
+            "${TEST_FILES[@]}" \
             2>&1 | tee ci-artifacts/flutter-test-shard-${{ matrix.shard }}-rerun.log
           status=$?
           set -e
