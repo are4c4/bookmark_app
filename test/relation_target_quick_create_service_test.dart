@@ -135,46 +135,44 @@ void main() {
     );
   });
 
-  test(
-    'Weblink quick-create fails closed on canonical collision before enrichment',
-    () async {
-      final definition = await weblinks.ensureDefinition(workspaceId);
-      await weblinks.findOrCreate(
+  test('Weblink quick-create fails closed on canonical collision before enrichment', () async {
+    final definition = await weblinks.ensureDefinition(workspaceId);
+    await weblinks.findOrCreate(
+      workspaceId: workspaceId,
+      url: 'https://example.com/article',
+      title: 'First canonical candidate',
+    );
+    final duplicateId = await objectStore.createObject(
+      objectTypeId: definition.objectType.id,
+      title: 'Second canonical candidate',
+    );
+    await objectStore.setPropertyValue(
+      objectId: duplicateId,
+      property: definition.urlProperty,
+      value: 'HTTPS://EXAMPLE.COM:443/article',
+    );
+    var enrichCalls = 0;
+
+    await expectLater(
+      service(
+        enrich:
+            ({required workspaceId, required objectId, required url}) async {
+              enrichCalls++;
+            },
+      ).create(
         workspaceId: workspaceId,
-        url: 'https://example.com/article',
-        title: 'First canonical candidate',
-      );
-      final duplicateId = await objectStore.createObject(
-        objectTypeId: definition.objectType.id,
-        title: 'Second canonical candidate',
-      );
-      await objectStore.setPropertyValue(
-        objectId: duplicateId,
-        property: definition.urlProperty,
-        value: 'HTTPS://EXAMPLE.COM:443/article',
-      );
-      var enrichCalls = 0;
+        targetObjectTypeId: definition.objectType.id,
+        input: 'https://example.com/article',
+      ),
+      throwsA(isA<StateError>()),
+    );
 
-      await expectLater(
-        service(
-          enrich: ({required workspaceId, required objectId, required url}) async {
-            enrichCalls++;
-          },
-        ).create(
-          workspaceId: workspaceId,
-          targetObjectTypeId: definition.objectType.id,
-          input: 'https://example.com/article',
-        ),
-        throwsA(isA<StateError>()),
-      );
-
-      expect(enrichCalls, 0);
-      expect(
-        await objectStore.listObjects(definition.objectType.id),
-        hasLength(2),
-      );
-    },
-  );
+    expect(enrichCalls, 0);
+    expect(
+      await objectStore.listObjects(definition.objectType.id),
+      hasLength(2),
+    );
+  });
 
   test('Image quick-create requires managed import callback and validates result type', () async {
     final images = ImageObjectService(
