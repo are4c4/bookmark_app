@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Advisory PR-contract validation for concurrent AI development lanes."""
+"""PR-contract enforcement for concurrent AI development lanes.
+
+Deterministic violations are blocking. Heuristic coordination signals remain warnings.
+Dependabot dependency PRs are exempt from AI metadata requirements, but never from
+workflow self-mutation safety checks.
+"""
 
 from __future__ import annotations
 
@@ -27,6 +32,7 @@ PREFIX_TO_LANE = {
     "oversight/": "H",
 }
 WORKFLOW_SUFFIXES = (".yml", ".yaml")
+RISK_APPROVAL_MARKER = "Risk approval: approved"
 
 
 @dataclass(frozen=True)
@@ -128,6 +134,11 @@ def actual_hotspots(paths: list[str]) -> frozenset[str]:
     return frozenset(path for path in paths if path in HOTSPOTS)
 
 
+def is_dependency_bot(author_login: str, branch: str) -> bool:
+    normalized = author_login.strip().lower()
+    return normalized == "dependabot[bot]" or branch.startswith("dependabot/")
+
+
 def detects_branch_mutating_workflow(path: str, content: str) -> bool:
     if not path.startswith(".github/workflows/") or not path.endswith(WORKFLOW_SUFFIXES):
         return False
@@ -144,6 +155,81 @@ def changed_paths(base: str, head: str) -> list[str]:
         text=True,
     )
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
+def patch_for_path(base: str, head: str, path: str) -> str:
+    result = subprocess.run(
+        ["git", "diff", "--unified=0", base, head, "--", path],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout
+
+
+def _added_lines(patch: str) -> list[str]:
+    return [
+        line[1:]
+        for line in patch.splitlines()
+        if line.startswith("+") and not line.startswith("+++")
+    ]
+
+
+def destructive_risks_for_patch(path: str, patch: str) -> list[str]:
+    added = _added_lines(patch)
+    if not added:
+        return []
+    joined = "\n".join(added)
+    reasons: list[str] = []
+
+    if path == "lib/data/app_database.dart" and re.search(r"\bschemaVersion\b", joined):
+        reasons.append("Drift schemaVersion changes")
+
+    if path.endswith((".dart", ".sql")) and re.search(
+        r"(?i)\bDROP\s+(?:TABLE|COLUMN|INDEX)\b|\bALTER\s+TABLE\b[^\n;]*\bDROP\b",
+        joined,
+    ):
+        reasons.append("destructive SQL/schema operation")
+
+    if path.startswith("macos/") and re.search(
+        r"\bPRODUCT_BUNDLE_IDENTIFIER\s*=|\bCFBundleIdentifier\b", joined
+    ):
+        reasons.append("macOS Bundle Identifier changes")
+
+    sensitive_storage_path = (
+        path == "lib/services/profile_manager.dart"
+        or "vault" in path.lower()
+        or "managed_file" in path.lower()
+        or path.startswith("lib/features/storage/")
+    )
+    if sensitive_storage_path and re.search(r"\.(?:delete|deleteSync)\s*\(", joined):
+        reasons.append("physical Vault/managed-file deletion behavior")
+
+    return reasons
+
+
+def destructive_risks(base: str, head: str, paths: list[str]) -> list[str]:
+    rendered: list[str] = []
+    for path in paths:
+        patch = patch_for_path(base, head, path)
+        for reason in destructive_risks_for_patch(path, patch):
+            rendered.append(f"{reason} in `{path}`")
+    return rendered
+
+
+def owner_risk_approval(comments: object, owner_login: str) -> bool:
+    if not isinstance(comments, list):
+        return False
+    owner = owner_login.strip().lower()
+    for row in comments:
+        if not isinstance(row, dict):
+            continue
+        user = row.get("user")
+        login = str(user.get("login") or "").lower() if isinstance(user, dict) else ""
+        body = str(row.get("body") or "")
+        if login == owner and RISK_APPROVAL_MARKER.lower() in body.lower():
+            return True
+    return False
 
 
 def _request_json(url: str, token: str) -> object:
@@ -186,9 +272,102 @@ def _open_pull_claims(api_root: str, token: str) -> list[OpenPullClaim]:
     return claims
 
 
-def _warn(message: str) -> None:
+def collect_errors(
+    contract: Contract,
+    paths: list[str],
+    mutating_workflows: list[str],
+    duplicate_claims: list[OpenPullClaim] | None = None,
+    dependency_bot: bool = False,
+) -> list[str]:
+    errors: list[str] = []
+
+    if mutating_workflows:
+        errors.append(
+            "Workflow grants `contents: write` and pushes to a branch: "
+            + ", ".join(f"`{path}`" for path in mutating_workflows)
+            + ". CI validates autonomous branches; it must not self-mutate them."
+        )
+
+    if dependency_bot:
+        return errors
+
+    docs_only = is_docs_only(paths)
+    duplicates = duplicate_claims or []
+
+    if contract.lane not in LANES:
+        errors.append("Missing or invalid `Primary lane`; use exactly one of A/B/C/D/E/F/G/H.")
+
+    if not docs_only and contract.related_issue is None:
+        errors.append("Runtime/configuration PR is missing `Related issue: #...` metadata.")
+
+    if duplicates:
+        rendered = ", ".join(f"#{pull.number} {pull.title}" for pull in duplicates)
+        errors.append(
+            f"Related issue #{contract.related_issue} is already claimed by open PR(s): {rendered}. "
+            "One focused Issue may have only one active implementation owner/PR."
+        )
+
+    if contract.migration_impact not in {"yes", "no"}:
+        errors.append("`Migration/data impact` must be explicitly `yes` or `no`.")
+
+    actual = actual_hotspots(paths)
+    if not contract.hotspots_declared:
+        errors.append("Missing `Shared hotspots` declaration; use `none` or list the touched hotspot paths.")
+    elif actual != contract.declared_hotspots:
+        errors.append(
+            "Declared shared hotspots do not match the PR diff: "
+            f"declared={sorted(contract.declared_hotspots)} actual={sorted(actual)}."
+        )
+
+    return errors
+
+
+def collect_warnings(
+    contract: Contract,
+    branch: str,
+    paths: list[str],
+    open_dependencies: set[int],
+    dependency_bot: bool = False,
+) -> list[str]:
+    if dependency_bot:
+        return []
+
+    warnings: list[str] = []
+    docs_only = is_docs_only(paths)
+
+    expected = expected_lane_for_branch(branch)
+    if contract.lane in LANES and expected and contract.lane != expected:
+        warnings.append(
+            f"Primary lane {contract.lane} conflicts with branch prefix, which implies lane {expected}."
+        )
+
+    if (
+        not docs_only
+        and contract.related_issue is not None
+        and not branch_has_issue_token(branch, contract.related_issue)
+    ):
+        warnings.append(
+            f"Branch `{branch}` does not include Related issue #{contract.related_issue} as a delimited token; "
+            "include the focused Issue number so pre-PR remote-branch audits can discover active ownership."
+        )
+
+    if open_dependencies:
+        warnings.append(
+            "Declared dependency is still open: "
+            + ", ".join(f"#{number}" for number in sorted(open_dependencies))
+            + ". Confirm the PR is intentionally sequenced before integration."
+        )
+    return warnings
+
+
+def _warning(message: str) -> None:
     escaped = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
     print(f"::warning title=AI PR coordination::{escaped}")
+
+
+def _error(message: str) -> None:
+    escaped = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+    print(f"::error title=AI PR coordination::{escaped}")
 
 
 def _append_summary(lines: list[str]) -> None:
@@ -199,65 +378,6 @@ def _append_summary(lines: list[str]) -> None:
         handle.write("\n".join(lines) + "\n")
 
 
-def collect_warnings(
-    contract: Contract,
-    branch: str,
-    paths: list[str],
-    open_dependencies: set[int],
-    mutating_workflows: list[str],
-    duplicate_claims: list[OpenPullClaim] | None = None,
-) -> list[str]:
-    warnings: list[str] = []
-    docs_only = is_docs_only(paths)
-    duplicates = duplicate_claims or []
-
-    if contract.lane not in LANES:
-        warnings.append("Missing or invalid `Primary lane`; use exactly one of A/B/C/D/E/F/G/H.")
-    expected = expected_lane_for_branch(branch)
-    if contract.lane in LANES and expected and contract.lane != expected:
-        warnings.append(f"Primary lane {contract.lane} conflicts with branch prefix, which implies lane {expected}.")
-
-    if not docs_only and contract.related_issue is None:
-        warnings.append("Runtime/configuration PR is missing `Related issue: #...` metadata.")
-    elif not docs_only and contract.related_issue is not None and not branch_has_issue_token(branch, contract.related_issue):
-        warnings.append(
-            f"Branch `{branch}` does not include Related issue #{contract.related_issue} as a delimited token; "
-            "include the focused Issue number so pre-PR remote-branch audits can discover active ownership."
-        )
-
-    if duplicates:
-        rendered = ", ".join(f"#{pull.number} {pull.title}" for pull in duplicates)
-        warnings.append(
-            f"Related issue #{contract.related_issue} is also claimed by open PR(s): {rendered}. "
-            "Confirm this is intentional umbrella/sequenced work or supersede the duplicate before integration."
-        )
-
-    if contract.migration_impact not in {"yes", "no"}:
-        warnings.append("`Migration/data impact` must be explicitly `yes` or `no`.")
-
-    actual = actual_hotspots(paths)
-    if not contract.hotspots_declared:
-        warnings.append("Missing `Shared hotspots` declaration; use `none` or list the touched hotspot paths.")
-    elif actual != contract.declared_hotspots:
-        warnings.append(
-            "Declared shared hotspots do not match the PR diff: "
-            f"declared={sorted(contract.declared_hotspots)} actual={sorted(actual)}."
-        )
-
-    if open_dependencies:
-        warnings.append(
-            "Declared dependency is still open: " + ", ".join(f"#{number}" for number in sorted(open_dependencies)) + "."
-        )
-
-    if mutating_workflows:
-        warnings.append(
-            "PR-specific workflow appears to grant `contents: write` and push to a branch: "
-            + ", ".join(f"`{path}`" for path in mutating_workflows)
-            + ". CI should validate autonomous branches rather than mutate them."
-        )
-    return warnings
-
-
 def main() -> int:
     event_path = os.environ.get("GITHUB_EVENT_PATH", "")
     repository = os.environ.get("GITHUB_REPOSITORY", "")
@@ -266,8 +386,8 @@ def main() -> int:
     head_sha = os.environ.get("CI_HEAD_SHA", "")
 
     if not event_path or not base_sha or not head_sha:
-        _warn("Coordination audit unavailable because event/base/head metadata is missing.")
-        return 0
+        _error("Coordination gate unavailable because event/base/head metadata is missing.")
+        return 1
 
     try:
         event = json.loads(Path(event_path).read_text(encoding="utf-8"))
@@ -275,14 +395,17 @@ def main() -> int:
         body = str(pull.get("body") or "")
         head = pull.get("head", {})
         branch = str(head.get("ref") or "")
+        author = pull.get("user", {})
+        author_login = str(author.get("login") or "") if isinstance(author, dict) else ""
         current_number = int(event.get("number") or pull.get("number") or 0)
         paths = changed_paths(base_sha, head_sha)
         contract = parse_contract(body)
+        dependency_bot = is_dependency_bot(author_login, branch)
 
+        api_root = f"https://api.github.com/repos/{repository}" if repository else ""
         open_dependencies: set[int] = set()
         duplicates: list[OpenPullClaim] = []
-        if repository and token:
-            api_root = f"https://api.github.com/repos/{repository}"
+        if api_root and token and not dependency_bot:
             for number in contract.dependencies:
                 payload = _request_json(f"{api_root}/issues/{number}", token)
                 if isinstance(payload, dict) and payload.get("state") == "open":
@@ -298,40 +421,88 @@ def main() -> int:
             if not path.startswith(".github/workflows/") or not path.endswith(WORKFLOW_SUFFIXES):
                 continue
             file_path = Path(path)
-            if file_path.exists() and detects_branch_mutating_workflow(path, file_path.read_text(encoding="utf-8")):
+            if file_path.exists() and detects_branch_mutating_workflow(
+                path, file_path.read_text(encoding="utf-8")
+            ):
                 mutating_workflows.append(path)
 
+        errors = collect_errors(
+            contract,
+            paths,
+            mutating_workflows,
+            duplicates,
+            dependency_bot=dependency_bot,
+        )
         warnings = collect_warnings(
             contract,
             branch,
             paths,
             open_dependencies,
-            mutating_workflows,
-            duplicates,
+            dependency_bot=dependency_bot,
         )
+
+        risks = destructive_risks(base_sha, head_sha, paths)
+        risk_approved = False
+        if risks and api_root and token and current_number:
+            owner_login = repository.split("/", 1)[0]
+            comments = _request_json(
+                f"{api_root}/issues/{current_number}/comments?per_page=100", token
+            )
+            risk_approved = owner_risk_approval(comments, owner_login)
+
+        if risks and not risk_approved:
+            errors.append(
+                "High-confidence destructive/irreversible change detected: "
+                + "; ".join(risks)
+                + ". The repository owner must add a PR conversation comment containing exactly "
+                + f"`{RISK_APPROVAL_MARKER}` after reviewing preservation/rollback, then rerun CI."
+            )
+
         for warning in warnings:
-            _warn(warning)
+            _warning(warning)
+        for error in errors:
+            _error(error)
 
         _append_summary(
             [
                 "## AI PR coordination",
                 "",
+                f"- Dependency bot exemption: `{'yes' if dependency_bot else 'no'}`",
                 f"- Primary lane: `{contract.lane or 'missing'}`",
                 f"- Branch: `{branch or 'unknown'}`",
                 f"- Related issue: `{('#' + str(contract.related_issue)) if contract.related_issue else 'missing/optional-docs'}`",
-                f"- Branch contains issue token: `{'yes' if contract.related_issue and branch_has_issue_token(branch, contract.related_issue) else 'n/a/no'}`",
-                f"- Other open PRs claiming Related issue: `{', '.join('#' + str(pull.number) for pull in duplicates) if duplicates else 'none'}`",
                 f"- Declared dependencies: `{', '.join('#' + str(number) for number in contract.dependencies) if contract.dependencies else 'none'}`",
+                f"- Other open PRs claiming Related issue: `{', '.join('#' + str(pull.number) for pull in duplicates) if duplicates else 'none'}`",
                 f"- Actual shared hotspots: `{', '.join(sorted(actual_hotspots(paths))) if actual_hotspots(paths) else 'none'}`",
-                f"- Coordination warnings: `{len(warnings)}`",
+                f"- Destructive-risk findings: `{len(risks)}`",
+                f"- Owner risk approval: `{'yes' if risk_approved else 'no/not-required'}`",
+                f"- Blocking coordination errors: `{len(errors)}`",
+                f"- Advisory coordination warnings: `{len(warnings)}`",
                 "",
-                *(["### Warnings", *[f"- ⚠️ {warning}" for warning in warnings]] if warnings else ["No coordination warnings."]),
+                *(
+                    ["### Blocking errors", *[f"- ❌ {error}" for error in errors]]
+                    if errors
+                    else ["No blocking coordination errors."]
+                ),
+                "",
+                *(
+                    ["### Advisory warnings", *[f"- ⚠️ {warning}" for warning in warnings]]
+                    if warnings
+                    else ["No advisory coordination warnings."]
+                ),
             ]
         )
-        return 0
-    except (OSError, ValueError, KeyError, json.JSONDecodeError, subprocess.CalledProcessError, urllib.error.URLError) as error:
-        _warn(f"Coordination audit unavailable: {error}")
-        return 0
+        return 1 if errors else 0
+    except (
+        OSError,
+        ValueError,
+        KeyError,
+        json.JSONDecodeError,
+        subprocess.CalledProcessError,
+        urllib.error.URLError,
+    ) as error:
+        _error(f"Coordination gate unavailable: {error}")
+        return 1
 
 
 if __name__ == "__main__":
