@@ -46,6 +46,14 @@ class RepositorySettingsGuardTest(unittest.TestCase):
         self.assertIn("repository default branch must remain `main`", result.errors)
         self.assertIn("repository must keep delete_branch_on_merge=true", result.errors)
 
+    def test_admin_only_fields_may_be_omitted_by_read_only_api(self) -> None:
+        self.assertTrue(guard.validates_repository({"default_branch": "main"}).ok)
+
+        ruleset = compliant_ruleset()
+        ruleset.pop("bypass_actors")
+        ruleset.pop("current_user_can_bypass")
+        self.assertTrue(guard.validates_default_branch_ruleset(ruleset).ok)
+
     def test_required_merge_gate_must_be_strict_and_exact(self) -> None:
         ruleset = compliant_ruleset()
         status = next(
