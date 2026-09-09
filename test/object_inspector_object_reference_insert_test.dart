@@ -58,6 +58,7 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       await tester.pumpWidget(
         MaterialApp(
+          theme: ThemeData(platform: TargetPlatform.macOS),
           home: ObjectInspectorPage(
             store: genericStore,
             objectStore: objectStore,
@@ -67,7 +68,13 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final referenceAction = find.byKey(
+      expect(
+        find.byKey(const ValueKey('body-block-insert-reference-after-a')),
+        findsNothing,
+      );
+      await tester.tap(find.byKey(const ValueKey('body-text-a')));
+      await tester.pump();
+      var referenceAction = find.byKey(
         const ValueKey('body-block-insert-reference-after-a'),
       );
       expect(referenceAction, findsOneWidget);
@@ -86,6 +93,11 @@ void main() {
       var document = await bodyStore.read(sourceId);
       expect(document.blocks, hasLength(1));
 
+      await tester.tap(find.byKey(const ValueKey('body-text-a')));
+      await tester.pump();
+      referenceAction = find.byKey(
+        const ValueKey('body-block-insert-reference-after-a'),
+      );
       await tester.tap(referenceAction);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Object を参照'));
