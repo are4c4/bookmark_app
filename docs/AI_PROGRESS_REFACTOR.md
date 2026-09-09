@@ -18,16 +18,18 @@ Durable product implications for G:
 
 ## Active focused issues
 
-### #1074 — classify remaining historical branches before further cleanup
-#1072 completed the proven-merged historical cleanup: 840 old branch refs were deleted after dry-run and full green CI, reducing the live inventory from 1,065 to 225 branches including `main`. GitHub native automatic merged-head deletion is enabled for future PRs.
+### #1076 — remove stale exact heads of closed-unmerged PRs
+#1072 removed 840 historical branch refs that were provably merged. #1074 then added a read-only inventory audit and classified the remaining refs. Its live report found 139 old branches whose current tip exactly matched the recorded head SHA of a closed, unmerged PR, while separately retaining 10 branches advanced after PR history and 42 branches with no PR history as unique/ambiguous work.
 
-The 224 non-main survivors must not be treated as active ownership merely because their refs exist. #1074 is a read-only classification slice that separates:
-- current open-PR / Dependabot / recent / default-tip refs that should be retained;
-- any newly provable merged-safe refs;
-- exact heads of closed-unmerged PRs that may be reversible cleanup candidates;
-- branches advanced after PR history and branches with no PR history, which retain unique/ambiguous work and must not be auto-deleted.
+#1076 is the narrowly justified second cleanup pass. A branch is eligible only when live state still proves all of the following immediately before deletion:
+- not the default branch and not an open-PR head;
+- not equal to the current default tip;
+- at least 24 hours old;
+- exact `<branch>|<tip SHA>` matches a closed-unmerged PR head;
+- the same exact pair is not recorded as a merged PR head;
+- the branch has not advanced since that closed PR.
 
-Do not broaden #1074 into deletion until the classification report provides concrete evidence and a separately justified destructive policy.
+The PR must dry-run first. Deletion occurs only after green integration and recomputes live eligibility. `advanced-after-pr`, `no-pr-history`, recent/default-tip and open-PR branches are never auto-deleted by this slice. Closed PR metadata preserves the historical head SHA needed to recreate a deleted ref if recovery is ever required.
 
 ### #1047 — Generic Database gallery state-loader extraction
 Behavior-preserving extraction: move Gallery cover-source discovery into the existing `GenericDatabasePageStateLoader` snapshot without changing Gallery semantics. `generic_database_page.dart` edits must remain patch-sized and re-audited against live ownership.
@@ -58,7 +60,8 @@ Future G work after owning-lane parity:
 - durable handoff audit;
 - immutable GitHub Actions SHA pin audit;
 - weekly Dependabot updates for Dart/pub and GitHub Actions;
-- historical proven-merged branch cleanup with exact merged-PR head recognition for squash merges.
+- historical proven-merged branch cleanup with exact merged-PR head recognition for squash merges;
+- read-only historical branch inventory classification for ambiguous refs.
 
 Do not relax a guardrail or create no-op commits to make unrelated work easier to merge.
 
@@ -100,9 +103,10 @@ The repository remains personal-account owned, so Merge Queue is not available. 
 Behavior-preserving refactors still require changed-Dart format, Analyze and relevant/full Flutter Test. Workflow/guard changes must exercise their focused regressions and the full authoritative CI path. Docs-only architecture synchronization should use the docs-only CI path plus handoff/coordination audits.
 
 ## Resume sequence
-1. finish #1074's read-only live classification and inspect its category counts/lists;
-2. if the report proves a narrow reversible cleanup class, create a separate focused deletion slice instead of silently broadening #1074; otherwise retain ambiguous/unique branches;
-3. re-audit live open PR/hotspot ownership;
-4. continue #1047/#225/#950 only through small focused slices;
-5. when #1039/#1040 owning-lane parity lands, create caller-zero retirement slices instead of combining product migration with cleanup;
-6. keep destructive schema/data removal separate and preservation-gated.
+1. finish #1076 dry-run and verify the exact closed-unmerged candidate set against live PR/branch state;
+2. integrate only after the authoritative `merge-gate` is green, then verify the post-merge deletion job and recount live branches;
+3. close #1076 only after recording deleted/retained counts; do not auto-delete `advanced-after-pr` or `no-pr-history` survivors;
+4. re-audit live open PR/hotspot ownership;
+5. continue #1047/#225/#950 only through small focused slices;
+6. when #1039/#1040 owning-lane parity lands, create caller-zero retirement slices instead of combining product migration with cleanup;
+7. keep destructive schema/data removal separate and preservation-gated.
