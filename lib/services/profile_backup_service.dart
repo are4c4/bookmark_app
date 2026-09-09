@@ -5,40 +5,58 @@ import 'package:archive/archive_io.dart';
 import 'package:file_selector/file_selector.dart';
 
 import '../data/app_database.dart';
+import 'vault_backup_destination_guard.dart';
+
+typedef ProfileBackupDestinationPicker =
+    Future<String?> Function(String suggestedName);
 
 class ProfileBackupService {
-  const ProfileBackupService();
+  const ProfileBackupService({this.exportDestinationPicker});
+
+  final ProfileBackupDestinationPicker? exportDestinationPicker;
 
   Future<String?> exportProfile({
     required String profileName,
     required String profileDirectoryPath,
     required AppDatabase database,
   }) async {
-    await database.customStatement('PRAGMA wal_checkpoint(FULL)');
-
     final safeName = profileName
         .trim()
         .replaceAll(RegExp(r'[^A-Za-z0-9ぁ-んァ-ヶ一-龠々ー_-]+'), '_');
     final now = DateTime.now();
     final date =
         '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
-    final location = await getSaveLocation(
-      suggestedName:
-          '${safeName.isEmpty ? 'BookmarkProfile' : safeName}_$date.bookmark-profile.zip',
-    );
-    if (location == null) return null;
+    final suggestedName =
+        '${safeName.isEmpty ? 'BookmarkProfile' : safeName}_$date.bookmark-profile.zip';
+    final destinationPath = await _pickExportDestination(suggestedName);
+    if (destinationPath == null) return null;
 
     final directory = Directory(profileDirectoryPath);
     if (!await directory.exists()) {
       throw StateError('Vaultフォルダが見つかりません。');
     }
 
+    // Complete backup must remain a read-only operation with respect to the
+    // source Vault. Prove the output cannot resolve into the recursively read
+    // source tree before checkpointing or creating the archive.
+    await const VaultBackupDestinationGuard().validate(
+      sourceVaultPath: directory.path,
+      destinationPath: destinationPath,
+    );
+
+    await database.customStatement('PRAGMA wal_checkpoint(FULL)');
     await ZipFileEncoder().zipDirectory(
       directory,
-      filename: location.path,
+      filename: destinationPath,
       followLinks: false,
     );
-    return location.path;
+    return destinationPath;
+  }
+
+  Future<String?> _pickExportDestination(String suggestedName) async {
+    final picker = exportDestinationPicker;
+    if (picker != null) return picker(suggestedName);
+    return (await getSaveLocation(suggestedName: suggestedName))?.path;
   }
 
   Future<String?> pickBackupFile() async {
