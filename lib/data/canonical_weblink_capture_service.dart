@@ -9,12 +9,11 @@ import 'weblink_object_service.dart';
 /// "missing" and create separate Weblink Objects. Existing canonical collisions
 /// fail closed instead of choosing one target arbitrarily.
 class CanonicalWeblinkCaptureService {
-  const CanonicalWeblinkCaptureService({
-    required WeblinkObjectService weblinks,
-  }) : _weblinks = weblinks;
+  const CanonicalWeblinkCaptureService({required WeblinkObjectService weblinks})
+    : _weblinks = weblinks;
 
   static final Expando<Map<int, Future<WeblinkObjectDefinition>>>
-      _definitionFutures = Expando('canonicalWeblinkDefinitions');
+  _definitionFutures = Expando('canonicalWeblinkDefinitions');
 
   final WeblinkObjectService _weblinks;
 
@@ -69,8 +68,10 @@ class CanonicalWeblinkCaptureService {
     final database = _weblinks.systemObjects.database;
     final byWorkspace = _definitionFutures[database] ??=
         <int, Future<WeblinkObjectDefinition>>{};
-    return byWorkspace[workspaceId] ??=
-        _loadDefinition(byWorkspace, workspaceId);
+    return byWorkspace[workspaceId] ??= _loadDefinition(
+      byWorkspace,
+      workspaceId,
+    );
   }
 
   Future<WeblinkObjectDefinition> _loadDefinition(
