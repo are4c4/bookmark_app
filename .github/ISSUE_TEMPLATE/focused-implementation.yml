@@ -1,0 +1,84 @@
+name: Focused implementation
+description: Define one implementation slice with explicit lane ownership and safety boundaries.
+title: "[Focused] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for one coherent implementation slice. One focused Issue may have only one active implementation owner/branch/PR. Re-check live GitHub ownership before coding.
+
+  - type: dropdown
+    id: primary-lane
+    attributes:
+      label: Primary lane
+      description: Choose the single lane that owns implementation of this focused slice.
+      options:
+        - A — Object Core & Body
+        - B — Relations & Data Integrity
+        - C — Database, View & Schema UX
+        - D — Primitive Objects & Media
+        - E — Search & Indexing
+        - F — Storage, Vault & Delivery
+        - G — Refactor & Architecture Health
+        - H — Architecture & Integration Oversight
+    validations:
+      required: true
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: State the concrete correctness, UX, architecture, or developer-workflow outcome this Issue should achieve.
+      placeholder: Describe the smallest coherent outcome, not a broad umbrella.
+    validations:
+      required: true
+
+  - type: input
+    id: depends-on
+    attributes:
+      label: Depends on
+      description: List blocking Issue/PR dependencies using #123 references, or write none.
+      placeholder: "none"
+    validations:
+      required: true
+
+  - type: textarea
+    id: shared-hotspots
+    attributes:
+      label: Shared hotspots
+      description: List shared hotspot file paths expected to be edited, or write none. Re-check live PR ownership before editing them.
+      placeholder: "none"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: migration-data-impact
+    attributes:
+      label: Migration/data impact
+      description: Does this slice change schemaVersion, schema/migration logic, preservation-sensitive data, or destructive storage behavior?
+      options:
+        - "no"
+        - "yes"
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance
+      description: List observable completion criteria, including focused tests/guards and preservation or parity evidence where applicable.
+      placeholder: |
+        - [ ] Behavior/contract is implemented.
+        - [ ] Focused regression coverage is green.
+        - [ ] Authoritative merge-gate is green.
+    validations:
+      required: true
+
+  - type: textarea
+    id: non-goals
+    attributes:
+      label: Non-goals
+      description: State nearby work this Issue intentionally does not own, or write none.
+      placeholder: "none"
+    validations:
+      required: true
