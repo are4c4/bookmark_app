@@ -15,6 +15,7 @@ import 'bookmark_unified_stage1_page.dart';
 import 'collection_management_page.dart';
 import 'global_search_page.dart';
 import 'generic_database_page.dart';
+import 'home_start_page.dart';
 import 'people_management_page.dart';
 import 'profile_management_page.dart';
 import 'settings_page.dart';
@@ -68,17 +69,21 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
     0xFFB07A91,
   ];
 
-  var _index = 0;
+  var _index = 12;
   var _sidebarCollapsed = false;
   var _loadingWorkspaces = true;
   List<WorkspaceInfo> _workspaces = const [];
   List<GenericDatabaseDefinitionRecord> _genericDatabases = const [];
   int? _selectedGenericDatabaseId;
   final Map<int, Widget> _pageCache = {};
+  late GenericDatabaseStore _genericDatabaseStore;
 
   @override
   void initState() {
     super.initState();
+    _genericDatabaseStore = GenericDatabaseStore(
+      widget.repository.workspaceStore.database,
+    );
     _reloadWorkspaces();
   }
 
@@ -86,6 +91,9 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
   void didUpdateWidget(covariant BookmarkAppShell oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.repository != widget.repository) {
+      _genericDatabaseStore = GenericDatabaseStore(
+        widget.repository.workspaceStore.database,
+      );
       _pageCache.clear();
       _selectedGenericDatabaseId = null;
       _reloadWorkspaces();
@@ -101,6 +109,7 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
     if (!mounted) return;
     setState(() {
       _pageCache.remove(0);
+      _pageCache.remove(12);
       _workspaces = workspaces;
       _loadingWorkspaces = false;
     });
@@ -108,8 +117,9 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
   }
 
   Future<void> _reloadGenericDatabases() async {
-    final store = GenericDatabaseStore(widget.repository.workspaceStore.database);
-    final databases = await store.listDatabases(widget.repository.workspaceId);
+    final databases = await _genericDatabaseStore.listDatabases(
+      widget.repository.workspaceId,
+    );
     if (!mounted) return;
     setState(() {
       _genericDatabases = databases;
@@ -125,7 +135,6 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
     final choice = await showObjectTypeTemplatePicker(context);
     if (!mounted || choice == null) return;
 
-    final store = GenericDatabaseStore(widget.repository.workspaceStore.database);
     try {
       late final int id;
       if (choice is EmptyObjectTypeChoice) {
@@ -135,7 +144,7 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
           hint: '例: 書籍',
         );
         if (name?.isNotEmpty != true) return;
-        id = await store.createDatabase(
+        id = await _genericDatabaseStore.createDatabase(
           workspaceId: widget.repository.workspaceId,
           name: name!,
         );
@@ -146,7 +155,8 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
           initial: template.name,
         );
         if (name?.isNotEmpty != true) return;
-        id = await ObjectTypeTemplateStore(store).createFromTemplate(
+        id = await ObjectTypeTemplateStore(_genericDatabaseStore)
+            .createFromTemplate(
           workspaceId: widget.repository.workspaceId,
           template: template,
           name: name!,
@@ -494,8 +504,8 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
   void _selectPage(int index) {
     if (index == _index) return;
     setState(() {
-      if (index == 1) {
-        _pageCache.remove(1);
+      if (index == 1 || index == 12) {
+        _pageCache.remove(index);
       }
       _index = index;
     });
@@ -587,6 +597,8 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
             child: ListView(padding: const EdgeInsets.only(bottom: UiTokens.space12), children: [
               _workspaceList(),
               const SizedBox(height: UiTokens.space6),
+              _navTile(12, Icons.home_outlined, 'ホーム'),
+              const SizedBox(height: UiTokens.space6),
               _sectionHeader('DATABASES'),
               _navTile(0, Icons.bookmarks_outlined, 'ブックマーク'),
               _navTile(7, Icons.people_outline, '人物'),
@@ -656,6 +668,7 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
   Widget _collapsedSidebar() {
     final scheme = Theme.of(context).colorScheme;
     const destinations = <(int, IconData)>[
+      (12, Icons.home_outlined),
       (0, Icons.bookmarks_outlined),
       (7, Icons.people_outline),
       (6, Icons.account_tree_outlined),
@@ -686,6 +699,7 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
   Future<void> _showCommandPalette() async {
     var query = '';
     const destinations = <(String, IconData, int)>[
+      ('ホーム', Icons.home_outlined, 12),
       ('ブックマーク', Icons.bookmarks_outlined, 0),
       ('人物', Icons.people_outline, 7),
       ('タグ', Icons.account_tree_outlined, 6),
@@ -837,6 +851,10 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
                 databaseId: _selectedGenericDatabaseId!,
                 onDatabaseChanged: _reloadGenericDatabases,
               ),
+        12 => HomeStartPage(
+            store: _genericDatabaseStore,
+            workspaceId: widget.repository.workspaceId,
+          ),
         _ => const SizedBox.shrink(),
       };
 
@@ -847,7 +865,7 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
       _pageCache.putIfAbsent(_index, () => _buildPage(_index, workspace));
     }
     return List<Widget>.generate(
-      12,
+      13,
       (index) => _pageCache[index] ?? const SizedBox.shrink(),
     );
   }

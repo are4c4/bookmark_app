@@ -36,7 +36,20 @@ Integrated foundation:
 - reusable `ObjectHierarchyMatchModeField` presentation exposes `完全一致` / `配下を含む` / `配下のみ` / `枝を除外` without owning hierarchy traversal;
 - `ObjectViewProjector` / `GenericObjectViewCoordinator` can receive the same matcher, leaving the eventual canonical hierarchy reader wiring to B/#1052 integration rather than a C-owned tree store.
 
-Next #1053 action: once B/#1052 exposes the canonical hierarchy reader/integrity contract, compose a read-only hierarchy snapshot/matcher into generic Database/View projection and wire the reusable hierarchy mode field into canonical Tag relation filter editing. Do not use legacy Tag projection tables or introduce a closure/tree cache as an alternate authority.
+Next #1053 action: once B/#1052 exposes the canonical hierarchy reader/integrity contract on `main`, compose its read-only hierarchy snapshot/matcher into generic Database/View projection and wire the reusable hierarchy mode field into canonical Tag relation filter editing. Do not use legacy Tag projection tables or introduce a closure/tree cache as an alternate authority.
+
+### #1061 — Home/start UX
+Home converges on Inbox / Recent / Favorites / Pinned Databases without making legacy Bookmark/People modules permanent navigation authority.
+
+Integrated first slice (#1111):
+- Home is the normal shell start destination while Bookmark / People / Tag / Collection transition navigation remains available until their parity/caller-zero gates complete;
+- Recent is derived from canonical Objects across ObjectTypes using `updatedAt` descending with Object id as deterministic tie-breaker;
+- transition-only mirrored Bookmark Objects are excluded by canonical `system_key = bookmark` identity, without excluding user-facing system ObjectTypes such as Weblink/Image/Tag/Daily Note;
+- Recent opens through the shared `ObjectInspectorPage` and refreshes after returning;
+- Home has loading, empty, error/retry and pull-to-refresh behavior;
+- no Home-only Recent index, recently-opened history, Favorites state or Pinned Database state is persisted by this slice.
+
+Next #1061 action: split Inbox / Favorites / Pinned Databases into focused contracts only when their canonical persistence/query semantics are explicit. Do not fake durable user state in presentation memory merely to fill the Home surface.
 
 ### #1043 — replace Stage1 normal ownership
 Move ordinary saved-URL use to canonical Weblink Objects through generic Database/View/navigation and capture-first/Inbox organization. Preserve useful list/table/gallery/filter/sort/opening behavior through generic contracts. Retire Stage1 routing only after #1041/#1042/#1054 and daily-use parity make it caller-zero.
@@ -52,9 +65,10 @@ Expose Person Objects through ordinary Database/View/Inspector flows. Preserve P
 - generic Gallery cover sources and media rendering;
 - generic Database sidebar/command-palette navigation;
 - canonical Images/Weblinks/Daily Notes system collection defaults;
-- shared Object opening/Inspector/Body composition.
+- shared Object opening/Inspector/Body composition;
+- Home start routing with canonical recently-changed Object projection and transition-only Bookmark mirror suppression.
 
-Older statements that “Lane C is idle after #949” are obsolete because #1043/#1046/#1053 are now focused open C issues.
+Older statements that “Lane C is idle after #949” are obsolete because #1043/#1046/#1053/#1061 contain focused C work or dependencies that must be re-audited live.
 
 ## Cross-lane boundaries
 - **A:** Object/ObjectType identity/lifecycle, Body, Person/Bookmark migration authority.
@@ -71,11 +85,11 @@ Older statements that “Lane C is idle after #949” are obsolete because #1043
 Changed-Dart format, Analyze, full Flutter Test and focused serialization/widget/real-host regressions are required for primary flows. UI acceptance includes click/key count, inline creation/editing, predictable focus, empty/error/loading states and clear remove-vs-delete semantics.
 
 ## Resume sequence
-1. re-read live #1053/#1043/#1046 and dependency status;
+1. re-read live #1053/#1043/#1046/#1061 and dependency status;
 2. choose one focused Issue and one owner branch/PR;
 3. avoid broad shared-host edits until the underlying contract is testable in reusable components;
 4. prove persisted View/query round-trip and interaction behavior;
 5. update this handoff with durable implementation facts;
-6. do not reintroduce Bookmark/People-specific view engines or a parallel Tag tree store.
+6. do not reintroduce Bookmark/People-specific view engines, Home-only fake durable state, or a parallel Tag tree store.
 
-This sequence is not terminal. After any slice/PR/merge, apply the shared **Lane continuation and resume/stop contract** in `AGENTS.md` before ending the run. Lane C must refresh dependencies because #1053/#1043/#1046 may become actionable as A/B/D work lands; a dependency that was blocked earlier is not a durable idle reason. Stop only after the final resume audit finds no independent safe C work, and record the exact shared stop category plus evidence in this handoff.
+This sequence is not terminal. After any slice/PR/merge, apply the shared **Lane continuation and resume/stop contract** in `AGENTS.md` before ending the run. Lane C must refresh dependencies because #1053/#1043/#1046/#1061 may become actionable as A/B/D work lands; a dependency that was blocked earlier is not a durable idle reason. Stop only after the final resume audit finds no independent safe C work, and record the exact shared stop category plus evidence in this handoff.
