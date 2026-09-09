@@ -62,9 +62,19 @@ void main() {
       expect(find.byType(ReorderableListView), findsOneWidget);
       expect(find.byKey(const ValueKey('body-block-drag-a')), findsNothing);
 
-      await tester.tap(find.byKey(const ValueKey('body-text-a')));
+      final field = find.byKey(const ValueKey('body-text-a'));
+      await tester.tap(field);
       await tester.pump();
       expect(find.byKey(const ValueKey('body-block-drag-a')), findsOneWidget);
+      expect(
+        tester
+            .widget<EditableText>(
+              find.descendant(of: field, matching: find.byType(EditableText)),
+            )
+            .focusNode
+            .hasFocus,
+        isTrue,
+      );
 
       final reorderable = tester.widget<ReorderableListView>(
         find.byType(ReorderableListView),
@@ -72,6 +82,15 @@ void main() {
       reorderable.onReorderItem!(0, 2);
       await tester.pumpAndSettle();
 
+      expect(
+        tester
+            .widget<EditableText>(
+              find.descendant(of: field, matching: find.byType(EditableText)),
+            )
+            .focusNode
+            .hasFocus,
+        isTrue,
+      );
       final stored = await bodyStore.read(objectId);
       expect(stored.blocks.map((block) => block.id), <String>['b', 'c', 'a']);
       final moved = stored.blocks.last;
