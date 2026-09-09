@@ -4,6 +4,7 @@ import '../data/bookmark_repository.dart';
 import '../data/database_view_gallery_adapter.dart';
 import '../data/database_view_gallery_cover_source_service.dart';
 import '../data/database_view_store.dart';
+import '../data/generic_database_hierarchy_query_controller.dart';
 import '../data/generic_database_object_create_service.dart';
 import '../data/generic_database_page_services.dart';
 import '../data/generic_database_page_state_loader.dart';
@@ -15,6 +16,7 @@ import '../data/object_graph_query_store.dart';
 import '../data/object_store.dart';
 import '../data/object_type_management_store.dart';
 import '../data/relation_target_quick_create_policy.dart';
+import '../data/tag_hierarchy_query_context_service.dart';
 import '../database/database_definition.dart';
 import '../domain/object_detail_content.dart';
 import '../domain/object_detail_property_presentation.dart';
@@ -59,6 +61,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
   late final GenericDatabaseStore _store;
   late final ObjectStore _objectStore;
   late final GenericDatabasePageServices _pageServices;
+  late final GenericDatabaseHierarchyQueryController _hierarchyQueries;
   late final GenericDatabasePageStateLoader _stateLoader;
   late final ObjectComputedValueStore _computedStore;
   late final ObjectTypeManagementStore _managementStore;
@@ -80,6 +83,8 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
   Map<int, List<GenericRecord>> _recordsByType = const {};
   Map<int, Map<int, dynamic>> _computedValues = const {};
   DatabaseViewConfig? _activeView;
+  TagHierarchyQueryContext _hierarchyQueryContext =
+      TagHierarchyQueryContext.unavailable;
   List<GalleryCoverSourceOption> _galleryCoverSources =
       const <GalleryCoverSourceOption>[];
   int? _selectedRecordId;
@@ -142,6 +147,12 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     );
     _store = _pageServices.genericStore;
     _objectStore = _pageServices.objectStore;
+    _hierarchyQueries = GenericDatabaseHierarchyQueryController(
+      TagHierarchyQueryContextService.fromStores(
+        genericStore: _store,
+        objectStore: _objectStore,
+      ),
+    );
     _boardMoveService = _pageServices.boardMoveService;
     _computedStore = _pageServices.computedStore;
     _stateLoader = _pageServices.stateLoader;
@@ -169,6 +180,10 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
       databaseId: widget.databaseId,
       workspaceId: widget.repository.workspaceId,
     );
+    final hierarchyQueryContext = await _hierarchyQueries.load(
+      workspaceId: widget.repository.workspaceId,
+      objectType: state.objectType,
+    );
 
     if (!mounted) return;
     setState(() {
@@ -180,6 +195,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
       _objectTypes = state.objectTypes;
       _recordsByType = state.recordsByType;
       _computedValues = state.computedValues;
+      _hierarchyQueryContext = hierarchyQueryContext;
       _galleryCoverSources = state.galleryCoverSources;
       _createMode = state.createMode;
       if (_selectedRecordId != null &&
@@ -276,6 +292,11 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
       final draft = await showDatabaseCollectionSettingsDialog(
         context: context,
         config: config,
+        hierarchyAwarePropertyIdsForObjectType: (objectType) =>
+            _hierarchyQueries.hierarchyAwarePropertyIds(
+          workspaceId: widget.repository.workspaceId,
+          objectType: objectType,
+        ),
       );
       if (draft == null) return;
       await _pageServices.collectionConfig.save(
@@ -460,6 +481,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
       records: _records,
       view: active,
       valueResolver: _projectedValueFor,
+      hierarchyDescendantMatcher: _hierarchyQueryContext.descendantMatcher,
     );
   }
 
@@ -2011,6 +2033,8 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                         view: activeView,
                         properties: _objectType?.properties ?? const [],
                         galleryCoverSources: _galleryCoverSources,
+                        hierarchyAwarePropertyIds:
+                            _hierarchyQueryContext.hierarchyAwarePropertyIds,
                         onViewChanged: (next) {
                           _persistView(next);
                         },

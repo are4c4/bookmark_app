@@ -36,7 +36,16 @@ Integrated foundation:
 - reusable `ObjectHierarchyMatchModeField` presentation exposes `完全一致` / `配下を含む` / `配下のみ` / `枝を除外` without owning hierarchy traversal;
 - `ObjectViewProjector` / `GenericObjectViewCoordinator` can receive the same matcher, leaving the eventual canonical hierarchy reader wiring to B/#1052 integration rather than a C-owned tree store.
 
-Next #1053 action: once B/#1052 exposes the canonical hierarchy reader/integrity contract on `main`, compose its read-only hierarchy snapshot/matcher into generic Database/View projection and wire the reusable hierarchy mode field into canonical Tag relation filter editing. Do not use legacy Tag projection tables or introduce a closure/tree cache as an alternate authority.
+Canonical runtime integration (#1157):
+- hierarchy capability is enabled only for Relation Properties targeting the canonical Tag system ObjectType;
+- C adapts B's validated `TagHierarchySnapshot.isStrictDescendant` through a runtime-only query context and does not persist ancestors, closure data, or a second Tag tree;
+- Database collection filters and saved View projection consume the same canonical matcher, while ordinary exact filtering remains unchanged;
+- `GenericDatabasePage` composes the runtime capability into existing projection, View toolbar and collection-settings boundaries rather than introducing a Tag-specific page/query engine;
+- `ObjectQueryDialog` preserves `hierarchyMatchMode` during editing and exposes the hierarchy selector only for capable Relation contains-any/all predicates;
+- unavailable or malformed canonical Parent state removes hierarchy capability so non-exact hierarchy predicates fail closed instead of guessing from legacy Tag projections;
+- focused query/widget tests plus real in-memory collection and real `GenericDatabasePage` regressions prove that a directly assigned grandchild matches a parent `配下を含む` predicate without materializing ancestor assignments.
+
+Next #1053 action: after #1157 is green and integrated, re-audit the Issue acceptance criteria and close it if no hierarchy-query behavior remains uncovered. Then refresh #1043/#1046/#1061 dependencies rather than extending Tag-specific presentation authority.
 
 ### #1061 — Home/start UX
 Home converges on Inbox / Recent / Favorites / Pinned Databases without making legacy Bookmark/People modules permanent navigation authority.
