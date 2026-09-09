@@ -5,6 +5,7 @@ import 'package:rxdart/rxdart.dart';
 
 import '../data/app_database.dart';
 import '../data/bookmark_read_store.dart';
+import '../data/bookmark_weblink_media_convergence_service.dart';
 import '../data/bookmark_weblink_object_bridge.dart';
 import '../data/bookmark_weblink_tag_convergence_service.dart';
 import '../data/core_object_bridge.dart';
@@ -30,10 +31,10 @@ class ObjectSyncService {
     RemoteImageStorageService? remoteImageStorage,
     Future<void> Function(int imageObjectId)? onPreviewImageIngested,
     Future<void> Function(Iterable<int> objectIds)? onCanonicalObjectsMirrored,
-  })  : _remoteImageStorage = remoteImageStorage,
-        _onPreviewImageIngested = onPreviewImageIngested,
-        _onCanonicalObjectsMirrored = onCanonicalObjectsMirrored,
-        objectStore = ObjectStore(GenericDatabaseStore(database)) {
+  }) : _remoteImageStorage = remoteImageStorage,
+       _onPreviewImageIngested = onPreviewImageIngested,
+       _onCanonicalObjectsMirrored = onCanonicalObjectsMirrored,
+       objectStore = ObjectStore(GenericDatabaseStore(database)) {
     systemObjectStore = SystemObjectStore(
       database: database,
       objectStore: objectStore,
@@ -65,6 +66,11 @@ class ObjectSyncService {
       objectStore: objectStore,
       systemObjectStore: systemObjectStore,
     );
+    bookmarkWeblinkMedia = BookmarkWeblinkMediaConvergenceService(
+      database: database,
+      objectStore: objectStore,
+      systemObjectStore: systemObjectStore,
+    );
   }
 
   /// Only one profile/workspace is active in the app at a time. Keeping the
@@ -91,7 +97,7 @@ class ObjectSyncService {
   /// changed canonical ids after every bridge has completed. Callback failure
   /// is isolated from the already-committed Object sync.
   final Future<void> Function(Iterable<int> objectIds)?
-      _onCanonicalObjectsMirrored;
+  _onCanonicalObjectsMirrored;
 
   late final SystemObjectStore systemObjectStore;
   late final TagObjectBridge tagBridge;
@@ -100,6 +106,7 @@ class ObjectSyncService {
   late final CoreObjectBridge coreBridge;
   late final BookmarkWeblinkObjectBridge bookmarkWeblinkBridge;
   late final BookmarkWeblinkTagConvergenceService bookmarkWeblinkTags;
+  late final BookmarkWeblinkMediaConvergenceService bookmarkWeblinkMedia;
   late final WeblinkPreviewImagePipeline _previewImagePipeline =
       WeblinkPreviewImagePipeline(
         database: database,
@@ -198,6 +205,8 @@ class ObjectSyncService {
     );
     final previousBookmarkTagSource = await bookmarkWeblinkTags
         .captureSourceSnapshot(workspaceId);
+    final previousBookmarkMediaSource = await bookmarkWeblinkMedia
+        .captureSourceSnapshot(workspaceId);
 
     final personObjectIds = await personBridge.syncLegacyPeople(workspaceId);
     final coreImpact = await coreBridge.syncAllWithImpact(workspaceId);
@@ -205,12 +214,18 @@ class ObjectSyncService {
     // photo_object_links exist can legacy Person profile photos be projected to
     // the canonical single Profile Image Relation without inventing identities.
     await personProfileImages.migrateLegacyProfilePhotos(workspaceId);
-    final weblinkSync =
-        await bookmarkWeblinkBridge.syncWorkspaceWithImpact(workspaceId);
+    final weblinkSync = await bookmarkWeblinkBridge.syncWorkspaceWithImpact(
+      workspaceId,
+    );
     final tagConvergence = await bookmarkWeblinkTags.reconcileAfterWeblinkSync(
       workspaceId,
       previousSource: previousBookmarkTagSource,
     );
+    final mediaConvergence = await bookmarkWeblinkMedia
+        .reconcileAfterWeblinkSync(
+          workspaceId,
+          previousSource: previousBookmarkMediaSource,
+        );
 
     // Daily Notes are a normal system ObjectType and should be available to the
     // generic sidebar/Database host even before the user opens the first note.
@@ -225,7 +240,8 @@ class ObjectSyncService {
     final bridgeCandidates = ObjectSyncImpact(personObjectIds)
         .combine(coreImpact)
         .combine(weblinkSync.impact)
-        .combine(ObjectSyncImpact(tagConvergence.mutatedWeblinkObjectIds));
+        .combine(ObjectSyncImpact(tagConvergence.mutatedWeblinkObjectIds))
+        .combine(ObjectSyncImpact(mediaConvergence.mutatedWeblinkObjectIds));
     final after = await ObjectSyncSemanticSnapshot.capture(
       objectStore: objectStore,
       systemObjects: systemObjectStore,
