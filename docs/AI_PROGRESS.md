@@ -106,9 +106,9 @@ Canonical Object Search is established. Resume only for demonstrated FTS/search 
 
 ### G — Refactor & Architecture Health
 - #225 maintainability, hotspot reduction, developer workflow, architecture health.
-- #950 proven caller-zero Photo compatibility cleanup.
+- #950 is a completed caller-zero Photo compatibility checkpoint. Surviving Photo-era paths remain intentional compatibility/preservation infrastructure unless a new focused current-main caller audit proves otherwise; destructive persisted-schema retirement is separate preservation/migration/approval-gated work.
 - #1107 Phase A non-self destructive approval is established: current-head approval must come from a distinct non-author GitHub User, complete paginated latest-review state is evaluated, and the reviewer must have write/admin permission. #1107 remains open for Phase B only: a trusted enforcement root/check or equivalent authorization boundary the implementation identity cannot modify or spoof.
-- retire caller-zero Bookmark/People/Photo repositories/pages/bridges only after owning-lane parity.
+- retire caller-zero Bookmark/People repositories/pages/bridges after owning-lane parity, and revisit Photo compatibility only through a new evidence-backed focused Issue rather than reopening #950.
 - repository-wide handoff/guard synchronization belongs here when a focused Issue owns it.
 
 ### H — Architecture & Integration Oversight
