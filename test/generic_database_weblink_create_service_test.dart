@@ -142,6 +142,37 @@ void main() {
     );
   });
 
+  test('URL collection creation fails closed on canonical collision', () async {
+    final definition = await weblinks.ensureDefinition(workspaceId);
+    await weblinks.findOrCreate(
+      workspaceId: workspaceId,
+      url: 'https://example.com/collision',
+      title: 'First candidate',
+    );
+    final duplicateId = await objectStore.createObject(
+      objectTypeId: definition.objectType.id,
+      title: 'Second candidate',
+    );
+    await objectStore.setPropertyValue(
+      objectId: duplicateId,
+      property: definition.urlProperty,
+      value: 'HTTPS://Example.COM:443/collision',
+    );
+
+    await expectLater(
+      service.createWeblinkFromUrl(
+        databaseId: definition.objectType.id,
+        url: 'https://example.com/collision',
+      ),
+      throwsA(isA<StateError>()),
+    );
+
+    expect(
+      await objectStore.listObjects(definition.objectType.id),
+      hasLength(2),
+    );
+  });
+
   test('optional Weblink enrichment failure keeps canonical creation', () async {
     final definition = await weblinks.ensureDefinition(workspaceId);
     var enrichmentAttempts = 0;
