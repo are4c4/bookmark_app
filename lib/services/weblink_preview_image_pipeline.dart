@@ -9,6 +9,7 @@ import '../data/relation_stored_value_inspector.dart';
 import '../data/system_object_store.dart';
 import '../data/weblink_image_schema_service.dart';
 import '../data/weblink_object_service.dart';
+import '../domain/managed_file_ownership.dart';
 import '../domain/object_model.dart';
 import 'remote_image_storage_service.dart';
 
@@ -134,6 +135,7 @@ class WeblinkPreviewImagePipeline {
       contentType: managed.contentType,
       pixelWidth: managed.pixelWidth,
       pixelHeight: managed.pixelHeight,
+      storageOwnership: ManagedFileOwnership.vaultManagedCopy,
     );
     await _attachRepresentative(
       weblinkObjectId: weblinkObjectId,
