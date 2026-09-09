@@ -72,6 +72,45 @@ class ObjectBodyStore {
     });
   }
 
+  /// Replaces the persisted Body only when it still exactly matches [expected].
+  ///
+  /// This is a narrow compare-and-swap primitive for short-lived local inverse
+  /// operations. The comparison and replacement happen in one database
+  /// transaction so a newer Body mutation cannot be overwritten between a
+  /// preflight read and the write. Both documents use the same canonical JSON
+  /// encoding as [write].
+  Future<bool> writeIfUnchanged({
+    required int objectId,
+    required ObjectBodyDocument expected,
+    required ObjectBodyDocument document,
+  }) async {
+    ObjectBodyBlockContractValidator.validateDocument(expected);
+    ObjectBodyBlockContractValidator.validateDocument(document);
+    await ensureSchema();
+    return _genericStore.database.transaction(() async {
+      await _genericStore.database.customStatement(
+        '''UPDATE object_bodies
+           SET document_json = ?, updated_at = CURRENT_TIMESTAMP
+           WHERE object_id = ? AND document_json = ?''',
+        [
+          jsonEncode(document.toJson()),
+          objectId,
+          jsonEncode(expected.toJson()),
+        ],
+      );
+      final changeRow = await _genericStore.database
+          .customSelect('SELECT changes() AS affected')
+          .getSingle();
+      if (changeRow.read<int>('affected') == 0) return false;
+
+      await _genericStore.database.customStatement(
+        'UPDATE generic_records SET updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [objectId],
+      );
+      return true;
+    });
+  }
+
   /// Removes Body content only. The Object itself and all Properties remain.
   ///
   /// Clearing existing Body content is still an Object content mutation, so it

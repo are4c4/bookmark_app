@@ -8,6 +8,7 @@ import '../../../../data/object_body_block_duplicate_service.dart';
 import '../../../../data/object_body_block_edit_service.dart';
 import '../../../../data/object_body_reference_insert_controller.dart';
 import '../../../../data/object_body_store.dart';
+import '../../../../data/object_body_structural_undo_service.dart';
 import '../../../../data/object_identity_search_service.dart';
 import '../../../../data/object_store.dart';
 import '../../../../domain/object_body.dart';
@@ -74,6 +75,9 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
 
   ObjectBodyBlockDuplicateService get _bodyDuplicates =>
       ObjectBodyBlockDuplicateService(editService: _bodyBlockEdits);
+
+  ObjectBodyStructuralUndoService get _bodyUndo =>
+      ObjectBodyStructuralUndoService(bodyStore: _bodyStore);
 
   ObjectBodyReferenceInsertController get _bodyReferenceInserts =>
       ObjectBodyReferenceInsertController(editService: _bodyBlockEdits);
@@ -358,9 +362,50 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
     ),
   );
 
-  Future<void> _delete(ObjectBodyBlock block) => _runMutation(
-    () => _bodyActions.remove(objectId: widget.objectId, blockId: block.id),
-  );
+  Future<void> _delete(ObjectBodyBlock block) async {
+    final objectId = widget.objectId;
+    final undoService = _bodyUndo;
+    try {
+      final result = await undoService.deleteWithUndo(
+        objectId: objectId,
+        blockId: block.id,
+      );
+      if (!mounted || widget.objectId != objectId) return;
+      _applyDocument(result.document);
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(
+          content: const Text('ブロックを削除しました'),
+          action: SnackBarAction(
+            label: '元に戻す',
+            onPressed: () => _undoDelete(undoService, result.undoToken),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (mounted && widget.objectId == objectId) {
+        _showError('Bodyを更新できませんでした。');
+      }
+    }
+  }
+
+  Future<void> _undoDelete(
+    ObjectBodyStructuralUndoService undoService,
+    ObjectBodyDeleteUndoToken token,
+  ) async {
+    try {
+      final document = await undoService.undoDelete(token);
+      if (!mounted || widget.objectId != token.objectId) return;
+      _applyDocument(document);
+    } on ObjectBodyUndoConflict {
+      if (mounted && widget.objectId == token.objectId) {
+        _showError('新しい変更があるため元に戻せませんでした。');
+      }
+    } catch (_) {
+      if (mounted && widget.objectId == token.objectId) {
+        _showError('Bodyを元に戻せませんでした。');
+      }
+    }
+  }
 
   Future<void> _duplicate(ObjectBodyBlock block) async {
     try {
