@@ -100,7 +100,11 @@ class PersonObjectDeletionCompatibility {
   /// transition-only `person_object_links` row cascades as well.
   Future<void> deleteLegacyCompatibilityRow(int personId) async {
     if (personId <= 0) {
-      throw ArgumentError.value(personId, 'personId', 'Person id must be positive.');
+      throw ArgumentError.value(
+        personId,
+        'personId',
+        'Person id must be positive.',
+      );
     }
     final deleted = await (database.delete(database.people)
           ..where((person) => person.id.equals(personId)))
@@ -133,7 +137,6 @@ class PersonObjectDeletionCompatibility {
 class PersonObjectDeletionService {
   PersonObjectDeletionService({
     required this.database,
-    required this.objectStore,
     required this.personBridge,
     required this.relationMutations,
     required this.compatibility,
@@ -153,7 +156,6 @@ class PersonObjectDeletionService {
     );
     return PersonObjectDeletionService(
       database: database,
-      objectStore: objectStore,
       personBridge: bridge,
       relationMutations: RelationMutationService(
         objectStore: objectStore,
@@ -172,7 +174,6 @@ class PersonObjectDeletionService {
   }
 
   final AppDatabase database;
-  final ObjectStore objectStore;
   final PersonObjectBridge personBridge;
   final RelationMutationService relationMutations;
   final PersonObjectDeletionCompatibility compatibility;
@@ -211,6 +212,18 @@ class PersonObjectDeletionService {
       }
 
       final schema = await personBridge.ensurePersonObjectType(workspaceId);
+      final resolvedLegacyPersonId =
+          await compatibility.legacyPersonIdForCanonicalDeletion(
+        workspaceId: workspaceId,
+        objectTypeId: schema.objectType.id,
+        objectId: objectId,
+      );
+      if (resolvedLegacyPersonId != personId) {
+        throw StateError(
+          'Canonical Person identity does not match the requested legacy Person.',
+        );
+      }
+
       await relationMutations.deleteObject(
         workspaceId: workspaceId,
         objectTypeId: schema.objectType.id,
