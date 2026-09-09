@@ -130,6 +130,7 @@ jobs:
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: stable
+          flutter-version-file: pubspec.yaml
           cache: true
 
       - name: Format changed Dart
@@ -139,6 +140,9 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
+
+      - name: Verify committed dependency lock
+        run: git diff --exit-code -- pubspec.lock
 
       - name: Generate Drift code
         run: dart run build_runner build --delete-conflicting-outputs
@@ -172,6 +176,7 @@ jobs:
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: stable
+          flutter-version-file: pubspec.yaml
           cache: true
 
       - name: Install dependencies
@@ -382,6 +387,7 @@ jobs:
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: stable
+          flutter-version-file: pubspec.yaml
           cache: true
 
       - name: Install dependencies
