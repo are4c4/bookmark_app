@@ -1,10 +1,11 @@
 name: bookmark_app
-description: A Flutter bookmark manager with database-backed multiple views.
+description: A local-first Object-first personal knowledge and database application.
 publish_to: 'none'
 version: 0.1.0+1
 
 environment:
   sdk: '>=3.10.0 <4.0.0'
+  flutter: 3.47.2
 
 dependencies:
   flutter:
