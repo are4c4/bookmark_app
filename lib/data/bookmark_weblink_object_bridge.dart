@@ -199,8 +199,9 @@ class BookmarkWeblinkObjectBridge {
     var linkedCount = 0;
     var retiredLegacyUrlCount = 0;
     for (final row in resolvedRows) {
-      final targetIds =
-          row.targetId == null ? const <int>[] : <int>[row.targetId!];
+      final targetIds = row.targetId == null
+          ? const <int>[]
+          : <int>[row.targetId!];
       await _relationMutations.setRelation(
         objectId: row.objectId,
         property: relation,
