@@ -77,9 +77,7 @@ class ObjectBodyDocumentView extends StatelessWidget {
     final entries = <Widget>[
       for (var index = 0; index < presentations.length; index++)
         _ObjectBodyDocumentEntry(
-          key: ValueKey(
-            'object-body-entry-${presentations[index].block.id}',
-          ),
+          key: ValueKey('object-body-entry-${presentations[index].block.id}'),
           presentation: presentations[index],
           position: positionResolver.resolve(
             document,
@@ -191,8 +189,7 @@ class _ObjectBodyDocumentEntryState extends State<_ObjectBodyDocumentEntry> {
       onParagraphSplit: widget.onParagraphSplit == null
           ? null
           : (selection) => widget.onParagraphSplit!(_block, selection),
-      onParagraphMergeWithPrevious:
-          widget.onParagraphMergeWithPrevious == null
+      onParagraphMergeWithPrevious: widget.onParagraphMergeWithPrevious == null
           ? null
           : () => widget.onParagraphMergeWithPrevious!(_block),
       onChecklistChanged: widget.onChecklistChanged == null
@@ -248,9 +245,7 @@ class _ObjectBodyDocumentEntryState extends State<_ObjectBodyDocumentEntry> {
                           ? 'ブロック操作を閉じる'
                           : 'ブロック操作を表示',
                       icon: Icon(
-                        _touchActionsVisible
-                            ? Icons.close
-                            : Icons.more_horiz,
+                        _touchActionsVisible ? Icons.close : Icons.more_horiz,
                         size: 18,
                       ),
                       onPressed: () => setState(
