@@ -316,11 +316,12 @@ class TagObjectBridge {
       return;
     }
 
-    final canonical = await _hierarchyIntegrity.relationTargets.selectionForMutation(
-      workspaceId: workspaceId,
-      sourceObjectId: sourceObjectId,
-      property: relationProperty,
-    );
+    final canonical = await _hierarchyIntegrity.relationTargets
+        .selectionForMutation(
+          workspaceId: workspaceId,
+          sourceObjectId: sourceObjectId,
+          property: relationProperty,
+        );
 
     if (!checkpoint.present) {
       if (!_selectionMatchesCurrentLegacy(
