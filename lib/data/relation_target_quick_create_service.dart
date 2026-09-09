@@ -76,9 +76,8 @@ class RelationTargetQuickCreateService {
 
       case RelationTargetQuickCreateMode.weblinkUrl:
         final url = _requiredInput(input, 'Weblink URL');
-        final object = await CanonicalWeblinkCaptureService(
-          weblinks: weblinks,
-        ).capture(workspaceId: workspaceId, url: url);
+        final object = await CanonicalWeblinkCaptureService(weblinks: weblinks)
+            .capture(workspaceId: workspaceId, url: url);
         final enrich = weblinkEnricher;
         if (enrich != null) {
           try {
