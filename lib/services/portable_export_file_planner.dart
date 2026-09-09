@@ -152,6 +152,8 @@ class PortableExportFilePlanner {
     this.packagePaths = const PortableExportPackagePathPolicy(),
   });
 
+  static const _managedRootNames = {'attachments', 'photos'};
+
   final PortableExportPackagePathPolicy packagePaths;
 
   Future<PortableExportFilePlan> plan({
@@ -206,36 +208,38 @@ class PortableExportFilePlanner {
 
     final safeStoredPath = packagePaths.validateRelativePath(storedPath);
     final segments = safeStoredPath.split('/');
-    if (segments.length < 2 || segments.first != 'attachments') {
+    if (segments.length < 2 || !_managedRootNames.contains(segments.first)) {
       throw StateError(
-        'Managed-byte export is outside the Vault attachments boundary.',
+        'Managed-byte export is outside the supported Vault managed roots.',
       );
     }
+    final managedRootName = segments.first;
 
     final vault = Directory(vaultValue).absolute;
     if (!await vault.exists()) {
       throw FileSystemException('Vault directory is unavailable.');
     }
 
-    final attachments = Directory('${vault.path}/attachments');
-    final attachmentsType = await FileSystemEntity.type(
-      attachments.path,
+    final managedRoot = Directory('${vault.path}/$managedRootName');
+    final managedRootType = await FileSystemEntity.type(
+      managedRoot.path,
       followLinks: false,
     );
-    if (attachmentsType != FileSystemEntityType.directory) {
-      throw FileSystemException('Vault attachments directory is unavailable.');
+    if (managedRootType != FileSystemEntityType.directory) {
+      throw FileSystemException('Vault managed directory is unavailable.');
     }
 
     await _validateManagedParents(
-      attachmentsPath: attachments.path,
+      managedRootPath: managedRoot.path,
       relativeSegments: segments,
     );
 
     final resolvedPath = ProfilePathResolver(vault.path)
         .resolveStoredPath(safeStoredPath);
-    if (!_isInsideAttachments(
+    if (!_isInsideManagedRoot(
       resolvedPath: resolvedPath,
       vaultDirectoryPath: vault.path,
+      managedRootName: managedRootName,
     )) {
       throw StateError('Managed-byte export source escaped the Vault.');
     }
@@ -259,10 +263,10 @@ class PortableExportFilePlanner {
   }
 
   Future<void> _validateManagedParents({
-    required String attachmentsPath,
+    required String managedRootPath,
     required List<String> relativeSegments,
   }) async {
-    var current = attachmentsPath;
+    var current = managedRootPath;
     for (var index = 1; index < relativeSegments.length - 1; index++) {
       current = '$current/${relativeSegments[index]}';
       final type = await FileSystemEntity.type(current, followLinks: false);
@@ -274,13 +278,16 @@ class PortableExportFilePlanner {
     }
   }
 
-  bool _isInsideAttachments({
+  bool _isInsideManagedRoot({
     required String resolvedPath,
     required String vaultDirectoryPath,
+    required String managedRootName,
   }) {
     final target = _normalizedAbsolute(resolvedPath);
-    final attachments = _normalizedAbsolute('$vaultDirectoryPath/attachments');
-    return target.startsWith('$attachments/');
+    final managedRoot = _normalizedAbsolute(
+      '$vaultDirectoryPath/$managedRootName',
+    );
+    return target.startsWith('$managedRoot/');
   }
 
   bool _isExternalAbsolutePath(String path) =>
