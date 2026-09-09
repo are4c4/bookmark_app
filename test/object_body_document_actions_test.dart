@@ -101,7 +101,7 @@ void main() {
   });
 
   testWidgets(
-    'reorder normalizes framework indices and preserves block identity',
+    'reorder forwards adjusted framework index and preserves block identity',
     (tester) async {
       ObjectBodyBlock? reordered;
       int? toIndex;
@@ -119,7 +119,7 @@ void main() {
       final reorderable = tester.widget<ReorderableListView>(
         find.byType(ReorderableListView),
       );
-      reorderable.onReorder(0, 3);
+      reorderable.onReorderItem!(0, 2);
       await tester.pump();
 
       expect(reordered?.id, 'a');
