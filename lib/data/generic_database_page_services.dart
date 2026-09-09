@@ -40,6 +40,8 @@ import 'object_relation_editor_service.dart';
 import 'object_store.dart';
 import 'object_type_defaults_store.dart';
 import 'object_type_management_store.dart';
+import 'person_object_bridge.dart';
+import 'person_object_deletion_service.dart';
 import 'relation_mutation_service.dart';
 import 'relation_schema_evolution_service.dart';
 import 'relation_target_quick_create_policy.dart';
@@ -131,6 +133,11 @@ class GenericDatabasePageServices {
       database: genericStore.database,
       objectStore: objectStore,
     );
+    final personBridge = PersonObjectBridge(
+      database: genericStore.database,
+      objectStore: objectStore,
+      systemObjectStore: systemObjects,
+    );
     final relationMutations = _GenericDatabaseRelationMutationService(
       objectStore: objectStore,
       bidirectionalStore: BidirectionalRelationStore(
@@ -139,6 +146,11 @@ class GenericDatabasePageServices {
       ),
       genericStore: genericStore,
       systemObjects: systemObjects,
+      personDeletionCompatibility: PersonObjectDeletionCompatibility(
+        database: genericStore.database,
+        objectStore: objectStore,
+        personBridge: personBridge,
+      ),
       photoStorage: photoStorage,
       imageDeletionPolicy: ImageManagedFileDeletionPolicy(
         database: genericStore.database,
@@ -341,8 +353,8 @@ class GenericDatabasePageServices {
 }
 
 /// Keeps the generic page's existing Relation-safe Object deletion API while
-/// layering Object-owned managed-Image file cleanup and the explicit legacy
-/// Photo compatibility deletion seam at the composition boundary.
+/// layering Object-owned managed-Image file cleanup plus explicit legacy Photo
+/// and Person compatibility deletion seams at the composition boundary.
 /// Relation semantics stay delegated to [RelationMutationService].
 class _GenericDatabaseRelationMutationService extends RelationMutationService {
   _GenericDatabaseRelationMutationService({
@@ -350,6 +362,7 @@ class _GenericDatabaseRelationMutationService extends RelationMutationService {
     required BidirectionalRelationStore bidirectionalStore,
     required GenericDatabaseStore genericStore,
     required this.systemObjects,
+    required this.personDeletionCompatibility,
     required this.photoStorage,
     required this.imageDeletionPolicy,
     required this.legacyPhotoDeletion,
@@ -360,6 +373,7 @@ class _GenericDatabaseRelationMutationService extends RelationMutationService {
         );
 
   final SystemObjectStore systemObjects;
+  final PersonObjectDeletionCompatibility personDeletionCompatibility;
   final PhotoStorageService photoStorage;
   final ImageManagedFileDeletionPolicy imageDeletionPolicy;
   final LegacyPhotoImageDeletionService legacyPhotoDeletion;
@@ -370,6 +384,29 @@ class _GenericDatabaseRelationMutationService extends RelationMutationService {
     required int objectTypeId,
     required int objectId,
   }) async {
+    final systemKey = await systemObjects.systemKeyForObjectType(objectTypeId);
+    if (systemKey == PersonObjectBridge.systemKey) {
+      await genericStore.database.transaction(() async {
+        final legacyPersonId =
+            await personDeletionCompatibility.legacyPersonIdForCanonicalDeletion(
+          workspaceId: workspaceId,
+          objectTypeId: objectTypeId,
+          objectId: objectId,
+        );
+        await super.deleteObject(
+          workspaceId: workspaceId,
+          objectTypeId: objectTypeId,
+          objectId: objectId,
+        );
+        if (legacyPersonId != null) {
+          await personDeletionCompatibility.deleteLegacyCompatibilityRow(
+            legacyPersonId,
+          );
+        }
+      });
+      return;
+    }
+
     final legacyPhotoId = await legacyPhotoDeletion.mappedPhotoIdForDeletion(
       workspaceId: workspaceId,
       objectTypeId: objectTypeId,
