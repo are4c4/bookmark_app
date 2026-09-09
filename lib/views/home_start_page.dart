@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../data/generic_database_store.dart';
 import '../data/home_recent_service.dart';
@@ -172,43 +173,57 @@ class _HomeStartPageState extends State<HomeStartPage> {
       );
     }
 
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          for (var index = 0; index < _recent.length; index++) ...[
-            _recentTile(_recent[index]),
-            if (index != _recent.length - 1) const Divider(height: 1),
+    return FocusTraversalGroup(
+      policy: OrderedTraversalPolicy(),
+      child: Card(
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            for (var index = 0; index < _recent.length; index++) ...[
+              _recentTile(_recent[index], index: index),
+              if (index != _recent.length - 1) const Divider(height: 1),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
 
-  Widget _recentTile(HomeRecentObject item) {
-    return ListTile(
-      key: ValueKey('home-recent-object-${item.object.id}'),
-      leading: SizedBox(
-        width: 32,
-        child: Center(
-          child: Text(
-            item.objectType.icon,
-            style: const TextStyle(fontSize: UiTokens.iconNormal),
+  Widget _recentTile(HomeRecentObject item, {required int index}) {
+    final open = () => _open(item);
+    return FocusTraversalOrder(
+      order: NumericFocusOrder(index.toDouble()),
+      child: CallbackShortcuts(
+        bindings: <ShortcutActivator, VoidCallback>{
+          const SingleActivator(LogicalKeyboardKey.enter): open,
+          const SingleActivator(LogicalKeyboardKey.space): open,
+        },
+        child: ListTile(
+          key: ValueKey('home-recent-object-${item.object.id}'),
+          autofocus: index == 0,
+          leading: SizedBox(
+            width: 32,
+            child: Center(
+              child: Text(
+                item.objectType.icon,
+                style: const TextStyle(fontSize: UiTokens.iconNormal),
+              ),
+            ),
           ),
+          title: Text(
+            item.object.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          subtitle: Text(
+            '${item.objectType.name} ・ ${_formatUpdatedAt(item.object.updatedAt)}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: open,
         ),
       ),
-      title: Text(
-        item.object.title,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      subtitle: Text(
-        '${item.objectType.name} ・ ${_formatUpdatedAt(item.object.updatedAt)}',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      trailing: const Icon(Icons.chevron_right),
-      onTap: () => _open(item),
     );
   }
 
