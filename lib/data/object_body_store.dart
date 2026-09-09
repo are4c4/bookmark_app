@@ -98,9 +98,9 @@ class ObjectBodyStore {
           jsonEncode(expected.toJson()),
         ],
       );
-      final changeRow = await _genericStore.database.customSelect(
-        'SELECT changes() AS affected',
-      ).getSingle();
+      final changeRow = await _genericStore.database
+          .customSelect('SELECT changes() AS affected')
+          .getSingle();
       if (changeRow.read<int>('affected') == 0) return false;
 
       await _genericStore.database.customStatement(
