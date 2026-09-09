@@ -35,9 +35,9 @@ Keep export work aligned with the Object-first portability contract: preserve st
 The first focused F-owned #1063 slice is integrated and establishes the filesystem trust boundary without taking over logical Object/Relation/Database serialization.
 
 - Portable package members must be clean relative forward-slash paths; absolute/drive-qualified, traversal, dot/empty-segment and backslash-ambiguous paths fail closed.
-- Automatic byte inclusion requires explicit `vault-managed-copy-v1` ownership plus an existing regular non-symlink Vault-relative `attachments/...` source.
+- Automatic byte inclusion requires explicit `vault-managed-copy-v1` ownership plus an existing regular non-symlink Vault-relative managed source.
 - Path location alone is never managed-byte ownership authority, including for files that happen to sit inside the Vault.
-- Intermediate symlink parents, symlinked `attachments`, missing/offline Vaults, missing/non-file sources and escaping paths fail closed.
+- Intermediate symlink parents, symlinked managed roots, missing/offline Vaults, missing/non-file sources and escaping paths fail closed.
 - Unowned absolute references remain external reference-only by default and are not silently probed, copied or rebased.
 - This boundary is read-only with respect to the source Vault. Later serializers/package writers consume the validated plan instead of reimplementing containment or inferring ownership.
 
@@ -52,20 +52,22 @@ The focused restore-preservation hardening is integrated. Restore now proves the
 - Invalid preflight input leaves an existing target untouched; extraction-stage cleanup/rollback remains best-effort without replacing the original failure.
 - App-generated regular-file Vault backups remain supported, and no schema/migration/Object/Relation semantics changed.
 
-## Next focused portability dependency
+## Current focused portability work
 
 ### #1146 — explicitly owned Image bytes under `photos/...`
-The existing export planner intentionally accepts only explicitly owned `attachments/...` bytes. Canonical managed Images use the separate Vault `photos/...` boundary, so Image byte inclusion needs a focused F extension rather than weakening ownership checks.
+D/#1141 is integrated by PR #1143 (`c7c06e27e859640899c62bcb1c0b20d12a8c869e`), so Lane F is actively implementing the downstream filesystem-planner slice in PR #1159 on `feature/portable-export-image-bytes-1146`.
 
-#1146 depends on D/#1141. D owns the producer-side primitive contract that persists explicit `vault-managed-copy-v1` ownership on trusted canonical Image creation/reuse. F must not infer ownership from a `photos/...` path or backfill historical Images merely because their path is inside the Vault.
-
-Once #1141 is integrated, #1146 may extend the existing planner to:
-- accept explicitly owned clean `photos/...` references while preserving existing `attachments/...` behavior;
+The active contract is intentionally narrow:
+- accept explicit `vault-managed-copy-v1` provenance only under the closed Vault managed roots `attachments/...` and `photos/...`;
+- preserve existing File `attachments/...` behavior while allowing canonical managed Image `photos/...` bytes;
 - validate the selected managed root, intermediate parents and source as real non-symlink filesystem entries;
-- prove containment inside the selected Vault managed root;
+- prove the resolved source remains inside the selected managed root;
 - keep unowned relative references fail-closed and unowned absolute references external-reference-only;
+- keep path traversal, absolute/drive-qualified, backslash-ambiguous and unsupported-root input fail-closed;
 - remain read-only with respect to the source Vault;
-- avoid introducing Image identity logic or a canonical graph serializer/package manifest.
+- do not introduce Image identity logic, historical ownership backfill, logical Object serialization, package manifests or byte relocation.
+
+Focused regressions cover managed `photos/...` success, unowned photo rejection, missing/offline/non-file photo sources, photo nested/source/root symlinks, preserved `attachments/...` behavior and unchanged external-reference semantics. GitHub Actions is authoritative for format/Analyze/full-test/merge-gate validation.
 
 ## Integrated foundation that remains authoritative
 - configurable user-selected Vault roots;
@@ -102,13 +104,13 @@ Repository tests and tools are authoritative for repository-owned behavior; use 
 
 ## Resume sequence
 1. re-read latest `main`, live F-focused Issues/PRs, current CI, shared-hotspot ownership and migration-writer state;
-2. if D/#1141 is integrated and #1146 is still open/unowned, implement the smallest #1146 filesystem-planner slice without broadening into logical serialization;
-3. otherwise check for another concrete live focused F Issue or newly actionable Vault/storage/export/delivery obligation;
-4. keep #1063 open as the umbrella and do not invent a canonical graph serializer, manifest, or package writer before owning-lane logical contracts are explicitly available;
+2. while #1146 / PR #1159 is active, finish its filesystem-planner acceptance criteria, fix only failures caused by the focused change and integrate after authoritative green validation;
+3. after #1146 integrates, re-audit #1063 for another explicit F-owned filesystem/package slice whose logical prerequisites already exist;
+4. do not invent a canonical graph serializer, manifest or package writer before owning-lane logical contracts are explicitly available;
 5. use preservation tooling and real-machine evidence when an active Issue or destructive-retirement gate specifically requires it;
 6. route concrete semantic defects to A/B/C/D/G as appropriate;
 7. keep destructive Bookmark/People/Photo schema retirement in a separate explicit single-writer migration with preservation evidence and required approval.
 
 Lane F inherits the shared **Lane continuation and resume/stop contract** in `AGENTS.md`. A real-machine requirement may legitimately produce `external-infra` for a specific active Issue, and an explicit cross-lane prerequisite may produce `dependency`, but only after the final live resume audit finds no other independent safe F work.
 
-Stop reason: dependency — #1146 is the only currently demonstrated focused F implementation slice and cannot start until D/#1141 is integrated; resume by re-reading live #1141/#1146 and current `main` before taking ownership.
+Work in progress: #1146 / PR #1159 — validate and integrate the explicitly-owned `photos/...` portable-export filesystem boundary.
