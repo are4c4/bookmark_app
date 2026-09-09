@@ -75,7 +75,7 @@ class ProfileBackupService {
     await target.create(recursive: true);
 
     try {
-      await extractFileToDisk(archive.path, target.path);
+      await _extractRestoreArchive(archive.path, target.path);
       if (!await File('${target.path}/database.sqlite').exists()) {
         throw const FormatException(
           'database.sqliteを含むBookmark Vaultバックアップではありません。',
@@ -107,54 +107,95 @@ class ProfileBackupService {
     Archive? decoded;
     try {
       decoded = ZipDecoder().decodeStream(input);
-      final memberKindsByFoldedPath = <String, bool>{};
-      var databaseEntries = 0;
+      _validateDecodedRestoreArchive(decoded);
+    } finally {
+      if (decoded != null) {
+        await decoded.clear();
+      }
+      await input.close();
+    }
+  }
 
-      for (final entry in decoded) {
-        if (entry.isSymbolicLink) {
-          throw const FormatException(
-            'シンボリックリンクを含むBookmark Vaultバックアップは復元できません。',
-          );
-        }
+  void _validateDecodedRestoreArchive(Archive decoded) {
+    final memberKindsByFoldedPath = <String, bool>{};
+    var databaseEntries = 0;
 
-        final memberPath = _validatedArchiveMemberPath(entry);
-        final foldedPath = memberPath.toLowerCase();
-        if (memberKindsByFoldedPath.containsKey(foldedPath)) {
+    for (final entry in decoded) {
+      if (entry.isSymbolicLink) {
+        throw const FormatException(
+          'シンボリックリンクを含むBookmark Vaultバックアップは復元できません。',
+        );
+      }
+
+      final memberPath = _validatedArchiveMemberPath(entry);
+      final foldedPath = memberPath.toLowerCase();
+      if (memberKindsByFoldedPath.containsKey(foldedPath)) {
+        throw FormatException(
+          '大文字小文字を区別しない重複パスを含むBookmark Vaultバックアップは復元できません: '
+          '$memberPath',
+        );
+      }
+
+      final isRegularFile = entry.isFile && !entry.isDirectory;
+      for (final existing in memberKindsByFoldedPath.entries) {
+        if (foldedPath.startsWith('${existing.key}/') && existing.value) {
           throw FormatException(
-            '大文字小文字を区別しない重複パスを含むBookmark Vaultバックアップは復元できません: '
+            '通常ファイル配下に子パスを含むBookmark Vaultバックアップは復元できません: '
             '$memberPath',
           );
         }
-
-        final isRegularFile = entry.isFile && !entry.isDirectory;
-        for (final existing in memberKindsByFoldedPath.entries) {
-          if (foldedPath.startsWith('${existing.key}/') && existing.value) {
-            throw FormatException(
-              '通常ファイル配下に子パスを含むBookmark Vaultバックアップは復元できません: '
-              '$memberPath',
-            );
-          }
-          if (existing.key.startsWith('$foldedPath/') && isRegularFile) {
-            throw FormatException(
-              '子パスを持つ通常ファイルを含むBookmark Vaultバックアップは復元できません: '
-              '$memberPath',
-            );
-          }
-        }
-        memberKindsByFoldedPath[foldedPath] = isRegularFile;
-
-        if (memberPath == 'database.sqlite') {
-          databaseEntries++;
-          if (!isRegularFile) {
-            throw const FormatException('database.sqliteが通常ファイルではありません。');
-          }
+        if (existing.key.startsWith('$foldedPath/') && isRegularFile) {
+          throw FormatException(
+            '子パスを持つ通常ファイルを含むBookmark Vaultバックアップは復元できません: '
+            '$memberPath',
+          );
         }
       }
+      memberKindsByFoldedPath[foldedPath] = isRegularFile;
 
-      if (databaseEntries != 1) {
-        throw const FormatException(
-          'database.sqliteを1つ含むBookmark Vaultバックアップではありません。',
+      if (memberPath == 'database.sqlite') {
+        databaseEntries++;
+        if (!isRegularFile) {
+          throw const FormatException('database.sqliteが通常ファイルではありません。');
+        }
+      }
+    }
+
+    if (databaseEntries != 1) {
+      throw const FormatException(
+        'database.sqliteを1つ含むBookmark Vaultバックアップではありません。',
+      );
+    }
+  }
+
+  Future<void> _extractRestoreArchive(
+    String archivePath,
+    String targetDirectoryPath,
+  ) async {
+    final input = InputFileStream(archivePath);
+    Archive? decoded;
+    try {
+      decoded = ZipDecoder().decodeStream(input);
+      // The archive can live outside the Vault and could be replaced between
+      // the preflight and extraction pass. Reapply the complete namespace
+      // contract before this decoded snapshot writes any target bytes.
+      _validateDecodedRestoreArchive(decoded);
+
+      for (final entry in decoded) {
+        final memberPath = _validatedArchiveMemberPath(entry);
+        final destinationPath = _resolveRestoreMemberPath(
+          targetDirectoryPath: targetDirectoryPath,
+          memberPath: memberPath,
         );
+
+        if (entry.isDirectory) {
+          await Directory(destinationPath).create(recursive: true);
+          continue;
+        }
+
+        final destination = File(destinationPath);
+        await destination.parent.create(recursive: true);
+        await _writeArchiveFile(entry, destination.path);
       }
     } finally {
       if (decoded != null) {
@@ -162,6 +203,43 @@ class ProfileBackupService {
       }
       await input.close();
     }
+  }
+
+  Future<void> _writeArchiveFile(ArchiveFile entry, String outputPath) async {
+    final output = OutputFileStream(outputPath);
+    Object? writeFailure;
+    StackTrace? writeFailureStackTrace;
+    try {
+      entry.writeContent(output);
+    } catch (error, stackTrace) {
+      writeFailure = error;
+      writeFailureStackTrace = stackTrace;
+    }
+
+    try {
+      await output.close();
+    } catch (error, stackTrace) {
+      if (writeFailure == null) {
+        Error.throwWithStackTrace(error, stackTrace);
+      }
+    }
+
+    if (writeFailure != null) {
+      Error.throwWithStackTrace(writeFailure, writeFailureStackTrace!);
+    }
+  }
+
+  String _resolveRestoreMemberPath({
+    required String targetDirectoryPath,
+    required String memberPath,
+  }) {
+    final targetRoot = _normalizedAbsoluteDirectory(targetDirectoryPath);
+    final destination = _normalizedAbsoluteFile('$targetRoot/$memberPath');
+    final prefix = targetRoot.endsWith('/') ? targetRoot : '$targetRoot/';
+    if (!destination.startsWith(prefix)) {
+      throw const FormatException('復元先の外側を指すBookmark Vaultバックアップパスです。');
+    }
+    return destination;
   }
 
   String _validatedArchiveMemberPath(ArchiveFile entry) {
@@ -192,4 +270,15 @@ class ProfileBackupService {
     }
     return memberPath;
   }
+
+  String _normalizedAbsoluteDirectory(String path) {
+    final normalized = Directory(path).absolute.path.replaceAll('\\', '/');
+    if (normalized == '/' || RegExp(r'^[A-Za-z]:/$').hasMatch(normalized)) {
+      return normalized;
+    }
+    return normalized.replaceAll(RegExp(r'/+$'), '');
+  }
+
+  String _normalizedAbsoluteFile(String path) =>
+      File(path).absolute.path.replaceAll('\\', '/');
 }

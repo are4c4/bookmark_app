@@ -10,6 +10,7 @@ import 'bookmark_attachment_store.dart';
 import 'bookmark_engagement_store.dart';
 import 'bookmark_read_store.dart';
 import 'bookmark_lifecycle_store.dart';
+import 'person_object_write_service.dart';
 import 'person_roles.dart';
 import 'photo_read_store.dart';
 import 'tag_group_store.dart';
@@ -37,6 +38,8 @@ class BookmarkRepository {
   final int workspaceId;
   final String? profileDirectoryPath;
   final AutoOrganizeService autoOrganize;
+  late final PersonObjectWriteService _personWrites =
+      PersonObjectWriteService.forDatabase(_database);
 
   String? get photoDirectoryPath =>
       profileDirectoryPath == null ? null : '$profileDirectoryPath/photos';
@@ -135,7 +138,7 @@ class BookmarkRepository {
       if (name.isNotEmpty) normalized[name.toLowerCase()] = name;
     }
     for (final name in normalized.values) {
-      await _database.createPerson(name);
+      await createPerson(name);
     }
     final all = await _database.watchAllPeople().first;
     return all.where((person) => normalized.containsKey(person.name.toLowerCase())).toList();
@@ -309,9 +312,15 @@ class BookmarkRepository {
     }
   }
 
-  Future<int> createPerson(String name, {String? note}) => _database.createPerson(name, note: note);
+  Future<int> createPerson(String name, {String? note}) =>
+      _personWrites.create(workspaceId: workspaceId, name: name, note: note);
   Future<void> updatePerson(Person person, String name, String? note) =>
-      _database.updatePerson(person.id, name, note);
+      _personWrites.update(
+        workspaceId: workspaceId,
+        personId: person.id,
+        name: name,
+        note: note,
+      );
   Future<void> deletePerson(Person person) => _database.deletePerson(person.id);
 
   Future<int> createCollection(String name, {String? note}) => _database.createCollection(name, note: note);
