@@ -224,8 +224,130 @@ void main() {
     },
   );
 
+  test('a legacy-only Parent move advances the canonical Relation', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final objectStore = ObjectStore(GenericDatabaseStore(database));
+    final systemStore = SystemObjectStore(
+      database: database,
+      objectStore: objectStore,
+    );
+    final bridge = TagObjectBridge(
+      database: database,
+      objectStore: objectStore,
+      systemObjectStore: systemStore,
+    );
+
+    await database.customStatement(
+      "INSERT INTO tags(name) VALUES ('root-a'), ('root-b')",
+    );
+    final roots = await database
+        .customSelect('SELECT id, name FROM tags ORDER BY id')
+        .get();
+    final firstRootId = roots.first.read<int>('id');
+    final secondRootId = roots.last.read<int>('id');
+    await database.customStatement(
+      "INSERT INTO tags(name, parent_tag_id) VALUES ('child', ?)",
+      <Object>[firstRootId],
+    );
+    final childId =
+        (await database
+                .customSelect("SELECT id FROM tags WHERE name = 'child'")
+                .getSingle())
+            .read<int>('id');
+
+    await bridge.syncLegacyTags(workspaceId);
+    await database.customStatement(
+      'UPDATE tags SET parent_tag_id = ? WHERE id = ?',
+      <Object>[secondRootId, childId],
+    );
+    await bridge.syncLegacyTags(workspaceId);
+
+    final schema = await bridge.ensureTagObjectType(workspaceId);
+    final childObjectId = (await bridge.objectIdForLegacyTag(
+      workspaceId,
+      childId,
+    ))!;
+    final secondRootObjectId = (await bridge.objectIdForLegacyTag(
+      workspaceId,
+      secondRootId,
+    ))!;
+    final childObject = (await objectStore.listObjects(schema.objectType.id))
+        .singleWhere((object) => object.id == childObjectId);
+    final parentRelation = ObjectRelationValue.fromJson(
+      childObject.values[schema.parentProperty.id],
+    );
+    expect(parentRelation.objectIds, <int>[secondRootObjectId]);
+  });
+
+  test('independent legacy and canonical Parent moves fail closed', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final objectStore = ObjectStore(GenericDatabaseStore(database));
+    final systemStore = SystemObjectStore(
+      database: database,
+      objectStore: objectStore,
+    );
+    final bridge = TagObjectBridge(
+      database: database,
+      objectStore: objectStore,
+      systemObjectStore: systemStore,
+    );
+
+    await database.customStatement(
+      "INSERT INTO tags(name) VALUES ('root-a'), ('root-b'), ('root-c')",
+    );
+    final roots = await database
+        .customSelect('SELECT id, name FROM tags ORDER BY id')
+        .get();
+    final firstRootId = roots[0].read<int>('id');
+    final secondRootId = roots[1].read<int>('id');
+    final thirdRootId = roots[2].read<int>('id');
+    await database.customStatement(
+      "INSERT INTO tags(name, parent_tag_id) VALUES ('child', ?)",
+      <Object>[firstRootId],
+    );
+    final childId =
+        (await database
+                .customSelect("SELECT id FROM tags WHERE name = 'child'")
+                .getSingle())
+            .read<int>('id');
+
+    await bridge.syncLegacyTags(workspaceId);
+    final schema = await bridge.ensureTagObjectType(workspaceId);
+    final childObjectId = (await bridge.objectIdForLegacyTag(
+      workspaceId,
+      childId,
+    ))!;
+    final secondRootObjectId = (await bridge.objectIdForLegacyTag(
+      workspaceId,
+      secondRootId,
+    ))!;
+    await bridge.hierarchyIntegrity.setParent(
+      workspaceId: workspaceId,
+      tagObjectId: childObjectId,
+      parentProperty: schema.parentProperty,
+      parentTagObjectId: secondRootObjectId,
+    );
+    await database.customStatement(
+      'UPDATE tags SET parent_tag_id = ? WHERE id = ?',
+      <Object>[thirdRootId, childId],
+    );
+
+    await expectLater(bridge.syncLegacyTags(workspaceId), throwsStateError);
+
+    final childObject = (await objectStore.listObjects(schema.objectType.id))
+        .singleWhere((object) => object.id == childObjectId);
+    final parentRelation = ObjectRelationValue.fromJson(
+      childObject.values[schema.parentProperty.id],
+    );
+    expect(parentRelation.objectIds, <int>[secondRootObjectId]);
+  });
+
   test(
-    'legacy TagGroup deletion cannot delete canonical TagGroup state',
+    'legacy TagGroup deletion preserves Object but clears untouched legacy membership',
     () async {
       final database = AppDatabase.forTesting(NativeDatabase.memory());
       addTearDown(database.close);
@@ -285,16 +407,8 @@ void main() {
       final groupRelation = ObjectRelationValue.fromJson(
         tagObject.values[schema.groupProperty.id],
       );
-      expect(groupRelation.objectIds, <int>[groupObjectId]);
-      final backlinks = await objectStore.backlinks(groupObjectId);
-      expect(
-        backlinks.any(
-          (edge) =>
-              edge.propertyId == schema.groupProperty.id &&
-              edge.sourceObjectId == tagObjectId,
-        ),
-        isTrue,
-      );
+      expect(groupRelation.objectIds, isEmpty);
+      expect(await objectStore.backlinks(groupObjectId), isEmpty);
     },
   );
 }
