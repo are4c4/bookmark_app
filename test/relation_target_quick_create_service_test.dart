@@ -137,6 +137,23 @@ void main() {
 
   test('Weblink quick-create fails closed on canonical collision before enrichment', () async {
     final definition = await weblinks.ensureDefinition(workspaceId);
+    final sourceTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Source',
+    );
+    await objectStore.createRelationProperty(
+      objectTypeId: sourceTypeId,
+      name: 'Source URL',
+      targetObjectTypeId: definition.objectType.id,
+      multiple: false,
+    );
+    final sourceRelation =
+        (await objectStore.getObjectType(sourceTypeId))!.properties.single;
+    final sourceId = await objectStore.createObject(
+      objectTypeId: sourceTypeId,
+      title: 'Source',
+    );
+
     await weblinks.findOrCreate(
       workspaceId: workspaceId,
       url: 'https://example.com/article',
@@ -172,6 +189,9 @@ void main() {
       await objectStore.listObjects(definition.objectType.id),
       hasLength(2),
     );
+    final sourceAfter = (await objectStore.listObjects(sourceTypeId)).single;
+    expect(sourceAfter.values[sourceRelation.id], isNull);
+    expect(await objectStore.outgoingRelations(sourceId), isEmpty);
   });
 
   test('Image quick-create requires managed import callback and validates result type', () async {
