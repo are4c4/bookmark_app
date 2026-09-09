@@ -182,18 +182,20 @@ class GenericDatabaseStore {
                         WHEN 'weblink' THEN 'Weblinks'
                         WHEN 'image' THEN 'Images'
                         WHEN 'dailyNote' THEN 'Daily Notes'
+                        WHEN 'person' THEN 'People'
                         ELSE d.name
                       END AS name,
                       d.icon, d.sort_order
                FROM generic_databases d
                LEFT JOIN system_object_types s ON s.object_type_id = d.id
                WHERE d.workspace_id = ?
-                 AND (s.object_type_id IS NULL OR s.system_key IN ('weblink', 'image', 'dailyNote'))
+                 AND (s.object_type_id IS NULL OR s.system_key IN ('weblink', 'image', 'dailyNote', 'person'))
                ORDER BY CASE s.system_key
                           WHEN 'weblink' THEN 0
                           WHEN 'image' THEN 1
                           WHEN 'dailyNote' THEN 2
-                          ELSE 3
+                          WHEN 'person' THEN 3
+                          ELSE 4
                         END,
                         d.sort_order, d.id'''
           : '''SELECT id, workspace_id, name, icon, sort_order
