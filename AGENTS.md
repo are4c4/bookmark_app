@@ -195,7 +195,7 @@ Always verify live Issues because this list is a routing aid, not transient owne
 - **D:** #1054 direct canonical Weblink capture; #155/#245 only for concrete native Weblink/Image/File obligations.
 - **E:** focused Search issues when canonical FTS correctness/freshness obligations are demonstrated.
 - **F:** #1063 export/portability is the current durable roadmap anchor; #242/#951 are completed preservation checkpoints, not active stop gates; future destructive retirement still requires migration-specific preservation evidence and explicit single-writer/destructive-approval handling.
-- **G:** #1047/#225 maintainability, #950 and future caller-zero Bookmark/People/Photo retirement; repository-wide architecture/guardrail sync such as #1060.
+- **G:** #1047/#225 maintainability and future caller-zero Bookmark/People retirement; #950 is a completed Photo caller-zero checkpoint, and surviving Photo-era paths remain compatibility/preservation infrastructure unless a new focused caller audit proves otherwise; repository-wide architecture/guardrail sync such as #1060.
 - **H:** continuous architecture/integration oversight via `docs/AI_PROGRESS_OVERSIGHT.md`; #1060 establishes the lane. H routes implementation findings to A–G.
 
 Umbrellas #56, #1039, #1040, #1050, #155, #225, #245 organize broader direction; implement through focused child Issues when possible.
