@@ -119,10 +119,7 @@ class ObjectGlobalSearchService {
     required int deletedObjectId,
     required Iterable<int> changedSourceObjectIds,
   }) async {
-    await refreshObjects(<int>{
-      deletedObjectId,
-      ...changedSourceObjectIds,
-    });
+    await refreshObjects(<int>{deletedObjectId, ...changedSourceObjectIds});
   }
 
   /// Refreshes multiple canonical mutation roots plus their current Relation
