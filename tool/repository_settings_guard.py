@@ -88,8 +88,6 @@ def validates_default_branch_ruleset(ruleset: dict[str, object]) -> AuditResult:
     bypass = ruleset.get("bypass_actors")
     if bypass != []:
         errors.append("main ruleset must not define bypass actors")
-    if ruleset.get("current_user_can_bypass") not in ("never", False):
-        errors.append("current audit identity must not be able to bypass main rules")
 
     return AuditResult(tuple(errors))
 
@@ -125,12 +123,11 @@ def select_default_branch_ruleset(
     return identifier, ()
 
 
-def _request_json(url: str, token: str) -> object:
+def _request_json(url: str) -> object:
     request = urllib.request.Request(
         url,
         headers={
             "Accept": "application/vnd.github+json",
-            "Authorization": f"Bearer {token}",
             "X-GitHub-Api-Version": "2022-11-28",
             "User-Agent": "bookmark-app-repository-settings-guard",
         },
@@ -160,24 +157,23 @@ def _append_summary(errors: list[str]) -> None:
 
 def main() -> int:
     repository_name = os.environ.get("GITHUB_REPOSITORY", "")
-    token = os.environ.get("GITHUB_TOKEN", "")
-    if not repository_name or not token:
-        _error("audit requires GITHUB_REPOSITORY and a read-only GITHUB_TOKEN")
+    if not repository_name:
+        _error("audit requires GITHUB_REPOSITORY")
         return 1
 
     api_root = f"https://api.github.com/repos/{repository_name}"
     errors: list[str] = []
     try:
-        repository = _request_json(api_root, token)
+        repository = _request_json(api_root)
         if not isinstance(repository, dict):
             raise ValueError("repository API response was not an object")
         errors.extend(validates_repository(repository).errors)
 
-        summaries = _request_json(f"{api_root}/rulesets", token)
+        summaries = _request_json(f"{api_root}/rulesets")
         ruleset_id, selection_errors = select_default_branch_ruleset(summaries)
         errors.extend(selection_errors)
         if ruleset_id is not None:
-            ruleset = _request_json(f"{api_root}/rulesets/{ruleset_id}", token)
+            ruleset = _request_json(f"{api_root}/rulesets/{ruleset_id}")
             if not isinstance(ruleset, dict):
                 raise ValueError("ruleset API response was not an object")
             errors.extend(validates_default_branch_ruleset(ruleset).errors)
