@@ -1,0 +1,230 @@
+name: Historical Merged Branch Cleanup
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/cleanup_merged_branches.yml
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/cleanup_merged_branches.yml
+  workflow_dispatch:
+    inputs:
+      min_age_hours:
+        description: Minimum age of a merged branch tip before deletion
+        required: true
+        default: '6'
+        type: string
+
+concurrency:
+  group: historical-merged-branch-cleanup
+  cancel-in-progress: false
+
+jobs:
+  dry-run:
+    name: branch-cleanup-dry-run
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Audit safely deletable historical branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MIN_AGE_HOURS: '6'
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          default_branch="${{ github.event.repository.default_branch }}"
+
+          git init --quiet repo
+          git -C repo remote add origin "https://github.com/${repo}.git"
+          git -C repo fetch --quiet --no-tags --prune origin '+refs/heads/*:refs/remotes/origin/*'
+
+          cd repo
+          default_ref="refs/remotes/origin/${default_branch}"
+          git rev-parse --verify "$default_ref" >/dev/null
+          default_tip="$(git rev-parse "$default_ref")"
+          now="$(date +%s)"
+          cutoff="$((now - MIN_AGE_HOURS * 3600))"
+
+          declare -A open_heads=()
+          while IFS= read -r head; do
+            [[ -n "$head" ]] && open_heads["$head"]=1
+          done < <(gh api --paginate "repos/${repo}/pulls?state=open&per_page=100" --jq '.[].head.ref')
+
+          # Squash merges do not make the original branch commits ancestors of
+          # main. Record the exact reviewed head SHA for every historical merged
+          # PR so a still-existing branch can be considered safe only when its
+          # current tip exactly matches that merged PR head.
+          declare -A merged_pr_heads=()
+          while IFS=$'\t' read -r head_ref head_sha; do
+            [[ -n "$head_ref" && -n "$head_sha" ]] && merged_pr_heads["${head_ref}|${head_sha}"]=1
+          done < <(
+            gh api --paginate "repos/${repo}/pulls?state=closed&per_page=100" \
+              --jq '.[] | select(.merged_at != null) | [.head.ref, .head.sha] | @tsv'
+          )
+
+          candidates=()
+          graph_merged=0
+          pr_merged=0
+          while IFS= read -r ref; do
+            branch="${ref#refs/remotes/origin/}"
+            [[ "$branch" == "$default_branch" ]] && continue
+            [[ -n "${open_heads[$branch]+x}" ]] && continue
+
+            tip="$(git rev-parse "$ref")"
+            [[ "$tip" == "$default_tip" ]] && continue
+
+            tip_epoch="$(git show -s --format=%ct "$tip")"
+            (( tip_epoch > cutoff )) && continue
+
+            if git merge-base --is-ancestor "$tip" "$default_tip"; then
+              candidates+=("$branch")
+              graph_merged=$((graph_merged + 1))
+            elif [[ -n "${merged_pr_heads[${branch}|${tip}]+x}" ]]; then
+              candidates+=("$branch")
+              pr_merged=$((pr_merged + 1))
+            fi
+          done < <(git for-each-ref --format='%(refname)' refs/remotes/origin/)
+
+          printf '%s\n' "${candidates[@]}" | sed '/^$/d' | sort -u > /tmp/merged-branch-candidates.txt
+          candidate_count="$(wc -l < /tmp/merged-branch-candidates.txt | tr -d ' ')"
+          echo "Found ${candidate_count} safely deletable historical branches (dry run)."
+          echo "graph-merged=${graph_merged} exact-merged-pr-head=${pr_merged}"
+          cat /tmp/merged-branch-candidates.txt
+
+          {
+            echo '## Historical merged branch cleanup — dry run'
+            echo
+            echo "- Default branch: \`${default_branch}\`"
+            echo "- Grace period: \`${MIN_AGE_HOURS}h\`"
+            echo "- Safely deletable candidates: \`${candidate_count}\`"
+            echo "- Graph-ancestor candidates: \`${graph_merged}\`"
+            echo "- Exact merged-PR-head candidates (covers squash merges): \`${pr_merged}\`"
+            echo '- Safety: open-PR heads, current default tip, recent tips, branches advanced after their merged PR, and branches with unique unmerged commits are excluded.'
+            echo
+            echo '<details><summary>First 200 candidates</summary>'
+            echo
+            echo '```text'
+            head -n 200 /tmp/merged-branch-candidates.txt
+            echo '```'
+            echo '</details>'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  cleanup:
+    name: delete-safely-merged-branches
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - name: Delete safely merged historical branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MIN_AGE_HOURS: ${{ inputs.min_age_hours || '6' }}
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          default_branch="${{ github.event.repository.default_branch }}"
+
+          if ! [[ "$MIN_AGE_HOURS" =~ ^[0-9]+$ ]]; then
+            echo "MIN_AGE_HOURS must be a non-negative integer, got: $MIN_AGE_HOURS" >&2
+            exit 2
+          fi
+
+          git init --quiet repo
+          git -C repo remote add origin "https://github.com/${repo}.git"
+          git -C repo fetch --quiet --no-tags --prune origin '+refs/heads/*:refs/remotes/origin/*'
+
+          cd repo
+          default_ref="refs/remotes/origin/${default_branch}"
+          git rev-parse --verify "$default_ref" >/dev/null
+          default_tip="$(git rev-parse "$default_ref")"
+          now="$(date +%s)"
+          cutoff="$((now - MIN_AGE_HOURS * 3600))"
+
+          declare -A open_heads=()
+          while IFS= read -r head; do
+            [[ -n "$head" ]] && open_heads["$head"]=1
+          done < <(gh api --paginate "repos/${repo}/pulls?state=open&per_page=100" --jq '.[].head.ref')
+
+          declare -A merged_pr_heads=()
+          while IFS=$'\t' read -r head_ref head_sha; do
+            [[ -n "$head_ref" && -n "$head_sha" ]] && merged_pr_heads["${head_ref}|${head_sha}"]=1
+          done < <(
+            gh api --paginate "repos/${repo}/pulls?state=closed&per_page=100" \
+              --jq '.[] | select(.merged_at != null) | [.head.ref, .head.sha] | @tsv'
+          )
+
+          candidates=()
+          graph_merged=0
+          pr_merged=0
+          while IFS= read -r ref; do
+            branch="${ref#refs/remotes/origin/}"
+            [[ "$branch" == "$default_branch" ]] && continue
+            [[ -n "${open_heads[$branch]+x}" ]] && continue
+
+            tip="$(git rev-parse "$ref")"
+            [[ "$tip" == "$default_tip" ]] && continue
+
+            tip_epoch="$(git show -s --format=%ct "$tip")"
+            (( tip_epoch > cutoff )) && continue
+
+            if git merge-base --is-ancestor "$tip" "$default_tip"; then
+              candidates+=("$branch")
+              graph_merged=$((graph_merged + 1))
+            elif [[ -n "${merged_pr_heads[${branch}|${tip}]+x}" ]]; then
+              candidates+=("$branch")
+              pr_merged=$((pr_merged + 1))
+            fi
+          done < <(git for-each-ref --format='%(refname)' refs/remotes/origin/)
+
+          printf '%s\n' "${candidates[@]}" | sed '/^$/d' | sort -u > /tmp/merged-branch-candidates.txt
+          candidate_count="$(wc -l < /tmp/merged-branch-candidates.txt | tr -d ' ')"
+          echo "Deleting ${candidate_count} safely merged historical branches."
+          echo "graph-merged=${graph_merged} exact-merged-pr-head=${pr_merged}"
+
+          deleted=0
+          failed=0
+          while IFS= read -r branch; do
+            [[ -z "$branch" ]] && continue
+            encoded="$(python3 - "$branch" <<'PY'
+          import sys
+          import urllib.parse
+          print(urllib.parse.quote(sys.argv[1], safe='/'))
+          PY
+          )"
+            if gh api --silent --method DELETE "repos/${repo}/git/refs/heads/${encoded}"; then
+              echo "deleted: $branch"
+              deleted=$((deleted + 1))
+            else
+              echo "warning: failed to delete $branch" >&2
+              failed=$((failed + 1))
+            fi
+            sleep 0.1
+          done < /tmp/merged-branch-candidates.txt
+
+          {
+            echo '## Historical merged branch cleanup'
+            echo
+            echo "- Default branch preserved: \`${default_branch}\`"
+            echo "- Grace period: \`${MIN_AGE_HOURS}h\`"
+            echo "- Candidates: \`${candidate_count}\`"
+            echo "- Graph-ancestor candidates: \`${graph_merged}\`"
+            echo "- Exact merged-PR-head candidates: \`${pr_merged}\`"
+            echo "- Deleted: \`${deleted}\`"
+            echo "- Failed/raced: \`${failed}\`"
+            echo '- Open-PR heads, branches with unique/unreviewed commits, branches advanced after their merged PR, branches at the current default tip, and recent branch tips were not deleted.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if (( failed > 0 )); then
+            echo "Some safe candidates could not be deleted; see warnings above." >&2
+          fi

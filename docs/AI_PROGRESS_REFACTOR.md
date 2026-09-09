@@ -18,13 +18,13 @@ Durable product implications for G:
 
 ## Active focused issues
 
-### #1066 — dependency / GitHub Actions supply-chain hardening
-Repository-only safety slice:
-- add weekly Dependabot version updates for Dart/pub and GitHub Actions;
-- pin every remote workflow `uses:` reference to an immutable full commit SHA;
-- enforce the pin rule in CI so moving tags cannot silently return;
-- preserve workflow permissions and current merge-gate semantics;
-- keep #980 as the manual GitHub Settings enforcement task because the connected App cannot write branch-protection/ruleset or repository merge-mode settings.
+### #1072 — historical merged branch cleanup
+Repository-only maintenance slice:
+- GitHub native automatic head-branch deletion is now enabled for future merged PRs;
+- clean the pre-existing historical branch backlog only when a branch tip is already contained in current `main`;
+- never delete `main`, current open-PR heads, branches with unique commits, branches equal to the current `main` tip, or very recent tips;
+- dry-run the candidate set on the PR before the post-merge cleanup runs;
+- keep the cleanup idempotent and explicit via `workflow_dispatch` for future maintenance.
 
 ### #1047 — Generic Database gallery state-loader extraction
 Behavior-preserving extraction: move Gallery cover-source discovery into the existing `GenericDatabasePageStateLoader` snapshot without changing Gallery semantics. `generic_database_page.dart` edits must remain patch-sized and re-audited against live ownership.
@@ -53,7 +53,8 @@ Future G work after owning-lane parity:
 - duplicate focused-Issue ownership warning;
 - migration single-writer lease audit;
 - durable handoff audit;
-- immutable GitHub Actions SHA pin audit once #1066 lands.
+- immutable GitHub Actions SHA pin audit;
+- weekly Dependabot updates for Dart/pub and GitHub Actions.
 
 Do not relax a guardrail or create no-op commits to make unrelated work easier to merge.
 
@@ -82,23 +83,21 @@ Recheck live PR ownership before broad edits. G should usually reduce a hotspot 
 
 G deletes superseded implementation only after the owning product/integrity lane proves replacement parity.
 
-## Repository settings risk
-`main` is currently unprotected; #980 tracks enabling required `merge-gate` and repository merge settings. The connected GitHub App does not expose Administration writes for branch protection/rulesets or merge-mode settings, so this remains a manual GitHub Settings action. While the repository is personal-account owned, use required up-to-date branches rather than assuming Merge Queue availability.
+## Repository settings
+`main` is protected by the active `Protect main` ruleset. The default branch requires PR-only squash merging, strict/up-to-date `merge-gate`, blocks force pushes and deletion, and has no bypass actors. #980 is completed.
 
-Preferred current settings:
-- require PR before merge;
-- require `merge-gate` and up-to-date branch;
-- block force-push and branch deletion for `main`;
-- squash-only merging;
-- delete merged head branches automatically;
-- optional auto-merge after protection is active.
+Repository-level housekeeping is also enabled:
+- automatic deletion of merged head branches is on;
+- auto-merge is allowed, but each PR must still opt into it and all ruleset requirements remain authoritative.
+
+The repository remains personal-account owned, so Merge Queue is not available. Existing `merge_group` workflow support remains ready for a future organization-owned repository.
 
 ## Validation
-Behavior-preserving refactors still require changed-Dart format, Analyze and relevant/full Flutter Test. Workflow/guard changes must exercise their focused Python regressions and the full authoritative CI path. Docs-only architecture synchronization should use the docs-only CI path plus handoff/coordination audits.
+Behavior-preserving refactors still require changed-Dart format, Analyze and relevant/full Flutter Test. Workflow/guard changes must exercise their focused regressions and the full authoritative CI path. Docs-only architecture synchronization should use the docs-only CI path plus handoff/coordination audits.
 
 ## Resume sequence
-1. finish #1066 and merge only after the full gate is green;
-2. keep #980 open until live GitHub Settings confirm protection/merge-policy enforcement;
+1. finish #1072 by validating the branch-cleanup dry run, then let the post-merge cleanup remove only safely merged historical branches;
+2. recheck live branch count and close #1072 only after cleanup evidence is recorded;
 3. re-audit live open PR/hotspot ownership;
 4. continue #1047/#225/#950 only through small focused slices;
 5. when #1039/#1040 owning-lane parity lands, create caller-zero retirement slices instead of combining product migration with cleanup;
