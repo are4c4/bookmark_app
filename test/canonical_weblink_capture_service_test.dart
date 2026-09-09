@@ -78,30 +78,34 @@ void main() {
     );
   });
 
-  test('concurrent equivalent captures resolve to one canonical target',
+  test('first concurrent equivalent captures create one definition and target',
       () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
     final workspaceId = await WorkspaceStore(database).initialize();
     final harness = _CaptureHarness(database);
-    final definition = await harness.weblinks.ensureDefinition(workspaceId);
 
     final captured = await Future.wait([
       harness.capture.capture(
         workspaceId: workspaceId,
         url: 'HTTPS://Example.COM:443/a/../article',
       ),
-      harness.capture.capture(
+      CanonicalWeblinkCaptureService(weblinks: harness.weblinks).capture(
         workspaceId: workspaceId,
         url: 'https://example.com/article',
       ),
     ]);
+    final definition = await harness.weblinks.ensureDefinition(workspaceId);
 
     expect(captured[1].id, captured[0].id);
     expect(
       await harness.objectStore.listObjects(definition.objectType.id),
       hasLength(1),
     );
+    final systemTypes = (await harness.objectStore.listObjectTypes(workspaceId))
+        .where((type) => type.id == definition.objectType.id)
+        .toList(growable: false);
+    expect(systemTypes, hasLength(1));
   });
 
   test('capture reuses persisted canonical identity after database restart',
@@ -181,13 +185,13 @@ void main() {
 }
 
 class _CaptureHarness {
-  _CaptureHarness(AppDatabase database)
-      : genericStore = GenericDatabaseStore(database),
-        objectStore = ObjectStore(GenericDatabaseStore(database)),
-        systemObjects = SystemObjectStore(
-          database: database,
-          objectStore: ObjectStore(GenericDatabaseStore(database)),
-        ) {
+  _CaptureHarness(AppDatabase database) {
+    genericStore = GenericDatabaseStore(database);
+    objectStore = ObjectStore(genericStore);
+    systemObjects = SystemObjectStore(
+      database: database,
+      objectStore: objectStore,
+    );
     weblinks = WeblinkObjectService(
       systemObjects: systemObjects,
       defaultsStore: ObjectTypeDefaultsStore(genericStore),
@@ -195,9 +199,9 @@ class _CaptureHarness {
     capture = CanonicalWeblinkCaptureService(weblinks: weblinks);
   }
 
-  final GenericDatabaseStore genericStore;
-  final ObjectStore objectStore;
-  final SystemObjectStore systemObjects;
+  late final GenericDatabaseStore genericStore;
+  late final ObjectStore objectStore;
+  late final SystemObjectStore systemObjects;
   late final WeblinkObjectService weblinks;
   late final CanonicalWeblinkCaptureService capture;
 }
