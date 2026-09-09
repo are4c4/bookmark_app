@@ -22,7 +22,10 @@ class ObjectBodyDeleteUndoToken {
 }
 
 class ObjectBodyDeleteResult {
-  const ObjectBodyDeleteResult({required this.document, required this.undoToken});
+  const ObjectBodyDeleteResult({
+    required this.document,
+    required this.undoToken,
+  });
 
   final ObjectBodyDocument document;
   final ObjectBodyDeleteUndoToken undoToken;
