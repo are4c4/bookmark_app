@@ -41,6 +41,9 @@ Continue only when current-main callers prove an API/path is dead. Preserve Phot
 ### #1079 — durable AI documentation source-of-truth
 Synchronize stale repository docs and make handoffs structurally resistant to transient-state drift. Durable docs record contracts/resume guidance; live GitHub owns open PRs, CI, branch tips, repository settings and current ownership.
 
+### #1082 / #1107 — destructive-risk approval provenance
+Deterministic PR-contract failures and high-confidence destructive-risk detection are blocking. The remaining security gap is approval provenance: an implementation identity must not be able to satisfy its own destructive-risk approval. #1107 owns the focused hardening. Prefer a trusted default-branch-controlled approval gate; do not treat an owner-authored comment written through the same automation credential as independent human approval.
+
 Future G work after owning-lane parity:
 - retire caller-zero Bookmark repositories/items/pages/bridges from #1039;
 - retire caller-zero People-specific repositories/pages/bridges from #1040;
@@ -54,10 +57,14 @@ Future G work after owning-lane parity:
 - test-health/flake artifacts;
 - docs-only CI fast path and stable `merge-gate`;
 - `merge_group` workflow support;
-- AI PR lane/Issue/dependency/hotspot/migration-impact contract;
+- repository-pinned Flutter toolchain via `pubspec.yaml`, tracked `pubspec.lock`, and machine checks that `flutter pub get` does not drift the committed lockfile;
+- AI PR lane/Issue/dependency/hotspot/migration-impact contract with deterministic violations blocking;
 - hotspot overlap/stale-base/churn diagnostics;
 - duplicate focused-Issue ownership detection;
-- migration single-writer lease audit;
+- deterministic migration single-writer hard gate: non-migration PRs pass without ownership arbitration, the lowest-numbered open migration PR is the unique active owner, later migration PRs block, and the check runs inside the required quality/`merge-gate` path;
+- high-confidence destructive-risk detection is blocking, while machine-strong non-self approval provenance remains focused work under #1107;
+- read-only repository-settings drift audit on PR, scheduled and manual runs for the observable effective default-branch integration contract; administration-only fields are validated when GitHub exposes them, but API omission is not guessed as drift and no privileged administration credential is introduced merely for exhaustive auditing;
+- focused implementation Issue Form requiring Primary lane, Goal, Depends on, Shared hotspots, Migration/data impact, Acceptance and Non-goals;
 - durable handoff audit;
 - immutable GitHub Actions SHA pin audit;
 - weekly Dependabot updates for Dart/pub and GitHub Actions;
@@ -89,7 +96,7 @@ Code search alone is insufficient. A deletion slice should prove:
 ## Shared hotspots
 High-risk hosts include `generic_database_page.dart`, `bookmark_unified_stage1_page.dart`, `object_inspector_page.dart`, `people_management_page.dart`, `app_shell.dart`, `tag_management_page.dart` and `app_database.dart`.
 
-Recheck live PR ownership before broad edits. G should usually reduce a hotspot by small extraction/deletion rather than taking a broad rewrite lease. Schema/migration writer remains single-writer.
+Recheck live PR ownership before broad edits. G should usually reduce a hotspot by small extraction/deletion rather than taking a broad rewrite lease. Schema/migration writer remains single-writer and is now enforced by the deterministic blocking gate.
 
 ## Cross-lane boundaries
 - **A:** Object/ObjectType/Body identity and migration semantics.
@@ -105,15 +112,16 @@ G deletes superseded implementation only after the owning product/integrity lane
 ## Repository integration contract
 `main` is protected by the active repository ruleset and integrates through PRs with strict/up-to-date `merge-gate`; #980 is completed. Automatic deletion of ordinary merged PR head branches is enabled.
 
-Treat the exact current ruleset/PR/branch/CI inventory as live GitHub state, not durable handoff prose. If repository settings become important to a future guard, query and validate the live settings against an explicit machine-readable contract rather than relying on this paragraph as operational truth.
+Critical observable integration invariants are also checked by a read-only repository-settings audit. The audit intentionally distinguishes real drift from fields omitted by non-privileged GitHub API payloads; exact current ruleset/settings values remain live GitHub state rather than durable handoff prose.
 
 ## Validation
 Behavior-preserving refactors require changed-Dart format, Analyze and relevant/full Flutter Test. Workflow/guard changes must exercise focused regressions and the authoritative CI path. Docs-only architecture synchronization uses the docs-only CI path plus handoff/coordination audits.
 
 ## Resume sequence
 1. re-audit latest `main`, open PR ownership and shared-hotspot/migration ownership before taking new G work;
-2. take #225/#950 or other G work only through focused reversible child Issues;
-3. when #1039/#1040 owning-lane parity lands, create caller-zero retirement slices instead of combining product migration with cleanup;
-4. if historical branch cleanup is revisited, begin with a new read-only inventory and do not broaden deletion to ambiguous refs;
-5. keep destructive schema/data removal separate, preservation-gated, and human-approved;
-6. keep durable docs free of transient snapshots and route machine-certifiable drift to CI while H handles semantic drift.
+2. complete #1107 through a trusted non-self destructive-approval mechanism before treating #1082's destructive-approval acceptance as done;
+3. take #225/#950 or other G work only through focused reversible child Issues;
+4. when #1039/#1040 owning-lane parity lands, create caller-zero retirement slices instead of combining product migration with cleanup;
+5. if historical branch cleanup is revisited, begin with a new read-only inventory and do not broaden deletion to ambiguous refs;
+6. keep destructive schema/data removal separate, preservation-gated, and independently approved;
+7. keep durable docs free of transient snapshots and route machine-certifiable drift to CI while H handles semantic drift.
