@@ -1,0 +1,248 @@
+name: Closed Unmerged Branch Cleanup
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/cleanup_closed_unmerged_branches.yml
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/cleanup_closed_unmerged_branches.yml
+  workflow_dispatch:
+    inputs:
+      min_age_hours:
+        description: Minimum age of an exact closed-unmerged PR head before deletion
+        required: true
+        default: '24'
+        type: string
+
+concurrency:
+  group: closed-unmerged-branch-cleanup
+  cancel-in-progress: false
+
+jobs:
+  dry-run:
+    name: closed-unmerged-cleanup-dry-run
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Audit exact closed-unmerged PR heads
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MIN_AGE_HOURS: '24'
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          default_branch="${{ github.event.repository.default_branch }}"
+
+          if ! [[ "$MIN_AGE_HOURS" =~ ^[0-9]+$ ]]; then
+            echo "MIN_AGE_HOURS must be a non-negative integer, got: $MIN_AGE_HOURS" >&2
+            exit 2
+          fi
+
+          git init --quiet repo
+          git -C repo remote add origin "https://github.com/${repo}.git"
+          git -C repo fetch --quiet --no-tags --prune origin '+refs/heads/*:refs/remotes/origin/*'
+          cd repo
+
+          default_ref="refs/remotes/origin/${default_branch}"
+          git rev-parse --verify "$default_ref" >/dev/null
+          default_tip="$(git rev-parse "$default_ref")"
+          now="$(date +%s)"
+          cutoff="$((now - MIN_AGE_HOURS * 3600))"
+
+          declare -A open_heads=()
+          declare -A closed_unmerged_exact=()
+          declare -A merged_exact=()
+
+          while IFS= read -r head_ref; do
+            [[ -n "$head_ref" ]] && open_heads["$head_ref"]=1
+          done < <(
+            gh api --paginate "repos/${repo}/pulls?state=open&per_page=100" --jq '.[].head.ref'
+          )
+
+          while IFS=$'\t' read -r pr_state head_ref head_sha; do
+            [[ -z "$head_ref" || -z "$head_sha" ]] && continue
+            key="${head_ref}|${head_sha}"
+            if [[ "$pr_state" == "merged" ]]; then
+              merged_exact["$key"]=1
+            else
+              closed_unmerged_exact["$key"]=1
+            fi
+          done < <(
+            gh api --paginate "repos/${repo}/pulls?state=closed&per_page=100" \
+              --jq '.[] | [(if .merged_at != null then "merged" else "closed-unmerged" end), .head.ref, .head.sha] | @tsv'
+          )
+
+          : > /tmp/closed-unmerged-candidates.txt
+          while IFS= read -r ref; do
+            branch="${ref#refs/remotes/origin/}"
+            [[ "$branch" == "$default_branch" ]] && continue
+            [[ -n "${open_heads[$branch]+x}" ]] && continue
+
+            tip="$(git rev-parse "$ref")"
+            [[ "$tip" == "$default_tip" ]] && continue
+
+            tip_epoch="$(git show -s --format=%ct "$tip")"
+            (( tip_epoch > cutoff )) && continue
+
+            key="${branch}|${tip}"
+            [[ -z "${closed_unmerged_exact[$key]+x}" ]] && continue
+            [[ -n "${merged_exact[$key]+x}" ]] && continue
+
+            printf '%s\t%s\n' "$branch" "$tip" >> /tmp/closed-unmerged-candidates.txt
+          done < <(git for-each-ref --format='%(refname)' refs/remotes/origin/)
+
+          sort -u -o /tmp/closed-unmerged-candidates.txt /tmp/closed-unmerged-candidates.txt
+          candidate_count="$(wc -l < /tmp/closed-unmerged-candidates.txt | tr -d ' ')"
+          echo "Found ${candidate_count} exact closed-unmerged PR-head branches (dry run)."
+          cat /tmp/closed-unmerged-candidates.txt
+
+          {
+            echo '## Closed-unmerged historical branch cleanup — dry run'
+            echo
+            echo "- Default branch: \`${default_branch}\`"
+            echo "- Grace period: \`${MIN_AGE_HOURS}h\`"
+            echo "- Exact closed-unmerged PR-head candidates: \`${candidate_count}\`"
+            echo '- No refs are deleted on pull-request runs.'
+            echo '- Open-PR heads, current default tip, recent tips, merged PR heads, and branches advanced after their closed PR are excluded.'
+            echo
+            echo '<details><summary>Candidate branches</summary>'
+            echo
+            echo '```text'
+            cat /tmp/closed-unmerged-candidates.txt
+            echo '```'
+            echo '</details>'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  cleanup:
+    name: delete-closed-unmerged-exact-heads
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - name: Delete stale exact heads of closed-unmerged PRs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MIN_AGE_HOURS: ${{ inputs.min_age_hours || '24' }}
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          default_branch="${{ github.event.repository.default_branch }}"
+
+          if ! [[ "$MIN_AGE_HOURS" =~ ^[0-9]+$ ]]; then
+            echo "MIN_AGE_HOURS must be a non-negative integer, got: $MIN_AGE_HOURS" >&2
+            exit 2
+          fi
+
+          git init --quiet repo
+          git -C repo remote add origin "https://github.com/${repo}.git"
+          git -C repo fetch --quiet --no-tags --prune origin '+refs/heads/*:refs/remotes/origin/*'
+          cd repo
+
+          default_ref="refs/remotes/origin/${default_branch}"
+          git rev-parse --verify "$default_ref" >/dev/null
+          default_tip="$(git rev-parse "$default_ref")"
+          now="$(date +%s)"
+          cutoff="$((now - MIN_AGE_HOURS * 3600))"
+
+          declare -A open_heads=()
+          declare -A closed_unmerged_exact=()
+          declare -A merged_exact=()
+
+          while IFS= read -r head_ref; do
+            [[ -n "$head_ref" ]] && open_heads["$head_ref"]=1
+          done < <(
+            gh api --paginate "repos/${repo}/pulls?state=open&per_page=100" --jq '.[].head.ref'
+          )
+
+          while IFS=$'\t' read -r pr_state head_ref head_sha; do
+            [[ -z "$head_ref" || -z "$head_sha" ]] && continue
+            key="${head_ref}|${head_sha}"
+            if [[ "$pr_state" == "merged" ]]; then
+              merged_exact["$key"]=1
+            else
+              closed_unmerged_exact["$key"]=1
+            fi
+          done < <(
+            gh api --paginate "repos/${repo}/pulls?state=closed&per_page=100" \
+              --jq '.[] | [(if .merged_at != null then "merged" else "closed-unmerged" end), .head.ref, .head.sha] | @tsv'
+          )
+
+          : > /tmp/closed-unmerged-candidates.txt
+          while IFS= read -r ref; do
+            branch="${ref#refs/remotes/origin/}"
+            [[ "$branch" == "$default_branch" ]] && continue
+            [[ -n "${open_heads[$branch]+x}" ]] && continue
+
+            tip="$(git rev-parse "$ref")"
+            [[ "$tip" == "$default_tip" ]] && continue
+
+            tip_epoch="$(git show -s --format=%ct "$tip")"
+            (( tip_epoch > cutoff )) && continue
+
+            key="${branch}|${tip}"
+            [[ -z "${closed_unmerged_exact[$key]+x}" ]] && continue
+            [[ -n "${merged_exact[$key]+x}" ]] && continue
+
+            printf '%s\t%s\n' "$branch" "$tip" >> /tmp/closed-unmerged-candidates.txt
+          done < <(git for-each-ref --format='%(refname)' refs/remotes/origin/)
+
+          sort -u -o /tmp/closed-unmerged-candidates.txt /tmp/closed-unmerged-candidates.txt
+          candidate_count="$(wc -l < /tmp/closed-unmerged-candidates.txt | tr -d ' ')"
+          echo "Deleting ${candidate_count} stale exact closed-unmerged PR-head branches."
+
+          deleted=0
+          failed=0
+          while IFS=$'\t' read -r branch expected_tip; do
+            [[ -z "$branch" ]] && continue
+
+            # Re-read the ref immediately before deletion. If another actor advanced
+            # or removed it after candidate discovery, leave it untouched.
+            current_tip="$(gh api "repos/${repo}/git/ref/heads/${branch}" --jq '.object.sha' 2>/dev/null || true)"
+            if [[ -z "$current_tip" || "$current_tip" != "$expected_tip" ]]; then
+              echo "skip raced/advanced: $branch" >&2
+              failed=$((failed + 1))
+              continue
+            fi
+
+            encoded="$(python3 - "$branch" <<'PY'
+          import sys
+          import urllib.parse
+          print(urllib.parse.quote(sys.argv[1], safe='/'))
+          PY
+          )"
+            if gh api --silent --method DELETE "repos/${repo}/git/refs/heads/${encoded}"; then
+              echo "deleted: $branch"
+              deleted=$((deleted + 1))
+            else
+              echo "warning: failed to delete $branch" >&2
+              failed=$((failed + 1))
+            fi
+            sleep 0.1
+          done < /tmp/closed-unmerged-candidates.txt
+
+          {
+            echo '## Closed-unmerged historical branch cleanup'
+            echo
+            echo "- Default branch preserved: \`${default_branch}\`"
+            echo "- Grace period: \`${MIN_AGE_HOURS}h\`"
+            echo "- Candidates: \`${candidate_count}\`"
+            echo "- Deleted: \`${deleted}\`"
+            echo "- Failed/raced/skipped: \`${failed}\`"
+            echo '- Only exact old heads of closed-unmerged PRs were eligible; unique/ambiguous branches were not considered.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if (( failed > 0 )); then
+            echo "Some candidates raced, advanced, disappeared, or could not be deleted; they were left for later audit." >&2
+          fi
