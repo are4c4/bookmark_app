@@ -11,7 +11,9 @@ void main() {
   const packagePaths = PortableExportPackagePathPolicy();
 
   setUp(() async {
-    sandbox = await Directory.systemTemp.createTemp('bookmark_portable_export_');
+    sandbox = await Directory.systemTemp.createTemp(
+      'bookmark_portable_export_',
+    );
     vault = Directory('${sandbox.path}/Vault');
     await Directory('${vault.path}/attachments').create(recursive: true);
     planner = const PortableExportFilePlanner();
@@ -23,20 +25,20 @@ void main() {
     }
   });
 
-  test('safe package member resolves below the selected package root', () async {
-    final packageRoot = Directory('${sandbox.path}/Export Package');
-    final resolved = packagePaths.resolve(
-      packageRootPath: packageRoot.path,
-      packageRelativePath: 'attachments/papers/research.pdf',
-    );
+  test(
+    'safe package member resolves below the selected package root',
+    () async {
+      final packageRoot = Directory('${sandbox.path}/Export Package');
+      final resolved = packagePaths.resolve(
+        packageRootPath: packageRoot.path,
+        packageRelativePath: 'attachments/papers/research.pdf',
+      );
 
-    final normalizedRoot = packageRoot.absolute.path.replaceAll('\\', '/');
-    expect(
-      resolved,
-      '$normalizedRoot/attachments/papers/research.pdf',
-    );
-    expect(packageRoot.existsSync(), isFalse);
-  });
+      final normalizedRoot = packageRoot.absolute.path.replaceAll('\\', '/');
+      expect(resolved, '$normalizedRoot/attachments/papers/research.pdf');
+      expect(packageRoot.existsSync(), isFalse);
+    },
+  );
 
   test('package path policy rejects ambiguous and escaping members', () {
     for (final unsafePath in <String>[
@@ -58,30 +60,33 @@ void main() {
     }
   });
 
-  test('explicit managed ownership plans only the existing Vault copy', () async {
-    final managedDirectory = Directory('${vault.path}/attachments/papers');
-    await managedDirectory.create();
-    final managed = File('${managedDirectory.path}/paper.pdf');
-    const bytes = <int>[1, 3, 3, 7];
-    await managed.writeAsBytes(bytes);
+  test(
+    'explicit managed ownership plans only the existing Vault copy',
+    () async {
+      final managedDirectory = Directory('${vault.path}/attachments/papers');
+      await managedDirectory.create();
+      final managed = File('${managedDirectory.path}/paper.pdf');
+      const bytes = <int>[1, 3, 3, 7];
+      await managed.writeAsBytes(bytes);
 
-    final plan = await planner.plan(
-      storedPath: 'attachments/papers/paper.pdf',
-      ownershipStorageKey: ManagedFileOwnership.vaultManagedCopy.storageKey,
-      vaultDirectoryPath: vault.path,
-    );
+      final plan = await planner.plan(
+        storedPath: 'attachments/papers/paper.pdf',
+        ownershipStorageKey: ManagedFileOwnership.vaultManagedCopy.storageKey,
+        vaultDirectoryPath: vault.path,
+      );
 
-    expect(plan.disposition, PortableExportFileDisposition.managedIncluded);
-    expect(plan.includeBytes, isTrue);
-    expect(plan.referencePath, 'attachments/papers/paper.pdf');
-    expect(plan.packageRelativePath, 'attachments/papers/paper.pdf');
-    expect(plan.managedSourcePath, managed.absolute.path);
-    expect(
-      plan.ownershipStorageKey,
-      ManagedFileOwnership.vaultManagedCopy.storageKey,
-    );
-    expect(await managed.readAsBytes(), bytes);
-  });
+      expect(plan.disposition, PortableExportFileDisposition.managedIncluded);
+      expect(plan.includeBytes, isTrue);
+      expect(plan.referencePath, 'attachments/papers/paper.pdf');
+      expect(plan.packageRelativePath, 'attachments/papers/paper.pdf');
+      expect(plan.managedSourcePath, managed.absolute.path);
+      expect(
+        plan.ownershipStorageKey,
+        ManagedFileOwnership.vaultManagedCopy.storageKey,
+      );
+      expect(await managed.readAsBytes(), bytes);
+    },
+  );
 
   test('unowned relative path is not guessed to be managed', () async {
     final managed = File('${vault.path}/attachments/unowned.pdf');
@@ -248,21 +253,24 @@ void main() {
     },
   );
 
-  test('Windows absolute reference also stays external on every host', () async {
-    const externalPath = r'C:\Users\example\external.pdf';
+  test(
+    'Windows absolute reference also stays external on every host',
+    () async {
+      const externalPath = r'C:\Users\example\external.pdf';
 
-    final plan = await planner.plan(
-      storedPath: externalPath,
-      ownershipStorageKey: null,
-      vaultDirectoryPath: '${sandbox.path}/missing-vault',
-    );
+      final plan = await planner.plan(
+        storedPath: externalPath,
+        ownershipStorageKey: null,
+        vaultDirectoryPath: '${sandbox.path}/missing-vault',
+      );
 
-    expect(plan.disposition, PortableExportFileDisposition.externalReference);
-    expect(plan.includeBytes, isFalse);
-    expect(plan.referencePath, externalPath);
-    expect(plan.managedSourcePath, isNull);
-    expect(plan.packageRelativePath, isNull);
-  });
+      expect(plan.disposition, PortableExportFileDisposition.externalReference);
+      expect(plan.includeBytes, isFalse);
+      expect(plan.referencePath, externalPath);
+      expect(plan.managedSourcePath, isNull);
+      expect(plan.packageRelativePath, isNull);
+    },
+  );
 
   test(
     'managed ownership cannot turn an external path into included bytes',
