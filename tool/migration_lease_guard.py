@@ -19,6 +19,7 @@ from typing import Iterable
 SCHEMA_FILE = "lib/data/app_database_schema.dart"
 MIGRATIONS_FILE = "lib/data/app_database_migrations.dart"
 APP_DATABASE_FILE = "lib/data/app_database.dart"
+APP_DATABASE_SCHEMA_REASON = f"{APP_DATABASE_FILE}:schemaVersion"
 DIRECT_MIGRATION_FILES = frozenset({SCHEMA_FILE, MIGRATIONS_FILE})
 
 
@@ -27,6 +28,13 @@ class MigrationClaim:
     number: int
     title: str
     reasons: frozenset[str]
+
+
+@dataclass(frozen=True)
+class ChangedFile:
+    status: str
+    path: str
+    previous_path: str | None = None
 
 
 def patch_changes_schema_version(patch: str) -> bool:
@@ -55,7 +63,75 @@ def migration_reasons(
     path_set = set(paths)
     reasons = {path for path in DIRECT_MIGRATION_FILES if path in path_set}
     if APP_DATABASE_FILE in path_set and patch_changes_schema_version(app_database_patch):
-        reasons.add(f"{APP_DATABASE_FILE}:schemaVersion")
+        reasons.add(APP_DATABASE_SCHEMA_REASON)
+    return frozenset(reasons)
+
+
+def parse_changed_files(output: str) -> list[ChangedFile]:
+    """Parse `git diff --name-status` while preserving rename source paths."""
+    records: list[ChangedFile] = []
+    for raw in output.splitlines():
+        if not raw.strip():
+            continue
+        fields = raw.split("\t")
+        status = fields[0].strip()
+        if status.startswith(("R", "C")):
+            if len(fields) != 3:
+                raise ValueError(f"Unexpected renamed/copied git diff row: {raw}")
+            records.append(
+                ChangedFile(
+                    status=status,
+                    previous_path=fields[1].strip(),
+                    path=fields[2].strip(),
+                )
+            )
+            continue
+        if len(fields) != 2:
+            raise ValueError(f"Unexpected git diff row: {raw}")
+        records.append(ChangedFile(status=status, path=fields[1].strip()))
+    return records
+
+
+def paths_for_migration_classification(files: Iterable[ChangedFile]) -> list[str]:
+    """Return effective paths, retaining old names only for renames."""
+    paths: list[str] = []
+    for changed in files:
+        candidates: list[str] = []
+        if changed.status.startswith("R") and changed.previous_path:
+            candidates.append(changed.previous_path)
+        candidates.append(changed.path)
+        for path in candidates:
+            if path and path not in paths:
+                paths.append(path)
+    return paths
+
+
+def app_database_authority_removed_or_renamed(files: Iterable[ChangedFile]) -> bool:
+    for changed in files:
+        if changed.status.startswith("D") and changed.path == APP_DATABASE_FILE:
+            return True
+        if (
+            changed.status.startswith("R")
+            and changed.previous_path == APP_DATABASE_FILE
+            and changed.path != APP_DATABASE_FILE
+        ):
+            return True
+    return False
+
+
+def current_migration_reasons(
+    files: Iterable[ChangedFile],
+    app_database_patch: str = "",
+) -> frozenset[str]:
+    file_list = list(files)
+    reasons = set(
+        migration_reasons(
+            paths_for_migration_classification(file_list),
+            app_database_patch,
+        )
+    )
+    if app_database_authority_removed_or_renamed(file_list):
+        reasons.add(APP_DATABASE_SCHEMA_REASON)
     return frozenset(reasons)
 
 
@@ -116,14 +192,27 @@ def queued_migration_claims(
     )
 
 
-def changed_paths(base: str, head: str) -> list[str]:
+def changed_files(base: str, head: str) -> list[ChangedFile]:
     result = subprocess.run(
-        ["git", "diff", "--name-only", "--diff-filter=ACMR", base, head],
+        [
+            "git",
+            "diff",
+            "--name-status",
+            "--find-renames",
+            "--diff-filter=ACMRD",
+            base,
+            head,
+        ],
         check=True,
         capture_output=True,
         text=True,
     )
-    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    return parse_changed_files(result.stdout)
+
+
+def changed_paths(base: str, head: str) -> list[str]:
+    """Compatibility helper returning paths from the status-aware classifier."""
+    return paths_for_migration_classification(changed_files(base, head))
 
 
 def changed_patch(base: str, head: str, path: str) -> str:
@@ -200,25 +289,50 @@ def _claim_for_open_pull(
         return None
 
     files = _paged_list(f"{api_root}/pulls/{number}/files", token)
-    paths = [str(row.get("filename") or "") for row in files]
+    paths: list[str] = []
+    for row in files:
+        filename = str(row.get("filename") or "")
+        previous = str(row.get("previous_filename") or "")
+        if str(row.get("status") or "") == "renamed" and previous:
+            paths.append(previous)
+        if filename:
+            paths.append(filename)
     reasons = {path for path in DIRECT_MIGRATION_FILES if path in paths}
 
     app_rows = [
-        row for row in files if str(row.get("filename") or "") == APP_DATABASE_FILE
+        row
+        for row in files
+        if str(row.get("filename") or "") == APP_DATABASE_FILE
+        or str(row.get("previous_filename") or "") == APP_DATABASE_FILE
     ]
     if app_rows:
-        patches = [str(row.get("patch") or "") for row in app_rows]
-        if any(patch_changes_schema_version(patch) for patch in patches if patch):
-            reasons.add(f"{APP_DATABASE_FILE}:schemaVersion")
-        elif not any(patches):
-            base = pull.get("base")
-            head = pull.get("head")
-            base_sha = str(base.get("sha") or "") if isinstance(base, dict) else ""
-            head_sha = str(head.get("sha") or "") if isinstance(head, dict) else ""
-            if base_sha and head_sha and _schema_version_changed_from_contents(
-                api_root, base_sha, head_sha, token
-            ):
-                reasons.add(f"{APP_DATABASE_FILE}:schemaVersion")
+        authority_removed = any(
+            (
+                str(row.get("status") or "") == "removed"
+                and str(row.get("filename") or "") == APP_DATABASE_FILE
+            )
+            or (
+                str(row.get("status") or "") == "renamed"
+                and str(row.get("previous_filename") or "") == APP_DATABASE_FILE
+                and str(row.get("filename") or "") != APP_DATABASE_FILE
+            )
+            for row in app_rows
+        )
+        if authority_removed:
+            reasons.add(APP_DATABASE_SCHEMA_REASON)
+        else:
+            patches = [str(row.get("patch") or "") for row in app_rows]
+            if any(patch_changes_schema_version(patch) for patch in patches if patch):
+                reasons.add(APP_DATABASE_SCHEMA_REASON)
+            elif not any(patches):
+                base = pull.get("base")
+                head = pull.get("head")
+                base_sha = str(base.get("sha") or "") if isinstance(base, dict) else ""
+                head_sha = str(head.get("sha") or "") if isinstance(head, dict) else ""
+                if base_sha and head_sha and _schema_version_changed_from_contents(
+                    api_root, base_sha, head_sha, token
+                ):
+                    reasons.add(APP_DATABASE_SCHEMA_REASON)
 
     return MigrationClaim(
         number=number,
@@ -263,13 +377,15 @@ def main() -> int:
         return 1
 
     try:
-        paths = changed_paths(base_sha, head_sha)
+        files = changed_files(base_sha, head_sha)
+        paths = paths_for_migration_classification(files)
+        authority_removed = app_database_authority_removed_or_renamed(files)
         app_patch = (
             changed_patch(base_sha, head_sha, APP_DATABASE_FILE)
-            if APP_DATABASE_FILE in paths
+            if APP_DATABASE_FILE in paths and not authority_removed
             else ""
         )
-        current_reasons = migration_reasons(paths, app_patch)
+        current_reasons = current_migration_reasons(files, app_patch)
         lines = [
             "## Migration single-writer lease",
             "",
