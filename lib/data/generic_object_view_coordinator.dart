@@ -2,6 +2,7 @@ import '../domain/object_group.dart';
 import '../domain/object_model.dart';
 import 'database_view_store.dart';
 import 'generic_database_store.dart';
+import 'object_query_engine.dart';
 import 'object_view_projector.dart';
 
 class GenericRecordGroup {
@@ -47,11 +48,13 @@ class GenericObjectViewCoordinator {
     required Iterable<GenericRecord> records,
     required DatabaseViewConfig view,
     ObjectViewValueResolver? valueResolver,
+    ObjectHierarchyDescendantMatcher? hierarchyDescendantMatcher,
   }) {
     final projection = projector.project(
       objects: objects,
       view: view,
       valueResolver: valueResolver,
+      hierarchyDescendantMatcher: hierarchyDescendantMatcher,
     );
     final recordById = <int, GenericRecord>{
       for (final record in records) record.id: record,
