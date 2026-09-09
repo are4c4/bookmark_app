@@ -85,7 +85,22 @@ Identity must be stable and independent of display names.
 
 Where native canonical identity exists, use it (for example normalized Weblink URL). For generic ObjectTypes, duplicate detection is advisory unless a type-specific stable key exists.
 
-Object merge is a future first-class capability. Until merge/redirect semantics exist, migrations must fail closed rather than silently combine Objects with conflicting user-authored data or Relations.
+Duplicate detection and Object merge are distinct concepts:
+- detection may suggest that two Objects could represent the same entity;
+- merge is an explicit user/system-authorized operation with a reviewed merge plan;
+- fuzzy similarity must never silently collapse canonical Objects.
+
+Object merge is a future first-class capability tracked by #1062. Its contract must:
+- choose or preserve one surviving canonical Object identity;
+- define redirect/tombstone behavior for the retired identity so old references do not silently dangle;
+- preserve or explicitly reconcile Body, Properties, aliases, lifecycle metadata and other user-authored state;
+- rewire Relations only through canonical Relation integrity APIs;
+- fail closed on cardinality/order/role or scalar-value conflicts rather than overwrite data;
+- preserve Database/View behavior without cloning Object identity;
+- remain restart/reconciliation safe and retry/idempotency aware;
+- avoid inferring managed Image/File byte-deletion authority from identity merge alone.
+
+Until merge/redirect semantics exist, migrations must fail closed rather than silently combine Objects with conflicting user-authored data or Relations.
 
 ## Properties
 
@@ -257,6 +272,24 @@ Baseline interaction direction:
 
 Persisted Body compatibility must be preserved while the editor UX evolves.
 
+## Undo and durable version history
+
+Short-lived local Undo and durable version history are different product layers.
+
+**Local Undo** reverses recent, losslessly invertible interaction changes and may use transient UI feedback such as `元に戻す`. It should fail closed if a later mutation makes the stored inverse unsafe.
+
+**Durable history** survives restart and explains/restores earlier Object state. The future contract is tracked by #1064 and should be capable of accounting for Object/lifecycle, Property, Body and Relation changes without turning the entire application into an event-sourcing rewrite by default.
+
+Durable restore must:
+- keep current canonical state authoritative;
+- distinguish whole-Object restore from selective field/Body restore;
+- detect conflicts with newer state rather than blindly overwrite it;
+- validate restored Relations through current canonical integrity/cardinality rules;
+- treat managed Image/File byte retention as an explicit Storage concern, not as an automatic consequence of metadata history;
+- define retention/compaction semantics before unbounded history storage is introduced.
+
+Do not force local Undo and durable history into one global command-stack abstraction merely because both can reverse changes.
+
 ## Generic Object Inspector
 
 The shared Object Inspector is a primary product surface. It should compose Title, Properties, Relations, Tags, native type capabilities and Body with consistent inline editing.
@@ -274,6 +307,31 @@ Saving a URL/Image/File/text should be fast and should not require choosing ever
 Inbox is a standard Object collection/query context for items that still need organization; it is not a special ObjectType.
 
 Normal URL capture should target roughly 1–2 primary actions.
+
+## Home and work-start surface
+
+The long-term Home/start surface is a place to begin work, not a catalog of legacy domain modules.
+
+The target composition is:
+
+```text
+Home
+├─ Inbox
+├─ Recent
+├─ Favorites
+└─ Pinned Databases
+```
+
+This direction is tracked by #1061.
+
+- Inbox surfaces captured Objects that still need organization.
+- Recent surfaces recently opened/changed Objects and useful contexts.
+- Favorites is reusable user state/query context, not a new ObjectType.
+- Pinned Databases are user-chosen entry points into canonical Database/View contexts.
+
+Legacy normal-use navigation such as `ブックマーク`, `人物`, or `写真` should disappear from the final Home only after the corresponding generic Weblink/Person/Image replacement has parity and the dedicated path is caller-zero. Do not remove transition navigation early merely to make Home look finished.
+
+Home must follow the same UX contract as the rest of the product: low click/key count, useful empty/loading/error states, keyboard navigation on desktop, touch reachability on mobile, and consistent create/open behavior.
 
 ## Object lifecycle and deletion
 
@@ -328,6 +386,25 @@ A Vault is one local Object universe containing Objects, schema, Relations, Data
 
 The canonical model must remain portable/exportable and must not depend on one UI representation. Future sync/collaboration/plugin support is not required now, but data identities and registries should not make those directions impossible.
 
+### Open export and portability
+
+Backup/restore and portable export are distinct capabilities.
+
+Backup/restore preserves an application Vault for recovery. Portable export exists so users can intentionally take their information out of the application in documented, inspectable formats. The focused contract is tracked by #1063.
+
+A future lossless export package must be able to preserve enough information to reconstruct or verify:
+- stable Object IDs and ObjectTypes;
+- typed Property definitions/values, including preserved unknown future values where possible;
+- Relations by stable identity with ordering/role/cardinality semantics;
+- Body block documents and Object/file references;
+- Database/View definitions and query configuration for whole-context exports;
+- managed Image/File bytes with explicit provenance/ownership metadata;
+- external references without silently copying/rebasing them unless the chosen export mode requests inclusion.
+
+Open projections such as Markdown or CSV are valuable, but they are lossy projections whenever they cannot represent the complete typed graph. Do not claim Markdown/CSV round-trip fidelity if Object IDs, Relations, unknown Property types, View configuration or block semantics are omitted.
+
+Prefer an inspectable structured layer such as JSON for the canonical export graph/schema plus human-friendly Markdown/CSV projections where appropriate, and a directory/ZIP package when managed bytes are included. Exact formats should be decided contract-first and tested for lossless versus intentionally lossy behavior.
+
 ## Migration and legacy retirement
 
 Historical schema is a compatibility contract until explicitly retired.
@@ -345,6 +422,26 @@ replacement contract
 
 Do not delete user data because a replacement UI exists. Schema migrations are single-writer work and require historical upgrade regressions where feasible.
 
+## Product / umbrella completion contract
+
+A focused implementation slice may be complete when its own acceptance criteria and required validation are green. That does **not** automatically mean the umbrella/product capability is Done.
+
+For an important umbrella, review every applicable dimension:
+
+1. **Architecture** — the durable model and ownership boundaries are explicit and do not contradict the constitution.
+2. **Behavior** — the promised functional scope works through canonical contracts.
+3. **Tests** — product meaning is locked by appropriate contract/unit/integration/real-host regressions, not only implementation-detail tests.
+4. **UX** — primary flows are efficient, coherent and stay in context where appropriate.
+5. **Keyboard / accessibility / device interaction** — keyboard/focus, screen-reader/touch-target/contrast and desktop/mobile behavior are addressed where applicable.
+6. **Empty / loading / error / recovery states** — non-happy paths are intentional and usable.
+7. **Migration / reconciliation** — existing data survives restart/reconciliation and supported historical transitions.
+8. **Replacement parity** — the new generic/native path covers the product behavior worth preserving.
+9. **Legacy retirement** — old UI/API/runtime paths become caller-zero before deletion.
+10. **Preservation before destruction** — destructive schema/data removal happens only after preservation evidence and a separate explicit migration.
+11. **Durable handoff** — Issues, architecture docs and lane/repository handoffs reflect the resulting state.
+
+Not every small Issue needs every dimension. Umbrella Issues should explicitly mark a dimension non-applicable or deferred rather than silently treating it as complete.
+
 ## AI parallel-development contract
 
 Architecture decisions in this document are stable product constraints. Implementation agents may make scoped reversible engineering decisions, but must not silently change these product semantics.
@@ -361,11 +458,35 @@ Parallel development rules:
 - handoffs store durable facts, not ephemeral “currently running/no PR” snapshots;
 - combined-state/merge-queue CI is the desired final integration gate once repository settings permit it.
 
-## Near-term migration routing
+### H — Architecture & Integration Oversight
+
+A–G are the product/engineering implementation ownership lanes. H is a repository-wide **control-tower / oversight lane**, not a competing product implementation lane. Its durable contract is `docs/AI_PROGRESS_OVERSIGHT.md` and #1060.
+
+H should continuously inspect live `main`, Issues, PRs, CI and A–G handoffs for:
+- architecture drift;
+- duplicate/overlapping work;
+- cross-lane dependency and integration gaps;
+- shared-hotspot/migration-writer conflicts;
+- UX inconsistency across independently implemented features;
+- newly emerging technical debt and legacy growth;
+- missing combined-state/correctness/preservation tests;
+- roadmap or umbrella-completion incoherence;
+- newly discovered product gaps that deserve a focused Issue.
+
+H may investigate, review, discuss, comment, create/refine Issues and update repository-wide routing/oversight documentation. Concrete implementation work should be routed to exactly one owning A–G lane. H should not normally implement runtime product behavior, perform schema migrations, take broad shared-hotspot ownership, redesign canonical Object/Relation semantics under an audit label, or merge another lane's work merely to maintain throughput.
+
+A fresh H chat must be able to resume from GitHub alone with `Hレーンとして作業を続けて`.
+
+## Near-term migration and roadmap routing
 
 - #1039 / #1041 / #1042 / #1043 — retire the legacy Bookmark domain toward Weblink + generic Object/Database/Inbox UX. Do not make Bookmark a final ObjectType.
 - #1040 / #1044 / #1045 / #1046 — retire the dedicated People subsystem toward generic Person ObjectType + generic Relation/Database/View UX.
-- #1049 — Body UX phase 1: make paragraph editing document-like while preserving Body persistence.
-- #1050 — generic Tag/TagGroup hierarchy and hierarchy-aware query/UX contracts.
+- #1049 / #1057 / #1058 — make Body editing document-like and locally undoable while preserving Body persistence.
+- #1050 / #1052 / #1053 — generic Tag/TagGroup hierarchy and hierarchy-aware query/UX contracts.
+- #1061 — Home/start surface centered on Inbox / Recent / Favorites / Pinned Databases.
+- #1062 — explicit Object duplicate detection, merge and redirect/tombstone contract.
+- #1063 — open export/portability contract distinct from backup/restore.
+- #1064 — durable Object/Property/Body/Relation version history and conflict-safe restore contract.
+- #1060 — H oversight/control-tower and completion-contract integration.
 
 New work should reference the focused Issue and this architecture contract.
