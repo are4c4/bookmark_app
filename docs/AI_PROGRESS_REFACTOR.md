@@ -41,8 +41,10 @@ Continue only when current-main callers prove an API/path is dead. Preserve Phot
 ### #1079 — durable AI documentation source-of-truth
 Synchronize stale repository docs and make handoffs structurally resistant to transient-state drift. Durable docs record contracts/resume guidance; live GitHub owns open PRs, CI, branch tips, repository settings and current ownership.
 
-### #1082 / #1107 — destructive-risk approval provenance
-Deterministic PR-contract failures and high-confidence destructive-risk detection are blocking. The remaining security gap is approval provenance: an implementation identity must not be able to satisfy its own destructive-risk approval. #1107 owns the focused hardening. Prefer a trusted default-branch-controlled approval gate; do not treat an owner-authored comment written through the same automation credential as independent human approval.
+### #1082 / #1107 — destructive-risk approval and enforcement trust root
+Deterministic PR-contract failures and high-confidence destructive-risk detection are blocking. #1107 Phase A is established: a destructive/approval-sensitive PR requires a current-head `APPROVED` review from a distinct non-author GitHub User whose latest review state is evaluated across the complete paginated review history and whose repository permission is write/admin. Owner comments, PR-body markers, labels, self reviews, bot reviews, stale reviews and read-only reviewers are not approval authority.
+
+The remaining #1107 security gap is Phase B, not approval provenance itself: repository-local PR-controlled GitHub Actions and guard code are still modifiable through the implementation authorization, so that authorization boundary is not yet independently immutable. #1107 stays open until a distinct external/reviewer/check identity, organization-level protection, or equivalent enforcement root exists that the implementation identity cannot modify or spoof. Routine reversible PRs remain approval-free.
 
 Future G work after owning-lane parity:
 - retire caller-zero Bookmark repositories/items/pages/bridges from #1039;
@@ -62,7 +64,7 @@ Future G work after owning-lane parity:
 - hotspot overlap/stale-base/churn diagnostics;
 - duplicate focused-Issue ownership detection;
 - deterministic migration single-writer hard gate: non-migration PRs pass without ownership arbitration, the lowest-numbered open migration PR is the unique active owner, later migration PRs block, and the check runs inside the required quality/`merge-gate` path;
-- high-confidence destructive-risk detection is blocking, while machine-strong non-self approval provenance remains focused work under #1107;
+- high-confidence destructive-risk detection is blocking, and Phase A machine-strong non-self approval requires a distinct current-head approved User with write/admin permission and complete review-history evaluation; Phase B enforcement-root immutability remains open under #1107;
 - read-only repository-settings drift audit on PR, scheduled and manual runs for the observable effective default-branch integration contract; administration-only fields are validated when GitHub exposes them, but API omission is not guessed as drift and no privileged administration credential is introduced merely for exhaustive auditing;
 - focused implementation Issue Form requiring Primary lane, Goal, Depends on, Shared hotspots, Migration/data impact, Acceptance and Non-goals;
 - durable handoff audit;
@@ -119,7 +121,7 @@ Behavior-preserving refactors require changed-Dart format, Analyze and relevant/
 
 ## Resume sequence
 1. re-audit latest `main`, open PR ownership and shared-hotspot/migration ownership before taking new G work;
-2. complete #1107 through a trusted non-self destructive-approval mechanism before treating #1082's destructive-approval acceptance as done;
+2. treat #1107 Phase A non-self approval as established; do not treat #1082 as complete until Phase B provides an enforcement root the implementation identity cannot modify/spoof;
 3. take #225/#950 or other G work only through focused reversible child Issues;
 4. when #1039/#1040 owning-lane parity lands, create caller-zero retirement slices instead of combining product migration with cleanup;
 5. if historical branch cleanup is revisited, begin with a new read-only inventory and do not broaden deletion to ambiguous refs;
