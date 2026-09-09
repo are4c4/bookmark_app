@@ -6,6 +6,16 @@ typedef ObjectQueryValueResolver = dynamic Function(
   int? propertyId,
 );
 
+/// Returns whether [descendantObjectId] is a strict descendant of
+/// [ancestorObjectId] in a canonical hierarchy snapshot.
+///
+/// Query code intentionally receives this as a read-only matcher so hierarchy
+/// persistence/traversal stays owned by the canonical Relation subsystem.
+typedef ObjectHierarchyDescendantMatcher = bool Function(
+  int descendantObjectId,
+  int ancestorObjectId,
+);
+
 class ObjectQueryEngine {
   const ObjectQueryEngine();
 
@@ -14,12 +24,17 @@ class ObjectQueryEngine {
     List<ObjectFilterRule> filters = const <ObjectFilterRule>[],
     List<ObjectSortRule> sorts = const <ObjectSortRule>[],
     ObjectQueryValueResolver? valueResolver,
+    ObjectHierarchyDescendantMatcher? hierarchyDescendantMatcher,
   }) {
     final resolve = valueResolver ?? _defaultValueResolver;
     final result = objects
         .where(
           (object) => filters.every(
-            (rule) => _matches(resolve(object, rule.propertyId), rule),
+            (rule) => _matches(
+              resolve(object, rule.propertyId),
+              rule,
+              hierarchyDescendantMatcher,
+            ),
           ),
         )
         .toList(growable: true);
@@ -45,7 +60,15 @@ class ObjectQueryEngine {
   dynamic _defaultValueResolver(AppObject object, int? propertyId) =>
       propertyId == null ? object.title : object.values[propertyId];
 
-  bool _matches(dynamic actual, ObjectFilterRule rule) {
+  bool _matches(
+    dynamic actual,
+    ObjectFilterRule rule,
+    ObjectHierarchyDescendantMatcher? hierarchyDescendantMatcher,
+  ) {
+    if (rule.hierarchyMatchMode != ObjectHierarchyMatchMode.exact) {
+      return _matchesHierarchy(actual, rule, hierarchyDescendantMatcher);
+    }
+
     return switch (rule.operator) {
       ObjectFilterOperator.equals => _equals(actual, rule.value),
       ObjectFilterOperator.notEquals => !_equals(actual, rule.value),
@@ -53,17 +76,106 @@ class ObjectQueryEngine {
       ObjectFilterOperator.notContains => !_contains(actual, rule.value),
       ObjectFilterOperator.isEmpty => _isEmpty(actual),
       ObjectFilterOperator.isNotEmpty => !_isEmpty(actual),
-      ObjectFilterOperator.greaterThan => _ordered(actual, rule.value, (v) => v > 0),
-      ObjectFilterOperator.greaterThanOrEqual =>
-        _ordered(actual, rule.value, (v) => v >= 0),
-      ObjectFilterOperator.lessThan => _ordered(actual, rule.value, (v) => v < 0),
-      ObjectFilterOperator.lessThanOrEqual =>
-        _ordered(actual, rule.value, (v) => v <= 0),
-      ObjectFilterOperator.before => _dateCompare(actual, rule.value, (v) => v < 0),
-      ObjectFilterOperator.after => _dateCompare(actual, rule.value, (v) => v > 0),
+      ObjectFilterOperator.greaterThan => _ordered(
+        actual,
+        rule.value,
+        (v) => v > 0,
+      ),
+      ObjectFilterOperator.greaterThanOrEqual => _ordered(
+        actual,
+        rule.value,
+        (v) => v >= 0,
+      ),
+      ObjectFilterOperator.lessThan => _ordered(
+        actual,
+        rule.value,
+        (v) => v < 0,
+      ),
+      ObjectFilterOperator.lessThanOrEqual => _ordered(
+        actual,
+        rule.value,
+        (v) => v <= 0,
+      ),
+      ObjectFilterOperator.before => _dateCompare(
+        actual,
+        rule.value,
+        (v) => v < 0,
+      ),
+      ObjectFilterOperator.after => _dateCompare(
+        actual,
+        rule.value,
+        (v) => v > 0,
+      ),
       ObjectFilterOperator.containsAny => _containsAny(actual, rule.value),
       ObjectFilterOperator.containsAll => _containsAll(actual, rule.value),
     };
+  }
+
+  bool _matchesHierarchy(
+    dynamic actual,
+    ObjectFilterRule rule,
+    ObjectHierarchyDescendantMatcher? hierarchyDescendantMatcher,
+  ) {
+    if (hierarchyDescendantMatcher == null) return false;
+    if (rule.operator != ObjectFilterOperator.containsAny &&
+        rule.operator != ObjectFilterOperator.containsAll) {
+      return false;
+    }
+
+    final actualIds = _asObjectIds(actual);
+    final expectedIds = _asObjectIds(rule.value);
+    if (expectedIds.isEmpty) return false;
+
+    bool isInBranch(int actualId, int expectedId) =>
+        actualId == expectedId ||
+        hierarchyDescendantMatcher(actualId, expectedId);
+
+    bool isStrictlyBelow(int actualId, int expectedId) =>
+        actualId != expectedId &&
+        hierarchyDescendantMatcher(actualId, expectedId);
+
+    switch (rule.hierarchyMatchMode) {
+      case ObjectHierarchyMatchMode.exact:
+        return false;
+      case ObjectHierarchyMatchMode.isOrBelow:
+        return _matchesHierarchyBranches(
+          actualIds,
+          expectedIds,
+          rule.operator,
+          isInBranch,
+        );
+      case ObjectHierarchyMatchMode.belowOnly:
+        return _matchesHierarchyBranches(
+          actualIds,
+          expectedIds,
+          rule.operator,
+          isStrictlyBelow,
+        );
+      case ObjectHierarchyMatchMode.excludeBranch:
+        return !expectedIds.any(
+          (expectedId) =>
+              actualIds.any((actualId) => isInBranch(actualId, expectedId)),
+        );
+    }
+  }
+
+  bool _matchesHierarchyBranches(
+    List<int> actualIds,
+    List<int> expectedIds,
+    ObjectFilterOperator operator,
+    bool Function(int actualId, int expectedId) matchesBranch,
+  ) {
+    if (actualIds.isEmpty) return false;
+    if (operator == ObjectFilterOperator.containsAll) {
+      return expectedIds.every(
+        (expectedId) =>
+            actualIds.any((actualId) => matchesBranch(actualId, expectedId)),
+      );
+    }
+    return expectedIds.any(
+      (expectedId) =>
+          actualIds.any((actualId) => matchesBranch(actualId, expectedId)),
+    );
   }
 
   bool _equals(dynamic actual, dynamic expected) {
@@ -119,7 +231,8 @@ class ObjectQueryEngine {
     final expectedValues = _asComparableList(expected);
     if (actualValues.isEmpty || expectedValues.isEmpty) return false;
     return expectedValues.any(
-      (expectedItem) => actualValues.any((actualItem) => _equals(actualItem, expectedItem)),
+      (expectedItem) =>
+          actualValues.any((actualItem) => _equals(actualItem, expectedItem)),
     );
   }
 
@@ -128,7 +241,8 @@ class ObjectQueryEngine {
     final expectedValues = _asComparableList(expected);
     if (expectedValues.isEmpty) return true;
     return expectedValues.every(
-      (expectedItem) => actualValues.any((actualItem) => _equals(actualItem, expectedItem)),
+      (expectedItem) =>
+          actualValues.any((actualItem) => _equals(actualItem, expectedItem)),
     );
   }
 
@@ -178,4 +292,10 @@ class ObjectQueryEngine {
     }
     return <dynamic>[value];
   }
+
+  List<int> _asObjectIds(dynamic value) =>
+      _asComparableList(value)
+          .map((item) => item is int ? item : int.tryParse('$item'))
+          .whereType<int>()
+          .toList(growable: false);
 }
