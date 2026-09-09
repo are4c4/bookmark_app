@@ -1,6 +1,6 @@
 # AI Progress — Relations & Data Integrity Lane
 
-> Durable Lane B handoff. Before implementation read the focused Issue, `docs/product_architecture.md`, `AGENTS.md`, `docs/AI_PROGRESS.md`, latest `main`, live PR ownership and current CI. Preserve the canonical Relation subsystem; historical implementation detail remains in git/Issue/PR history.
+> Durable Lane B handoff. Before implementation read the focused Issue, `docs/product_architecture.md`, `AGENTS.md`, `docs/AI_PROGRESS.md`, latest `main`, live PR ownership and current CI. Preserve the canonical Relation subsystem; transient PR/CI/main snapshots belong to live GitHub rather than this file.
 
 ## Lane goal
 Own cross-Object correctness and fail-closed data integrity: canonical Relation mutation/read/index/backlink/audit/reconcile, integrity-sensitive schema evolution, deletion/reference invariants, Tag hierarchy correctness, and Relation-producing workflow atomicity.
@@ -12,83 +12,75 @@ Own cross-Object correctness and fail-closed data integrity: canonical Relation 
 - `RelationIntegrityService` is diagnostic/read-only; deterministic index-only reconciliation is separate from user-authored serialized value repair.
 - Relation-safe Object deletion detaches surviving sources through canonical APIs.
 - Missing/wrong-type targets, duplicates, cardinality conflicts, stale index/order/position metadata and ambiguous corruption fail closed.
-- No parallel domain edge store, Tag tree store, or ad-hoc serialized-id writer.
+- No parallel domain edge store, Tag tree store, ancestor materialization, or ad-hoc serialized-id writer.
 
 ## Object-first architecture implications
-- `Bookmark` is not a final ObjectType. Legacy Bookmark relationships must converge onto canonical Weblink or another explicitly chosen generic Object target without guessing/merging conflicting user data.
+- `Bookmark` is compatibility/migration input, not a final ObjectType. Retained Bookmark relationships converge onto canonical Weblink or another explicitly chosen generic Object target without guessing or silently merging conflicting state.
 - Person roles/groups must converge onto generic Relation/Database/Tag semantics rather than a permanent People-specific relationship store.
-- Tag hierarchy is generic Object/Relation persistence: `Tag --Parent--> Tag`; only direct tags are stored on ordinary Objects, ancestors are derived.
+- Tag hierarchy is generic Object/Relation persistence: `Tag --Parent--> Tag`; only direct Tags are stored on ordinary Objects and ancestors are derived.
 - Roles such as Author/Member/Designer are Relation semantics, not extra ObjectTypes.
 
-## Active focused issues
+## Integrated B contracts
 
-### #1052 — Tag hierarchy integrity
-Primary Tag-hierarchy correctness slice. Active implementation: PR #1095 on `feature/tag-hierarchy-integrity-1052`.
+### Tag hierarchy integrity and strict descendant reader — #1052 / #1105 completed
+- Tag `Parent` is a canonical single Relation targeting Tag; self-parenting, indirect cycles, wrong targets, malformed state, cardinality violations and serialized/index drift fail closed.
+- TagGroup is a generic ObjectType and Tag `Group` is a canonical single Relation targeting TagGroup; no second hierarchy store exists.
+- Legacy Tag/TagGroup compatibility sync is preservation-safe: canonical-only Parent/Group state is not silently overwritten and canonical TagGroup Objects are not deleted merely because a legacy row is absent.
+- `TagHierarchyIntegrityService.loadSnapshot()` reads strict canonical Parent state transactionally and `TagHierarchySnapshot.isStrictDescendant()` derives hierarchy in memory without persisting ancestors or a closure cache.
+- C/#1053 consumes this B-owned canonical reader for hierarchy-aware query/UX rather than reading legacy `tags.parentTagId`.
 
-Implemented on the active branch:
-- canonical Tag -> Parent(Tag) relation with cardinality 0..1;
-- strict mutation preflight rejects malformed values, missing/wrong-type targets, cardinality violations and normalized-edge drift before mutation;
-- self-parenting and indirect cycles fail before partial mutation;
-- TagGroup is a generic ObjectType and Tag -> Group(TagGroup) is a canonical single Relation, without a second hierarchy store;
-- legacy Tag/TagGroup projection is preservation-safe: canonical TagGroup Objects are not deleted merely because legacy rows disappear, canonical-only Parent/Group edits are not silently overwritten, one-sided legacy changes can reconcile, and ambiguous independent edits fail closed;
-- `TagHierarchyIntegrityService.loadSnapshot()` exposes a transactionally consistent read-only snapshot from canonical Parent Relations only. `TagHierarchySnapshot.isStrictDescendant()` derives ancestors/descendants in memory for C/#1053 and stores no ancestor list or closure cache;
-- snapshot loading applies strict Relation value/index/target/cardinality validation to every Tag and rejects an already-persisted cycle rather than hiding corruption;
-- direct Object -> Tag assignments remain independent of derived ancestors.
+### Relation-target Weblink quick-create — #1103 completed
+- Relation Weblink quick-create establishes identity through the canonical `CanonicalWeblinkCaptureService` boundary.
+- Equivalent normalized URLs reuse one Weblink; ambiguous canonical URL collisions fail closed before Relation mutation or ambiguous candidate return.
+- Optional enrichment remains fail-soft after identity establishment, and the created/reused Object is revalidated against the configured Relation target ObjectType before selection.
 
-Validation evidence on runtime head `4ea94151e5d5de1d2f0c76a48c932a4a9cdf16d5`:
-- all four Flutter Test shards and `test-health` are green;
-- required Format/Analyze are currently prevented from starting by repository CI Issue #1106 (stale original PR base SHA absent from the shallow checkout), not by a B test failure;
-- do not recreate #1095 merely to bypass #1106 unless repository coordination explicitly changes; rerun authoritative Format/Analyze after the G-owned guard fix lands.
+### Bookmark direct Tags -> canonical Weblink Tags — #1118 completed
+- Weblink `Tags` is the canonical many Relation destination for retained direct saved-URL Tag assignments.
+- Bookmark `Weblink`/`Tags` and Weblink `Tags` are read through strict Relation validation; multiple Bookmarks converging on one Weblink must expose the same ordered direct Tag set or fail closed.
+- `BookmarkWeblinkTagSourceSnapshot` captures the pre-Core compatibility state so reconciliation is preservation-safe: legacy-only changes can advance canonical Weblink Tags, canonical-only edits including explicit clear are preserved, and independent edits on both sides fail closed.
+- Existing-workspace bootstrap is explicit and retry/restart safe; new/retargeted sources cannot overwrite a different non-empty canonical target.
+- Only direct Tags are copied; Tag ancestors remain derived from canonical Parent Relations.
+- Production `ObjectSyncService` composes convergence after Bookmark -> Weblink identity refresh and reports only actually mutated Weblink ids through the existing `ObjectSyncImpact` path. No Bookmark-specific Search hook or alternate Relation store exists.
+- Legacy Bookmark rows and mirrored Bookmark Relations remain preserved for compatibility until later parity/caller-zero/destructive-retirement work proves them removable.
 
-No descendant-filter UI/query implementation here; C/#1053 owns query semantics and presentation and can consume the snapshot matcher after #1052 integrates.
+## Active B roadmap
 
-### #1042 — Bookmark retirement relations
-Audit legacy Bookmark -> Weblink, Images/Cover Image, Tags and Person/role relationships and define the canonical target for each retained relationship. Multiple legacy Bookmarks collapsing onto one normalized Weblink must never silently merge conflicting Relation state.
+### #1042 — Bookmark retirement relations umbrella
+Retained saved-URL relations must end on canonical Weblink/generic Object targets. Direct Tags are complete. The next focused slice is #1154 for Images/Cover Image. Person/role semantics are coordinated with #1045 after the Weblink-side retained relations are complete.
 
-Current dependency: relation convergence needs the D/#1054 canonical Weblink identity boundary and A/#1041 Bookmark -> canonical Weblink reconciliation semantics before B can safely choose/rewire canonical Relation sources in collision cases.
+### #1154 — Bookmark Images/Cover -> Weblink media Relations
+Next safe focused B implementation slice.
+- Source: strict mirrored Bookmark `Weblink`, ordered `Images`, and single `Cover Image` Relations.
+- Canonical destination: Weblink `Related images` (many) and `Representative image` (single), both targeting canonical Image Objects through the established Weblink/Image schema.
+- Capture Bookmark media before Core compatibility refresh, then reconcile after Bookmark -> Weblink identity refresh using the ordered media tuple `(Related images, Representative image?)`.
+- A Bookmark cover must remain included in the migrated Related set, but a canonical-only/preview-derived Weblink Representative image is valid without being auto-added to Related images.
+- Equivalent many-Bookmark -> one-Weblink state converges once; conflicting sources, target drift/corruption, or independently changed source+target state fail closed with no partial mutation.
+- Canonical-only Weblink media edits remain authoritative when the compatibility source is unchanged; legacy-only compatible changes advance only when the previous equivalent checkpoint makes authority unambiguous.
+- Compose one focused `ObjectSyncService` hook and report actually mutated Weblink ids through existing `ObjectSyncImpact`; do not change remote preview behavior, Image byte ownership, D/F media semantics, or presentation.
+- No schemaVersion/destructive migration and no deletion of Bookmark/Photo compatibility data.
 
 ### #1045 — Person groups/roles
-Map Person groups and Bookmark-era Person roles onto generic Relation/Database/Tag contracts. Preserve visible role/cardinality/order semantics and Profile Image Relation. No dedicated People UI replacement here.
-
-Current dependency: Bookmark-era role convergence depends on #1042. The existing `PersonObjectBridge` still declares legacy People rows authoritative while A/#1044 owns the Person authority transition; do not create a second Person grouping authority or prematurely choose a lossy Tag/Database projection while that identity contract remains unsettled.
-
-## Integrated foundation that remains authoritative
-The existing canonical Relation subsystem already provides:
-- strict persisted Relation-value inspection;
-- target ObjectType/cardinality validation;
-- stored-value/index count/order/position consistency checks;
-- canonical backlinks and graph/read projections;
-- Relation-safe Object deletion/detach;
-- bidirectional Relation lifecycle;
-- deterministic index-only reconcile paths;
-- transaction/rollback-safe Relation-producing workflows;
-- strict mutation preflight used by Bookmark Image and Person Profile Image compatibility paths.
-
-Older statements that Lane B is idle after #895/#947 are obsolete because #1042/#1045/#1052 are now open focused B issues.
+After #1042's Weblink-side retained Relation slices are complete, map Bookmark-era Person roles and legacy Person grouping onto explicit generic Relation/Database/Tag contracts. Preserve Profile Image Relation, role/cardinality/order semantics and fail closed on ambiguous legacy/canonical state. Coordinate with A/#1044 Person authority and do not create a second Person grouping authority.
 
 ## Cross-lane boundaries
-- **A:** Object/ObjectType identity/lifecycle, Bookmark→Weblink generic identity contract, Person identity authority, Body.
+- **A:** Object/ObjectType identity/lifecycle, Bookmark -> Weblink reconciliation authority, Person identity authority, Body.
 - **C:** Database/View/schema presentation, Tag hierarchy filter/picker UX, Stage1/People generic UI replacement.
-- **D:** Weblink/Image/File native identity/media behavior and direct URL capture.
-- **E:** Search projection; Search consumes integrity-filtered Relation labels/impact and must not bypass B contracts.
-- **F:** Vault/storage preservation.
-- **G:** caller-zero legacy code deletion only after B and owning product lanes prove parity; repository CI/developer-workflow guard fixes such as #1106 remain G-owned.
+- **D:** Weblink/Image/File native identity/media behavior, canonical URL capture and Weblink/Image schema/native capabilities. B consumes these boundaries but does not redesign them.
+- **E:** Search projection consumes canonical Object/Relation impact and must not create Bookmark-specific long-term indexing.
+- **F:** Vault/storage/managed-byte preservation and destructive-retirement evidence.
+- **G:** caller-zero legacy code deletion only after B and owning product lanes prove parity; CI/developer-workflow health remains G-owned.
 
 ## Hotspot / migration rule
-Prefer Relation services/domain/tests and avoid broad presentation hotspots. Any schema/migration-changing slice is single-writer and must be coordinated explicitly through the repository hard gate. Do not edit Stage1/People/GenericDatabasePage merely because their workflows produce Relations unless the focused B acceptance requires a patch-sized integrity hook.
+Prefer Relation services/domain/tests and avoid broad presentation hotspots. `ObjectSyncService` may receive a patch-sized composition hook when a focused B acceptance explicitly requires production reconciliation. Any schema/migration-changing slice is single-writer and must use the repository hard gate. Do not edit Stage1/People/GenericDatabasePage merely because those workflows produce Relations.
 
 ## Validation
-Analyze + relevant Relation regressions + full Flutter Test are part of integrity acceptance. Corruption tests should prove no partial mutation and no opportunistic repair.
+Analyze + relevant Relation regressions + full Flutter Test + required `merge-gate` are part of integrity acceptance. Corruption tests should prove no partial mutation and no opportunistic repair. GitHub CI is authoritative when local Flutter execution is unavailable.
 
 ## Resume sequence
-1. re-read live #1052/#1042/#1045, #1106 while relevant, current PR ownership and latest `main`;
-2. finish #1052 authoritative Format/Analyze after the G-owned #1106 guard defect is resolved, then merge only if the required aggregate gate is green;
-3. after #1052 integration, hand C/#1053 the canonical `TagHierarchySnapshot.isStrictDescendant` boundary rather than legacy Tag hierarchy state;
-4. refresh live B work and choose the next focused Issue; D/#1054 may also hand B the remaining Relation-target Weblink quick-create caller after its canonical capture boundary integrates;
-5. implement the smallest integrity kernel below presentation and add healthy + corrupt/rollback/delete/backlink regressions;
-6. remain idle rather than inventing Relation abstractions if all focused B work becomes dependency-blocked.
+1. Re-read latest `main`, active B Issue, open PR ownership, shared hotspots and current CI.
+2. Implement #1154 from latest main using the established three-way Bookmark -> Weblink convergence pattern; do not open a parallel hook while another B PR owns `ObjectSyncService`.
+3. After #1154 integrates, re-audit #1042 acceptance and close/refine it only if every retained saved-URL Relation has an explicit canonical destination with integrity coverage.
+4. Continue #1045 when its Person authority dependency is actionable; otherwise select another evidence-backed B integrity slice or stop with the precise shared dependency/idle reason.
+5. Do not invent Relation abstractions, alternate stores, closure caches, or speculative migrations merely to keep the lane active.
 
-This sequence is not terminal. After any slice/PR/merge, apply the shared **Lane continuation and resume/stop contract** in `AGENTS.md` before ending the run. Lane B must re-check unfinished acceptance, same-umbrella follow-ups, live B focused Issues and newly-unblocked integrity work before declaring idle. If no safe B work remains, record `Stop reason: idle-no-work — <live evidence>` or the more precise shared stop category in the durable handoff; dependency-blocked work is `Stop reason: dependency — <blocking Issue/PR/evidence>`, not generic idle.
-
-## Current stop state
-Stop reason: dependency — #1052 runtime/full Flutter Test is green but required Format/Analyze/merge-gate cannot execute because G-owned #1106 blocks stale-base PR #1095 before Flutter setup. Final live audit found #1042 dependent on open D/#1054 PR #1108 plus A/#1041 reconciliation semantics, and #1045 role work dependent on #1042 while its grouping authority should not precede A/#1044 Person authority convergence. Resume immediately by rechecking #1106; once fixed, rerun #1095 required validation and merge if green, then refresh #1042/#1045 and D's Relation-target quick-create handoff.
+This sequence is not terminal. After every slice/PR/merge, apply the shared Lane continuation and resume/stop contract in `AGENTS.md` before ending the run.
