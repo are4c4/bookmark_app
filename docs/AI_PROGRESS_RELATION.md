@@ -43,21 +43,20 @@ Own cross-Object correctness and fail-closed data integrity: canonical Relation 
 - Production `ObjectSyncService` composes convergence after Bookmark -> Weblink identity refresh and reports only actually mutated Weblink ids through the existing `ObjectSyncImpact` path. No Bookmark-specific Search hook or alternate Relation store exists.
 - Legacy Bookmark rows and mirrored Bookmark Relations remain preserved for compatibility until later parity/caller-zero/destructive-retirement work proves them removable.
 
+### Bookmark Images/Cover -> canonical Weblink media Relations — #1154 completed
+- Mirrored Bookmark `Weblink`, ordered `Images`, and single `Cover Image` are compatibility sources; canonical destinations are Weblink `Related images` and `Representative image`, both targeting canonical Image Objects.
+- Source and target media Relations are read through strict persisted-value/index/target/cardinality validation. A Bookmark cover must remain included in its ordered source Images; malformed, wrong-type, cardinality, index/order/position drift and ambiguous state fail closed before partial target mutation.
+- `BookmarkWeblinkMediaSourceSnapshot` captures the pre-Core compatibility source so reconciliation is preservation-safe: legacy-only compatible changes may advance from a previously equivalent checkpoint, canonical-only target edits are preserved, and independent source+target edits fail closed.
+- A canonical/preview-derived Weblink Representative image is valid independently of Related images and is never auto-added merely to normalize Bookmark-era semantics.
+- Multiple Bookmarks resolving to one Weblink must expose equivalent ordered Images and equivalent Cover before convergence; conflicting sources are not unioned and no cover is guessed.
+- Target writes stay inside the canonical Relation subsystem through `RelationMutationService`, are applied in one workspace transaction, and are strictly reloaded after mutation so serialized/index/backlink state remains canonical.
+- Production `ObjectSyncService` captures media before Core compatibility refresh, reconciles after Bookmark -> Weblink identity refresh, and reports only actually mutated Weblink ids through the existing `ObjectSyncImpact` path.
+- Legacy Bookmark/Photo compatibility rows and mirrored Bookmark Relations remain preserved; this contract adds no schemaVersion, destructive migration, preview/download behavior, Image byte authority, or alternate media/Relation store.
+
 ## Active B roadmap
 
 ### #1042 — Bookmark retirement relations umbrella
-Retained saved-URL relations must end on canonical Weblink/generic Object targets. Direct Tags are complete. The next focused slice is #1154 for Images/Cover Image. Person/role semantics are coordinated with #1045 after the Weblink-side retained relations are complete.
-
-### #1154 — Bookmark Images/Cover -> Weblink media Relations
-Next safe focused B implementation slice.
-- Source: strict mirrored Bookmark `Weblink`, ordered `Images`, and single `Cover Image` Relations.
-- Canonical destination: Weblink `Related images` (many) and `Representative image` (single), both targeting canonical Image Objects through the established Weblink/Image schema.
-- Capture Bookmark media before Core compatibility refresh, then reconcile after Bookmark -> Weblink identity refresh using the ordered media tuple `(Related images, Representative image?)`.
-- A Bookmark cover must remain included in the migrated Related set, but a canonical-only/preview-derived Weblink Representative image is valid without being auto-added to Related images.
-- Equivalent many-Bookmark -> one-Weblink state converges once; conflicting sources, target drift/corruption, or independently changed source+target state fail closed with no partial mutation.
-- Canonical-only Weblink media edits remain authoritative when the compatibility source is unchanged; legacy-only compatible changes advance only when the previous equivalent checkpoint makes authority unambiguous.
-- Compose one focused `ObjectSyncService` hook and report actually mutated Weblink ids through existing `ObjectSyncImpact`; do not change remote preview behavior, Image byte ownership, D/F media semantics, or presentation.
-- No schemaVersion/destructive migration and no deletion of Bookmark/Photo compatibility data.
+Retained saved-URL relations must end on canonical Weblink/generic Object targets. Direct Tags and Images/Cover convergence are complete. Re-audit the umbrella against current main before closing/refining it; any remaining Bookmark-era Person/role semantics must have an explicit generic canonical destination and integrity contract rather than being silently folded into Weblink convergence.
 
 ### #1045 — Person groups/roles
 After #1042's Weblink-side retained Relation slices are complete, map Bookmark-era Person roles and legacy Person grouping onto explicit generic Relation/Database/Tag contracts. Preserve Profile Image Relation, role/cardinality/order semantics and fail closed on ambiguous legacy/canonical state. Coordinate with A/#1044 Person authority and do not create a second Person grouping authority.
@@ -77,10 +76,10 @@ Prefer Relation services/domain/tests and avoid broad presentation hotspots. `Ob
 Analyze + relevant Relation regressions + full Flutter Test + required `merge-gate` are part of integrity acceptance. Corruption tests should prove no partial mutation and no opportunistic repair. GitHub CI is authoritative when local Flutter execution is unavailable.
 
 ## Resume sequence
-1. Re-read latest `main`, active B Issue, open PR ownership, shared hotspots and current CI.
-2. Implement #1154 from latest main using the established three-way Bookmark -> Weblink convergence pattern; do not open a parallel hook while another B PR owns `ObjectSyncService`.
-3. After #1154 integrates, re-audit #1042 acceptance and close/refine it only if every retained saved-URL Relation has an explicit canonical destination with integrity coverage.
-4. Continue #1045 when its Person authority dependency is actionable; otherwise select another evidence-backed B integrity slice or stop with the precise shared dependency/idle reason.
+1. Re-read latest `main`, open B Issues, open PR ownership, shared hotspots and current CI.
+2. Re-audit #1042 against the integrated direct-Tag and media-convergence contracts; close/refine it only if every retained saved-URL Relation has an explicit canonical destination with integrity coverage.
+3. Continue #1045 only when A/#1044 Person authority is sufficiently integrated for one focused non-overlapping role/group Relation slice; preserve existing Person/Profile Image and legacy compatibility state.
+4. If #1042/#1045 are blocked, select another live evidence-backed B integrity slice through the `AGENTS.md` next-work discovery order or stop with the precise dependency/conflict/idle reason.
 5. Do not invent Relation abstractions, alternate stores, closure caches, or speculative migrations merely to keep the lane active.
 
 This sequence is not terminal. After every slice/PR/merge, apply the shared Lane continuation and resume/stop contract in `AGENTS.md` before ending the run.
