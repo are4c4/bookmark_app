@@ -96,6 +96,11 @@ class MigrationMergeGateTest(unittest.TestCase):
         with mock.patch.object(gate.subprocess, "run", return_value=rev_parse):
             self.assertIsNone(gate._local_pull_merge_diff_refs("synthetic-merge"))
 
+    def test_merge_checkout_helper_rejects_missing_expected_merge_sha(self) -> None:
+        with mock.patch.object(gate.subprocess, "run") as run:
+            self.assertIsNone(gate._local_pull_merge_diff_refs(""))
+            run.assert_not_called()
+
     def test_merge_checkout_helper_requires_merge_commit_parents(self) -> None:
         results = [
             mock.Mock(returncode=0, stdout="synthetic-merge\n"),
