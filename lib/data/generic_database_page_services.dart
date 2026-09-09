@@ -256,6 +256,10 @@ class GenericDatabasePageServices {
       fileImport: fileImport,
     );
     final computedStore = ObjectComputedValueStore(objectStore);
+    final galleryCoverSources = DatabaseViewGalleryCoverSourceService(
+      objectStore: objectStore,
+      systemObjects: systemObjects,
+    );
 
     return GenericDatabasePageServices(
       genericStore: genericStore,
@@ -282,10 +286,7 @@ class GenericDatabasePageServices {
         collectionStore: collectionStore,
         objectStore: objectStore,
       ),
-      galleryCoverSources: DatabaseViewGalleryCoverSourceService(
-        objectStore: objectStore,
-        systemObjects: systemObjects,
-      ),
+      galleryCoverSources: galleryCoverSources,
       openPresentation: ObjectOpenPresentationService(
         viewOpenModes: DatabaseViewOpenModeService(viewStore),
         objectTypeDefaults: defaultsStore,
@@ -295,6 +296,8 @@ class GenericDatabasePageServices {
         genericStore: genericStore,
         computedStore: computedStore,
         createModeForObjectType: creator.createModeForObjectType,
+        galleryCoverSourcesForObjectType: (objectTypeId) =>
+            galleryCoverSources.discover(objectTypeId: objectTypeId),
       ),
       computedStore: computedStore,
       managementStore: ObjectTypeManagementStore(

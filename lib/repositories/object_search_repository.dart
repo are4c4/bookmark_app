@@ -51,6 +51,16 @@ class ObjectSearchRepository {
           objectStore: ObjectStore(genericStore),
         );
 
+  static const List<String> _searchTextColumns = <String>[
+    'title',
+    'aliases',
+    'properties',
+    'body',
+    'relation_labels',
+    'weblink_metadata',
+    'derived_text',
+  ];
+
   final GenericDatabaseStore _genericStore;
   final AppDatabase _database;
   final ObjectAliasStore _aliasStore;
@@ -86,15 +96,33 @@ class ObjectSearchRepository {
     _initialized = true;
   }
 
-  String _buildPrefixQuery(String value) {
-    final terms = value
-        .trim()
-        .split(RegExp(r'\s+'))
-        .map((term) => term.replaceAll('"', '').trim())
-        .where((term) => term.isNotEmpty)
-        .toList(growable: false);
-    if (terms.isEmpty) return '';
-    return terms.map((term) => '"$term"*').join(' AND ');
+  List<String> _queryTerms(String value) => value
+      .trim()
+      .split(RegExp(r'\s+'))
+      .map((term) => term.replaceAll('"', '').trim())
+      .where((term) => term.isNotEmpty)
+      .toList(growable: false);
+
+  String _buildPrefixQueryFromTerms(Iterable<String> terms) =>
+      terms.map((term) => '"$term"*').join(' AND ');
+
+  String _buildPrefixQuery(String value) =>
+      _buildPrefixQueryFromTerms(_queryTerms(value));
+
+  bool _containsCjk(String value) {
+    for (final rune in value.runes) {
+      if (rune == 0x3005 ||
+          (rune >= 0x3040 && rune <= 0x30ff) ||
+          (rune >= 0x31f0 && rune <= 0x31ff) ||
+          (rune >= 0x3400 && rune <= 0x4dbf) ||
+          (rune >= 0x4e00 && rune <= 0x9fff) ||
+          (rune >= 0xf900 && rune <= 0xfaff) ||
+          (rune >= 0xff65 && rune <= 0xff9f) ||
+          (rune >= 0x20000 && rune <= 0x2fa1f)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   Future<String> _readBodySearchText(int objectId) async {
@@ -319,16 +347,20 @@ class ObjectSearchRepository {
     });
   }
 
-  Future<List<ObjectSearchHit>> search({
-    required int workspaceId,
-    required String rawQuery,
-    int? objectTypeId,
-    int limit = 100,
-  }) async {
-    await initialize();
-    final query = _buildPrefixQuery(rawQuery);
-    if (query.isEmpty) return const <ObjectSearchHit>[];
+  ObjectSearchHit _hitFromRow(QueryRow row) => ObjectSearchHit(
+        objectId: row.read<int>('object_id'),
+        objectTypeId: row.read<int>('object_type_id'),
+        workspaceId: row.read<int>('workspace_id'),
+        rank: row.read<double>('rank'),
+        snippet: row.read<String>('snippet'),
+      );
 
+  Future<List<ObjectSearchHit>> _searchPrefix({
+    required int workspaceId,
+    required String query,
+    required int limit,
+    int? objectTypeId,
+  }) async {
     final typeClause = objectTypeId == null
         ? ''
         : 'AND CAST(object_type_id AS INTEGER) = ?';
@@ -338,8 +370,7 @@ class ObjectSearchRepository {
       if (objectTypeId != null) Variable<int>(objectTypeId),
       Variable<int>(limit),
     ];
-    final rows = await _database.customSelect(
-      '''
+    final rows = await _database.customSelect('''
       SELECT
         CAST(object_id AS INTEGER) AS object_id,
         CAST(object_type_id AS INTEGER) AS object_type_id,
@@ -352,20 +383,98 @@ class ObjectSearchRepository {
         $typeClause
       ORDER BY rank, object_id
       LIMIT ?
-      ''',
-      variables: variables,
-    ).get();
+      ''', variables: variables).get();
+    return rows.map(_hitFromRow).toList(growable: false);
+  }
 
-    return rows
-        .map(
-          (row) => ObjectSearchHit(
-            objectId: row.read<int>('object_id'),
-            objectTypeId: row.read<int>('object_type_id'),
-            workspaceId: row.read<int>('workspace_id'),
-            rank: row.read<double>('rank'),
-            snippet: row.read<String>('snippet'),
-          ),
-        )
-        .toList(growable: false);
+  Future<List<ObjectSearchHit>> _searchCjkSubstringFallback({
+    required int workspaceId,
+    required List<String> cjkTerms,
+    required List<String> prefixTerms,
+    required int limit,
+    int? objectTypeId,
+  }) async {
+    final conditions = <String>['CAST(workspace_id AS INTEGER) = ?'];
+    final variables = <Variable<Object>>[Variable<int>(workspaceId)];
+    final prefixQuery = _buildPrefixQueryFromTerms(prefixTerms);
+    if (prefixQuery.isNotEmpty) {
+      conditions.add('object_search_fts MATCH ?');
+      variables.add(Variable<String>(prefixQuery));
+    }
+    if (objectTypeId != null) {
+      conditions.add('CAST(object_type_id AS INTEGER) = ?');
+      variables.add(Variable<int>(objectTypeId));
+    }
+    for (final term in cjkTerms) {
+      conditions.add(
+        '(${_searchTextColumns.map((column) => 'instr(lower($column), lower(?)) > 0').join(' OR ')})',
+      );
+      for (var index = 0; index < _searchTextColumns.length; index += 1) {
+        variables.add(Variable<String>(term));
+      }
+    }
+    variables.add(Variable<int>(limit));
+
+    final rankExpression = prefixQuery.isEmpty
+        ? '0.0'
+        : 'bm25(object_search_fts)';
+    final snippetExpression = prefixQuery.isEmpty
+        ? "''"
+        : "snippet(object_search_fts, -1, '‹', '›', ' … ', 20)";
+    final rows = await _database.customSelect('''
+      SELECT
+        CAST(object_id AS INTEGER) AS object_id,
+        CAST(object_type_id AS INTEGER) AS object_type_id,
+        CAST(workspace_id AS INTEGER) AS workspace_id,
+        $rankExpression AS rank,
+        $snippetExpression AS snippet
+      FROM object_search_fts
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY rank, object_id
+      LIMIT ?
+      ''', variables: variables).get();
+    return rows.map(_hitFromRow).toList(growable: false);
+  }
+
+  Future<List<ObjectSearchHit>> search({
+    required int workspaceId,
+    required String rawQuery,
+    int? objectTypeId,
+    int limit = 100,
+  }) async {
+    await initialize();
+    final terms = _queryTerms(rawQuery);
+    if (terms.isEmpty) return const <ObjectSearchHit>[];
+
+    final query = _buildPrefixQuery(rawQuery);
+    final prefixHits = await _searchPrefix(
+      workspaceId: workspaceId,
+      query: query,
+      objectTypeId: objectTypeId,
+      limit: limit,
+    );
+    final cjkTerms = terms.where(_containsCjk).toList(growable: false);
+    if (cjkTerms.isEmpty || prefixHits.length >= limit) return prefixHits;
+
+    // unicode61 keeps ordinary Japanese text without whitespace in one token.
+    // Prefix MATCH therefore misses a query that starts inside that token (for
+    // example `漱石` in `夏目漱石`). Scan the same canonical projection only for
+    // CJK-containing terms, while keeping non-CJK terms on the existing prefix
+    // FTS path. This adds no second index and does not broaden Latin infix search.
+    final fallbackHits = await _searchCjkSubstringFallback(
+      workspaceId: workspaceId,
+      cjkTerms: cjkTerms,
+      prefixTerms: terms.where((term) => !_containsCjk(term)).toList(),
+      objectTypeId: objectTypeId,
+      limit: limit,
+    );
+    final seenObjectIds = prefixHits.map((hit) => hit.objectId).toSet();
+    final merged = <ObjectSearchHit>[...prefixHits];
+    for (final hit in fallbackHits) {
+      if (!seenObjectIds.add(hit.objectId)) continue;
+      merged.add(hit);
+      if (merged.length >= limit) break;
+    }
+    return List<ObjectSearchHit>.unmodifiable(merged);
   }
 }
