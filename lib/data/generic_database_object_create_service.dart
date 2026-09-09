@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import '../domain/managed_file_ownership.dart';
 import '../domain/object_group.dart';
 import '../domain/object_model.dart';
+import 'canonical_weblink_capture_service.dart';
 import 'daily_note_service.dart';
 import 'file_object_service.dart';
 import 'generic_database_collection_page_data.dart';
@@ -129,11 +130,9 @@ class GenericDatabaseObjectCreateService {
     if (service == null) {
       throw StateError('Weblink URL creation requires WeblinkObjectService.');
     }
-    final object = await service.findOrCreate(
-      workspaceId: page.objectType.workspaceId,
-      url: url,
-      title: title,
-    );
+    final object = await CanonicalWeblinkCaptureService(
+      weblinks: service,
+    ).capture(workspaceId: page.objectType.workspaceId, url: url, title: title);
     final enrich = weblinkCreateEnricher;
     if (enrich != null) {
       try {

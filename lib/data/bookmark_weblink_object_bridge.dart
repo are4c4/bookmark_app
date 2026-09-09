@@ -3,6 +3,7 @@ import 'package:drift/drift.dart';
 import '../domain/object_model.dart';
 import 'app_database.dart';
 import 'bidirectional_relation_store.dart';
+import 'canonical_weblink_capture_service.dart';
 import 'generic_database_store.dart';
 import 'object_store.dart';
 import 'object_type_defaults_store.dart';
@@ -57,6 +58,8 @@ class BookmarkWeblinkObjectBridge {
         systemObjects: systemObjectStore,
         defaultsStore: ObjectTypeDefaultsStore(_genericStore),
       );
+  late final CanonicalWeblinkCaptureService _capture =
+      CanonicalWeblinkCaptureService(weblinks: _weblinks);
 
   RelationMutationService get _relationMutations => RelationMutationService(
         objectStore: objectStore,
@@ -107,7 +110,7 @@ class BookmarkWeblinkObjectBridge {
       final rawUrl = row.read<String>('url');
       int? targetId;
       try {
-        final weblink = await _weblinks.findOrCreate(
+        final weblink = await _capture.capture(
           workspaceId: workspaceId,
           url: rawUrl,
         );

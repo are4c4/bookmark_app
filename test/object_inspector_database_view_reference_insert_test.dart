@@ -32,7 +32,13 @@ void main() {
       );
       await _pumpInspector(tester, fixture);
 
-      final referenceAction = find.byKey(
+      expect(
+        find.byKey(const ValueKey('body-block-insert-reference-after-a')),
+        findsNothing,
+      );
+      await tester.tap(find.byKey(const ValueKey('body-text-a')));
+      await tester.pump();
+      var referenceAction = find.byKey(
         const ValueKey('body-block-insert-reference-after-a'),
       );
       await tester.tap(referenceAction);
@@ -48,6 +54,11 @@ void main() {
       await tester.pumpAndSettle();
       expect((await fixture.bodyStore.read(fixture.sourceId)).blocks, hasLength(1));
 
+      await tester.tap(find.byKey(const ValueKey('body-text-a')));
+      await tester.pump();
+      referenceAction = find.byKey(
+        const ValueKey('body-block-insert-reference-after-a'),
+      );
       await tester.tap(referenceAction);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Database / View を埋め込む'));
@@ -114,6 +125,7 @@ Future<void> _pumpInspector(WidgetTester tester, _Fixture fixture) async {
   addTearDown(tester.view.resetDevicePixelRatio);
   await tester.pumpWidget(
     MaterialApp(
+      theme: ThemeData(platform: TargetPlatform.macOS),
       home: ObjectInspectorPage(
         store: fixture.genericStore,
         objectStore: fixture.objectStore,
