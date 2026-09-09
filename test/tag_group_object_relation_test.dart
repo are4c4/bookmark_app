@@ -141,7 +141,7 @@ void main() {
       tagObject.values[schema.groupProperty.id],
     );
     expect(groupRelation.objectIds, <int>[secondGroupObjectId]);
-    var groupObject = (await objectStore.listObjects(
+    final groupObject = (await objectStore.listObjects(
       schema.tagGroupObjectType.id,
     ))
         .singleWhere((object) => object.id == firstGroupObjectId);
@@ -214,11 +214,9 @@ void main() {
     );
     expect(parentRelation.objectIds, isEmpty);
     final legacyChild = await database.customSelect(
-      'SELECT parent_tag_id FROM tags WHERE id = ?',
-      variables: [],
-      readsFrom: <ResultSetImplementation>{database.tags},
-    );
-    expect(legacyChild, isNotNull);
+      'SELECT parent_tag_id FROM tags WHERE id = $childId',
+    ).getSingle();
+    expect(legacyChild.read<int>('parent_tag_id'), rootId);
   });
 
   test('legacy TagGroup deletion cannot delete canonical TagGroup state', () async {
