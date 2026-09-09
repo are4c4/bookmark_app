@@ -70,6 +70,19 @@ The restore content-integrity follow-up is integrated with #1132's namespace con
 
 The latest implementation head before this durable handoff update was green for changed-Dart format, Analyze/guards, all four Flutter Test shards on first pass, test-health, handoff/migration/settings audits and authoritative `merge-gate`.
 
+### #1179 — Vault complete-backup destination preservation
+The complete-backup output-boundary hardening is integrated by PR #1181 (`e3e9152e5d629e080d723f5d59088ed38f34389a`). Backup is now read-only with respect to the source Vault even when the selected destination pathname crosses filesystem aliases.
+
+- The source Vault and selected destination parent are resolved before WAL checkpoint/archive output; direct/nested Vault destinations and outside-looking parent symlinks resolving into the Vault fail closed.
+- An existing destination symlink whose target resolves inside the source Vault is rejected before archive creation.
+- The validated real outside parent becomes the actual output directory, so later archive staging does not traverse an untrusted alias again.
+- ZIP bytes are written only to a freshly created staging file in that validated outside directory, never through the pre-existing selected destination entity.
+- After successful ZIP creation, only the selected directory entry is replaced. Existing regular-file hard links and symbolic links are therefore not followed for writes.
+- Supported-platform regressions prove that an outside destination hard-linked to a Vault file can be replaced without changing the source-Vault bytes, and an outside symlink to an outside target can be replaced without changing the target bytes.
+- Cancellation still returns before checkpoint/output, invalid destinations leave the source Vault unchanged, and ordinary external complete backup remains supported.
+- Existing ZIP format/restore behavior, Object/Relation/Image/File identity, schemaVersion and migrations remain unchanged.
+- The latest-main-synchronized implementation head passed changed-Dart format, Analyze/guards, all four Flutter Test shards on first pass, test-health, handoff/migration/settings audits and authoritative `merge-gate` before auto-merge.
+
 ### #1146 — explicitly owned Image bytes under `photos/...`
 The downstream Image-byte filesystem slice is integrated by PR #1159 (`2b5ae87f1b65edf67c1ca02b4ab39d78b33a1f0c`) after D/#1141 established explicit Image ownership provenance.
 
@@ -128,6 +141,6 @@ Repository tests and tools are authoritative for repository-owned behavior; use 
 
 Lane F inherits the shared **Lane continuation and resume/stop contract** in `AGENTS.md`. A real-machine requirement may legitimately produce `external-infra`, a genuine prerequisite may produce `dependency`, and no concrete work after the final live audit may produce `idle-no-work`.
 
-Final resume audit for the #1171 integration found only #1063 and #1171 as open F-primary Issues. #1063 remains an umbrella portability contract and still has no newly split focused F package-writer/filesystem slice whose logical prerequisites authorize independent implementation. No additional current-main Storage/Vault correctness defect was demonstrated in this audit.
+Final resume audit after the #1179 integration finds #1063 as the active F-primary roadmap anchor. #1179 is completed, while #56/#1039 are cross-lane umbrellas that mention F preservation responsibilities rather than focused F implementation work. #1063 still has no newly split focused F package-writer/filesystem slice whose logical prerequisites authorize independent implementation, and no additional current-main Storage/Vault correctness defect was demonstrated in this audit.
 
-Stop reason: idle-no-work after #1171 integration — resume when #1063 gains an explicit focused F filesystem/package contract with owning-lane logical prerequisites, #1064 splits a managed-byte retention/GC Issue to F, a destructive retirement requests focused preservation validation, or a concrete current-main Storage/Vault correctness defect appears.
+Stop reason: idle-no-work after #1179 integration — resume when #1063 gains an explicit focused F filesystem/package contract with owning-lane logical prerequisites, #1064 splits a managed-byte retention/GC Issue to F, a destructive retirement requests focused preservation validation, or a concrete current-main Storage/Vault correctness defect appears.
