@@ -76,3 +76,5 @@ Analyze + relevant Relation regressions + full Flutter Test are part of integrit
 4. add healthy + corrupt/rollback/delete/backlink regressions;
 5. run full validation and update this handoff with durable branch/commit/PR facts;
 6. remain idle rather than inventing Relation abstractions if all focused B work becomes dependency-blocked.
+
+This sequence is not terminal. After any slice/PR/merge, apply the shared **Lane continuation and resume/stop contract** in `AGENTS.md` before ending the run. Lane B must re-check unfinished acceptance, same-umbrella follow-ups, live B focused Issues and newly-unblocked integrity work before declaring idle. If no safe B work remains, record `Stop reason: idle-no-work — <live evidence>` or the more precise shared stop category in the durable handoff; dependency-blocked work is `Stop reason: dependency — <blocking Issue/PR/evidence>`, not generic idle.
