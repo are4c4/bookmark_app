@@ -2,6 +2,7 @@ import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/bidirectional_relation_store.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
 import 'package:bookmark_app/data/object_store.dart';
+import 'package:bookmark_app/data/person_group_store.dart';
 import 'package:bookmark_app/data/person_object_bridge.dart';
 import 'package:bookmark_app/data/person_object_deletion_service.dart';
 import 'package:bookmark_app/data/person_object_write_service.dart';
@@ -45,7 +46,6 @@ void main() {
     );
     deletion = PersonObjectDeletionService(
       database: database,
-      objectStore: objectStore,
       personBridge: bridge,
       relationMutations: relationMutations,
       compatibility: PersonObjectDeletionCompatibility(
@@ -63,8 +63,7 @@ void main() {
   test(
     'delete detaches canonical Relations and cleans legacy compatibility atomically',
     () async {
-      final personId =
-          await PersonObjectWriteService.forDatabase(database).create(
+      final personId = await PersonObjectWriteService.forDatabase(database).create(
         workspaceId: workspaceId,
         name: 'Alice',
         note: 'note',
@@ -110,13 +109,9 @@ void main() {
         'Author',
         <Person>[legacyPerson],
       );
-      final groupId = await database.into(database.personGroups).insert(
-            PersonGroupsCompanion.insert(name: 'Writers'),
-          );
-      await database.customStatement(
-        'INSERT INTO person_group_members(group_id, person_id) VALUES (?, ?)',
-        <Object>[groupId, personId],
-      );
+      final groupStore = PersonGroupStore(database);
+      final groupId = await groupStore.createGroup('Writers');
+      await groupStore.setGroupsForPerson(personId, <int>[groupId]);
       await database.customStatement(
         'INSERT INTO saved_views(name, person_filter_id) VALUES (?, ?)',
         <Object>['Person filter', personId],
@@ -148,9 +143,7 @@ void main() {
         0,
       );
       expect(
-        (await database.select(database.savedViews).get())
-            .single
-            .personFilterId,
+        (await database.select(database.savedViews).get()).single.personFilterId,
         isNull,
       );
 
@@ -170,8 +163,7 @@ void main() {
   test(
     'delete recovers a missing compatibility link before removing both identities',
     () async {
-      final personId =
-          await PersonObjectWriteService.forDatabase(database).create(
+      final personId = await PersonObjectWriteService.forDatabase(database).create(
         workspaceId: workspaceId,
         name: 'Recoverable',
       );
@@ -196,8 +188,7 @@ void main() {
   test(
     'late canonical delete failure rolls back Relation detach and legacy cleanup',
     () async {
-      final personId =
-          await PersonObjectWriteService.forDatabase(database).create(
+      final personId = await PersonObjectWriteService.forDatabase(database).create(
         workspaceId: workspaceId,
         name: 'Rollback',
       );
@@ -231,13 +222,13 @@ void main() {
       );
 
       await database.customStatement('''
-      CREATE TRIGGER fail_person_object_delete
-      BEFORE DELETE ON generic_records
-      WHEN OLD.id = $personObjectId
-      BEGIN
-        SELECT RAISE(ABORT, 'forced Person Object delete failure');
-      END
-    ''');
+        CREATE TRIGGER fail_person_object_delete
+        BEFORE DELETE ON generic_records
+        WHEN OLD.id = $personObjectId
+        BEGIN
+          SELECT RAISE(ABORT, 'forced Person Object delete failure');
+        END
+      ''');
 
       await expectLater(
         deletion.delete(workspaceId: workspaceId, personId: personId),
