@@ -61,15 +61,23 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.byKey(const ValueKey('body-block-more-a')), findsOneWidget);
+    expect(find.byKey(const ValueKey('body-block-move-down-a')), findsNothing);
+    expect(find.byKey(const ValueKey('body-block-duplicate-a')), findsNothing);
+    expect(find.byKey(const ValueKey('body-block-delete-a')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('body-block-more-a')));
+    await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('body-block-move-down-a')), findsOneWidget);
     expect(find.byKey(const ValueKey('body-block-duplicate-a')), findsOneWidget);
     expect(find.byKey(const ValueKey('body-block-delete-a')), findsOneWidget);
-
     await tester.tap(find.byKey(const ValueKey('body-block-move-down-a')));
     await tester.pumpAndSettle();
     var document = await bodyStore.read(objectId);
     expect(document.blocks.map((block) => block.id).toList(), <String>['b', 'a']);
 
+    await tester.tap(find.byKey(const ValueKey('body-block-more-a')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('body-block-duplicate-a')));
     await tester.pumpAndSettle();
     document = await bodyStore.read(objectId);
@@ -86,6 +94,8 @@ void main() {
     expect(document.blocks[aIndex + 1].type, ObjectBodyBlockType.heading);
     expect(document.blocks[aIndex + 1].attributes['level'], 1);
 
+    await tester.tap(find.byKey(const ValueKey('body-block-more-a')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('body-block-delete-a')));
     await tester.pumpAndSettle();
     document = await bodyStore.read(objectId);
