@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from plan_flutter_test_shards_test import PlanFlutterTestShardsTest
 import report_flutter_test_file_timings as timings
 
 
