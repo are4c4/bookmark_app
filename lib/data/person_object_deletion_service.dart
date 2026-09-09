@@ -55,8 +55,7 @@ class PersonObjectDeletionCompatibility {
     );
     if (mapped != null) return mapped;
 
-    final rawLegacyId =
-        matches.single.values[schema.legacyPersonIdProperty.id];
+    final rawLegacyId = matches.single.values[schema.legacyPersonIdProperty.id];
     if (rawLegacyId == null) return null;
     final claimedLegacyId = _positiveInt(rawLegacyId);
     if (claimedLegacyId == null) {
@@ -65,9 +64,9 @@ class PersonObjectDeletionCompatibility {
       );
     }
 
-    final legacyRows = await (database.select(database.people)
-          ..where((person) => person.id.equals(claimedLegacyId)))
-        .get();
+    final legacyRows = await (database.select(
+      database.people,
+    )..where((person) => person.id.equals(claimedLegacyId))).get();
     if (legacyRows.length != 1) {
       throw StateError(
         'Canonical Person claims a missing legacy Person identity; refusing deletion.',
@@ -106,9 +105,9 @@ class PersonObjectDeletionCompatibility {
         'Person id must be positive.',
       );
     }
-    final deleted = await (database.delete(database.people)
-          ..where((person) => person.id.equals(personId)))
-        .go();
+    final deleted = await (database.delete(
+      database.people,
+    )..where((person) => person.id.equals(personId))).go();
     if (deleted != 1) {
       throw StateError(
         'Legacy Person projection is missing; refusing a partial Person deletion.',
@@ -178,14 +177,11 @@ class PersonObjectDeletionService {
   final RelationMutationService relationMutations;
   final PersonObjectDeletionCompatibility compatibility;
 
-  Future<void> delete({
-    required int workspaceId,
-    required int personId,
-  }) async {
+  Future<void> delete({required int workspaceId, required int personId}) async {
     await database.transaction(() async {
-      final legacyRows = await (database.select(database.people)
-            ..where((person) => person.id.equals(personId)))
-          .get();
+      final legacyRows = await (database.select(
+        database.people,
+      )..where((person) => person.id.equals(personId))).get();
       if (legacyRows.length != 1) {
         throw ArgumentError.value(
           personId,
@@ -212,12 +208,12 @@ class PersonObjectDeletionService {
       }
 
       final schema = await personBridge.ensurePersonObjectType(workspaceId);
-      final resolvedLegacyPersonId =
-          await compatibility.legacyPersonIdForCanonicalDeletion(
-        workspaceId: workspaceId,
-        objectTypeId: schema.objectType.id,
-        objectId: objectId,
-      );
+      final resolvedLegacyPersonId = await compatibility
+          .legacyPersonIdForCanonicalDeletion(
+            workspaceId: workspaceId,
+            objectTypeId: schema.objectType.id,
+            objectId: objectId,
+          );
       if (resolvedLegacyPersonId != personId) {
         throw StateError(
           'Canonical Person identity does not match the requested legacy Person.',
