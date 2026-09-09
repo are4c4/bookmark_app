@@ -1,6 +1,8 @@
 import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/database_collection_resolver.dart';
 import 'package:bookmark_app/data/database_collection_store.dart';
+import 'package:bookmark_app/data/database_view_gallery_adapter.dart';
+import 'package:bookmark_app/data/database_view_gallery_cover_source_service.dart';
 import 'package:bookmark_app/data/generic_database_collection_page_data.dart';
 import 'package:bookmark_app/data/generic_database_object_create_service.dart';
 import 'package:bookmark_app/data/generic_database_page_state_loader.dart';
@@ -93,6 +95,7 @@ void main() {
       );
 
       int? resolvedCreateModeFor;
+      int? resolvedCoverSourcesFor;
       final loader = GenericDatabasePageStateLoader(
         pageLoader: pageLoader,
         genericStore: projectionStore,
@@ -100,6 +103,15 @@ void main() {
         createModeForObjectType: (objectTypeId) async {
           resolvedCreateModeFor = objectTypeId;
           return GenericDatabaseCreateMode.weblinkUrl;
+        },
+        galleryCoverSourcesForObjectType: (objectTypeId) async {
+          resolvedCoverSourcesFor = objectTypeId;
+          return const <GalleryCoverSourceOption>[
+            GalleryCoverSourceOption(
+              source: GalleryCoverSource.none(),
+              label: 'なし',
+            ),
+          ];
         },
       );
 
@@ -124,8 +136,48 @@ void main() {
       expect(projectionStore.listRecordsDatabaseIds, [relatedTypeId]);
       expect(state.computedValues[objectId]?[formulaPropertyId], 6);
       expect(state.computedValues[objectId]?[brokenFormulaId], isNull);
+      expect(state.galleryCoverSources.single.label, 'なし');
+      expect(
+        state.galleryCoverSources.single.source,
+        const GalleryCoverSource.none(),
+      );
       expect(state.createMode, GenericDatabaseCreateMode.weblinkUrl);
       expect(resolvedCreateModeFor, databaseId);
+      expect(resolvedCoverSourcesFor, databaseId);
+
+      final failingCoverLoader = GenericDatabasePageStateLoader(
+        pageLoader: pageLoader,
+        genericStore: genericStore,
+        computedStore: computedStore,
+        createModeForObjectType: (_) async => GenericDatabaseCreateMode.generic,
+        galleryCoverSourcesForObjectType: (_) async {
+          throw StateError('cover discovery unavailable');
+        },
+      );
+      final failingCoverState = await failingCoverLoader.load(
+        databaseId: databaseId,
+        workspaceId: workspaceId,
+      );
+      expect(failingCoverState.galleryCoverSources, isEmpty);
+
+      var missingTypeResolverCalls = 0;
+      final missingTypeLoader = GenericDatabasePageStateLoader(
+        pageLoader: pageLoader,
+        genericStore: genericStore,
+        computedStore: computedStore,
+        createModeForObjectType: (_) async => GenericDatabaseCreateMode.generic,
+        galleryCoverSourcesForObjectType: (_) async {
+          missingTypeResolverCalls++;
+          return const <GalleryCoverSourceOption>[];
+        },
+      );
+      final missingTypeState = await missingTypeLoader.load(
+        databaseId: -1,
+        workspaceId: workspaceId,
+      );
+      expect(missingTypeState.objectType, isNull);
+      expect(missingTypeState.galleryCoverSources, isEmpty);
+      expect(missingTypeResolverCalls, 0);
     },
   );
 }

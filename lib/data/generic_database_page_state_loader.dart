@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import '../domain/object_model.dart';
+import 'database_view_gallery_cover_source_service.dart';
 import 'generic_database_collection_page_data.dart';
 import 'generic_database_object_create_service.dart';
 import 'generic_database_store.dart';
@@ -10,6 +11,8 @@ import 'relation_read_service.dart';
 
 typedef GenericDatabaseCreateModeResolver = Future<GenericDatabaseCreateMode>
     Function(int objectTypeId);
+typedef GenericDatabaseGalleryCoverSourceResolver =
+    Future<List<GalleryCoverSourceOption>> Function(int objectTypeId);
 
 /// Immutable loading result consumed by `GenericDatabasePage`.
 ///
@@ -26,6 +29,7 @@ class GenericDatabasePageState {
     required this.objectTypes,
     required this.recordsByType,
     required this.computedValues,
+    required this.galleryCoverSources,
     required this.createMode,
   });
 
@@ -44,6 +48,7 @@ class GenericDatabasePageState {
   final Map<int, List<GenericRecord>> recordsByType;
 
   final Map<int, Map<int, dynamic>> computedValues;
+  final List<GalleryCoverSourceOption> galleryCoverSources;
   final GenericDatabaseCreateMode createMode;
 }
 
@@ -59,12 +64,15 @@ class GenericDatabasePageStateLoader {
     required this.genericStore,
     required this.computedStore,
     required this.createModeForObjectType,
+    this.galleryCoverSourcesForObjectType,
   });
 
   final GenericDatabaseCollectionPageLoader pageLoader;
   final GenericDatabaseStore genericStore;
   final ObjectComputedValueStore computedStore;
   final GenericDatabaseCreateModeResolver createModeForObjectType;
+  final GenericDatabaseGalleryCoverSourceResolver?
+      galleryCoverSourcesForObjectType;
 
   static void _debugComputedProjectionFallback(StackTrace stackTrace) {
     assert(() {
@@ -86,6 +94,15 @@ class GenericDatabasePageStateLoader {
     final createMode = objectType == null
         ? GenericDatabaseCreateMode.generic
         : await createModeForObjectType(objectType.id);
+    var galleryCoverSources = const <GalleryCoverSourceOption>[];
+    final coverSourceResolver = galleryCoverSourcesForObjectType;
+    if (objectType != null && coverSourceResolver != null) {
+      try {
+        galleryCoverSources = await coverSourceResolver(objectType.id);
+      } catch (_) {
+        galleryCoverSources = const <GalleryCoverSourceOption>[];
+      }
+    }
 
     final objectTypes = await genericStore.listAllDatabases(workspaceId);
     final availableObjectTypeIds = objectTypes.map((type) => type.id).toSet();
@@ -155,6 +172,7 @@ class GenericDatabasePageStateLoader {
       objectTypes: objectTypes,
       recordsByType: recordsByType,
       computedValues: computedValues,
+      galleryCoverSources: galleryCoverSources,
       createMode: createMode,
     );
   }
