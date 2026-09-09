@@ -549,7 +549,7 @@ class BookmarkWeblinkPersonRoleConvergenceService {
                 bp.person_id AS person_id,
                 bp.role AS role
          FROM bookmark_object_links bol
-         INNER JOIN bookmark_workspaces bw
+         INNER JOIN bookmark_workspace bw
            ON bw.bookmark_id = bol.bookmark_id
           AND bw.workspace_id = bol.workspace_id
          INNER JOIN bookmark_people bp ON bp.bookmark_id = bol.bookmark_id
@@ -688,7 +688,7 @@ class BookmarkWeblinkPersonRoleConvergenceService {
     final rows = await database.customSelect(
       '''SELECT bol.object_id
          FROM bookmark_object_links bol
-         INNER JOIN bookmark_workspaces bw
+         INNER JOIN bookmark_workspace bw
            ON bw.bookmark_id = bol.bookmark_id
           AND bw.workspace_id = bol.workspace_id
          WHERE bol.workspace_id = ?
