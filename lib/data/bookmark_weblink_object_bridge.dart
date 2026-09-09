@@ -32,6 +32,45 @@ class BookmarkWeblinkSyncReport {
   final int retiredLegacyUrlCount;
 }
 
+class _LegacyBookmarkSavedState {
+  const _LegacyBookmarkSavedState({
+    required this.favorite,
+    required this.readingStatus,
+    required this.storageState,
+    required this.genre,
+    required this.rating,
+  });
+
+  final bool favorite;
+  final String readingStatus;
+  final String storageState;
+  final String genre;
+  final int rating;
+
+  bool equivalentTo(_LegacyBookmarkSavedState other) =>
+      favorite == other.favorite &&
+      readingStatus == other.readingStatus &&
+      storageState == other.storageState &&
+      genre == other.genre &&
+      rating == other.rating;
+}
+
+class _ResolvedBookmarkWeblinkRow {
+  const _ResolvedBookmarkWeblinkRow({
+    required this.objectId,
+    required this.targetId,
+    required this.title,
+    required this.description,
+    required this.thumbnail,
+  });
+
+  final int objectId;
+  final int? targetId;
+  final String title;
+  final String? description;
+  final String? thumbnail;
+}
+
 /// Adds the canonical reusable Weblink relation to mirrored Bookmark Objects.
 ///
 /// The legacy `bookmarks.url` column remains the compatibility source for the
@@ -94,7 +133,12 @@ class BookmarkWeblinkObjectBridge {
                 bookmarks.url AS url,
                 bookmarks.title AS title,
                 bookmarks.description AS description,
-                bookmarks.thumbnail AS thumbnail
+                bookmarks.thumbnail AS thumbnail,
+                bookmarks.favorite AS favorite,
+                bookmarks.reading_status AS reading_status,
+                bookmarks.storage_state AS storage_state,
+                bookmarks.genre AS genre,
+                bookmarks.rating AS rating
          FROM bookmark_object_links AS links
          JOIN bookmarks ON bookmarks.id = links.bookmark_id
          WHERE links.workspace_id = ?
@@ -102,35 +146,74 @@ class BookmarkWeblinkObjectBridge {
       variables: [Variable<int>(workspaceId)],
     ).get();
 
-    var linkedCount = 0;
+    // Resolve every canonical identity before mutating any Bookmark Relation or
+    // retiring any mirrored URL. Multiple legacy saved-items may legitimately
+    // reference one resource, but their saved-item state cannot be collapsed
+    // until a lossless destination exists. Resource metadata (title/description/
+    // thumbnail) remains compatibility-preserved on the legacy row/mirror and
+    // is still only best-effort enrichment below; Relation state is owned by B.
+    final resolvedRows = <_ResolvedBookmarkWeblinkRow>[];
+    final stateByTargetId = <int, _LegacyBookmarkSavedState>{};
     var invalidUrlCount = 0;
-    var retiredLegacyUrlCount = 0;
     for (final row in rows) {
-      final objectId = row.read<int>('object_id');
-      final rawUrl = row.read<String>('url');
       int? targetId;
       try {
         final weblink = await _capture.capture(
           workspaceId: workspaceId,
-          url: rawUrl,
+          url: row.read<String>('url'),
         );
         targetId = weblink.id;
       } on ArgumentError {
         invalidUrlCount += 1;
       }
 
-      final targetIds = targetId == null ? const <int>[] : <int>[targetId];
+      if (targetId != null) {
+        final state = _LegacyBookmarkSavedState(
+          favorite: row.read<int>('favorite') != 0,
+          readingStatus: row.read<String>('reading_status'),
+          storageState: row.read<String>('storage_state'),
+          genre: row.read<String>('genre'),
+          rating: row.read<int>('rating'),
+        );
+        final existing = stateByTargetId[targetId];
+        if (existing != null && !existing.equivalentTo(state)) {
+          throw StateError(
+            'Legacy Bookmark user-state collision: multiple Bookmarks resolve '
+            'to one canonical Weblink with non-equivalent saved-item state.',
+          );
+        }
+        stateByTargetId[targetId] = state;
+      }
+
+      resolvedRows.add(
+        _ResolvedBookmarkWeblinkRow(
+          objectId: row.read<int>('object_id'),
+          targetId: targetId,
+          title: row.read<String>('title'),
+          description: row.readNullable<String>('description'),
+          thumbnail: row.readNullable<String>('thumbnail'),
+        ),
+      );
+    }
+
+    var linkedCount = 0;
+    var retiredLegacyUrlCount = 0;
+    for (final row in resolvedRows) {
+      final targetIds = row.targetId == null
+          ? const <int>[]
+          : <int>[row.targetId!];
       await _relationMutations.setRelation(
-        objectId: objectId,
+        objectId: row.objectId,
         property: relation,
         targetObjectIds: targetIds,
       );
 
+      final targetId = row.targetId;
       if (targetId == null) continue;
       linkedCount += 1;
       final verified = await _isCanonicalRelationPersisted(
         bookmarkObjectTypeId: bookmarkType.id,
-        bookmarkObjectId: objectId,
+        bookmarkObjectId: row.objectId,
         relationPropertyId: relation.id,
         targetObjectId: targetId,
       );
@@ -141,7 +224,7 @@ class BookmarkWeblinkObjectBridge {
       }
 
       await objectStore.setPropertyValue(
-        objectId: objectId,
+        objectId: row.objectId,
         property: legacyUrlProperty,
         value: null,
       );
@@ -154,9 +237,9 @@ class BookmarkWeblinkObjectBridge {
         await _weblinks.enrichIfMissing(
           workspaceId: workspaceId,
           objectId: targetId,
-          pageTitle: row.read<String>('title'),
-          description: row.readNullable<String>('description'),
-          previewImageUrl: row.readNullable<String>('thumbnail'),
+          pageTitle: row.title,
+          description: row.description,
+          previewImageUrl: row.thumbnail,
         );
       } catch (_) {
         // Keep the verified Relation and legacy Bookmark data intact when
@@ -165,7 +248,7 @@ class BookmarkWeblinkObjectBridge {
     }
 
     return BookmarkWeblinkSyncReport(
-      processedCount: rows.length,
+      processedCount: resolvedRows.length,
       linkedCount: linkedCount,
       invalidUrlCount: invalidUrlCount,
       retiredLegacyUrlCount: retiredLegacyUrlCount,
