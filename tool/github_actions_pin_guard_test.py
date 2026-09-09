@@ -103,6 +103,23 @@ class FlutterToolchainGuardTest(unittest.TestCase):
             )
         )
 
+    def test_every_flutter_setup_in_same_workflow_is_checked(self) -> None:
+        workflow = VALID_FLUTTER_WORKFLOW + """
+  release:
+    steps:
+      - name: Set up Flutter for release
+        uses: subosito/flutter-action@0123456789abcdef0123456789abcdef01234567
+        with:
+          flutter-version: 3.47.2
+          cache: true
+"""
+        root = self.make_repo(workflow)
+        errors = toolchain_guard.validate_repository(
+            root, tracked={toolchain_guard.LOCKFILE}
+        )
+        self.assertEqual(len(errors), 1)
+        self.assertIn("ci.yml", errors[0])
+
     def test_all_flutter_setup_blocks_are_checked_across_yaml_extensions(self) -> None:
         root = self.make_repo()
         second = root / toolchain_guard.WORKFLOW_ROOT / "release.yaml"
