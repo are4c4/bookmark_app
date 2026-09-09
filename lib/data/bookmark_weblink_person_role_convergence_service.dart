@@ -16,20 +16,24 @@ class BookmarkWeblinkPersonRoleSourceSnapshot {
   BookmarkWeblinkPersonRoleSourceSnapshot(
     Map<int, Map<String, List<int>>> rolePersonIdsByBookmarkObjectId, {
     required Map<int, int?> weblinkObjectIdByBookmarkObjectId,
-  })  : _rolePersonIdsByBookmarkObjectId = Map.unmodifiable(
-          rolePersonIdsByBookmarkObjectId.map(
-            (objectId, roles) => MapEntry(
+  }) : _rolePersonIdsByBookmarkObjectId =
+            Map<int, Map<String, List<int>>>.unmodifiable(
+          rolePersonIdsByBookmarkObjectId.map<int, Map<String, List<int>>>(
+            (objectId, roles) => MapEntry<int, Map<String, List<int>>>(
               objectId,
-              Map.unmodifiable(
-                roles.map(
-                  (role, ids) => MapEntry(role, List<int>.unmodifiable(ids)),
+              Map<String, List<int>>.unmodifiable(
+                roles.map<String, List<int>>(
+                  (role, ids) => MapEntry<String, List<int>>(
+                    role,
+                    List<int>.unmodifiable(ids),
+                  ),
                 ),
               ),
             ),
           ),
         ),
         _weblinkObjectIdByBookmarkObjectId =
-            Map.unmodifiable(weblinkObjectIdByBookmarkObjectId);
+            Map<int, int?>.unmodifiable(weblinkObjectIdByBookmarkObjectId);
 
   static final empty = BookmarkWeblinkPersonRoleSourceSnapshot(
     const <int, Map<String, List<int>>>{},
