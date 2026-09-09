@@ -94,40 +94,39 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(
-      find.byKey(const ValueKey('body-block-touch-actions-a')),
-    );
+    await tester.tap(find.byKey(const ValueKey('body-block-touch-actions-a')));
     await tester.pump();
 
     expect(find.text('actions-a'), findsOneWidget);
   });
 
-  testWidgets('reorder normalizes framework indices and preserves block identity', (
-    tester,
-  ) async {
-    ObjectBodyBlock? reordered;
-    int? toIndex;
-    await tester.pumpWidget(
-      desktopHost(
-        onBlockReorder: (block, index) async {
-          reordered = block;
-          toIndex = index;
-        },
-        blockActionsBuilder: (context, block, position) =>
-            Text('actions-${block.id}'),
-      ),
-    );
+  testWidgets(
+    'reorder normalizes framework indices and preserves block identity',
+    (tester) async {
+      ObjectBodyBlock? reordered;
+      int? toIndex;
+      await tester.pumpWidget(
+        desktopHost(
+          onBlockReorder: (block, index) async {
+            reordered = block;
+            toIndex = index;
+          },
+          blockActionsBuilder: (context, block, position) =>
+              Text('actions-${block.id}'),
+        ),
+      );
 
-    final reorderable = tester.widget<ReorderableListView>(
-      find.byType(ReorderableListView),
-    );
-    reorderable.onReorder(0, 3);
-    await tester.pump();
+      final reorderable = tester.widget<ReorderableListView>(
+        find.byType(ReorderableListView),
+      );
+      reorderable.onReorder(0, 3);
+      await tester.pump();
 
-    expect(reordered?.id, 'a');
-    expect(reordered?.text, 'A');
-    expect(toIndex, 2);
-  });
+      expect(reordered?.id, 'a');
+      expect(reordered?.text, 'A');
+      expect(toIndex, 2);
+    },
+  );
 
   testWidgets('document remains action-free when no builder is supplied', (
     tester,
