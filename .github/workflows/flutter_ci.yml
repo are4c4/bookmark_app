@@ -272,7 +272,7 @@ jobs:
 
       - name: Upload test shard timing
         if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: flutter-test-timing-${{ github.run_id }}-${{ github.run_attempt }}-shard-${{ matrix.shard }}
           path: ci-artifacts/test-timing-${{ matrix.shard }}.json
@@ -305,7 +305,7 @@ jobs:
 
       - name: Upload Flutter test diagnostics
         if: ${{ always() && steps.flutter-test.outcome == 'failure' }}
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: flutter-test-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}-shard-${{ matrix.shard }}
           path: ci-artifacts/flutter-test-shard-${{ matrix.shard }}*.log
@@ -405,7 +405,7 @@ jobs:
         run: bash tool/package_macos.sh
 
       - name: Upload macOS release package
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: Bookmark-macOS
           if-no-files-found: error
