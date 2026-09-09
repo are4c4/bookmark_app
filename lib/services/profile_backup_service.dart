@@ -5,10 +5,12 @@ import 'package:archive/archive_io.dart';
 import 'package:file_selector/file_selector.dart';
 
 import '../data/app_database.dart';
+import 'backup_output_file_service.dart';
 import 'vault_backup_destination_guard.dart';
 
-typedef ProfileBackupDestinationPicker =
-    Future<String?> Function(String suggestedName);
+typedef ProfileBackupDestinationPicker = Future<String?> Function(
+  String suggestedName,
+);
 
 class ProfileBackupService {
   const ProfileBackupService({this.exportDestinationPicker});
@@ -37,18 +39,22 @@ class ProfileBackupService {
     }
 
     // Complete backup must remain a read-only operation with respect to the
-    // source Vault. Prove the output cannot resolve into the recursively read
-    // source tree before checkpointing or creating the archive.
-    await const VaultBackupDestinationGuard().validate(
-      sourceVaultPath: directory.path,
-      destinationPath: destinationPath,
-    );
+    // source Vault. Resolve the destination parent to its real outside-Vault
+    // location before checkpointing or creating any archive output.
+    final safeDestinationPath = await const VaultBackupDestinationGuard()
+        .resolveSafeDestination(
+          sourceVaultPath: directory.path,
+          destinationPath: destinationPath,
+        );
 
     await database.customStatement('PRAGMA wal_checkpoint(FULL)');
-    await ZipFileEncoder().zipDirectory(
-      directory,
-      filename: destinationPath,
-      followLinks: false,
+    await const BackupOutputFileService().write(
+      destinationPath: safeDestinationPath,
+      writer: (stagedPath) => ZipFileEncoder().zipDirectory(
+        directory,
+        filename: stagedPath,
+        followLinks: false,
+      ),
     );
     return destinationPath;
   }
