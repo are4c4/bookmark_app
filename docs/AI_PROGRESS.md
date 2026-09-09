@@ -80,13 +80,14 @@ The Issue numbers below are durable roadmap/routing anchors, not claims that a P
 - #1042 legacy Bookmark-era Relation convergence.
 - #1045 Person groups/roles convergence.
 - Future #1062/#1064 Relation rewiring/restore slices belong in focused B Issues.
-- Completed checkpoint: #1052 canonical Tag Parent/TagGroup integrity and cycle prevention.
+- Completed checkpoints: #1052 canonical Tag Parent/TagGroup integrity and cycle prevention; #1105 strict canonical Tag descendant reader.
 
 ### C — Database, View & Schema UX
-- #1053 hierarchy-aware Tag predicates/filter UX.
 - #1043 generic Weblink/Object Database/View + Inbox replacement for Stage1 normal ownership.
 - #1046 generic Person Database/View/Inspector replacement after parity.
 - #1061 Home/start UX centered on Inbox / Recent / Favorites / Pinned Databases.
+- Broader #1050 Tag picker/tree/management UX remains an umbrella concern only where live acceptance is unfinished.
+- Completed checkpoint: #1053 hierarchy-aware Tag predicates/filter UX, integrated through canonical B hierarchy semantics.
 
 ### D — Primitive Objects & Media
 - #155 is the durable Weblink/Image/File native-capability umbrella; resume D only for a concrete native-capability obligation proven by a live focused Issue.
@@ -123,7 +124,9 @@ Object-first constitution
         +--> Body #1058 [A]
         |
         +--> Tag #1050
-        |      +--> #1053 [C] query/UX
+        |      +--> completed #1052/#1105 [B] integrity/read
+        |      +--> completed #1053 [C] query/filter UX
+        |      +--> broader picker/tree/management UX only where live acceptance remains
         |
         +--> Bookmark retirement #1039
         |      +--> #1042 [B] relations
@@ -171,6 +174,7 @@ Person is a generic ObjectType, not a permanent People subsystem. Profile Image 
 - Canonical hierarchy is `Tag --Parent--> Tag` through canonical Relation APIs.
 - Store only directly assigned Tags; derive ancestors.
 - Query distinguishes exact from hierarchy-aware predicates.
+- #1052/#1105/#1053 are completed canonical integrity/read/query checkpoints; broader #1050 UX must reuse them rather than reopen parallel hierarchy authority.
 
 ### Database/View and Home
 - Object identity is global; Database membership/query does not clone Object identity.
