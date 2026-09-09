@@ -63,7 +63,8 @@ void main() {
   test(
     'delete detaches canonical Relations and cleans legacy compatibility atomically',
     () async {
-      final personId = await PersonObjectWriteService.forDatabase(database).create(
+      final personId =
+          await PersonObjectWriteService.forDatabase(database).create(
         workspaceId: workspaceId,
         name: 'Alice',
         note: 'note',
@@ -109,10 +110,9 @@ void main() {
         'Author',
         <Person>[legacyPerson],
       );
-      final groupId = await database.customInsert(
-        'INSERT INTO person_groups(name) VALUES (?)',
-        variables: <Object>['Writers'],
-      );
+      final groupId = await database.into(database.personGroups).insert(
+            PersonGroupsCompanion.insert(name: 'Writers'),
+          );
       await database.customStatement(
         'INSERT INTO person_group_members(group_id, person_id) VALUES (?, ?)',
         <Object>[groupId, personId],
@@ -147,8 +147,12 @@ void main() {
             .read<int>('count'),
         0,
       );
-      expect((await database.select(database.savedViews).get()).single.personFilterId,
-          isNull);
+      expect(
+        (await database.select(database.savedViews).get())
+            .single
+            .personFilterId,
+        isNull,
+      );
 
       final restartedBridge = PersonObjectBridge(
         database: database,
@@ -163,65 +167,70 @@ void main() {
     },
   );
 
-  test('delete recovers a missing compatibility link before removing both identities',
-      () async {
-    final personId = await PersonObjectWriteService.forDatabase(database).create(
-      workspaceId: workspaceId,
-      name: 'Recoverable',
-    );
-    final schema = await bridge.ensurePersonObjectType(workspaceId);
-    final objectId = (await bridge.objectIdForLegacyPerson(
-      workspaceId,
-      personId,
-    ))!;
-    await database.customStatement(
-      'DELETE FROM person_object_links WHERE workspace_id = ? AND person_id = ?',
-      <Object>[workspaceId, personId],
-    );
-    expect(await bridge.legacyPersonIdForObject(workspaceId, objectId), isNull);
+  test(
+    'delete recovers a missing compatibility link before removing both identities',
+    () async {
+      final personId =
+          await PersonObjectWriteService.forDatabase(database).create(
+        workspaceId: workspaceId,
+        name: 'Recoverable',
+      );
+      final schema = await bridge.ensurePersonObjectType(workspaceId);
+      final objectId = (await bridge.objectIdForLegacyPerson(
+        workspaceId,
+        personId,
+      ))!;
+      await database.customStatement(
+        'DELETE FROM person_object_links WHERE workspace_id = ? AND person_id = ?',
+        <Object>[workspaceId, personId],
+      );
+      expect(await bridge.legacyPersonIdForObject(workspaceId, objectId), isNull);
 
-    await deletion.delete(workspaceId: workspaceId, personId: personId);
+      await deletion.delete(workspaceId: workspaceId, personId: personId);
 
-    expect(await database.select(database.people).get(), isEmpty);
-    expect(await objectStore.listObjects(schema.objectType.id), isEmpty);
-  });
+      expect(await database.select(database.people).get(), isEmpty);
+      expect(await objectStore.listObjects(schema.objectType.id), isEmpty);
+    },
+  );
 
-  test('late canonical delete failure rolls back Relation detach and legacy cleanup',
-      () async {
-    final personId = await PersonObjectWriteService.forDatabase(database).create(
-      workspaceId: workspaceId,
-      name: 'Rollback',
-    );
-    final schema = await bridge.ensurePersonObjectType(workspaceId);
-    final personObjectId = (await bridge.objectIdForLegacyPerson(
-      workspaceId,
-      personId,
-    ))!;
+  test(
+    'late canonical delete failure rolls back Relation detach and legacy cleanup',
+    () async {
+      final personId =
+          await PersonObjectWriteService.forDatabase(database).create(
+        workspaceId: workspaceId,
+        name: 'Rollback',
+      );
+      final schema = await bridge.ensurePersonObjectType(workspaceId);
+      final personObjectId = (await bridge.objectIdForLegacyPerson(
+        workspaceId,
+        personId,
+      ))!;
 
-    final sourceTypeId = await objectStore.createObjectType(
-      workspaceId: workspaceId,
-      name: 'Source',
-    );
-    final relationId = await objectStore.createRelationProperty(
-      objectTypeId: sourceTypeId,
-      name: 'Person',
-      targetObjectTypeId: schema.objectType.id,
-      multiple: false,
-    );
-    final relation = (await objectStore.getObjectType(sourceTypeId))!
-        .properties
-        .singleWhere((property) => property.id == relationId);
-    final sourceId = await objectStore.createObject(
-      objectTypeId: sourceTypeId,
-      title: 'Source',
-    );
-    await relationMutations.setRelation(
-      objectId: sourceId,
-      property: relation,
-      targetObjectIds: <int>[personObjectId],
-    );
+      final sourceTypeId = await objectStore.createObjectType(
+        workspaceId: workspaceId,
+        name: 'Source',
+      );
+      final relationId = await objectStore.createRelationProperty(
+        objectTypeId: sourceTypeId,
+        name: 'Person',
+        targetObjectTypeId: schema.objectType.id,
+        multiple: false,
+      );
+      final relation = (await objectStore.getObjectType(sourceTypeId))!
+          .properties
+          .singleWhere((property) => property.id == relationId);
+      final sourceId = await objectStore.createObject(
+        objectTypeId: sourceTypeId,
+        title: 'Source',
+      );
+      await relationMutations.setRelation(
+        objectId: sourceId,
+        property: relation,
+        targetObjectIds: <int>[personObjectId],
+      );
 
-    await database.customStatement('''
+      await database.customStatement('''
       CREATE TRIGGER fail_person_object_delete
       BEFORE DELETE ON generic_records
       WHEN OLD.id = $personObjectId
@@ -230,22 +239,23 @@ void main() {
       END
     ''');
 
-    await expectLater(
-      deletion.delete(workspaceId: workspaceId, personId: personId),
-      throwsA(anything),
-    );
+      await expectLater(
+        deletion.delete(workspaceId: workspaceId, personId: personId),
+        throwsA(anything),
+      );
 
-    expect(await database.select(database.people).get(), hasLength(1));
-    expect(await objectStore.listObjects(schema.objectType.id), hasLength(1));
-    expect(
-      await bridge.objectIdForLegacyPerson(workspaceId, personId),
-      personObjectId,
-    );
-    final source = (await objectStore.listObjects(sourceTypeId)).single;
-    expect(
-      ObjectRelationValue.fromJson(source.values[relationId]).objectIds,
-      <int>[personObjectId],
-    );
-    expect(await objectStore.backlinks(personObjectId), hasLength(1));
-  });
+      expect(await database.select(database.people).get(), hasLength(1));
+      expect(await objectStore.listObjects(schema.objectType.id), hasLength(1));
+      expect(
+        await bridge.objectIdForLegacyPerson(workspaceId, personId),
+        personObjectId,
+      );
+      final source = (await objectStore.listObjects(sourceTypeId)).single;
+      expect(
+        ObjectRelationValue.fromJson(source.values[relationId]).objectIds,
+        <int>[personObjectId],
+      );
+      expect(await objectStore.backlinks(personObjectId), hasLength(1));
+    },
+  );
 }
