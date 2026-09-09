@@ -6,10 +6,10 @@ This repository is developed with AI-assisted planning and implementation.
 
 Before changing code, read these in order:
 
-1. The active focused GitHub Issue and its acceptance criteria.
+1. The active focused GitHub Issue and its acceptance criteria, when an implementation/coordination Issue is active.
 2. `docs/product_architecture.md` for the durable product architecture constitution.
 3. `docs/AI_PROGRESS.md` for repository-wide integration/routing state.
-4. The progress file for the active implementation lane:
+4. The progress file for the active lane:
    - `docs/AI_PROGRESS_OBJECT.md` — Object Core & Body.
    - `docs/AI_PROGRESS_RELATION.md` — Relations & Data Integrity.
    - `docs/AI_PROGRESS_DATABASE_VIEW.md` — Database, View & Schema UX.
@@ -17,6 +17,7 @@ Before changing code, read these in order:
    - `docs/AI_PROGRESS_SEARCH.md` — Search & Indexing.
    - `docs/AI_PROGRESS_STORAGE.md` — Storage, Vault & Delivery.
    - `docs/AI_PROGRESS_REFACTOR.md` — Refactor & Architecture Health.
+   - `docs/AI_PROGRESS_OVERSIGHT.md` — H Architecture & Integration Oversight / control tower.
 5. Existing code, tests, and other repository documentation.
 
 `docs/product_architecture.md` is a stable product contract. A focused Issue may refine implementation details, but it must not silently contradict that architecture. Resolve a real conflict explicitly before implementation.
@@ -40,10 +41,14 @@ The product is a local-first, Object-first personal knowledge/database applicati
 - `Bookmark` is legacy compatibility/migration input, not a final ObjectType. Normal URL capture creates/reuses a canonical Weblink Object.
 - Tag is not a native media primitive. Tag hierarchy uses canonical Object/Relation persistence; B owns integrity and C owns hierarchy-aware query/UX.
 - Historical Bookmark/People/Photo schema/data remains until replacement parity, caller-zero proof, preservation validation and any explicit destructive migration are complete.
+- Home should converge on Inbox / Recent / Favorites / Pinned Databases rather than permanent legacy domain modules.
+- Object merge, open export/portability and durable version history are explicit future first-class contracts; do not improvise lossy substitutes.
 
-## Seven-lane development model
+## Seven implementation lanes + H oversight
 
-Each implementation run/PR has exactly one primary lane. The split is by responsibility, not by file count.
+A–G are implementation ownership lanes. Each implementation run/PR has exactly one primary implementation lane, split by responsibility rather than file count.
+
+H is a repository-wide oversight/control-tower lane. It may own focused coordination/guardrail/documentation work but does not normally own product/runtime implementation.
 
 ### Lane A — Object Core & Body
 
@@ -55,7 +60,8 @@ Owns:
 - Daily Note identity/navigation/time-based Object patterns;
 - generic Object opening/detail contracts;
 - user-defined ObjectType core behavior;
-- migration/reconciliation contracts when generic Object identity is authoritative.
+- migration/reconciliation contracts when generic Object identity is authoritative;
+- Object duplicate/merge/redirect and durable history core contracts when focused Issues activate them.
 
 Does not own Weblink/Image/File native behavior, Relation integrity, Database/View UX, FTS, Vault lifecycle or broad refactoring.
 
@@ -69,7 +75,8 @@ Owns:
 - fail-closed corruption handling;
 - integrity-sensitive schema evolution;
 - Tag hierarchy parent/group integrity and cycle prevention;
-- Relation-producing workflow atomicity.
+- Relation-producing workflow atomicity;
+- Relation rewiring/integrity slices required by future Object merge/history contracts.
 
 Preserve the canonical Relation subsystem. Do not invent parallel edge stores or speculative Relation abstractions.
 
@@ -83,7 +90,8 @@ Owns:
 - user-owned template/domain schema instantiation UX;
 - generic Gallery cover/media-source configuration;
 - Tag hierarchy query/filter/picker/tree UX;
-- generic Person/Weblink/Object collection/navigation surfaces and legacy dedicated-page replacement after parity.
+- generic Person/Weblink/Object collection/navigation surfaces and legacy dedicated-page replacement after parity;
+- Home/Inbox/Recent/Favorites/Pinned Database work-start UX through canonical contracts.
 
 C owns generic presentation/configuration, not native Weblink/Image/File semantics or Relation integrity.
 
@@ -118,7 +126,9 @@ Owns:
 - profile/Vault-relative path handling;
 - backup/restore/duplication/move/recovery;
 - app packaging/delivery;
-- preservation validation before destructive legacy schema retirement.
+- preservation validation before destructive legacy schema retirement;
+- portable export packaging/filesystem semantics and managed/external byte handling when the export roadmap activates;
+- managed-byte retention/GC boundaries required by durable history when explicitly split to F.
 
 F owns byte/location lifecycle, not Object identity or native media semantics.
 
@@ -132,39 +142,67 @@ Owns:
 - failure/privacy observability guardrails;
 - CI/developer-loop and architecture-boundary enforcement;
 - temporary shim retirement and incremental movement toward `lib/features/...` ownership;
-- repository-wide architecture/handoff synchronization such as #1048.
+- repository-wide architecture/handoff synchronization such as #1048/#1060.
 
 G must not redesign working product semantics under a refactor label.
 
+### Lane H — Architecture & Integration Oversight
+
+H is the control tower for the whole repository. Its durable handoff is `docs/AI_PROGRESS_OVERSIGHT.md`.
+
+Owns observation/routing work such as:
+- architecture drift audits against `docs/product_architecture.md`;
+- cross-lane dependency/integration review;
+- duplicate Issue/implementation ownership detection;
+- shared-hotspot and migration-writer conflict review;
+- product-wide UX consistency audits;
+- discovery of emerging technical debt or new legacy dependencies;
+- combined-state/test/preservation gap discovery;
+- roadmap/umbrella-completion review;
+- creating/refining focused Issues and routing them to exactly one A–G implementation lane;
+- repository-wide oversight/routing documentation and focused coordination guardrails when a coordination Issue owns the change.
+
+H does not normally:
+- implement runtime product features;
+- take broad shared-hotspot ownership from A–G;
+- perform schema/data migrations;
+- redesign canonical Object/Relation semantics under an audit label;
+- create duplicate persistence/query/search/index systems;
+- merge another lane's PR merely to keep work moving.
+
+A fresh H chat should be able to resume with only `Hレーンとして作業を続けて`, re-read GitHub live state, perform a broad audit and route concrete findings without chat history.
+
 ## Ownership and concurrency rules
 
-- Identify exactly one primary lane before editing.
+- Identify exactly one primary A–G implementation lane before product/runtime editing. H is valid only for oversight/coordination work within its contract.
 - One focused Issue has one active implementation owner/branch/PR. Umbrellas may have many focused child Issues.
 - Do not modify another lane's progress file except for a repository-wide coordination/architecture change or an explicit cross-lane dependency.
 - Split cross-lane work by coherent acceptance slices and sequence dependencies.
 - Before non-trivial edits to shared hotspots such as `generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, `bookmark_unified_stage1_page.dart`, `bookmark_reorderable_properties.dart`, `people_management_page.dart`, `settings_page.dart`, `profile_manager.dart`, or `app_database.dart`, inspect current open PR ownership.
 - Shared hotspots use temporary ownership leases. Patch-sized non-overlapping work may proceed only after confirming behavior/region non-overlap.
 - Schema/migration writer work is single-writer.
-- Relation subsystem redesign is not a Refactor-lane goal.
+- Relation subsystem redesign is not a Refactor- or Oversight-lane goal.
 - Idle is acceptable when no independent safe work exists; never invent speculative abstractions to keep a lane busy.
+- H findings that require product/runtime code must be routed to an A–G focused Issue rather than implemented directly by H.
 
 ## Current issue routing
 
 Always verify live Issues because this list is a routing aid, not transient ownership state.
 
-- **A:** #1041 Bookmark→Weblink/generic Object migration contract; #1044 generic Person authority; #1049 document-like Body UX; #56 core follow-ups.
-- **B:** #1042 Bookmark-era Relation convergence; #1045 Person groups/roles; #1052 Tag hierarchy integrity.
-- **C:** #1043 Stage1→generic Weblink/Object Database/View + Inbox; #1046 People→generic Person Database/View; #1053 hierarchy-aware Tag filtering/UX.
+- **A:** #1041 Bookmark→Weblink/generic Object migration contract; #1044 generic Person authority; #1057/#1058 Body interaction/Undo; #1062 Object merge/redirect; #1064 durable history contract; #56 core follow-ups.
+- **B:** #1042 Bookmark-era Relation convergence; #1045 Person groups/roles; #1052 Tag hierarchy integrity; future #1062/#1064 Relation-integrity slices when split.
+- **C:** #1043 Stage1→generic Weblink/Object Database/View + Inbox; #1046 People→generic Person Database/View; #1053 hierarchy-aware Tag filtering/UX; #1061 Home/start UX.
 - **D:** #1054 direct canonical Weblink capture; #155/#245 only for concrete native Weblink/Image/File obligations.
 - **E:** focused Search issues when canonical FTS correctness/freshness obligations are demonstrated.
-- **F:** #951/#242 preservation and real-machine Vault validation; later preservation gates for destructive legacy migration.
-- **G:** #1048 architecture/handoff alignment, #1047/#225 maintainability, #950 and future caller-zero Bookmark/People/Photo retirement.
+- **F:** #951/#242 preservation and real-machine Vault validation; #1063 export/portability; later preservation/managed-byte slices for destructive migration/history.
+- **G:** #1047/#225 maintainability, #950 and future caller-zero Bookmark/People/Photo retirement; repository-wide architecture/guardrail sync such as #1060.
+- **H:** continuous architecture/integration oversight via `docs/AI_PROGRESS_OVERSIGHT.md`; #1060 establishes the lane. H routes implementation findings to A–G.
 
 Umbrellas #56, #1039, #1040, #1050, #155, #225, #245 organize broader direction; implement through focused child Issues when possible.
 
 ## Autonomous implementation loop
 
-When a focused task is active, continue without asking for confirmation for routine reversible engineering decisions inside its contract.
+When an A–G focused task is active, continue without asking for confirmation for routine reversible engineering decisions inside its contract.
 
 1. Inspect latest `main`, active Issue/branch, open PR ownership and relevant CI.
 2. Read `docs/product_architecture.md`, repository handoff and active lane handoff.
@@ -179,8 +217,24 @@ When a focused task is active, continue without asking for confirmation for rout
 11. If CI is pending, continue independent work rather than waiting idly.
 12. Update `docs/AI_PROGRESS.md` when architecture/routing/global priority materially changes.
 
+### H autonomous oversight loop
+
+H follows `docs/AI_PROGRESS_OVERSIGHT.md` rather than the product implementation loop:
+
+1. Re-read architecture, repository routing, all relevant A–G handoffs and live GitHub state.
+2. Build the current dependency/hotspot/migration ownership map.
+3. Inspect recent `main` changes and active PRs for cross-lane composition risks.
+4. Audit architecture, UX, technical debt, correctness/preservation and roadmap coherence.
+5. Link findings to existing Issues or create one focused Issue with exactly one owning A–G implementation lane.
+6. Update oversight/repository routing only when durable facts changed.
+7. Continue to another independent audit area instead of stopping after the first finding.
+8. Keep `docs/AI_PROGRESS_OVERSIGHT.md` resumable without chat history.
+
+Any H PR that changes repository files still needs a focused coordination Issue and normal PR/CI discipline.
+
 ### Stop only when
 
+For A–G implementation runs:
 - the active focused Issue/lane has no actionable work;
 - a genuine product decision requires user input;
 - the next step is destructive/irreversible or deletes user data and lacks explicit approval;
@@ -188,21 +242,33 @@ When a focused task is active, continue without asking for confirmation for rout
 - external infrastructure failure blocks all independent safe work;
 - runtime/tool/session limits are reached.
 
-One PR, one commit, one passing test suite or pending CI is not by itself a stop reason.
+For H audits:
+- the major oversight areas have been checked and no further actionable evidence exists;
+- the next conclusion needs a genuine product decision;
+- all meaningful next findings depend on active work that cannot yet be evaluated;
+- tool/session limits prevent further useful inspection.
+
+One PR, one commit, one passing test suite, one newly created Issue or pending CI is not by itself a stop reason.
 
 ## Handoff requirement
 
 Before a run ends, keep the active lane progress file usable without chat history. Record:
-- current goal/focused Issue;
+- current goal/focused Issue or H audit scope;
 - durable branch/commit/PR checkpoint when one exists;
-- completed checkpoints;
-- work in progress and exact next actions;
+- completed checkpoints/findings;
+- work in progress and exact next actions/audit targets;
 - validation/results;
 - cross-lane dependencies and hotspot/migration ownership;
 - blockers/risks;
 - stop reason.
 
 Avoid durable claims such as “no PR currently exists” or “lane X is running now” unless they are explicitly labeled as time-sensitive and necessary. Live GitHub state must be rechecked on resume.
+
+## Product / umbrella completion
+
+A green focused PR does not automatically make its umbrella Done. For important product capabilities, use the completion dimensions in `docs/product_architecture.md`: architecture, behavior, tests, UX, keyboard/accessibility/device interaction, empty/loading/error/recovery states, migration/reconciliation, replacement parity, legacy caller-zero retirement, preservation before destructive migration, and durable handoff/routing.
+
+Small focused Issues may mark dimensions non-applicable. Umbrellas should not silently omit them.
 
 ## Migration and legacy-retirement safety
 
@@ -221,7 +287,7 @@ Do not delete user data merely because replacement UI exists. Existing historica
 
 ## Branch, commit and CI hygiene
 
-- Use dedicated branches for non-trivial work; prefer lane-identifiable names (`feature/object-*`, `feature/relation-*`, `feature/database-view-*`, `feature/primitives-*`, `feature/search-*`, `feature/storage-*`, `refactor/issue-*`, `docs/*`).
+- Use dedicated branches for non-trivial work; prefer lane-identifiable names (`feature/object-*`, `feature/relation-*`, `feature/database-view-*`, `feature/primitives-*`, `feature/search-*`, `feature/storage-*`, `refactor/issue-*`, `oversight/issue-*`, `docs/*`).
 - Keep `main` releasable and refresh from latest `main` before integration when overlapping foundations changed.
 - Do not create commits solely to trigger CI or manufacture activity.
 - Do not add/remove temporary marker files, whitespace churn, unrelated formatting or meaningless comments as CI triggers.
@@ -238,6 +304,6 @@ Do not delete user data merely because replacement UI exists. Existing historica
 - If a major product decision is genuinely ambiguous, record alternatives/blocker instead of inventing semantics.
 - Prefer deletion/small extraction over abstraction for its own sake.
 
-## Planning vs implementation chats
+## Planning, implementation and oversight chats
 
-Planning/design work should refine durable Issues and `docs/product_architecture.md` when architecture changes. Implementation chats adopt one lane and one focused Issue, execute it through multiple safe checkpoints, and keep the matching lane handoff current. Separate lane chats are useful for parallelism but are not required.
+Planning/design work should refine durable Issues and `docs/product_architecture.md` when architecture changes. A–G implementation chats adopt one lane and one focused Issue, execute it through multiple safe checkpoints, and keep the matching lane handoff current. H oversight chats inspect the whole system, route concrete work to A–G, and keep the oversight handoff current. Separate chats are useful for parallelism but are not required.
