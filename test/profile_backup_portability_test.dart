@@ -67,6 +67,48 @@ void main() {
   });
 
   test(
+    'corrupt compressed content fails during extraction and cleans target',
+    () async {
+      final sandbox = await Directory.systemTemp.createTemp(
+        'bookmark_profile_backup_corrupt_content_',
+      );
+      addTearDown(() async {
+        if (await sandbox.exists()) {
+          await sandbox.delete(recursive: true);
+        }
+      });
+
+      const corruptPath = 'attachments/corrupt.txt';
+      final archive = await _writeArchive(
+        sandbox: sandbox,
+        filename: 'corrupt_content.zip',
+        entries: [
+          ArchiveFile.string('database.sqlite', 'database'),
+          ArchiveFile.string(corruptPath, List.filled(4096, 'A').join()),
+        ],
+        corruptDeflateEntry: corruptPath,
+      );
+      final target = Directory('${sandbox.path}/target');
+      await target.create();
+      final sentinel = File('${target.path}/keep.txt');
+      await sentinel.writeAsString('preflight reached');
+
+      await expectLater(
+        const ProfileBackupService().restoreProfile(
+          archivePath: archive.path,
+          targetDirectoryPath: target.path,
+        ),
+        throwsA(anything),
+      );
+
+      // A preflight failure would leave the existing target untouched. The
+      // missing target proves this fixture passed namespace validation, failed
+      // during content extraction, and used extraction-stage cleanup.
+      expect(target.existsSync(), isFalse);
+    },
+  );
+
+  test(
     'profile-relative managed paths resolve under a restored Vault root',
     () async {
       final sandbox = await Directory.systemTemp.createTemp(
@@ -277,6 +319,7 @@ Future<File> _writeArchive({
   required Directory sandbox,
   required String filename,
   required List<ArchiveFile> entries,
+  String? corruptDeflateEntry,
 }) async {
   final hasSyntheticSymlink = entries.any(
     (entry) => (entry.mode & 0xf000) == 0xa000,
@@ -289,10 +332,58 @@ Future<File> _writeArchive({
   if (hasSyntheticSymlink) {
     _markZipCreatorUnix(bytes);
   }
+  if (corruptDeflateEntry != null) {
+    _corruptDeflatePayload(bytes, corruptDeflateEntry);
+  }
   final file = File('${sandbox.path}/$filename');
   await file.writeAsBytes(bytes, flush: true);
   await archive.clear();
   return file;
+}
+
+void _corruptDeflatePayload(List<int> bytes, String entryName) {
+  final end = _findEndOfCentralDirectory(bytes);
+  final entryCount = _readUint16Le(bytes, end + 10);
+  var centralOffset = _readUint32Le(bytes, end + 16);
+
+  for (var index = 0; index < entryCount; index++) {
+    if (_readUint32Le(bytes, centralOffset) != 0x02014b50) {
+      throw StateError('Synthetic ZIP central directory is malformed.');
+    }
+
+    final nameLength = _readUint16Le(bytes, centralOffset + 28);
+    final extraLength = _readUint16Le(bytes, centralOffset + 30);
+    final commentLength = _readUint16Le(bytes, centralOffset + 32);
+    final name = utf8.decode(
+      bytes.sublist(centralOffset + 46, centralOffset + 46 + nameLength),
+    );
+
+    if (name == entryName) {
+      final compressionMethod = _readUint16Le(bytes, centralOffset + 10);
+      final compressedSize = _readUint32Le(bytes, centralOffset + 20);
+      if (compressionMethod != 8 || compressedSize == 0) {
+        throw StateError('Synthetic corrupt entry must use deflate.');
+      }
+
+      final localOffset = _readUint32Le(bytes, centralOffset + 42);
+      if (_readUint32Le(bytes, localOffset) != 0x04034b50) {
+        throw StateError('Synthetic ZIP local header is malformed.');
+      }
+      final localNameLength = _readUint16Le(bytes, localOffset + 26);
+      final localExtraLength = _readUint16Le(bytes, localOffset + 28);
+      final dataOffset = localOffset + 30 + localNameLength + localExtraLength;
+
+      // Raw DEFLATE starts with BFINAL + BTYPE. BTYPE=3 is reserved/invalid,
+      // so this preserves all ZIP namespace metadata while guaranteeing the
+      // payload fails only when the entry content is decompressed/written.
+      bytes[dataOffset] = (bytes[dataOffset] & ~0x06) | 0x06;
+      return;
+    }
+
+    centralOffset += 46 + nameLength + extraLength + commentLength;
+  }
+
+  throw StateError('Synthetic corrupt ZIP entry was not found: $entryName');
 }
 
 void _markZipCreatorUnix(List<int> bytes) {
