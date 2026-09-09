@@ -153,7 +153,9 @@ class GenericDatabaseObjectCreateService {
   ///
   /// File selection/copying belongs to the import boundary. This method starts
   /// only after a managed [filePath] exists and keeps generic title-only Image
-  /// creation fail-closed so file/source identity cannot be bypassed.
+  /// creation fail-closed so file/source identity cannot be bypassed. Optional
+  /// storage ownership is accepted only through the closed managed-file
+  /// ownership contract; the creator never infers it from the path.
   Future<int> createImageFromManagedFile({
     required int databaseId,
     required String filePath,
@@ -163,6 +165,7 @@ class GenericDatabaseObjectCreateService {
     String? contentType,
     int? pixelWidth,
     int? pixelHeight,
+    ManagedFileOwnership? storageOwnership,
   }) async {
     final page = await _load(databaseId);
     final systemKey = await _systemKey(page);
@@ -184,6 +187,7 @@ class GenericDatabaseObjectCreateService {
       contentType: contentType,
       pixelWidth: pixelWidth,
       pixelHeight: pixelHeight,
+      storageOwnership: storageOwnership,
     );
     return object.id;
   }
