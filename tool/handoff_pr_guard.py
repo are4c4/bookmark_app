@@ -21,6 +21,7 @@ HANDOFF_FILES = {
     "docs/AI_PROGRESS_SEARCH.md",
     "docs/AI_PROGRESS_STORAGE.md",
     "docs/AI_PROGRESS_REFACTOR.md",
+    "docs/AI_PROGRESS_OVERSIGHT.md",
 }
 
 
