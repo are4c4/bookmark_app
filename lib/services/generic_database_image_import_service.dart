@@ -5,6 +5,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:image/image.dart' as image;
 
 import '../data/generic_database_object_create_service.dart';
+import '../domain/managed_file_ownership.dart';
 import 'photo_storage_service.dart';
 import 'primitive_file_import_classifier.dart';
 
@@ -140,6 +141,7 @@ class GenericDatabaseImageImportService {
             contentType: photo.contentType ?? _contentType(photo.originalName),
             pixelWidth: geometry?.width,
             pixelHeight: geometry?.height,
+            storageOwnership: ManagedFileOwnership.vaultManagedCopy,
           ),
         );
       } catch (_) {
