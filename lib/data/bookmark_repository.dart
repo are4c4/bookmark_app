@@ -305,8 +305,8 @@ class BookmarkRepository {
 
   Future<void> batchSetStatus(Iterable<int> ids, String status) =>
       _engagement.batchSetStatus(ids, status);
-  Future<void> batchSetRating(Iterable<int> ids, String status) =>
-      _engagement.batchSetRating(ids, int.parse(status));
+  Future<void> batchSetRating(Iterable<int> ids, int rating) =>
+      _engagement.batchSetRating(ids, rating);
   Future<void> batchSetFavorite(Iterable<int> ids, bool favorite) =>
       _engagement.batchSetFavorite(ids, favorite);
   Future<void> batchDelete(Iterable<int> ids) async {
