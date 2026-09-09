@@ -85,8 +85,10 @@ def validates_default_branch_ruleset(ruleset: dict[str, object]) -> AuditResult:
         if contexts != ["merge-gate"]:
             errors.append("main ruleset must require exactly `merge-gate`")
 
-    bypass = ruleset.get("bypass_actors")
-    if bypass != []:
+    # GitHub omits these administration-backed fields from ordinary Actions/public
+    # payloads. Enforce them whenever the caller can observe them, but omission is
+    # not itself drift; treating it as drift would permanently false-fail CI.
+    if "bypass_actors" in ruleset and ruleset.get("bypass_actors") != []:
         errors.append("main ruleset must not define bypass actors")
     if (
         "current_user_can_bypass" in ruleset
@@ -101,7 +103,10 @@ def validates_repository(repository: dict[str, object]) -> AuditResult:
     errors: list[str] = []
     if repository.get("default_branch") != "main":
         errors.append("repository default branch must remain `main`")
-    if repository.get("delete_branch_on_merge") is not True:
+    if (
+        "delete_branch_on_merge" in repository
+        and repository.get("delete_branch_on_merge") is not True
+    ):
         errors.append("repository must keep delete_branch_on_merge=true")
     return AuditResult(tuple(errors))
 
@@ -155,7 +160,10 @@ def _append_summary(errors: list[str]) -> None:
         lines.append("Drift detected:")
         lines.extend(f"- {error}" for error in errors)
     else:
-        lines.append("All critical protected-main integration settings match the contract.")
+        lines.append("All observable protected-main integration settings match the contract.")
+        lines.append(
+            "Administration-only fields are also validated when GitHub includes them in the API payload."
+        )
     with Path(path).open("a", encoding="utf-8") as handle:
         handle.write("\n".join(lines) + "\n")
 
@@ -195,7 +203,7 @@ def main() -> int:
     _append_summary(errors)
     if errors:
         return 1
-    print("repository_settings_guard: protected-main settings match contract")
+    print("repository_settings_guard: observable protected-main settings match contract")
     return 0
 
 
