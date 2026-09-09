@@ -11,7 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test(
-    'repository create/update Person uses one canonical Person identity',
+    'repository create/update/delete Person uses one canonical Person identity',
     () async {
       final database = AppDatabase.forTesting(NativeDatabase.memory());
       addTearDown(database.close);
@@ -67,6 +67,22 @@ void main() {
       );
       expect(projected.name, 'Renamed Person');
       expect(projected.note, 'second note');
+
+      await repository.deletePerson(projected);
+
+      expect(await repository.watchPeople().first, isEmpty);
+      expect(await objectStore.listObjects(schema.objectType.id), isEmpty);
+
+      final restartedBridge = PersonObjectBridge(
+        database: database,
+        objectStore: objectStore,
+        systemObjectStore: SystemObjectStore(
+          database: database,
+          objectStore: objectStore,
+        ),
+      );
+      expect(await restartedBridge.syncLegacyPeople(workspaceId), isEmpty);
+      expect(await objectStore.listObjects(schema.objectType.id), isEmpty);
     },
   );
 }
