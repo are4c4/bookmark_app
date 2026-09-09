@@ -211,10 +211,11 @@ void main() {
       final directUrl = bookmarkType.properties.singleWhere(
         (property) => property.name == 'URL',
       );
-      final weblinkType = (await restarted.systemObjectStore.getSystemObjectType(
-        workspaceId: workspaceId,
-        systemKey: WeblinkObjectService.systemKey,
-      ))!;
+      final weblinkType = (await restarted.systemObjectStore
+          .getSystemObjectType(
+            workspaceId: workspaceId,
+            systemKey: WeblinkObjectService.systemKey,
+          ))!;
       final weblinks = await restarted.objectStore.listObjects(weblinkType.id);
       expect(weblinks, hasLength(1));
       final targetId = weblinks.single.id;
