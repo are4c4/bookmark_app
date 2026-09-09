@@ -232,17 +232,81 @@ H follows `docs/AI_PROGRESS_OVERSIGHT.md` rather than the product implementation
 
 Any H PR that changes repository files still needs a focused coordination Issue and normal PR/CI discipline.
 
+## Lane continuation and resume/stop contract
+
+All A–H runs inherit this contract, including a fresh chat started with only `<lane>レーンとして作業を続けて`. The goal is continuous useful work, not continuous activity: keep going while concrete safe work exists, and stop cleanly when it does not.
+
+### After every coherent slice, PR, or merge
+
+Do not treat completion of the current item as the end of the lane. Before stopping or declaring the lane idle:
+
+1. Refresh latest `main` after the most recent integration that could affect the lane.
+2. Re-read live open PRs, focused Issues, relevant CI, shared-hotspot ownership and migration-writer ownership.
+3. If the current focused Issue still has unfinished acceptance criteria, continue it.
+4. If the current focused Issue is complete, search for the next safe lane-local task using the discovery order below.
+5. If CI is pending for one PR, continue only work that is independent of that pending result; pending CI by itself is not a stop reason.
+
+### Next-work discovery order
+
+Use this order so a lane does not stop merely because its first Issue finished:
+
+1. unfinished acceptance criteria in the current focused Issue;
+2. an explicit next slice or unmet acceptance dimension in the same umbrella Issue;
+3. another live open focused Issue routed to the lane and not already owned by another active branch/PR;
+4. a lane-local dependency that became actionable because another PR merged or current `main` changed;
+5. a concrete, evidence-backed acceptance/correctness/parity gap discovered from current `main`, tests or the active umbrella; create/refine one focused Issue before implementing a new gap rather than silently broadening scope;
+6. for H, a newly actionable previously-idle lane, cross-lane integration gap, or architecture/roadmap inconsistency that should be routed to exactly one A–G lane.
+
+At every step, preserve existing ownership, hotspot leases, schema/migration single-writer rules and product boundaries. Do not invent speculative features, abstractions, refactors or documentation churn merely to avoid an idle lane. There is no minimum PR count, minimum runtime, or activity quota.
+
+### Final resume audit before stopping
+
+A lane may report `idle` or another stop only after all of these have been checked against live state at the end of the run:
+
+- latest `main` was refreshed after the last relevant merge;
+- open PR ownership and focused Issues were re-read;
+- the lane handoff and relevant umbrella acceptance were re-read;
+- newly-unblocked dependencies were checked;
+- shared-hotspot and migration-writer conflicts were checked;
+- independent work that could proceed while CI is pending was considered;
+- the next-work discovery order above found no further safe task, or found a specific blocker that matches a stop category below.
+
+If this audit has not happened, “current PR merged”, “tests are green”, “CI is running”, or “the listed Issue is done” is not valid stop evidence.
+
+### Stop reason categories
+
+Record one of these exact categories in the durable handoff when a run stops:
+
+- `idle-no-work` — final resume audit found no concrete safe lane-local work; include the live evidence searched.
+- `dependency` — all meaningful next work is blocked by an explicit Issue/PR/contract dependency; name it.
+- `decision` — a genuine product/architecture choice requires user input; summarize the alternatives without choosing silently.
+- `destructive-approval` — the next step is destructive/irreversible or deletes user data and lacks required explicit approval/preservation evidence.
+- `conflict` — active hotspot ownership, duplicate focused-Issue ownership or migration-writer ownership blocks all independent safe work; identify the owner.
+- `external-infra` — required external/real-machine infrastructure is unavailable and no independent safe work remains.
+- `tool-session-limit` — runtime/tool/session limits stopped the run despite remaining safe work; record the exact next action so a fresh chat can resume immediately.
+
+Use the form `Stop reason: <category> — <evidence/next action>`. Do not use a vague “done”, “finished”, or “waiting” as the durable stop reason.
+
+### Lane activity intent
+
+- **A/B/C/D/G:** normally continue across multiple focused slices while concrete safe lane-local work exists.
+- **E:** may legitimately use `idle-no-work` when no demonstrated Search/Indexing correctness obligation exists after the final resume audit; do not manufacture Search work.
+- **F:** may legitimately stop on `external-infra`/`dependency` for real-machine preservation gates, but only after checking for other independent Vault/storage/export/delivery work.
+- **H:** remains a broad oversight/reactivation lane. On every resume, explicitly check whether a previously idle A–G lane became actionable because dependencies merged, ownership cleared, or new evidence appeared; route implementation back to exactly one owning A–G lane rather than taking it over.
+
+Hourly/background automatic restarts are outside this contract and must not be introduced implicitly.
+
 ### Stop only when
 
-For A–G implementation runs:
-- the active focused Issue/lane has no actionable work;
+For A–G implementation runs, after the final resume audit:
+- `idle-no-work` applies because the lane has no actionable concrete work;
 - a genuine product decision requires user input;
 - the next step is destructive/irreversible or deletes user data and lacks explicit approval;
-- an unavoidable cross-lane conflict/dependency blocks safe work;
+- an unavoidable cross-lane conflict/dependency blocks all independent safe work;
 - external infrastructure failure blocks all independent safe work;
 - runtime/tool/session limits are reached.
 
-For H audits:
+For H audits, after the final resume audit:
 - the major oversight areas have been checked and no further actionable evidence exists;
 - the next conclusion needs a genuine product decision;
 - all meaningful next findings depend on active work that cannot yet be evaluated;
@@ -260,7 +324,7 @@ Before a run ends, keep the active lane progress file usable without chat histor
 - validation/results;
 - cross-lane dependencies and hotspot/migration ownership;
 - blockers/risks;
-- stop reason.
+- `Stop reason: <category> — <evidence/next action>` using the shared resume/stop categories above.
 
 Avoid durable claims such as “no PR currently exists” or “lane X is running now” unless they are explicitly labeled as time-sensitive and necessary. Live GitHub state must be rechecked on resume.
 
