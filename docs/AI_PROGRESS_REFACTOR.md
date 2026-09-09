@@ -81,7 +81,7 @@ Future G work after owning-lane parity:
 - duplicate focused-Issue ownership detection;
 - deterministic migration single-writer hard gate: non-migration PRs pass without ownership arbitration, the lowest-numbered open migration PR is the unique active owner, later migration PRs block, and the check runs inside the required quality/`merge-gate` path;
 - high-confidence destructive-risk detection is blocking, and Phase A machine-strong non-self approval requires a distinct current-head approved User with write/admin permission and complete review-history evaluation; Phase B enforcement-root immutability remains open under #1107;
-- read-only repository-settings drift audit on PR, scheduled and manual runs for the observable effective default-branch integration contract; administration-only fields are validated when GitHub exposes them, but API omission is not guessed as drift and no privileged administration credential is introduced merely for exhaustive auditing;
+- read-only repository-settings drift audit on PR, scheduled and manual runs: active branch ruleset details are inspected and uniqueness is required only among rulesets targeting `~DEFAULT_BRANCH`; normal Actions runs authenticate reads with the ordinary read-only token while local/manual execution may fall back to unauthenticated reads; audit unavailability remains fail-closed and is distinguished from actual settings drift; administration-only fields are validated when GitHub exposes them, but omission is not guessed as drift and no privileged administration credential is introduced merely for exhaustive auditing;
 - focused implementation Issue Form requiring Primary lane, Goal, Depends on, Shared hotspots, Migration/data impact, Acceptance and Non-goals;
 - durable handoff audit;
 - immutable GitHub Actions SHA pin audit;
@@ -130,7 +130,7 @@ G deletes superseded implementation only after the owning product/integrity lane
 ## Repository integration contract
 `main` is protected by the active repository ruleset and integrates through PRs with strict/up-to-date `merge-gate`; #980 is completed. Automatic deletion of ordinary merged PR head branches is enabled.
 
-Critical observable integration invariants are also checked by a read-only repository-settings audit. The audit intentionally distinguishes real drift from fields omitted by non-privileged GitHub API payloads; exact current ruleset/settings values remain live GitHub state rather than durable handoff prose.
+Critical observable integration invariants are also checked by a read-only repository-settings audit. The audit selects the unambiguous active ruleset targeting the default branch rather than requiring it to be the repository's only active branch ruleset, authenticates normal Actions reads with the ordinary read-only token, distinguishes audit unavailability from actual drift while failing closed in either case, and intentionally distinguishes real drift from administration-only fields omitted by non-privileged GitHub API payloads. Exact current ruleset/settings values remain live GitHub state rather than durable handoff prose.
 
 ## Validation
 Behavior-preserving refactors require changed-Dart format, Analyze and relevant/full Flutter Test. Workflow/guard changes must exercise focused regressions and the authoritative CI path. Full Flutter Test currently means the deterministic exact-once four-file-list path above, not the retired built-in test-case shard flags. Docs-only architecture synchronization uses the docs-only CI path plus handoff/coordination audits.
