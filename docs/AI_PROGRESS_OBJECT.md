@@ -17,23 +17,37 @@ Own generic Object/ObjectType identity and lifecycle semantics, reusable Propert
 ## Active focused issues
 
 ### #1044 — Person migration A
-Current primary Lane A slice. Move normal Person identity/write authority to generic Person ObjectType while preserving stable identity, note/Body compatibility, restart/reconciliation safety and legacy compatibility projections. Do not retire People UI or redesign groups/roles here.
+Current primary Lane A issue. Generic Person identity/write authority is moving onto the ordinary Object/ObjectType lifecycle while legacy `people` remains only an explicit compatibility projection until B/C/G parity and caller-zero work is complete.
 
-Current implementation boundary on `feature/object-person-generic-write-authority-1044` / PR #1152:
-- `PersonObjectWriteService` creates the canonical generic Person Object first, then projects a compatibility `people` row and `person_object_links` mapping in the same transaction;
-- rename/note updates mutate the canonical Person Object first and then project legacy `people` state in the same transaction;
-- legacy projection failure (including legacy unique-name conflicts) rolls the transaction back so canonical title/note cannot advance independently;
-- existing legacy Persons are imported through the existing `PersonObjectBridge` and then reuse their canonical Person Object instead of creating a duplicate;
-- service reconstruction/restart preserves the same `person_object_links` identity;
-- normal `BookmarkRepository.createPerson` / `updatePerson` and internal `_resolvePeople()` creation now route through the generic-first boundary;
-- `deletePerson` intentionally remains outside this first slice because Bookmark/PersonGroup legacy FK/cascade compatibility must be proven before authority is reversed for deletion;
-- no schema/migration file or People UI is changed.
+PR #1152 is integrated as `c3719420756611bf56f5f5c6be2ad94112bb4ae7` and established the create/update/reconciliation authority direction:
+- `PersonObjectWriteService` creates the canonical generic Person Object first, then projects a compatibility `people` row and `person_object_links` mapping in one transaction;
+- rename/note updates mutate canonical title/Note first and project legacy state transactionally;
+- mapped Person reconciliation treats canonical Object title/Note as authority, while unmapped historical legacy Persons may seed one canonical Object once;
+- damaged/ambiguous identity or legacy projection conflict fails closed instead of duplicating or partially advancing identity;
+- normal `BookmarkRepository.createPerson` / `updatePerson` plus internal Person creation use this generic-first boundary;
+- Profile Image is already canonical `Relation<Image>` authority; legacy `profilePhotoId` is compatibility projection only;
+- restart/service reconstruction preserves one canonical Person identity.
 
-Focused regressions:
-- `test/person_object_write_service_test.dart` covers canonical-first create/update, projection rollback and restart identity reuse;
-- `test/bookmark_repository_person_write_authority_test.dart` covers the real repository create/update path preserving one canonical Person identity.
+Current focused lifecycle slice: `feature/person-generic-delete-lifecycle-1044` / PR #1180.
+- `PersonObjectDeletionService` resolves and validates the canonical Person before a surviving People caller may delete it;
+- canonical incoming Relation detach/Object deletion stays delegated to B's established `RelationMutationService.deleteObject()`; A does not add a Person-specific Relation store or detach algorithm;
+- explicit Person deletion removes the temporary legacy `people` projection in the same outer transaction so reconciliation cannot resurrect the deleted canonical Person;
+- existing compatibility FK behavior remains intact while legacy callers survive: Bookmark role rows and PersonGroup memberships cascade, Saved View Person filters become null;
+- Generic Database/Object deletion recognizes only the registered system Person ObjectType and applies the same compatibility cleanup; canonical-only Person Objects with no legacy projection remain directly deletable;
+- deleting Person removes its outgoing Profile Image Relation with the Person Object but does not delete the target Image Object or infer managed-byte deletion authority;
+- missing transition mapping may be recovered only from one valid/unambiguous canonical `Legacy Person ID` claim; malformed, missing or conflicting identity fails closed;
+- late canonical deletion failure rolls back Relation detach and legacy compatibility cleanup together;
+- no schemaVersion/migration/legacy-table retirement or People UI change is part of this slice.
 
-Next #1044 work after this create/update slice integrates: re-audit delete/profile-image/note compatibility and remaining normal Person write callers. Do not expand into B-owned role/group Relation semantics or C-owned People UI retirement.
+Focused regressions cover:
+- canonical-first create/update, rollback and restart identity reuse;
+- real repository create/update/delete lifecycle and restart non-recreation;
+- legacy role/group/Saved View compatibility cleanup during explicit Person deletion;
+- missing-link recovery and late-delete transactional rollback;
+- real Generic Database deletion of legacy-backed Person with incoming Relations and Profile Image target preservation;
+- deletion of canonical-only Person without creating legacy People state.
+
+After #1180 integrates, re-audit #1044 acceptance and current-main Person write/delete callers. Do not absorb B/#1045 role/group Relation convergence, C/#1046 People UI replacement or G caller-zero retirement into Lane A merely to keep #1044 active.
 
 ## Recently integrated
 
@@ -98,12 +112,13 @@ Delivered:
 - exact Search-agnostic canonical Object sync impact contract;
 - template/object creation integrity and shared Object detail/opening seams;
 - local Body structural Undo as interaction recovery, not durable history;
-- collision-safe Bookmark -> canonical Weblink convergence while compatibility data remains intact.
+- collision-safe Bookmark -> canonical Weblink convergence while compatibility data remains intact;
+- generic-first Person create/update/reconciliation authority with temporary legacy projection.
 
-Older handoff statements that #1041 or #1058 are active are obsolete. #1044 is the current primary Lane A slice.
+Older handoff statements that #1041, #1058 or PR #1152 are still active are obsolete. #1044 remains the current primary Lane A issue while the focused delete/lifecycle slice is validated.
 
 ## Cross-lane boundaries
-- **B:** Relation mutation/read/index/backlink/audit/reconcile, Bookmark/Person relationship migration, Person roles/groups and Tag hierarchy integrity. A/#1044 must not redesign role/group Relation semantics.
+- **B:** Relation mutation/read/index/backlink/audit/reconcile, Bookmark/Person relationship migration, Person roles/groups and Tag hierarchy integrity. A/#1044 consumes canonical Relation deletion but must not redesign role/group Relation semantics.
 - **C:** Database/View/schema UX, Stage1/People generic collection replacement and Tag hierarchy query/filter/picker UX. Dedicated People UI retirement remains C-owned.
 - **D:** Weblink URL identity/normalization/capture-native behavior and Image/File native capabilities. D/#1054 is integrated; do not reopen it from A.
 - **E:** canonical Object Search projection/FTS freshness.
@@ -111,17 +126,18 @@ Older handoff statements that #1041 or #1058 are active are obsolete. #1044 is t
 - **G:** behavior-preserving hotspot reduction and caller-zero legacy retirement after A/B/C/D parity.
 
 ## Hotspot / concurrency rule
-Recheck live PR ownership before editing `object_inspector_page.dart`, `generic_database_page.dart`, Stage1, People or `app_database.dart`. #1044 should prefer the focused Person write boundary, repository routing and dedicated tests. Do not take over B role/group Relation convergence or C People UI work.
+Recheck live PR ownership before editing `object_inspector_page.dart`, `generic_database_page.dart`, Stage1, People or `app_database.dart`. #1180 deliberately composes deletion in `generic_database_page_services.dart` rather than taking C's live `generic_database_page.dart` ownership. Do not take over B role/group Relation convergence or C People UI work.
 
 ## Validation
-GitHub Actions is authoritative when local Flutter execution is unavailable. #1044 create/update authority requires changed-Dart format, Analyze/guards, focused service/repository regressions, full Flutter Test and authoritative merge-gate on an up-to-date head.
+GitHub Actions is authoritative when local Flutter execution is unavailable. #1044 lifecycle authority requires changed-Dart Format, Analyze/guards, focused service/repository/real-host regressions, full Flutter Test shards, test-health and authoritative merge-gate on a latest-main-synchronized head.
 
 ## Resume sequence
 1. verify latest `main`, #1044, open PR ownership and current CI before editing;
-2. finish and integrate the generic-first Person create/update/note authority slice in PR #1152 without schema/migration or People UI changes;
-3. keep legacy `people` as a compatibility projection and fail closed/roll back when projection cannot remain consistent;
-4. after create/update integrates, re-audit #1044 acceptance for delete, Profile Image Relation compatibility, remaining legacy-first callers and restart/reconciliation gaps;
-5. split deletion into a separate focused slice unless legacy Bookmark/PersonGroup FK/cascade behavior is proven preservation-safe;
-6. continue Lane A until the shared `AGENTS.md` stop condition is actually reached.
+2. validate/fix PR #1180's canonical Person delete + legacy compatibility cleanup without schema/migration or shared People UI changes;
+3. preserve Relation semantics by delegating detach/delete to `RelationMutationService`; fix only A-owned identity/lifecycle composition failures exposed by tests;
+4. synchronize #1180 onto latest main only after its implementation is format/analyze/test stable, then require authoritative full CI/merge-gate before integration;
+5. after #1180 integrates, re-audit #1044 acceptance, remaining normal Person write/delete callers and restart/reconciliation behavior;
+6. close #1044 only if the A-owned authority acceptance is genuinely complete; otherwise continue the next focused non-conflicting A slice;
+7. if A's #1044 authority is complete but remaining People retirement work is exclusively B/#1045, C/#1046 or G caller-zero, record the appropriate shared stop reason instead of inventing A work.
 
 This sequence is not terminal. After any slice/PR/merge, apply the shared **Lane continuation and resume/stop contract** in `AGENTS.md` before ending the run. Lane A continues while concrete safe A work exists; a single completed Issue/PR is never sufficient stop evidence. If the final resume audit finds no actionable A work, record `Stop reason: idle-no-work — <live evidence>` (or another exact stop category from `AGENTS.md`) in the durable handoff before stopping.
