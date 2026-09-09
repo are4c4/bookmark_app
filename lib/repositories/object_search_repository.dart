@@ -422,6 +422,19 @@ class ObjectSearchRepository {
     return rows.map(_hitFromRow).toList(growable: false);
   }
 
+  bool _matchesCanonicalCjkTerms(QueryRow row, List<String> canonicalTerms) {
+    final canonicalColumns = _searchTextColumns
+        .map(
+          (column) =>
+              normalizeCjkSearchCompatibilityText(row.read<String>(column))
+                  .toLowerCase(),
+        )
+        .toList(growable: false);
+    return canonicalTerms.every(
+      (term) => canonicalColumns.any((column) => column.contains(term)),
+    );
+  }
+
   Future<List<ObjectSearchHit>> _searchCjkSubstringFallback({
     required int workspaceId,
     required List<String> cjkTerms,
@@ -429,49 +442,70 @@ class ObjectSearchRepository {
     required int limit,
     int? objectTypeId,
   }) async {
+    if (limit <= 0) return const <ObjectSearchHit>[];
+
     final conditions = <String>['CAST(workspace_id AS INTEGER) = ?'];
-    final variables = <Variable<Object>>[Variable<int>(workspaceId)];
+    final baseVariables = <Variable<Object>>[Variable<int>(workspaceId)];
     final prefixQuery = _buildPrefixQueryFromTerms(prefixTerms);
     if (prefixQuery.isNotEmpty) {
       conditions.add('object_search_fts MATCH ?');
-      variables.add(Variable<String>(prefixQuery));
+      baseVariables.add(Variable<String>(prefixQuery));
     }
     if (objectTypeId != null) {
       conditions.add('CAST(object_type_id AS INTEGER) = ?');
-      variables.add(Variable<int>(objectTypeId));
+      baseVariables.add(Variable<int>(objectTypeId));
     }
-    for (final term in cjkTerms) {
-      final variants = buildCjkWidthCompatibilityVariants(term);
-      final predicates = <String>[];
-      for (final column in _searchTextColumns) {
-        for (final variant in variants) {
-          predicates.add('instr(lower($column), lower(?)) > 0');
-          variables.add(Variable<String>(variant));
-        }
-      }
-      conditions.add('(${predicates.join(' OR ')})');
-    }
-    variables.add(Variable<int>(limit));
 
+    final canonicalTerms = cjkTerms
+        .map(normalizeCjkSearchCompatibilityText)
+        .map((term) => term.toLowerCase())
+        .toList(growable: false);
     final rankExpression = prefixQuery.isEmpty
         ? '0.0'
         : 'bm25(object_search_fts)';
     final snippetExpression = prefixQuery.isEmpty
         ? "''"
         : "snippet(object_search_fts, -1, '‹', '›', ' … ', 20)";
-    final rows = await _database.customSelect('''
-      SELECT
-        CAST(object_id AS INTEGER) AS object_id,
-        CAST(object_type_id AS INTEGER) AS object_type_id,
-        CAST(workspace_id AS INTEGER) AS workspace_id,
-        $rankExpression AS rank,
-        $snippetExpression AS snippet
-      FROM object_search_fts
-      WHERE ${conditions.join(' AND ')}
-      ORDER BY rank, object_id
-      LIMIT ?
-      ''', variables: variables).get();
-    return rows.map(_hitFromRow).toList(growable: false);
+    final textProjection = _searchTextColumns.join(',\n        ');
+    final batchSize = limit > 100 ? limit : 100;
+    final hits = <ObjectSearchHit>[];
+    var offset = 0;
+
+    while (hits.length < limit) {
+      final rows = await _database
+          .customSelect(
+            '''
+        SELECT
+          CAST(object_id AS INTEGER) AS object_id,
+          CAST(object_type_id AS INTEGER) AS object_type_id,
+          CAST(workspace_id AS INTEGER) AS workspace_id,
+          $rankExpression AS rank,
+          $snippetExpression AS snippet,
+          $textProjection
+        FROM object_search_fts
+        WHERE ${conditions.join(' AND ')}
+        ORDER BY rank, object_id
+        LIMIT ? OFFSET ?
+        ''',
+            variables: <Variable<Object>>[
+              ...baseVariables,
+              Variable<int>(batchSize),
+              Variable<int>(offset),
+            ],
+          )
+          .get();
+      if (rows.isEmpty) break;
+
+      for (final row in rows) {
+        if (!_matchesCanonicalCjkTerms(row, canonicalTerms)) continue;
+        hits.add(_hitFromRow(row));
+        if (hits.length >= limit) break;
+      }
+      if (rows.length < batchSize) break;
+      offset += rows.length;
+    }
+
+    return List<ObjectSearchHit>.unmodifiable(hits);
   }
 
   Future<List<ObjectSearchHit>> search({
@@ -501,11 +535,12 @@ class ObjectSearchRepository {
     // unicode61 keeps ordinary Japanese text without whitespace in one token
     // and does not fold half-width Katakana to ordinary full-width forms.
     // Prefix MATCH therefore misses either intra-token CJK starts (for example
-    // `漱石` in `夏目漱石`) or compatible width variants such as `ｶﾀｶﾅ` versus
-    // `カタカナ`. Scan the same canonical projection only for CJK-containing
-    // terms, preserving punctuation inside the term and keeping non-CJK terms
-    // on the existing prefix FTS path. This adds no second index and does not
-    // broaden ordinary Latin infix search.
+    // `漱石` in `夏目漱石`) or compatible Japanese representations such as
+    // `ｶﾞ` / `ガ` / `カ`+U+3099. Scan the same canonical projection only for
+    // CJK-containing terms, normalizing both candidate text and query needles
+    // at comparison time while keeping non-CJK terms on the existing prefix
+    // FTS path. This adds no second index and does not broaden ordinary Latin
+    // infix search.
     final fallbackHits = await _searchCjkSubstringFallback(
       workspaceId: workspaceId,
       cjkTerms: cjkTerms,
