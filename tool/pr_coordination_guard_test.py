@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
+import base64
 import unittest
+from unittest import mock
 
 import pr_coordination_guard as guard
 
@@ -432,6 +434,80 @@ jobs:
                 policy_active=True,
             ),
             [],
+        )
+
+    def test_current_base_policy_contents_detect_v2_sentinel(self) -> None:
+        active = base64.b64encode(
+            f"# {guard.APPROVAL_POLICY_SENTINEL}\n".encode("utf-8")
+        ).decode("ascii")
+        inactive = base64.b64encode(b"# old policy\n").decode("ascii")
+
+        self.assertTrue(
+            guard.approval_policy_active_from_contents(
+                {"encoding": "base64", "content": active}
+            )
+        )
+        self.assertFalse(
+            guard.approval_policy_active_from_contents(
+                {"encoding": "base64", "content": inactive}
+            )
+        )
+        with self.assertRaises(ValueError):
+            guard.approval_policy_active_from_contents(
+                {"encoding": "utf-8", "content": "plain text"}
+            )
+
+    def test_current_base_policy_lookup_uses_live_base_ref(self) -> None:
+        encoded = base64.b64encode(
+            f"# {guard.APPROVAL_POLICY_SENTINEL}\n".encode("utf-8")
+        ).decode("ascii")
+        with mock.patch.object(
+            guard,
+            "_request_json",
+            return_value={"encoding": "base64", "content": encoded},
+        ) as request:
+            self.assertTrue(
+                guard._current_base_approval_policy_active(
+                    "https://api.github.com/repos/owner/repo",
+                    "token",
+                    "main",
+                )
+            )
+
+        request.assert_called_once_with(
+            "https://api.github.com/repos/owner/repo/contents/tool/pr_coordination_guard.py?ref=main",
+            "token",
+        )
+
+    def test_current_base_policy_override_blocks_stale_base_bootstrap(self) -> None:
+        patch = """@@ -1 +1 @@
+-old = 1
++new = 2
+"""
+        with mock.patch.object(
+            guard, "approval_policy_active", return_value=False
+        ) as stale_base, mock.patch.object(
+            guard, "patch_for_path", return_value=patch
+        ):
+            risks = guard.destructive_risks(
+                "stale-pre-v2-base",
+                "head",
+                [guard.APPROVAL_GUARD_PATH],
+                policy_active=True,
+            )
+
+        stale_base.assert_not_called()
+        self.assertTrue(any("guard policy" in risk for risk in risks))
+
+    def test_runtime_paths_do_not_need_live_policy_lookup(self) -> None:
+        self.assertFalse(
+            guard.approval_policy_sensitive_paths(["lib/features/search/search.dart"])
+        )
+        self.assertTrue(
+            guard.approval_policy_sensitive_paths([guard.APPROVAL_GUARD_PATH])
+        )
+        self.assertTrue(
+            guard.approval_policy_sensitive_paths([".github/workflows/flutter_ci.yml"])
         )
 
 
