@@ -1,0 +1,5 @@
+include: package:flutter_lints/flutter.yaml
+
+# Start from Flutter's maintained baseline and ratchet stricter project-specific
+# rules only when the existing codebase can satisfy them without broad churn.
+# `flutter analyze` is the authoritative enforcement path in CI.
