@@ -4,7 +4,6 @@ import 'package:bookmark_app/data/object_body_store.dart';
 import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/domain/object_body.dart';
-import 'package:bookmark_app/features/object/presentation/widgets/object_body_document_view.dart';
 import 'package:bookmark_app/features/object/presentation/widgets/object_body_editor_section.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
@@ -38,7 +37,7 @@ void main() {
             text: 'A',
             attributes: <String, dynamic>{'align': 'center'},
           ),
-          ObjectBodyBlock(id: 'b', type: 'heading', text: 'B'),
+          ObjectBodyBlock(id: 'b', type: 'paragraph', text: 'B'),
           ObjectBodyBlock(id: 'c', type: 'paragraph', text: 'C'),
         ],
       ),
