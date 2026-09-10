@@ -83,6 +83,34 @@ void main() {
       newer.toJson(),
     );
   });
+
+  testWidgets('text edit is serialized before delete without resurrection', (
+    tester,
+  ) async {
+    final fixture = await _fixture();
+    addTearDown(fixture.database.close);
+    const initial = ObjectBodyDocument(
+      blocks: <ObjectBodyBlock>[
+        ObjectBodyBlock(id: 'keep', type: 'paragraph', text: 'Keep'),
+        ObjectBodyBlock(id: 'delete', type: 'paragraph', text: 'Old text'),
+      ],
+    );
+    await fixture.bodyStore.write(
+      objectId: fixture.objectId,
+      document: initial,
+    );
+    await _pumpEditor(tester, fixture);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('body-text-delete')),
+      'Edited before delete',
+    );
+    await _deleteBlock(tester, 'delete');
+
+    final persisted = await fixture.bodyStore.read(fixture.objectId);
+    expect(persisted.blocks.map((block) => block.id), ['keep']);
+    expect(find.byKey(const ValueKey('body-text-delete')), findsNothing);
+  });
 }
 
 Future<

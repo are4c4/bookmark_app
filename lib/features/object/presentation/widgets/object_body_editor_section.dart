@@ -63,7 +63,7 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
   int _loadGeneration = 0;
   String? _autofocusBlockId;
   int? _autofocusOffset;
-  Future<void> _textMutationQueue = Future<void>.value();
+  Future<void> _mutationQueue = Future<void>.value();
 
   ObjectBodyStore get _bodyStore => ObjectBodyStore(widget.store);
 
@@ -168,22 +168,30 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
     }
   }
 
-  Future<void> _enqueueTextMutation(
+  Future<void> _enqueueMutation(
     int objectId,
-    Future<ObjectBodyDocument> Function() mutation,
+    Future<void> Function() mutation,
   ) {
-    final operation = _textMutationQueue.then((_) async {
+    final operation = _mutationQueue.then((_) async {
       if (!mounted || widget.objectId != objectId) return;
-      await _runMutation(mutation, expectedObjectId: objectId);
+      await mutation();
     });
-    _textMutationQueue = operation;
+    _mutationQueue = operation;
     return operation;
   }
+
+  Future<void> _enqueueDocumentMutation(
+    int objectId,
+    Future<ObjectBodyDocument> Function() mutation,
+  ) => _enqueueMutation(
+    objectId,
+    () => _runMutation(mutation, expectedObjectId: objectId),
+  );
 
   Future<void> _editText(ObjectBodyBlock block, String text) {
     final objectId = widget.objectId;
     final edits = _bodyBlockEdits;
-    return _enqueueTextMutation(
+    return _enqueueDocumentMutation(
       objectId,
       () => edits.updateText(objectId: objectId, blockId: block.id, text: text),
     );
@@ -197,7 +205,7 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
     final bodyStore = _bodyStore;
     final edits = _bodyBlockEdits;
     String? newBlockId;
-    await _enqueueTextMutation(objectId, () async {
+    await _enqueueDocumentMutation(objectId, () async {
       final latest = await bodyStore.read(objectId);
       newBlockId = _bodyBlockIds.next(latest, prefix: 'paragraph');
       return edits.splitParagraph(
@@ -224,7 +232,7 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
     String? targetBlockId;
     int? targetOffset;
 
-    await _enqueueTextMutation(objectId, () async {
+    await _enqueueDocumentMutation(objectId, () async {
       final latest = await bodyStore.read(objectId);
       final index = latest.blocks.indexWhere((item) => item.id == block.id);
       if (index <= 0) return latest;
@@ -250,48 +258,54 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
     });
   }
 
-  Future<void> _toggleChecklist(ObjectBodyBlock block, bool checked) =>
-      _runMutation(
-        () => _bodyBlockEdits.setChecklistChecked(
-          objectId: widget.objectId,
-          blockId: block.id,
-          checked: checked,
-        ),
-      );
-
-  Future<void> _insertBlock(
-    ObjectBodyInsertKind kind, {
-    String? afterBlockId,
-  }) async {
-    final latest = await _bodyStore.read(widget.objectId);
-    final newBlockId = _bodyBlockIds.next(latest, prefix: kind.name);
-    await _runMutation(
-      () => afterBlockId == null
-          ? _bodyActions.insert(
-              objectId: widget.objectId,
-              newBlockId: newBlockId,
-              kind: kind,
-            )
-          : _bodyActions.insertAfter(
-              objectId: widget.objectId,
-              anchorBlockId: afterBlockId,
-              newBlockId: newBlockId,
-              kind: kind,
-            ),
+  Future<void> _toggleChecklist(ObjectBodyBlock block, bool checked) {
+    final objectId = widget.objectId;
+    final edits = _bodyBlockEdits;
+    return _enqueueDocumentMutation(
+      objectId,
+      () => edits.setChecklistChecked(
+        objectId: objectId,
+        blockId: block.id,
+        checked: checked,
+      ),
     );
   }
 
+  Future<void> _insertBlock(ObjectBodyInsertKind kind, {String? afterBlockId}) {
+    final objectId = widget.objectId;
+    final bodyStore = _bodyStore;
+    final actions = _bodyActions;
+    return _enqueueDocumentMutation(objectId, () async {
+      final latest = await bodyStore.read(objectId);
+      final newBlockId = _bodyBlockIds.next(latest, prefix: kind.name);
+      return afterBlockId == null
+          ? actions.insert(
+              objectId: objectId,
+              newBlockId: newBlockId,
+              kind: kind,
+            )
+          : actions.insertAfter(
+              objectId: objectId,
+              anchorBlockId: afterBlockId,
+              newBlockId: newBlockId,
+              kind: kind,
+            );
+    });
+  }
+
   Future<void> _insertObjectReference({String? afterBlockId}) async {
+    final objectId = widget.objectId;
+    final workspaceId = widget.workspaceId;
+    final catalog = _objectReferenceCatalog;
+    final inserts = _bodyReferenceInserts;
     try {
-      final candidates = await _objectReferenceCatalog.load(
-        workspaceId: widget.workspaceId,
-      );
-      if (!mounted) return;
+      final candidates = await catalog.load(workspaceId: workspaceId);
+      if (!mounted || widget.objectId != objectId) return;
       final targetId = await showObjectBodyObjectReferencePicker(
         context,
         candidates: candidates,
       );
-      if (targetId == null) return;
+      if (targetId == null || !mounted || widget.objectId != objectId) return;
       final target = candidates.firstWhere(
         (candidate) => candidate.objectId == targetId,
       );
@@ -299,99 +313,136 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
         objectId: target.objectId,
         label: target.title,
       );
-      final result = afterBlockId == null
-          ? await _bodyReferenceInserts.insertAllocated(
-              objectId: widget.objectId,
-              request: request,
-            )
-          : await _bodyReferenceInserts.insertAfterAllocated(
-              objectId: widget.objectId,
-              anchorBlockId: afterBlockId,
-              request: request,
-            );
-      _applyDocument(result.document);
+      await _enqueueMutation(objectId, () async {
+        try {
+          final result = afterBlockId == null
+              ? await inserts.insertAllocated(
+                  objectId: objectId,
+                  request: request,
+                )
+              : await inserts.insertAfterAllocated(
+                  objectId: objectId,
+                  anchorBlockId: afterBlockId,
+                  request: request,
+                );
+          if (!mounted || widget.objectId != objectId) return;
+          _applyDocument(result.document);
+        } catch (_) {
+          if (mounted && widget.objectId == objectId) {
+            _showError('Object参照を追加できませんでした。');
+          }
+        }
+      });
     } catch (_) {
-      _showError('Object参照を追加できませんでした。');
+      if (mounted && widget.objectId == objectId) {
+        _showError('Object参照を追加できませんでした。');
+      }
     }
   }
 
   Future<void> _insertDatabaseViewReference({String? afterBlockId}) async {
+    final objectId = widget.objectId;
+    final workspaceId = widget.workspaceId;
+    final catalog = _databaseViewReferenceCatalog;
+    final inserts = _bodyReferenceInserts;
     try {
-      final candidates = await _databaseViewReferenceCatalog.load(
-        workspaceId: widget.workspaceId,
-      );
-      if (!mounted) return;
+      final candidates = await catalog.load(workspaceId: workspaceId);
+      if (!mounted || widget.objectId != objectId) return;
       final target = await showObjectBodyDatabaseViewReferencePicker(
         context,
         candidates: candidates,
       );
-      if (target == null) return;
+      if (target == null || !mounted || widget.objectId != objectId) return;
       final request = ObjectBodyDatabaseViewInsert(
         databaseId: target.databaseId,
         viewId: target.viewId,
       );
-      final result = afterBlockId == null
-          ? await _bodyReferenceInserts.insertAllocated(
-              objectId: widget.objectId,
-              request: request,
-            )
-          : await _bodyReferenceInserts.insertAfterAllocated(
-              objectId: widget.objectId,
-              anchorBlockId: afterBlockId,
-              request: request,
-            );
-      _applyDocument(result.document);
+      await _enqueueMutation(objectId, () async {
+        try {
+          final result = afterBlockId == null
+              ? await inserts.insertAllocated(
+                  objectId: objectId,
+                  request: request,
+                )
+              : await inserts.insertAfterAllocated(
+                  objectId: objectId,
+                  anchorBlockId: afterBlockId,
+                  request: request,
+                );
+          if (!mounted || widget.objectId != objectId) return;
+          _applyDocument(result.document);
+        } catch (_) {
+          if (mounted && widget.objectId == objectId) {
+            _showError('Database / View参照を追加できませんでした。');
+          }
+        }
+      });
     } catch (_) {
-      _showError('Database / View参照を追加できませんでした。');
+      if (mounted && widget.objectId == objectId) {
+        _showError('Database / View参照を追加できませんでした。');
+      }
     }
   }
 
-  Future<void> _moveUp(ObjectBodyBlock block) => _runMutation(
-    () => _bodyActions.moveUp(objectId: widget.objectId, blockId: block.id),
-  );
+  Future<void> _moveUp(ObjectBodyBlock block) {
+    final objectId = widget.objectId;
+    final actions = _bodyActions;
+    return _enqueueDocumentMutation(
+      objectId,
+      () => actions.moveUp(objectId: objectId, blockId: block.id),
+    );
+  }
 
-  Future<void> _moveDown(ObjectBodyBlock block) => _runMutation(
-    () => _bodyActions.moveDown(objectId: widget.objectId, blockId: block.id),
-  );
+  Future<void> _moveDown(ObjectBodyBlock block) {
+    final objectId = widget.objectId;
+    final actions = _bodyActions;
+    return _enqueueDocumentMutation(
+      objectId,
+      () => actions.moveDown(objectId: objectId, blockId: block.id),
+    );
+  }
 
-  Future<void> _reorder(ObjectBodyBlock block, int toIndex) => _runMutation(
-    () => _bodyBlockEdits.move(
-      objectId: widget.objectId,
-      blockId: block.id,
-      toIndex: toIndex,
-    ),
-  );
+  Future<void> _reorder(ObjectBodyBlock block, int toIndex) {
+    final objectId = widget.objectId;
+    final edits = _bodyBlockEdits;
+    return _enqueueDocumentMutation(
+      objectId,
+      () => edits.move(objectId: objectId, blockId: block.id, toIndex: toIndex),
+    );
+  }
 
-  Future<void> _delete(ObjectBodyBlock block) async {
+  Future<void> _delete(ObjectBodyBlock block) {
     final objectId = widget.objectId;
     final undoService = _bodyUndo;
-    try {
-      final result = await undoService.deleteWithUndo(
-        objectId: objectId,
-        blockId: block.id,
-      );
-      if (!mounted || widget.objectId != objectId) return;
-      _applyDocument(result.document);
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        SnackBar(
-          content: const Text('ブロックを削除しました'),
-          action: SnackBarAction(
-            label: '元に戻す',
-            onPressed: () => _undoDelete(undoService, result.undoToken),
+    return _enqueueMutation(objectId, () async {
+      try {
+        final result = await undoService.deleteWithUndo(
+          objectId: objectId,
+          blockId: block.id,
+        );
+        if (!mounted || widget.objectId != objectId) return;
+        _applyDocument(result.document);
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(
+            content: const Text('ブロックを削除しました'),
+            action: SnackBarAction(
+              label: '元に戻す',
+              onPressed: () => _undoDelete(undoService, result.undoToken),
+            ),
           ),
-        ),
-      );
-    } catch (_) {
-      if (mounted && widget.objectId == objectId) {
-        _showError('Bodyを更新できませんでした。');
+        );
+      } catch (_) {
+        if (mounted && widget.objectId == objectId) {
+          _showError('Bodyを更新できませんでした。');
+        }
       }
-    }
+    });
   }
 
   Future<void> _undoDelete(
     ObjectBodyStructuralUndoService undoService,
     ObjectBodyDeleteUndoToken token,
-  ) async {
+  ) => _enqueueMutation(token.objectId, () async {
     try {
       final document = await undoService.undoDelete(token);
       if (!mounted || widget.objectId != token.objectId) return;
@@ -405,18 +456,25 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
         _showError('Bodyを元に戻せませんでした。');
       }
     }
-  }
+  });
 
-  Future<void> _duplicate(ObjectBodyBlock block) async {
-    try {
-      final result = await _bodyDuplicates.duplicateAfter(
-        objectId: widget.objectId,
-        sourceBlockId: block.id,
-      );
-      _applyDocument(result.document);
-    } catch (_) {
-      _showError('Bodyを更新できませんでした。');
-    }
+  Future<void> _duplicate(ObjectBodyBlock block) {
+    final objectId = widget.objectId;
+    final duplicates = _bodyDuplicates;
+    return _enqueueMutation(objectId, () async {
+      try {
+        final result = await duplicates.duplicateAfter(
+          objectId: objectId,
+          sourceBlockId: block.id,
+        );
+        if (!mounted || widget.objectId != objectId) return;
+        _applyDocument(result.document);
+      } catch (_) {
+        if (mounted && widget.objectId == objectId) {
+          _showError('Bodyを更新できませんでした。');
+        }
+      }
+    });
   }
 
   void _insertReference(
