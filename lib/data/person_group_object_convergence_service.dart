@@ -176,6 +176,102 @@ class PersonGroupObjectConvergenceService {
     });
   }
 
+  Future<List<int>> setGroupsForLegacyPerson({
+    required int workspaceId,
+    required int legacyPersonId,
+    required Iterable<int> legacyGroupIds,
+  }) async {
+    await personBridge.syncLegacyPeople(workspaceId);
+    final schema = await ensureSchema(workspaceId);
+    final requestedLegacyIds = <int>[];
+    final seenLegacyIds = <int>{};
+    for (final groupId in legacyGroupIds) {
+      if (groupId <= 0 || !seenLegacyIds.add(groupId)) continue;
+      requestedLegacyIds.add(groupId);
+    }
+
+    return database.transaction(() async {
+      final personObjectId = await personBridge.objectIdForLegacyPerson(
+        workspaceId,
+        legacyPersonId,
+      );
+      if (personObjectId == null) {
+        throw StateError(
+          'Legacy Person $legacyPersonId has no canonical Person Object.',
+        );
+      }
+
+      final legacyGroups = await _legacyGroups.listGroups();
+      final legacyById = <int, PersonGroupInfo>{
+        for (final group in legacyGroups) group.id: group,
+      };
+      final groupObjects = await objectStore.listObjects(
+        schema.groupObjectType.id,
+      );
+      _validatedManagedClaims(
+        groupObjects,
+        propertyId: schema.legacyGroupIdProperty.id,
+      );
+
+      final targetObjectIds = <int>[];
+      for (final legacyGroupId in requestedLegacyIds) {
+        final legacyGroup = legacyById[legacyGroupId];
+        if (legacyGroup == null) {
+          throw StateError(
+            'Legacy Person group $legacyGroupId does not exist.',
+          );
+        }
+        targetObjectIds.add(
+          await _groupObjectFor(
+            schema: schema,
+            legacyGroup: legacyGroup,
+            allowCreate: false,
+          ),
+        );
+      }
+
+      await _targets.selectionForMutation(
+        workspaceId: workspaceId,
+        sourceObjectId: personObjectId,
+        property: schema.personGroupsProperty,
+      );
+      await _mutations.setRelation(
+        objectId: personObjectId,
+        property: schema.personGroupsProperty,
+        targetObjectIds: targetObjectIds,
+      );
+      final committed = await _targets.selectionForMutation(
+        workspaceId: workspaceId,
+        sourceObjectId: personObjectId,
+        property: schema.personGroupsProperty,
+      );
+      if (!_sameIds(committed.selectedObjectIds, targetObjectIds)) {
+        throw StateError(
+          'Canonical Person group membership did not commit as requested.',
+        );
+      }
+
+      await _legacyGroups.setGroupsForPerson(
+        legacyPersonId,
+        requestedLegacyIds,
+      );
+      final legacyCommitted = await _legacyGroups.groupsForPerson(
+        legacyPersonId,
+      );
+      final legacyCommittedIds = legacyCommitted
+          .map((group) => group.id)
+          .toSet();
+      if (legacyCommittedIds.length != requestedLegacyIds.length ||
+          !requestedLegacyIds.every(legacyCommittedIds.contains)) {
+        throw StateError(
+          'Legacy Person group compatibility projection did not commit as requested.',
+        );
+      }
+
+      return List<int>.unmodifiable(committed.selectedObjectIds);
+    });
+  }
+
   Map<int, int> _validatedManagedClaims(
     List<AppObject> objects, {
     required int propertyId,
