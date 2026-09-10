@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../data/canonical_weblink_capture_service.dart';
 import '../data/generic_database_store.dart';
 import '../data/home_recent_service.dart';
 import '../data/object_store.dart';
+import '../data/object_type_defaults_store.dart';
 import '../data/system_object_store.dart';
+import '../data/weblink_object_service.dart';
 import '../ui/ui_tokens.dart';
 import 'object_inspector_page.dart';
 
@@ -25,11 +28,18 @@ class HomeStartPage extends StatefulWidget {
 }
 
 class _HomeStartPageState extends State<HomeStartPage> {
+  final TextEditingController _captureController = TextEditingController();
+  final FocusNode _captureFocusNode = FocusNode();
+
   late ObjectStore _objectStore;
   late SystemObjectStore _systemObjects;
+  late CanonicalWeblinkCaptureService _weblinkCapture;
   List<HomeRecentObject> _recent = const <HomeRecentObject>[];
   bool _loading = true;
   bool _loadFailed = false;
+  bool _capturing = false;
+  String? _captureError;
+  String? _captureSuccess;
 
   @override
   void initState() {
@@ -49,11 +59,24 @@ class _HomeStartPageState extends State<HomeStartPage> {
     }
   }
 
+  @override
+  void dispose() {
+    _captureController.dispose();
+    _captureFocusNode.dispose();
+    super.dispose();
+  }
+
   void _configureStores() {
     _objectStore = ObjectStore(widget.store);
     _systemObjects = SystemObjectStore(
       database: widget.store.database,
       objectStore: _objectStore,
+    );
+    _weblinkCapture = CanonicalWeblinkCaptureService(
+      weblinks: WeblinkObjectService(
+        systemObjects: _systemObjects,
+        defaultsStore: ObjectTypeDefaultsStore(widget.store),
+      ),
     );
   }
 
@@ -82,6 +105,51 @@ class _HomeStartPageState extends State<HomeStartPage> {
         _recent = const <HomeRecentObject>[];
         _loading = false;
         _loadFailed = true;
+      });
+    }
+  }
+
+  Future<void> _captureUrl() async {
+    if (_capturing) return;
+    final url = _captureController.text.trim();
+    if (url.isEmpty) {
+      setState(() {
+        _captureError = 'URLを入力してください。';
+        _captureSuccess = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _capturing = true;
+      _captureError = null;
+      _captureSuccess = null;
+    });
+    try {
+      final captured = await _weblinkCapture.capture(
+        workspaceId: widget.workspaceId,
+        url: url,
+      );
+      if (!mounted) return;
+      _captureController.clear();
+      await _load();
+      if (!mounted) return;
+      setState(() {
+        _capturing = false;
+        _captureSuccess = '「${captured.title}」を保存しました。';
+      });
+      _captureFocusNode.requestFocus();
+    } on ArgumentError {
+      if (!mounted) return;
+      setState(() {
+        _capturing = false;
+        _captureError = '有効なURLを入力してください。';
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _capturing = false;
+        _captureError = 'URLを保存できませんでした。入力内容を確認して再試行してください。';
       });
     }
   }
@@ -121,10 +189,12 @@ class _HomeStartPageState extends State<HomeStartPage> {
                   ),
                   const SizedBox(height: UiTokens.space6),
                   Text(
-                    '最近更新したオブジェクトから作業を再開できます。',
+                    'URLをすばやく保存したり、最近更新したオブジェクトから作業を再開できます。',
                     style: Theme.of(context).textTheme.bodyMedium
                         ?.copyWith(color: scheme.onSurfaceVariant),
                   ),
+                  const SizedBox(height: 28),
+                  _captureCard(context),
                   const SizedBox(height: 28),
                   Row(
                     children: [
@@ -142,6 +212,104 @@ class _HomeStartPageState extends State<HomeStartPage> {
                 ],
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _captureCard(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.add_link, size: UiTokens.iconNormal),
+                const SizedBox(width: UiTokens.space8),
+                Text(
+                  'URLを保存',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: UiTokens.space12),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final field = TextField(
+                  key: const ValueKey('home-weblink-capture-url'),
+                  controller: _captureController,
+                  focusNode: _captureFocusNode,
+                  enabled: !_capturing,
+                  keyboardType: TextInputType.url,
+                  textInputAction: TextInputAction.done,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  decoration: const InputDecoration(
+                    labelText: 'URL',
+                    hintText: 'https://example.com',
+                    border: OutlineInputBorder(),
+                  ),
+                  onSubmitted: _capturing ? null : (_) => _captureUrl(),
+                );
+                final submit = FilledButton.icon(
+                  key: const ValueKey('home-weblink-capture-submit'),
+                  onPressed: _capturing ? null : _captureUrl,
+                  icon: _capturing
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.add_link),
+                  label: Text(_capturing ? '保存中…' : '保存'),
+                );
+                if (constraints.maxWidth < 560) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      field,
+                      const SizedBox(height: UiTokens.space8),
+                      submit,
+                    ],
+                  );
+                }
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: field),
+                    const SizedBox(width: UiTokens.space8),
+                    SizedBox(height: 56, child: submit),
+                  ],
+                );
+              },
+            ),
+            if (_captureError != null) ...[
+              const SizedBox(height: UiTokens.space8),
+              Semantics(
+                liveRegion: true,
+                child: Text(
+                  _captureError!,
+                  key: const ValueKey('home-weblink-capture-error'),
+                  style: TextStyle(color: scheme.error),
+                ),
+              ),
+            ],
+            if (_captureSuccess != null) ...[
+              const SizedBox(height: UiTokens.space8),
+              Semantics(
+                liveRegion: true,
+                child: Text(
+                  _captureSuccess!,
+                  key: const ValueKey('home-weblink-capture-success'),
+                  style: TextStyle(color: scheme.primary),
+                ),
+              ),
+            ],
           ],
         ),
       ),
