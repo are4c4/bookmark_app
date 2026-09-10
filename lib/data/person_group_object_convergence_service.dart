@@ -109,6 +109,16 @@ class PersonGroupObjectConvergenceService {
     final schema = await ensureSchema(workspaceId);
     return database.transaction(() async {
       final legacyGroups = await _legacyGroups.listGroups();
+      final existingGroupObjects = await objectStore.listObjects(
+        schema.groupObjectType.id,
+      );
+      final managedExisting = existingGroupObjects
+          .where(
+            (object) =>
+                _legacyId(object.values[schema.legacyGroupIdProperty.id]) != null,
+          )
+          .toList(growable: false);
+      final isInitialBootstrap = managedExisting.isEmpty;
       final groupObjectIds = <int, int>{};
       final touched = <int>[];
 
@@ -116,6 +126,7 @@ class PersonGroupObjectConvergenceService {
         final objectId = await _groupObjectFor(
           schema: schema,
           legacyGroup: group,
+          allowCreate: isInitialBootstrap,
         );
         groupObjectIds[group.id] = objectId;
       }
@@ -148,7 +159,7 @@ class PersonGroupObjectConvergenceService {
           property: schema.personGroupsProperty,
         );
         if (_sameIds(current.selectedObjectIds, expected)) continue;
-        if (current.selectedObjectIds.isNotEmpty) {
+        if (!isInitialBootstrap || current.selectedObjectIds.isNotEmpty) {
           throw StateError(
             'Canonical Person group membership conflicts with legacy compatibility state.',
           );
@@ -169,6 +180,7 @@ class PersonGroupObjectConvergenceService {
   Future<int> _groupObjectFor({
     required PersonGroupObjectSchema schema,
     required PersonGroupInfo legacyGroup,
+    required bool allowCreate,
   }) async {
     final matches = (await objectStore.listObjects(schema.groupObjectType.id))
         .where(
@@ -190,6 +202,11 @@ class PersonGroupObjectConvergenceService {
         );
       }
       return existing.id;
+    }
+    if (!allowCreate) {
+      throw StateError(
+        'Legacy Person Group has no canonical identity after bootstrap.',
+      );
     }
 
     final objectId = await objectStore.createObject(
