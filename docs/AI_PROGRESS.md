@@ -62,36 +62,36 @@ Always re-check each Issue live before assuming state or ownership.
 - **#1050** — generic Tag/TagGroup hierarchy and hierarchy-aware query/UX.
 - **#155** — Weblink native capability umbrella.
 - **#225** — maintainability, hotspot reduction, caller-zero legacy retirement, and developer-workflow health.
-- **#245** — Photo→Image convergence umbrella; destructive historical schema retirement remains separate.
+- **#245** — completed Photo→Image product-facing convergence checkpoint; destructive historical schema retirement remains separate.
 - **#242/#951** — completed real-macOS Vault/data-preservation checkpoints. They are evidence for the validated transitions, not blanket authorization for future destructive legacy retirement.
 
 ## Focused implementation routing
 
-The Issue numbers below are durable roadmap/routing anchors, not claims that a PR is currently active. Verify live state before taking ownership.
+The Issue numbers below are durable roadmap/routing anchors, not claims that a PR is currently active. Verify live state before taking ownership. Completed focused Issues are checkpoints, not active work sources.
 
 ### A — Object Core & Body
-- #1057 Body contextual block handles/drag reorder.
 - #1058 reversible local Body structural Undo.
-- #1041 legacy Bookmark → canonical Weblink/generic Object migration authority.
 - #1044 generic Person ObjectType normal write authority.
 - #1062 duplicate detection / Object merge / redirect semantics.
 - #1064 durable Object/Property/Body/Relation history contract; split B/F slices when required.
+- Completed checkpoints: #1041 legacy Bookmark → canonical Weblink/generic Object migration authority; #1057 Body contextual block handles/drag reorder.
 
 ### B — Relations & Data Integrity
-- #1052 canonical Tag Parent/TagGroup integrity and cycle prevention.
 - #1042 legacy Bookmark-era Relation convergence.
 - #1045 Person groups/roles convergence.
 - Future #1062/#1064 Relation rewiring/restore slices belong in focused B Issues.
+- Completed checkpoints: #1052 canonical Tag Parent/TagGroup integrity and cycle prevention; #1105 strict canonical Tag descendant reader.
 
 ### C — Database, View & Schema UX
-- #1053 hierarchy-aware Tag predicates/filter UX.
 - #1043 generic Weblink/Object Database/View + Inbox replacement for Stage1 normal ownership.
 - #1046 generic Person Database/View/Inspector replacement after parity.
 - #1061 Home/start UX centered on Inbox / Recent / Favorites / Pinned Databases.
+- Broader #1050 Tag picker/tree/management UX remains an umbrella concern only where live acceptance is unfinished.
+- Completed checkpoint: #1053 hierarchy-aware Tag predicates/filter UX, integrated through canonical B hierarchy semantics.
 
 ### D — Primitive Objects & Media
-- #1054 direct canonical URL capture to Weblink Object.
-- #155/#245 only for concrete native Weblink/Image/File obligations.
+- #155 is the durable Weblink/Image/File native-capability umbrella; resume D only for a concrete native-capability obligation proven by a live focused Issue.
+- Completed checkpoints: #1054 direct canonical URL capture to Weblink Object; #245 Photo→Image product-facing convergence.
 
 Tag/TagGroup are not D-owned native primitives.
 
@@ -121,16 +121,15 @@ H audits architecture drift, duplicate ownership, cross-lane dependencies, share
 ```text
 Object-first constitution
         |
-        +--> Body #1057/#1058 [A]
+        +--> Body #1058 [A]
         |
         +--> Tag #1050
-        |      +--> #1052 [B] integrity
-        |      +--> #1053 [C] query/UX
+        |      +--> completed #1052/#1105 [B] integrity/read
+        |      +--> completed #1053 [C] query/filter UX
+        |      +--> broader picker/tree/management UX only where live acceptance remains
         |
         +--> Bookmark retirement #1039
-        |      +--> #1041 [A] identity/migration
         |      +--> #1042 [B] relations
-        |      +--> #1054 [D] direct Weblink capture
         |      +--> #1043 [C] generic daily-use UX
         |      +--> G caller-zero retirement after parity
         |
@@ -175,6 +174,7 @@ Person is a generic ObjectType, not a permanent People subsystem. Profile Image 
 - Canonical hierarchy is `Tag --Parent--> Tag` through canonical Relation APIs.
 - Store only directly assigned Tags; derive ancestors.
 - Query distinguishes exact from hierarchy-aware predicates.
+- #1052/#1105/#1053 are completed canonical integrity/read/query checkpoints; broader #1050 UX must reuse them rather than reopen parallel hierarchy authority.
 
 ### Database/View and Home
 - Object identity is global; Database membership/query does not clone Object identity.
@@ -207,6 +207,20 @@ Do not remove user data merely because replacement UI exists.
 ## Umbrella `Done` contract
 
 A focused PR can be complete while its umbrella is not. Important umbrellas review every applicable dimension in `docs/product_architecture.md`: architecture, behavior, tests, UX, keyboard/accessibility/device interaction, error/recovery states, migration/reconciliation, parity, caller-zero, preservation before destruction, and durable docs/routing.
+
+## Strict-main integration window
+
+Protected `main` intentionally keeps strict/up-to-date `merge-gate`; do not weaken latest-main validation to reduce CI churn. Under parallel autonomous development, use this advisory merge-order convention instead:
+
+- A **product/code PR** is in its final integration window when it has been synchronized to current `main` and its authoritative final `merge-gate` is running, or is green and awaiting immediate integration.
+- An unrelated **non-urgent docs-only PR** is documentation/handoff/routing work that is file-disjoint from that product PR and does not correct an active safety, architecture, preservation, migration, ownership, or CI blocker.
+- While such a product PR is in its final integration window, non-urgent file-disjoint docs-only PRs should normally wait rather than advance `main` and force another strict full-CI cycle.
+- After the product PR integrates, coalesce waiting docs/handoff updates against the new `main` where practical instead of interleaving many tiny docs merges between product integrations.
+- Safety-critical coordination or architecture corrections may take priority when delaying them would permit unsafe work; record the reason in the focused Issue/PR rather than treating every handoff refresh as urgent.
+- Waiting docs work must never block the product PR through a declared dependency, shared-hotspot lease, duplicate focused-Issue claim, or migration ownership. If it would, resolve that coordination conflict rather than creating a circular wait.
+- This convention is advisory merge scheduling only. Multiple product PRs still obey normal ownership/hotspot/migration rules, and no stale code may merge merely because intervening changes are docs-only.
+
+This convention exists because strict latest-main validation is the safety property; repeated CI caused solely by merge ordering is the optimization target. It does not introduce a merge queue, bypass token, reduced test coverage, or weaker required checks.
 
 ## Repository integration contract
 

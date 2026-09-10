@@ -38,8 +38,8 @@ Continue measurable hotspot reduction, `AppDatabase` narrowing, explicit failure
 ### #950 — Photo caller-zero cleanup (completed checkpoint)
 Safe caller-zero Photo mutation/presentation/read cleanup is complete. The surviving Photo-era paths are intentionally live compatibility/preservation infrastructure and must not be treated as spare cleanup merely to keep G active. Any future Photo code retirement requires a new focused current-main caller-zero proof; persisted Photo schema/data retirement is separately preservation-, migration-, and approval-gated.
 
-### #1079 — durable AI documentation source-of-truth
-Synchronize stale repository docs and make handoffs structurally resistant to transient-state drift. Durable docs record contracts/resume guidance; live GitHub owns open PRs, CI, branch tips, repository settings and current ownership.
+### #1079 — durable AI documentation source-of-truth (completed checkpoint)
+#1079 established the durable source-of-truth split: repository docs record stable contracts and resume guidance, while live GitHub owns open PRs, CI, branch tips, repository settings and current ownership. Future documentation-drift work must come from a live focused Issue rather than treating #1079 itself as an active work queue.
 
 ### #1082 / #1107 — destructive-risk approval and enforcement trust root
 Deterministic PR-contract failures and high-confidence destructive-risk detection are blocking. #1107 Phase A is established: a destructive/approval-sensitive PR requires a current-head `APPROVED` review from a distinct non-author GitHub User whose latest review state is evaluated across the complete paginated review history and whose repository permission is write/admin. Owner comments, PR-body markers, labels, self reviews, bot reviews, stale reviews and read-only reviewers are not approval authority.
