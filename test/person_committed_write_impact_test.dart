@@ -31,52 +31,53 @@ void main() {
     expect(impact.canonicalMutationCommitted, isTrue);
   });
 
-  test('update exposes the same canonical Person identity after commit',
-      () async {
-    final created = await service.createWithImpact(
-      workspaceId: workspaceId,
-      name: 'Before',
-    );
+  test(
+    'update exposes the same canonical Person identity after commit',
+    () async {
+      final created = await service.createWithImpact(
+        workspaceId: workspaceId,
+        name: 'Before',
+      );
 
-    final updated = await service.updateWithImpact(
-      workspaceId: workspaceId,
-      personId: created.legacyPersonId,
-      name: 'After',
-      note: 'changed',
-    );
+      final updated = await service.updateWithImpact(
+        workspaceId: workspaceId,
+        personId: created.legacyPersonId,
+        name: 'After',
+        note: 'changed',
+      );
 
-    expect(updated, isNotNull);
-    expect(updated!.legacyPersonId, created.legacyPersonId);
-    expect(updated.canonicalObjectId, created.canonicalObjectId);
-    expect(updated.canonicalMutationCommitted, isTrue);
-  });
+      expect(updated, isNotNull);
+      expect(updated!.legacyPersonId, created.legacyPersonId);
+      expect(updated.canonicalObjectId, created.canonicalObjectId);
+      expect(updated.canonicalMutationCommitted, isTrue);
+    },
+  );
 
-  test('duplicate create without a canonical write is distinguishable',
-      () async {
-    final created = await service.createWithImpact(
-      workspaceId: workspaceId,
-      name: 'Existing',
-    );
+  test(
+    'duplicate create without a canonical write is distinguishable',
+    () async {
+      final created = await service.createWithImpact(
+        workspaceId: workspaceId,
+        name: 'Existing',
+      );
 
-    final duplicate = await service.createWithImpact(
-      workspaceId: workspaceId,
-      name: 'Existing',
-    );
+      final duplicate = await service.createWithImpact(
+        workspaceId: workspaceId,
+        name: 'Existing',
+      );
 
-    expect(duplicate.legacyPersonId, created.legacyPersonId);
-    expect(duplicate.canonicalObjectId, created.canonicalObjectId);
-    expect(duplicate.canonicalMutationCommitted, isFalse);
-  });
+      expect(duplicate.legacyPersonId, created.legacyPersonId);
+      expect(duplicate.canonicalObjectId, created.canonicalObjectId);
+      expect(duplicate.canonicalMutationCommitted, isFalse);
+    },
+  );
 
   test('failed update exposes no successful impact result', () async {
     final alice = await service.createWithImpact(
       workspaceId: workspaceId,
       name: 'Alice',
     );
-    await service.createWithImpact(
-      workspaceId: workspaceId,
-      name: 'Bob',
-    );
+    await service.createWithImpact(workspaceId: workspaceId, name: 'Bob');
 
     await expectLater(
       service.updateWithImpact(
