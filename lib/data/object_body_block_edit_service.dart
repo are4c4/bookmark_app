@@ -114,10 +114,8 @@ class ObjectBodyBlockEditService {
     required String blockId,
   }) => _mutate(
         objectId,
-        (document) => editor.mergeParagraphIntoPrevious(
-          document: document,
-          blockId: blockId,
-        ),
+        (document) =>
+            editor.mergeParagraphIntoPrevious(document: document, blockId: blockId),
       );
 
   /// Updates checklist state without replacing its text or other attributes.
