@@ -114,7 +114,8 @@ class ObjectSyncService {
   late final BookmarkWeblinkObjectBridge bookmarkWeblinkBridge;
   late final BookmarkWeblinkTagConvergenceService bookmarkWeblinkTags;
   late final BookmarkWeblinkMediaConvergenceService bookmarkWeblinkMedia;
-  late final BookmarkWeblinkPersonRoleConvergenceService bookmarkWeblinkPersonRoles;
+  late final BookmarkWeblinkPersonRoleConvergenceService
+  bookmarkWeblinkPersonRoles;
   late final WeblinkPreviewImagePipeline _previewImagePipeline =
       WeblinkPreviewImagePipeline(
         database: database,

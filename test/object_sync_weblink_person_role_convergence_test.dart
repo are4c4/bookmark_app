@@ -111,17 +111,16 @@ void main() {
 
       final weblinkType = await fixture.sync.systemObjectStore
           .getSystemObjectType(
-        workspaceId: fixture.workspaceId,
-        systemKey: WeblinkObjectService.systemKey,
-      );
+            workspaceId: fixture.workspaceId,
+            systemKey: WeblinkObjectService.systemKey,
+          );
       expect(weblinkType, isNotNull);
       expect(
         weblinkType!.properties.where(
           (property) =>
               property.config[BookmarkWeblinkPersonRoleConvergenceService
-                      .roleContractMetadataKey] ==
-                  BookmarkWeblinkPersonRoleConvergenceService
-                      .targetRoleContract,
+                  .roleContractMetadataKey] ==
+              BookmarkWeblinkPersonRoleConvergenceService.targetRoleContract,
         ),
         isEmpty,
       );
@@ -152,10 +151,7 @@ void main() {
 
       expect(secondState, firstState);
       expect(firstState['著者'], <int>[await fixture.personObjectId(aliceId)]);
-      expect(
-        (await fixture.weblinks()).length,
-        1,
-      );
+      expect((await fixture.weblinks()).length, 1);
     },
   );
 
@@ -173,9 +169,9 @@ void main() {
 
       final weblinkType = (await fixture.sync.systemObjectStore
           .getSystemObjectType(
-        workspaceId: fixture.workspaceId,
-        systemKey: WeblinkObjectService.systemKey,
-      ))!;
+            workspaceId: fixture.workspaceId,
+            systemKey: WeblinkObjectService.systemKey,
+          ))!;
       final unrelatedId = await fixture.sync.objectStore.createProperty(
         objectTypeId: weblinkType.id,
         name: '著者',
@@ -203,30 +199,33 @@ void main() {
     },
   );
 
-  test('source Relation index drift fails before compatibility repair', () async {
-    final fixture = await _RoleFixture.create();
-    addTearDown(fixture.dispose);
-    final aliceId = await fixture.createPerson('Alice');
-    final bookmarkId = await fixture.createBookmark(
-      url: 'https://example.com/source-drift-role',
-      title: 'Source drift role',
-    );
-    await fixture.setLegacyRole(bookmarkId, aliceId, '著者');
-    await fixture.sync.syncWorkspace(fixture.workspaceId);
+  test(
+    'source Relation index drift fails before compatibility repair',
+    () async {
+      final fixture = await _RoleFixture.create();
+      addTearDown(fixture.dispose);
+      final aliceId = await fixture.createPerson('Alice');
+      final bookmarkId = await fixture.createBookmark(
+        url: 'https://example.com/source-drift-role',
+        title: 'Source drift role',
+      );
+      await fixture.setLegacyRole(bookmarkId, aliceId, '著者');
+      await fixture.sync.syncWorkspace(fixture.workspaceId);
 
-    final sourceProperty = await fixture.sourceRoleProperty('著者');
-    final bookmarkObjectId = await fixture.bookmarkObjectId(bookmarkId);
-    await fixture.database.customStatement(
-      'DELETE FROM object_relation_edges '
-      'WHERE source_object_id = ? AND property_id = ?',
-      <Object>[bookmarkObjectId, sourceProperty.id],
-    );
+      final sourceProperty = await fixture.sourceRoleProperty('著者');
+      final bookmarkObjectId = await fixture.bookmarkObjectId(bookmarkId);
+      await fixture.database.customStatement(
+        'DELETE FROM object_relation_edges '
+        'WHERE source_object_id = ? AND property_id = ?',
+        <Object>[bookmarkObjectId, sourceProperty.id],
+      );
 
-    await expectLater(
-      fixture.sync.syncWorkspace(fixture.workspaceId),
-      throwsA(isA<StateError>()),
-    );
-  });
+      await expectLater(
+        fixture.sync.syncWorkspace(fixture.workspaceId),
+        throwsA(isA<StateError>()),
+      );
+    },
+  );
 
   test('target Relation index drift fails without overwriting value', () async {
     final fixture = await _RoleFixture.create();
@@ -276,24 +275,19 @@ void main() {
       );
       await fixture.setLegacyRole(bookmarkId, aliceId, '著者');
       await fixture.sync.syncWorkspace(fixture.workspaceId);
+      final weblinkObjectId = (await fixture.weblinks()).single.id;
       notifications.clear();
 
       await fixture.clearLegacyRole(bookmarkId, '著者');
       await fixture.setLegacyRole(bookmarkId, bobId, '著者');
       await _waitUntil(
-        () => notifications.any(
-          (ids) => ids.contains(fixture.weblinkObjectId),
-        ),
+        () => notifications.any((ids) => ids.contains(weblinkObjectId)),
       );
 
-      expect(
-        (await fixture.roleState())['著者'],
-        <int>[await fixture.personObjectId(bobId)],
-      );
-      expect(
-        notifications.any((ids) => ids.contains(fixture.weblinkObjectId)),
-        isTrue,
-      );
+      expect((await fixture.roleState())['著者'], <int>[
+        await fixture.personObjectId(bobId),
+      ]);
+      expect(notifications.any((ids) => ids.contains(weblinkObjectId)), isTrue);
     },
   );
 }
@@ -361,23 +355,31 @@ class _RoleFixture {
       'INSERT INTO people(name) VALUES (?)',
       <Object>[name],
     );
-    return (await database.customSelect(
-      'SELECT id FROM people WHERE name = ? ORDER BY id DESC LIMIT 1',
-      variables: <Variable<Object>>[Variable<String>(name)],
-    ).getSingle())
+    return (await database
+            .customSelect(
+              'SELECT id FROM people WHERE name = ? ORDER BY id DESC LIMIT 1',
+              variables: <Variable<Object>>[Variable<String>(name)],
+            )
+            .getSingle())
         .read<int>('id');
   }
 
-  Future<int> createBookmark({required String url, required String title}) async {
+  Future<int> createBookmark({
+    required String url,
+    required String title,
+  }) async {
     await database.customStatement(
       'INSERT INTO bookmarks(url, title) VALUES (?, ?)',
       <Object>[url, title],
     );
-    final bookmarkId = (await database.customSelect(
-      'SELECT id FROM bookmarks WHERE title = ? ORDER BY id DESC LIMIT 1',
-      variables: <Variable<Object>>[Variable<String>(title)],
-    ).getSingle())
-        .read<int>('id');
+    final bookmarkId =
+        (await database
+                .customSelect(
+                  'SELECT id FROM bookmarks WHERE title = ? ORDER BY id DESC LIMIT 1',
+                  variables: <Variable<Object>>[Variable<String>(title)],
+                )
+                .getSingle())
+            .read<int>('id');
     await database.customStatement(
       'INSERT INTO bookmark_workspace(bookmark_id, workspace_id) VALUES (?, ?)',
       <Object>[bookmarkId, workspaceId],
@@ -408,14 +410,16 @@ class _RoleFixture {
   }
 
   Future<int> bookmarkObjectId(int legacyBookmarkId) async {
-    return (await database.customSelect(
-      '''SELECT object_id FROM bookmark_object_links
+    return (await database
+            .customSelect(
+              '''SELECT object_id FROM bookmark_object_links
          WHERE workspace_id = ? AND bookmark_id = ?''',
-      variables: <Variable<Object>>[
-        Variable<int>(workspaceId),
-        Variable<int>(legacyBookmarkId),
-      ],
-    ).getSingle())
+              variables: <Variable<Object>>[
+                Variable<int>(workspaceId),
+                Variable<int>(legacyBookmarkId),
+              ],
+            )
+            .getSingle())
         .read<int>('object_id');
   }
 
@@ -476,8 +480,8 @@ class _RoleFixture {
           BookmarkWeblinkPersonRoleConvergenceService.targetRoleContract) {
         continue;
       }
-      final role = property.config[
-          BookmarkWeblinkPersonRoleConvergenceService.roleMetadataKey];
+      final role = property
+          .config[BookmarkWeblinkPersonRoleConvergenceService.roleMetadataKey];
       if (role is! String) continue;
       result[role] = ObjectRelationValue.fromJson(object.values[property.id])
           .objectIds;
