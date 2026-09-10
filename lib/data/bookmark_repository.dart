@@ -143,7 +143,8 @@ class BookmarkRepository {
     for (final name in normalized.values) {
       await createPerson(name);
     }
-    final all = await _database.watchAllPeople().first;
+    final all = await _database.select(_database.people).get();
+    all.sort((left, right) => left.name.compareTo(right.name));
     return all.where((person) => normalized.containsKey(person.name.toLowerCase())).toList();
   }
 
@@ -159,17 +160,20 @@ class BookmarkRepository {
     int rating = 0,
     bool inbox = false,
   }) async {
-    final id = await _database.addBookmark(
-      url: url,
-      title: title,
-      thumbnail: thumbnail,
-      description: description,
-      tagNames: tagNames,
-      personNames: personNames,
-      favorite: favorite,
-      status: status,
-      rating: rating,
-    );
+    final id = await _database.transaction(() async {
+      final people = await _resolvePeople(personNames);
+      return _database.addBookmark(
+        url: url,
+        title: title,
+        thumbnail: thumbnail,
+        description: description,
+        tagNames: tagNames,
+        personNames: people.map((person) => person.name),
+        favorite: favorite,
+        status: status,
+        rating: rating,
+      );
+    });
     await workspaceStore.assignBookmark(id, workspaceId);
     await lifecycleStore.ensureBookmark(id, inbox: inbox);
     await autoOrganize.applyToBookmark(
