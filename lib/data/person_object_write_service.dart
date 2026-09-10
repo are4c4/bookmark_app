@@ -6,6 +6,18 @@ import 'object_store.dart';
 import 'person_object_bridge.dart';
 import 'system_object_store.dart';
 
+class PersonCommittedWriteImpact {
+  const PersonCommittedWriteImpact({
+    required this.legacyPersonId,
+    required this.canonicalObjectId,
+    required this.canonicalMutationCommitted,
+  });
+
+  final int legacyPersonId;
+  final int canonicalObjectId;
+  final bool canonicalMutationCommitted;
+}
+
 /// Canonical Object-first create/update boundary for Person writes.
 ///
 /// The generic Person Object is mutated before the legacy `people` projection
@@ -44,6 +56,19 @@ class PersonObjectWriteService {
     required String name,
     String? note,
   }) async {
+    final result = await createWithImpact(
+      workspaceId: workspaceId,
+      name: name,
+      note: note,
+    );
+    return result.legacyPersonId;
+  }
+
+  Future<PersonCommittedWriteImpact> createWithImpact({
+    required int workspaceId,
+    required String name,
+    String? note,
+  }) async {
     final trimmedName = name.trim();
     if (trimmedName.isEmpty) {
       throw ArgumentError('Person name is empty');
@@ -54,16 +79,37 @@ class PersonObjectWriteService {
       database.people,
     )..where((person) => person.name.equals(trimmedName))).getSingleOrNull();
     if (existing != null) {
+      final objectIdBeforeSync = await personBridge.objectIdForLegacyPerson(
+        workspaceId,
+        existing.id,
+      );
       await personBridge.syncLegacyPeople(workspaceId);
+      final canonicalObjectId = await personBridge.objectIdForLegacyPerson(
+        workspaceId,
+        existing.id,
+      );
+      if (canonicalObjectId == null) {
+        throw StateError(
+          'Legacy Person has no canonical Person Object mapping after sync.',
+        );
+      }
       if (normalizedNote != null) {
-        await update(
+        final updateImpact = await updateWithImpact(
           workspaceId: workspaceId,
           personId: existing.id,
           name: existing.name,
           note: normalizedNote,
         );
+        if (updateImpact == null) {
+          throw StateError('Expected committed Person update impact.');
+        }
+        return updateImpact;
       }
-      return existing.id;
+      return PersonCommittedWriteImpact(
+        legacyPersonId: existing.id,
+        canonicalObjectId: canonicalObjectId,
+        canonicalMutationCommitted: objectIdBeforeSync == null,
+      );
     }
 
     final schema = await personBridge.ensurePersonObjectType(workspaceId);
@@ -99,7 +145,11 @@ class PersonObjectWriteService {
            VALUES (?, ?, ?)''',
         <Object>[workspaceId, personId, objectId],
       );
-      return personId;
+      return PersonCommittedWriteImpact(
+        legacyPersonId: personId,
+        canonicalObjectId: objectId,
+        canonicalMutationCommitted: true,
+      );
     });
   }
 
@@ -109,8 +159,22 @@ class PersonObjectWriteService {
     required String name,
     String? note,
   }) async {
+    await updateWithImpact(
+      workspaceId: workspaceId,
+      personId: personId,
+      name: name,
+      note: note,
+    );
+  }
+
+  Future<PersonCommittedWriteImpact?> updateWithImpact({
+    required int workspaceId,
+    required int personId,
+    required String name,
+    String? note,
+  }) async {
     final trimmedName = name.trim();
-    if (trimmedName.isEmpty) return;
+    if (trimmedName.isEmpty) return null;
     final normalizedNote = _normalizedNote(note);
 
     var objectId = await personBridge.objectIdForLegacyPerson(
@@ -130,7 +194,7 @@ class PersonObjectWriteService {
     final canonicalObjectId = objectId;
 
     final schema = await personBridge.ensurePersonObjectType(workspaceId);
-    await database.transaction(() async {
+    return database.transaction(() async {
       await objectStore.renameObject(canonicalObjectId, trimmedName);
       await objectStore.setPropertyValue(
         objectId: canonicalObjectId,
@@ -151,6 +215,11 @@ class PersonObjectWriteService {
           'Legacy Person projection is missing; refusing a partial Person write.',
         );
       }
+      return PersonCommittedWriteImpact(
+        legacyPersonId: personId,
+        canonicalObjectId: canonicalObjectId,
+        canonicalMutationCommitted: true,
+      );
     });
   }
 
