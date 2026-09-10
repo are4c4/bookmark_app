@@ -69,48 +69,50 @@ void main() {
     expect(find.text('Pinned Databases'), findsNothing);
   });
 
-  testWidgets('quick capture creates a canonical Weblink without Bookmark data', (
-    tester,
-  ) async {
-    final database = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(database.close);
-    final workspaceId = await WorkspaceStore(database).initialize();
-    final harness = _HomeWeblinkHarness(database);
+  testWidgets(
+    'quick capture creates a canonical Weblink without Bookmark data',
+    (tester) async {
+      final database = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(database.close);
+      final workspaceId = await WorkspaceStore(database).initialize();
+      final harness = _HomeWeblinkHarness(database);
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: HomeStartPage(
-          store: harness.store,
-          workspaceId: workspaceId,
+      await tester.pumpWidget(
+        MaterialApp(
+          home: HomeStartPage(store: harness.store, workspaceId: workspaceId),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    await tester.enterText(
-      find.byKey(const ValueKey('home-weblink-url-field')),
-      'https://example.com/home-capture',
-    );
-    await tester.tap(find.byKey(const ValueKey('home-weblink-capture-button')));
-    await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('home-weblink-url-field')),
+        'https://example.com/home-capture',
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('home-weblink-capture-button')),
+      );
+      await tester.pumpAndSettle();
 
-    final definition = await harness.weblinks.ensureDefinition(workspaceId);
-    final objects = await harness.objectStore.listObjects(definition.objectType.id);
-    final bookmarkCount = await database
-        .customSelect('SELECT COUNT(*) AS count FROM bookmarks')
-        .getSingle();
+      final definition = await harness.weblinks.ensureDefinition(workspaceId);
+      final objects = await harness.objectStore.listObjects(
+        definition.objectType.id,
+      );
+      final bookmarkCount = await database
+          .customSelect('SELECT COUNT(*) AS count FROM bookmarks')
+          .getSingle();
 
-    expect(objects, hasLength(1));
-    expect(bookmarkCount.read<int>('count'), 0);
-    expect(
-      find.byKey(const ValueKey('home-weblink-open-result')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(ValueKey('home-recent-object-${objects.single.id}')),
-      findsOneWidget,
-    );
-  });
+      expect(objects, hasLength(1));
+      expect(bookmarkCount.read<int>('count'), 0);
+      expect(
+        find.byKey(const ValueKey('home-weblink-open-result')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(ValueKey('home-recent-object-${objects.single.id}')),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets('keyboard capture reuses identity without forging updatedAt', (
     tester,
@@ -163,10 +165,7 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        home: HomeStartPage(
-          store: harness.store,
-          workspaceId: workspaceId,
-        ),
+        home: HomeStartPage(store: harness.store, workspaceId: workspaceId),
       ),
     );
     await tester.pumpAndSettle();
@@ -175,7 +174,9 @@ void main() {
       find.byKey(const ValueKey('home-weblink-url-field')),
       'example.com/no-scheme',
     );
-    await tester.tap(find.byKey(const ValueKey('home-weblink-capture-button')));
+    await tester.tap(
+      find.byKey(const ValueKey('home-weblink-capture-button')),
+    );
     await tester.pumpAndSettle();
 
     expect(
