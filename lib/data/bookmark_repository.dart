@@ -143,7 +143,8 @@ class BookmarkRepository {
     for (final name in normalized.values) {
       await createPerson(name);
     }
-    final all = await _database.watchAllPeople().first;
+    final all = await _database.select(_database.people).get();
+    all.sort((left, right) => left.name.compareTo(right.name));
     return all.where((person) => normalized.containsKey(person.name.toLowerCase())).toList();
   }
 
