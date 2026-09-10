@@ -49,6 +49,81 @@ void main() {
     expect(await fixture.groups.memberIds(groupId), <int>{personId});
   });
 
+  test(
+    'canonical membership write projects legacy state and is idempotent',
+    () async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.dispose);
+      final personId = await fixture.createPerson('Alice');
+      final personObjectId = await fixture.personObjectId(personId);
+      final writersId = await fixture.groups.createGroup('Writers');
+      final editorsId = await fixture.groups.createGroup('Editors');
+      await fixture.groups.setGroupsForPerson(personId, <int>[writersId]);
+      await fixture.service.converge(fixture.workspaceId);
+      final schema = await fixture.service.ensureSchema(fixture.workspaceId);
+      final groupObjects = await fixture.objectStore.listObjects(
+        schema.groupObjectType.id,
+      );
+      int objectIdFor(int legacyId) => groupObjects
+          .singleWhere(
+            (object) =>
+                object.values[schema.legacyGroupIdProperty.id] == legacyId,
+          )
+          .id;
+      final expected = <int>[objectIdFor(editorsId), objectIdFor(writersId)];
+
+      expect(
+        await fixture.service.setGroupsForLegacyPerson(
+          workspaceId: fixture.workspaceId,
+          legacyPersonId: personId,
+          legacyGroupIds: <int>[editorsId, writersId],
+        ),
+        expected,
+      );
+      expect(await fixture.selection(schema, personObjectId), expected);
+      expect(await fixture.groups.memberIds(writersId), <int>{personId});
+      expect(await fixture.groups.memberIds(editorsId), <int>{personId});
+
+      final restarted = fixture.newService();
+      expect(
+        await restarted.setGroupsForLegacyPerson(
+          workspaceId: fixture.workspaceId,
+          legacyPersonId: personId,
+          legacyGroupIds: <int>[editorsId, writersId],
+        ),
+        expected,
+      );
+      expect(await fixture.selection(schema, personObjectId), expected);
+    },
+  );
+
+  test(
+    'invalid requested group fails before either membership side changes',
+    () async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.dispose);
+      final personId = await fixture.createPerson('Alice');
+      final personObjectId = await fixture.personObjectId(personId);
+      final writersId = await fixture.groups.createGroup('Writers');
+      await fixture.groups.setGroupsForPerson(personId, <int>[writersId]);
+      await fixture.service.converge(fixture.workspaceId);
+      final schema = await fixture.service.ensureSchema(fixture.workspaceId);
+      final before = await fixture.selection(schema, personObjectId);
+
+      await expectLater(
+        fixture.service.setGroupsForLegacyPerson(
+          workspaceId: fixture.workspaceId,
+          legacyPersonId: personId,
+          legacyGroupIds: <int>[writersId, 999999],
+        ),
+        throwsA(isA<StateError>()),
+      );
+
+      expect(await fixture.selection(schema, personObjectId), before);
+      expect(await fixture.groups.memberIds(writersId), <int>{personId});
+    },
+  );
+
   test('fails closed when canonical Person group membership changes after bootstrap', () async {
     final fixture = await _Fixture.create();
     addTearDown(fixture.dispose);
