@@ -80,7 +80,8 @@ class PersonGroupObjectConvergenceService {
       },
     );
     if (legacyId.type != ObjectPropertyType.number ||
-        legacyId.config[ObjectPropertyDefinition.identityManagedConfigKey] != true) {
+        legacyId.config[ObjectPropertyDefinition.identityManagedConfigKey] !=
+            true) {
       throw StateError(
         'Existing Person Group legacy identity Property is incompatible.',
       );
@@ -112,13 +113,11 @@ class PersonGroupObjectConvergenceService {
       final existingGroupObjects = await objectStore.listObjects(
         schema.groupObjectType.id,
       );
-      final managedExisting = existingGroupObjects
-          .where(
-            (object) =>
-                _legacyId(object.values[schema.legacyGroupIdProperty.id]) != null,
-          )
-          .toList(growable: false);
-      final isInitialBootstrap = managedExisting.isEmpty;
+      final managedClaims = _validatedManagedClaims(
+        existingGroupObjects,
+        propertyId: schema.legacyGroupIdProperty.id,
+      );
+      final isInitialBootstrap = managedClaims.isEmpty;
       final groupObjectIds = <int, int>{};
       final touched = <int>[];
 
@@ -175,6 +174,30 @@ class PersonGroupObjectConvergenceService {
       touched.sort();
       return List<int>.unmodifiable(touched);
     });
+  }
+
+  Map<int, int> _validatedManagedClaims(
+    List<AppObject> objects, {
+    required int propertyId,
+  }) {
+    final claims = <int, int>{};
+    for (final object in objects) {
+      final rawLegacyId = object.values[propertyId];
+      if (rawLegacyId == null) continue;
+      final legacyId = _legacyId(rawLegacyId);
+      if (legacyId == null) {
+        throw StateError(
+          'Canonical Person Group has a malformed legacy identity claim.',
+        );
+      }
+      if (claims.containsKey(legacyId)) {
+        throw StateError(
+          'Legacy Person Group identity is ambiguous; multiple canonical Objects claim id $legacyId.',
+        );
+      }
+      claims[legacyId] = object.id;
+    }
+    return claims;
   }
 
   Future<int> _groupObjectFor({
