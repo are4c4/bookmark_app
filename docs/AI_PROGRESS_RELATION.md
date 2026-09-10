@@ -53,13 +53,20 @@ Own cross-Object correctness and fail-closed data integrity: canonical Relation 
 - Production `ObjectSyncService` captures media before Core compatibility refresh, reconciles after Bookmark -> Weblink identity refresh, and reports only actually mutated Weblink ids through the existing `ObjectSyncImpact` path.
 - Legacy Bookmark/Photo compatibility rows and mirrored Bookmark Relations remain preserved; this contract adds no schemaVersion, destructive migration, preview/download behavior, Image byte authority, or alternate media/Relation store.
 
+### Bookmark Person roles -> canonical Weblink role Relations — #1186 / #1193 completed
+- Retained legacy `bookmark_people` role assignments converge onto canonical Weblink -> Person Relation Properties; roles remain Relation semantics rather than Person ObjectTypes or a parallel domain edge store.
+- Canonical Person identity resolves through the existing Person compatibility bridge, role strings preserve the established normalization/custom-role contract, and one Person may participate in multiple roles for one Weblink.
+- Multiple Bookmarks resolving to one Weblink must expose equivalent Person sets for each role or fail closed; legacy-only changes may advance from an equivalent checkpoint, canonical-only edits survive, and independent legacy/canonical edits fail closed.
+- Source compatibility checkpoint refresh and canonical target convergence share one workspace transaction, strict Relation validation protects reads/post-write state, and only actually mutated Weblinks contribute to the existing semantic impact path.
+- Legacy Bookmark role rows remain preservation/compatibility input until later caller-zero and destructive-retirement work proves them removable.
+
+### Bookmark-era Relation convergence — #1042 completed checkpoint
+#1042 is complete for the retained saved-URL Relation semantics currently identified: direct Tags, Images/Cover and Person roles all have explicit canonical Weblink/generic Object destinations with fail-closed convergence contracts. Do not route fresh B work back through #1042 merely because broader Bookmark retirement #1039 remains open. Any newly demonstrated saved-URL Relation gap requires a new focused B Issue.
+
 ## Active B roadmap
 
-### #1042 — Bookmark retirement relations umbrella
-Retained saved-URL relations must end on canonical Weblink/generic Object targets. Direct Tags and Images/Cover convergence are complete. Re-audit the umbrella against current main before closing/refining it; any remaining Bookmark-era Person/role semantics must have an explicit generic canonical destination and integrity contract rather than being silently folded into Weblink convergence.
-
 ### #1045 — Person groups/roles
-After #1042's Weblink-side retained Relation slices are complete, map Bookmark-era Person roles and legacy Person grouping onto explicit generic Relation/Database/Tag contracts. Preserve Profile Image Relation, role/cardinality/order semantics and fail closed on ambiguous legacy/canonical state. Coordinate with A/#1044 Person authority and do not create a second Person grouping authority.
+Bookmark-era Weblink Person-role convergence is complete under #1042/#1186. Continue #1045 for legacy Person grouping and any remaining People relationship semantics through explicit generic Object/Relation/Database/Tag contracts. Preserve Profile Image Relation, role/cardinality/order semantics and fail closed on ambiguous legacy/canonical state. Coordinate with A/#1044 Person authority and do not create a second Person grouping authority.
 
 ## Cross-lane boundaries
 - **A:** Object/ObjectType identity/lifecycle, Bookmark -> Weblink reconciliation authority, Person identity authority, Body.
@@ -77,9 +84,9 @@ Analyze + relevant Relation regressions + full Flutter Test + required `merge-ga
 
 ## Resume sequence
 1. Re-read latest `main`, open B Issues, open PR ownership, shared hotspots and current CI.
-2. Re-audit #1042 against the integrated direct-Tag and media-convergence contracts; close/refine it only if every retained saved-URL Relation has an explicit canonical destination with integrity coverage.
-3. Continue #1045 only when A/#1044 Person authority is sufficiently integrated for one focused non-overlapping role/group Relation slice; preserve existing Person/Profile Image and legacy compatibility state.
-4. If #1042/#1045 are blocked, select another live evidence-backed B integrity slice through the `AGENTS.md` next-work discovery order or stop with the precise dependency/conflict/idle reason.
+2. Treat #1042 as a completed Bookmark-era Relation-convergence checkpoint; do not reopen or extend it merely because #1039 remains open.
+3. Continue #1045 only through focused evidence-backed Person groups/relationship slices once A-owned Person authority prerequisites are integrated; preserve existing Person/Profile Image and legacy compatibility state.
+4. If #1045 is blocked, select another live evidence-backed B integrity slice through the `AGENTS.md` next-work discovery order or stop with the precise dependency/conflict/idle reason.
 5. Do not invent Relation abstractions, alternate stores, closure caches, or speculative migrations merely to keep the lane active.
 
 This sequence is not terminal. After every slice/PR/merge, apply the shared Lane continuation and resume/stop contract in `AGENTS.md` before ending the run.
