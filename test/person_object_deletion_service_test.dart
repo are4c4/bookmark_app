@@ -106,10 +106,6 @@ void main() {
     final groupStore = PersonGroupStore(database);
     final groupId = await groupStore.createGroup('Writers');
     await groupStore.setGroupsForPerson(personId, <int>[groupId]);
-    await database.customStatement(
-      'INSERT INTO saved_views(name, person_filter_id) VALUES (?, ?)',
-      <Object>['Person filter', personId],
-    );
 
     await deletion.delete(workspaceId: workspaceId, personId: personId);
 
@@ -144,10 +140,6 @@ void main() {
           .read<int>('count'),
       0,
     );
-    expect(
-      (await database.select(database.savedViews).get()).single.personFilterId,
-      isNull,
-    );
 
     final restartedBridge = PersonObjectBridge(
       database: database,
@@ -159,6 +151,100 @@ void main() {
     );
     expect(await restartedBridge.syncLegacyPeople(workspaceId), isEmpty);
     expect(await objectStore.listObjects(schema.objectType.id), isEmpty);
+  });
+
+  test('delete fails closed for Saved View Person reference', () async {
+    final personId = await PersonObjectWriteService.forDatabase(database)
+        .create(workspaceId: workspaceId, name: 'Preserved');
+    final schema = await bridge.ensurePersonObjectType(workspaceId);
+    final personObjectId = (await bridge.objectIdForLegacyPerson(
+      workspaceId,
+      personId,
+    ))!;
+
+    final sourceTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Source',
+    );
+    final relationId = await objectStore.createRelationProperty(
+      objectTypeId: sourceTypeId,
+      name: 'Person',
+      targetObjectTypeId: schema.objectType.id,
+      multiple: false,
+    );
+    final relation = (await objectStore.getObjectType(sourceTypeId))!.properties
+        .singleWhere((property) => property.id == relationId);
+    final sourceId = await objectStore.createObject(
+      objectTypeId: sourceTypeId,
+      title: 'Source',
+    );
+    await relationMutations.setRelation(
+      objectId: sourceId,
+      property: relation,
+      targetObjectIds: <int>[personObjectId],
+    );
+
+    final legacyPerson = await (database.select(
+      database.people,
+    )..where((person) => person.id.equals(personId))).getSingle();
+    final bookmarkId = await database.addBookmark(
+      url: 'https://example.com/preserved-person',
+      title: 'Preserved Person',
+    );
+    await database.setPeopleForRole(bookmarkId, 'Author', <Person>[
+      legacyPerson,
+    ]);
+    final groupStore = PersonGroupStore(database);
+    final groupId = await groupStore.createGroup('Preserved group');
+    await groupStore.setGroupsForPerson(personId, <int>[groupId]);
+    await database.customStatement(
+      'INSERT INTO saved_views(name, person_filter_id) VALUES (?, ?)',
+      <Object>['Person filter', personId],
+    );
+
+    await expectLater(
+      deletion.delete(workspaceId: workspaceId, personId: personId),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('Saved View'),
+        ),
+      ),
+    );
+
+    expect(await objectStore.listObjects(schema.objectType.id), hasLength(1));
+    expect(await database.select(database.people).get(), hasLength(1));
+    expect(
+      await bridge.objectIdForLegacyPerson(workspaceId, personId),
+      personObjectId,
+    );
+    final source = (await objectStore.listObjects(sourceTypeId)).single;
+    expect(
+      ObjectRelationValue.fromJson(source.values[relationId]).objectIds,
+      <int>[personObjectId],
+    );
+    expect(await objectStore.backlinks(personObjectId), hasLength(1));
+    expect(
+      (await database
+              .customSelect('SELECT COUNT(*) AS count FROM bookmark_people')
+              .getSingle())
+          .read<int>('count'),
+      1,
+    );
+    expect(
+      (await database
+              .customSelect(
+                'SELECT COUNT(*) AS count FROM person_group_members',
+              )
+              .getSingle())
+          .read<int>('count'),
+      1,
+    );
+    expect(
+      (await database.select(database.savedViews).get()).single.personFilterId,
+      personId,
+    );
   });
 
   test('delete recovers a missing compatibility link before removing both identities', () async {
