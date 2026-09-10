@@ -145,8 +145,9 @@ void main() {
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
 
-    final objects =
-        await harness.objectStore.listObjects(definition.objectType.id);
+    final objects = await harness.objectStore.listObjects(
+      definition.objectType.id,
+    );
     expect(objects, hasLength(1));
     expect(objects.single.id, original.id);
     expect(objects.single.updatedAt, original.updatedAt);
