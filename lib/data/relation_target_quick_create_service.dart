@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import '../domain/object_model.dart';
 import 'canonical_weblink_capture_service.dart';
 import 'object_store.dart';
+import 'person_object_write_service.dart';
 import 'relation_target_quick_create_policy.dart';
 import 'tag_object_bridge.dart';
 import 'weblink_object_service.dart';
@@ -18,10 +19,11 @@ typedef RelationQuickCreateWeblinkEnricher = Future<void> Function({
 /// title-only escape hatch for identity-sensitive system primitives.
 ///
 /// The read-only [RelationTargetQuickCreatePolicy] decides the canonical mode.
-/// Custom ObjectTypes use normal Object creation, Tag creation goes through the
-/// legacy-compatible Tag bridge, Weblinks use the canonical capture boundary,
-/// and Image/File require caller-supplied managed-import callbacks. Every result
-/// is reloaded from the configured target ObjectType before being returned.
+/// Custom ObjectTypes use normal Object creation, Person and Tag creation use
+/// their canonical migration-safe write boundaries, Weblinks use the canonical
+/// capture boundary, and Image/File require caller-supplied managed-import
+/// callbacks. Every result is reloaded from the configured target ObjectType
+/// before being returned.
 class RelationTargetQuickCreateService {
   const RelationTargetQuickCreateService({
     required this.policy,
@@ -60,6 +62,17 @@ class RelationTargetQuickCreateService {
           workspaceId: workspaceId,
           targetObjectTypeId: targetObjectTypeId,
           objectId: objectId,
+        );
+
+      case RelationTargetQuickCreateMode.person:
+        final name = _requiredInput(input, 'Person name');
+        final impact = await PersonObjectWriteService.forDatabase(
+          tagBridge.database,
+        ).createWithImpact(workspaceId: workspaceId, name: name);
+        return _validatedTarget(
+          workspaceId: workspaceId,
+          targetObjectTypeId: targetObjectTypeId,
+          objectId: impact.canonicalObjectId,
         );
 
       case RelationTargetQuickCreateMode.tag:

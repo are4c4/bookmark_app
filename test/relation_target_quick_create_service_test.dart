@@ -4,6 +4,7 @@ import 'package:bookmark_app/data/generic_database_store.dart';
 import 'package:bookmark_app/data/image_object_service.dart';
 import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/object_type_defaults_store.dart';
+import 'package:bookmark_app/data/person_object_bridge.dart';
 import 'package:bookmark_app/data/relation_target_quick_create_policy.dart';
 import 'package:bookmark_app/data/relation_target_quick_create_service.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
@@ -80,6 +81,32 @@ void main() {
     expect(created!.objectTypeId, targetTypeId);
     expect(created.title, 'Ada Lovelace');
     expect(await objectStore.listObjects(targetTypeId), hasLength(1));
+  });
+
+  test('Person quick-create uses canonical Person write authority', () async {
+    final personBridge = PersonObjectBridge(
+      database: database,
+      objectStore: objectStore,
+      systemObjectStore: systemObjects,
+    );
+    final schema = await personBridge.ensurePersonObjectType(workspaceId);
+
+    final created = await service().create(
+      workspaceId: workspaceId,
+      targetObjectTypeId: schema.objectType.id,
+      input: '  Grace Hopper  ',
+    );
+
+    expect(created, isNotNull);
+    expect(created!.objectTypeId, schema.objectType.id);
+    expect(created.title, 'Grace Hopper');
+    final people = await database.select(database.people).get();
+    expect(people, hasLength(1));
+    expect(people.single.name, 'Grace Hopper');
+    expect(
+      await personBridge.objectIdForLegacyPerson(workspaceId, people.single.id),
+      created.id,
+    );
   });
 
   test('Tag quick-create creates legacy Tag and canonical Tag Object together', () async {
