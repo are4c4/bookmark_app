@@ -89,10 +89,12 @@ class ObjectBodyStore {
     ObjectBodyBlockContractValidator.validateDocument(document);
     await ensureSchema();
     return _genericStore.database.transaction(() async {
-      final row = await _genericStore.database.customSelect(
-        'SELECT document_json FROM object_bodies WHERE object_id = ? LIMIT 1',
-        variables: [Variable<int>(objectId)],
-      ).getSingleOrNull();
+      final row = await _genericStore.database
+          .customSelect(
+            'SELECT document_json FROM object_bodies WHERE object_id = ? LIMIT 1',
+            variables: [Variable<int>(objectId)],
+          )
+          .getSingleOrNull();
 
       final expectedCanonical = jsonEncode(expected.toJson());
       final nextCanonical = jsonEncode(document.toJson());
