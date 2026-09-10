@@ -10,6 +10,8 @@ import 'generic_database_collection_page_data.dart';
 import 'image_object_service.dart';
 import 'object_board_create_service.dart';
 import 'object_store.dart';
+import 'person_object_bridge.dart';
+import 'person_object_write_service.dart';
 import 'system_object_store.dart';
 import 'weblink_object_service.dart';
 
@@ -100,6 +102,12 @@ class GenericDatabaseObjectCreateService {
       ))
           .id;
     }
+    if (systemKey == PersonObjectBridge.systemKey) {
+      final impact = await PersonObjectWriteService.forDatabase(
+        pageLoader.genericStore.database,
+      ).createWithImpact(workspaceId: page.objectType.workspaceId, name: title);
+      return impact.canonicalObjectId;
+    }
     _rejectIdentitySensitiveGenericCreate(systemKey);
     return objectStore.createObject(
       objectTypeId: page.objectType.id,
@@ -112,7 +120,7 @@ class GenericDatabaseObjectCreateService {
   ///
   /// This is intentionally distinct from [create]: title-only creation remains
   /// fail-closed so URL normalization/reuse cannot be bypassed by generic hosts.
-  /// Optional resource enrichment runs only after canonical identity exists and
+  /// Optional resource enrichment runs only after identity establishment and
   /// is explicitly fail-soft so metadata/media errors never roll back creation.
   Future<int> createWeblinkFromUrl({
     required int databaseId,
