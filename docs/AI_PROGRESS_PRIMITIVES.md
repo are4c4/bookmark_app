@@ -15,9 +15,10 @@ Own irreducible native behavior for Weblink, Image and File Objects: identity, n
 ## Current state
 Lane D has no active focused implementation Issue after completion of #1141. Continue only when live GitHub exposes a concrete Weblink/Image/File native-capability defect or an explicit D-owned prerequisite for another lane. Do not manufacture work from completed umbrellas or take downstream Relation, Database/View, Vault/export or legacy caller-zero responsibilities.
 
-The two cross-lane consumers that previously remained pending are now integrated:
-- B/#1103 is implemented on `main` through PR #1117; Relation Weblink quick-create now uses `CanonicalWeblinkCaptureService` and no longer owns a weaker production `WeblinkObjectService.findOrCreate` identity path.
-- F/#1146 is implemented on `main` through PR #1159; portable Image-byte export consumes the explicit managed-file ownership provenance emitted by D/#1141 without inferring ownership from path location.
+Cross-lane integration checkpoints now on `main`:
+- B/#1103 is implemented through PR #1117; Relation Weblink quick-create uses `CanonicalWeblinkCaptureService` and no longer owns a weaker production `WeblinkObjectService.findOrCreate` identity path.
+- F/#1146 is implemented through PR #1159; portable Image-byte export consumes the explicit managed-file ownership provenance emitted by D/#1141 without inferring ownership from path location.
+- B/#1154 is implemented through PR #1176; retained Bookmark `Images` / `Cover Image` compatibility state converges onto canonical Weblink `Related images` / `Representative image` Relations while reusing the existing D-owned Weblink/Image native schema and leaving preview/download behavior and managed-byte ownership unchanged.
 
 These integrations validate the existing D boundaries; they do not create new D work by themselves.
 
@@ -62,6 +63,7 @@ B/#1103 subsequently adopted this same boundary in Relation target quick-create 
 - Representative/Related Image Relations using canonical Image Objects;
 - generic Database-host creation/enrichment and shared media rendering;
 - Relation target quick-create uses the same canonical capture identity boundary;
+- retained Bookmark media compatibility can converge through B-owned canonical Weblink Image Relations without changing D native identity/media behavior;
 - legacy Bookmark URL/thumbnail remains compatibility input only where still required.
 
 ### Image
@@ -82,7 +84,7 @@ B/#1103 subsequently adopted this same boundary in Relation target quick-create 
 
 ## Cross-lane boundaries
 - **A:** generic Object/ObjectType/lifecycle/Body and migration authority when no native primitive semantics are involved.
-- **B:** all Relation lifecycle/integrity. #1103 is an integrated checkpoint proving Relation Weblink quick-create consumes canonical D capture; active Bookmark→Weblink media convergence such as #1154 remains B-owned.
+- **B:** all Relation lifecycle/integrity. #1103 and #1154 are integrated checkpoints proving B consumes canonical D Weblink/Image boundaries for quick-create and saved-URL media convergence without redesigning native identity, schema, preview/download or byte ownership.
 - **C:** generic Database/View/schema/query/capture-host UX, including Stage1 replacement work such as #1043.
 - **E:** Search projection/indexing; D produces native facts but does not write FTS directly.
 - **F:** Vault/filesystem lifecycle, portable path, export packaging and physical-delete eligibility. #1146 is an integrated checkpoint consuming D/#1141 ownership provenance; D must not broaden F path policy or infer eligibility from `photos/...`.
@@ -104,10 +106,10 @@ For future D runtime changes, changed-Dart format, Analyze and full Flutter Test
 1. re-read current `main`, open Issues/PRs, `AGENTS.md`, architecture/repository handoffs and this file;
 2. re-audit #155 plus newly reported Weblink/Image/File native-capability defects;
 3. treat #245 as completed unless another concrete Image primitive defect is demonstrated;
-4. treat B/#1103 and F/#1146 as completed integration checkpoints, not work to reopen; do not take active B work such as #1154, C #1043 or other Database/View UX, F export/path policy, or G legacy caller-zero cleanup;
+4. treat B/#1103, B/#1154 and F/#1146 as completed integration checkpoints, not work to reopen; do not take C #1043 or other Database/View UX, B's remaining Relation migration work, F export/path policy, or G legacy caller-zero cleanup;
 5. if a concrete D-owned defect or prerequisite exists, use/open one focused Issue and implement the smallest preservation-safe slice;
 6. otherwise stop with `idle-no-work` after the live final resume audit required by `AGENTS.md`.
 
 This sequence is not terminal. After any future slice/PR/merge, apply the shared **Lane continuation and resume/stop contract** in `AGENTS.md` before ending the run. Lane D continues only through concrete native-capability obligations.
 
-Stop reason: idle-no-work — #1141 is completed on main through #1143; B/#1103 canonical quick-create adoption is integrated through #1117; F/#1146 Image-byte export consumption is integrated through #1159; #245 remains completed; #155 has no remaining D-owned acceptance beyond newly demonstrated native defects; the live open-PR audit found no D implementation owner; the live open-Issue audit found no independent D-primary Weblink/Image/File focused work; remaining Weblink/Image migration consumers are routed to B/C/G. No D shared-hotspot or migration-writer work is currently required.
+Stop reason: idle-no-work — #1141 is completed on main through #1143; B/#1103 canonical quick-create adoption is integrated through #1117; B/#1154 Bookmark-media convergence is integrated through #1176; F/#1146 Image-byte export consumption is integrated through #1159; #245 remains completed; #155 has no remaining D-owned acceptance beyond newly demonstrated native defects; the live open-PR audit found no D implementation owner; the live open-Issue audit found no independent D-primary Weblink/Image/File focused work; remaining Weblink/Image migration consumers are routed to A/B/C/G. No D shared-hotspot or migration-writer work is currently required.

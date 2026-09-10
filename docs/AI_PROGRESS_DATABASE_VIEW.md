@@ -14,29 +14,22 @@ Make Database/View/schema UX generic enough that Person, Weblink, Tag and user-d
 - Tag/TagGroup use generic persistence with specialized hierarchy-aware query/picker/tree UX.
 - C owns presentation/configuration/query UX, not native Weblink/Image/File identity or Relation integrity.
 
+## Completed Tag hierarchy query checkpoint
+
+### #1053 — hierarchy-aware Tag filter/query UX (completed)
+#1157 integrated the canonical runtime completion for #1053. The durable semantics are:
+- exact parent does not match a directly assigned descendant;
+- `is-or-below`, below-only and exclude-branch remain distinct typed predicates;
+- no automatic ancestor Tag assignment is persisted;
+- saved query/filter serialization preserves hierarchy mode;
+- C consumes B's validated canonical `TagHierarchySnapshot.isStrictDescendant` reader rather than creating a second traversal/tree store;
+- hierarchy capability is enabled only for Relation Properties targeting the canonical Tag system ObjectType;
+- unavailable or malformed canonical Parent state removes hierarchy capability so non-exact hierarchy predicates fail closed;
+- Database collection filters, saved View projection and reusable query UI share the same canonical hierarchy capability.
+
+#1052 and #1105 are completed B integrity/read checkpoints; #1053 is a completed C query/UX checkpoint. Broader #1050 Tag picker/tree/management UX may still contain unfinished product work, but fresh C runs must not reopen #1053 as an implementation queue.
+
 ## Active focused issues
-
-### #1053 — hierarchy-aware Tag filter/query UX
-Required semantics for a direct child/grandchild assignment:
-- exact parent => no match;
-- `is-or-below` parent => match;
-- below-only and exclude-branch remain distinct typed predicates;
-- no automatic ancestor Tag assignment is persisted.
-
-Scope:
-- stable saved query/filter serialization;
-- reusable UI mode such as `完全一致` / `配下を含む`;
-- consume B/#1052 canonical hierarchy reader/integrity contract rather than creating a second traversal/tree store;
-- preserve View round-trip and existing exact filtering.
-
-Integrated foundation:
-- `ObjectFilterRule` can persist a hierarchy match mode while legacy/omitted rules remain exact;
-- `ObjectQueryEngine` accepts a read-only strict-descendant matcher and fails closed for non-exact hierarchy predicates when no canonical matcher is supplied;
-- exact / is-or-below / below-only / exclude-branch semantics are covered without persisting ancestor assignments;
-- reusable `ObjectHierarchyMatchModeField` presentation exposes `完全一致` / `配下を含む` / `配下のみ` / `枝を除外` without owning hierarchy traversal;
-- `ObjectViewProjector` / `GenericObjectViewCoordinator` can receive the same matcher, leaving the eventual canonical hierarchy reader wiring to B/#1052 integration rather than a C-owned tree store.
-
-Next #1053 action: once B/#1052 exposes the canonical hierarchy reader/integrity contract on `main`, compose its read-only hierarchy snapshot/matcher into generic Database/View projection and wire the reusable hierarchy mode field into canonical Tag relation filter editing. Do not use legacy Tag projection tables or introduce a closure/tree cache as an alternate authority.
 
 ### #1061 — Home/start UX
 Home converges on Inbox / Recent / Favorites / Pinned Databases without making legacy Bookmark/People modules permanent navigation authority.
@@ -59,7 +52,7 @@ Focused interaction slice (#1125):
 Next #1061 action: split Inbox / Favorites / Pinned Databases into focused contracts only when their canonical persistence/query semantics are explicit. Do not reuse legacy Bookmark `storageState`/favorite state as Home authority, and do not fake durable user state in presentation memory merely to fill the Home surface.
 
 ### #1043 — replace Stage1 normal ownership
-Move ordinary saved-URL use to canonical Weblink Objects through generic Database/View/navigation and capture-first/Inbox organization. Preserve useful list/table/gallery/filter/sort/opening behavior through generic contracts. Retire Stage1 routing only after #1041/#1042/#1054 and daily-use parity make it caller-zero.
+Move ordinary saved-URL use to canonical Weblink Objects through generic Database/View/navigation and capture-first/Inbox organization. Preserve useful list/table/gallery/filter/sort/opening behavior through generic contracts. Retire Stage1 routing only after completed #1041/#1054, B/#1042 Relation convergence, and daily-use parity make it caller-zero.
 
 ### #1046 — replace dedicated People management
 Expose Person Objects through ordinary Database/View/Inspector flows. Preserve Profile Image Relation, search/filter/group/opening and inline Relation picker creation. Remove `PeopleManagementPage` only after #1044/#1045 and daily-use parity.
@@ -73,9 +66,10 @@ Expose Person Objects through ordinary Database/View/Inspector flows. Preserve P
 - generic Database sidebar/command-palette navigation;
 - canonical Images/Weblinks/Daily Notes system collection defaults;
 - shared Object opening/Inspector/Body composition;
-- Home start routing with canonical recently-changed Object projection and transition-only Bookmark mirror suppression.
+- Home start routing with canonical recently-changed Object projection and transition-only Bookmark mirror suppression;
+- completed canonical hierarchy-aware Tag Database/View query runtime from #1053/#1157 using B's #1052/#1105 integrity/read contracts.
 
-Older statements that “Lane C is idle after #949” are obsolete because #1043/#1046/#1053/#1061 contain focused C work or dependencies that must be re-audited live.
+Older statements that “Lane C is idle after #949” are obsolete because #1043/#1046/#1061 and broader #1050 product UX contain C work or dependencies that must be re-audited live. Completed #1053 is not an active work source.
 
 ## Cross-lane boundaries
 - **A:** Object/ObjectType identity/lifecycle, Body, Person/Bookmark migration authority.
@@ -92,11 +86,11 @@ Older statements that “Lane C is idle after #949” are obsolete because #1043
 Changed-Dart format, Analyze, full Flutter Test and focused serialization/widget/real-host regressions are required for primary flows. UI acceptance includes click/key count, inline creation/editing, predictable focus, empty/error/loading states and clear remove-vs-delete semantics.
 
 ## Resume sequence
-1. re-read live #1053/#1043/#1046/#1061 and dependency status;
+1. re-read live #1043/#1046/#1061 and broader #1050 acceptance/dependency status; treat #1053 as a completed checkpoint unless it is explicitly reopened;
 2. choose one focused Issue and one owner branch/PR;
 3. avoid broad shared-host edits until the underlying contract is testable in reusable components;
 4. prove persisted View/query round-trip and interaction behavior;
 5. update this handoff with durable implementation facts;
 6. do not reintroduce Bookmark/People-specific view engines, Home-only fake durable state, or a parallel Tag tree store.
 
-This sequence is not terminal. After any slice/PR/merge, apply the shared **Lane continuation and resume/stop contract** in `AGENTS.md` before ending the run. Lane C must refresh dependencies because #1053/#1043/#1046/#1061 may become actionable as A/B/D work lands; a dependency that was blocked earlier is not a durable idle reason. Stop only after the final resume audit finds no independent safe C work, and record the exact shared stop category plus evidence in this handoff.
+This sequence is not terminal. After any slice/PR/merge, apply the shared **Lane continuation and resume/stop contract** in `AGENTS.md` before ending the run. Lane C must refresh dependencies because #1043/#1046/#1061 and broader #1050 work may become actionable as A/B/D work lands; a dependency that was blocked earlier is not a durable idle reason. Stop only after the final resume audit finds no independent safe C work, and record the exact shared stop category plus evidence in this handoff.

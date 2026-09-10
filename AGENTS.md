@@ -189,13 +189,13 @@ A fresh H chat should be able to resume with only `Hレーンとして作業を�
 
 Always verify live Issues because this list is a routing aid, not transient ownership state.
 
-- **A:** #1041 Bookmark→Weblink/generic Object migration contract; #1044 generic Person authority; #1057/#1058 Body interaction/Undo; #1062 Object merge/redirect; #1064 durable history contract; #56 core follow-ups.
-- **B:** #1042 Bookmark-era Relation convergence; #1045 Person groups/roles; #1052 Tag hierarchy integrity; future #1062/#1064 Relation-integrity slices when split.
-- **C:** #1043 Stage1→generic Weblink/Object Database/View + Inbox; #1046 People→generic Person Database/View; #1053 hierarchy-aware Tag filtering/UX; #1061 Home/start UX.
-- **D:** #1054 direct canonical Weblink capture; #155/#245 only for concrete native Weblink/Image/File obligations.
+- **A:** #1044 generic Person authority; #1058 Body Undo; #1062 Object merge/redirect; #1064 durable history contract; #56 core follow-ups.
+- **B:** #1042 Bookmark-era Relation convergence; #1045 Person groups/roles; future #1062/#1064 Relation-integrity slices when split.
+- **C:** #1043 Stage1→generic Weblink/Object Database/View + Inbox; #1046 People→generic Person Database/View; #1061 Home/start UX; broader #1050 Tag picker/tree/management UX only where live acceptance remains. #1053 hierarchy-aware Tag filtering/query UX is a completed checkpoint, not an active work source.
+- **D:** #155 is the durable Weblink/Image/File native-capability umbrella; resume D only for concrete native Weblink/Image/File obligations proven by live focused Issues.
 - **E:** focused Search issues when canonical FTS correctness/freshness obligations are demonstrated.
 - **F:** #1063 export/portability is the current durable roadmap anchor; #242/#951 are completed preservation checkpoints, not active stop gates; future destructive retirement still requires migration-specific preservation evidence and explicit single-writer/destructive-approval handling.
-- **G:** #1047/#225 maintainability and future caller-zero Bookmark/People retirement; #950 is a completed Photo caller-zero checkpoint, and surviving Photo-era paths remain compatibility/preservation infrastructure unless a new focused caller audit proves otherwise; repository-wide architecture/guardrail sync such as #1060.
+- **G:** #225 maintainability and live focused G Issues; #1047/#950 are completed checkpoints, and future caller-zero Bookmark/People retirement begins only after owning-lane parity; surviving Photo-era paths remain compatibility/preservation infrastructure unless a new focused caller audit proves otherwise; repository-wide architecture/guardrail sync such as #1060.
 - **H:** continuous architecture/integration oversight via `docs/AI_PROGRESS_OVERSIGHT.md`; #1060 establishes the lane. H routes implementation findings to A–G.
 
 Umbrellas #56, #1039, #1040, #1050, #155, #225, #245 organize broader direction; implement through focused child Issues when possible.
