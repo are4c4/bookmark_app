@@ -2,7 +2,6 @@ import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/bidirectional_relation_store.dart';
 import 'package:bookmark_app/data/bookmark_weblink_person_role_convergence_service.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
-import 'package:bookmark_app/data/person_object_bridge.dart';
 import 'package:bookmark_app/data/relation_mutation_service.dart';
 import 'package:bookmark_app/data/weblink_object_service.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
