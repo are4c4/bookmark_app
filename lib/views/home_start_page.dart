@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../data/canonical_weblink_capture_service.dart';
 import '../data/generic_database_store.dart';
 import '../data/home_recent_service.dart';
 import '../data/object_store.dart';
+import '../data/object_type_defaults_store.dart';
 import '../data/system_object_store.dart';
+import '../data/weblink_object_service.dart';
 import '../ui/ui_tokens.dart';
 import 'object_inspector_page.dart';
 
@@ -25,11 +28,15 @@ class HomeStartPage extends StatefulWidget {
 }
 
 class _HomeStartPageState extends State<HomeStartPage> {
+  final TextEditingController _captureController = TextEditingController();
   late ObjectStore _objectStore;
   late SystemObjectStore _systemObjects;
+  late CanonicalWeblinkCaptureService _weblinkCapture;
   List<HomeRecentObject> _recent = const <HomeRecentObject>[];
   bool _loading = true;
   bool _loadFailed = false;
+  bool _captureBusy = false;
+  String? _captureError;
 
   @override
   void initState() {
@@ -49,11 +56,23 @@ class _HomeStartPageState extends State<HomeStartPage> {
     }
   }
 
+  @override
+  void dispose() {
+    _captureController.dispose();
+    super.dispose();
+  }
+
   void _configureStores() {
     _objectStore = ObjectStore(widget.store);
     _systemObjects = SystemObjectStore(
       database: widget.store.database,
       objectStore: _objectStore,
+    );
+    _weblinkCapture = CanonicalWeblinkCaptureService(
+      weblinks: WeblinkObjectService(
+        systemObjects: _systemObjects,
+        defaultsStore: ObjectTypeDefaultsStore(widget.store),
+      ),
     );
   }
 
@@ -86,13 +105,65 @@ class _HomeStartPageState extends State<HomeStartPage> {
     }
   }
 
-  Future<void> _open(HomeRecentObject item) async {
+  Future<void> _captureWeblink() async {
+    if (_captureBusy) return;
+    final rawUrl = _captureController.text.trim();
+    if (rawUrl.isEmpty) {
+      setState(() => _captureError = 'URLを入力してください。');
+      return;
+    }
+
+    setState(() {
+      _captureBusy = true;
+      _captureError = null;
+    });
+    try {
+      final object = await _weblinkCapture.capture(
+        workspaceId: widget.workspaceId,
+        url: rawUrl,
+      );
+      if (!mounted) return;
+      _captureController.clear();
+      await _load();
+      if (!mounted) return;
+      setState(() => _captureBusy = false);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: const Text('Weblinkを保存しました。'),
+            action: SnackBarAction(
+              label: '開く',
+              onPressed: () {
+                _openObject(object.id);
+              },
+            ),
+          ),
+        );
+    } on ArgumentError {
+      if (!mounted) return;
+      setState(() {
+        _captureBusy = false;
+        _captureError = '有効なURLを入力してください。';
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _captureBusy = false;
+        _captureError = 'Weblinkを保存できませんでした。';
+      });
+    }
+  }
+
+  Future<void> _open(HomeRecentObject item) => _openObject(item.object.id);
+
+  Future<void> _openObject(int objectId) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => ObjectInspectorPage(
           store: widget.store,
           objectStore: _objectStore,
-          objectId: item.object.id,
+          objectId: objectId,
         ),
       ),
     );
@@ -126,6 +197,8 @@ class _HomeStartPageState extends State<HomeStartPage> {
                         ?.copyWith(color: scheme.onSurfaceVariant),
                   ),
                   const SizedBox(height: 28),
+                  _captureCard(context),
+                  const SizedBox(height: 28),
                   Row(
                     children: [
                       const Icon(Icons.history, size: UiTokens.iconNormal),
@@ -140,6 +213,78 @@ class _HomeStartPageState extends State<HomeStartPage> {
                   const SizedBox(height: UiTokens.space12),
                   _recentBody(context),
                 ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _captureCard(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.add_link, size: UiTokens.iconNormal),
+                const SizedBox(width: UiTokens.space8),
+                Text(
+                  'Weblinkを保存',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: UiTokens.space6),
+            Text(
+              'URLだけで保存できます。整理はあとから行えます。',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: UiTokens.space12),
+            TextField(
+              key: const ValueKey('home-weblink-url-field'),
+              controller: _captureController,
+              enabled: !_captureBusy,
+              keyboardType: TextInputType.url,
+              textInputAction: TextInputAction.done,
+              autocorrect: false,
+              enableSuggestions: false,
+              decoration: InputDecoration(
+                labelText: 'URL',
+                hintText: 'https://example.com',
+                errorText: _captureError,
+                prefixIcon: const Icon(Icons.link),
+              ),
+              onChanged: (_) {
+                if (_captureError != null) {
+                  setState(() => _captureError = null);
+                }
+              },
+              onSubmitted: (_) {
+                _captureWeblink();
+              },
+            ),
+            const SizedBox(height: UiTokens.space12),
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton.icon(
+                key: const ValueKey('home-weblink-capture-button'),
+                onPressed: _captureBusy ? null : _captureWeblink,
+                icon: _captureBusy
+                    ? const SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.add_link),
+                label: Text(_captureBusy ? '保存中…' : '保存'),
               ),
             ),
           ],
