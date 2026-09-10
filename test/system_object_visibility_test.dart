@@ -47,21 +47,32 @@ void main() {
       name: 'Daily Note',
       icon: '📅',
     );
+    final personType = await systemStore.ensureSystemObjectType(
+      workspaceId: workspaceId,
+      systemKey: 'person',
+      name: '人物',
+      icon: '👤',
+    );
 
     final navigation = await genericStore.listDatabases(workspaceId);
     final relationTargetTypes = await genericStore.listAllDatabases(workspaceId);
     final objectTypes = await objectStore.listObjectTypes(workspaceId);
 
-    expect(
-      navigation.map((item) => item.id),
-      [weblinkType.id, imageType.id, dailyNoteType.id, customId],
-    );
+    expect(navigation.map((item) => item.id), [
+      weblinkType.id,
+      imageType.id,
+      dailyNoteType.id,
+      personType.id,
+      customId,
+    ]);
     expect(navigation[0].name, 'Weblinks');
     expect(navigation[0].icon, '🔗');
     expect(navigation[1].name, 'Images');
     expect(navigation[1].icon, '🖼️');
     expect(navigation[2].name, 'Daily Notes');
     expect(navigation[2].icon, '📅');
+    expect(navigation[3].name, 'People');
+    expect(navigation[3].icon, '👤');
     expect(navigation.map((item) => item.id), isNot(contains(tagType.id)));
     expect(
       relationTargetTypes.map((item) => item.id),
@@ -71,6 +82,7 @@ void main() {
         imageType.id,
         weblinkType.id,
         dailyNoteType.id,
+        personType.id,
       ]),
     );
     expect(
@@ -81,11 +93,12 @@ void main() {
         imageType.id,
         weblinkType.id,
         dailyNoteType.id,
+        personType.id,
       ]),
     );
   });
 
-  test('workspace Object sync makes Daily Notes available before first note is opened', () async {
+  test('workspace Object sync makes Daily Notes and People available before first item is opened', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
     final workspaceId = await WorkspaceStore(database).initialize();
@@ -94,8 +107,14 @@ void main() {
 
     await sync.syncWorkspace(workspaceId);
 
-    final navigation = await GenericDatabaseStore(database).listDatabases(workspaceId);
-    final dailyNotes = navigation.singleWhere((item) => item.name == 'Daily Notes');
+    final navigation = await GenericDatabaseStore(database)
+        .listDatabases(workspaceId);
+    final dailyNotes = navigation.singleWhere(
+      (item) => item.name == 'Daily Notes',
+    );
+    final people = navigation.singleWhere((item) => item.name == 'People');
     expect(dailyNotes.icon, '📅');
+    expect(people.icon, '👤');
+    expect(await database.select(database.people).get(), isEmpty);
   });
 }
