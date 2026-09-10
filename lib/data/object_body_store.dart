@@ -72,13 +72,14 @@ class ObjectBodyStore {
     });
   }
 
-  /// Replaces the persisted Body only when it still exactly matches [expected].
+  /// Replaces the persisted Body only when it still semantically matches
+  /// [expected].
   ///
-  /// This is a narrow compare-and-swap primitive for short-lived local inverse
-  /// operations. The comparison and replacement happen in one database
-  /// transaction so a newer Body mutation cannot be overwritten between a
-  /// preflight read and the write. Both documents use the same canonical JSON
-  /// encoding as [write].
+  /// Accepted historical/non-canonical JSON encodings are decoded through the
+  /// same compatibility path as [read] before semantic comparison. The final
+  /// write is nevertheless conditioned on the exact raw snapshot read inside
+  /// the transaction, so a real concurrent persisted change is never
+  /// overwritten merely because both snapshots decode successfully.
   Future<bool> writeIfUnchanged({
     required int objectId,
     required ObjectBodyDocument expected,
@@ -88,16 +89,46 @@ class ObjectBodyStore {
     ObjectBodyBlockContractValidator.validateDocument(document);
     await ensureSchema();
     return _genericStore.database.transaction(() async {
-      await _genericStore.database.customStatement(
-        '''UPDATE object_bodies
-           SET document_json = ?, updated_at = CURRENT_TIMESTAMP
-           WHERE object_id = ? AND document_json = ?''',
-        [
-          jsonEncode(document.toJson()),
-          objectId,
-          jsonEncode(expected.toJson()),
-        ],
-      );
+      final row = await _genericStore.database
+          .customSelect(
+            'SELECT document_json FROM object_bodies WHERE object_id = ? LIMIT 1',
+            variables: [Variable<int>(objectId)],
+          )
+          .getSingleOrNull();
+
+      final expectedCanonical = jsonEncode(expected.toJson());
+      final nextCanonical = jsonEncode(document.toJson());
+
+      if (row == null) {
+        final emptyCanonical = jsonEncode(const ObjectBodyDocument().toJson());
+        if (expectedCanonical != emptyCanonical) return false;
+
+        await _genericStore.database.customStatement(
+          '''INSERT OR IGNORE INTO object_bodies(
+               object_id, document_json, updated_at
+             ) VALUES (?, ?, CURRENT_TIMESTAMP)''',
+          [objectId, nextCanonical],
+        );
+      } else {
+        final raw = row.read<String>('document_json');
+        dynamic decoded;
+        try {
+          decoded = jsonDecode(raw);
+        } on FormatException {
+          throw const FormatException('Stored Object body is not valid JSON.');
+        }
+        final stored = ObjectBodyDocument.fromJson(decoded);
+        ObjectBodyBlockContractValidator.validateDocument(stored);
+        if (jsonEncode(stored.toJson()) != expectedCanonical) return false;
+
+        await _genericStore.database.customStatement(
+          '''UPDATE object_bodies
+             SET document_json = ?, updated_at = CURRENT_TIMESTAMP
+             WHERE object_id = ? AND document_json = ?''',
+          [nextCanonical, objectId, raw],
+        );
+      }
+
       final changeRow = await _genericStore.database
           .customSelect('SELECT changes() AS affected')
           .getSingle();

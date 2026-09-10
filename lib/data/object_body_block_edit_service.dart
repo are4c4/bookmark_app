@@ -112,16 +112,11 @@ class ObjectBodyBlockEditService {
   Future<ObjectBodyDocument> mergeParagraphIntoPrevious({
     required int objectId,
     required String blockId,
-  }) async {
-    final current = await bodyStore.read(objectId);
-    final next = editor.mergeParagraphIntoPrevious(
-      document: current,
-      blockId: blockId,
-    );
-    if (identical(next, current)) return current;
-    await bodyStore.write(objectId: objectId, document: next);
-    return next;
-  }
+  }) => _mutate(
+        objectId,
+        (document) =>
+            editor.mergeParagraphIntoPrevious(document: document, blockId: blockId),
+      );
 
   /// Updates checklist state without replacing its text or other attributes.
   Future<ObjectBodyDocument> setChecklistChecked({
@@ -207,7 +202,18 @@ class ObjectBodyBlockEditService {
   ) async {
     final current = await bodyStore.read(objectId);
     final next = mutation(current);
-    await bodyStore.write(objectId: objectId, document: next);
+    if (identical(next, current)) return current;
+
+    final committed = await bodyStore.writeIfUnchanged(
+      objectId: objectId,
+      expected: current,
+      document: next,
+    );
+    if (!committed) {
+      throw StateError(
+        'Object Body changed while this block mutation was in progress.',
+      );
+    }
     return next;
   }
 
