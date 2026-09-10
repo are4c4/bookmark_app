@@ -117,6 +117,100 @@ void main() {
     expect(await objectStore.listObjects(personSchema.objectType.id), isEmpty);
   });
 
+  test(
+    'generic Person delete fails closed while a Saved View references it',
+    () async {
+      final database = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(database.close);
+      final workspaceId = await WorkspaceStore(database).initialize();
+      final genericStore = GenericDatabaseStore(database);
+      final objectStore = ObjectStore(genericStore);
+      final bridge = PersonObjectBridge(
+        database: database,
+        objectStore: objectStore,
+        systemObjectStore: SystemObjectStore(
+          database: database,
+          objectStore: objectStore,
+        ),
+      );
+      final personId = await PersonObjectWriteService.forDatabase(database)
+          .create(workspaceId: workspaceId, name: 'Filtered Person');
+      final personSchema = await bridge.ensurePersonObjectType(workspaceId);
+      final personObjectId = (await bridge.objectIdForLegacyPerson(
+        workspaceId,
+        personId,
+      ))!;
+
+      final sourceTypeId = await objectStore.createObjectType(
+        workspaceId: workspaceId,
+        name: 'Source',
+      );
+      final relationId = await objectStore.createRelationProperty(
+        objectTypeId: sourceTypeId,
+        name: 'Person',
+        targetObjectTypeId: personSchema.objectType.id,
+        multiple: false,
+      );
+      final relation = (await objectStore.getObjectType(sourceTypeId))!
+          .properties
+          .singleWhere((property) => property.id == relationId);
+      final sourceObjectId = await objectStore.createObject(
+        objectTypeId: sourceTypeId,
+        title: 'Source',
+      );
+      final services = GenericDatabasePageServices.fromStores(
+        genericStore: genericStore,
+        objectStore: objectStore,
+      );
+      await services.relationMutations.setRelation(
+        objectId: sourceObjectId,
+        property: relation,
+        targetObjectIds: <int>[personObjectId],
+      );
+      await database.customStatement(
+        'INSERT INTO saved_views(name, person_filter_id) VALUES (?, ?)',
+        <Object>['Person filter', personId],
+      );
+
+      await expectLater(
+        services.relationMutations.deleteObject(
+          workspaceId: workspaceId,
+          objectTypeId: personSchema.objectType.id,
+          objectId: personObjectId,
+        ),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('Saved View'),
+          ),
+        ),
+      );
+
+      expect(
+        await objectStore.listObjects(personSchema.objectType.id),
+        hasLength(1),
+      );
+      expect(await database.select(database.people).get(), hasLength(1));
+      expect(
+        await bridge.objectIdForLegacyPerson(workspaceId, personId),
+        personObjectId,
+      );
+      final source = (await objectStore.listObjects(sourceTypeId)).single;
+      expect(
+        ObjectRelationValue.fromJson(source.values[relationId]).objectIds,
+        <int>[personObjectId],
+      );
+      expect(await objectStore.backlinks(personObjectId), hasLength(1));
+      expect(
+        (await database.select(database.savedViews).get())
+            .single
+            .personFilterId,
+        personId,
+      );
+    },
+  );
+
   test('generic delete permits a native canonical Person without legacy projection', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);

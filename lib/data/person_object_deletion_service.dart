@@ -30,6 +30,11 @@ class PersonObjectDeletionCompatibility {
   /// A missing link row is recoverable only when the canonical identity-managed
   /// `Legacy Person ID` claim is valid and unambiguous. The existing bridge owns
   /// that reconciliation and fails closed on duplicate/damaged claims.
+  ///
+  /// When a surviving legacy Saved View still filters by the Person, deletion
+  /// also fails closed here before canonical Relation detach/Object deletion.
+  /// The current legacy FK would otherwise turn that filter into null, which
+  /// means “no Person filter” and silently broadens the View semantics.
   Future<int?> legacyPersonIdForCanonicalDeletion({
     required int workspaceId,
     required int objectTypeId,
@@ -51,7 +56,10 @@ class PersonObjectDeletionCompatibility {
       workspaceId,
       objectId,
     );
-    if (mapped != null) return mapped;
+    if (mapped != null) {
+      await _assertNoSavedViewReference(mapped);
+      return mapped;
+    }
 
     final rawLegacyId = matches.single.values[schema.legacyPersonIdProperty.id];
     if (rawLegacyId == null) return null;
@@ -81,20 +89,33 @@ class PersonObjectDeletionCompatibility {
       workspaceId,
       objectId,
     );
-    if (recovered != claimedLegacyId) {
+    if (recovered == null || recovered != claimedLegacyId) {
       throw StateError(
         'Canonical Person identity mapping could not be recovered safely.',
       );
     }
+    await _assertNoSavedViewReference(recovered);
     return recovered;
+  }
+
+  Future<void> _assertNoSavedViewReference(int personId) async {
+    final references = await (database.select(
+      database.savedViews,
+    )..where((view) => view.personFilterId.equals(personId))).get();
+    if (references.isNotEmpty) {
+      throw StateError(
+        'Person is still referenced by a Saved View; refusing deletion to preserve the filter.',
+      );
+    }
   }
 
   /// Removes the temporary legacy Person projection.
   ///
   /// Existing foreign-key actions intentionally preserve legacy semantics while
   /// those callers survive: Bookmark role assignments and PersonGroup
-  /// memberships cascade, saved-view Person filters become null, and the
-  /// transition-only `person_object_links` row cascades as well.
+  /// memberships cascade, and the transition-only `person_object_links` row
+  /// cascades as well. Saved View Person filters are preflighted above and may
+  /// never be cleared implicitly by this deletion path.
   Future<void> deleteLegacyCompatibilityRow(int personId) async {
     if (personId <= 0) {
       throw ArgumentError.value(
