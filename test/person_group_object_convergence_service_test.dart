@@ -14,61 +14,166 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('bootstraps legacy Person groups once through canonical Relations', () async {
-    final database = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(database.close);
-    final workspaceId = await WorkspaceStore(database).initialize();
-    final genericStore = GenericDatabaseStore(database);
-    final objectStore = ObjectStore(genericStore);
-    final systemObjects = SystemObjectStore(
-      database: database,
-      objectStore: objectStore,
-    );
-    final personBridge = PersonObjectBridge(
-      database: database,
-      objectStore: objectStore,
-      systemObjectStore: systemObjects,
-    );
-    final personId = await PersonObjectWriteService.forDatabase(database)
-        .create(workspaceId: workspaceId, name: 'Alice');
-    final personObjectId = (await personBridge.objectIdForLegacyPerson(
-      workspaceId,
-      personId,
-    ))!;
-    final groups = PersonGroupStore(database);
-    final groupId = await groups.createGroup('Writers');
-    await groups.setGroupsForPerson(personId, <int>[groupId]);
+  test('bootstraps once and remains stable across service restart', () async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.dispose);
+    final personId = await fixture.createPerson('Alice');
+    final personObjectId = await fixture.personObjectId(personId);
+    final groupId = await fixture.groups.createGroup('Writers');
+    await fixture.groups.setGroupsForPerson(personId, <int>[groupId]);
 
-    final service = PersonGroupObjectConvergenceService(
-      database: database,
-      objectStore: objectStore,
-      systemObjectStore: systemObjects,
-      personBridge: personBridge,
+    expect(
+      await fixture.service.converge(fixture.workspaceId),
+      <int>[personObjectId],
     );
-    expect(await service.converge(workspaceId), <int>[personObjectId]);
 
-    final schema = await service.ensureSchema(workspaceId);
-    final groupObjects = await objectStore.listObjects(schema.groupObjectType.id);
+    final schema = await fixture.service.ensureSchema(fixture.workspaceId);
+    final groupObjects = await fixture.objectStore.listObjects(
+      schema.groupObjectType.id,
+    );
     expect(groupObjects, hasLength(1));
     expect(groupObjects.single.title, 'Writers');
     expect(
       groupObjects.single.values[schema.legacyGroupIdProperty.id],
       groupId,
     );
-    final selection = await RelationTargetService(objectStore).selectionForMutation(
-      workspaceId: workspaceId,
-      sourceObjectId: personObjectId,
-      property: schema.personGroupsProperty,
+    expect(
+      await fixture.selection(schema, personObjectId),
+      <int>[groupObjects.single.id],
     );
-    expect(selection.selectedObjectIds, <int>[groupObjects.single.id]);
 
-    expect(await service.converge(workspaceId), isEmpty);
-    expect(await groups.memberIds(groupId), <int>{personId});
+    final restarted = fixture.newService();
+    expect(await restarted.converge(fixture.workspaceId), isEmpty);
+    final afterRestart = await fixture.objectStore.listObjects(
+      schema.groupObjectType.id,
+    );
+    expect(afterRestart.single.id, groupObjects.single.id);
+    expect(await fixture.groups.memberIds(groupId), <int>{personId});
   });
 
-  test('fails closed when canonical Person group membership changes after bootstrap', () async {
+  test(
+    'fails closed when canonical Person group membership changes after bootstrap',
+    () async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.dispose);
+      final personId = await fixture.createPerson('Alice');
+      final personObjectId = await fixture.personObjectId(personId);
+      final groupId = await fixture.groups.createGroup('Writers');
+      await fixture.groups.setGroupsForPerson(personId, <int>[groupId]);
+      await fixture.service.converge(fixture.workspaceId);
+      final schema = await fixture.service.ensureSchema(fixture.workspaceId);
+
+      await fixture.mutations.setRelation(
+        objectId: personObjectId,
+        property: schema.personGroupsProperty,
+        targetObjectIds: const <int>[],
+      );
+
+      await expectLater(
+        fixture.service.converge(fixture.workspaceId),
+        throwsA(isA<StateError>()),
+      );
+      expect(await fixture.selection(schema, personObjectId), isEmpty);
+      expect(await fixture.groups.memberIds(groupId), <int>{personId});
+      expect(
+        await fixture.objectStore.listObjects(schema.groupObjectType.id),
+        hasLength(1),
+      );
+    },
+  );
+
+  test('malformed legacy group identity fails before bootstrap mutation', () async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.dispose);
+    final personId = await fixture.createPerson('Alice');
+    final personObjectId = await fixture.personObjectId(personId);
+    final groupId = await fixture.groups.createGroup('Writers');
+    await fixture.groups.setGroupsForPerson(personId, <int>[groupId]);
+    final schema = await fixture.service.ensureSchema(fixture.workspaceId);
+    final corruptObjectId = await fixture.objectStore.createObject(
+      objectTypeId: schema.groupObjectType.id,
+      title: 'Corrupt group claim',
+    );
+    await fixture.genericStore.setValue(
+      recordId: corruptObjectId,
+      propertyId: schema.legacyGroupIdProperty.id,
+      value: 'not-a-group-id',
+    );
+
+    await expectLater(
+      fixture.service.converge(fixture.workspaceId),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('malformed legacy identity'),
+        ),
+      ),
+    );
+
+    expect(await fixture.selection(schema, personObjectId), isEmpty);
+    final groupObjects = await fixture.objectStore.listObjects(
+      schema.groupObjectType.id,
+    );
+    expect(groupObjects.map((object) => object.id), <int>[corruptObjectId]);
+    expect(await fixture.groups.memberIds(groupId), <int>{personId});
+  });
+
+  test('duplicate legacy group identity fails before Relation mutation', () async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.dispose);
+    final personId = await fixture.createPerson('Alice');
+    final personObjectId = await fixture.personObjectId(personId);
+    final groupId = await fixture.groups.createGroup('Writers');
+    await fixture.groups.setGroupsForPerson(personId, <int>[groupId]);
+    final schema = await fixture.service.ensureSchema(fixture.workspaceId);
+
+    for (final title in <String>['First claim', 'Second claim']) {
+      final objectId = await fixture.objectStore.createObject(
+        objectTypeId: schema.groupObjectType.id,
+        title: title,
+      );
+      await fixture.genericStore.setValue(
+        recordId: objectId,
+        propertyId: schema.legacyGroupIdProperty.id,
+        value: groupId,
+      );
+    }
+
+    await expectLater(
+      fixture.service.converge(fixture.workspaceId),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('multiple canonical Objects claim'),
+        ),
+      ),
+    );
+
+    expect(await fixture.selection(schema, personObjectId), isEmpty);
+    expect(
+      await fixture.objectStore.listObjects(schema.groupObjectType.id),
+      hasLength(2),
+    );
+    expect(await fixture.groups.memberIds(groupId), <int>{personId});
+  });
+}
+
+class _Fixture {
+  _Fixture({
+    required this.database,
+    required this.workspaceId,
+    required this.genericStore,
+    required this.objectStore,
+    required this.systemObjects,
+    required this.personBridge,
+    required this.groups,
+    required this.service,
+  });
+
+  static Future<_Fixture> create() async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(database.close);
     final workspaceId = await WorkspaceStore(database).initialize();
     final genericStore = GenericDatabaseStore(database);
     final objectStore = ObjectStore(genericStore);
@@ -81,49 +186,79 @@ void main() {
       objectStore: objectStore,
       systemObjectStore: systemObjects,
     );
-    final personId = await PersonObjectWriteService.forDatabase(database)
-        .create(workspaceId: workspaceId, name: 'Alice');
-    final personObjectId = (await personBridge.objectIdForLegacyPerson(
-      workspaceId,
-      personId,
-    ))!;
     final groups = PersonGroupStore(database);
-    final groupId = await groups.createGroup('Writers');
-    await groups.setGroupsForPerson(personId, <int>[groupId]);
     final service = PersonGroupObjectConvergenceService(
       database: database,
       objectStore: objectStore,
       systemObjectStore: systemObjects,
       personBridge: personBridge,
     );
-    await service.converge(workspaceId);
-    final schema = await service.ensureSchema(workspaceId);
-
-    final mutations = RelationMutationService(
-      objectStore: objectStore,
+    return _Fixture(
+      database: database,
+      workspaceId: workspaceId,
       genericStore: genericStore,
-      bidirectionalStore: BidirectionalRelationStore(
-        genericStore: genericStore,
-        objectStore: objectStore,
-      ),
+      objectStore: objectStore,
+      systemObjects: systemObjects,
+      personBridge: personBridge,
+      groups: groups,
+      service: service,
     );
-    await mutations.setRelation(
-      objectId: personObjectId,
-      property: schema.personGroupsProperty,
-      targetObjectIds: const <int>[],
-    );
+  }
 
-    await expectLater(
-      service.converge(workspaceId),
-      throwsA(isA<StateError>()),
+  final AppDatabase database;
+  final int workspaceId;
+  final GenericDatabaseStore genericStore;
+  final ObjectStore objectStore;
+  final SystemObjectStore systemObjects;
+  final PersonObjectBridge personBridge;
+  final PersonGroupStore groups;
+  final PersonGroupObjectConvergenceService service;
+
+  late final RelationMutationService mutations = RelationMutationService(
+    objectStore: objectStore,
+    genericStore: genericStore,
+    bidirectionalStore: BidirectionalRelationStore(
+      genericStore: genericStore,
+      objectStore: objectStore,
+    ),
+  );
+
+  PersonGroupObjectConvergenceService newService() =>
+      PersonGroupObjectConvergenceService(
+        database: database,
+        objectStore: objectStore,
+        systemObjectStore: systemObjects,
+        personBridge: personBridge,
+      );
+
+  Future<int> createPerson(String name) =>
+      PersonObjectWriteService.forDatabase(database).create(
+        workspaceId: workspaceId,
+        name: name,
+      );
+
+  Future<int> personObjectId(int personId) async {
+    final objectId = await personBridge.objectIdForLegacyPerson(
+      workspaceId,
+      personId,
     );
-    final selection = await RelationTargetService(objectStore).selectionForMutation(
+    expect(objectId, isNotNull);
+    return objectId!;
+  }
+
+  Future<List<int>> selection(
+    PersonGroupObjectSchema schema,
+    int personObjectId,
+  ) async {
+    final selection = await RelationTargetService(
+      objectStore,
+    ).selectionForMutation(
       workspaceId: workspaceId,
       sourceObjectId: personObjectId,
       property: schema.personGroupsProperty,
     );
-    expect(selection.selectedObjectIds, isEmpty);
-    expect(await groups.memberIds(groupId), <int>{personId});
-    expect(await objectStore.listObjects(schema.groupObjectType.id), hasLength(1));
-  });
+    return selection.selectedObjectIds;
+  }
+
+  Future<void> dispose() => database.close();
 }
