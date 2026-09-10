@@ -31,7 +31,8 @@ void main() {
     expect(impact.canonicalMutationCommitted, isTrue);
   });
 
-  test('update exposes the same canonical Person identity after commit', () async {
+  test('update exposes the same canonical Person identity after commit',
+      () async {
     final created = await service.createWithImpact(
       workspaceId: workspaceId,
       name: 'Before',
@@ -50,7 +51,8 @@ void main() {
     expect(updated.canonicalMutationCommitted, isTrue);
   });
 
-  test('duplicate create without a canonical write is distinguishable', () async {
+  test('duplicate create without a canonical write is distinguishable',
+      () async {
     final created = await service.createWithImpact(
       workspaceId: workspaceId,
       name: 'Existing',
