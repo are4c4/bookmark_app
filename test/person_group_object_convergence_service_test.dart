@@ -22,10 +22,9 @@ void main() {
     final groupId = await fixture.groups.createGroup('Writers');
     await fixture.groups.setGroupsForPerson(personId, <int>[groupId]);
 
-    expect(
-      await fixture.service.converge(fixture.workspaceId),
-      <int>[personObjectId],
-    );
+    expect(await fixture.service.converge(fixture.workspaceId), <int>[
+      personObjectId,
+    ]);
 
     final schema = await fixture.service.ensureSchema(fixture.workspaceId);
     final groupObjects = await fixture.objectStore.listObjects(
@@ -37,10 +36,9 @@ void main() {
       groupObjects.single.values[schema.legacyGroupIdProperty.id],
       groupId,
     );
-    expect(
-      await fixture.selection(schema, personObjectId),
-      <int>[groupObjects.single.id],
-    );
+    expect(await fixture.selection(schema, personObjectId), <int>[
+      groupObjects.single.id,
+    ]);
 
     final restarted = fixture.newService();
     expect(await restarted.converge(fixture.workspaceId), isEmpty);
@@ -51,8 +49,36 @@ void main() {
     expect(await fixture.groups.memberIds(groupId), <int>{personId});
   });
 
+  test('fails closed when canonical Person group membership changes after bootstrap', () async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.dispose);
+    final personId = await fixture.createPerson('Alice');
+    final personObjectId = await fixture.personObjectId(personId);
+    final groupId = await fixture.groups.createGroup('Writers');
+    await fixture.groups.setGroupsForPerson(personId, <int>[groupId]);
+    await fixture.service.converge(fixture.workspaceId);
+    final schema = await fixture.service.ensureSchema(fixture.workspaceId);
+
+    await fixture.mutations.setRelation(
+      objectId: personObjectId,
+      property: schema.personGroupsProperty,
+      targetObjectIds: const <int>[],
+    );
+
+    await expectLater(
+      fixture.service.converge(fixture.workspaceId),
+      throwsA(isA<StateError>()),
+    );
+    expect(await fixture.selection(schema, personObjectId), isEmpty);
+    expect(await fixture.groups.memberIds(groupId), <int>{personId});
+    expect(
+      await fixture.objectStore.listObjects(schema.groupObjectType.id),
+      hasLength(1),
+    );
+  });
+
   test(
-    'fails closed when canonical Person group membership changes after bootstrap',
+    'malformed legacy group identity fails before bootstrap mutation',
     () async {
       final fixture = await _Fixture.create();
       addTearDown(fixture.dispose);
@@ -60,104 +86,79 @@ void main() {
       final personObjectId = await fixture.personObjectId(personId);
       final groupId = await fixture.groups.createGroup('Writers');
       await fixture.groups.setGroupsForPerson(personId, <int>[groupId]);
-      await fixture.service.converge(fixture.workspaceId);
       final schema = await fixture.service.ensureSchema(fixture.workspaceId);
-
-      await fixture.mutations.setRelation(
-        objectId: personObjectId,
-        property: schema.personGroupsProperty,
-        targetObjectIds: const <int>[],
+      final corruptObjectId = await fixture.objectStore.createObject(
+        objectTypeId: schema.groupObjectType.id,
+        title: 'Corrupt group claim',
+      );
+      await fixture.genericStore.setValue(
+        recordId: corruptObjectId,
+        propertyId: schema.legacyGroupIdProperty.id,
+        value: 'not-a-group-id',
       );
 
       await expectLater(
         fixture.service.converge(fixture.workspaceId),
-        throwsA(isA<StateError>()),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('malformed legacy identity'),
+          ),
+        ),
       );
+
       expect(await fixture.selection(schema, personObjectId), isEmpty);
-      expect(await fixture.groups.memberIds(groupId), <int>{personId});
-      expect(
-        await fixture.objectStore.listObjects(schema.groupObjectType.id),
-        hasLength(1),
+      final groupObjects = await fixture.objectStore.listObjects(
+        schema.groupObjectType.id,
       );
+      expect(groupObjects.map((object) => object.id), <int>[corruptObjectId]);
+      expect(await fixture.groups.memberIds(groupId), <int>{personId});
     },
   );
 
-  test('malformed legacy group identity fails before bootstrap mutation', () async {
-    final fixture = await _Fixture.create();
-    addTearDown(fixture.dispose);
-    final personId = await fixture.createPerson('Alice');
-    final personObjectId = await fixture.personObjectId(personId);
-    final groupId = await fixture.groups.createGroup('Writers');
-    await fixture.groups.setGroupsForPerson(personId, <int>[groupId]);
-    final schema = await fixture.service.ensureSchema(fixture.workspaceId);
-    final corruptObjectId = await fixture.objectStore.createObject(
-      objectTypeId: schema.groupObjectType.id,
-      title: 'Corrupt group claim',
-    );
-    await fixture.genericStore.setValue(
-      recordId: corruptObjectId,
-      propertyId: schema.legacyGroupIdProperty.id,
-      value: 'not-a-group-id',
-    );
+  test(
+    'duplicate legacy group identity fails before Relation mutation',
+    () async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.dispose);
+      final personId = await fixture.createPerson('Alice');
+      final personObjectId = await fixture.personObjectId(personId);
+      final groupId = await fixture.groups.createGroup('Writers');
+      await fixture.groups.setGroupsForPerson(personId, <int>[groupId]);
+      final schema = await fixture.service.ensureSchema(fixture.workspaceId);
 
-    await expectLater(
-      fixture.service.converge(fixture.workspaceId),
-      throwsA(
-        isA<StateError>().having(
-          (error) => error.message,
-          'message',
-          contains('malformed legacy identity'),
+      for (final title in <String>['First claim', 'Second claim']) {
+        final objectId = await fixture.objectStore.createObject(
+          objectTypeId: schema.groupObjectType.id,
+          title: title,
+        );
+        await fixture.genericStore.setValue(
+          recordId: objectId,
+          propertyId: schema.legacyGroupIdProperty.id,
+          value: groupId,
+        );
+      }
+
+      await expectLater(
+        fixture.service.converge(fixture.workspaceId),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('multiple canonical Objects claim'),
+          ),
         ),
-      ),
-    );
-
-    expect(await fixture.selection(schema, personObjectId), isEmpty);
-    final groupObjects = await fixture.objectStore.listObjects(
-      schema.groupObjectType.id,
-    );
-    expect(groupObjects.map((object) => object.id), <int>[corruptObjectId]);
-    expect(await fixture.groups.memberIds(groupId), <int>{personId});
-  });
-
-  test('duplicate legacy group identity fails before Relation mutation', () async {
-    final fixture = await _Fixture.create();
-    addTearDown(fixture.dispose);
-    final personId = await fixture.createPerson('Alice');
-    final personObjectId = await fixture.personObjectId(personId);
-    final groupId = await fixture.groups.createGroup('Writers');
-    await fixture.groups.setGroupsForPerson(personId, <int>[groupId]);
-    final schema = await fixture.service.ensureSchema(fixture.workspaceId);
-
-    for (final title in <String>['First claim', 'Second claim']) {
-      final objectId = await fixture.objectStore.createObject(
-        objectTypeId: schema.groupObjectType.id,
-        title: title,
       );
-      await fixture.genericStore.setValue(
-        recordId: objectId,
-        propertyId: schema.legacyGroupIdProperty.id,
-        value: groupId,
+
+      expect(await fixture.selection(schema, personObjectId), isEmpty);
+      expect(
+        await fixture.objectStore.listObjects(schema.groupObjectType.id),
+        hasLength(2),
       );
-    }
-
-    await expectLater(
-      fixture.service.converge(fixture.workspaceId),
-      throwsA(
-        isA<StateError>().having(
-          (error) => error.message,
-          'message',
-          contains('multiple canonical Objects claim'),
-        ),
-      ),
-    );
-
-    expect(await fixture.selection(schema, personObjectId), isEmpty);
-    expect(
-      await fixture.objectStore.listObjects(schema.groupObjectType.id),
-      hasLength(2),
-    );
-    expect(await fixture.groups.memberIds(groupId), <int>{personId});
-  });
+      expect(await fixture.groups.memberIds(groupId), <int>{personId});
+    },
+  );
 }
 
 class _Fixture {
@@ -232,10 +233,8 @@ class _Fixture {
       );
 
   Future<int> createPerson(String name) =>
-      PersonObjectWriteService.forDatabase(database).create(
-        workspaceId: workspaceId,
-        name: name,
-      );
+      PersonObjectWriteService.forDatabase(database)
+          .create(workspaceId: workspaceId, name: name);
 
   Future<int> personObjectId(int personId) async {
     final objectId = await personBridge.objectIdForLegacyPerson(
@@ -250,13 +249,12 @@ class _Fixture {
     PersonGroupObjectSchema schema,
     int personObjectId,
   ) async {
-    final selection = await RelationTargetService(
-      objectStore,
-    ).selectionForMutation(
-      workspaceId: workspaceId,
-      sourceObjectId: personObjectId,
-      property: schema.personGroupsProperty,
-    );
+    final selection = await RelationTargetService(objectStore)
+        .selectionForMutation(
+          workspaceId: workspaceId,
+          sourceObjectId: personObjectId,
+          property: schema.personGroupsProperty,
+        );
     return selection.selectedObjectIds;
   }
 
