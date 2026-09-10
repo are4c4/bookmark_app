@@ -7,6 +7,7 @@ import '../data/app_database.dart';
 import '../data/bookmark_read_store.dart';
 import '../data/bookmark_weblink_media_convergence_service.dart';
 import '../data/bookmark_weblink_object_bridge.dart';
+import '../data/bookmark_weblink_person_role_convergence_service.dart';
 import '../data/bookmark_weblink_tag_convergence_service.dart';
 import '../data/core_object_bridge.dart';
 import '../data/daily_note_service.dart';
@@ -71,6 +72,12 @@ class ObjectSyncService {
       objectStore: objectStore,
       systemObjectStore: systemObjectStore,
     );
+    bookmarkWeblinkPersonRoles = BookmarkWeblinkPersonRoleConvergenceService(
+      database: database,
+      objectStore: objectStore,
+      systemObjectStore: systemObjectStore,
+      personBridge: personBridge,
+    );
   }
 
   /// Only one profile/workspace is active in the app at a time. Keeping the
@@ -107,6 +114,8 @@ class ObjectSyncService {
   late final BookmarkWeblinkObjectBridge bookmarkWeblinkBridge;
   late final BookmarkWeblinkTagConvergenceService bookmarkWeblinkTags;
   late final BookmarkWeblinkMediaConvergenceService bookmarkWeblinkMedia;
+  late final BookmarkWeblinkPersonRoleConvergenceService
+  bookmarkWeblinkPersonRoles;
   late final WeblinkPreviewImagePipeline _previewImagePipeline =
       WeblinkPreviewImagePipeline(
         database: database,
@@ -207,6 +216,8 @@ class ObjectSyncService {
         .captureSourceSnapshot(workspaceId);
     final previousBookmarkMediaSource = await bookmarkWeblinkMedia
         .captureSourceSnapshot(workspaceId);
+    final previousBookmarkPersonRoleSource = await bookmarkWeblinkPersonRoles
+        .captureSourceSnapshot(workspaceId);
 
     final personObjectIds = await personBridge.syncLegacyPeople(workspaceId);
     final coreImpact = await coreBridge.syncAllWithImpact(workspaceId);
@@ -226,6 +237,11 @@ class ObjectSyncService {
           workspaceId,
           previousSource: previousBookmarkMediaSource,
         );
+    final personRoleConvergence = await bookmarkWeblinkPersonRoles
+        .reconcileAfterWeblinkSync(
+          workspaceId,
+          previousSource: previousBookmarkPersonRoleSource,
+        );
 
     // Daily Notes are a normal system ObjectType and should be available to the
     // generic sidebar/Database host even before the user opens the first note.
@@ -241,7 +257,10 @@ class ObjectSyncService {
         .combine(coreImpact)
         .combine(weblinkSync.impact)
         .combine(ObjectSyncImpact(tagConvergence.mutatedWeblinkObjectIds))
-        .combine(ObjectSyncImpact(mediaConvergence.mutatedWeblinkObjectIds));
+        .combine(ObjectSyncImpact(mediaConvergence.mutatedWeblinkObjectIds))
+        .combine(
+          ObjectSyncImpact(personRoleConvergence.mutatedWeblinkObjectIds),
+        );
     final after = await ObjectSyncSemanticSnapshot.capture(
       objectStore: objectStore,
       systemObjects: systemObjectStore,
