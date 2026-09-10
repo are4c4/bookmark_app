@@ -149,13 +149,35 @@ class RelationMutationService {
     await objectStore.deleteProperty(storedProperty.id);
   }
 
+  /// Deletes an Object through the canonical Relation-safe lifecycle.
+  ///
+  /// Existing consumers that do not need downstream projection refresh can
+  /// retain this compatibility boundary. Consumers that need exact changed
+  /// Object ids should call [deleteObjectWithImpact].
+  Future<void> deleteObject({
+    required int workspaceId,
+    required int objectTypeId,
+    required int objectId,
+  }) async {
+    await deleteObjectWithImpact(
+      workspaceId: workspaceId,
+      objectTypeId: objectTypeId,
+      objectId: objectId,
+    );
+  }
+
   /// Deletes an Object after detaching every incoming Relation that references
   /// it, including legacy values that were not yet present in the edge index.
+  ///
+  /// The returned impact is derived from the same validated detach plan used
+  /// for mutation and is exposed only after the deletion transaction commits.
+  /// This lets downstream projection owners refresh exact changed Objects
+  /// without reimplementing backlink discovery after the target is gone.
   ///
   /// This is the Relation-safe deletion path for Object detail consumers. The
   /// low-level [ObjectStore.deleteObject] remains available for storage-owned
   /// workflows that have already handled relation lifecycle explicitly.
-  Future<void> deleteObject({
+  Future<RelationObjectDeletionImpact> deleteObjectWithImpact({
     required int workspaceId,
     required int objectTypeId,
     required int objectId,
@@ -182,7 +204,10 @@ class RelationMutationService {
     final backlinks = await objectStore.backlinks(objectId);
     if (backlinks.isEmpty) {
       await objectStore.deleteObject(objectId);
-      return;
+      return RelationObjectDeletionImpact(
+        deletedObjectId: objectId,
+        detachedSourceObjectIds: const <int>[],
+      );
     }
 
     final objectTypes = await objectStore.listObjectTypes(workspaceId);
@@ -238,6 +263,10 @@ class RelationMutationService {
       );
     }
 
+    final detachedSourceObjectIds = <int>{
+      for (final plan in plans) plan.sourceObjectId,
+    }.toList(growable: false);
+
     // All pair/property/source validation is completed before the first write.
     // Keep every detach plus the final Object deletion in one outer transaction.
     // Nested canonical Relation mutations participate in this transaction, so a
@@ -253,6 +282,11 @@ class RelationMutationService {
       }
       await objectStore.deleteObject(objectId);
     });
+
+    return RelationObjectDeletionImpact(
+      deletedObjectId: objectId,
+      detachedSourceObjectIds: detachedSourceObjectIds,
+    );
   }
 
   Future<ObjectPropertyDefinition> _canonicalRelationProperty(
@@ -304,6 +338,23 @@ class RelationMutationService {
     }
     return null;
   }
+}
+
+/// Canonical Relation-safe deletion result for downstream projection owners.
+///
+/// [detachedSourceObjectIds] contains each surviving source Object whose
+/// serialized Relation value changed during the committed deletion exactly
+/// once. The deleted Object itself is reported separately.
+class RelationObjectDeletionImpact {
+  RelationObjectDeletionImpact({
+    required this.deletedObjectId,
+    required List<int> detachedSourceObjectIds,
+  }) : detachedSourceObjectIds = List<int>.unmodifiable(
+          detachedSourceObjectIds,
+        );
+
+  final int deletedObjectId;
+  final List<int> detachedSourceObjectIds;
 }
 
 class _RelationDetachPlan {
