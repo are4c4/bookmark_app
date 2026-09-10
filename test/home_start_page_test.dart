@@ -188,6 +188,52 @@ void main() {
       isNull,
     );
   });
+
+  testWidgets('ambiguous canonical collision fails closed in Home', (
+    tester,
+  ) async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final harness = _HomeWeblinkHarness(database);
+    final definition = await harness.weblinks.ensureDefinition(workspaceId);
+
+    for (final url in ['https://example.com/', 'https://EXAMPLE.com:443']) {
+      final objectId = await harness.objectStore.createObject(
+        objectTypeId: definition.objectType.id,
+        title: 'Collision',
+      );
+      await harness.objectStore.setPropertyValue(
+        objectId: objectId,
+        property: definition.urlProperty,
+        value: url,
+      );
+    }
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HomeStartPage(store: harness.store, workspaceId: workspaceId),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('home-weblink-url-field')),
+      'https://example.com',
+    );
+    await tester.tap(find.byKey(const ValueKey('home-weblink-capture-button')));
+    await tester.pumpAndSettle();
+
+    final objects = await harness.objectStore.listObjects(
+      definition.objectType.id,
+    );
+    expect(objects, hasLength(2));
+    expect(find.text('このURLを保存できませんでした。URLを確認してください。'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('home-weblink-open-result')),
+      findsNothing,
+    );
+  });
 }
 
 class _HomeWeblinkHarness {
