@@ -94,9 +94,8 @@ void main() {
       await tester.pumpAndSettle();
 
       final definition = await harness.weblinks.ensureDefinition(workspaceId);
-      final objects = await harness.objectStore.listObjects(
-        definition.objectType.id,
-      );
+      final objects =
+          await harness.objectStore.listObjects(definition.objectType.id);
       final bookmarkCount = await database
           .customSelect('SELECT COUNT(*) AS count FROM bookmarks')
           .getSingle();
@@ -145,9 +144,8 @@ void main() {
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
 
-    final objects = await harness.objectStore.listObjects(
-      definition.objectType.id,
-    );
+    final objects =
+        await harness.objectStore.listObjects(definition.objectType.id);
     expect(objects, hasLength(1));
     expect(objects.single.id, original.id);
     expect(objects.single.updatedAt, original.updatedAt);
