@@ -1,6 +1,6 @@
 # AI Progress — Database, View & Schema UX Lane
 
-> Durable Lane C handoff. Before implementation read the focused Issue, `docs/product_architecture.md`, `AGENTS.md`, `docs/AI_PROGRESS.md`, latest `main`, live PR ownership and current CI. Historical completion detail remains in git/Issue/PR history.
+> Durable Lane C handoff. Before implementation read the focused Issue, `docs/product_architecture.md`, `AGENTS.md`, `docs/AI_PROGRESS.md`, latest `main`, live PR ownership and current CI. Historical completion detail remains in git/Issue/PR history; this file prioritizes durable contracts and exact resume actions.
 
 ## Lane goal
 Make Database/View/schema UX generic enough that Person, Weblink, Tag and user-defined ObjectTypes can use ordinary Object/Database workflows rather than dedicated management engines.
@@ -16,8 +16,8 @@ Make Database/View/schema UX generic enough that Person, Weblink, Tag and user-d
 
 ## Completed Tag hierarchy query checkpoint
 
-### #1053 — hierarchy-aware Tag filter/query UX (completed)
-#1157 integrated the canonical runtime completion for #1053. The durable semantics are:
+### #1053 — hierarchy-aware Tag filter/query UX
+Completed. The durable semantics are:
 - exact parent does not match a directly assigned descendant;
 - `is-or-below`, below-only and exclude-branch remain distinct typed predicates;
 - no automatic ancestor Tag assignment is persisted;
@@ -31,31 +31,40 @@ Make Database/View/schema UX generic enough that Person, Weblink, Tag and user-d
 
 ## Active focused issues
 
+Always verify live GitHub before taking ownership. Completed checkpoints below are not active work sources.
+
+### #1046 — replace dedicated People management
+A/#1044 generic Person authority and B/#1045 Person role/group integrity are completed prerequisites. C no longer waits on those tracks before proving daily-use parity.
+
+Integrated C checkpoints:
+- canonical Person is exposed as the ordinary generic `People` Database/navigation collection, including an empty workspace with zero legacy People rows (#1199 / PR #1220);
+- normal generic Database creation for the registered system Person ObjectType routes through A's `PersonObjectWriteService` rather than title-only Object creation (#1224 / PR #1225);
+- Relation-picker Person quick-create uses the same canonical Person write authority and returns the canonical Person Object id (#1230 / PR #1231);
+- Person Board/group creation preserves canonical Person authority and applies the group preset to that same Object/transaction (#1234 / PR #1235).
+
+Do not reimplement those creation/navigation paths. Remaining #1046 parity must be re-audited from current `main`, with emphasis on:
+- normal Person rename/Note edit and lifecycle/delete through generic Object/Database/Inspector flows;
+- canonical Profile Image presentation through the Person -> Image Relation using generic Relation/Gallery capabilities where possible;
+- groups/roles/backlinks through canonical Relation/Database contracts;
+- search/filter/group/persisted View/opening behavior needed for normal People workflows;
+- inline editing/creation and keyboard/focus/empty-state behavior;
+- proving the dedicated `PeopleManagementPage` route becomes caller-zero only after equivalent daily-use workflows are available generically.
+
+Concrete transition bug #1237 owns the surviving `PeopleManagementPage` group lifecycle/membership writes that still call legacy `PersonGroupStore` directly. Do not duplicate that work. After #1237, re-audit whether those dedicated controls can be removed rather than further extended.
+
 ### #1061 — Home/start UX
 Home converges on Inbox / Recent / Favorites / Pinned Databases without making legacy Bookmark/People modules permanent navigation authority.
 
-Integrated first slice (#1111):
-- Home is the normal shell start destination while Bookmark / People / Tag / Collection transition navigation remains available until their parity/caller-zero gates complete;
-- Recent is derived from canonical Objects across ObjectTypes using `updatedAt` descending with Object id as deterministic tie-breaker;
-- transition-only mirrored Bookmark Objects are excluded by canonical `system_key = bookmark` identity, without excluding user-facing system ObjectTypes such as Weblink/Image/Tag/Daily Note;
-- Recent opens through the shared `ObjectInspectorPage` and refreshes after returning;
-- Home has loading, empty, error/retry and pull-to-refresh behavior;
-- no Home-only Recent index, recently-opened history, Favorites state or Pinned Database state is persisted by this slice.
+Integrated checkpoints:
+- Home is the normal shell start destination while transition navigation remains available until parity/caller-zero gates complete;
+- Recent is derived from canonical Objects across ObjectTypes using deterministic `updatedAt` ordering and excludes transition-only mirrored Bookmark Objects without excluding user-facing system ObjectTypes;
+- Home Recent opens through the shared Object Inspector and has loading/empty/error/retry/refresh and keyboard focus/activation behavior;
+- canonical Weblink quick capture is integrated (#1194 / PR #1202): Home create/reuse delegates to D's `CanonicalWeblinkCaptureService`, pointer/touch/keyboard submit share one path, malformed/ambiguous collisions surface stable errors, and successful capture reloads canonical Recent without introducing Bookmark rows, Home-only Weblink identity, or fake Recent state.
 
-Focused interaction slice (#1125):
-- Home Recent focus traversal is explicitly ordered by the same visible deterministic Recent order;
-- the first Recent row receives autofocus so desktop keyboard users can resume work without crossing transition-only domain navigation first;
-- Enter, Space and pointer/touch activation converge on the same shared `ObjectInspectorPage` opening path;
-- Material row semantics/touch targets remain intact, and empty Home keyboard traversal does not create a focus trap;
-- this interaction layer adds no Home selection persistence, recently-opened history or alternate Object-opening authority.
-
-Next #1061 action: split Inbox / Favorites / Pinned Databases into focused contracts only when their canonical persistence/query semantics are explicit. Do not reuse legacy Bookmark `storageState`/favorite state as Home authority, and do not fake durable user state in presentation memory merely to fill the Home surface.
+Home quick capture is complete as a checkpoint, but #1061 remains open. Inbox, Favorites and Pinned Databases still require explicit canonical persistence/query semantics before implementation. Do not reuse legacy Bookmark `storageState`/favorite state as permanent Home authority and do not invent UI-memory persistence merely to fill the surface.
 
 ### #1043 — replace Stage1 normal ownership
-Move ordinary saved-URL use to canonical Weblink Objects through generic Database/View/navigation and capture-first/Inbox organization. Preserve useful list/table/gallery/filter/sort/opening behavior through generic contracts. Retire Stage1 routing only after completed #1041/#1054, B/#1042 Relation convergence, and daily-use parity make it caller-zero.
-
-### #1046 — replace dedicated People management
-Expose Person Objects through ordinary Database/View/Inspector flows. Preserve Profile Image Relation, search/filter/group/opening and inline Relation picker creation. Remove `PeopleManagementPage` only after #1044/#1045 and daily-use parity.
+Move ordinary saved-URL use to canonical Weblink Objects through generic Database/View/navigation and capture-first/Inbox organization. Preserve useful list/table/gallery/filter/sort/opening behavior through generic contracts. Retire Stage1 routing only after completed A/#1041, B/#1042 and D/#1054 prerequisites plus C daily-use parity make the dedicated path caller-zero.
 
 ## Integrated foundation that remains authoritative
 - generic Database/ObjectType separation;
@@ -64,33 +73,36 @@ Expose Person Objects through ordinary Database/View/Inspector flows. Preserve P
 - relation-aware Property authoring/schema editing through canonical services;
 - generic Gallery cover sources and media rendering;
 - generic Database sidebar/command-palette navigation;
-- canonical Images/Weblinks/Daily Notes system collection defaults;
+- canonical Images/Weblinks/Daily Notes/People system collection defaults;
+- normal generic Person create, Relation-picker quick-create and Board-create routed through canonical Person authority;
 - shared Object opening/Inspector/Body composition;
-- Home start routing with canonical recently-changed Object projection and transition-only Bookmark mirror suppression;
-- completed canonical hierarchy-aware Tag Database/View query runtime from #1053/#1157 using B's #1052/#1105 integrity/read contracts.
+- Home start routing with canonical recently-changed Object projection, transition-only Bookmark mirror suppression and canonical Weblink quick capture;
+- completed canonical hierarchy-aware Tag Database/View query runtime from #1053 using B's #1052/#1105 integrity/read contracts.
 
-Older statements that “Lane C is idle after #949” are obsolete because #1043/#1046/#1061 and broader #1050 product UX contain C work or dependencies that must be re-audited live. Completed #1053 is not an active work source.
+Older statements that A/#1044 or B/#1045 are unresolved blockers for C are obsolete. Older statements that Person collection/create/Relation-picker/Board-create or Home canonical URL capture still need to be built are also obsolete. #1046/#1061 remain open for the parity/contracts explicitly listed above.
 
 ## Cross-lane boundaries
-- **A:** Object/ObjectType identity/lifecycle, Body, Person/Bookmark migration authority.
-- **B:** Relation integrity, Tag Parent/group cycle/cardinality correctness, Bookmark/Person relationship migration.
-- **D:** Weblink/Image/File native behavior and direct URL capture.
-- **E:** FTS/search architecture; C owns Database/View typed query/filter semantics, not global FTS persistence.
+- **A:** Object/ObjectType identity/lifecycle, Body, Person/Bookmark migration authority. C consumes completed #1044 rather than recreating Person write identity.
+- **B:** Relation integrity, Tag Parent/group cycle/cardinality correctness, Bookmark/Person relationship migration. C consumes completed #1045 and the canonical Person Group Object/Relation boundaries; #1237 changes only surviving UI composition.
+- **D:** Weblink/Image/File native behavior and direct URL capture. Home capture delegates to D's canonical Weblink identity service.
+- **E:** FTS/search architecture; C owns Database/View typed query/filter semantics, not global FTS persistence. Person Search freshness remains E-owned where live acceptance exists.
 - **F:** Vault/storage lifecycle.
-- **G:** behavior-preserving shared-host reduction and caller-zero dedicated-page retirement after parity.
+- **G:** behavior-preserving shared-host reduction and caller-zero dedicated-page retirement after C parity.
 
 ## Shared hotspots
-`generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, `bookmark_unified_stage1_page.dart` and `people_management_page.dart` are conflict-prone. Recheck live PR ownership before editing. Prefer reusable query/domain/presentation components and small host-composition hunks over broad rewrites.
+`generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, `bookmark_unified_stage1_page.dart` and `people_management_page.dart` are conflict-prone. Recheck live PR ownership before editing. Prefer reusable query/domain/presentation components and small host-composition hunks over broad rewrites. #1237 specifically owns the surviving People group-write transition bug; avoid duplicate ownership.
 
 ## Validation
-Changed-Dart format, Analyze, full Flutter Test and focused serialization/widget/real-host regressions are required for primary flows. UI acceptance includes click/key count, inline creation/editing, predictable focus, empty/error/loading states and clear remove-vs-delete semantics.
+Changed-Dart format, Analyze, full Flutter Test and focused serialization/widget/real-host regressions are required for primary flows. UI acceptance includes click/key count, inline creation/editing, predictable focus, empty/error/loading states and clear remove-vs-delete semantics. Docs-only handoff changes use the repository docs/coordination path plus required merge-gate.
 
 ## Resume sequence
-1. re-read live #1043/#1046/#1061 and broader #1050 acceptance/dependency status; treat #1053 as a completed checkpoint unless it is explicitly reopened;
-2. choose one focused Issue and one owner branch/PR;
-3. avoid broad shared-host edits until the underlying contract is testable in reusable components;
-4. prove persisted View/query round-trip and interaction behavior;
-5. update this handoff with durable implementation facts;
-6. do not reintroduce Bookmark/People-specific view engines, Home-only fake durable state, or a parallel Tag tree store.
+1. refresh latest `main`, live open PR ownership, current CI, shared-hotspot and migration ownership;
+2. re-read live #1043/#1046/#1061, #1237 and broader #1050 acceptance/dependency status; treat #1053 and the integrated Person creation/navigation checkpoints as completed rather than implementation queues;
+3. if #1237 is unowned and safe, it is the concrete current #1046 transition bug; otherwise choose another demonstrated non-conflicting C parity gap rather than duplicating ownership;
+4. for #1046, re-audit generic edit/delete/lifecycle, Profile Image, groups/roles/backlinks, query/filter/opening and caller-zero readiness before splitting new work;
+5. for #1061, keep Home canonical Weblink capture as completed and implement Inbox/Favorites/Pinned only after their canonical contracts are explicit;
+6. for #1043, preserve canonical Weblink/Object Database/View semantics and do not grow legacy Bookmark authority;
+7. avoid broad shared-host edits until the underlying contract is testable in reusable components;
+8. after each coherent slice/PR/merge, apply the shared **Lane continuation and resume/stop contract** in `AGENTS.md` and continue while safe C work exists.
 
-This sequence is not terminal. After any slice/PR/merge, apply the shared **Lane continuation and resume/stop contract** in `AGENTS.md` before ending the run. Lane C must refresh dependencies because #1043/#1046/#1061 and broader #1050 work may become actionable as A/B/D work lands; a dependency that was blocked earlier is not a durable idle reason. Stop only after the final resume audit finds no independent safe C work, and record the exact shared stop category plus evidence in this handoff.
+If the final resume audit finds no actionable C work, record the exact stop category from `AGENTS.md` with live evidence. Completion of one historical Person/Home slice is never, by itself, a stop reason.
