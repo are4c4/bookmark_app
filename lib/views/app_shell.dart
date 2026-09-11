@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../data/bookmark_repository.dart';
-import '../data/generic_database_store.dart';
-import '../data/object_type_template_store.dart';
 import '../data/workspace_store.dart';
+import '../services/app_shell_database_catalog_service.dart';
 import '../services/bookmark_transfer_service.dart';
 import '../services/profile_manager.dart';
 import '../services/profile_backup_service.dart';
@@ -73,16 +72,16 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
   var _sidebarCollapsed = false;
   var _loadingWorkspaces = true;
   List<WorkspaceInfo> _workspaces = const [];
-  List<GenericDatabaseDefinitionRecord> _genericDatabases = const [];
+  List<AppShellDatabaseRecord> _genericDatabases = const [];
   int? _selectedGenericDatabaseId;
   final Map<int, Widget> _pageCache = {};
-  late GenericDatabaseStore _genericDatabaseStore;
+  late AppShellDatabaseCatalogService _databaseCatalog;
 
   @override
   void initState() {
     super.initState();
-    _genericDatabaseStore = GenericDatabaseStore(
-      widget.repository.workspaceStore.database,
+    _databaseCatalog = AppShellDatabaseCatalogService.fromWorkspaceStore(
+      widget.repository.workspaceStore,
     );
     _reloadWorkspaces();
   }
@@ -91,8 +90,8 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
   void didUpdateWidget(covariant BookmarkAppShell oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.repository != widget.repository) {
-      _genericDatabaseStore = GenericDatabaseStore(
-        widget.repository.workspaceStore.database,
+      _databaseCatalog = AppShellDatabaseCatalogService.fromWorkspaceStore(
+        widget.repository.workspaceStore,
       );
       _pageCache.clear();
       _selectedGenericDatabaseId = null;
@@ -117,8 +116,8 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
   }
 
   Future<void> _reloadGenericDatabases() async {
-    final databases = await _genericDatabaseStore.listDatabases(
-      widget.repository.workspaceId,
+    final databases = await _databaseCatalog.listDatabases(
+      workspaceId: widget.repository.workspaceId,
     );
     if (!mounted) return;
     setState(() {
@@ -144,7 +143,7 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
           hint: '例: 書籍',
         );
         if (name?.isNotEmpty != true) return;
-        id = await _genericDatabaseStore.createDatabase(
+        id = await _databaseCatalog.createEmptyDatabase(
           workspaceId: widget.repository.workspaceId,
           name: name!,
         );
@@ -155,8 +154,7 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
           initial: template.name,
         );
         if (name?.isNotEmpty != true) return;
-        id = await ObjectTypeTemplateStore(_genericDatabaseStore)
-            .createFromTemplate(
+        id = await _databaseCatalog.createTemplateDatabase(
           workspaceId: widget.repository.workspaceId,
           template: template,
           name: name!,
@@ -538,7 +536,7 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
     );
   }
 
-  Widget _genericDatabaseTile(GenericDatabaseDefinitionRecord database) {
+  Widget _genericDatabaseTile(AppShellDatabaseRecord database) {
     final scheme = Theme.of(context).colorScheme;
     final selected = _index == 11 && _selectedGenericDatabaseId == database.id;
     return Padding(
@@ -852,7 +850,7 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
                 onDatabaseChanged: _reloadGenericDatabases,
               ),
         12 => HomeStartPage(
-            store: _genericDatabaseStore,
+            store: _databaseCatalog.homeStartStore,
             workspaceId: widget.repository.workspaceId,
           ),
         _ => const SizedBox.shrink(),
