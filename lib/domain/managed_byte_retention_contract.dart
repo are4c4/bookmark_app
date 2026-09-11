@@ -27,6 +27,55 @@ class ManagedByteIdentity {
   int get hashCode => Object.hash(ownership, vaultRelativePath);
 }
 
+/// Storage-owned identity for one durable-history checkpoint retention claim.
+///
+/// A revision id is scoped to its Object. It is never safe to key byte retention
+/// by [revisionId] alone because two Objects can independently have the same
+/// revision number. This mirrors A's durable checkpoint identity without taking
+/// ownership of A's checkpoint semantics.
+class ManagedByteHistoryCheckpointIdentity {
+  ManagedByteHistoryCheckpointIdentity({
+    required this.objectId,
+    required this.revisionId,
+  }) {
+    if (objectId <= 0) {
+      throw ArgumentError.value(
+        objectId,
+        'objectId',
+        'History checkpoint Object ids must be positive.',
+      );
+    }
+    if (revisionId <= 0) {
+      throw ArgumentError.value(
+        revisionId,
+        'revisionId',
+        'History checkpoint revision ids must be positive.',
+      );
+    }
+  }
+
+  factory ManagedByteHistoryCheckpointIdentity.fromEntry(
+    ObjectHistoryEntry entry,
+  ) => ManagedByteHistoryCheckpointIdentity(
+    objectId: entry.objectId,
+    revisionId: entry.revisionId,
+  );
+
+  final int objectId;
+  final int revisionId;
+
+  String get key => 'object:$objectId/revision:$revisionId';
+
+  @override
+  bool operator ==(Object other) =>
+      other is ManagedByteHistoryCheckpointIdentity &&
+      other.objectId == objectId &&
+      other.revisionId == revisionId;
+
+  @override
+  int get hashCode => Object.hash(objectId, revisionId);
+}
+
 enum HistoryByteReferenceKind { managed, external }
 
 /// Logical file reference captured by durable history.
@@ -82,22 +131,24 @@ class ManagedByteRetentionState {
   ManagedByteRetentionState({
     required this.identity,
     Iterable<String> currentReferenceKeys = const <String>[],
-    Iterable<int> retainedHistoryRevisionIds = const <int>[],
+    Iterable<ManagedByteHistoryCheckpointIdentity> retainedHistoryCheckpoints =
+        const <ManagedByteHistoryCheckpointIdentity>[],
     Iterable<String> preservationClaimKeys = const <String>[],
     required this.referenceAuditComplete,
   }) : currentReferenceKeys = Set<String>.unmodifiable(
          _normalizeClaimKeys(currentReferenceKeys, 'currentReferenceKeys'),
        ),
-       retainedHistoryRevisionIds = Set<int>.unmodifiable(
-         _validateRevisionIds(retainedHistoryRevisionIds),
-       ),
+       retainedHistoryCheckpoints =
+           Set<ManagedByteHistoryCheckpointIdentity>.unmodifiable(
+             _validateHistoryCheckpointIdentities(retainedHistoryCheckpoints),
+           ),
        preservationClaimKeys = Set<String>.unmodifiable(
          _normalizeClaimKeys(preservationClaimKeys, 'preservationClaimKeys'),
        );
 
   final ManagedByteIdentity identity;
   final Set<String> currentReferenceKeys;
-  final Set<int> retainedHistoryRevisionIds;
+  final Set<ManagedByteHistoryCheckpointIdentity> retainedHistoryCheckpoints;
   final Set<String> preservationClaimKeys;
 
   /// True only when the caller has completely audited all Storage-relevant
@@ -109,7 +160,7 @@ class ManagedByteRetentionState {
     if (currentReferenceKeys.isNotEmpty) {
       blockers.add(ManagedByteGcBlocker.currentReference);
     }
-    if (retainedHistoryRevisionIds.isNotEmpty) {
+    if (retainedHistoryCheckpoints.isNotEmpty) {
       blockers.add(ManagedByteGcBlocker.retainedHistory);
     }
     if (preservationClaimKeys.isNotEmpty) {
@@ -123,16 +174,9 @@ class ManagedByteRetentionState {
 
   HistoryManagedByteRestoreability restoreabilityFor({
     required HistoryByteReference reference,
-    required int revisionId,
+    required ManagedByteHistoryCheckpointIdentity checkpoint,
     required bool managedByteVerifiedPresent,
   }) {
-    if (revisionId <= 0) {
-      throw ArgumentError.value(
-        revisionId,
-        'revisionId',
-        'History revision ids must be positive.',
-      );
-    }
     if (reference.kind == HistoryByteReferenceKind.external) {
       return HistoryManagedByteRestoreability.metadataOnly;
     }
@@ -141,7 +185,7 @@ class ManagedByteRetentionState {
         'History managed-byte reference does not match this retention state.',
       );
     }
-    if (!retainedHistoryRevisionIds.contains(revisionId) ||
+    if (!retainedHistoryCheckpoints.contains(checkpoint) ||
         !managedByteVerifiedPresent) {
       return HistoryManagedByteRestoreability.metadataOnly;
     }
@@ -163,24 +207,22 @@ class ManagedByteRetentionState {
         },
       );
 
-  ManagedByteRetentionState retainHistoryRevision(int revisionId) {
-    _validateRevisionId(revisionId);
-    return _copyWith(
-      retainedHistoryRevisionIds: <int>{
-        ...retainedHistoryRevisionIds,
-        revisionId,
-      },
-    );
-  }
+  ManagedByteRetentionState retainHistoryCheckpoint(
+    ManagedByteHistoryCheckpointIdentity checkpoint,
+  ) => _copyWith(
+    retainedHistoryCheckpoints: <ManagedByteHistoryCheckpointIdentity>{
+      ...retainedHistoryCheckpoints,
+      checkpoint,
+    },
+  );
 
-  ManagedByteRetentionState releaseHistoryRevision(int revisionId) {
-    _validateRevisionId(revisionId);
-    return _copyWith(
-      retainedHistoryRevisionIds: <int>{
-        ...retainedHistoryRevisionIds.where((id) => id != revisionId),
-      },
-    );
-  }
+  ManagedByteRetentionState releaseHistoryCheckpoint(
+    ManagedByteHistoryCheckpointIdentity checkpoint,
+  ) => _copyWith(
+    retainedHistoryCheckpoints: <ManagedByteHistoryCheckpointIdentity>{
+      ...retainedHistoryCheckpoints.where((claim) => claim != checkpoint),
+    },
+  );
 
   /// Releases the byte claim associated with a checkpoint that A has already
   /// selected for bounded-history compaction.
@@ -189,8 +231,8 @@ class ManagedByteRetentionState {
   /// retention claim through compaction; bounded policy may release the selected
   /// claim, after which [evaluateGc] still requires all other claims and the
   /// complete reference audit to be clear before deletion can be considered.
-  ManagedByteRetentionState releaseHistoryRevisionForCompaction({
-    required int revisionId,
+  ManagedByteRetentionState releaseHistoryCheckpointForCompaction({
+    required ManagedByteHistoryCheckpointIdentity checkpoint,
     required ObjectHistoryRetentionPolicy policy,
   }) {
     if (policy.kind == ObjectHistoryRetentionKind.keepAll) {
@@ -198,7 +240,7 @@ class ManagedByteRetentionState {
         'keepAll history retention cannot release managed-byte claims by compaction.',
       );
     }
-    return releaseHistoryRevision(revisionId);
+    return releaseHistoryCheckpoint(checkpoint);
   }
 
   ManagedByteRetentionState retainPreservationClaim(String claimKey) =>
@@ -221,14 +263,14 @@ class ManagedByteRetentionState {
 
   ManagedByteRetentionState _copyWith({
     Set<String>? currentReferenceKeys,
-    Set<int>? retainedHistoryRevisionIds,
+    Set<ManagedByteHistoryCheckpointIdentity>? retainedHistoryCheckpoints,
     Set<String>? preservationClaimKeys,
     bool? referenceAuditComplete,
   }) => ManagedByteRetentionState(
     identity: identity,
     currentReferenceKeys: currentReferenceKeys ?? this.currentReferenceKeys,
-    retainedHistoryRevisionIds:
-        retainedHistoryRevisionIds ?? this.retainedHistoryRevisionIds,
+    retainedHistoryCheckpoints:
+        retainedHistoryCheckpoints ?? this.retainedHistoryCheckpoints,
     preservationClaimKeys: preservationClaimKeys ?? this.preservationClaimKeys,
     referenceAuditComplete:
         referenceAuditComplete ?? this.referenceAuditComplete,
@@ -310,27 +352,18 @@ String _claimKey(String value, {String parameterName = 'claimKey'}) {
   return key;
 }
 
-Set<int> _validateRevisionIds(Iterable<int> values) {
-  final result = <int>{};
+Set<ManagedByteHistoryCheckpointIdentity> _validateHistoryCheckpointIdentities(
+  Iterable<ManagedByteHistoryCheckpointIdentity> values,
+) {
+  final result = <ManagedByteHistoryCheckpointIdentity>{};
   for (final value in values) {
-    _validateRevisionId(value);
     if (!result.add(value)) {
       throw ArgumentError.value(
-        value,
-        'retainedHistoryRevisionIds',
-        'Managed-byte history revision claims must be unique.',
+        value.key,
+        'retainedHistoryCheckpoints',
+        'Managed-byte history checkpoint claims must be unique.',
       );
     }
   }
   return result;
-}
-
-void _validateRevisionId(int revisionId) {
-  if (revisionId <= 0) {
-    throw ArgumentError.value(
-      revisionId,
-      'revisionId',
-      'History revision ids must be positive.',
-    );
-  }
 }
