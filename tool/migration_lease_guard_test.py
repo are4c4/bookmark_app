@@ -42,6 +42,96 @@ class MigrationLeaseGuardTest(unittest.TestCase):
         reasons = guard.migration_reasons([guard.APP_DATABASE_FILE], patch)
         self.assertEqual(reasons, frozenset())
 
+    def test_lazy_create_table_in_production_dart_acquires_lease(self) -> None:
+        path = "lib/data/object_redirect_store.dart"
+        files = guard.parse_changed_files(f"A\t{path}\n")
+        patch = """
+@@ -0,0 +1,8 @@
++Future<void> ensureSchema() async {
++  await database.customStatement('''
++    CREATE TABLE IF NOT EXISTS object_redirects (
++      retired_object_id INTEGER PRIMARY KEY
++    )
++  ''');
++}
+"""
+        reasons = guard.current_migration_reasons(
+            files,
+            file_patches={path: patch},
+        )
+        self.assertEqual(
+            reasons,
+            frozenset(
+                {
+                    f"{path}:durable-ddl:create-table:object_redirects",
+                }
+            ),
+        )
+
+    def test_create_index_and_alter_table_acquire_lease(self) -> None:
+        path = "lib/data/custom_store.dart"
+        patch = """
+@@ -1 +1,5 @@
++await db.customStatement(
++  'CREATE UNIQUE INDEX IF NOT EXISTS object_alias_key ON object_aliases(alias)');
++await db.customStatement(
++  'ALTER TABLE object_aliases ADD COLUMN source TEXT');
+"""
+        self.assertEqual(
+            guard.durable_schema_ddl_reasons(path, patch),
+            frozenset(
+                {
+                    f"{path}:durable-ddl:create-unique-index:object_alias_key",
+                    f"{path}:durable-ddl:alter-table:object_aliases",
+                }
+            ),
+        )
+
+    def test_sql_reads_and_dml_do_not_acquire_lazy_schema_lease(self) -> None:
+        path = "lib/services/database_backup_service.dart"
+        patch = """
+@@ -1 +1,4 @@
++await database.customSelect(
++  "SELECT name FROM sqlite_master WHERE type = 'table'").get();
++await database.customStatement('INSERT INTO items(id) VALUES (1)');
++await database.customStatement('UPDATE items SET id = 2');
+"""
+        self.assertEqual(guard.durable_schema_ddl_reasons(path, patch), frozenset())
+
+    def test_test_only_and_temporary_schema_do_not_acquire_lazy_schema_lease(self) -> None:
+        production_path = "lib/data/diagnostic_store.dart"
+        test_path = "test/diagnostic_store_test.dart"
+        temporary_patch = """
+@@ -1 +1 @@
++await db.customStatement('CREATE TEMP TABLE scratch(id INTEGER)');
+"""
+        durable_patch = """
+@@ -1 +1 @@
++await db.customStatement('CREATE TABLE durable_table(id INTEGER)');
+"""
+        self.assertEqual(
+            guard.durable_schema_ddl_reasons(production_path, temporary_patch),
+            frozenset(),
+        )
+        self.assertEqual(
+            guard.durable_schema_ddl_reasons(test_path, durable_patch),
+            frozenset(),
+        )
+
+    def test_large_patch_fallback_only_reports_new_durable_authority(self) -> None:
+        path = "lib/data/custom_store.dart"
+        before = """
+await db.customStatement('CREATE TABLE existing_table(id INTEGER)');
+"""
+        after = """
+await db.customStatement('CREATE TABLE existing_table(id INTEGER)');
+await db.customStatement('CREATE INDEX IF NOT EXISTS new_idx ON existing_table(id)');
+"""
+        self.assertEqual(
+            guard.durable_schema_ddl_reasons_from_contents(path, before, after),
+            frozenset({f"{path}:durable-ddl:create-index:new_idx"}),
+        )
+
     def test_patch_headers_do_not_count_as_schema_version_edits(self) -> None:
         patch = """
 --- a/lib/data/schemaVersion.dart
@@ -171,6 +261,20 @@ class AppDatabase {
         reasons = frozenset({guard.MIGRATIONS_FILE})
         claims = [self.claim(20, guard.SCHEMA_FILE)]
         blocker = guard.blocking_migration_owner(21, reasons, claims)
+        self.assertIsNotNone(blocker)
+        self.assertEqual(blocker.number, 20)
+
+    def test_lazy_schema_writer_is_blocked_by_earlier_migration_owner(self) -> None:
+        path = "lib/data/object_redirect_store.dart"
+        reasons = guard.durable_schema_ddl_reasons(
+            path,
+            "+await db.customStatement('CREATE TABLE object_redirects(id INTEGER)');",
+        )
+        blocker = guard.blocking_migration_owner(
+            21,
+            reasons,
+            [self.claim(20, guard.SCHEMA_FILE)],
+        )
         self.assertIsNotNone(blocker)
         self.assertEqual(blocker.number, 20)
 
