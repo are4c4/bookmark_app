@@ -64,6 +64,26 @@ class ObjectBoardCreateService {
     required String title,
     required ObjectPropertyDefinition groupProperty,
     required ObjectGroupBucket<AppObject> targetGroup,
+  }) {
+    return createWithObjectFactory(
+      createObject: () =>
+          _objectStore.createObject(objectTypeId: objectTypeId, title: title),
+      groupProperty: groupProperty,
+      targetGroup: targetGroup,
+    );
+  }
+
+  /// Creates an Object through the caller's canonical authority, then applies
+  /// the initial Board-group preset inside the same transaction.
+  ///
+  /// This lets identity-sensitive generic ObjectTypes (for example Person)
+  /// preserve their canonical write boundary without duplicating Board preset
+  /// semantics. The preset is validated before [createObject] runs, so an
+  /// unsupported group cannot leave a partial created Object.
+  Future<int> createWithObjectFactory({
+    required Future<int> Function() createObject,
+    required ObjectPropertyDefinition groupProperty,
+    required ObjectGroupBucket<AppObject> targetGroup,
   }) async {
     // Validate/derive the preset before creating the Object so unsupported
     // grouped Properties cannot leave an orphan record.
@@ -73,14 +93,10 @@ class ObjectBoardCreateService {
     );
 
     // The new Object and its initial Board-group preset are one logical write.
-    // Nested canonical Relation mutations participate in this transaction, so a
-    // preset failure rolls back the Object insert without relying on a separate
-    // best-effort cleanup delete.
+    // Nested canonical Object/Relation mutations participate in this transaction,
+    // so a preset failure rolls back creation without best-effort cleanup.
     return relationMutations.genericStore.database.transaction(() async {
-      final objectId = await _objectStore.createObject(
-        objectTypeId: objectTypeId,
-        title: title,
-      );
+      final objectId = await createObject();
       if (value != null) {
         if (groupProperty.isRelation) {
           final relation = value is ObjectRelationValue

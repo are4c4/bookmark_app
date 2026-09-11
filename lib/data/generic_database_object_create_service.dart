@@ -273,6 +273,23 @@ class GenericDatabaseObjectCreateService {
       );
     }
 
+    if (systemKey == PersonObjectBridge.systemKey) {
+      return boardCreate.createWithObjectFactory(
+        createObject: () async {
+          final impact =
+              await PersonObjectWriteService.forDatabase(
+                pageLoader.genericStore.database,
+              ).createWithImpact(
+                workspaceId: page.objectType.workspaceId,
+                name: title,
+              );
+          return impact.canonicalObjectId;
+        },
+        groupProperty: canonicalProperty,
+        targetGroup: targetGroup,
+      );
+    }
+
     return boardCreate.create(
       objectTypeId: page.objectType.id,
       title: title,
