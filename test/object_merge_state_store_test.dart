@@ -12,120 +12,129 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('captures and conditionally persists exact A-owned merge state', () async {
-    final fixture = await _Fixture.create();
-    addTearDown(fixture.database.close);
+  test(
+    'captures and conditionally persists exact A-owned merge state',
+    () async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.database.close);
 
-    await fixture.objectStore.setPropertyValue(
-      objectId: fixture.objectId,
-      property: fixture.property,
-      value: 'old value',
-    );
-    await fixture.bodyStore.write(
-      objectId: fixture.objectId,
-      document: _body('old body'),
-    );
-    await fixture.aliasStore.replaceAliases(
-      objectId: fixture.objectId,
-      aliases: const <String>['Old Alias'],
-    );
+      await fixture.objectStore.setPropertyValue(
+        objectId: fixture.objectId,
+        property: fixture.property,
+        value: 'old value',
+      );
+      await fixture.bodyStore.write(
+        objectId: fixture.objectId,
+        document: _body('old body'),
+      );
+      await fixture.aliasStore.replaceAliases(
+        objectId: fixture.objectId,
+        aliases: const <String>['Old Alias'],
+      );
 
-    final expected = await fixture.mergeStateStore.capture(
-      objectTypeId: fixture.objectTypeId,
-      objectId: fixture.objectId,
-    );
-    expect(expected.title, 'Original');
-    expect(expected.propertySnapshots.single.value, 'old value');
-    expect(expected.body.toJson(), _body('old body').toJson());
-    expect(expected.aliases, const <String>['Old Alias']);
+      final expected = await fixture.mergeStateStore.capture(
+        objectTypeId: fixture.objectTypeId,
+        objectId: fixture.objectId,
+      );
+      expect(expected.title, 'Original');
+      expect(expected.propertySnapshots.single.value, 'old value');
+      expect(expected.body.toJson(), _body('old body').toJson());
+      expect(expected.aliases, const <String>['Old Alias']);
 
-    final next = ObjectMergeStateSnapshot(
-      objectId: fixture.objectId,
-      objectTypeId: fixture.objectTypeId,
-      title: 'Merged title',
-      propertySnapshots: <ObjectMergeValuePropertySnapshot>[
-        ObjectMergeValuePropertySnapshot.fromDefinition(
-          property: fixture.property,
-          value: 'merged value',
+      final next = ObjectMergeStateSnapshot(
+        objectId: fixture.objectId,
+        objectTypeId: fixture.objectTypeId,
+        title: 'Merged title',
+        propertySnapshots: <ObjectMergeValuePropertySnapshot>[
+          ObjectMergeValuePropertySnapshot.fromDefinition(
+            property: fixture.property,
+            value: 'merged value',
+          ),
+        ],
+        body: _body('merged body'),
+        aliases: const <String>['Merged Alias'],
+      );
+
+      expect(
+        await fixture.mergeStateStore.writeIfUnchanged(
+          expected: expected,
+          next: next,
         ),
-      ],
-      body: _body('merged body'),
-      aliases: const <String>['Merged Alias'],
-    );
+        isTrue,
+      );
 
-    expect(
-      await fixture.mergeStateStore.writeIfUnchanged(
-        expected: expected,
-        next: next,
-      ),
-      isTrue,
-    );
+      final persisted = await fixture.mergeStateStore.capture(
+        objectTypeId: fixture.objectTypeId,
+        objectId: fixture.objectId,
+      );
+      expect(persisted.title, 'Merged title');
+      expect(persisted.propertySnapshots.single.value, 'merged value');
+      expect(persisted.body.toJson(), _body('merged body').toJson());
+      expect(persisted.aliases, const <String>['Merged Alias']);
+    },
+  );
 
-    final persisted = await fixture.mergeStateStore.capture(
-      objectTypeId: fixture.objectTypeId,
-      objectId: fixture.objectId,
-    );
-    expect(persisted.title, 'Merged title');
-    expect(persisted.propertySnapshots.single.value, 'merged value');
-    expect(persisted.body.toJson(), _body('merged body').toJson());
-    expect(persisted.aliases, const <String>['Merged Alias']);
-  });
+  test(
+    'stale expected state fails before changing any A-owned state',
+    () async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.database.close);
 
-  test('stale expected state fails before changing any A-owned state', () async {
-    final fixture = await _Fixture.create();
-    addTearDown(fixture.database.close);
+      await fixture.objectStore.setPropertyValue(
+        objectId: fixture.objectId,
+        property: fixture.property,
+        value: 'original value',
+      );
+      await fixture.bodyStore.write(
+        objectId: fixture.objectId,
+        document: _body('original body'),
+      );
+      await fixture.aliasStore.replaceAliases(
+        objectId: fixture.objectId,
+        aliases: const <String>['Original Alias'],
+      );
+      final stale = await fixture.mergeStateStore.capture(
+        objectTypeId: fixture.objectTypeId,
+        objectId: fixture.objectId,
+      );
 
-    await fixture.objectStore.setPropertyValue(
-      objectId: fixture.objectId,
-      property: fixture.property,
-      value: 'original value',
-    );
-    await fixture.bodyStore.write(
-      objectId: fixture.objectId,
-      document: _body('original body'),
-    );
-    await fixture.aliasStore.replaceAliases(
-      objectId: fixture.objectId,
-      aliases: const <String>['Original Alias'],
-    );
-    final stale = await fixture.mergeStateStore.capture(
-      objectTypeId: fixture.objectTypeId,
-      objectId: fixture.objectId,
-    );
+      await fixture.objectStore.renameObject(
+        fixture.objectId,
+        'Concurrent title',
+      );
 
-    await fixture.objectStore.renameObject(fixture.objectId, 'Concurrent title');
+      final next = ObjectMergeStateSnapshot(
+        objectId: fixture.objectId,
+        objectTypeId: fixture.objectTypeId,
+        title: 'Should not persist',
+        propertySnapshots: <ObjectMergeValuePropertySnapshot>[
+          ObjectMergeValuePropertySnapshot.fromDefinition(
+            property: fixture.property,
+            value: 'should not persist',
+          ),
+        ],
+        body: _body('should not persist'),
+        aliases: const <String>['Should Not Persist'],
+      );
 
-    final next = ObjectMergeStateSnapshot(
-      objectId: fixture.objectId,
-      objectTypeId: fixture.objectTypeId,
-      title: 'Should not persist',
-      propertySnapshots: <ObjectMergeValuePropertySnapshot>[
-        ObjectMergeValuePropertySnapshot.fromDefinition(
-          property: fixture.property,
-          value: 'should not persist',
+      expect(
+        await fixture.mergeStateStore.writeIfUnchanged(
+          expected: stale,
+          next: next,
         ),
-      ],
-      body: _body('should not persist'),
-      aliases: const <String>['Should Not Persist'],
-    );
+        isFalse,
+      );
 
-    expect(
-      await fixture.mergeStateStore.writeIfUnchanged(
-        expected: stale,
-        next: next,
-      ),
-      isFalse,
-    );
-
-    final persisted = await fixture.mergeStateStore.capture(
-      objectTypeId: fixture.objectTypeId,
-      objectId: fixture.objectId,
-    );
-    expect(persisted.title, 'Concurrent title');
-    expect(persisted.propertySnapshots.single.value, 'original value');
-    expect(persisted.body.toJson(), _body('original body').toJson());
-    expect(persisted.aliases, const <String>['Original Alias']);
-  });
+      final persisted = await fixture.mergeStateStore.capture(
+        objectTypeId: fixture.objectTypeId,
+        objectId: fixture.objectId,
+      );
+      expect(persisted.title, 'Concurrent title');
+      expect(persisted.propertySnapshots.single.value, 'original value');
+      expect(persisted.body.toJson(), _body('original body').toJson());
+      expect(persisted.aliases, const <String>['Original Alias']);
+    },
+  );
 }
 
 ObjectBodyDocument _body(String text) => ObjectBodyDocument(
