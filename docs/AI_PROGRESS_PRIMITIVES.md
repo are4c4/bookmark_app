@@ -13,7 +13,7 @@ Own irreducible native behavior for Weblink, Image and File Objects: identity, n
 - Lane F owns Vault/filesystem byte placement and physical-delete/export path policy; D owns primitive Object identity/product semantics and persists native provenance supplied by trusted storage boundaries.
 
 ## Current state
-Lane D has no active focused implementation Issue after completion of #1141. Continue only when live GitHub exposes a concrete Weblink/Image/File native-capability defect or an explicit D-owned prerequisite for another lane. Do not manufacture work from completed umbrellas or take downstream Relation, Database/View, Vault/export or legacy caller-zero responsibilities.
+Lane D has no active focused runtime implementation Issue after completion of #1275. Continue only when live GitHub exposes a concrete Weblink/Image/File native-capability defect or an explicit D-owned prerequisite for another lane. Do not manufacture work from completed umbrellas or take downstream Relation, Database/View, Vault/export or legacy caller-zero responsibilities.
 
 Cross-lane integration checkpoints now on `main`:
 - B/#1103 is implemented through PR #1117; Relation Weblink quick-create uses `CanonicalWeblinkCaptureService` and no longer owns a weaker production `WeblinkObjectService.findOrCreate` identity path.
@@ -24,11 +24,24 @@ These integrations validate the existing D boundaries; they do not create new D 
 
 ## Most recent focused completion
 
+### #1275 — keep explicit Image ownership correlated with the persisted File
+PR #1279 tightened the #1141 provenance contract after a service-level correctness audit found a source-only reuse edge case:
+- `ImageObjectService.findOrCreateManaged(...)` may still reuse an Image by canonical Source URL or File identity;
+- trusted managed ownership may fill previously missing ownership only when the persisted File is empty and can adopt the incoming managed path, or when the persisted File already matches that incoming canonical path;
+- when reuse is only by Source URL, the existing File is non-empty and different, and the caller asserts trusted ownership for the incoming managed copy, the service fails closed before any File/Source/ownership mutation;
+- source-only reuse without a new ownership assertion keeps the established non-destructive reuse behavior;
+- existing non-empty ownership remains immutable and is never overwritten by retries;
+- no duplicate Image is manufactured on the fail-closed path;
+- ownership is still never inferred from path location and no historical/bulk ownership backfill is performed;
+- no schemaVersion/migration, Relation change, Image identity redesign, F export/delete policy change or filesystem policy change was introduced.
+
+The latest-main synchronized implementation passed changed-Dart formatting, Analyze, all four Flutter Test shards, `test-health` and required `merge-gate`. #1275 is completed on `main` through #1279.
+
 ### #1141 — explicit managed-file ownership provenance for Image
 PR #1143 completed the D-side producer contract required by the portable-export filesystem boundary:
 - canonical Image defines one hidden system `Storage ownership` Property using the shared closed `ManagedFileOwnership` storage-key contract;
 - `ImageObjectService.findOrCreateManaged(...)` accepts optional explicit ownership, persists it only when supplied by a trusted caller and never infers ownership from a path;
-- reuse may fill previously missing ownership only from a later explicit trusted managed-copy operation proving the same canonical Image identity;
+- reuse may fill previously missing ownership only from a later explicit trusted managed-copy operation, subject to the #1275 requirement that that provenance remains correlated with the persisted File;
 - existing non-empty ownership metadata is preserved rather than overwritten by retries;
 - generic managed Image creation threads the typed ownership value without introducing another provenance store;
 - trusted local Image import and Weblink preview managed-copy workflows emit `vault-managed-copy-v1` only after the managed storage boundary creates/reuses the bytes;
@@ -36,7 +49,7 @@ PR #1143 completed the D-side producer contract required by the portable-export 
 - user-customized Image default Property ordering remains preserved while known generated defaults may add the hidden metadata Property;
 - no historical bulk backfill, Drift schemaVersion migration, Relation redesign, Image→File redesign, destructive rewrite or F portable-export/path-policy change was introduced.
 
-The final latest-main synchronized implementation passed changed-Dart formatting, Analyze, all four Flutter Test shards, `test-health` and required `merge-gate`, including the newer per-file test timing instrumentation. #1141 is completed. F/#1146 subsequently consumed this producer contract successfully on `main`: D supplies explicit provenance, while F decides whether an owned Image reference is safe/eligible for portable byte inclusion under its filesystem contract.
+F/#1146 subsequently consumed this producer contract successfully on `main`: D supplies explicit provenance, while F decides whether an owned Image reference is safe/eligible for portable byte inclusion under its filesystem contract.
 
 ### #1054 — direct canonical Weblink capture
 The canonical URL-capture contract is explicit and independent of permanent Bookmark authority:
@@ -53,7 +66,7 @@ B/#1103 subsequently adopted this same boundary in Relation target quick-create 
 
 ## Conditional umbrellas
 - **#155** — Weblink native identity/normalization/metadata/media. The D-owned native foundation and direct-capture slice are complete. Remaining open acceptance is Bookmark migration/parity/retirement work routed to A/B/C/G unless a new concrete Weblink native-capability defect is demonstrated.
-- **#245** — Photo→Image convergence is completed as an umbrella. Product-facing Image authority is canonical; remaining compatibility/preservation work belongs to its owning lane unless a new concrete Image primitive defect is discovered. #1141 was such a focused post-completion provenance defect and did not reopen Photo→Image migration broadly.
+- **#245** — Photo→Image convergence is completed as an umbrella. Product-facing Image authority is canonical; remaining compatibility/preservation work belongs to its owning lane unless a new concrete Image primitive defect is discovered. #1141 and #1275 were focused post-completion Image provenance defects and did not reopen Photo→Image migration broadly.
 
 ## Integrated native-capability foundation
 ### Weblink
@@ -69,6 +82,7 @@ B/#1103 subsequently adopted this same boundary in Relation target quick-create 
 ### Image
 - canonical managed Image import/create/reuse, provenance and geometry;
 - explicit closed managed-file ownership metadata when a trusted producer proves byte ownership; path location alone remains non-authoritative;
+- trusted ownership remains correlated with the persisted File: source-only reuse cannot attach ownership for a different incoming managed path to an existing non-empty File;
 - content-first Image/File classification;
 - preview/edit/rotate/flip/restore/crop behavior;
 - canonical Relation integration for Bookmark Images/Cover and Person Profile Image;
@@ -93,6 +107,7 @@ B/#1103 subsequently adopted this same boundary in Relation target quick-create 
 ## Known risks
 - never infer physical-delete/export authority from path/hash alone;
 - do not backfill Image ownership solely because an old path happens to be under the active Vault/profile;
+- do not attach incoming trusted Image ownership through Source URL reuse when the persisted non-empty File identifies different bytes; fail closed before mutation instead;
 - do not silently merge multiple legacy Bookmark contexts merely because they normalize to one Weblink;
 - preserve canonical Relation preflight for media-producing workflows;
 - do not create a Weblink-specific page/persistence engine when generic Object/Database/View contracts suffice;
@@ -100,7 +115,7 @@ B/#1103 subsequently adopted this same boundary in Relation target quick-create 
 - do not let convenience callers bypass the canonical Weblink capture boundary and reintroduce ambiguous collision selection.
 
 ## Validation expectations
-For future D runtime changes, changed-Dart format, Analyze and full Flutter Test remain required. Media changes additionally need focused preservation/rollback regressions when bytes are created, mutated or deleted. Native ownership changes must continue to prove explicit provenance and reject path-based inference.
+For future D runtime changes, changed-Dart format, Analyze and full Flutter Test remain required. Media changes additionally need focused preservation/rollback regressions when bytes are created, mutated or deleted. Native ownership changes must continue to prove explicit provenance, File/provenance correlation and rejection of path-based inference.
 
 ## Resume sequence
 1. re-read current `main`, open Issues/PRs, `AGENTS.md`, architecture/repository handoffs and this file;
@@ -112,4 +127,4 @@ For future D runtime changes, changed-Dart format, Analyze and full Flutter Test
 
 This sequence is not terminal. After any future slice/PR/merge, apply the shared **Lane continuation and resume/stop contract** in `AGENTS.md` before ending the run. Lane D continues only through concrete native-capability obligations.
 
-Stop reason: idle-no-work — #1141 is completed on main through #1143; B/#1103 canonical quick-create adoption is integrated through #1117; B/#1154 Bookmark-media convergence is integrated through #1176; F/#1146 Image-byte export consumption is integrated through #1159; #245 remains completed; #155 has no remaining D-owned acceptance beyond newly demonstrated native defects; the live open-PR audit found no D implementation owner; the live open-Issue audit found no independent D-primary Weblink/Image/File focused work; remaining Weblink/Image migration consumers are routed to A/B/C/G. No D shared-hotspot or migration-writer work is currently required.
+Stop reason: idle-no-work — #1275 is completed on main through #1279 and the Image ownership contract now fails closed when trusted provenance would target a different persisted File; #1141 remains completed; B/#1103 canonical quick-create adoption is integrated through #1117; B/#1154 Bookmark-media convergence is integrated through #1176; F/#1146 Image-byte export consumption is integrated through #1159; #245 remains completed; #155 has no remaining D-owned acceptance beyond newly demonstrated native defects; the live open-PR audit found no D runtime implementation owner; the live open-Issue audit found no independent D-primary Weblink/Image/File runtime work; remaining Weblink/Image migration consumers are routed to A/B/C/G. No D shared-hotspot or migration-writer work is currently required.
