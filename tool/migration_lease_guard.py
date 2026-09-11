@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic single-writer gate for Drift schema migrations."""
+"""Deterministic single-writer gate for durable application schema changes."""
 
 from __future__ import annotations
 
@@ -14,13 +14,19 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Mapping
 
 SCHEMA_FILE = "lib/data/app_database_schema.dart"
 MIGRATIONS_FILE = "lib/data/app_database_migrations.dart"
 APP_DATABASE_FILE = "lib/data/app_database.dart"
 APP_DATABASE_SCHEMA_REASON = f"{APP_DATABASE_FILE}:schemaVersion"
 DIRECT_MIGRATION_FILES = frozenset({SCHEMA_FILE, MIGRATIONS_FILE})
+PRODUCTION_DART_PREFIX = "lib/"
+_DURABLE_DDL_PATTERN = re.compile(
+    r"\b(?P<kind>CREATE\s+(?:UNIQUE\s+)?(?:TABLE|INDEX)|ALTER\s+TABLE)"
+    r"\s+(?:IF\s+NOT\s+EXISTS\s+)?(?P<name>[A-Za-z_][A-Za-z0-9_]*)",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -53,6 +59,54 @@ def schema_version_signature(content: str) -> tuple[str, ...]:
         line.strip()
         for line in content.splitlines()
         if re.search(r"\bschemaVersion\b", line)
+    )
+
+
+def _production_dart_path(path: str) -> bool:
+    return path.startswith(PRODUCTION_DART_PREFIX) and path.endswith(".dart")
+
+
+def _added_patch_text(patch: str) -> str:
+    return "\n".join(
+        line[1:]
+        for line in patch.splitlines()
+        if line.startswith("+") and not line.startswith("+++")
+    )
+
+
+def durable_schema_ddl_signature(content: str) -> frozenset[tuple[str, str]]:
+    """Return high-confidence persistent DDL authorities found in production text."""
+    signatures: set[tuple[str, str]] = set()
+    for match in _DURABLE_DDL_PATTERN.finditer(content):
+        kind = "-".join(match.group("kind").lower().split())
+        name = match.group("name").lower()
+        signatures.add((kind, name))
+    return frozenset(signatures)
+
+
+def durable_schema_ddl_reasons(path: str, patch: str) -> frozenset[str]:
+    """Classify newly-added production DDL from a unified patch."""
+    if not _production_dart_path(path):
+        return frozenset()
+    return frozenset(
+        f"{path}:durable-ddl:{kind}:{name}"
+        for kind, name in durable_schema_ddl_signature(_added_patch_text(patch))
+    )
+
+
+def durable_schema_ddl_reasons_from_contents(
+    path: str,
+    before: str,
+    after: str,
+) -> frozenset[str]:
+    """Fallback classification when GitHub omits a large-file patch."""
+    if not _production_dart_path(path):
+        return frozenset()
+    added = durable_schema_ddl_signature(after).difference(
+        durable_schema_ddl_signature(before)
+    )
+    return frozenset(
+        f"{path}:durable-ddl:{kind}:{name}" for kind, name in added
     )
 
 
@@ -122,6 +176,7 @@ def app_database_authority_removed_or_renamed(files: Iterable[ChangedFile]) -> b
 def current_migration_reasons(
     files: Iterable[ChangedFile],
     app_database_patch: str = "",
+    file_patches: Mapping[str, str] | None = None,
 ) -> frozenset[str]:
     file_list = list(files)
     reasons = set(
@@ -132,6 +187,9 @@ def current_migration_reasons(
     )
     if app_database_authority_removed_or_renamed(file_list):
         reasons.add(APP_DATABASE_SCHEMA_REASON)
+    if file_patches:
+        for path, patch in file_patches.items():
+            reasons.update(durable_schema_ddl_reasons(path, patch))
     return frozenset(reasons)
 
 
@@ -299,6 +357,11 @@ def _claim_for_open_pull(
             paths.append(filename)
     reasons = {path for path in DIRECT_MIGRATION_FILES if path in paths}
 
+    base = pull.get("base")
+    head = pull.get("head")
+    base_sha = str(base.get("sha") or "") if isinstance(base, dict) else ""
+    head_sha = str(head.get("sha") or "") if isinstance(head, dict) else ""
+
     app_rows = [
         row
         for row in files
@@ -325,14 +388,35 @@ def _claim_for_open_pull(
             if any(patch_changes_schema_version(patch) for patch in patches if patch):
                 reasons.add(APP_DATABASE_SCHEMA_REASON)
             elif not any(patches):
-                base = pull.get("base")
-                head = pull.get("head")
-                base_sha = str(base.get("sha") or "") if isinstance(base, dict) else ""
-                head_sha = str(head.get("sha") or "") if isinstance(head, dict) else ""
                 if base_sha and head_sha and _schema_version_changed_from_contents(
                     api_root, base_sha, head_sha, token
                 ):
                     reasons.add(APP_DATABASE_SCHEMA_REASON)
+
+    for row in files:
+        filename = str(row.get("filename") or "")
+        status = str(row.get("status") or "")
+        if not _production_dart_path(filename) or status == "removed":
+            continue
+        patch = str(row.get("patch") or "")
+        if patch:
+            reasons.update(durable_schema_ddl_reasons(filename, patch))
+            continue
+        if not head_sha:
+            raise ValueError(
+                f"Cannot classify durable schema DDL for PR #{number}: missing head SHA"
+            )
+        after = _content_text(api_root, filename, head_sha, token)
+        before = ""
+        if status != "added":
+            if not base_sha:
+                raise ValueError(
+                    f"Cannot classify durable schema DDL for PR #{number}: missing base SHA"
+                )
+            before = _content_text(api_root, filename, base_sha, token)
+        reasons.update(
+            durable_schema_ddl_reasons_from_contents(filename, before, after)
+        )
 
     return MigrationClaim(
         number=number,
@@ -380,12 +464,22 @@ def main() -> int:
         files = changed_files(base_sha, head_sha)
         paths = paths_for_migration_classification(files)
         authority_removed = app_database_authority_removed_or_renamed(files)
+        patches = {
+            changed.path: changed_patch(base_sha, head_sha, changed.path)
+            for changed in files
+            if _production_dart_path(changed.path)
+            and not changed.status.startswith("D")
+        }
         app_patch = (
-            changed_patch(base_sha, head_sha, APP_DATABASE_FILE)
+            patches.get(APP_DATABASE_FILE, "")
             if APP_DATABASE_FILE in paths and not authority_removed
             else ""
         )
-        current_reasons = current_migration_reasons(files, app_patch)
+        current_reasons = current_migration_reasons(
+            files,
+            app_patch,
+            file_patches=patches,
+        )
         lines = [
             "## Migration single-writer lease",
             "",
