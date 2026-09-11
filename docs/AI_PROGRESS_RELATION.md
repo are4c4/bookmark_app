@@ -69,15 +69,29 @@ Own cross-Object correctness and fail-closed data integrity: canonical Relation 
 - Profile Image remains the established canonical Person -> Image Relation and is not replaced by the group/role convergence work.
 - Remaining People-retirement work belongs to generic C daily-use parity, Search freshness where applicable, and later G caller-zero/preservation sequencing rather than another B relationship authority.
 
+### Tag hierarchy canonical-first compatibility mutation boundary — #1240 completed
+- Surviving legacy Tag move/restore flows use `TagHierarchyCompatibilityMutationService` rather than writing compatibility hierarchy fields as authority.
+- Canonical Tag `Parent` / `Group` Relations are mutated first through `TagHierarchyIntegrityService`; retained `tags.parent_tag_id` / `tags.group_id` and existing compatibility checkpoints are projected only after canonical success, inside the same transaction.
+- A moved canonical subtree receives the resolved destination TagGroup so retained legacy tree semantics remain equivalent; when a selected parent already has a canonical Group, that parent Group determines the destination rather than silently preserving a conflicting caller Group.
+- Move snapshots preserve the previous canonical/compatibility state needed for restore, and restore rejects stale independent canonical or legacy edits instead of overwriting them.
+- Cycles, malformed Relation values, wrong-target Parent/Group Relations, canonical/index drift, unmapped or canonical-only subtree members, and unrepresentable TagGroup identity fail closed with no partial canonical or compatibility mutation.
+- Focused regressions cover move/restore equivalence, canonical-only edits followed by explicit compatibility mutation, cycle rollback, malformed and wrong-target preservation, stale restore rejection, and idempotent retry. PR #1265 was validated on latest main with Format, Analyze, all four Flutter test shards, `test-health`, and `merge-gate` green.
+- This boundary does not create a parallel Tag tree/closure store and does not itself edit the Tag management UI; presentation routing remains C-owned.
+
 ## Active B roadmap
 
-#1042 and #1045 are completed migration/integrity checkpoints. Do not reopen them or create more Person/Bookmark-specific relationship stores merely to keep B active.
+#1042, #1045, and #1240 are completed migration/integrity checkpoints. Do not reopen them or create more Person/Bookmark/Tag-specific relationship stores merely to keep B active.
+
+Current focused priorities:
+- **#1259 / #1062 Object merge Relation rewiring:** next cross-lane critical dependency. B must preview, validate and canonically apply `retiredObjectId -> survivorObjectId` Relation rewrites before A may retire/delete the merged Object. Preserve ordering/cardinality/bidirectional invariants and fail closed on ambiguous outgoing state.
+- **#1267 / #1064 History Relation restore:** ready secondary B work after the merge Relation slice unless a newer higher-priority concrete integrity dependency supersedes it.
 
 Resume B only from:
-- a newly demonstrated current-main Relation/integrity correctness gap with a focused B Issue;
+- an already-open focused B Issue with a demonstrated current-main Relation/integrity obligation, preferring #1259 while it remains open and unowned;
 - an explicitly split #1062 Object-merge Relation rewiring/integrity slice;
 - an explicitly split #1064 durable-history Relation restore/integrity slice;
-- another owning-lane dependency that requires a concrete canonical Relation contract and is routed to B through a focused Issue.
+- another owning-lane dependency that requires a concrete canonical Relation contract and is routed to B through a focused Issue;
+- otherwise a newly demonstrated current-main Relation/integrity correctness gap.
 
 ## Cross-lane boundaries
 - **A:** Object/ObjectType identity/lifecycle, Bookmark -> Weblink reconciliation authority, Person identity authority, Body, merge/history core contracts.
@@ -95,8 +109,8 @@ Analyze + relevant Relation regressions + full Flutter Test + required `merge-ga
 
 ## Resume sequence
 1. Re-read latest `main`, open B Issues, open PR ownership, shared hotspots and current CI.
-2. Treat #1042 and #1045 as completed checkpoints; do not select them as active work sources.
-3. Prefer an already-open focused B Issue whose acceptance demonstrates a current Relation/integrity obligation; otherwise inspect explicitly split #1062/#1064 Relation work when those umbrellas activate it.
+2. Treat #1042, #1045, and #1240 as completed checkpoints; do not select them as active work sources.
+3. While open and unowned, prefer #1259 as the current Object-merge integrity dependency; then consider #1267 or another explicitly routed focused B Issue.
 4. If no such work exists, apply the `AGENTS.md` next-work discovery order and stop with the precise live reason rather than inventing Relation abstractions, alternate stores, closure caches or speculative migrations.
 
 This sequence is not terminal. After every slice/PR/merge, apply the shared Lane continuation and resume/stop contract in `AGENTS.md` before ending the run.
