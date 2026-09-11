@@ -83,15 +83,17 @@ class ObjectMergePreview {
   ObjectMergePreview({
     required this.survivorId,
     required this.retiredId,
-    this.requirements = const <ObjectMergeRequirement>[],
-    this.relationBlockers = const <ObjectMergeRelationBlocker>[],
+    List<ObjectMergeRequirement> requirements =
+        const <ObjectMergeRequirement>[],
+    List<ObjectMergeRelationBlocker> relationBlockers =
+        const <ObjectMergeRelationBlocker>[],
   }) : requirements = List<ObjectMergeRequirement>.unmodifiable(requirements),
        relationBlockers = List<ObjectMergeRelationBlocker>.unmodifiable(
          relationBlockers,
        ) {
     _validateObjectIds(survivorId: survivorId, retiredId: retiredId);
     final keys = <String>{};
-    for (final requirement in this.requirements) {
+    for (final requirement in requirements) {
       if (!keys.add(requirement.key)) {
         throw ArgumentError.value(
           requirement.key,
