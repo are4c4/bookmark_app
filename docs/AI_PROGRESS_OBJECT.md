@@ -24,10 +24,16 @@ Define advisory duplicate detection separately from explicit merge, preserve one
 ### #1064 — durable Object history / restore contract
 Define restart-safe durable history for Object/Property/Body/Relation state, explicitly separate from local Undo, and make restore conflict-aware/fail-closed. Split Relation-integrity and managed-byte retention work to B/F when the contract reaches those boundaries.
 
-### #1177 — legacy-only Bookmark preservation boundary
-The completed #1041 Bookmark migration checkpoint does not by itself prove a canonical destination for every legacy scalar/lifecycle fact. In particular `lastOpenedAt`, `openCount`, and `deletedAt` remain legacy compatibility/preservation concerns until a separately proven lossless destination or explicit retirement policy exists. Do not invent speculative generic Properties merely to eliminate these fields, and do not let later G caller-zero/schema retirement treat #1041 completion as permission to discard them.
-
 ## Completed checkpoints
+
+### #1177 — legacy-only Bookmark preservation boundary
+Completed as a durable preservation-contract checkpoint. The completed #1041 Bookmark migration checkpoint does not by itself prove a canonical destination for every legacy scalar/lifecycle fact. In particular `lastOpenedAt`, `openCount`, and `deletedAt` remain legacy compatibility/preservation concerns until a separately proven lossless destination or explicit retirement policy exists.
+
+Durable contract:
+- do not invent speculative generic Properties merely to eliminate these fields;
+- do not let later G caller-zero/schema retirement treat #1041 completion as permission to discard them;
+- any future canonical destination or intentional retirement policy for these facts requires a separate focused product/preservation decision;
+- Issue closure means this preservation boundary is now recorded, not that the underlying legacy facts are disposable.
 
 ### #1044 — generic-first Person authority
 Completed. Generic Person identity/write authority is now Object-first rather than legacy-`people`-first.
@@ -63,7 +69,7 @@ Historical implementation checkpoints include PR #1226 for compatibility-safe pe
 ### #1041 — Bookmark retirement A authority
 Completed. Canonical Weblink identity remains D-owned and is consumed rather than reimplemented. Legacy Bookmark collision/reconciliation preserves or fails closed on saved-item state conflicts instead of silently collapsing user-authored data.
 
-Converged/preservation-checked saved-item state includes `Favorite`, `Reading Status`, `Storage State`, `Genre` and `Rating`; title/description/thumbnail remain compatibility-preserved/best-effort transition data. This checkpoint does **not** erase #1177's retained legacy-only `lastOpenedAt`, `openCount`, and `deletedAt` preservation boundary.
+Converged/preservation-checked saved-item state includes `Favorite`, `Reading Status`, `Storage State`, `Genre` and `Rating`; title/description/thumbnail remain compatibility-preserved/best-effort transition data. This checkpoint does **not** erase completed #1177's retained legacy-only `lastOpenedAt`, `openCount`, and `deletedAt` preservation boundary.
 
 ### #1057 — Body UX phase 2
 Completed. Idle Body chrome is content-first; hover/focus/touch preserve contextual actions, drag reorder persists through the canonical edit service, and popup/menu interaction remains stable.
@@ -80,7 +86,8 @@ Completed. Enter split, Shift+Enter newline, safe leading-Backspace merge, compa
 - template/object creation integrity and shared Object detail/opening seams;
 - local Body structural Undo + persistence/editor concurrency correctness, distinct from durable history;
 - collision-safe Bookmark -> canonical Weblink convergence while compatibility data remains intact;
-- generic-first Person create/update/delete/reconciliation authority with temporary legacy projection.
+- generic-first Person create/update/delete/reconciliation authority with temporary legacy projection;
+- explicit preservation of legacy-only Bookmark `lastOpenedAt`, `openCount`, and `deletedAt` until a separate destination/retirement decision exists.
 
 ## Cross-lane boundaries
 - **B:** Relation mutation/read/index/backlink/audit/reconcile, Bookmark/Person relationship migration, Person roles/groups and Tag hierarchy integrity. Future #1062/#1064 Relation rewiring/restore slices must be split to B rather than implemented directly in A.
@@ -98,10 +105,10 @@ A runtime Object/Body change requires changed-Dart Format, Analyze/guards, focus
 
 ## Resume sequence
 1. refresh latest `main`, live open PR ownership, current CI, shared hotspots and migration ownership;
-2. verify the state/acceptance of #1062, #1064 and #1177 plus any newer focused A issues; do **not** reopen #1044/#1058/#1121 merely because their historical implementation details remain relevant;
+2. verify the state/acceptance of #1062 and #1064 plus any newer focused A issues; treat #1177/#1044/#1058/#1121 as completed checkpoints rather than active work sources;
 3. select the next concrete non-conflicting A-owned acceptance slice from live GitHub;
 4. keep #1062 Relation rewiring and #1064 Relation/history-byte implications split to B/F when those boundaries are reached;
-5. preserve #1177 legacy-only Bookmark facts until a lossless destination or explicit retirement policy exists; do not convert documentation pressure into speculative schema design;
+5. preserve the legacy-only Bookmark facts recorded by completed #1177 until a lossless destination or explicit retirement policy exists; do not convert documentation pressure into speculative schema design;
 6. after each coherent slice/PR/merge, apply the shared **Lane continuation and resume/stop contract** in `AGENTS.md` and continue while safe A work exists.
 
-If the final resume audit finds no actionable A work, record the exact stop category from `AGENTS.md` with live evidence. A completed historical PR or completed #1044/#1058/#1121 is never, by itself, a stop reason.
+If the final resume audit finds no actionable A work, record the exact stop category from `AGENTS.md` with live evidence. A completed historical PR or completed #1177/#1044/#1058/#1121 is never, by itself, a stop reason.
