@@ -224,29 +224,26 @@ void main() {
         throwsArgumentError,
       );
       expect(
-        () => resolver.resolve(
-          objectId: 1,
-          redirects: const <int, int>{0: 2},
-        ),
+        () => resolver.resolve(objectId: 1, redirects: const <int, int>{0: 2}),
         throwsStateError,
       );
       expect(
-        () => resolver.resolve(
-          objectId: 1,
-          redirects: const <int, int>{1: 1},
-        ),
+        () => resolver.resolve(objectId: 1, redirects: const <int, int>{1: 1}),
         throwsStateError,
       );
     });
 
-    test('cycles fail closed even when they are outside the requested chain', () {
-      expect(
-        () => resolver.resolve(
-          objectId: 10,
-          redirects: const <int, int>{20: 30, 30: 20},
-        ),
-        throwsStateError,
-      );
-    });
+    test(
+      'cycles fail closed even when they are outside the requested chain',
+      () {
+        expect(
+          () => resolver.resolve(
+            objectId: 10,
+            redirects: const <int, int>{20: 30, 30: 20},
+          ),
+          throwsStateError,
+        );
+      },
+    );
   });
 }
