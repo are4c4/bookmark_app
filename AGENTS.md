@@ -189,8 +189,8 @@ A fresh H chat should be able to resume with only `Hレーンとして作業を�
 
 Always verify live Issues because this list is a routing aid, not transient ownership state.
 
-- **A:** #1044 generic Person authority; #1058 Body Undo; #1062 Object merge/redirect; #1064 durable history contract; #56 core follow-ups.
-- **B:** #1042 Bookmark-era Relation convergence; #1045 Person groups/roles; future #1062/#1064 Relation-integrity slices when split.
+- **A:** #1062 Object merge/redirect; #1064 durable history contract; #1177 legacy-only Bookmark preservation where its acceptance remains open; #56 core follow-ups through focused Issues. #1044/#1058/#1121 are completed checkpoints, not active work sources.
+- **B:** future #1062/#1064 Relation-integrity slices when explicitly split, plus newly demonstrated Relation/integrity gaps through focused B Issues. #1042/#1045 are completed migration/integrity checkpoints, not active work sources.
 - **C:** #1043 Stage1→generic Weblink/Object Database/View + Inbox; #1046 People→generic Person Database/View; #1061 Home/start UX; broader #1050 Tag picker/tree/management UX only where live acceptance remains. #1053 hierarchy-aware Tag filtering/query UX is a completed checkpoint, not an active work source.
 - **D:** #155 is the durable Weblink/Image/File native-capability umbrella; resume D only for concrete native Weblink/Image/File obligations proven by live focused Issues.
 - **E:** focused Search issues when canonical FTS correctness/freshness obligations are demonstrated.
