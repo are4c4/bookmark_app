@@ -80,31 +80,34 @@ void main() {
     expect(await _legacyProfilePhotoId(fixture), isNull);
   });
 
-  test('generic profile clear clears canonical and legacy projections', () async {
-    final fixture = await _fixture();
-    addTearDown(fixture.database.close);
-    await fixture.profileImages.migrateLegacyProfilePhoto(
-      workspaceId: fixture.workspaceId,
-      personId: fixture.personId,
-    );
-    final context = (await fixture.profileImages.load(
-      workspaceId: fixture.workspaceId,
-      personId: fixture.personId,
-    )).relation;
+  test(
+    'generic profile clear clears canonical and legacy projections',
+    () async {
+      final fixture = await _fixture();
+      addTearDown(fixture.database.close);
+      await fixture.profileImages.migrateLegacyProfilePhoto(
+        workspaceId: fixture.workspaceId,
+        personId: fixture.personId,
+      );
+      final context = (await fixture.profileImages.load(
+        workspaceId: fixture.workspaceId,
+        personId: fixture.personId,
+      )).relation;
 
-    await fixture.router.save(
-      context: context,
-      selectedObjectIds: const <int>[],
-    );
+      await fixture.router.save(
+        context: context,
+        selectedObjectIds: const <int>[],
+      );
 
-    final after = await fixture.profileImages.load(
-      workspaceId: fixture.workspaceId,
-      personId: fixture.personId,
-    );
-    expect(after.relation.selectedObjectIds, isEmpty);
-    expect(after.legacyProfilePhotoId, isNull);
-    expect(await _legacyProfilePhotoId(fixture), isNull);
-  });
+      final after = await fixture.profileImages.load(
+        workspaceId: fixture.workspaceId,
+        personId: fixture.personId,
+      );
+      expect(after.relation.selectedObjectIds, isEmpty);
+      expect(after.legacyProfilePhotoId, isNull);
+      expect(await _legacyProfilePhotoId(fixture), isNull);
+    },
+  );
 
   test('native canonical Person uses ordinary Relation semantics without legacy row', () async {
     final fixture = await _fixture();
