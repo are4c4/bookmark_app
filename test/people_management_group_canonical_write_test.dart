@@ -35,9 +35,8 @@ Future<void> _openGroupManager(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
-Finder _personMenu() => find.byWidgetPredicate(
-      (widget) => widget is PopupMenuButton<String>,
-    );
+Finder _personMenu() =>
+    find.byWidgetPredicate((widget) => widget is PopupMenuButton<String>);
 
 void main() {
   testWidgets(
@@ -194,6 +193,13 @@ void main() {
         objectStore: objectStore,
         systemObjectStore: systemObjectStore,
       );
+      final convergence = PersonGroupObjectConvergenceService(
+        database: database,
+        objectStore: objectStore,
+        systemObjectStore: systemObjectStore,
+        personBridge: personBridge,
+      );
+      final schema = await convergence.ensureSchema(repository.workspaceId);
       final groupWrites = PersonGroupObjectWriteService(
         database: database,
         objectStore: objectStore,
@@ -232,14 +238,7 @@ void main() {
       expect(legacy.id, created.legacyGroupId);
       expect(legacy.name, 'Research');
       final canonical = (await objectStore.listObjects(
-        (await PersonGroupObjectConvergenceService(
-          database: database,
-          objectStore: objectStore,
-          systemObjectStore: systemObjectStore,
-          personBridge: personBridge,
-        ).ensureSchema(repository.workspaceId))
-            .groupObjectType
-            .id,
+        schema.groupObjectType.id,
       )).single;
       expect(canonical.id, created.canonicalObjectId);
       expect(canonical.title, 'Conflicting canonical title');
