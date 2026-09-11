@@ -1,0 +1,137 @@
+import '../data/app_database.dart';
+import '../data/image_object_service.dart';
+import '../data/object_relation_editor_service.dart';
+import '../data/person_object_bridge.dart';
+import '../data/relation_target_service.dart';
+import '../data/system_object_store.dart';
+import 'person_profile_image_relation_service.dart';
+
+/// Routes the canonical Person `Profile Image` Relation through the established
+/// compatibility boundary while legacy People UI still exists.
+///
+/// Every unrelated Relation, including native canonical Person Relations, keeps
+/// using the ordinary generic Relation editor. A legacy-backed canonical Person
+/// uses [PersonProfileImageRelationService] so its canonical Image Relation and
+/// temporary `people.profile_photo_id` projection commit atomically.
+class CanonicalPersonProfileImageRelationEditService {
+  CanonicalPersonProfileImageRelationEditService({
+    required this.genericEditor,
+    required this.personBridge,
+    required this.systemObjects,
+    required this.profileImages,
+  });
+
+  factory CanonicalPersonProfileImageRelationEditService.forDatabase({
+    required AppDatabase database,
+    required ObjectRelationEditorService genericEditor,
+  }) {
+    final objectStore = genericEditor.targets.objectStore;
+    final systemObjects = SystemObjectStore(
+      database: database,
+      objectStore: objectStore,
+    );
+    return CanonicalPersonProfileImageRelationEditService(
+      genericEditor: genericEditor,
+      personBridge: PersonObjectBridge(
+        database: database,
+        objectStore: objectStore,
+        systemObjectStore: systemObjects,
+      ),
+      systemObjects: systemObjects,
+      profileImages: PersonProfileImageRelationService(database),
+    );
+  }
+
+  final ObjectRelationEditorService genericEditor;
+  final PersonObjectBridge personBridge;
+  final SystemObjectStore systemObjects;
+  final PersonProfileImageRelationService profileImages;
+
+  Future<void> save({
+    required RelationSelectionContext context,
+    required Iterable<int> selectedObjectIds,
+  }) async {
+    final selected = selectedObjectIds.toList(growable: false);
+    final workspaceId = context.targetObjectType.workspaceId;
+    final personSchema = await personBridge.ensurePersonObjectType(workspaceId);
+
+    if (context.property.objectTypeId != personSchema.objectType.id ||
+        context.property.name !=
+            PersonProfileImageRelationService.profileImagePropertyName) {
+      await genericEditor.save(
+        context: context,
+        selectedObjectIds: selected,
+      );
+      return;
+    }
+
+    final targetSystemKey = await systemObjects.systemKeyForObjectType(
+      context.targetObjectType.id,
+    );
+    if (targetSystemKey != ImageObjectService.systemKey ||
+        context.property.targetObjectTypeId != context.targetObjectType.id ||
+        context.property.allowsMultipleRelations) {
+      throw StateError(
+        'Canonical Person Profile Image Property does not match the required single Image Relation schema.',
+      );
+    }
+
+    if (selected.length > 1) {
+      throw ArgumentError.value(
+        selected,
+        'selectedObjectIds',
+        'Canonical Person Profile Image accepts at most one Image.',
+      );
+    }
+
+    final mappedLegacyId = await personBridge.legacyPersonIdForObject(
+      workspaceId,
+      context.sourceObject.id,
+    );
+    final claimedValue =
+        context.sourceObject.values[personSchema.legacyPersonIdProperty.id];
+    final claimedLegacyId = _legacyId(claimedValue);
+    if (claimedValue != null && claimedLegacyId == null) {
+      throw StateError('Canonical Person legacy identity is malformed.');
+    }
+
+    if (mappedLegacyId == null) {
+      if (claimedLegacyId != null) {
+        throw StateError(
+          'Canonical Person claims a legacy identity without a valid mapping.',
+        );
+      }
+      await genericEditor.save(
+        context: context,
+        selectedObjectIds: selected,
+      );
+      return;
+    }
+
+    if (claimedLegacyId != mappedLegacyId) {
+      throw StateError(
+        'Canonical Person mapping does not match its persisted legacy identity.',
+      );
+    }
+
+    if (selected.isEmpty) {
+      await profileImages.clearProfileImage(
+        workspaceId: workspaceId,
+        personId: mappedLegacyId,
+      );
+      return;
+    }
+
+    await profileImages.setProfileImage(
+      workspaceId: workspaceId,
+      personId: mappedLegacyId,
+      imageObjectId: selected.single,
+    );
+  }
+
+  int? _legacyId(dynamic value) {
+    if (value is int) return value;
+    if (value == null) return null;
+    return int.tryParse('$value');
+  }
+}
