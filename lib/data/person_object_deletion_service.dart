@@ -197,7 +197,20 @@ class PersonObjectDeletionService {
   final PersonObjectDeletionCompatibility compatibility;
 
   Future<void> delete({required int workspaceId, required int personId}) async {
-    await database.transaction(() async {
+    await deleteWithImpact(workspaceId: workspaceId, personId: personId);
+  }
+
+  /// Deletes one canonical Person and returns the exact committed Relation
+  /// deletion impact for downstream derived projections.
+  ///
+  /// The impact is returned only after the outer Person + compatibility
+  /// transaction commits. Callers that do not own a derived projection can keep
+  /// using [delete].
+  Future<RelationObjectDeletionImpact> deleteWithImpact({
+    required int workspaceId,
+    required int personId,
+  }) {
+    return database.transaction(() async {
       final legacyRows = await (database.select(
         database.people,
       )..where((person) => person.id.equals(personId))).get();
@@ -239,12 +252,13 @@ class PersonObjectDeletionService {
         );
       }
 
-      await relationMutations.deleteObject(
+      final impact = await relationMutations.deleteObjectWithImpact(
         workspaceId: workspaceId,
         objectTypeId: schema.objectType.id,
         objectId: objectId,
       );
       await compatibility.deleteLegacyCompatibilityRow(personId);
+      return impact;
     });
   }
 }
