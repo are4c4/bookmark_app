@@ -214,9 +214,8 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
 
   void _showPersonEditError() {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('人物を更新できませんでした。')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('人物を更新できませんでした。')));
   }
 
   @override
