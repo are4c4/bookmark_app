@@ -123,10 +123,11 @@ class ObjectMergeStateMaterializer {
     final aliases = switch (aliasesDecision) {
       null || ObjectMergeDecision.keepSurvivor => prepared.survivor.aliases,
       ObjectMergeDecision.takeRetired => prepared.retired.aliases,
-      ObjectMergeDecision.combine => const ObjectMergeStatePlanner().combineAliases(
-        survivor: prepared.survivor,
-        retired: prepared.retired,
-      ),
+      ObjectMergeDecision.combine =>
+        const ObjectMergeStatePlanner().combineAliases(
+          survivor: prepared.survivor,
+          retired: prepared.retired,
+        ),
     };
 
     final lifecycleRequirement = requirements['lifecycle'];
