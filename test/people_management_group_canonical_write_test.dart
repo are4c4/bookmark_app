@@ -4,6 +4,7 @@ import 'package:bookmark_app/data/bookmark_repository.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
 import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/person_group_object_convergence_service.dart';
+import 'package:bookmark_app/data/person_group_object_write_service.dart';
 import 'package:bookmark_app/data/person_group_store.dart';
 import 'package:bookmark_app/data/person_object_bridge.dart';
 import 'package:bookmark_app/data/relation_target_service.dart';
@@ -33,6 +34,10 @@ Future<void> _openGroupManager(WidgetTester tester) async {
   await tester.tap(find.text('グループを管理…'));
   await tester.pumpAndSettle();
 }
+
+Finder _personMenu() => find.byWidgetPredicate(
+      (widget) => widget is PopupMenuButton<String>,
+    );
 
 void main() {
   testWidgets(
@@ -96,7 +101,7 @@ void main() {
       await tester.tap(find.text('閉じる'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byType(PopupMenuButton<String>).last);
+      await tester.tap(_personMenu().last);
       await tester.pumpAndSettle();
       await tester.tap(find.text('所属グループを編集'));
       await tester.pumpAndSettle();
@@ -104,7 +109,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        (await legacyGroups.groupsForPerson(personId)).map((group) => group.id),
+        (await legacyGroups.groupsForPerson(personId))
+            .map((group) => group.id)
+            .toList(),
         [createdLegacy.id],
       );
       final personObjectId = await personBridge.objectIdForLegacyPerson(
@@ -112,10 +119,11 @@ void main() {
         personId,
       );
       expect(personObjectId, isNotNull);
+      final canonicalPersonId = personObjectId!;
       final relationTargets = RelationTargetService(objectStore);
       final selectedAfterAdd = await relationTargets.selectionForMutation(
         workspaceId: repository.workspaceId,
-        sourceObjectId: personObjectId!,
+        sourceObjectId: canonicalPersonId,
         property: schema.personGroupsProperty,
       );
       expect(selectedAfterAdd.selectedObjectIds, [createdCanonical.id]);
@@ -156,10 +164,85 @@ void main() {
       expect(await objectStore.listObjects(schema.groupObjectType.id), isEmpty);
       final selectedAfterDelete = await relationTargets.selectionForMutation(
         workspaceId: repository.workspaceId,
-        sourceObjectId: personObjectId,
+        sourceObjectId: canonicalPersonId,
         property: schema.personGroupsProperty,
       );
       expect(selectedAfterDelete.selectedObjectIds, isEmpty);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    },
+  );
+
+  testWidgets(
+    'People group UI fails closed with a stable message on canonical conflict',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1400, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final database = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(database.close);
+      final repository = await _repository(database);
+      final genericStore = GenericDatabaseStore(database);
+      final objectStore = ObjectStore(genericStore);
+      final systemObjectStore = SystemObjectStore(
+        database: database,
+        objectStore: objectStore,
+      );
+      final personBridge = PersonObjectBridge(
+        database: database,
+        objectStore: objectStore,
+        systemObjectStore: systemObjectStore,
+      );
+      final groupWrites = PersonGroupObjectWriteService(
+        database: database,
+        objectStore: objectStore,
+        systemObjectStore: systemObjectStore,
+        personBridge: personBridge,
+      );
+      final legacyGroups = PersonGroupStore(database);
+      final created = await groupWrites.create(
+        workspaceId: repository.workspaceId,
+        name: 'Research',
+      );
+      await objectStore.renameObject(
+        created.canonicalObjectId,
+        'Conflicting canonical title',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(home: PeopleManagementPage(repository: repository)),
+      );
+      await tester.pumpAndSettle();
+      await _openGroupManager(tester);
+
+      final deleteButton = find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byTooltip('削除'),
+      );
+      expect(deleteButton, findsOneWidget);
+      await tester.tap(deleteButton);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('人物グループを更新できませんでした。状態を確認してもう一度お試しください。'),
+        findsOneWidget,
+      );
+      final legacy = (await legacyGroups.listGroups()).single;
+      expect(legacy.id, created.legacyGroupId);
+      expect(legacy.name, 'Research');
+      final canonical = (await objectStore.listObjects(
+        (await PersonGroupObjectConvergenceService(
+          database: database,
+          objectStore: objectStore,
+          systemObjectStore: systemObjectStore,
+          personBridge: personBridge,
+        ).ensureSchema(repository.workspaceId))
+            .groupObjectType
+            .id,
+      )).single;
+      expect(canonical.id, created.canonicalObjectId);
+      expect(canonical.title, 'Conflicting canonical title');
 
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();
