@@ -374,7 +374,10 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
                     if (created == null) return;
                     final refreshed = await _personGroups.listGroups();
                     final next = <int>{...current, created.legacyGroupId};
-                    final committed = await _setGroupsForPerson(person.id, next);
+                    final committed = await _setGroupsForPerson(
+                      person.id,
+                      next,
+                    );
                     all
                       ..clear()
                       ..addAll(refreshed);
