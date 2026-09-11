@@ -21,6 +21,7 @@ import '../data/object_identity_search_service.dart';
 import '../data/object_store.dart';
 import '../data/object_type_defaults_store.dart';
 import '../data/object_value_promotion_execution_service.dart';
+import '../data/person_object_bridge.dart';
 import '../data/relation_mutation_service.dart';
 import '../data/relation_read_service.dart';
 import '../data/system_object_store.dart';
@@ -49,6 +50,7 @@ import '../features/object/presentation/widgets/object_file_detail_panel_host.da
 import '../features/object/presentation/widgets/object_image_detail_panel.dart';
 import '../services/canonical_file_detail_capabilities.dart';
 import '../services/canonical_image_edit_service.dart';
+import '../services/canonical_person_detail_edit_service.dart';
 
 class ObjectInspectorPage extends StatefulWidget {
   const ObjectInspectorPage({
@@ -145,6 +147,12 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
         loader: _contentLoader,
       );
 
+  CanonicalPersonDetailEditService get _personDetailEdits =>
+      CanonicalPersonDetailEditService.fromStores(
+        genericStore: widget.store,
+        objectStore: widget.objectStore,
+      );
+
   RelationMutationService get _relationMutations => RelationMutationService(
         objectStore: widget.objectStore,
         bidirectionalStore: BidirectionalRelationStore(
@@ -168,6 +176,7 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
 
   bool get _isDailyNote => _systemKey == DailyNoteService.systemKey;
   bool get _isImage => _systemKey == ImageObjectService.systemKey;
+  bool get _isPerson => _systemKey == PersonObjectBridge.systemKey;
 
   bool get _isEditableImage {
     final content = _content;
@@ -201,6 +210,12 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
         .showSnackBar(const SnackBar(content: Text('画像を編集できませんでした。')));
+  }
+
+  void _showPersonEditError() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('人物を更新できませんでした。')));
   }
 
   @override
@@ -547,7 +562,7 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
     ObjectGraphNodeRecord node,
     ObjectDetailContent content,
   ) async {
-    if (node.isSystemType && !_isEditableImage) return;
+    if (node.isSystemType && !_isEditableImage && !_isPerson) return;
     var value = content.object.title;
     final result = await showDialog<String>(
       context: context,
@@ -576,13 +591,16 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
     );
     if (result == null || result.trim().isEmpty) return;
     try {
-      final updated = await _editService.rename(
-        content: content,
-        title: result,
-      );
+      final updated = _isPerson
+          ? await _personDetailEdits.rename(content: content, title: result)
+          : await _editService.rename(content: content, title: result);
       if (mounted) setState(() => _content = updated);
     } catch (_) {
       if (!mounted) return;
+      if (_isPerson) {
+        _showPersonEditError();
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Object名を変更できませんでした。')),
       );
@@ -595,6 +613,10 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
   ) {
     if (!property.isValue) return false;
     if (node.isSystemType) {
+      if (_isPerson) {
+        return property.name == 'Note' &&
+            property.type == ObjectPropertyType.text;
+      }
       return _isEditableImage &&
           property.name == 'Note' &&
           property.type == ObjectPropertyType.text;
@@ -656,14 +678,24 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
     }
 
     try {
-      final updated = await _editService.setValue(
-        content: content,
-        property: property,
-        value: parsed,
-      );
+      final updated = _isPerson
+          ? await _personDetailEdits.setNote(
+              content: content,
+              property: property,
+              note: result,
+            )
+          : await _editService.setValue(
+              content: content,
+              property: property,
+              value: parsed,
+            );
       if (mounted) setState(() => _content = updated);
     } catch (_) {
       if (!mounted) return;
+      if (_isPerson) {
+        _showPersonEditError();
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('${property.name}を更新できませんでした。')),
       );
@@ -820,7 +852,7 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
                       ),
                 ),
               ),
-              if (!node.isSystemType || _isEditableImage)
+              if (!node.isSystemType || _isEditableImage || _isPerson)
                 IconButton(
                   key: const ValueKey('object-title-edit-button'),
                   tooltip: 'Object名を変更',
