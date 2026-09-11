@@ -46,10 +46,9 @@ class ObjectMergeStateSnapshot {
     required List<ObjectMergeValuePropertySnapshot> propertySnapshots,
     required ObjectBodyDocument body,
     required List<String> aliases,
-  }) : propertySnapshots =
-           List<ObjectMergeValuePropertySnapshot>.unmodifiable(
-             propertySnapshots,
-           ),
+  }) : propertySnapshots = List<ObjectMergeValuePropertySnapshot>.unmodifiable(
+         propertySnapshots,
+       ),
        aliases = List<String>.unmodifiable(aliases),
        _bodyJson = _freezeBody(body) {
     if (objectId <= 0) {
@@ -116,9 +115,7 @@ class ObjectMergeStatePlanner {
         const <ObjectMergeRelationBlocker>[],
   }) {
     if (survivor.objectId == retired.objectId) {
-      throw ArgumentError(
-        'Merge survivor and retired Object ids must differ.',
-      );
+      throw ArgumentError('Merge survivor and retired Object ids must differ.');
     }
     if (survivor.objectTypeId != retired.objectTypeId) {
       throw StateError(
