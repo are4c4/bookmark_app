@@ -19,133 +19,98 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test(
-    'generic Person create preserves canonical and legacy authority',
-    () async {
-      final fixture = await _PersonCreateFixture.create();
-      addTearDown(fixture.database.close);
+  test('generic Person create preserves canonical and legacy authority', () async {
+    final fixture = await _PersonCreateFixture.create();
+    addTearDown(fixture.database.close);
 
-      final objectId = await fixture.service.create(
-        databaseId: fixture.personSchema.objectType.id,
-        title: 'Ada Lovelace',
-      );
+    final objectId = await fixture.service.create(
+      databaseId: fixture.personSchema.objectType.id,
+      title: 'Ada Lovelace',
+    );
 
-      final objects = await fixture.objectStore.listObjects(
-        fixture.personSchema.objectType.id,
-      );
-      expect(objects, hasLength(1));
-      expect(objects.single.id, objectId);
-      expect(objects.single.title, 'Ada Lovelace');
+    final objects = await fixture.objectStore.listObjects(fixture.personSchema.objectType.id);
+    expect(objects, hasLength(1));
+    expect(objects.single.id, objectId);
+    expect(objects.single.title, 'Ada Lovelace');
 
-      final legacyPeople = await fixture.database
-          .select(fixture.database.people)
-          .get();
-      expect(legacyPeople, hasLength(1));
-      expect(legacyPeople.single.name, 'Ada Lovelace');
-      expect(
-        await fixture.personBridge.objectIdForLegacyPerson(
-          fixture.workspaceId,
-          legacyPeople.single.id,
-        ),
-        objectId,
-      );
-    },
-  );
+    final legacyPeople = await fixture.database.select(fixture.database.people).get();
+    expect(legacyPeople, hasLength(1));
+    expect(legacyPeople.single.name, 'Ada Lovelace');
+    expect(
+      await fixture.personBridge.objectIdForLegacyPerson(fixture.workspaceId, legacyPeople.single.id),
+      objectId,
+    );
+  });
 
-  test(
-    'Person Board create preserves canonical authority and applies group preset',
-    () async {
-      final fixture = await _PersonCreateFixture.create();
-      addTearDown(fixture.database.close);
+  test('Person Board create preserves canonical authority and applies group preset', () async {
+    final fixture = await _PersonCreateFixture.create();
+    addTearDown(fixture.database.close);
 
-      final groupSchema = await fixture.groupConvergence.ensureSchema(
-        fixture.workspaceId,
-      );
-      final group = await PersonGroupObjectWriteService(
-        database: fixture.database,
-        objectStore: fixture.objectStore,
-        systemObjectStore: fixture.systemObjects,
-        personBridge: fixture.personBridge,
-      ).create(workspaceId: fixture.workspaceId, name: 'Engineers');
-      final personType = (await fixture.objectStore.getObjectType(
-        fixture.personSchema.objectType.id,
-      ))!;
+    final groupSchema = await fixture.groupConvergence.ensureSchema(fixture.workspaceId);
+    final group = await PersonGroupObjectWriteService(
+      database: fixture.database,
+      objectStore: fixture.objectStore,
+      systemObjectStore: fixture.systemObjects,
+      personBridge: fixture.personBridge,
+    ).create(workspaceId: fixture.workspaceId, name: 'Engineers');
+    final personType = (await fixture.objectStore.getObjectType(fixture.personSchema.objectType.id))!;
 
-      final objectId = await fixture.service.createInGroup(
+    final objectId = await fixture.service.createInGroup(
+      databaseId: personType.id,
+      title: 'Grace Hopper',
+      groupProperty: groupSchema.personGroupsProperty,
+      targetGroup: ObjectGroupBucket<AppObject>(
+        key: 'group-${group.canonicalObjectId}',
+        label: 'Engineers',
+        value: group.canonicalObjectId,
+        items: const <AppObject>[],
+        isEmptyGroup: false,
+      ),
+    );
+
+    final person = (await fixture.objectStore.listObjects(personType.id)).single;
+    expect(person.id, objectId);
+    expect(person.title, 'Grace Hopper');
+    expect(
+      ObjectRelationValue.fromJson(person.values[groupSchema.personGroupsProperty.id]).objectIds,
+      <int>[group.canonicalObjectId],
+    );
+
+    final legacyPeople = await fixture.database.select(fixture.database.people).get();
+    expect(legacyPeople, hasLength(1));
+    expect(legacyPeople.single.name, 'Grace Hopper');
+    expect(
+      await fixture.personBridge.objectIdForLegacyPerson(fixture.workspaceId, legacyPeople.single.id),
+      objectId,
+    );
+  });
+
+  test('failed Person Board relation preset rolls back canonical and legacy creation', () async {
+    final fixture = await _PersonCreateFixture.create();
+    addTearDown(fixture.database.close);
+
+    final groupSchema = await fixture.groupConvergence.ensureSchema(fixture.workspaceId);
+    final personType = (await fixture.objectStore.getObjectType(fixture.personSchema.objectType.id))!;
+
+    await expectLater(
+      fixture.service.createInGroup(
         databaseId: personType.id,
-        title: 'Grace Hopper',
+        title: 'No Partial Person',
         groupProperty: groupSchema.personGroupsProperty,
-        targetGroup: ObjectGroupBucket<AppObject>(
-          key: 'group-${group.canonicalObjectId}',
-          label: 'Engineers',
-          value: group.canonicalObjectId,
-          items: const <AppObject>[],
+        targetGroup: const ObjectGroupBucket<AppObject>(
+          key: 'missing-team',
+          label: 'Missing group',
+          value: 999999,
+          items: <AppObject>[],
           isEmptyGroup: false,
         ),
-      );
+      ),
+      throwsA(anything),
+    );
 
-      final person = (await fixture.objectStore.listObjects(personType.id))
-          .single;
-      expect(person.id, objectId);
-      expect(person.title, 'Grace Hopper');
-      expect(
-        ObjectRelationValue.fromJson(
-          person.values[groupSchema.personGroupsProperty.id],
-        ).objectIds,
-        <int>[group.canonicalObjectId],
-      );
-
-      final legacyPeople = await fixture.database
-          .select(fixture.database.people)
-          .get();
-      expect(legacyPeople, hasLength(1));
-      expect(legacyPeople.single.name, 'Grace Hopper');
-      expect(
-        await fixture.personBridge.objectIdForLegacyPerson(
-          fixture.workspaceId,
-          legacyPeople.single.id,
-        ),
-        objectId,
-      );
-    },
-  );
-
-  test(
-    'failed Person Board relation preset rolls back canonical and legacy creation',
-    () async {
-      final fixture = await _PersonCreateFixture.create();
-      addTearDown(fixture.database.close);
-
-      final groupSchema = await fixture.groupConvergence.ensureSchema(
-        fixture.workspaceId,
-      );
-      final personType = (await fixture.objectStore.getObjectType(
-        fixture.personSchema.objectType.id,
-      ))!;
-
-      await expectLater(
-        fixture.service.createInGroup(
-          databaseId: personType.id,
-          title: 'No Partial Person',
-          groupProperty: groupSchema.personGroupsProperty,
-          targetGroup: const ObjectGroupBucket<AppObject>(
-            key: 'missing-team',
-            label: 'Missing group',
-            value: 999999,
-            items: <AppObject>[],
-            isEmptyGroup: false,
-          ),
-        ),
-        throwsA(anything),
-      );
-
-      expect(await fixture.objectStore.listObjects(personType.id), isEmpty);
-      expect(
-        await fixture.database.select(fixture.database.people).get(),
-        isEmpty,
-      );
-    },
-  );
+    expect(await fixture.objectStore.listObjects(personType.id), isEmpty);
+    expect(await fixture.database.select(fixture.database.people).get(), isEmpty);
+  });
 }
 
 class _PersonCreateFixture {
