@@ -15,71 +15,77 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('finalizes Relation rewire, A state, redirect and retirement atomically', () async {
-    final fixture = await _Fixture.create();
-    addTearDown(fixture.database.close);
+  test(
+    'finalizes Relation rewire, A state, redirect and retirement atomically',
+    () async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.database.close);
 
-    final personTypeId = await fixture.createType('Person');
-    final sourceTypeId = await fixture.createType('Source');
-    final personRelation = await fixture.createRelation(
-      sourceTypeId: sourceTypeId,
-      targetTypeId: personTypeId,
-      name: 'Person',
-      multiple: false,
-    );
-    final survivor = await fixture.createObject(personTypeId, 'Survivor');
-    final retired = await fixture.createObject(personTypeId, 'Retired');
-    final source = await fixture.createObject(sourceTypeId, 'Source');
-    await fixture.mutationService.setRelation(
-      objectId: source,
-      property: personRelation,
-      targetObjectIds: <int>[retired],
-    );
+      final personTypeId = await fixture.createType('Person');
+      final sourceTypeId = await fixture.createType('Source');
+      final personRelation = await fixture.createRelation(
+        sourceTypeId: sourceTypeId,
+        targetTypeId: personTypeId,
+        name: 'Person',
+        multiple: false,
+      );
+      final survivor = await fixture.createObject(personTypeId, 'Survivor');
+      final retired = await fixture.createObject(personTypeId, 'Retired');
+      final source = await fixture.createObject(sourceTypeId, 'Source');
+      await fixture.mutationService.setRelation(
+        objectId: source,
+        property: personRelation,
+        targetObjectIds: <int>[retired],
+      );
 
-    final prepared = await fixture.prepare(
-      objectTypeId: personTypeId,
-      survivorObjectId: survivor,
-      retiredObjectId: retired,
-    );
-    final plan = prepared.plan(
-      decisions: <String, ObjectMergeDecision>{
-        'title': ObjectMergeDecision.takeRetired,
-      },
-    );
+      final prepared = await fixture.prepare(
+        objectTypeId: personTypeId,
+        survivorObjectId: survivor,
+        retiredObjectId: retired,
+      );
+      final plan = prepared.plan(
+        decisions: <String, ObjectMergeDecision>{
+          'title': ObjectMergeDecision.takeRetired,
+        },
+      );
 
-    final result = await fixture.finalizer.finalize(
-      workspaceId: fixture.workspaceId,
-      prepared: prepared,
-      plan: plan,
-    );
+      final result = await fixture.finalizer.finalize(
+        workspaceId: fixture.workspaceId,
+        prepared: prepared,
+        plan: plan,
+      );
 
-    expect(result.alreadyFinalized, isFalse);
-    expect(result.survivingObjectId, survivor);
-    expect(result.relationImpact!.changedSurvivingSourceObjectIds, <int>[source]);
-    expect(
-      await fixture.relationValue(sourceTypeId, source, personRelation.id),
-      <int>[survivor],
-    );
-    expect(
-      (await fixture.objectStore.listObjects(personTypeId))
-          .map((object) => object.id),
-      <int>[survivor],
-    );
-    expect(
-      (await fixture.objectStore.listObjects(personTypeId)).single.title,
-      'Retired',
-    );
-    expect(await fixture.redirectStore.resolve(retired), survivor);
+      expect(result.alreadyFinalized, isFalse);
+      expect(result.survivingObjectId, survivor);
+      expect(
+        result.relationImpact!.changedSurvivingSourceObjectIds,
+        <int>[source],
+      );
+      expect(
+        await fixture.relationValue(sourceTypeId, source, personRelation.id),
+        <int>[survivor],
+      );
+      expect(
+        (await fixture.objectStore.listObjects(personTypeId))
+            .map((object) => object.id),
+        <int>[survivor],
+      );
+      expect(
+        (await fixture.objectStore.listObjects(personTypeId)).single.title,
+        'Retired',
+      );
+      expect(await fixture.redirectStore.resolve(retired), survivor);
 
-    final retry = await fixture.finalizer.finalize(
-      workspaceId: fixture.workspaceId,
-      prepared: prepared,
-      plan: plan,
-    );
-    expect(retry.alreadyFinalized, isTrue);
-    expect(retry.survivingObjectId, survivor);
-    expect(retry.relationImpact, isNull);
-  });
+      final retry = await fixture.finalizer.finalize(
+        workspaceId: fixture.workspaceId,
+        prepared: prepared,
+        plan: plan,
+      );
+      expect(retry.alreadyFinalized, isTrue);
+      expect(retry.survivingObjectId, survivor);
+      expect(retry.relationImpact, isNull);
+    },
+  );
 
   test('stale retired A state fails before Relation mutation', () async {
     final fixture = await _Fixture.create();
@@ -132,130 +138,136 @@ void main() {
     );
   });
 
-  test('fresh Relation blocker fails before A persistence or retirement', () async {
-    final fixture = await _Fixture.create();
-    addTearDown(fixture.database.close);
+  test(
+    'fresh Relation blocker fails before A persistence or retirement',
+    () async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.database.close);
 
-    final personTypeId = await fixture.createType('Person');
-    final sourceTypeId = await fixture.createType('Source');
-    final peopleRelation = await fixture.createRelation(
-      sourceTypeId: sourceTypeId,
-      targetTypeId: personTypeId,
-      name: 'People',
-      multiple: true,
-    );
-    final survivor = await fixture.createObject(personTypeId, 'Same');
-    final retired = await fixture.createObject(personTypeId, 'Same');
-    final source = await fixture.createObject(sourceTypeId, 'Source');
-    await fixture.mutationService.setRelation(
-      objectId: source,
-      property: peopleRelation,
-      targetObjectIds: <int>[retired],
-    );
+      final personTypeId = await fixture.createType('Person');
+      final sourceTypeId = await fixture.createType('Source');
+      final peopleRelation = await fixture.createRelation(
+        sourceTypeId: sourceTypeId,
+        targetTypeId: personTypeId,
+        name: 'People',
+        multiple: true,
+      );
+      final survivor = await fixture.createObject(personTypeId, 'Same');
+      final retired = await fixture.createObject(personTypeId, 'Same');
+      final source = await fixture.createObject(sourceTypeId, 'Source');
+      await fixture.mutationService.setRelation(
+        objectId: source,
+        property: peopleRelation,
+        targetObjectIds: <int>[retired],
+      );
 
-    final prepared = await fixture.prepare(
-      objectTypeId: personTypeId,
-      survivorObjectId: survivor,
-      retiredObjectId: retired,
-    );
-    final plan = prepared.plan();
+      final prepared = await fixture.prepare(
+        objectTypeId: personTypeId,
+        survivorObjectId: survivor,
+        retiredObjectId: retired,
+      );
+      final plan = prepared.plan();
 
-    await fixture.mutationService.setRelation(
-      objectId: source,
-      property: peopleRelation,
-      targetObjectIds: <int>[survivor, retired],
-    );
+      await fixture.mutationService.setRelation(
+        objectId: source,
+        property: peopleRelation,
+        targetObjectIds: <int>[survivor, retired],
+      );
 
-    await expectLater(
-      fixture.finalizer.finalize(
-        workspaceId: fixture.workspaceId,
-        prepared: prepared,
-        plan: plan,
-      ),
-      throwsStateError,
-    );
+      await expectLater(
+        fixture.finalizer.finalize(
+          workspaceId: fixture.workspaceId,
+          prepared: prepared,
+          plan: plan,
+        ),
+        throwsStateError,
+      );
 
-    expect(
-      await fixture.relationValue(sourceTypeId, source, peopleRelation.id),
-      <int>[survivor, retired],
-    );
-    expect(await fixture.redirectStore.resolve(retired), retired);
-    expect(
-      (await fixture.objectStore.listObjects(personTypeId))
-          .map((object) => object.id)
-          .toSet(),
-      <int>{survivor, retired},
-    );
-  });
+      expect(
+        await fixture.relationValue(sourceTypeId, source, peopleRelation.id),
+        <int>[survivor, retired],
+      );
+      expect(await fixture.redirectStore.resolve(retired), retired);
+      expect(
+        (await fixture.objectStore.listObjects(personTypeId))
+            .map((object) => object.id)
+            .toSet(),
+        <int>{survivor, retired},
+      );
+    },
+  );
 
-  test('late retired-row delete failure rolls back every merge mutation', () async {
-    final fixture = await _Fixture.create();
-    addTearDown(fixture.database.close);
+  test(
+    'late retired-row delete failure rolls back every merge mutation',
+    () async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.database.close);
 
-    final personTypeId = await fixture.createType('Person');
-    final sourceTypeId = await fixture.createType('Source');
-    final personRelation = await fixture.createRelation(
-      sourceTypeId: sourceTypeId,
-      targetTypeId: personTypeId,
-      name: 'Person',
-      multiple: false,
-    );
-    final survivor = await fixture.createObject(personTypeId, 'Survivor');
-    final retired = await fixture.createObject(personTypeId, 'Retired');
-    final source = await fixture.createObject(sourceTypeId, 'Source');
-    await fixture.mutationService.setRelation(
-      objectId: source,
-      property: personRelation,
-      targetObjectIds: <int>[retired],
-    );
+      final personTypeId = await fixture.createType('Person');
+      final sourceTypeId = await fixture.createType('Source');
+      final personRelation = await fixture.createRelation(
+        sourceTypeId: sourceTypeId,
+        targetTypeId: personTypeId,
+        name: 'Person',
+        multiple: false,
+      );
+      final survivor = await fixture.createObject(personTypeId, 'Survivor');
+      final retired = await fixture.createObject(personTypeId, 'Retired');
+      final source = await fixture.createObject(sourceTypeId, 'Source');
+      await fixture.mutationService.setRelation(
+        objectId: source,
+        property: personRelation,
+        targetObjectIds: <int>[retired],
+      );
 
-    final prepared = await fixture.prepare(
-      objectTypeId: personTypeId,
-      survivorObjectId: survivor,
-      retiredObjectId: retired,
-    );
-    final plan = prepared.plan(
-      decisions: <String, ObjectMergeDecision>{
-        'title': ObjectMergeDecision.takeRetired,
-      },
-    );
+      final prepared = await fixture.prepare(
+        objectTypeId: personTypeId,
+        survivorObjectId: survivor,
+        retiredObjectId: retired,
+      );
+      final plan = prepared.plan(
+        decisions: <String, ObjectMergeDecision>{
+          'title': ObjectMergeDecision.takeRetired,
+        },
+      );
 
-    await fixture.database.customStatement('''
-      CREATE TRIGGER fail_object_merge_retirement
-      BEFORE DELETE ON generic_records
-      WHEN OLD.id = $retired
-      BEGIN
-        SELECT RAISE(ABORT, 'forced retirement failure');
-      END
-    ''');
+      await fixture.database.customStatement('''
+        CREATE TRIGGER fail_object_merge_retirement
+        BEFORE DELETE ON generic_records
+        WHEN OLD.id = $retired
+        BEGIN
+          SELECT RAISE(ABORT, 'forced retirement failure');
+        END
+      ''');
 
-    await expectLater(
-      fixture.finalizer.finalize(
-        workspaceId: fixture.workspaceId,
-        prepared: prepared,
-        plan: plan,
-      ),
-      throwsA(anything),
-    );
+      await expectLater(
+        fixture.finalizer.finalize(
+          workspaceId: fixture.workspaceId,
+          prepared: prepared,
+          plan: plan,
+        ),
+        throwsA(anything),
+      );
 
-    expect(
-      await fixture.relationValue(sourceTypeId, source, personRelation.id),
-      <int>[retired],
-    );
-    expect(
-      (await fixture.objectStore.listObjects(personTypeId))
-          .singleWhere((object) => object.id == survivor)
-          .title,
-      'Survivor',
-    );
-    expect(await fixture.redirectStore.resolve(retired), retired);
-    expect(
-      (await fixture.objectStore.listObjects(personTypeId))
-          .map((object) => object.id)
-          .toSet(),
-      <int>{survivor, retired},
-    );
-  });
+      expect(
+        await fixture.relationValue(sourceTypeId, source, personRelation.id),
+        <int>[retired],
+      );
+      expect(
+        (await fixture.objectStore.listObjects(personTypeId))
+            .singleWhere((object) => object.id == survivor)
+            .title,
+        'Survivor',
+      );
+      expect(await fixture.redirectStore.resolve(retired), retired);
+      expect(
+        (await fixture.objectStore.listObjects(personTypeId))
+            .map((object) => object.id)
+            .toSet(),
+        <int>{survivor, retired},
+      );
+    },
+  );
 }
 
 class _Fixture {
