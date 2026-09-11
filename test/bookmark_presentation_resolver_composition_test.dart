@@ -14,8 +14,18 @@ void main() {
     final reverseLookup = File(
       'lib/widgets/bookmark_reverse_lookup_dialog.dart',
     ).readAsStringSync();
-    final notionCard =
-        File('lib/widgets/notion_bookmark_card.dart').readAsStringSync();
+    final notionCard = File('lib/widgets/notion_bookmark_card.dart')
+        .readAsStringSync();
+    final stage1 = File('lib/views/bookmark_unified_stage1_page.dart')
+        .readAsStringSync();
+    final stage1UrlFactory = RegExp(
+      r'BookmarkPresentationResolverFactory\.urlFor\(\s*'
+      r'widget\.repository,?\s*\)',
+    );
+    final stage1DatabaseViewStore = RegExp(
+      r'DatabaseViewStore\(\s*'
+      r'widget\.repository\.workspaceStore\.database,?\s*\)',
+    );
 
     expect(factory, contains('repository.workspaceStore.database'));
     expect(factory, contains('BookmarkUrlResolver('));
@@ -30,6 +40,13 @@ void main() {
     expect(lifecycle, isNot(contains('BookmarkUrlResolver(')));
     expect(reverseLookup, isNot(contains('BookmarkUrlResolver(')));
     expect(notionCard, isNot(contains('BookmarkUrlResolver(')));
+
+    expect(stage1, contains('BookmarkPresentationResolverFactory'));
+    expect(stage1UrlFactory.hasMatch(stage1), isTrue);
+    expect(stage1, isNot(contains('BookmarkUrlResolver(')));
+    expect(stage1, isNot(contains('services/bookmark_url_resolver.dart')));
+    expect(RegExp(r'workspaceStore\.database').allMatches(stage1).length, 1);
+    expect(stage1DatabaseViewStore.hasMatch(stage1), isTrue);
 
     // Existing host/test injection seams remain available; this slice only
     // moves low-level resolver construction out of presentation code.
