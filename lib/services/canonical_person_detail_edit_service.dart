@@ -1,3 +1,4 @@
+import '../data/canonical_object_mutation_impact_sink.dart';
 import '../data/generic_database_store.dart';
 import '../data/object_body_store.dart';
 import '../data/object_computed_value_store.dart';
@@ -22,11 +23,13 @@ class CanonicalPersonDetailEditService {
     required this.personWrites,
     required this.genericEdits,
     required this.loader,
+    this.canonicalObjectMutationImpactSink,
   });
 
   factory CanonicalPersonDetailEditService.fromStores({
     required GenericDatabaseStore genericStore,
     required ObjectStore objectStore,
+    CanonicalObjectMutationImpactSink? mutationImpactSink,
   }) {
     final database = genericStore.database;
     final systemObjects = SystemObjectStore(
@@ -57,6 +60,8 @@ class CanonicalPersonDetailEditService {
         loader: loader,
       ),
       loader: loader,
+      canonicalObjectMutationImpactSink:
+          mutationImpactSink ?? canonicalObjectMutationImpactSinkFor(database),
     );
   }
 
@@ -65,6 +70,7 @@ class CanonicalPersonDetailEditService {
   final PersonObjectWriteService personWrites;
   final ObjectDetailEditService genericEdits;
   final ObjectDetailContentLoader loader;
+  final CanonicalObjectMutationImpactSink? canonicalObjectMutationImpactSink;
 
   Future<ObjectDetailContent> rename({
     required ObjectDetailContent content,
@@ -72,15 +78,18 @@ class CanonicalPersonDetailEditService {
   }) async {
     final route = await _resolveRoute(content);
     if (route.legacyPersonId == null) {
-      return genericEdits.rename(content: content, title: title);
+      final updated = await genericEdits.rename(content: content, title: title);
+      await _notifyCommittedObject(content.object.id);
+      return updated;
     }
 
-    await personWrites.update(
+    final impact = await personWrites.updateWithImpact(
       workspaceId: content.objectType.workspaceId,
       personId: route.legacyPersonId!,
       name: title,
       note: _currentNote(content, route.schema.noteProperty),
     );
+    await _notifyPersonImpact(impact);
     return _reload(content);
   }
 
@@ -99,19 +108,22 @@ class CanonicalPersonDetailEditService {
     }
 
     if (route.legacyPersonId == null) {
-      return genericEdits.setValue(
+      final updated = await genericEdits.setValue(
         content: content,
         property: property,
         value: note,
       );
+      await _notifyCommittedObject(content.object.id);
+      return updated;
     }
 
-    await personWrites.update(
+    final impact = await personWrites.updateWithImpact(
       workspaceId: content.objectType.workspaceId,
       personId: route.legacyPersonId!,
       name: content.object.title,
       note: note,
     );
+    await _notifyPersonImpact(impact);
     return _reload(content);
   }
 
@@ -160,6 +172,15 @@ class CanonicalPersonDetailEditService {
     }
 
     return _PersonEditRoute(schema: schema, legacyPersonId: mappedLegacyId);
+  }
+
+  Future<void> _notifyPersonImpact(PersonCommittedWriteImpact? impact) async {
+    if (impact?.canonicalMutationCommitted != true) return;
+    await _notifyCommittedObject(impact!.canonicalObjectId);
+  }
+
+  Future<void> _notifyCommittedObject(int objectId) async {
+    await canonicalObjectMutationImpactSink?.objectCommitted(objectId);
   }
 
   String? _currentNote(

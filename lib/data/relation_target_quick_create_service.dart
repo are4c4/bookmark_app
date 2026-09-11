@@ -1,6 +1,7 @@
 import 'dart:developer' as developer;
 
 import '../domain/object_model.dart';
+import 'canonical_object_mutation_impact_sink.dart';
 import 'canonical_weblink_capture_service.dart';
 import 'object_store.dart';
 import 'person_object_write_service.dart';
@@ -31,6 +32,7 @@ class RelationTargetQuickCreateService {
     required this.tagBridge,
     required this.weblinks,
     this.weblinkEnricher,
+    this.canonicalObjectMutationImpactSink,
   });
 
   final RelationTargetQuickCreatePolicy policy;
@@ -38,6 +40,7 @@ class RelationTargetQuickCreateService {
   final TagObjectBridge tagBridge;
   final WeblinkObjectService weblinks;
   final RelationQuickCreateWeblinkEnricher? weblinkEnricher;
+  final CanonicalObjectMutationImpactSink? canonicalObjectMutationImpactSink;
 
   Future<AppObject?> create({
     required int workspaceId,
@@ -69,11 +72,17 @@ class RelationTargetQuickCreateService {
         final impact = await PersonObjectWriteService.forDatabase(
           tagBridge.database,
         ).createWithImpact(workspaceId: workspaceId, name: name);
-        return _validatedTarget(
+        final object = await _validatedTarget(
           workspaceId: workspaceId,
           targetObjectTypeId: targetObjectTypeId,
           objectId: impact.canonicalObjectId,
         );
+        if (impact.canonicalMutationCommitted) {
+          await canonicalObjectMutationImpactSink?.objectCommitted(
+            impact.canonicalObjectId,
+          );
+        }
+        return object;
 
       case RelationTargetQuickCreateMode.tag:
         final name = _requiredInput(input, 'Tag name');

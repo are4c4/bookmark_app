@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'data/app_database.dart';
 import 'data/bookmark_lifecycle_store.dart';
 import 'data/bookmark_repository.dart';
+import 'data/canonical_object_mutation_impact_sink.dart';
 import 'data/generic_database_store.dart';
 import 'data/workspace_store.dart';
 import 'repositories/object_global_search_service.dart';
@@ -100,7 +101,17 @@ class _BookmarkBootstrapState extends State<BookmarkBootstrap> {
         importExternalFiles: movedFromDirectoryPath == null,
       );
     }
-    final workspaceStore = WorkspaceStore(database);
+    final search = ObjectGlobalSearchService(GenericDatabaseStore(database));
+    final workspaceStore = WorkspaceStore(
+      database,
+      canonicalObjectMutationImpactSink: CanonicalObjectMutationImpactSink(
+        onObjectCommitted: search.refreshObjectLabelDependents,
+        onDeletionCommitted: (impact) => search.refreshCommittedDeletionImpact(
+          deletedObjectId: impact.deletedObjectId,
+          changedSourceObjectIds: impact.detachedSourceObjectIds,
+        ),
+      ),
+    );
     final workspaceId = await workspaceStore.initialize();
     final lifecycleStore = BookmarkLifecycleStore(database);
     await lifecycleStore.initialize();

@@ -1,4 +1,5 @@
 import 'package:bookmark_app/data/app_database.dart';
+import 'package:bookmark_app/data/canonical_object_mutation_impact_sink.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
 import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/person_object_bridge.dart';
@@ -9,13 +10,23 @@ import 'package:bookmark_app/services/canonical_person_detail_edit_service.dart'
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+CanonicalObjectMutationImpactSink _recordingSink(List<int> objectIds) =>
+    CanonicalObjectMutationImpactSink(
+      onObjectCommitted: (objectId) async => objectIds.add(objectId),
+      onDeletionCommitted: (_) async {},
+    );
+
 void main() {
   test(
     'legacy-backed Person detail edits keep canonical and legacy state equal',
     () async {
       final database = AppDatabase.forTesting(NativeDatabase.memory());
       addTearDown(database.close);
-      final workspaceId = await WorkspaceStore(database).initialize();
+      final committedObjectIds = <int>[];
+      final workspaceId = await WorkspaceStore(
+        database,
+        canonicalObjectMutationImpactSink: _recordingSink(committedObjectIds),
+      ).initialize();
       final genericStore = GenericDatabaseStore(database);
       final objectStore = ObjectStore(genericStore);
       final bridge = PersonObjectBridge(
@@ -70,13 +81,18 @@ void main() {
         (await database.select(database.people).get()).single.note,
         isNull,
       );
+      expect(committedObjectIds, <int>[objectId, objectId, objectId]);
     },
   );
 
   test('native canonical Person remains editable without creating legacy projection', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
-    final workspaceId = await WorkspaceStore(database).initialize();
+    final committedObjectIds = <int>[];
+    final workspaceId = await WorkspaceStore(
+      database,
+      canonicalObjectMutationImpactSink: _recordingSink(committedObjectIds),
+    ).initialize();
     final genericStore = GenericDatabaseStore(database);
     final objectStore = ObjectStore(genericStore);
     final bridge = PersonObjectBridge(
@@ -112,14 +128,19 @@ void main() {
     expect(content.object.values[schema.noteProperty.id], 'native note');
     expect(await database.select(database.people).get(), isEmpty);
     expect(await bridge.legacyPersonIdForObject(workspaceId, objectId), isNull);
+    expect(committedObjectIds, <int>[objectId, objectId]);
   });
 
   test(
-    'missing Person mapping fails closed before canonical mutation',
+    'missing Person mapping fails closed before canonical mutation or impact',
     () async {
       final database = AppDatabase.forTesting(NativeDatabase.memory());
       addTearDown(database.close);
-      final workspaceId = await WorkspaceStore(database).initialize();
+      final committedObjectIds = <int>[];
+      final workspaceId = await WorkspaceStore(
+        database,
+        canonicalObjectMutationImpactSink: _recordingSink(committedObjectIds),
+      ).initialize();
       final genericStore = GenericDatabaseStore(database);
       final objectStore = ObjectStore(genericStore);
       final bridge = PersonObjectBridge(
@@ -167,6 +188,7 @@ void main() {
       expect(object.values[schema.noteProperty.id], 'preserved note');
       expect(person.name, 'Preserved');
       expect(person.note, 'preserved note');
+      expect(committedObjectIds, isEmpty);
     },
   );
 

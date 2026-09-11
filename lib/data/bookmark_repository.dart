@@ -319,17 +319,43 @@ class BookmarkRepository {
     }
   }
 
-  Future<int> createPerson(String name, {String? note}) =>
-      _personWrites.create(workspaceId: workspaceId, name: name, note: note);
-  Future<void> updatePerson(Person person, String name, String? note) =>
-      _personWrites.update(
-        workspaceId: workspaceId,
-        personId: person.id,
-        name: name,
-        note: note,
+  Future<int> createPerson(String name, {String? note}) async {
+    final impact = await _personWrites.createWithImpact(
+      workspaceId: workspaceId,
+      name: name,
+      note: note,
+    );
+    if (impact.canonicalMutationCommitted) {
+      await workspaceStore.canonicalObjectMutationImpactSink?.objectCommitted(
+        impact.canonicalObjectId,
       );
-  Future<void> deletePerson(Person person) =>
-      _personDeletes.delete(workspaceId: workspaceId, personId: person.id);
+    }
+    return impact.legacyPersonId;
+  }
+
+  Future<void> updatePerson(Person person, String name, String? note) async {
+    final impact = await _personWrites.updateWithImpact(
+      workspaceId: workspaceId,
+      personId: person.id,
+      name: name,
+      note: note,
+    );
+    if (impact?.canonicalMutationCommitted == true) {
+      await workspaceStore.canonicalObjectMutationImpactSink?.objectCommitted(
+        impact!.canonicalObjectId,
+      );
+    }
+  }
+
+  Future<void> deletePerson(Person person) async {
+    final impact = await _personDeletes.deleteWithImpact(
+      workspaceId: workspaceId,
+      personId: person.id,
+    );
+    await workspaceStore.canonicalObjectMutationImpactSink?.deletionCommitted(
+      impact,
+    );
+  }
 
   Future<int> createCollection(String name, {String? note}) => _database.createCollection(name, note: note);
   Future<void> deleteCollection(CollectionRecord collection) => _database.deleteCollection(collection.id);
