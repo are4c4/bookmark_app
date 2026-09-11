@@ -12,12 +12,20 @@ import 'person_profile_image_relation_service.dart';
 /// using the ordinary generic Relation editor. A legacy-backed canonical Person
 /// uses [PersonProfileImageRelationService] so its canonical Image Relation and
 /// temporary `people.profile_photo_id` projection commit atomically.
-class CanonicalPersonProfileImageRelationEditService {
+///
+/// This is an [ObjectRelationEditorService] subtype so a composition root can
+/// install it without changing generic picker/search/load call sites.
+class CanonicalPersonProfileImageRelationEditService
+    extends ObjectRelationEditorService {
   CanonicalPersonProfileImageRelationEditService({
     required this.genericEditor,
     required this.personBridge,
     required this.profileImages,
-  });
+  }) : super(
+          targets: genericEditor.targets,
+          mutations: genericEditor.mutations,
+          identitySearch: genericEditor.identitySearch,
+        );
 
   factory CanonicalPersonProfileImageRelationEditService.forDatabase({
     required AppDatabase database,
@@ -43,6 +51,7 @@ class CanonicalPersonProfileImageRelationEditService {
   final PersonObjectBridge personBridge;
   final PersonProfileImageRelationService profileImages;
 
+  @override
   Future<void> save({
     required RelationSelectionContext context,
     required Iterable<int> selectedObjectIds,
