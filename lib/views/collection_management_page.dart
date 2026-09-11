@@ -1,9 +1,7 @@
 import 'dart:async';
 
-import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/material.dart';
 
-import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
 import '../data/database_view_store.dart';
 import '../database/database_definition.dart';
@@ -11,6 +9,7 @@ import '../features/database/presentation/widgets/database_create_tiles.dart';
 import '../features/database/presentation/widgets/database_page_toolbar.dart';
 import '../features/database/presentation/widgets/database_view_tabs.dart';
 import '../features/database/presentation/widgets/resizable_detail_pane.dart';
+import '../services/collection_management_service.dart';
 import '../ui/ui_tokens.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/app_toast.dart';
@@ -29,18 +28,22 @@ class CollectionManagementPage extends StatefulWidget {
 class _CollectionManagementPageState extends State<CollectionManagementPage> {
   int? _selectedCollectionId;
   String _query = '';
+  late final CollectionManagementService _collectionManagementService;
   late final DatabaseViewStore _databaseViewStore;
   DatabaseViewConfig? _activeDatabaseView;
   int? _activeDatabaseViewId;
   Timer? _viewSaveTimer;
 
   BookmarkRepository get repository => widget.repository;
-  AppDatabase get database => repository.workspaceStore.database;
 
   @override
   void initState() {
     super.initState();
-    _databaseViewStore = DatabaseViewStore(database);
+    _collectionManagementService =
+        CollectionManagementService.fromWorkspaceStore(
+      repository.workspaceStore,
+    );
+    _databaseViewStore = _collectionManagementService.databaseViewStore;
   }
 
   @override
@@ -98,25 +101,13 @@ class _CollectionManagementPageState extends State<CollectionManagementPage> {
     if (mounted) setState(() => _selectedCollectionId = id);
   }
 
-  Future<void> _rename(CollectionRecord collection, String name) async {
-    final value = name.trim();
-    if (value.isEmpty || value == collection.name) return;
-    await (database.update(database.collections)
-          ..where((row) => row.id.equals(collection.id)))
-        .write(CollectionsCompanion(name: Value(value)));
-  }
+  Future<void> _rename(CollectionManagementRecord collection, String name) =>
+      _collectionManagementService.renameCollection(collection, name);
 
-  Future<void> _saveNote(CollectionRecord collection, String note) async {
-    await (database.update(database.collections)
-          ..where((row) => row.id.equals(collection.id)))
-        .write(
-      CollectionsCompanion(
-        note: Value(note.trim().isEmpty ? null : note.trim()),
-      ),
-    );
-  }
+  Future<void> _saveNote(CollectionManagementRecord collection, String note) =>
+      _collectionManagementService.saveCollectionNote(collection, note);
 
-  Future<void> _delete(CollectionRecord collection) async {
+  Future<void> _delete(CollectionManagementRecord collection) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -143,7 +134,7 @@ class _CollectionManagementPageState extends State<CollectionManagementPage> {
 
   Future<void> _addBookmark(
     int bookmarkId,
-    CollectionRecord collection,
+    CollectionManagementRecord collection,
   ) async {
     final bookmarks = await repository.watchAll().first;
     final bookmark = bookmarks
@@ -161,7 +152,7 @@ class _CollectionManagementPageState extends State<CollectionManagementPage> {
     if (mounted) showAppToast(context, '「${collection.name}」へ追加しました');
   }
 
-  Future<void> _chooseBookmark(CollectionRecord collection) async {
+  Future<void> _chooseBookmark(CollectionManagementRecord collection) async {
     final all = await repository.watchAll().first;
     if (!mounted) return;
     var query = '';
@@ -246,8 +237,8 @@ class _CollectionManagementPageState extends State<CollectionManagementPage> {
   }
 
   Future<void> _removeBookmark(
-    BookmarkItem bookmark,
-    CollectionRecord collection,
+    CollectionManagementBookmark bookmark,
+    CollectionManagementRecord collection,
   ) async {
     final remaining = bookmark.collections
         .where((item) => item.id != collection.id);
@@ -255,7 +246,7 @@ class _CollectionManagementPageState extends State<CollectionManagementPage> {
     if (mounted) showAppToast(context, 'コレクションから外しました');
   }
 
-  Widget _collectionRow(CollectionRecord collection, int count) {
+  Widget _collectionRow(CollectionManagementRecord collection, int count) {
     final scheme = Theme.of(context).colorScheme;
     final selected = _selectedCollectionId == collection.id;
     return DragTarget<int>(
@@ -318,7 +309,7 @@ class _CollectionManagementPageState extends State<CollectionManagementPage> {
     );
   }
 
-  Widget _detail(CollectionRecord collection) {
+  Widget _detail(CollectionManagementRecord collection) {
     final scheme = Theme.of(context).colorScheme;
     return Material(
       color: scheme.surface,
@@ -368,7 +359,7 @@ class _CollectionManagementPageState extends State<CollectionManagementPage> {
           ),
           const Divider(height: 1),
           Expanded(
-            child: StreamBuilder<List<BookmarkItem>>(
+            child: StreamBuilder<List<CollectionManagementBookmark>>(
               stream: repository.watchBookmarksForCollection(collection),
               builder: (context, snapshot) {
                 if (!snapshot.hasData) {
@@ -469,7 +460,7 @@ class _CollectionManagementPageState extends State<CollectionManagementPage> {
             }),
           ),
           Expanded(
-            child: StreamBuilder<List<CollectionRecord>>(
+            child: StreamBuilder<List<CollectionManagementRecord>>(
               stream: repository.watchCollections(),
               builder: (context, snapshot) {
                 if (!snapshot.hasData) {
@@ -501,7 +492,10 @@ class _CollectionManagementPageState extends State<CollectionManagementPage> {
                               padding: const EdgeInsets.fromLTRB(12, 10, 12, 80),
                               children: [
                                 ...collections.map(
-                                  (collection) => StreamBuilder<List<BookmarkItem>>(
+                                  (collection) =>
+                                      StreamBuilder<
+                                    List<CollectionManagementBookmark>
+                                  >(
                                     stream: repository
                                         .watchBookmarksForCollection(collection),
                                     builder: (context, itemSnapshot) =>
