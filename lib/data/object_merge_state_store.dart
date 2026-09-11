@@ -51,10 +51,11 @@ class ObjectMergeStateStore {
       );
     }
 
-    final valueProperties = objectType.properties
-        .where((property) => property.isValue)
-        .toList(growable: false)
-      ..sort((left, right) => left.id.compareTo(right.id));
+    final valueProperties =
+        objectType.properties
+            .where((property) => property.isValue)
+            .toList(growable: false)
+          ..sort((left, right) => left.id.compareTo(right.id));
 
     return ObjectMergeStateSnapshot(
       objectId: object.id,
@@ -160,8 +161,7 @@ class ObjectMergeStateStore {
   bool _sameSnapshot(
     ObjectMergeStateSnapshot left,
     ObjectMergeStateSnapshot right,
-  ) =>
-      jsonEncode(_snapshotJson(left)) == jsonEncode(_snapshotJson(right));
+  ) => jsonEncode(_snapshotJson(left)) == jsonEncode(_snapshotJson(right));
 
   Map<String, dynamic> _snapshotJson(ObjectMergeStateSnapshot snapshot) =>
       <String, dynamic>{
