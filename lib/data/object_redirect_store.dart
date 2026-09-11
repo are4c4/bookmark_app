@@ -94,9 +94,11 @@ class ObjectRedirectStore {
   });
 
   Future<bool> _schemaExists() async {
-    final row = await _genericStore.database.customSelect(
-      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'object_redirects' LIMIT 1",
-    ).getSingleOrNull();
+    final row = await _genericStore.database
+        .customSelect(
+          "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'object_redirects' LIMIT 1",
+        )
+        .getSingleOrNull();
     return row != null;
   }
 
@@ -108,8 +110,7 @@ class ObjectRedirectStore {
     ).get();
     return <int, int>{
       for (final row in rows)
-        row.read<int>('retired_object_id'):
-            row.read<int>('survivor_object_id'),
+        row.read<int>('retired_object_id'): row.read<int>('survivor_object_id'),
     };
   }
 }
