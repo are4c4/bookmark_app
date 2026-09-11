@@ -5,8 +5,14 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
 import '../data/database_view_store.dart';
-import '../database/database_definition.dart';
+import '../data/generic_database_store.dart';
+import '../data/object_store.dart';
+import '../data/person_group_object_convergence_service.dart';
+import '../data/person_group_object_write_service.dart';
 import '../data/person_group_store.dart';
+import '../data/person_object_bridge.dart';
+import '../data/system_object_store.dart';
+import '../database/database_definition.dart';
 import '../services/bookmark_presentation_resolver_factory.dart';
 import '../services/bookmark_url_resolver.dart';
 import '../services/person_profile_image_relation_service.dart';
@@ -40,6 +46,8 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
   int? _selectedPersonId;
   int? _selectedGroupId;
   late final PersonGroupStore _personGroups;
+  late final PersonGroupObjectWriteService _personGroupWrites;
+  late final PersonGroupObjectConvergenceService _groupMembershipWrites;
   late final DatabaseViewStore _databaseViewStore;
   late final BookmarkUrlResolve _resolveBookmarkUrl;
   late final PersonProfileImageRelationService _profileImages;
@@ -53,8 +61,32 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
   @override
   void initState() {
     super.initState();
-    _personGroups = PersonGroupStore(repository.workspaceStore.database);
-    _databaseViewStore = DatabaseViewStore(repository.workspaceStore.database);
+    final database = repository.workspaceStore.database;
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final systemObjectStore = SystemObjectStore(
+      database: database,
+      objectStore: objectStore,
+    );
+    final personBridge = PersonObjectBridge(
+      database: database,
+      objectStore: objectStore,
+      systemObjectStore: systemObjectStore,
+    );
+    _personGroups = PersonGroupStore(database);
+    _personGroupWrites = PersonGroupObjectWriteService(
+      database: database,
+      objectStore: objectStore,
+      systemObjectStore: systemObjectStore,
+      personBridge: personBridge,
+    );
+    _groupMembershipWrites = PersonGroupObjectConvergenceService(
+      database: database,
+      objectStore: objectStore,
+      systemObjectStore: systemObjectStore,
+      personBridge: personBridge,
+    );
+    _databaseViewStore = DatabaseViewStore(database);
     _resolveBookmarkUrl =
         BookmarkPresentationResolverFactory.urlFor(repository);
     _profileImages = createPersonProfileImageRelationService(repository);
@@ -168,6 +200,68 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
     }
   }
 
+  void _showGroupMutationFailure() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(content: Text('人物グループを更新できませんでした。状態を確認してもう一度お試しください。')),
+      );
+  }
+
+  Future<PersonGroupObjectWriteResult?> _createGroup(String name) async {
+    try {
+      return await _personGroupWrites.create(
+        workspaceId: repository.workspaceId,
+        name: name,
+      );
+    } catch (_) {
+      _showGroupMutationFailure();
+      return null;
+    }
+  }
+
+  Future<bool> _renameGroup(int groupId, String name) async {
+    try {
+      await _personGroupWrites.rename(
+        workspaceId: repository.workspaceId,
+        legacyGroupId: groupId,
+        name: name,
+      );
+      return true;
+    } catch (_) {
+      _showGroupMutationFailure();
+      return false;
+    }
+  }
+
+  Future<bool> _deleteGroup(int groupId) async {
+    try {
+      await _personGroupWrites.delete(
+        workspaceId: repository.workspaceId,
+        legacyGroupId: groupId,
+      );
+      return true;
+    } catch (_) {
+      _showGroupMutationFailure();
+      return false;
+    }
+  }
+
+  Future<bool> _setGroupsForPerson(int personId, Iterable<int> groupIds) async {
+    try {
+      await _groupMembershipWrites.setGroupsForLegacyPerson(
+        workspaceId: repository.workspaceId,
+        legacyPersonId: personId,
+        legacyGroupIds: groupIds,
+      );
+      return true;
+    } catch (_) {
+      _showGroupMutationFailure();
+      return false;
+    }
+  }
+
   Future<void> _showGroupManager() async {
     await showDialog<void>(
       context: context,
@@ -183,7 +277,8 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
                   prefixIcon: Icons.add,
                   hintText: 'グループ名を入力して Enter',
                   onSubmitted: (value) async {
-                    await _personGroups.createGroup(value);
+                    final created = await _createGroup(value);
+                    if (created == null) return;
                     if (dialogContext.mounted) setLocalState(() {});
                     if (mounted) setState(() {});
                   },
@@ -213,7 +308,9 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
                             title: InlineRenameText(
                               value: group.name,
                               onSubmitted: (value) async {
-                                await _personGroups.renameGroup(group.id, value);
+                                if (!await _renameGroup(group.id, value)) {
+                                  return;
+                                }
                                 if (dialogContext.mounted) setLocalState(() {});
                                 if (mounted) setState(() {});
                               },
@@ -222,7 +319,9 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
                               tooltip: '削除',
                               icon: const Icon(Icons.delete_outline, size: 18),
                               onPressed: () async {
-                                await _personGroups.deleteGroup(group.id);
+                                if (!await _deleteGroup(group.id)) {
+                                  return;
+                                }
                                 if (_selectedGroupId == group.id && mounted) {
                                   setState(() => _selectedGroupId = null);
                                 }
@@ -271,13 +370,22 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
                   prefixIcon: Icons.add,
                   hintText: 'グループを作成して追加',
                   onSubmitted: (value) async {
-                    final id = await _personGroups.createGroup(value);
+                    final created = await _createGroup(value);
+                    if (created == null) return;
                     final refreshed = await _personGroups.listGroups();
-                    current.add(id);
-                    await _personGroups.setGroupsForPerson(person.id, current);
+                    final next = <int>{...current, created.legacyGroupId};
+                    final committed = await _setGroupsForPerson(
+                      person.id,
+                      next,
+                    );
                     all
                       ..clear()
                       ..addAll(refreshed);
+                    if (committed) {
+                      current
+                        ..clear()
+                        ..addAll(next);
+                    }
                     if (dialogContext.mounted) setLocalState(() {});
                     if (mounted) setState(() {});
                   },
@@ -300,13 +408,18 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
                           child: InkWell(
                             borderRadius: BorderRadius.circular(5),
                             onTap: () async {
-                              selected
-                                  ? current.remove(group.id)
-                                  : current.add(group.id);
-                              await _personGroups.setGroupsForPerson(
-                                person.id,
-                                current,
-                              );
+                              final next = <int>{...current};
+                              if (selected) {
+                                next.remove(group.id);
+                              } else {
+                                next.add(group.id);
+                              }
+                              if (!await _setGroupsForPerson(person.id, next)) {
+                                return;
+                              }
+                              current
+                                ..clear()
+                                ..addAll(next);
                               if (dialogContext.mounted) setLocalState(() {});
                               if (mounted) setState(() {});
                             },
