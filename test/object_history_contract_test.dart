@@ -3,22 +3,25 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('ObjectHistoryEntry', () {
-    test('captures stable durable identity and local-first source metadata', () {
-      final capturedAt = DateTime.utc(2026, 9, 11, 6, 45);
-      final entry = ObjectHistoryEntry(
-        objectId: 7,
-        revisionId: 3,
-        previousRevisionId: 2,
-        capturedAt: capturedAt,
-        source: ObjectHistorySourceKind.userMutation,
-      );
+    test(
+      'captures stable durable identity and local-first source metadata',
+      () {
+        final capturedAt = DateTime.utc(2026, 9, 11, 6, 45);
+        final entry = ObjectHistoryEntry(
+          objectId: 7,
+          revisionId: 3,
+          previousRevisionId: 2,
+          capturedAt: capturedAt,
+          source: ObjectHistorySourceKind.userMutation,
+        );
 
-      expect(entry.objectId, 7);
-      expect(entry.revisionId, 3);
-      expect(entry.previousRevisionId, 2);
-      expect(entry.capturedAt, capturedAt);
-      expect(entry.source, ObjectHistorySourceKind.userMutation);
-    });
+        expect(entry.objectId, 7);
+        expect(entry.revisionId, 3);
+        expect(entry.previousRevisionId, 2);
+        expect(entry.capturedAt, capturedAt);
+        expect(entry.source, ObjectHistorySourceKind.userMutation);
+      },
+    );
 
     test('malformed Object and revision identities fail closed', () {
       expect(
@@ -76,10 +79,11 @@ void main() {
       expect(whole.kind, ObjectHistoryRestoreScopeKind.wholeObject);
       expect(whole.targets, isEmpty);
       expect(selective.kind, ObjectHistoryRestoreScopeKind.selective);
-      expect(
-        selective.targets.map((target) => target.key),
-        <String>['title', 'property:12', 'body'],
-      );
+      expect(selective.targets.map((target) => target.key), <String>[
+        'title',
+        'property:12',
+        'body',
+      ]);
     });
 
     test('empty, duplicate, and malformed selective targets fail closed', () {
@@ -90,70 +94,74 @@ void main() {
         throwsArgumentError,
       );
       expect(
-        () => ObjectHistoryRestoreScope.selective(
-          <ObjectHistoryFieldTarget>[
-            ObjectHistoryFieldTarget.title(),
-            ObjectHistoryFieldTarget.title(),
-          ],
-        ),
+        () => ObjectHistoryRestoreScope.selective(<ObjectHistoryFieldTarget>[
+          ObjectHistoryFieldTarget.title(),
+          ObjectHistoryFieldTarget.title(),
+        ]),
         throwsArgumentError,
       );
-      expect(
-        () => ObjectHistoryFieldTarget.property(0),
-        throwsArgumentError,
-      );
+      expect(() => ObjectHistoryFieldTarget.property(0), throwsArgumentError);
     });
   });
 
   group('ObjectHistoryRestorePlan', () {
-    test('matching current revision is executable without Relation blockers', () {
-      final plan = ObjectHistoryRestorePlan(
-        objectId: 7,
-        historicalRevisionId: 2,
-        expectedCurrentRevisionId: 4,
-        actualCurrentRevisionId: 4,
-        scope: ObjectHistoryRestoreScope.wholeObject(),
-      );
+    test(
+      'matching current revision is executable without Relation blockers',
+      () {
+        final plan = ObjectHistoryRestorePlan(
+          objectId: 7,
+          historicalRevisionId: 2,
+          expectedCurrentRevisionId: 4,
+          actualCurrentRevisionId: 4,
+          scope: ObjectHistoryRestoreScope.wholeObject(),
+        );
 
-      expect(plan.hasCurrentRevisionConflict, isFalse);
-      expect(plan.isExecutable, isTrue);
-    });
+        expect(plan.hasCurrentRevisionConflict, isFalse);
+        expect(plan.isExecutable, isTrue);
+      },
+    );
 
-    test('stale prepared revision fails closed against newer canonical state', () {
-      final plan = ObjectHistoryRestorePlan(
-        objectId: 7,
-        historicalRevisionId: 2,
-        expectedCurrentRevisionId: 4,
-        actualCurrentRevisionId: 5,
-        scope: ObjectHistoryRestoreScope.selective(
-          <ObjectHistoryFieldTarget>[ObjectHistoryFieldTarget.body()],
-        ),
-      );
+    test(
+      'stale prepared revision fails closed against newer canonical state',
+      () {
+        final plan = ObjectHistoryRestorePlan(
+          objectId: 7,
+          historicalRevisionId: 2,
+          expectedCurrentRevisionId: 4,
+          actualCurrentRevisionId: 5,
+          scope: ObjectHistoryRestoreScope.selective(<ObjectHistoryFieldTarget>[
+            ObjectHistoryFieldTarget.body(),
+          ]),
+        );
 
-      expect(plan.hasCurrentRevisionConflict, isTrue);
-      expect(plan.isExecutable, isFalse);
-    });
+        expect(plan.hasCurrentRevisionConflict, isTrue);
+        expect(plan.isExecutable, isFalse);
+      },
+    );
 
-    test('Relation integrity blocker cannot be bypassed by A restore scope', () {
-      final plan = ObjectHistoryRestorePlan(
-        objectId: 7,
-        historicalRevisionId: 2,
-        expectedCurrentRevisionId: 4,
-        actualCurrentRevisionId: 4,
-        scope: ObjectHistoryRestoreScope.selective(
-          <ObjectHistoryFieldTarget>[ObjectHistoryFieldTarget.title()],
-        ),
-        relationBlockers: <ObjectHistoryRelationBlocker>[
-          ObjectHistoryRelationBlocker(
-            key: 'relation:author',
-            reason: 'Historical targets violate current cardinality.',
-          ),
-        ],
-      );
+    test(
+      'Relation integrity blocker cannot be bypassed by A restore scope',
+      () {
+        final plan = ObjectHistoryRestorePlan(
+          objectId: 7,
+          historicalRevisionId: 2,
+          expectedCurrentRevisionId: 4,
+          actualCurrentRevisionId: 4,
+          scope: ObjectHistoryRestoreScope.selective(<ObjectHistoryFieldTarget>[
+            ObjectHistoryFieldTarget.title(),
+          ]),
+          relationBlockers: <ObjectHistoryRelationBlocker>[
+            ObjectHistoryRelationBlocker(
+              key: 'relation:author',
+              reason: 'Historical targets violate current cardinality.',
+            ),
+          ],
+        );
 
-      expect(plan.isExecutable, isFalse);
-      expect(plan.relationBlockers, hasLength(1));
-    });
+        expect(plan.isExecutable, isFalse);
+        expect(plan.relationBlockers, hasLength(1));
+      },
+    );
 
     test('restore revision identities and ordering are validated', () {
       expect(
