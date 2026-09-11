@@ -3,7 +3,7 @@
 > Durable Lane G handoff. Before implementation read the focused Issue, `docs/product_architecture.md`, `AGENTS.md`, `docs/AI_PROGRESS.md`, latest `main`, live PR ownership and current CI. Historical completion detail remains in git/Issue/PR history.
 
 ## Lane goal
-Reduce maintenance hotspots and duplicate/caller-zero legacy paths while preserving product behavior. Own architecture guardrails, CI/developer-loop health, repository-wide handoff alignment and small responsibility extraction/deletion. Do not hide product redesign inside refactor work.
+Own generic Object/ObjectType identity and lifecycle semantics, reusable Property value/type semantics, universal Body/block/reference behavior, Daily Note identity, and shared Object opening/detail contracts. Lane A does not own native Weblink/Image/File behavior, Relation integrity, Database/View presentation, Search FTS, Vault lifecycle or broad behavior-preserving refactors.
 
 ## Current architecture responsibility
 The Object-first product constitution is established. Lane G owns keeping repository instructions/handoffs and architecture guardrails consistent with it so future agents do not follow superseded Bookmark-centric or Tag-as-native-primitive routing.
@@ -56,6 +56,13 @@ Durable contract:
 - do not introduce a PAT or separate GitHub App credential solely to evade this protection. If an exceptional product/developer workflow genuinely requires autonomous PR self-updates, define its credential/security boundary in a separate focused Issue;
 - this completed trigger/identity boundary does **not** solve #1107 Phase B. A distinct enforcement root that repository-controlled implementation code cannot modify/spoof remains a separate open security requirement.
 
+### #1127 — effective-current-base PR classification (partial checkpoint)
+PR #1250 completed the CI-scope half of #1127. For `pull_request` runs, `tool/classify_ci_scope.py` now treats the checked-out synthetic PR merge as the effective landing-diff authority only after fail-closed identity proof: local `HEAD` must equal `GITHUB_SHA`, the checkout must have exactly two parents, and the second parent must equal the event PR head. Scope classification then uses `HEAD^1 -> HEAD`, so stale creation-time base history no longer determines docs-only/full-CI selection. Focused regressions cover stale event base, checkout mismatch, malformed merge shape, wrong second parent and missing identity metadata; the real CI-scope path, developer diagnostics, Analyze, four Flutter Test shards, test-health and required merge-gate all passed before integration.
+
+#1127 remains open because `tool/pr_coordination_guard.py` still needs the same effective landing-diff semantics for changed-path/hotspot checks and destructive-risk classification. That remaining slice must **separate landing-diff refs from the real PR head SHA used for current-head approval identity**; replacing `CI_HEAD_SHA` wholesale with the synthetic merge SHA would weaken/break Phase A approval semantics. Do not create a wrapper or parallel coordination authority to avoid the canonical guard.
+
+The guard/test pair is approval-sensitive and must not be edited concurrently with another active owner. Recheck live ownership before resuming #1127; once ownership clears, take the remaining guard slice from latest main and keep #1127 open until its coordination/destructive-risk acceptance is proven.
+
 ### #1087 — CI Performance Phase 2 (completed checkpoint)
 Duration-aware full-suite execution is established. The required Flutter Test path uses exactly four jobs with deterministic **file-level** assignment instead of Flutter's built-in test-case sharding.
 
@@ -83,6 +90,7 @@ Future G work after owning-lane parity:
 - hunk-aware changed-Dart formatting;
 - deterministic duration-aware file-level 4-shard full Flutter Test execution with exact-once current-inventory verification, deterministic fallback for unknown files, and Drift generated-code cache;
 - test-health/flake artifacts and advisory per-file slow-test timing;
+- docs-only/full-CI scope for pull requests is classified from the verified synthetic current-base landing diff, failing closed when checkout identity cannot be proven;
 - docs-only CI fast path and stable `merge-gate`;
 - `merge_group` workflow support;
 - repository-pinned Flutter toolchain via `pubspec.yaml`, tracked `pubspec.lock`, and machine checks that `flutter pub get` does not drift the committed lockfile;
@@ -150,12 +158,14 @@ Behavior-preserving refactors require changed-Dart format, Analyze and relevant/
 1. re-audit latest `main`, open PR ownership and shared-hotspot/migration ownership before taking new G work;
 2. treat #1107 Phase A non-self approval as established; do not treat #1082 as complete until Phase B provides an enforcement root the implementation identity cannot modify/spoof;
 3. treat #1208 as a completed trigger/identity checkpoint: do not recreate repository-`GITHUB_TOKEN` PR self-mutation or weaken required checks to make zero-job approval-required runs look green;
-4. treat #1087 file-level CI performance work as a completed checkpoint; do not reopen shard-count or slow-test tuning without new measured evidence of a concrete regression/bottleneck;
-5. take #225 or other live G work only through focused reversible child Issues; treat #1047 and #950 as completed checkpoints rather than active work queues;
-6. when #1039/#1040 owning-lane parity lands, create caller-zero retirement slices instead of combining product migration with cleanup;
-7. if historical branch cleanup is revisited, begin with a new read-only inventory and do not broaden deletion to ambiguous refs;
-8. keep destructive schema/data removal separate, preservation-gated, and independently approved;
-9. keep durable docs free of transient snapshots and route machine-certifiable drift to CI while H handles semantic drift.
+4. re-read #1127 live state: its CI-scope half is integrated, but the canonical coordination guard still needs effective-current-base landing-diff semantics with PR-head approval identity kept separate; do not edit the guard while another PR owns the guard/test pair;
+5. after that ownership clears, finish #1127 before taking another overlapping guard follow-up such as #1123; re-audit #1122 state rather than duplicating an active implementation;
+6. treat #1087 file-level CI performance work as a completed checkpoint; do not reopen shard-count or slow-test tuning without new measured evidence of a concrete regression/bottleneck;
+7. take #225 or other live G work only through focused reversible child Issues; treat #1047 and #950 as completed checkpoints rather than active work queues;
+8. when #1039/#1040 owning-lane parity lands, create caller-zero retirement slices instead of combining product migration with cleanup;
+9. if historical branch cleanup is revisited, begin with a new read-only inventory and do not broaden deletion to ambiguous refs;
+10. keep destructive schema/data removal separate, preservation-gated, and independently approved;
+11. keep durable docs free of transient snapshots and route machine-certifiable drift to CI while H handles semantic drift.
 
 ### Last audited stop
-`Stop reason: external-infra` — after the #1208 checkpoint, the remaining immediately concrete unowned G work that does not depend on product parity includes repository metadata #1094 and #1107 Phase B. #1094 requires repository-description write capability that may not be exposed by the active GitHub integration, while #1107 Phase B requires a trusted enforcement root outside repository-controlled Actions. Guard-local follow-ups such as #1123/#1127 may also be temporarily blocked by live approval-sensitive guard ownership, so recheck open PRs before taking them. Bookmark/People caller-zero work remains gated on owning-lane parity. Re-run the full live audit on every resume; this line records the last audited reason, not permanent ownership state.
+`Stop reason: conflict` — the remaining immediately concrete repository-local G work is concentrated in `tool/pr_coordination_guard.py` and its focused tests: #1127 still needs effective-current-base landing-diff classification for coordination/destructive-risk checks, and #1123 remains a later overlapping guard follow-up. At the last live audit PR #1136/#1122 already owned that approval-sensitive guard/test pair and had no distinct current-head approved reviewer, so starting another guard implementation would violate focused ownership and the self-protected approval policy. Resume by rechecking #1136 first; if that ownership clears, refresh latest main and finish #1127 before #1123. Independent alternatives remain blocked for separate reasons: #1094 requires repository-description write capability not exposed by the current integration, #1107 Phase B requires an enforcement root outside repository-controlled Actions, and Bookmark/People caller-zero cleanup remains gated on owning-lane parity. Re-run the full live audit on every resume because this stop line records a snapshot, not permanent ownership state.
