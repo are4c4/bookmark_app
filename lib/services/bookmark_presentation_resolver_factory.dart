@@ -3,6 +3,9 @@ import '../data/bookmark_repository.dart';
 import 'bookmark_url_resolver.dart';
 import 'bookmark_visual_resolver.dart';
 
+typedef BookmarkPresentationUrlSource = BookmarkUrlSource;
+typedef BookmarkPresentationUrlResolve = BookmarkUrlResolve;
+
 typedef BookmarkVisualResolve = Future<BookmarkVisualSource?> Function(
   BookmarkItem bookmark,
 );
@@ -16,7 +19,7 @@ typedef BookmarkVisualResolve = Future<BookmarkVisualSource?> Function(
 class BookmarkPresentationResolverFactory {
   const BookmarkPresentationResolverFactory._();
 
-  static BookmarkUrlResolve urlFor(BookmarkRepository repository) =>
+  static BookmarkPresentationUrlResolve urlFor(BookmarkRepository repository) =>
       BookmarkUrlResolver(
         database: repository.workspaceStore.database,
         workspaceId: repository.workspaceId,

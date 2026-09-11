@@ -60,7 +60,7 @@ void main() {
     final presentBookmark = _between(
       source,
       '  Future<void> _presentBookmark(',
-      '\n  Future<BookmarkUrlSource?> _resolveBookmarkUrl(',
+      '\n  Future<BookmarkPresentationUrlSource?> _resolveBookmarkUrl(',
     );
     expect(
       presentBookmark,

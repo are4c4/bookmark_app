@@ -19,8 +19,8 @@ import '../features/database/presentation/widgets/database_view_tabs.dart';
 import '../features/database/presentation/widgets/object_gallery_view.dart';
 import '../features/object/presentation/object_open_presentation_host.dart';
 import '../services/bookmark_metadata_service.dart';
+import '../services/bookmark_presentation_resolver_factory.dart';
 import '../services/bookmark_stage1_image_drop_import_service.dart';
-import '../services/bookmark_url_resolver.dart';
 import '../widgets/app_toast.dart';
 import '../widgets/bookmark_create_dialog.dart';
 import '../widgets/bookmark_detail_panel.dart';
@@ -85,7 +85,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
   Timer? _databaseViewSaveTimer;
   late final DatabaseViewStore _databaseViewStore;
   late final DatabaseViewOpenModeService _databaseViewOpenModeService;
-  late final BookmarkUrlResolver _bookmarkUrlResolver;
+  late final BookmarkPresentationUrlResolve _bookmarkUrlResolve;
   late final BookmarkStage1ImageDropImportService _imageDropImport;
   int? _activeDatabaseViewId;
   DatabaseViewConfig? _activeDatabaseView;
@@ -105,11 +105,14 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
   @override
   void initState() {
     super.initState();
-    _databaseViewStore = DatabaseViewStore(widget.repository.workspaceStore.database);
-    _databaseViewOpenModeService = DatabaseViewOpenModeService(_databaseViewStore);
-    _bookmarkUrlResolver = BookmarkUrlResolver(
-      database: widget.repository.workspaceStore.database,
-      workspaceId: widget.repository.workspaceId,
+    _databaseViewStore = DatabaseViewStore(
+      widget.repository.workspaceStore.database,
+    );
+    _databaseViewOpenModeService = DatabaseViewOpenModeService(
+      _databaseViewStore,
+    );
+    _bookmarkUrlResolve = BookmarkPresentationResolverFactory.urlFor(
+      widget.repository,
     );
     _imageDropImport = BookmarkStage1ImageDropImportService(
       workspaceStore: widget.repository.workspaceStore,
@@ -384,8 +387,9 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
     );
   }
 
-  Future<BookmarkUrlSource?> _resolveBookmarkUrl(BookmarkItem bookmark) =>
-      _bookmarkUrlResolver.resolve(bookmark);
+  Future<BookmarkPresentationUrlSource?> _resolveBookmarkUrl(
+    BookmarkItem bookmark,
+  ) => _bookmarkUrlResolve(bookmark);
 
   Future<void> _openBookmark(BookmarkItem bookmark) async {
     final resolved = await _resolveBookmarkUrl(bookmark);
@@ -1458,13 +1462,13 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
               _selectionMode || _viewType != BookmarkStage1ViewType.table
                   ? null
                   : FloatingActionButton.extended(
-                  onPressed: () => showBookmarkCreateDialog(
-                    context: context,
-                    repository: widget.repository,
-                  ),
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('追加'),
-                ),
+                      onPressed: () => showBookmarkCreateDialog(
+                        context: context,
+                        repository: widget.repository,
+                      ),
+                      icon: const Icon(Icons.add, size: 18),
+                      label: const Text('追加'),
+                    ),
           body: DropTarget(
             onDragEntered: (_) => setState(() => _externalDragging = true),
             onDragExited: (_) => setState(() => _externalDragging = false),
@@ -1483,8 +1487,7 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
                 return LayoutBuilder(builder: (context, constraints) {
                   final wantsDetail = selected != null && !_selectionMode;
                   final availableForDetail = constraints.maxWidth - 260;
-                  final showDetail =
-                      wantsDetail && availableForDetail >= 320;
+                  final showDetail = wantsDetail && availableForDetail >= 320;
                   final maxDetailWidth = showDetail
                       ? availableForDetail.clamp(320.0, 720.0).toDouble()
                       : 0.0;
@@ -1540,7 +1543,8 @@ class _BookmarkUnifiedStage1PageState extends State<BookmarkUnifiedStage1Page> {
                             propertyOrder: _propertyOrder,
                             onPropertyOrderChanged: (order) {
                               setState(() {
-                                _propertyOrder = normalizeBookmarkPropertyOrder(order);
+                                _propertyOrder =
+                                    normalizeBookmarkPropertyOrder(order);
                                 _markViewChanged();
                               });
                             },
