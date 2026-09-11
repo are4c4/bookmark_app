@@ -4,32 +4,17 @@
 /// View, or managed-file behavior. It only describes when an explicit merge is
 /// safe to execute and how retired Object ids resolve after a later persistence
 /// layer records redirects.
-enum ObjectMergeStateKind {
-  title,
-  property,
-  body,
-  aliases,
-  lifecycle,
-}
+enum ObjectMergeStateKind { title, property, body, aliases, lifecycle }
 
-enum ObjectMergeDecision {
-  keepSurvivor,
-  takeRetired,
-  combine,
-}
+enum ObjectMergeDecision { keepSurvivor, takeRetired, combine }
 
-enum ObjectMergeRequirementStatus {
-  compatible,
-  decisionRequired,
-}
+enum ObjectMergeRequirementStatus { compatible, decisionRequired }
 
 /// One A-owned state dimension considered by an Object merge preview.
 class ObjectMergeRequirement {
-  ObjectMergeRequirement.compatible({
-    required this.key,
-    required this.kind,
-  })  : status = ObjectMergeRequirementStatus.compatible,
-        allowedDecisions = const <ObjectMergeDecision>{} {
+  ObjectMergeRequirement.compatible({required this.key, required this.kind})
+    : status = ObjectMergeRequirementStatus.compatible,
+      allowedDecisions = const <ObjectMergeDecision>{} {
     _validateKey(key);
   }
 
@@ -37,8 +22,10 @@ class ObjectMergeRequirement {
     required this.key,
     required this.kind,
     required Set<ObjectMergeDecision> allowedDecisions,
-  })  : status = ObjectMergeRequirementStatus.decisionRequired,
-        allowedDecisions = Set<ObjectMergeDecision>.unmodifiable(allowedDecisions) {
+  }) : status = ObjectMergeRequirementStatus.decisionRequired,
+       allowedDecisions = Set<ObjectMergeDecision>.unmodifiable(
+         allowedDecisions,
+       ) {
     _validateKey(key);
     if (allowedDecisions.isEmpty) {
       throw ArgumentError.value(
@@ -98,9 +85,10 @@ class ObjectMergePreview {
     required this.retiredId,
     this.requirements = const <ObjectMergeRequirement>[],
     this.relationBlockers = const <ObjectMergeRelationBlocker>[],
-  })  : requirements = List<ObjectMergeRequirement>.unmodifiable(requirements),
-        relationBlockers =
-            List<ObjectMergeRelationBlocker>.unmodifiable(relationBlockers) {
+  }) : requirements = List<ObjectMergeRequirement>.unmodifiable(requirements),
+       relationBlockers = List<ObjectMergeRelationBlocker>.unmodifiable(
+         relationBlockers,
+       ) {
     _validateObjectIds(survivorId: survivorId, retiredId: retiredId);
     final keys = <String>{};
     for (final requirement in this.requirements) {
@@ -140,7 +128,8 @@ class ObjectMergePlan {
         const <String, ObjectMergeDecision>{},
   }) : decisions = Map<String, ObjectMergeDecision>.unmodifiable(decisions) {
     final requirementsByKey = <String, ObjectMergeRequirement>{
-      for (final requirement in preview.requirements) requirement.key: requirement,
+      for (final requirement in preview.requirements)
+        requirement.key: requirement,
     };
     for (final entry in decisions.entries) {
       final requirement = requirementsByKey[entry.key];
@@ -167,7 +156,8 @@ class ObjectMergePlan {
   bool get isExecutable {
     if (preview.hasRelationBlockers) return false;
     for (final requirement in preview.requirements) {
-      if (requirement.requiresDecision && !decisions.containsKey(requirement.key)) {
+      if (requirement.requiresDecision &&
+          !decisions.containsKey(requirement.key)) {
         return false;
       }
     }
