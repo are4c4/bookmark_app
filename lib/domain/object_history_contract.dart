@@ -94,9 +94,8 @@ class ObjectHistoryRestoreScope {
     : kind = ObjectHistoryRestoreScopeKind.wholeObject,
       targets = const <ObjectHistoryFieldTarget>[];
 
-  ObjectHistoryRestoreScope.selective(
-    List<ObjectHistoryFieldTarget> targets,
-  ) : kind = ObjectHistoryRestoreScopeKind.selective,
+  ObjectHistoryRestoreScope.selective(List<ObjectHistoryFieldTarget> targets)
+    : kind = ObjectHistoryRestoreScopeKind.selective,
       targets = List<ObjectHistoryFieldTarget>.unmodifiable(targets) {
     if (targets.isEmpty) {
       throw ArgumentError.value(
@@ -156,7 +155,8 @@ class ObjectHistoryRestorePlan {
     required this.expectedCurrentRevisionId,
     required this.actualCurrentRevisionId,
     required this.scope,
-    this.relationBlockers = const <ObjectHistoryRelationBlocker>[],
+    List<ObjectHistoryRelationBlocker> relationBlockers =
+        const <ObjectHistoryRelationBlocker>[],
   }) : relationBlockers = List<ObjectHistoryRelationBlocker>.unmodifiable(
          relationBlockers,
        ) {
@@ -170,9 +170,7 @@ class ObjectHistoryRestorePlan {
     if (historicalRevisionId <= 0 ||
         expectedCurrentRevisionId <= 0 ||
         actualCurrentRevisionId <= 0) {
-      throw ArgumentError(
-        'History restore revision ids must all be positive.',
-      );
+      throw ArgumentError('History restore revision ids must all be positive.');
     }
     if (historicalRevisionId >= expectedCurrentRevisionId) {
       throw ArgumentError(
