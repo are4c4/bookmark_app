@@ -1,4 +1,3 @@
-import '../data/app_database.dart';
 import '../data/generic_database_store.dart';
 import '../data/object_body_store.dart';
 import '../data/object_computed_value_store.dart';
@@ -18,7 +17,6 @@ import '../domain/object_model.dart';
 /// Person Objects without a legacy identity remain ordinary generic Objects.
 class CanonicalPersonDetailEditService {
   CanonicalPersonDetailEditService({
-    required this.database,
     required this.objectStore,
     required this.personBridge,
     required this.personWrites,
@@ -46,7 +44,6 @@ class CanonicalPersonDetailEditService {
       computedStore: ObjectComputedValueStore(objectStore),
     );
     return CanonicalPersonDetailEditService(
-      database: database,
       objectStore: objectStore,
       personBridge: bridge,
       personWrites: PersonObjectWriteService(
@@ -63,7 +60,6 @@ class CanonicalPersonDetailEditService {
     );
   }
 
-  final AppDatabase database;
   final ObjectStore objectStore;
   final PersonObjectBridge personBridge;
   final PersonObjectWriteService personWrites;
