@@ -8,39 +8,49 @@ void main() {
   const planner = ObjectMergeStatePlanner();
 
   group('ObjectMergeStatePlanner', () {
-    test('identical A-owned state produces an executable compatible preview', () {
-      final survivor = _snapshot(
-        objectId: 10,
-        properties: <ObjectMergeValuePropertySnapshot>[
-          _propertySnapshot(
-            id: 20,
-            type: ObjectPropertyType.text,
-            value: <String, dynamic>{'nested': <dynamic>[1, true]},
-          ),
-        ],
-        aliases: <String>['Alpha', 'Beta'],
-      );
-      final retired = _snapshot(
-        objectId: 11,
-        properties: <ObjectMergeValuePropertySnapshot>[
-          _propertySnapshot(
-            id: 20,
-            type: ObjectPropertyType.text,
-            value: <String, dynamic>{'nested': <dynamic>[1, true]},
-          ),
-        ],
-        aliases: <String>['Alpha', 'Beta'],
-      );
+    test(
+      'identical A-owned state produces an executable compatible preview',
+      () {
+        final survivor = _snapshot(
+          objectId: 10,
+          properties: <ObjectMergeValuePropertySnapshot>[
+            _propertySnapshot(
+              id: 20,
+              type: ObjectPropertyType.text,
+              value: <String, dynamic>{
+                'nested': <dynamic>[1, true],
+              },
+            ),
+          ],
+          aliases: <String>['Alpha', 'Beta'],
+        );
+        final retired = _snapshot(
+          objectId: 11,
+          properties: <ObjectMergeValuePropertySnapshot>[
+            _propertySnapshot(
+              id: 20,
+              type: ObjectPropertyType.text,
+              value: <String, dynamic>{
+                'nested': <dynamic>[1, true],
+              },
+            ),
+          ],
+          aliases: <String>['Alpha', 'Beta'],
+        );
 
-      final preview = planner.preview(survivor: survivor, retired: retired);
+        final preview = planner.preview(survivor: survivor, retired: retired);
 
-      expect(
-        preview.requirements.map((requirement) => requirement.key),
-        <String>['title', 'property:20', 'body', 'aliases', 'lifecycle'],
-      );
-      expect(preview.requirements.every((item) => !item.requiresDecision), isTrue);
-      expect(preview.plan().isExecutable, isTrue);
-    });
+        expect(
+          preview.requirements.map((requirement) => requirement.key),
+          <String>['title', 'property:20', 'body', 'aliases', 'lifecycle'],
+        );
+        expect(
+          preview.requirements.every((item) => !item.requiresDecision),
+          isTrue,
+        );
+        expect(preview.plan().isExecutable, isTrue);
+      },
+    );
 
     test('title Property Body and alias differences require decisions', () {
       final survivor = _snapshot(
@@ -76,14 +86,16 @@ void main() {
           if (requirement.requiresDecision) requirement.key: requirement,
       };
 
-      expect(conflicts.keys, <String>['title', 'property:20', 'body', 'aliases']);
-      expect(
-        conflicts['title']!.allowedDecisions,
-        <ObjectMergeDecision>{
-          ObjectMergeDecision.keepSurvivor,
-          ObjectMergeDecision.takeRetired,
-        },
-      );
+      expect(conflicts.keys, <String>[
+        'title',
+        'property:20',
+        'body',
+        'aliases',
+      ]);
+      expect(conflicts['title']!.allowedDecisions, <ObjectMergeDecision>{
+        ObjectMergeDecision.keepSurvivor,
+        ObjectMergeDecision.takeRetired,
+      });
       expect(
         conflicts['body']!.allowedDecisions,
         isNot(contains(ObjectMergeDecision.combine)),
@@ -208,25 +220,28 @@ void main() {
       );
     });
 
-    test('Relation and computed Properties cannot enter A-owned merge state', () {
-      expect(
-        () => ObjectMergeValuePropertySnapshot.fromDefinition(
-          property: _property(
-            id: 20,
-            type: ObjectPropertyType.objectRelation,
+    test(
+      'Relation and computed Properties cannot enter A-owned merge state',
+      () {
+        expect(
+          () => ObjectMergeValuePropertySnapshot.fromDefinition(
+            property: _property(
+              id: 20,
+              type: ObjectPropertyType.objectRelation,
+            ),
+            value: <int>[1],
           ),
-          value: <int>[1],
-        ),
-        throwsArgumentError,
-      );
-      expect(
-        () => ObjectMergeValuePropertySnapshot.fromDefinition(
-          property: _property(id: 21, type: ObjectPropertyType.formula),
-          value: 'derived',
-        ),
-        throwsArgumentError,
-      );
-    });
+          throwsArgumentError,
+        );
+        expect(
+          () => ObjectMergeValuePropertySnapshot.fromDefinition(
+            property: _property(id: 21, type: ObjectPropertyType.formula),
+            value: 'derived',
+          ),
+          throwsArgumentError,
+        );
+      },
+    );
 
     test('alias combine preserves disjoint aliases in deterministic order', () {
       final survivor = _snapshot(
@@ -263,24 +278,30 @@ void main() {
       );
     });
 
-    test('snapshot rejects noncanonical aliases and duplicate Property ids', () {
-      expect(
-        () => _snapshot(objectId: 10, aliases: <String>['  Alpha  ']),
-        throwsArgumentError,
-      );
-      final duplicate = _propertySnapshot(
-        id: 20,
-        type: ObjectPropertyType.text,
-        value: 'a',
-      );
-      expect(
-        () => _snapshot(
-          objectId: 10,
-          properties: <ObjectMergeValuePropertySnapshot>[duplicate, duplicate],
-        ),
-        throwsArgumentError,
-      );
-    });
+    test(
+      'snapshot rejects noncanonical aliases and duplicate Property ids',
+      () {
+        expect(
+          () => _snapshot(objectId: 10, aliases: <String>['  Alpha  ']),
+          throwsArgumentError,
+        );
+        final duplicate = _propertySnapshot(
+          id: 20,
+          type: ObjectPropertyType.text,
+          value: 'a',
+        );
+        expect(
+          () => _snapshot(
+            objectId: 10,
+            properties: <ObjectMergeValuePropertySnapshot>[
+              duplicate,
+              duplicate,
+            ],
+          ),
+          throwsArgumentError,
+        );
+      },
+    );
 
     test('snapshot freezes nested Property payloads and alias input', () {
       final value = <String, dynamic>{
@@ -330,21 +351,24 @@ void main() {
       );
     });
 
-    test('Relation blockers remain B-owned and make the plan non-executable', () {
-      final preview = planner.preview(
-        survivor: _snapshot(objectId: 10),
-        retired: _snapshot(objectId: 11),
-        relationBlockers: <ObjectMergeRelationBlocker>[
-          ObjectMergeRelationBlocker(
-            key: 'relation:20',
-            reason: 'B-owned cardinality conflict',
-          ),
-        ],
-      );
+    test(
+      'Relation blockers remain B-owned and make the plan non-executable',
+      () {
+        final preview = planner.preview(
+          survivor: _snapshot(objectId: 10),
+          retired: _snapshot(objectId: 11),
+          relationBlockers: <ObjectMergeRelationBlocker>[
+            ObjectMergeRelationBlocker(
+              key: 'relation:20',
+              reason: 'B-owned cardinality conflict',
+            ),
+          ],
+        );
 
-      expect(preview.hasRelationBlockers, isTrue);
-      expect(preview.plan().isExecutable, isFalse);
-    });
+        expect(preview.hasRelationBlockers, isTrue);
+        expect(preview.plan().isExecutable, isFalse);
+      },
+    );
   });
 }
 
