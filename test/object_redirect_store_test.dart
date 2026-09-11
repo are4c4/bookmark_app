@@ -96,35 +96,35 @@ void main() {
     expect(await redirectStore.resolve(canonicalId), canonicalId);
   });
 
-  test('same redirect is idempotent and conflicting remap fails closed', () async {
-    final database = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(database.close);
-    final redirectStore = ObjectRedirectStore(GenericDatabaseStore(database));
+  test(
+    'same redirect is idempotent and conflicting remap fails closed',
+    () async {
+      final database = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(database.close);
+      final redirectStore = ObjectRedirectStore(GenericDatabaseStore(database));
 
-    expect(
-      await redirectStore.recordRedirect(
-        retiredObjectId: 30,
-        survivorObjectId: 20,
-      ),
-      isTrue,
-    );
-    expect(
-      await redirectStore.recordRedirect(
-        retiredObjectId: 30,
-        survivorObjectId: 20,
-      ),
-      isFalse,
-    );
+      expect(
+        await redirectStore.recordRedirect(
+          retiredObjectId: 30,
+          survivorObjectId: 20,
+        ),
+        isTrue,
+      );
+      expect(
+        await redirectStore.recordRedirect(
+          retiredObjectId: 30,
+          survivorObjectId: 20,
+        ),
+        isFalse,
+      );
 
-    await expectLater(
-      redirectStore.recordRedirect(
-        retiredObjectId: 30,
-        survivorObjectId: 10,
-      ),
-      throwsStateError,
-    );
-    expect(await redirectStore.resolve(30), 20);
-  });
+      await expectLater(
+        redirectStore.recordRedirect(retiredObjectId: 30, survivorObjectId: 10),
+        throwsStateError,
+      );
+      expect(await redirectStore.resolve(30), 20);
+    },
+  );
 
   test('cycle introduction is rejected atomically', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
@@ -137,10 +137,7 @@ void main() {
     );
 
     await expectLater(
-      redirectStore.recordRedirect(
-        retiredObjectId: 20,
-        survivorObjectId: 30,
-      ),
+      redirectStore.recordRedirect(retiredObjectId: 20, survivorObjectId: 30),
       throwsStateError,
     );
 
