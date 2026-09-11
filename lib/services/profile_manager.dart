@@ -477,6 +477,43 @@ class ProfileManager {
       await database.close();
     }
   }
+
+  Future<DatabaseProfile?> _registeredSourceForImportedMetadata(
+    File metadataFile,
+    DatabaseProfile copy,
+  ) async {
+    final raw = jsonDecode(await metadataFile.readAsString());
+    if (raw is! Map) return null;
+    final metadata = Map<String, Object?>.from(raw);
+    final formatVersion = metadata['formatVersion'];
+    final id = metadata['id'];
+    final name = metadata['name'];
+    final database = metadata['database'];
+    final photos = metadata['photos'];
+    final attachments = metadata['attachments'];
+    if (formatVersion != 1 ||
+        id is! String ||
+        id.trim().isEmpty ||
+        name is! String ||
+        name.trim().isEmpty ||
+        database != 'database.sqlite' ||
+        photos != 'photos' ||
+        attachments != 'attachments') {
+      return null;
+    }
+
+    final sourceId = id.trim();
+    final matches = _state.profiles
+        .where(
+          (candidate) =>
+              candidate.id == sourceId &&
+              candidate.id != copy.id &&
+              !_sameDirectory(candidate.directoryPath, copy.directoryPath),
+        )
+        .toList();
+    return matches.length == 1 ? matches.single : null;
+  }
+
   Future<DatabaseProfile> duplicateProfile(
     DatabaseProfile source, {
     String? name,
@@ -532,12 +569,10 @@ class ProfileManager {
       final importedMetadata = File(copy.profileMetadataPath);
       if (await importedMetadata.exists()) {
         try {
-          final raw = jsonDecode(await importedMetadata.readAsString());
-          if (raw is Map) {
-            sourceProfile = DatabaseProfile.fromJson(
-              Map<String, Object?>.from(raw),
-            );
-          }
+          sourceProfile = await _registeredSourceForImportedMetadata(
+            importedMetadata,
+            copy,
+          );
         } catch (_, stackTrace) {
           // Backup metadata is advisory for path rewriting. The restored profile
           // remains usable without it, so keep the import best-effort while
