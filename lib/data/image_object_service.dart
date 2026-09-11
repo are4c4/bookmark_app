@@ -208,6 +208,14 @@ class ImageObjectService {
           source != null && _sourceUrlsMatch(storedSource, source);
       final matchesFile = _storedPathsMatch(storedFile, path);
       if (!matchesSource && !matchesFile) continue;
+      if (ownershipStorageKey != null &&
+          matchesSource &&
+          !matchesFile &&
+          storedFile.isNotEmpty) {
+        throw StateError(
+          'Managed Image ownership cannot target a different stored file.',
+        );
+      }
       await _setIfMissing(object, definition.fileProperty, path);
       await _setIfMissing(object, definition.sourceUrlProperty, source);
       await _setIfMissing(
