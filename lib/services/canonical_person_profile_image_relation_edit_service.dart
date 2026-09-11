@@ -1,5 +1,4 @@
 import '../data/app_database.dart';
-import '../data/image_object_service.dart';
 import '../data/object_relation_editor_service.dart';
 import '../data/person_object_bridge.dart';
 import '../data/relation_target_service.dart';
@@ -17,7 +16,6 @@ class CanonicalPersonProfileImageRelationEditService {
   CanonicalPersonProfileImageRelationEditService({
     required this.genericEditor,
     required this.personBridge,
-    required this.systemObjects,
     required this.profileImages,
   });
 
@@ -37,14 +35,12 @@ class CanonicalPersonProfileImageRelationEditService {
         objectStore: objectStore,
         systemObjectStore: systemObjects,
       ),
-      systemObjects: systemObjects,
       profileImages: PersonProfileImageRelationService(database),
     );
   }
 
   final ObjectRelationEditorService genericEditor;
   final PersonObjectBridge personBridge;
-  final SystemObjectStore systemObjects;
   final PersonProfileImageRelationService profileImages;
 
   Future<void> save({
@@ -60,25 +56,6 @@ class CanonicalPersonProfileImageRelationEditService {
             PersonProfileImageRelationService.profileImagePropertyName) {
       await genericEditor.save(context: context, selectedObjectIds: selected);
       return;
-    }
-
-    final targetSystemKey = await systemObjects.systemKeyForObjectType(
-      context.targetObjectType.id,
-    );
-    if (targetSystemKey != ImageObjectService.systemKey ||
-        context.property.targetObjectTypeId != context.targetObjectType.id ||
-        context.property.allowsMultipleRelations) {
-      throw StateError(
-        'Canonical Person Profile Image Property does not match the required single Image Relation schema.',
-      );
-    }
-
-    if (selected.length > 1) {
-      throw ArgumentError.value(
-        selected,
-        'selectedObjectIds',
-        'Canonical Person Profile Image accepts at most one Image.',
-      );
     }
 
     final mappedLegacyId = await personBridge.legacyPersonIdForObject(
@@ -105,6 +82,24 @@ class CanonicalPersonProfileImageRelationEditService {
     if (claimedLegacyId != mappedLegacyId) {
       throw StateError(
         'Canonical Person mapping does not match its persisted legacy identity.',
+      );
+    }
+
+    final canonical = await profileImages.load(
+      workspaceId: workspaceId,
+      personId: mappedLegacyId,
+    );
+    if (canonical.personObjectId != context.sourceObject.id ||
+        canonical.property.id != context.property.id) {
+      await genericEditor.save(context: context, selectedObjectIds: selected);
+      return;
+    }
+
+    if (selected.length > 1) {
+      throw ArgumentError.value(
+        selected,
+        'selectedObjectIds',
+        'Canonical Person Profile Image accepts at most one Image.',
       );
     }
 
