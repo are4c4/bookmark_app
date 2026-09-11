@@ -129,10 +129,10 @@ void main() {
 }
 
 ObjectBodyDocument _body(String text) => ObjectBodyDocument(
-      blocks: <ObjectBodyBlock>[
-        ObjectBodyBlock(id: 'p', type: 'paragraph', text: text),
-      ],
-    );
+  blocks: <ObjectBodyBlock>[
+    ObjectBodyBlock(id: 'p', type: 'paragraph', text: text),
+  ],
+);
 
 class _Fixture {
   _Fixture({
