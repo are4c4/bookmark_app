@@ -47,7 +47,7 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
   int? _selectedGroupId;
   late final PersonGroupStore _personGroups;
   late final PersonGroupObjectWriteService _personGroupWrites;
-  late final PersonGroupObjectConvergenceService _personGroupMembershipWrites;
+  late final PersonGroupObjectConvergenceService _groupMembershipWrites;
   late final DatabaseViewStore _databaseViewStore;
   late final BookmarkUrlResolve _resolveBookmarkUrl;
   late final PersonProfileImageRelationService _profileImages;
@@ -80,7 +80,7 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
       systemObjectStore: systemObjectStore,
       personBridge: personBridge,
     );
-    _personGroupMembershipWrites = PersonGroupObjectConvergenceService(
+    _groupMembershipWrites = PersonGroupObjectConvergenceService(
       database: database,
       objectStore: objectStore,
       systemObjectStore: systemObjectStore,
@@ -205,9 +205,7 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
-        const SnackBar(
-          content: Text('人物グループを更新できませんでした。状態を確認してもう一度お試しください。'),
-        ),
+        const SnackBar(content: Text('人物グループを更新できませんでした。状態を確認してもう一度お試しください。')),
       );
   }
 
@@ -250,12 +248,9 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
     }
   }
 
-  Future<bool> _setGroupsForPerson(
-    int personId,
-    Iterable<int> groupIds,
-  ) async {
+  Future<bool> _setGroupsForPerson(int personId, Iterable<int> groupIds) async {
     try {
-      await _personGroupMembershipWrites.setGroupsForLegacyPerson(
+      await _groupMembershipWrites.setGroupsForLegacyPerson(
         workspaceId: repository.workspaceId,
         legacyPersonId: personId,
         legacyGroupIds: groupIds,
@@ -313,7 +308,9 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
                             title: InlineRenameText(
                               value: group.name,
                               onSubmitted: (value) async {
-                                if (!await _renameGroup(group.id, value)) return;
+                                if (!await _renameGroup(group.id, value)) {
+                                  return;
+                                }
                                 if (dialogContext.mounted) setLocalState(() {});
                                 if (mounted) setState(() {});
                               },
@@ -322,7 +319,9 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
                               tooltip: '削除',
                               icon: const Icon(Icons.delete_outline, size: 18),
                               onPressed: () async {
-                                if (!await _deleteGroup(group.id)) return;
+                                if (!await _deleteGroup(group.id)) {
+                                  return;
+                                }
                                 if (_selectedGroupId == group.id && mounted) {
                                   setState(() => _selectedGroupId = null);
                                 }
@@ -374,14 +373,8 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
                     final created = await _createGroup(value);
                     if (created == null) return;
                     final refreshed = await _personGroups.listGroups();
-                    final next = <int>{
-                      ...current,
-                      created.legacyGroupId,
-                    };
-                    final committed = await _setGroupsForPerson(
-                      person.id,
-                      next,
-                    );
+                    final next = <int>{...current, created.legacyGroupId};
+                    final committed = await _setGroupsForPerson(person.id, next);
                     all
                       ..clear()
                       ..addAll(refreshed);
@@ -413,9 +406,11 @@ class _PeopleManagementPageState extends State<PeopleManagementPage> {
                             borderRadius: BorderRadius.circular(5),
                             onTap: () async {
                               final next = <int>{...current};
-                              selected
-                                  ? next.remove(group.id)
-                                  : next.add(group.id);
+                              if (selected) {
+                                next.remove(group.id);
+                              } else {
+                                next.add(group.id);
+                              }
                               if (!await _setGroupsForPerson(person.id, next)) {
                                 return;
                               }
