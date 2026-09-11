@@ -66,10 +66,8 @@ class ObjectBoardCreateService {
     required ObjectGroupBucket<AppObject> targetGroup,
   }) {
     return createWithObjectFactory(
-      createObject: () => _objectStore.createObject(
-        objectTypeId: objectTypeId,
-        title: title,
-      ),
+      createObject: () =>
+          _objectStore.createObject(objectTypeId: objectTypeId, title: title),
       groupProperty: groupProperty,
       targetGroup: targetGroup,
     );
