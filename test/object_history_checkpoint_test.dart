@@ -6,59 +6,59 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('ObjectHistoryCheckpointPayload', () {
-    test('captures title, value Properties, Body, and Relation requirements', () {
-      final body = ObjectBodyDocument(
-        blocks: <ObjectBodyBlock>[
-          ObjectBodyBlock.paragraph(id: 'p1', text: 'Earlier body'),
-        ],
-      );
-      final textProperty = _property(
-        id: 11,
-        type: ObjectPropertyType.text,
-      );
-      final numberProperty = _property(
-        id: 12,
-        type: ObjectPropertyType.number,
-      );
-      final relationProperty = _property(
-        id: 13,
-        type: ObjectPropertyType.objectRelation,
-      );
+    test(
+      'captures title, value Properties, Body, and Relation requirements',
+      () {
+        final body = ObjectBodyDocument(
+          blocks: <ObjectBodyBlock>[
+            ObjectBodyBlock.paragraph(id: 'p1', text: 'Earlier body'),
+          ],
+        );
+        final textProperty = _property(id: 11, type: ObjectPropertyType.text);
+        final numberProperty = _property(
+          id: 12,
+          type: ObjectPropertyType.number,
+        );
+        final relationProperty = _property(
+          id: 13,
+          type: ObjectPropertyType.objectRelation,
+        );
 
-      final checkpoint = ObjectHistoryCheckpointPayload(
-        entry: _entry(),
-        title: 'Historical title',
-        propertySnapshots: <ObjectHistoryPropertySnapshot>[
-          ObjectHistoryPropertySnapshot.fromDefinition(
-            property: textProperty,
-            value: <String, dynamic>{
-              'raw': <dynamic>['future', 1, true, null],
-            },
-          ),
-          ObjectHistoryPropertySnapshot.fromDefinition(
-            property: numberProperty,
-            value: 4.5,
-          ),
-        ],
-        body: body,
-        relationRequirements: <ObjectHistoryRelationRequirement>[
-          ObjectHistoryRelationRequirement.fromDefinition(relationProperty),
-        ],
-      );
+        final checkpoint = ObjectHistoryCheckpointPayload(
+          entry: _entry(),
+          title: 'Historical title',
+          propertySnapshots: <ObjectHistoryPropertySnapshot>[
+            ObjectHistoryPropertySnapshot.fromDefinition(
+              property: textProperty,
+              value: <String, dynamic>{
+                'raw': <dynamic>['future', 1, true, null],
+              },
+            ),
+            ObjectHistoryPropertySnapshot.fromDefinition(
+              property: numberProperty,
+              value: 4.5,
+            ),
+          ],
+          body: body,
+          relationRequirements: <ObjectHistoryRelationRequirement>[
+            ObjectHistoryRelationRequirement.fromDefinition(relationProperty),
+          ],
+        );
 
-      expect(checkpoint.entry.objectId, 7);
-      expect(checkpoint.entry.revisionId, 3);
-      expect(checkpoint.title, 'Historical title');
-      expect(
-        checkpoint.propertySnapshots.map((snapshot) => snapshot.propertyId),
-        <int>[11, 12],
-      );
-      expect(
-        checkpoint.relationRequirements.single.propertyId,
-        relationProperty.id,
-      );
-      expect(checkpoint.body.blocks.single.text, 'Earlier body');
-    });
+        expect(checkpoint.entry.objectId, 7);
+        expect(checkpoint.entry.revisionId, 3);
+        expect(checkpoint.title, 'Historical title');
+        expect(
+          checkpoint.propertySnapshots.map((snapshot) => snapshot.propertyId),
+          <int>[11, 12],
+        );
+        expect(
+          checkpoint.relationRequirements.single.propertyId,
+          relationProperty.id,
+        );
+        expect(checkpoint.body.blocks.single.text, 'Earlier body');
+      },
+    );
 
     test('Property identity must be positive and unique', () {
       expect(
@@ -90,37 +90,40 @@ void main() {
       );
     });
 
-    test('Relation and computed Properties cannot become A value snapshots', () {
-      final relation = _property(
-        id: 21,
-        type: ObjectPropertyType.objectRelation,
-      );
-      final formula = _property(id: 22, type: ObjectPropertyType.formula);
-      final text = _property(id: 23, type: ObjectPropertyType.text);
+    test(
+      'Relation and computed Properties cannot become A value snapshots',
+      () {
+        final relation = _property(
+          id: 21,
+          type: ObjectPropertyType.objectRelation,
+        );
+        final formula = _property(id: 22, type: ObjectPropertyType.formula);
+        final text = _property(id: 23, type: ObjectPropertyType.text);
 
-      expect(
-        () => ObjectHistoryPropertySnapshot.fromDefinition(
-          property: relation,
-          value: <int>[9],
-        ),
-        throwsArgumentError,
-      );
-      expect(
-        () => ObjectHistoryPropertySnapshot.fromDefinition(
-          property: formula,
-          value: 42,
-        ),
-        throwsArgumentError,
-      );
-      expect(
-        () => ObjectHistoryRelationRequirement.fromDefinition(text),
-        throwsArgumentError,
-      );
-      expect(
-        ObjectHistoryRelationRequirement.fromDefinition(relation).propertyId,
-        21,
-      );
-    });
+        expect(
+          () => ObjectHistoryPropertySnapshot.fromDefinition(
+            property: relation,
+            value: <int>[9],
+          ),
+          throwsArgumentError,
+        );
+        expect(
+          () => ObjectHistoryPropertySnapshot.fromDefinition(
+            property: formula,
+            value: 42,
+          ),
+          throwsArgumentError,
+        );
+        expect(
+          () => ObjectHistoryRelationRequirement.fromDefinition(text),
+          throwsArgumentError,
+        );
+        expect(
+          ObjectHistoryRelationRequirement.fromDefinition(relation).propertyId,
+          21,
+        );
+      },
+    );
 
     test('JSON-safe Property values are deeply immutable after capture', () {
       final source = <String, dynamic>{
@@ -193,7 +196,10 @@ void main() {
       final firstRead = checkpoint.body;
       expect(firstRead.blocks.single.attributes['checked'], isFalse);
       firstRead.blocks.single.attributes['local'] = true;
-      expect(checkpoint.body.blocks.single.attributes.containsKey('local'), isFalse);
+      expect(
+        checkpoint.body.blocks.single.attributes.containsKey('local'),
+        isFalse,
+      );
 
       final malformed = ObjectBodyDocument(
         blocks: <ObjectBodyBlock>[
