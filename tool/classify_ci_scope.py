@@ -31,6 +31,68 @@ def changed_paths(base: str, head: str) -> list[str]:
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
 
+def verified_pull_request_diff_refs(
+    expected_checkout_sha: str,
+    expected_pr_head_sha: str,
+) -> tuple[str, str]:
+    """Return current-base -> synthetic-merge refs for a verified PR checkout.
+
+    GitHub Actions checks out refs/pull/<n>/merge for pull_request workflows.
+    Its first parent is the current base and its second parent is the event PR head.
+    Verify both identities before trusting HEAD^1 -> HEAD as the effective landing diff.
+    """
+    if not expected_checkout_sha:
+        raise ValueError("GITHUB_SHA is missing for pull-request scope classification.")
+    if not expected_pr_head_sha:
+        raise ValueError("Pull-request head SHA is missing for scope classification.")
+
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if head.returncode != 0:
+        raise ValueError("Unable to resolve the checked-out commit.")
+    local_head = head.stdout.strip()
+    if local_head != expected_checkout_sha:
+        raise ValueError(
+            "Checked-out commit does not match GITHUB_SHA; refusing a stale PR diff."
+        )
+
+    parents = subprocess.run(
+        ["git", "rev-list", "--parents", "-n", "1", "HEAD"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if parents.returncode != 0:
+        raise ValueError("Unable to inspect synthetic pull-request merge parents.")
+    parts = parents.stdout.strip().split()
+    if len(parts) != 3 or parts[0] != expected_checkout_sha:
+        raise ValueError(
+            "Pull-request checkout is not the expected two-parent synthetic merge."
+        )
+    if parts[2] != expected_pr_head_sha:
+        raise ValueError(
+            "Synthetic merge second parent does not match the event PR head."
+        )
+
+    return ("HEAD^1", "HEAD")
+
+
+def effective_diff_refs(
+    event: str,
+    base: str,
+    head: str,
+    checkout_sha: str,
+) -> tuple[str, str]:
+    """Resolve the diff refs used for CI scope classification."""
+    if event == "pull_request":
+        return verified_pull_request_diff_refs(checkout_sha, head)
+    return (base, head)
+
+
 def write_output(name: str, value: str) -> None:
     output_path = os.environ.get("GITHUB_OUTPUT")
     if output_path:
@@ -67,14 +129,16 @@ def main() -> int:
         )
         return 0
 
-    if not args.base or not args.head:
-        print("Pull-request scope classification requires base and head SHAs.", file=sys.stderr)
-        return 2
-
     try:
-        paths = changed_paths(args.base, args.head)
-    except subprocess.CalledProcessError as error:
-        print(f"Unable to classify complete PR diff: {error}", file=sys.stderr)
+        base_ref, head_ref = effective_diff_refs(
+            args.event,
+            args.base,
+            args.head,
+            os.environ.get("GITHUB_SHA", ""),
+        )
+        paths = changed_paths(base_ref, head_ref)
+    except (ValueError, subprocess.CalledProcessError) as error:
+        print(f"Unable to classify effective PR landing diff: {error}", file=sys.stderr)
         return 2
 
     docs_only = is_docs_only(paths)
@@ -83,7 +147,7 @@ def main() -> int:
         [
             "## CI scope",
             "",
-            f"- Files in complete PR diff: `{len(paths)}`",
+            f"- Files in effective PR landing diff: `{len(paths)}`",
             f"- Fast docs-only path: `{'true' if docs_only else 'false'}`",
             "- Eligible pattern: `docs/**/*.md` only",
         ]
