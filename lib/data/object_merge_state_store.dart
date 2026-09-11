@@ -14,9 +14,9 @@ import 'object_store.dart';
 /// than writing Relation payloads through this boundary.
 class ObjectMergeStateStore {
   ObjectMergeStateStore(this.genericStore)
-      : objectStore = ObjectStore(genericStore),
-        bodyStore = ObjectBodyStore(genericStore),
-        aliasStore = ObjectAliasStore(genericStore);
+    : objectStore = ObjectStore(genericStore),
+      bodyStore = ObjectBodyStore(genericStore),
+      aliasStore = ObjectAliasStore(genericStore);
 
   final GenericDatabaseStore genericStore;
   final ObjectStore objectStore;
