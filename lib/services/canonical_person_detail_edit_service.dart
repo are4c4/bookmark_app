@@ -159,10 +159,7 @@ class CanonicalPersonDetailEditService {
       );
     }
 
-    return _PersonEditRoute(
-      schema: schema,
-      legacyPersonId: mappedLegacyId,
-    );
+    return _PersonEditRoute(schema: schema, legacyPersonId: mappedLegacyId);
   }
 
   String? _currentNote(
@@ -196,10 +193,7 @@ class CanonicalPersonDetailEditService {
 }
 
 class _PersonEditRoute {
-  const _PersonEditRoute({
-    required this.schema,
-    required this.legacyPersonId,
-  });
+  const _PersonEditRoute({required this.schema, required this.legacyPersonId});
 
   final PersonObjectSchema schema;
   final int? legacyPersonId;
