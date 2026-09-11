@@ -57,10 +57,9 @@ void main() {
 
       expect(result.alreadyFinalized, isFalse);
       expect(result.survivingObjectId, survivor);
-      expect(
-        result.relationImpact!.changedSurvivingSourceObjectIds,
-        <int>[source],
-      );
+      expect(result.relationImpact!.changedSurvivingSourceObjectIds, <int>[
+        source,
+      ]);
       expect(
         await fixture.relationValue(sourceTypeId, source, personRelation.id),
         <int>[survivor],
