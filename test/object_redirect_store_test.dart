@@ -39,6 +39,13 @@ void main() {
         );
         expect(await reopenedStore.resolve(30), 20);
         expect(await reopenedStore.resolve(20), 20);
+        expect(
+          await reopenedStore.recordRedirect(
+            retiredObjectId: 30,
+            survivorObjectId: 20,
+          ),
+          isFalse,
+        );
       } finally {
         await reopenedDatabase.close();
       }
