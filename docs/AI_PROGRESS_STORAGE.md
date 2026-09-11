@@ -82,8 +82,22 @@ Focused regressions cover the registered-source happy path, no-source fail-close
 
 F may independently take a newly split #1063 child only when it is a concrete filesystem/package responsibility whose logical prerequisites are already explicit. Continue to keep backup/restore distinct from portable export and preserve stable identity, typed graph semantics and managed/external byte distinctions without claiming Markdown/CSV projections are round-trip complete.
 
-### #1064 — durable history
-Durable Object history remains A-owned. Managed Image/File byte retention/GC must not be inferred from metadata history. F should act only after #1064 explicitly splits a focused managed-byte retention/GC Issue to F.
+### #1064 / #1268 — durable history managed-byte retention
+Durable Object history remains A-owned, but #1064 has now split the managed Image/File byte-retention and GC safety boundary to focused F Issue #1268.
+
+#1268 is the next demonstrated F implementation slice, but it explicitly depends on A/#1260. Do not implement it until #1260 is integrated and its logical checkpoint contract is the current-main source of truth.
+
+When that dependency is satisfied, start with the contract-first, non-migration slice described by #1268:
+
+- distinguish logical historical references from an actual retained/restorable managed-byte guarantee;
+- keep current-state, retained-history and backup/export preservation claims distinct enough that releasing one claim never implies immediate physical deletion;
+- require global ownership/reference safety before any future GC decision can permit deletion;
+- keep external absolute references external and outside app-owned deletion authority;
+- preserve existing Vault move/backup/restore and explicit-provenance contracts;
+- fail closed/retain on ambiguity;
+- prefer a focused policy/decision boundary plus deterministic tests before any persisted retention ledger or physical deletion implementation.
+
+Do not let F redefine A-owned checkpoint/Body/Property semantics, Relation replay, history timeline UX or history persistence merely to implement #1268.
 
 ### Legacy Bookmark / People / Photo retirement
 Normal-use convergence and caller-zero work belongs to A/B/C/D/G. F participates before destructive schema/data retirement only when a focused preservation-validation requirement is explicitly created. Completion of #242/#951 does not waive that requirement.
@@ -102,21 +116,22 @@ F should not:
 - create a cloud-folder sync protocol;
 - define another lane's canonical graph serialization;
 - create a package writer that invents missing logical reconstruction semantics;
-- create a managed-byte history model before a focused F contract exists;
+- create a managed-byte history model outside #1268's explicit storage-owned boundary;
 - perform destructive cleanup merely because a legacy UI/runtime path is caller-zero.
 
 ## Validation expectations
-Repository tests/tools are authoritative for repository-owned behavior. Use real-machine validation whenever a focused F Issue or destructive migration requires filesystem/platform evidence CI cannot prove. Storage-owned portability slices should deterministically prove containment, explicit ownership, fail-closed alias handling and source-Vault non-mutation.
+Repository tests/tools are authoritative for repository-owned behavior. Use real-machine validation whenever a focused F Issue or destructive migration requires filesystem/platform evidence CI cannot prove. Storage-owned portability/preservation slices should deterministically prove containment, explicit ownership, fail-closed ambiguity and source-Vault non-mutation where applicable.
 
 ## Resume sequence
 1. Re-read latest `main`, `AGENTS.md`, `docs/product_architecture.md`, `docs/AI_PROGRESS.md`, this handoff, live F-focused Issues/PRs, CI, shared-hotspot ownership and migration-writer state.
-2. Re-read #1063 and take only a newly split focused F filesystem/package contract whose logical prerequisites already exist.
-3. Re-check #1064 only for an explicitly F-owned managed-byte retention/GC child; do not take over A's history model.
-4. Re-check destructive Bookmark/People/Photo retirement only for a specifically requested F preservation-validation slice before schema/data removal.
-5. If a concrete current-main Storage/Vault correctness defect is demonstrated, create/reuse the smallest focused F Issue and fix only that defect.
-6. Otherwise do not invent a serializer, package format, sync protocol, retention model or destructive cleanup merely to keep Lane F active.
+2. Re-read live #1260 and #1268 first. If #1260 is integrated, #1268 is still open and no other owner exists, take the smallest contract-first #1268 slice from latest main without schema/migration or physical deletion.
+3. If #1260 is not integrated, check for another independent concrete F obligation rather than modifying A's branch or weakening the dependency.
+4. Re-read #1063 and take only a newly split focused F filesystem/package contract whose logical prerequisites already exist.
+5. Re-check destructive Bookmark/People/Photo retirement only for a specifically requested F preservation-validation slice before schema/data removal.
+6. If a concrete current-main Storage/Vault correctness defect is demonstrated, create/reuse the smallest focused F Issue and fix only that defect.
+7. Otherwise do not invent a serializer, package format, sync protocol, retention ledger, physical GC or destructive cleanup merely to keep Lane F active.
 
 ## Current durable stop
-Final live audit after #1238/#1245 integration found no open F implementation PR and no newly split focused F child beyond the #1063 umbrella. #1063 still lacks a focused package/filesystem child whose owning-lane logical prerequisites authorize independent implementation. #1064 has not yet split managed-byte retention/GC to F, and no destructive retirement currently requests a focused F preservation-validation slice. No additional current-main Storage/Vault correctness defect was demonstrated in this audit.
+Final live audit after #1268 was split found no active #1268 PR/branch and no other independent focused F implementation slice. #1268 is the next demonstrated F work, but its explicit prerequisite #1260 is not yet integrated. #1063 remains umbrella-only, no destructive retirement currently requests focused F preservation validation, and no additional current-main Storage/Vault correctness defect was demonstrated.
 
-Stop reason: idle-no-work after #1238 integration — resume when #1063 gains an explicit focused F filesystem/package contract with owning-lane logical prerequisites, #1064 splits a managed-byte retention/GC Issue to F, a destructive retirement requests focused preservation validation, or a concrete current-main Storage/Vault correctness defect appears.
+Stop reason: dependency — #1268 is the next focused F implementation slice and cannot start until A/#1260 is integrated; resume by re-reading live #1260/#1268, current main and F ownership before taking the contract-first non-migration slice.
