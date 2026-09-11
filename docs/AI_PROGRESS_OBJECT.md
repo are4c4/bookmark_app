@@ -21,10 +21,46 @@ Always verify live GitHub before taking ownership. Completed issues below are ch
 ### #1062 — Object duplicate / merge / redirect semantics
 Define advisory duplicate detection separately from explicit merge, preserve one canonical Object identity, define redirect/tombstone behavior for retired IDs, preserve Body/Properties/lifecycle state, and split Relation rewiring to B when implementation reaches that boundary. Fuzzy matching must never silently merge Objects.
 
+The A-owned contract/planning/materialization boundary is established. Actual persistent Object retirement/finalization becomes actionable only after B's focused canonical Relation rewiring boundary from #1259 is integrated. A must not delete the retired Object first because record deletion can cascade Relation evidence that B still needs to validate and rewrite.
+
 ### #1064 — durable Object history / restore contract
 Define restart-safe durable history for Object/Property/Body/Relation state, explicitly separate from local Undo, and make restore conflict-aware/fail-closed. Split Relation-integrity and managed-byte retention work to B/F when the contract reaches those boundaries.
 
+A's logical history/checkpoint and restore-safety contracts are established, and F's managed-byte retention safety boundary from #1268 is integrated. Relation-aware durable restore/persistence remains dependent on B's focused #1267 contract; A must not serialize or replay Relation edges directly while that boundary remains unresolved.
+
 ## Completed checkpoints
+
+### #1062 A-side explicit merge contract through #1294
+Completed as the Object-core contract/planning/materialization foundation for explicit merge. This is not yet the persistent cross-store merge transaction.
+
+Durable contract:
+- duplicate detection remains advisory unless a native stable key independently proves deterministic reuse; merge is an explicit operation;
+- merge preview owns positive distinct survivor/retired identities, explicit conflict requirements and B-owned Relation blockers;
+- retired Object IDs have durable A-owned redirect semantics that remain resolvable after Object-row retirement and fail closed on malformed/conflicting/cyclic mappings;
+- concrete A-owned snapshots cover title, value Properties, versioned Body and ordered aliases while excluding Relation and computed Property authority;
+- Property identity/type drift and cross-ObjectType merge attempts fail closed rather than being coerced;
+- conflicting title/value Property/Body state requires explicit keep-survivor/take-retired decisions; alias state additionally supports only preservation-safe deterministic combine;
+- the prepared merge context binds frozen survivor/retired snapshots to the exact preview used for decisions, so a plan from stale same-ID state cannot be paired with later snapshots;
+- pure materialization produces proposed survivor A-owned state without persistence, Object deletion, redirect mutation, Relation mutation, Search/UI work or managed-file action;
+- survivor Object identity/ObjectType and survivor-authoritative generic lifecycle policy remain authoritative;
+- the next persistent A finalization must revalidate current state inside the coordinating transaction and compose B's canonical Relation rewiring before retired Object deletion.
+
+Historical focused checkpoints include #1239/#1252 for the preview/redirect domain contract, #1257/#1258 for durable redirects, #1289/#1290 for concrete A-owned state planning, and #1294/#1297 for prepared-context-bound state materialization.
+
+### #1064 A/F durable-history boundary through #1268
+Completed contract checkpoints establish the A-owned logical history shape and F-owned managed-byte safety boundary, while Relation history remains explicitly B-owned.
+
+Durable contract:
+- durable history is restart-safe checkpoint/history data distinct from short-lived local Undo;
+- history entries use explicit Object/revision identity, source metadata, whole/selective restore scope and stale-current-revision checks;
+- A-owned checkpoint payload preserves title/value Property/Body semantics without turning Relation or computed values into A authority;
+- restore must fail closed rather than overwrite a changed current revision;
+- Relation checkpoint/restore integrity is delegated to B/#1267 and must pass current canonical Relation rules before execution;
+- logical Image/File references in history do not by themselves promise byte retention or deletion authority;
+- F/#1268 establishes managed-byte identity/retention/GC safety: retained history claims and current/backup/export preservation can block deletion, external references remain metadata-only, and physical deletion still requires F-side complete ownership/reference proof;
+- current canonical Object state remains authoritative; these contracts do not turn normal reads into event-log reconstruction.
+
+Historical A checkpoints include #1254/#1255 for history identity/restore safety and #1260 for A-owned checkpoint payload semantics. F/#1268 is the integrated managed-byte boundary. Do not advance whole-Object Relation-aware durable persistence/restore by inventing an A-side Relation snapshot while B/#1267 is open.
 
 ### #1177 — legacy-only Bookmark preservation boundary
 Completed as a durable preservation-contract checkpoint. The completed #1041 Bookmark migration checkpoint does not by itself prove a canonical destination for every legacy scalar/lifecycle fact. In particular `lastOpenedAt`, `openCount`, and `deletedAt` remain legacy compatibility/preservation concerns until a separately proven lossless destination or explicit retirement policy exists.
@@ -87,14 +123,16 @@ Completed. Enter split, Shift+Enter newline, safe leading-Backspace merge, compa
 - local Body structural Undo + persistence/editor concurrency correctness, distinct from durable history;
 - collision-safe Bookmark -> canonical Weblink convergence while compatibility data remains intact;
 - generic-first Person create/update/delete/reconciliation authority with temporary legacy projection;
-- explicit preservation of legacy-only Bookmark `lastOpenedAt`, `openCount`, and `deletedAt` until a separate destination/retirement decision exists.
+- explicit preservation of legacy-only Bookmark `lastOpenedAt`, `openCount`, and `deletedAt` until a separate destination/retirement decision exists;
+- explicit Object merge preview/redirect, concrete A-owned state planning and pure resolved-state materialization, with persistent retirement still sequenced behind canonical Relation rewiring;
+- durable Object history identity/checkpoint/restore-safety contracts plus the integrated F-owned managed-byte retention boundary, with Relation history still B-owned.
 
 ## Cross-lane boundaries
-- **B:** Relation mutation/read/index/backlink/audit/reconcile, Bookmark/Person relationship migration, Person roles/groups and Tag hierarchy integrity. Future #1062/#1064 Relation rewiring/restore slices must be split to B rather than implemented directly in A.
+- **B:** Relation mutation/read/index/backlink/audit/reconcile, Bookmark/Person relationship migration, Person roles/groups and Tag hierarchy integrity. #1062 persistent merge finalization waits for the canonical rewiring boundary from #1259; #1064 Relation-history/restore composition waits for #1267. A must consume those contracts rather than write Relation values/edges directly.
 - **C:** Database/View/schema UX, Stage1/People generic collection replacement and Tag hierarchy query/filter/picker UX. Dedicated People UI retirement remains C-owned.
 - **D:** Weblink URL identity/normalization/capture-native behavior and Image/File native capabilities. A consumes those contracts rather than recreating them.
 - **E:** canonical Object Search projection/FTS freshness.
-- **F:** Vault/filesystem/preservation lifecycle; durable history managed-byte retention belongs to F when explicitly split.
+- **F:** Vault/filesystem/preservation lifecycle. The #1268 managed-byte history retention safety boundary is integrated; physical byte retention/GC remains F-owned and is never inferred from A metadata history.
 - **G:** behavior-preserving hotspot reduction and caller-zero legacy retirement after owning-lane parity and preservation evidence.
 
 ## Hotspot / concurrency rule
@@ -105,10 +143,12 @@ A runtime Object/Body change requires changed-Dart Format, Analyze/guards, focus
 
 ## Resume sequence
 1. refresh latest `main`, live open PR ownership, current CI, shared hotspots and migration ownership;
-2. verify the state/acceptance of #1062 and #1064 plus any newer focused A issues; treat #1177/#1044/#1058/#1121 as completed checkpoints rather than active work sources;
-3. select the next concrete non-conflicting A-owned acceptance slice from live GitHub;
-4. keep #1062 Relation rewiring and #1064 Relation/history-byte implications split to B/F when those boundaries are reached;
+2. verify the state/acceptance of #1062 and #1064 plus any newer focused A issues; treat completed focused merge/history checkpoints as integrated contracts rather than active work sources;
+3. for #1062, check B/#1259 first. Once its canonical Relation rewiring boundary is integrated, create or reuse one focused A finalization Issue that revalidates current A state inside a caller-owned outer transaction, invokes B's canonical rewiring boundary, persists the resolved A-owned survivor state and redirect, and only then retires the losing Object. Do not implement a competing Relation planner/service;
+4. for #1064, check B/#1267 first. Once the Relation checkpoint/restore boundary is integrated, re-audit whether the next focused A slice is durable checkpoint persistence/restore coordination. Consume F's integrated managed-byte retention contract rather than adding filesystem authority to A;
 5. preserve the legacy-only Bookmark facts recorded by completed #1177 until a lossless destination or explicit retirement policy exists; do not convert documentation pressure into speculative schema design;
 6. after each coherent slice/PR/merge, apply the shared **Lane continuation and resume/stop contract** in `AGENTS.md` and continue while safe A work exists.
 
-If the final resume audit finds no actionable A work, record the exact stop category from `AGENTS.md` with live evidence. A completed historical PR or completed #1177/#1044/#1058/#1121 is never, by itself, a stop reason.
+## Current stop contract
+
+Stop reason: `dependency` — the final live resume audit found no independent safe A implementation slice. #1062 persistent Object merge/final retirement is sequenced behind B/#1259 canonical Relation rewiring integration, and #1064 Relation-aware durable history/restore coordination is sequenced behind B/#1267. F/#1268 is already integrated and is no longer a history blocker. On the next A run, refresh live GitHub first: if either B dependency has integrated, take the newly unblocked focused A slice; otherwise do not invent duplicate Relation/history abstractions merely to keep Lane A active.
