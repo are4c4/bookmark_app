@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import '../domain/managed_file_ownership.dart';
 import '../domain/object_group.dart';
 import '../domain/object_model.dart';
+import 'canonical_object_mutation_impact_sink.dart';
 import 'canonical_weblink_capture_service.dart';
 import 'daily_note_service.dart';
 import 'file_object_service.dart';
@@ -46,6 +47,7 @@ class GenericDatabaseObjectCreateService {
     this.images,
     this.files,
     this.weblinkCreateEnricher,
+    this.canonicalObjectMutationImpactSink,
   });
 
   final GenericDatabaseCollectionPageLoader pageLoader;
@@ -57,6 +59,7 @@ class GenericDatabaseObjectCreateService {
   final ImageObjectService? images;
   final FileObjectService? files;
   final GenericDatabaseWeblinkCreateEnricher? weblinkCreateEnricher;
+  final CanonicalObjectMutationImpactSink? canonicalObjectMutationImpactSink;
 
   /// Returns the user-facing creation mode for an ObjectType.
   ///
@@ -106,6 +109,7 @@ class GenericDatabaseObjectCreateService {
       final impact = await PersonObjectWriteService.forDatabase(
         pageLoader.genericStore.database,
       ).createWithImpact(workspaceId: page.objectType.workspaceId, name: title);
+      await _notifyCommittedPersonObject(impact);
       return impact.canonicalObjectId;
     }
     _rejectIdentitySensitiveGenericCreate(systemKey);
@@ -205,7 +209,7 @@ class GenericDatabaseObjectCreateService {
   ///
   /// File copying/classification belongs to the import boundary. This keeps
   /// title-only creation fail-closed so managed stored-path identity and
-  /// metadata cannot be bypassed by generic hosts. Optional storage ownership
+  /// metadata cannot be bypassed. Optional storage ownership
   /// must come from the closed managed-file ownership contract rather than an
   /// arbitrary string or path-location inference.
   Future<int> createFileFromManagedFile({
@@ -274,20 +278,23 @@ class GenericDatabaseObjectCreateService {
     }
 
     if (systemKey == PersonObjectBridge.systemKey) {
-      return boardCreate.createWithObjectFactory(
+      PersonCommittedWriteImpact? impact;
+      final objectId = await boardCreate.createWithObjectFactory(
         createObject: () async {
-          final impact =
+          impact =
               await PersonObjectWriteService.forDatabase(
                 pageLoader.genericStore.database,
               ).createWithImpact(
                 workspaceId: page.objectType.workspaceId,
                 name: title,
               );
-          return impact.canonicalObjectId;
+          return impact!.canonicalObjectId;
         },
         groupProperty: canonicalProperty,
         targetGroup: targetGroup,
       );
+      await _notifyCommittedPersonObject(impact);
+      return objectId;
     }
 
     return boardCreate.create(
@@ -295,6 +302,15 @@ class GenericDatabaseObjectCreateService {
       title: title,
       groupProperty: canonicalProperty,
       targetGroup: targetGroup,
+    );
+  }
+
+  Future<void> _notifyCommittedPersonObject(
+    PersonCommittedWriteImpact? impact,
+  ) async {
+    if (impact?.canonicalMutationCommitted != true) return;
+    await canonicalObjectMutationImpactSink?.objectCommitted(
+      impact!.canonicalObjectId,
     );
   }
 

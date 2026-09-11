@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 import 'app_database.dart';
+import 'canonical_object_mutation_impact_sink.dart';
 
 class WorkspaceInfo {
   const WorkspaceInfo({
@@ -19,9 +20,19 @@ class WorkspaceInfo {
 }
 
 class WorkspaceStore {
-  WorkspaceStore(this.database);
+  WorkspaceStore(this.database, {this.canonicalObjectMutationImpactSink}) {
+    final sink = canonicalObjectMutationImpactSink;
+    if (sink != null) {
+      bindCanonicalObjectMutationImpactSink(database: database, sink: sink);
+    }
+  }
 
   final AppDatabase database;
+
+  /// Runtime-only application composition for committed canonical Object
+  /// impact. Persistence and workspace semantics remain independent of the
+  /// downstream projection owner.
+  final CanonicalObjectMutationImpactSink? canonicalObjectMutationImpactSink;
 
   WorkspaceInfo _toInfo(WorkspaceRecord row) => WorkspaceInfo(
         id: row.id,

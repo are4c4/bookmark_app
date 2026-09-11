@@ -12,6 +12,7 @@ import '../services/vault_managed_file_copy_service.dart';
 import '../services/weblink_create_enrichment_service.dart';
 import '../services/weblink_preview_image_pipeline.dart';
 import 'bidirectional_relation_store.dart';
+import 'canonical_object_mutation_impact_sink.dart';
 import 'daily_note_service.dart';
 import 'database_collection_config_service.dart';
 import 'database_collection_resolver.dart';
@@ -106,6 +107,8 @@ class GenericDatabasePageServices {
       photoStorage: photoStorage,
       weblinkMetadataFetch: weblinkMetadataFetch,
       weblinkPreviewImageIngest: weblinkPreviewImageIngest,
+      canonicalObjectMutationImpactSink:
+          workspaceStore.canonicalObjectMutationImpactSink,
     );
   }
 
@@ -116,6 +119,7 @@ class GenericDatabasePageServices {
     PhotoStorageService photoStorage = const PhotoStorageService(),
     WeblinkMetadataFetch? weblinkMetadataFetch,
     WeblinkPreviewImageIngest? weblinkPreviewImageIngest,
+    CanonicalObjectMutationImpactSink? canonicalObjectMutationImpactSink,
   }) {
     final collectionStore = DatabaseCollectionStore(
       genericStore: genericStore,
@@ -162,6 +166,7 @@ class GenericDatabasePageServices {
         objectStore: objectStore,
         systemObjects: systemObjects,
       ),
+      canonicalObjectMutationImpactSink: canonicalObjectMutationImpactSink,
     );
     final viewStore = DatabaseViewStore(genericStore.database);
     final propertyAuthoring = DatabasePropertyAuthoringService(objectStore);
@@ -237,6 +242,7 @@ class GenericDatabasePageServices {
       images: images,
       files: files,
       weblinkCreateEnricher: weblinkEnrichment.enrich,
+      canonicalObjectMutationImpactSink: canonicalObjectMutationImpactSink,
     );
     final imageImport = GenericDatabaseImageImportService(
       photoStorage: photoStorage,
@@ -260,6 +266,7 @@ class GenericDatabasePageServices {
       tagBridge: tagBridge,
       weblinks: weblinks,
       weblinkEnricher: weblinkEnrichment.enrich,
+      canonicalObjectMutationImpactSink: canonicalObjectMutationImpactSink,
     );
     final relationQuickCreateHost = RelationTargetQuickCreateHostService(
       policy: relationQuickCreatePolicy,
@@ -366,6 +373,7 @@ class _GenericDatabaseRelationMutationService extends RelationMutationService {
     required this.photoStorage,
     required this.imageDeletionPolicy,
     required this.legacyPhotoDeletion,
+    required this.canonicalObjectMutationImpactSink,
   }) : super(
           objectStore: objectStore,
           bidirectionalStore: bidirectionalStore,
@@ -377,6 +385,7 @@ class _GenericDatabaseRelationMutationService extends RelationMutationService {
   final PhotoStorageService photoStorage;
   final ImageManagedFileDeletionPolicy imageDeletionPolicy;
   final LegacyPhotoImageDeletionService legacyPhotoDeletion;
+  final CanonicalObjectMutationImpactSink? canonicalObjectMutationImpactSink;
 
   @override
   Future<void> deleteObject({
@@ -386,14 +395,14 @@ class _GenericDatabaseRelationMutationService extends RelationMutationService {
   }) async {
     final systemKey = await systemObjects.systemKeyForObjectType(objectTypeId);
     if (systemKey == PersonObjectBridge.systemKey) {
-      await genericStore.database.transaction(() async {
+      final impact = await genericStore.database.transaction(() async {
         final legacyPersonId = await personDeletionCompatibility
             .legacyPersonIdForCanonicalDeletion(
               workspaceId: workspaceId,
               objectTypeId: objectTypeId,
               objectId: objectId,
             );
-        await super.deleteObject(
+        final deletionImpact = await super.deleteObjectWithImpact(
           workspaceId: workspaceId,
           objectTypeId: objectTypeId,
           objectId: objectId,
@@ -403,7 +412,9 @@ class _GenericDatabaseRelationMutationService extends RelationMutationService {
             legacyPersonId,
           );
         }
+        return deletionImpact;
       });
+      await canonicalObjectMutationImpactSink?.deletionCommitted(impact);
       return;
     }
 
