@@ -94,7 +94,9 @@ class ObjectMergeFinalizer {
       final survivorUnchanged = await stateStore.matchesCurrent(
         prepared.survivor,
       );
-      final retiredUnchanged = await stateStore.matchesCurrent(prepared.retired);
+      final retiredUnchanged = await stateStore.matchesCurrent(
+        prepared.retired,
+      );
       if (!survivorUnchanged || !retiredUnchanged) {
         throw StateError(
           'Object merge prepared A-owned state is stale; prepare the merge again before finalizing.',
@@ -158,7 +160,6 @@ class ObjectMergeFinalizer {
     required int objectTypeId,
     required int objectId,
   }) async =>
-      (await objectStore.listObjects(objectTypeId)).any(
-        (object) => object.id == objectId,
-      );
+      (await objectStore.listObjects(objectTypeId))
+          .any((object) => object.id == objectId);
 }
