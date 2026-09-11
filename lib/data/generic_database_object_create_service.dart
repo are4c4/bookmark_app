@@ -276,12 +276,13 @@ class GenericDatabaseObjectCreateService {
     if (systemKey == PersonObjectBridge.systemKey) {
       return boardCreate.createWithObjectFactory(
         createObject: () async {
-          final impact = await PersonObjectWriteService.forDatabase(
-            pageLoader.genericStore.database,
-          ).createWithImpact(
-            workspaceId: page.objectType.workspaceId,
-            name: title,
-          );
+          final impact =
+              await PersonObjectWriteService.forDatabase(
+                pageLoader.genericStore.database,
+              ).createWithImpact(
+                workspaceId: page.objectType.workspaceId,
+                name: title,
+              );
           return impact.canonicalObjectId;
         },
         groupProperty: canonicalProperty,
