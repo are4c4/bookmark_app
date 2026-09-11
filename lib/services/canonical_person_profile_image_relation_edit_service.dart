@@ -58,10 +58,7 @@ class CanonicalPersonProfileImageRelationEditService {
     if (context.property.objectTypeId != personSchema.objectType.id ||
         context.property.name !=
             PersonProfileImageRelationService.profileImagePropertyName) {
-      await genericEditor.save(
-        context: context,
-        selectedObjectIds: selected,
-      );
+      await genericEditor.save(context: context, selectedObjectIds: selected);
       return;
     }
 
@@ -101,10 +98,7 @@ class CanonicalPersonProfileImageRelationEditService {
           'Canonical Person claims a legacy identity without a valid mapping.',
         );
       }
-      await genericEditor.save(
-        context: context,
-        selectedObjectIds: selected,
-      );
+      await genericEditor.save(context: context, selectedObjectIds: selected);
       return;
     }
 
