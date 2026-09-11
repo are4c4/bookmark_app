@@ -63,11 +63,7 @@ void main() {
             type: ObjectPropertyType.text,
             value: 'survivor text',
           ),
-          _propertySnapshot(
-            id: 21,
-            type: ObjectPropertyType.number,
-            value: 1,
-          ),
+          _propertySnapshot(id: 21, type: ObjectPropertyType.number, value: 1),
         ],
         aliases: <String>['Alpha'],
       );
@@ -81,11 +77,7 @@ void main() {
             type: ObjectPropertyType.text,
             value: 'retired text',
           ),
-          _propertySnapshot(
-            id: 21,
-            type: ObjectPropertyType.number,
-            value: 2,
-          ),
+          _propertySnapshot(id: 21, type: ObjectPropertyType.number, value: 2),
         ],
         aliases: <String>['Beta'],
       );
@@ -101,10 +93,7 @@ void main() {
           .withDecision('body', ObjectMergeDecision.keepSurvivor)
           .withDecision('aliases', ObjectMergeDecision.combine);
 
-      final result = materializer.materialize(
-        prepared: prepared,
-        plan: plan,
-      );
+      final result = materializer.materialize(prepared: prepared, plan: plan);
       final properties = <int, ObjectMergeValuePropertySnapshot>{
         for (final property in result.propertySnapshots)
           property.propertyId: property,
@@ -128,15 +117,13 @@ void main() {
         survivor: _snapshot(objectId: 10, title: 'Second survivor'),
         retired: _snapshot(objectId: 11, title: 'Second retired'),
       );
-      final stalePlan = first
-          .plan()
-          .withDecision('title', ObjectMergeDecision.keepSurvivor);
+      final stalePlan = first.plan().withDecision(
+        'title',
+        ObjectMergeDecision.keepSurvivor,
+      );
 
       expect(
-        () => materializer.materialize(
-          prepared: second,
-          plan: stalePlan,
-        ),
+        () => materializer.materialize(prepared: second, plan: stalePlan),
         throwsStateError,
       );
     });
@@ -165,11 +152,7 @@ void main() {
       final survivor = _snapshot(
         objectId: 10,
         properties: <ObjectMergeValuePropertySnapshot>[
-          _propertySnapshot(
-            id: 20,
-            type: ObjectPropertyType.number,
-            value: 1,
-          ),
+          _propertySnapshot(id: 20, type: ObjectPropertyType.number, value: 1),
         ],
       );
       final retired = _snapshot(
@@ -186,14 +169,11 @@ void main() {
         survivor: survivor,
         retired: retired,
       );
-      final plan = prepared
-          .plan()
-          .withDecision('property:20', ObjectMergeDecision.takeRetired);
-
-      final result = materializer.materialize(
-        prepared: prepared,
-        plan: plan,
+      final plan = prepared.plan().withDecision(
+        'property:20',
+        ObjectMergeDecision.takeRetired,
       );
+      final result = materializer.materialize(prepared: prepared, plan: plan);
 
       expect(result.propertySnapshots.single.value, isA<double>());
       expect(result.propertySnapshots.single.value, 1.0);
@@ -259,7 +239,8 @@ void main() {
         ),
         throwsUnsupportedError,
       );
-      final value = result.propertySnapshots.single.value as Map<String, dynamic>;
+      final value =
+          result.propertySnapshots.single.value as Map<String, dynamic>;
       expect(() => value['extra'] = true, throwsUnsupportedError);
     });
   });
