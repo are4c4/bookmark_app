@@ -46,6 +46,16 @@ Deterministic PR-contract failures and high-confidence destructive-risk detectio
 
 The remaining #1107 security gap is Phase B, not approval provenance itself: repository-local PR-controlled GitHub Actions and guard code are still modifiable through the implementation authorization, so that authorization boundary is not yet independently immutable. #1107 stays open until a distinct external/reviewer/check identity, organization-level protection, or equivalent enforcement root exists that the implementation identity cannot modify or spoof. Routine reversible PRs remain approval-free.
 
+### #1208 — repository `GITHUB_TOKEN` PR self-mutation boundary (completed checkpoint)
+#1208 proved a separate workflow-trigger/identity failure mode: a temporary Actions workflow granted `contents: write`, committed as `github-actions[bot]`, and pushed directly back to an open same-repository PR branch with the repository `GITHUB_TOKEN`. The resulting `pull_request` workflow runs were approval-required and created no runnable jobs until a write user approved them. This was not a Flutter CI defect or branch-protection failure.
+
+Durable contract:
+- normal AI-assisted PR branch updates must use the connected GitHub/user-authorized branch-update path, not a repository Actions workflow that self-mutates the active PR branch;
+- PR-specific workflows that combine `contents: write` with branch `git push` remain a deterministic coordination violation and are blocked by the existing repository guard/test contract;
+- zero-job / approval-required workflow runs are not successful validation and must never be reinterpreted as green merely to unblock merge;
+- do not introduce a PAT or separate GitHub App credential solely to evade this protection. If an exceptional product/developer workflow genuinely requires autonomous PR self-updates, define its credential/security boundary in a separate focused Issue;
+- this completed trigger/identity boundary does **not** solve #1107 Phase B. A distinct enforcement root that repository-controlled implementation code cannot modify/spoof remains a separate open security requirement.
+
 ### #1087 — CI Performance Phase 2 (completed checkpoint)
 Duration-aware full-suite execution is established. The required Flutter Test path uses exactly four jobs with deterministic **file-level** assignment instead of Flutter's built-in test-case sharding.
 
@@ -79,6 +89,7 @@ Future G work after owning-lane parity:
 - AI PR lane/Issue/dependency/hotspot/migration-impact contract with deterministic violations blocking;
 - hotspot overlap/stale-base/churn diagnostics;
 - duplicate focused-Issue ownership detection;
+- PR-branch self-mutation protection: repository Actions must not grant `contents: write` and `git push` back into active PR branches as an AI repair/update mechanism; use normal user-authorized branch updates instead;
 - deterministic migration single-writer hard gate: non-migration PRs pass without ownership arbitration, the lowest-numbered open migration PR is the unique active owner, later migration PRs block, and the check runs inside the required quality/`merge-gate` path;
 - high-confidence destructive-risk detection is blocking, and Phase A machine-strong non-self approval requires a distinct current-head approved User with write/admin permission and complete review-history evaluation; Phase B enforcement-root immutability remains open under #1107;
 - read-only repository-settings drift audit on PR, scheduled and manual runs: active branch ruleset details are inspected and uniqueness is required only among rulesets targeting `~DEFAULT_BRANCH`; normal Actions runs authenticate reads with the ordinary read-only token while local/manual execution may fall back to unauthenticated reads; audit unavailability remains fail-closed and is distinguished from actual settings drift; administration-only fields are validated when GitHub exposes them, but omission is not guessed as drift and no privileged administration credential is introduced merely for exhaustive auditing;
@@ -138,9 +149,13 @@ Behavior-preserving refactors require changed-Dart format, Analyze and relevant/
 ## Resume sequence
 1. re-audit latest `main`, open PR ownership and shared-hotspot/migration ownership before taking new G work;
 2. treat #1107 Phase A non-self approval as established; do not treat #1082 as complete until Phase B provides an enforcement root the implementation identity cannot modify/spoof;
-3. treat #1087 file-level CI performance work as a completed checkpoint; do not reopen shard-count or slow-test tuning without new measured evidence of a concrete regression/bottleneck;
-4. take #225 or other live G work only through focused reversible child Issues; treat #1047 and #950 as completed checkpoints rather than active work queues;
-5. when #1039/#1040 owning-lane parity lands, create caller-zero retirement slices instead of combining product migration with cleanup;
-6. if historical branch cleanup is revisited, begin with a new read-only inventory and do not broaden deletion to ambiguous refs;
-7. keep destructive schema/data removal separate, preservation-gated, and independently approved;
-8. keep durable docs free of transient snapshots and route machine-certifiable drift to CI while H handles semantic drift.
+3. treat #1208 as a completed trigger/identity checkpoint: do not recreate repository-`GITHUB_TOKEN` PR self-mutation or weaken required checks to make zero-job approval-required runs look green;
+4. treat #1087 file-level CI performance work as a completed checkpoint; do not reopen shard-count or slow-test tuning without new measured evidence of a concrete regression/bottleneck;
+5. take #225 or other live G work only through focused reversible child Issues; treat #1047 and #950 as completed checkpoints rather than active work queues;
+6. when #1039/#1040 owning-lane parity lands, create caller-zero retirement slices instead of combining product migration with cleanup;
+7. if historical branch cleanup is revisited, begin with a new read-only inventory and do not broaden deletion to ambiguous refs;
+8. keep destructive schema/data removal separate, preservation-gated, and independently approved;
+9. keep durable docs free of transient snapshots and route machine-certifiable drift to CI while H handles semantic drift.
+
+### Last audited stop
+`Stop reason: external-infra` — after the #1208 checkpoint, the remaining immediately concrete unowned G work that does not depend on product parity includes repository metadata #1094 and #1107 Phase B. #1094 requires repository-description write capability that may not be exposed by the active GitHub integration, while #1107 Phase B requires a trusted enforcement root outside repository-controlled Actions. Guard-local follow-ups such as #1123/#1127 may also be temporarily blocked by live approval-sensitive guard ownership, so recheck open PRs before taking them. Bookmark/People caller-zero work remains gated on owning-lane parity. Re-run the full live audit on every resume; this line records the last audited reason, not permanent ownership state.
