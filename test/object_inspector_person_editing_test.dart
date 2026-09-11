@@ -27,11 +27,8 @@ void main() {
         objectStore: objectStore,
       ),
     );
-    final personId = await PersonObjectWriteService.forDatabase(database).create(
-      workspaceId: workspaceId,
-      name: 'Before',
-      note: 'old note',
-    );
+    final personId = await PersonObjectWriteService.forDatabase(database)
+        .create(workspaceId: workspaceId, name: 'Before', note: 'old note');
     final schema = await bridge.ensurePersonObjectType(workspaceId);
     final objectId = (await bridge.objectIdForLegacyPerson(
       workspaceId,
@@ -87,64 +84,64 @@ void main() {
     expect(person.note, 'new note');
   });
 
-  testWidgets('generic Person Inspector hides persistence errors and fails closed', (
-    tester,
-  ) async {
-    final database = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(database.close);
-    final workspaceId = await WorkspaceStore(database).initialize();
-    final genericStore = GenericDatabaseStore(database);
-    final objectStore = ObjectStore(genericStore);
-    final bridge = PersonObjectBridge(
-      database: database,
-      objectStore: objectStore,
-      systemObjectStore: SystemObjectStore(
+  testWidgets(
+    'generic Person Inspector hides persistence errors and fails closed',
+    (tester) async {
+      final database = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(database.close);
+      final workspaceId = await WorkspaceStore(database).initialize();
+      final genericStore = GenericDatabaseStore(database);
+      final objectStore = ObjectStore(genericStore);
+      final bridge = PersonObjectBridge(
         database: database,
         objectStore: objectStore,
-      ),
-    );
-    final personId = await PersonObjectWriteService.forDatabase(database).create(
-      workspaceId: workspaceId,
-      name: 'Preserved',
-      note: 'old note',
-    );
-    final schema = await bridge.ensurePersonObjectType(workspaceId);
-    final objectId = (await bridge.objectIdForLegacyPerson(
-      workspaceId,
-      personId,
-    ))!;
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: ObjectInspectorPage(
-          store: genericStore,
+        systemObjectStore: SystemObjectStore(
+          database: database,
           objectStore: objectStore,
-          objectId: objectId,
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      final personId = await PersonObjectWriteService.forDatabase(
+        database,
+      ).create(workspaceId: workspaceId, name: 'Preserved', note: 'old note');
+      final schema = await bridge.ensurePersonObjectType(workspaceId);
+      final objectId = (await bridge.objectIdForLegacyPerson(
+        workspaceId,
+        personId,
+      ))!;
 
-    await database.customStatement(
-      'DELETE FROM person_object_links WHERE workspace_id = ? AND person_id = ?',
-      <Object>[workspaceId, personId],
-    );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ObjectInspectorPage(
+            store: genericStore,
+            objectStore: objectStore,
+            objectId: objectId,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('object-title-edit-button')));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const ValueKey('object-title-edit-field')),
-      'Must not commit',
-    );
-    await tester.tap(find.byKey(const ValueKey('object-title-edit-save')));
-    await tester.pumpAndSettle();
+      await database.customStatement(
+        'DELETE FROM person_object_links WHERE workspace_id = ? AND person_id = ?',
+        <Object>[workspaceId, personId],
+      );
 
-    expect(find.text('人物を更新できませんでした。'), findsOneWidget);
-    final object = (await objectStore.listObjects(schema.objectType.id)).single;
-    final person = (await database.select(database.people).get()).single;
-    expect(object.title, 'Preserved');
-    expect(object.values[schema.noteProperty.id], 'old note');
-    expect(person.name, 'Preserved');
-    expect(person.note, 'old note');
-  });
+      await tester.tap(find.byKey(const ValueKey('object-title-edit-button')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('object-title-edit-field')),
+        'Must not commit',
+      );
+      await tester.tap(find.byKey(const ValueKey('object-title-edit-save')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('人物を更新できませんでした。'), findsOneWidget);
+      final object = (await objectStore.listObjects(schema.objectType.id))
+          .single;
+      final person = (await database.select(database.people).get()).single;
+      expect(object.title, 'Preserved');
+      expect(object.values[schema.noteProperty.id], 'old note');
+      expect(person.name, 'Preserved');
+      expect(person.note, 'old note');
+    },
+  );
 }
