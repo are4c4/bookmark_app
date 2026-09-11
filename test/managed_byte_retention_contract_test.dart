@@ -9,6 +9,14 @@ void main() {
     vaultRelativePath: 'photos/history/image.png',
   );
 
+  ManagedByteHistoryCheckpointIdentity checkpoint(
+    int objectId,
+    int revisionId,
+  ) => ManagedByteHistoryCheckpointIdentity(
+    objectId: objectId,
+    revisionId: revisionId,
+  );
+
   group('ManagedByteIdentity', () {
     test('is Vault-relative and stable across Vault location changes', () {
       final identity = managedIdentity();
@@ -45,11 +53,40 @@ void main() {
     });
   });
 
+  group('ManagedByteHistoryCheckpointIdentity', () {
+    test('keeps Object-scoped revision identities distinct', () {
+      expect(checkpoint(10, 4), isNot(checkpoint(11, 4)));
+      expect(checkpoint(10, 4), checkpoint(10, 4));
+      expect(checkpoint(10, 4).key, 'object:10/revision:4');
+    });
+
+    test('can mirror A-owned durable checkpoint identity', () {
+      final entry = ObjectHistoryEntry(
+        objectId: 42,
+        revisionId: 7,
+        capturedAt: DateTime.utc(2026, 9, 11),
+        source: ObjectHistorySourceKind.userMutation,
+      );
+
+      expect(
+        ManagedByteHistoryCheckpointIdentity.fromEntry(entry),
+        checkpoint(42, 7),
+      );
+    });
+
+    test('rejects non-positive Object or revision ids', () {
+      expect(() => checkpoint(0, 1), throwsArgumentError);
+      expect(() => checkpoint(1, 0), throwsArgumentError);
+    });
+  });
+
   group('HistoryByteReference', () {
     test('external absolute references remain metadata-only', () {
       final state = ManagedByteRetentionState(
         identity: managedIdentity(),
-        retainedHistoryRevisionIds: const <int>[4],
+        retainedHistoryCheckpoints: <ManagedByteHistoryCheckpointIdentity>[
+          checkpoint(10, 4),
+        ],
         referenceAuditComplete: true,
       );
       final external = HistoryByteReference.external('/external/photo.png');
@@ -59,7 +96,7 @@ void main() {
       expect(
         state.restoreabilityFor(
           reference: external,
-          revisionId: 4,
+          checkpoint: checkpoint(10, 4),
           managedByteVerifiedPresent: true,
         ),
         HistoryManagedByteRestoreability.metadataOnly,
@@ -89,11 +126,14 @@ void main() {
         var state = ManagedByteRetentionState(
           identity: managedIdentity(),
           currentReferenceKeys: const <String>['object:10/property:3'],
-          retainedHistoryRevisionIds: const <int>[4, 5],
+          retainedHistoryCheckpoints: <ManagedByteHistoryCheckpointIdentity>[
+            checkpoint(10, 4),
+            checkpoint(10, 5),
+          ],
           referenceAuditComplete: true,
         );
 
-        state = state.releaseHistoryRevision(4);
+        state = state.releaseHistoryCheckpoint(checkpoint(10, 4));
         var decision = state.evaluateGc();
         expect(decision.eligibleForPhysicalDeletion, isFalse);
         expect(
@@ -111,10 +151,51 @@ void main() {
           ManagedByteGcBlocker.retainedHistory,
         });
 
-        state = state.releaseHistoryRevision(5);
+        state = state.releaseHistoryCheckpoint(checkpoint(10, 5));
         expect(state.evaluateGc().eligibleForPhysicalDeletion, isTrue);
       },
     );
+
+    test('same revision number on different Objects remains independent', () {
+      final objectA = checkpoint(10, 4);
+      final objectB = checkpoint(20, 4);
+      final reference = HistoryByteReference.managed(managedIdentity());
+      var state = ManagedByteRetentionState(
+        identity: managedIdentity(),
+        retainedHistoryCheckpoints: <ManagedByteHistoryCheckpointIdentity>[
+          objectA,
+          objectB,
+        ],
+        referenceAuditComplete: true,
+      );
+
+      state = state.releaseHistoryCheckpoint(objectA);
+
+      expect(
+        state.retainedHistoryCheckpoints,
+        <ManagedByteHistoryCheckpointIdentity>{objectB},
+      );
+      expect(state.evaluateGc().eligibleForPhysicalDeletion, isFalse);
+      expect(state.evaluateGc().blockers, <ManagedByteGcBlocker>{
+        ManagedByteGcBlocker.retainedHistory,
+      });
+      expect(
+        state.restoreabilityFor(
+          reference: reference,
+          checkpoint: objectA,
+          managedByteVerifiedPresent: true,
+        ),
+        HistoryManagedByteRestoreability.metadataOnly,
+      );
+      expect(
+        state.restoreabilityFor(
+          reference: reference,
+          checkpoint: objectB,
+          managedByteVerifiedPresent: true,
+        ),
+        HistoryManagedByteRestoreability.retainedRestorable,
+      );
+    });
 
     test(
       'preservation claim blocks GC after current/history claims are gone',
@@ -157,36 +238,50 @@ void main() {
 
   group('history retention policy interaction', () {
     test('bounded compaction releases only the selected checkpoint claim', () {
+      final checkpoint8 = checkpoint(10, 8);
+      final checkpoint9 = checkpoint(10, 9);
       final state = ManagedByteRetentionState(
         identity: managedIdentity(),
-        retainedHistoryRevisionIds: const <int>[8, 9],
+        retainedHistoryCheckpoints: <ManagedByteHistoryCheckpointIdentity>[
+          checkpoint8,
+          checkpoint9,
+        ],
         referenceAuditComplete: true,
       );
 
-      final compacted = state.releaseHistoryRevisionForCompaction(
-        revisionId: 8,
+      final compacted = state.releaseHistoryCheckpointForCompaction(
+        checkpoint: checkpoint8,
         policy: ObjectHistoryRetentionPolicy.bounded(maxCheckpoints: 1),
       );
 
-      expect(compacted.retainedHistoryRevisionIds, <int>{9});
+      expect(
+        compacted.retainedHistoryCheckpoints,
+        <ManagedByteHistoryCheckpointIdentity>{checkpoint9},
+      );
       expect(compacted.evaluateGc().eligibleForPhysicalDeletion, isFalse);
     });
 
     test('keepAll cannot release byte claims through compaction', () {
+      final retained = checkpoint(10, 8);
       final state = ManagedByteRetentionState(
         identity: managedIdentity(),
-        retainedHistoryRevisionIds: const <int>[8],
+        retainedHistoryCheckpoints: <ManagedByteHistoryCheckpointIdentity>[
+          retained,
+        ],
         referenceAuditComplete: true,
       );
 
       expect(
-        () => state.releaseHistoryRevisionForCompaction(
-          revisionId: 8,
+        () => state.releaseHistoryCheckpointForCompaction(
+          checkpoint: retained,
           policy: ObjectHistoryRetentionPolicy.keepAll(),
         ),
         throwsStateError,
       );
-      expect(state.retainedHistoryRevisionIds, <int>{8});
+      expect(
+        state.retainedHistoryCheckpoints,
+        <ManagedByteHistoryCheckpointIdentity>{retained},
+      );
     });
   });
 
@@ -194,16 +289,19 @@ void main() {
     test('requires both a retained claim and verified managed bytes', () {
       final identity = managedIdentity();
       final reference = HistoryByteReference.managed(identity);
+      final retained = checkpoint(10, 12);
       final state = ManagedByteRetentionState(
         identity: identity,
-        retainedHistoryRevisionIds: const <int>[12],
+        retainedHistoryCheckpoints: <ManagedByteHistoryCheckpointIdentity>[
+          retained,
+        ],
         referenceAuditComplete: true,
       );
 
       expect(
         state.restoreabilityFor(
           reference: reference,
-          revisionId: 12,
+          checkpoint: retained,
           managedByteVerifiedPresent: false,
         ),
         HistoryManagedByteRestoreability.metadataOnly,
@@ -211,7 +309,7 @@ void main() {
       expect(
         state.restoreabilityFor(
           reference: reference,
-          revisionId: 11,
+          checkpoint: checkpoint(10, 11),
           managedByteVerifiedPresent: true,
         ),
         HistoryManagedByteRestoreability.metadataOnly,
@@ -219,7 +317,7 @@ void main() {
       expect(
         state.restoreabilityFor(
           reference: reference,
-          revisionId: 12,
+          checkpoint: retained,
           managedByteVerifiedPresent: true,
         ),
         HistoryManagedByteRestoreability.retainedRestorable,
@@ -229,7 +327,9 @@ void main() {
     test('managed reference cannot borrow another byte identity retention', () {
       final state = ManagedByteRetentionState(
         identity: managedIdentity(),
-        retainedHistoryRevisionIds: const <int>[12],
+        retainedHistoryCheckpoints: <ManagedByteHistoryCheckpointIdentity>[
+          checkpoint(10, 12),
+        ],
         referenceAuditComplete: true,
       );
       final other = HistoryByteReference.managed(
@@ -242,7 +342,7 @@ void main() {
       expect(
         () => state.restoreabilityFor(
           reference: other,
-          revisionId: 12,
+          checkpoint: checkpoint(10, 12),
           managedByteVerifiedPresent: true,
         ),
         throwsArgumentError,
