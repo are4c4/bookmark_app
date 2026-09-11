@@ -70,17 +70,15 @@ Always re-check each Issue live before assuming state or ownership.
 The Issue numbers below are durable roadmap/routing anchors, not claims that a PR is currently active. Verify live state before taking ownership. Completed focused Issues are checkpoints, not active work sources.
 
 ### A — Object Core & Body
-- #1058 reversible local Body structural Undo.
-- #1044 generic Person ObjectType normal write authority.
 - #1062 duplicate detection / Object merge / redirect semantics.
 - #1064 durable Object/Property/Body/Relation history contract; split B/F slices when required.
-- Completed checkpoints: #1041 legacy Bookmark → canonical Weblink/generic Object migration authority; #1057 Body contextual block handles/drag reorder.
+- #1177 legacy-only Bookmark engagement/lifecycle preservation boundary where its acceptance remains open.
+- Completed checkpoints: #1041 legacy Bookmark → canonical Weblink/generic Object migration authority; #1044 generic-first Person create/update/delete/reconciliation authority; #1057 Body contextual block handles/drag reorder; #1058/#1121 local structural Undo plus compatibility-safe persisted Body concurrency.
 
 ### B — Relations & Data Integrity
-- #1042 legacy Bookmark-era Relation convergence.
-- #1045 Person groups/roles convergence.
-- Future #1062/#1064 Relation rewiring/restore slices belong in focused B Issues.
-- Completed checkpoints: #1052 canonical Tag Parent/TagGroup integrity and cycle prevention; #1105 strict canonical Tag descendant reader.
+- Future #1062/#1064 Relation rewiring/restore slices belong in focused B Issues when explicitly split.
+- Otherwise resume B only for a newly demonstrated Relation/integrity obligation from a live focused Issue rather than reopening completed migration queues.
+- Completed checkpoints: #1042 retained Bookmark-era Relation convergence; #1045 generic Person roles/groups convergence; #1052 canonical Tag Parent/TagGroup integrity and cycle prevention; #1105 strict canonical Tag descendant reader.
 
 ### C — Database, View & Schema UX
 - #1043 generic Weblink/Object Database/View + Inbox replacement for Stage1 normal ownership.
@@ -96,7 +94,7 @@ The Issue numbers below are durable roadmap/routing anchors, not claims that a P
 Tag/TagGroup are not D-owned native primitives.
 
 ### E — Search & Indexing
-Canonical Object Search is established. Resume only for demonstrated FTS/search freshness/ranking/projection obligations; do not create domain-specific long-term search stores for Bookmark/Person/Tag.
+Canonical Object Search is established. Resume only for demonstrated FTS/search freshness/ranking/projection obligations; do not create domain-specific long-term search stores for Bookmark/Person/Tag. #1178 remains the Person mutation freshness track where live acceptance is unfinished.
 
 ### F — Storage, Vault & Delivery
 - #1063 open export/portability distinct from backup/restore is the current durable roadmap anchor; verify live ownership before taking it.
@@ -121,7 +119,8 @@ H audits architecture drift, duplicate ownership, cross-lane dependencies, share
 ```text
 Object-first constitution
         |
-        +--> Body #1058 [A]
+        +--> completed Body local Undo/concurrency #1058/#1121 [A]
+        |      +--> #1064 [A/B/F] durable history remains distinct and open
         |
         +--> Tag #1050
         |      +--> completed #1052/#1105 [B] integrity/read
@@ -129,14 +128,17 @@ Object-first constitution
         |      +--> broader picker/tree/management UX only where live acceptance remains
         |
         +--> Bookmark retirement #1039
-        |      +--> #1042 [B] relations
+        |      +--> completed #1041 [A] identity/scalar migration authority
+        |      +--> completed #1042 [B] retained Relation convergence
         |      +--> #1043 [C] generic daily-use UX
+        |      +--> #1177 [A] retained legacy-only preservation boundary where applicable
         |      +--> G caller-zero retirement after parity
         |
         +--> People retirement #1040
-        |      +--> #1044 [A] Person authority
-        |      +--> #1045 [B] groups/roles
+        |      +--> completed #1044 [A] Person authority
+        |      +--> completed #1045 [B] groups/roles integrity
         |      +--> #1046 [C] generic UX
+        |      +--> #1178 [E] canonical Search freshness where acceptance remains
         |      +--> G caller-zero retirement after parity
         |
         +--> Platform contracts
@@ -167,7 +169,7 @@ URL → normalize → create/reuse Weblink Object → optional Inbox/Database/Ta
 Richer semantic Objects may reference the Weblink. Do not guess semantic type during migration. Conflicting legacy collisions fail closed/preserve compatibility until a lossless merge policy exists.
 
 ### Person retirement
-Person is a generic ObjectType, not a permanent People subsystem. Profile Image remains a Relation to Image. Generic Inspector/Database/View replaces dedicated management only after authority/integrity/daily-use parity.
+Person is a generic ObjectType, not a permanent People subsystem. Generic-first Person identity/write authority (#1044) and roles/groups integrity (#1045) are completed prerequisites, not active migration queues. Profile Image remains a Relation to Image. Generic Inspector/Database/View and canonical Search replace dedicated management only after remaining daily-use parity.
 
 ### Tag hierarchy
 - Tag and TagGroup are generic Objects.
@@ -186,7 +188,7 @@ Person is a generic ObjectType, not a permanent People subsystem. Profile Image 
 Active → Archived → Trashed → explicit permanent deletion. Managed bytes are physically removed only with proven active-Vault ownership/shared-reference safety.
 
 ### Undo/history
-Local Undo is short-lived interaction recovery; durable history is restart-safe persisted history/restore.
+Local Undo/concurrency correctness is established by #1058/#1121 and remains distinct from #1064 durable, restart-safe history/restore.
 
 ### Portability
 Vault backup/restore is not open export. Portable export must preserve stable identity/graph/schema in a lossless structured layer where possible; Markdown/CSV are projections when they cannot encode the full model.
