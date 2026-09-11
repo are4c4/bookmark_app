@@ -73,6 +73,20 @@ class ObjectMergeStateStore {
     );
   }
 
+  /// Returns whether the complete current A-owned state still matches the
+  /// frozen merge snapshot. Missing Objects/ObjectTypes are treated as stale.
+  Future<bool> matchesCurrent(ObjectMergeStateSnapshot expected) async {
+    try {
+      final current = await capture(
+        objectTypeId: expected.objectTypeId,
+        objectId: expected.objectId,
+      );
+      return _sameSnapshot(current, expected);
+    } on ArgumentError {
+      return false;
+    }
+  }
+
   /// Persists [next] only when the complete current A-owned state still equals
   /// [expected].
   ///
