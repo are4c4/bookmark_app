@@ -85,6 +85,13 @@ class ObjectMergeFinalizer {
         );
       }
 
+      final resolvedSurvivor = await redirectStore.resolve(survivorObjectId);
+      if (resolvedSurvivor != survivorObjectId) {
+        throw StateError(
+          'Object merge survivor is already retired through a redirect chain.',
+        );
+      }
+
       final survivorUnchanged = await stateStore.matchesCurrent(
         prepared.survivor,
       );
