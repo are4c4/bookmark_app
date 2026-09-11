@@ -32,16 +32,15 @@ class ObjectMergeFinalizer {
     required this.relationMergeService,
     required this.redirectStore,
     required this.objectStore,
-    ObjectMergeStateMaterializer materializer =
-        const ObjectMergeStateMaterializer(),
-  }) : _materializer = materializer;
+  });
 
   final GenericDatabaseStore genericStore;
   final ObjectMergeStateStore stateStore;
   final RelationObjectMergeService relationMergeService;
   final ObjectRedirectStore redirectStore;
   final ObjectStore objectStore;
-  final ObjectMergeStateMaterializer _materializer;
+  final ObjectMergeStateMaterializer _materializer =
+      const ObjectMergeStateMaterializer();
 
   Future<ObjectMergeFinalizationResult> finalize({
     required int workspaceId,
