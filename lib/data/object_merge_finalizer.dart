@@ -136,7 +136,9 @@ class ObjectMergeFinalizer {
         objectTypeId: objectTypeId,
         objectId: retiredObjectId,
       )) {
-        throw StateError('Retired Object row still exists after merge finalization.');
+        throw StateError(
+          'Retired Object row still exists after merge finalization.',
+        );
       }
       final resolved = await redirectStore.resolve(retiredObjectId);
       if (resolved != survivorObjectId) {
@@ -156,7 +158,8 @@ class ObjectMergeFinalizer {
   Future<bool> _objectExists({
     required int objectTypeId,
     required int objectId,
-  }) async => (await objectStore.listObjects(objectTypeId)).any(
-    (object) => object.id == objectId,
-  );
+  }) async =>
+      (await objectStore.listObjects(objectTypeId)).any(
+        (object) => object.id == objectId,
+      );
 }
