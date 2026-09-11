@@ -34,6 +34,11 @@ class RelationTargetQuickCreateAction extends StatelessWidget {
           icon: Icons.add_circle_outline,
           tooltip: 'カスタムObjectを作成',
         ),
+      RelationTargetQuickCreateMode.person => const (
+          label: '新しいPersonを作成',
+          icon: Icons.person_add_alt_1_outlined,
+          tooltip: 'Personを作成',
+        ),
       RelationTargetQuickCreateMode.tag => const (
           label: '新しいタグを作成',
           icon: Icons.sell_outlined,

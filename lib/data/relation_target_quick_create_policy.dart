@@ -2,12 +2,14 @@ import '../domain/object_model.dart';
 import 'file_object_service.dart';
 import 'image_object_service.dart';
 import 'object_store.dart';
+import 'person_object_bridge.dart';
 import 'system_object_store.dart';
 import 'tag_object_bridge.dart';
 import 'weblink_object_service.dart';
 
 enum RelationTargetQuickCreateMode {
   genericObject,
+  person,
   tag,
   weblinkUrl,
   managedImage,
@@ -19,8 +21,8 @@ enum RelationTargetQuickCreateMode {
 ///
 /// This is deliberately read-only. It prevents generic presentation from using
 /// title-only Object creation for identity-sensitive built-in primitives. The
-/// actual mutations remain delegated to the canonical Tag/Weblink/Image/File or
-/// normal Object creation boundaries selected by the host.
+/// actual mutations remain delegated to the canonical Person/Tag/Weblink/Image/
+/// File or normal Object creation boundaries selected by the host.
 class RelationTargetQuickCreatePolicy {
   const RelationTargetQuickCreatePolicy({
     required this.objectStore,
@@ -46,6 +48,7 @@ class RelationTargetQuickCreatePolicy {
       targetObjectTypeId,
     );
     return switch (systemKey) {
+      PersonObjectBridge.systemKey => RelationTargetQuickCreateMode.person,
       TagObjectBridge.systemKey => RelationTargetQuickCreateMode.tag,
       WeblinkObjectService.systemKey => RelationTargetQuickCreateMode.weblinkUrl,
       ImageObjectService.systemKey => RelationTargetQuickCreateMode.managedImage,

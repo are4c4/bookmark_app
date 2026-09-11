@@ -51,6 +51,7 @@ class RelationTargetQuickCreateHostService {
         RelationTargetQuickCreateMode.managedImage ||
         RelationTargetQuickCreateMode.managedFile => false,
         RelationTargetQuickCreateMode.genericObject ||
+        RelationTargetQuickCreateMode.person ||
         RelationTargetQuickCreateMode.tag ||
         RelationTargetQuickCreateMode.weblinkUrl ||
         RelationTargetQuickCreateMode.unavailable => true,
@@ -61,6 +62,8 @@ class RelationTargetQuickCreateHostService {
     return switch (mode) {
       RelationTargetQuickCreateMode.genericObject =>
         input.isEmpty ? '新しいObjectを作成' : '「$input」を作成',
+      RelationTargetQuickCreateMode.person =>
+        input.isEmpty ? '新しいPersonを作成' : 'Person「$input」を作成',
       RelationTargetQuickCreateMode.tag =>
         input.isEmpty ? '新しいタグを作成' : 'タグ「$input」を作成',
       RelationTargetQuickCreateMode.weblinkUrl => input.isEmpty
