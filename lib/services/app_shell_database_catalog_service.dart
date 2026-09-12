@@ -51,17 +51,16 @@ class AppShellDatabaseCatalogService {
         .getSingleOrNull();
     if (hasSystemRegistry == null) return null;
 
-    final row = await _store.database.customSelect(
-      '''SELECT d.id, d.workspace_id, d.name, d.icon, d.sort_order
+    final row = await _store.database
+        .customSelect(
+          '''SELECT d.id, d.workspace_id, d.name, d.icon, d.sort_order
          FROM generic_databases d
          INNER JOIN system_object_types s ON s.object_type_id = d.id
          WHERE d.workspace_id = ? AND s.system_key = ?
          LIMIT 1''',
-      variables: [
-        Variable<int>(workspaceId),
-        Variable<String>(systemKey),
-      ],
-    ).getSingleOrNull();
+          variables: [Variable<int>(workspaceId), Variable<String>(systemKey)],
+        )
+        .getSingleOrNull();
     if (row == null) return null;
 
     return AppShellDatabaseRecord(
