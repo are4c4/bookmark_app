@@ -57,8 +57,12 @@ void main() {
       "INSERT INTO photos(path, title) VALUES ('photos/profile-b.jpg', 'Profile Beta')",
     );
     final photos = await database.select(database.photos).get();
-    final firstPhoto = photos.firstWhere((photo) => photo.title == 'Profile Alpha');
-    final secondPhoto = photos.firstWhere((photo) => photo.title == 'Profile Beta');
+    final firstPhoto = photos.firstWhere(
+      (photo) => photo.title == 'Profile Alpha',
+    );
+    final secondPhoto = photos.firstWhere(
+      (photo) => photo.title == 'Profile Beta',
+    );
     await database.customStatement(
       'INSERT INTO people(name, profile_photo_id) VALUES (?, ?)',
       <Object>['Profile Person', firstPhoto.id],
@@ -75,13 +79,17 @@ void main() {
       workspaceId: workspaceId,
       personId: person.id,
     );
-    final secondImageId = (await database.customSelect(
-      'SELECT object_id FROM photo_object_links WHERE workspace_id = ? AND photo_id = ?',
-      variables: <Variable<int>>[
-        Variable<int>(workspaceId),
-        Variable<int>(secondPhoto.id),
-      ],
-    ).getSingle()).read<int>('object_id');
+    final secondImageId =
+        (await database
+                .customSelect(
+                  'SELECT object_id FROM photo_object_links WHERE workspace_id = ? AND photo_id = ?',
+                  variables: <Variable<int>>[
+                    Variable<int>(workspaceId),
+                    Variable<int>(secondPhoto.id),
+                  ],
+                )
+                .getSingle())
+            .read<int>('object_id');
 
     final genericEditor = ObjectRelationEditorService(
       targets: RelationTargetService(objectStore),
@@ -102,8 +110,10 @@ void main() {
     await search.rebuildWorkspace(workspaceId);
 
     expect(
-      (await index.search(workspaceId: workspaceId, rawQuery: 'alpha'))
-          .map((hit) => hit.objectId),
+      (await index.search(
+        workspaceId: workspaceId,
+        rawQuery: 'alpha',
+      )).map((hit) => hit.objectId),
       contains(initial.personObjectId),
     );
 
@@ -113,13 +123,17 @@ void main() {
     );
 
     expect(
-      (await index.search(workspaceId: workspaceId, rawQuery: 'alpha'))
-          .map((hit) => hit.objectId),
+      (await index.search(
+        workspaceId: workspaceId,
+        rawQuery: 'alpha',
+      )).map((hit) => hit.objectId),
       isNot(contains(initial.personObjectId)),
     );
     expect(
-      (await index.search(workspaceId: workspaceId, rawQuery: 'beta'))
-          .map((hit) => hit.objectId),
+      (await index.search(
+        workspaceId: workspaceId,
+        rawQuery: 'beta',
+      )).map((hit) => hit.objectId),
       contains(initial.personObjectId),
     );
   });
