@@ -46,8 +46,9 @@ class CanonicalPersonProfileImageRelationEditService
         systemObjectStore: systemObjects,
       ),
       profileImages: PersonProfileImageRelationService(database),
-      canonicalObjectMutationImpactSink:
-          canonicalObjectMutationImpactSinkFor(database),
+      canonicalObjectMutationImpactSink: canonicalObjectMutationImpactSinkFor(
+        database,
+      ),
     );
   }
 
