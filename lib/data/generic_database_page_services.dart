@@ -1,6 +1,7 @@
 import 'dart:developer' as developer;
 
 import '../services/bookmark_metadata_service.dart';
+import '../services/canonical_person_profile_image_relation_edit_service.dart';
 import '../services/generic_database_file_import_service.dart';
 import '../services/generic_database_image_import_service.dart';
 import '../services/image_managed_file_deletion_policy.dart';
@@ -279,6 +280,11 @@ class GenericDatabasePageServices {
       objectStore: objectStore,
       systemObjects: systemObjects,
     );
+    final genericRelationEditor = ObjectRelationEditorService(
+      targets: RelationTargetService(objectStore),
+      mutations: relationMutations,
+      identitySearch: identitySearch,
+    );
 
     return GenericDatabasePageServices(
       genericStore: genericStore,
@@ -287,11 +293,11 @@ class GenericDatabasePageServices {
       creator: creator,
       imageImport: imageImport,
       fileImport: fileImport,
-      relationEditor: ObjectRelationEditorService(
-        targets: RelationTargetService(objectStore),
-        mutations: relationMutations,
-        identitySearch: identitySearch,
-      ),
+      relationEditor:
+          CanonicalPersonProfileImageRelationEditService.forDatabase(
+            database: genericStore.database,
+            genericEditor: genericRelationEditor,
+          ),
       relationQuickCreatePolicy: relationQuickCreatePolicy,
       relationQuickCreate: relationQuickCreate,
       relationQuickCreateHost: relationQuickCreateHost,
