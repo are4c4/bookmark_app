@@ -15,7 +15,6 @@ import 'collection_management_page.dart';
 import 'global_search_page.dart';
 import 'generic_database_page.dart';
 import 'home_start_page.dart';
-import 'people_management_page.dart';
 import 'profile_management_page.dart';
 import 'settings_page.dart';
 import 'tag_management_page.dart';
@@ -74,6 +73,7 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
   List<WorkspaceInfo> _workspaces = const [];
   List<AppShellDatabaseRecord> _genericDatabases = const [];
   int? _selectedGenericDatabaseId;
+  int? _peopleDatabaseId;
   final Map<int, Widget> _pageCache = {};
   late AppShellDatabaseCatalogService _databaseCatalog;
 
@@ -95,6 +95,7 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
       );
       _pageCache.clear();
       _selectedGenericDatabaseId = null;
+      _peopleDatabaseId = null;
       _reloadWorkspaces();
     } else if (oldWidget.profileState != widget.profileState ||
         oldWidget.themeMode != widget.themeMode) {
@@ -116,12 +117,18 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
   }
 
   Future<void> _reloadGenericDatabases() async {
+    final workspaceId = widget.repository.workspaceId;
     final databases = await _databaseCatalog.listDatabases(
-      workspaceId: widget.repository.workspaceId,
+      workspaceId: workspaceId,
+    );
+    final peopleDatabase = await _databaseCatalog.findSystemDatabase(
+      workspaceId: workspaceId,
+      systemKey: 'person',
     );
     if (!mounted) return;
     setState(() {
       _genericDatabases = databases;
+      _peopleDatabaseId = peopleDatabase?.id;
       if (_selectedGenericDatabaseId != null &&
           !databases.any((item) => item.id == _selectedGenericDatabaseId)) {
         _selectedGenericDatabaseId = null;
@@ -500,6 +507,20 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
   }
 
   void _selectPage(int index) {
+    if (index == 7) {
+      final databaseId = _peopleDatabaseId;
+      if (databaseId == null) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('人物データベースを開けませんでした。')));
+        return;
+      }
+      setState(() {
+        _selectedGenericDatabaseId = databaseId;
+        _index = 11;
+        _pageCache.remove(11);
+      });
+      return;
+    }
     if (index == _index) return;
     setState(() {
       if (index == 1 || index == 12) {
@@ -820,7 +841,6 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
         3 => BookmarkLifecyclePage.archive(repository: widget.repository),
         4 => BookmarkLifecyclePage.trash(repository: widget.repository),
         6 => TagManagementPage(repository: widget.repository),
-        7 => PeopleManagementPage(repository: widget.repository),
         8 => CollectionManagementPage(repository: widget.repository),
         9 => ProfileManagementPage(
             state: widget.profileState,

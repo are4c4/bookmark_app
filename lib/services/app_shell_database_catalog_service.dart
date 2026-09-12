@@ -1,3 +1,5 @@
+import 'package:drift/drift.dart';
+
 import '../data/generic_database_store.dart';
 import '../data/object_type_template_store.dart';
 import '../data/workspace_store.dart';
@@ -33,6 +35,41 @@ class AppShellDatabaseCatalogService {
     required int workspaceId,
   }) {
     return _store.listDatabases(workspaceId);
+  }
+
+  /// Resolves one registered system ObjectType to its canonical generic
+  /// Database without relying on its user-facing/display name.
+  Future<AppShellDatabaseRecord?> findSystemDatabase({
+    required int workspaceId,
+    required String systemKey,
+  }) async {
+    await _store.ensureSchema();
+    final hasSystemRegistry = await _store.database
+        .customSelect(
+          "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'system_object_types' LIMIT 1",
+        )
+        .getSingleOrNull();
+    if (hasSystemRegistry == null) return null;
+
+    final row = await _store.database
+        .customSelect(
+          '''SELECT d.id, d.workspace_id, d.name, d.icon, d.sort_order
+         FROM generic_databases d
+         INNER JOIN system_object_types s ON s.object_type_id = d.id
+         WHERE d.workspace_id = ? AND s.system_key = ?
+         LIMIT 1''',
+          variables: [Variable<int>(workspaceId), Variable<String>(systemKey)],
+        )
+        .getSingleOrNull();
+    if (row == null) return null;
+
+    return AppShellDatabaseRecord(
+      id: row.read<int>('id'),
+      workspaceId: row.read<int>('workspace_id'),
+      name: row.read<String>('name'),
+      icon: row.read<String>('icon'),
+      sortOrder: row.read<int>('sort_order'),
+    );
   }
 
   Future<int> createEmptyDatabase({
