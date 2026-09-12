@@ -7,23 +7,20 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test(
-    'generic database composition installs Person Profile Image compatibility router',
-    () async {
-      final database = AppDatabase.forTesting(NativeDatabase.memory());
-      addTearDown(database.close);
-      final genericStore = GenericDatabaseStore(database);
-      final objectStore = ObjectStore(genericStore);
+  test('generic database composition installs Person Profile Image compatibility router', () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
 
-      final services = GenericDatabasePageServices.fromStores(
-        genericStore: genericStore,
-        objectStore: objectStore,
-      );
+    final services = GenericDatabasePageServices.fromStores(
+      genericStore: genericStore,
+      objectStore: objectStore,
+    );
 
-      expect(
-        services.relationEditor,
-        isA<CanonicalPersonProfileImageRelationEditService>(),
-      );
-    },
-  );
+    expect(
+      services.relationEditor,
+      isA<CanonicalPersonProfileImageRelationEditService>(),
+    );
+  });
 }
