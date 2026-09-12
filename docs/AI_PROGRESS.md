@@ -94,7 +94,7 @@ The Issue numbers below are durable roadmap/routing anchors, not claims that a P
 Tag/TagGroup are not D-owned native primitives.
 
 ### E — Search & Indexing
-Canonical Object Search is established. Resume only for demonstrated FTS/search freshness/ranking/projection obligations; do not create domain-specific long-term search stores for Bookmark/Person/Tag. #1178 remains the Person mutation freshness track where live acceptance is unfinished.
+Canonical Object Search is established. #1178 is a completed checkpoint for canonical Person mutation Search freshness. Resume E only for a newly demonstrated FTS/search correctness, freshness, ranking, projection, or opening obligation; do not create domain-specific long-term search stores for Bookmark/Person/Tag.
 
 ### F — Storage, Vault & Delivery
 - #1063 open export/portability distinct from backup/restore is the current durable roadmap anchor; verify live ownership before taking it.
@@ -138,7 +138,7 @@ Object-first constitution
         |      +--> completed #1044 [A] Person authority
         |      +--> completed #1045 [B] groups/roles integrity
         |      +--> #1046 [C] generic UX
-        |      +--> #1178 [E] canonical Search freshness where acceptance remains
+        |      +--> completed #1178 [E] canonical Person mutation Search freshness
         |      +--> G caller-zero retirement after parity
         |
         +--> Platform contracts
@@ -169,7 +169,7 @@ URL → normalize → create/reuse Weblink Object → optional Inbox/Database/Ta
 Richer semantic Objects may reference the Weblink. Do not guess semantic type during migration. Conflicting legacy collisions fail closed/preserve compatibility until a lossless merge policy exists.
 
 ### Person retirement
-Person is a generic ObjectType, not a permanent People subsystem. Generic-first Person identity/write authority (#1044) and roles/groups integrity (#1045) are completed prerequisites, not active migration queues. Profile Image remains a Relation to Image. Generic Inspector/Database/View and canonical Search replace dedicated management only after remaining daily-use parity.
+Person is a generic ObjectType, not a permanent People subsystem. Generic-first Person identity/write authority (#1044), roles/groups integrity (#1045), and canonical Person mutation Search freshness (#1178) are completed prerequisites, not active migration queues. Profile Image remains a Relation to Image. Generic Inspector/Database/View replace dedicated management only after remaining daily-use parity; future E work requires a newly demonstrated canonical Search defect rather than reopening #1178.
 
 ### Tag hierarchy
 - Tag and TagGroup are generic Objects.
