@@ -37,20 +37,20 @@ Future<BookmarkRepository> _repository(AppDatabase database) async {
 }
 
 Widget _shell(BookmarkRepository repository) => MaterialApp(
-      home: BookmarkAppShell(
-        repository: repository,
-        profileState: _profileState,
-        themeMode: ThemeMode.light,
-        onThemeModeChanged: (_) {},
-        onSwitchProfile: (_) async {},
-        onCreateProfile: (_) async {},
-        onRenameProfile: (_, __) async {},
-        onDuplicateProfile: (_) async {},
-        onImportProfileBackup: (_, __) async {},
-        onDeleteProfile: (_) async {},
-        onSwitchWorkspace: (_) async {},
-      ),
-    );
+  home: BookmarkAppShell(
+    repository: repository,
+    profileState: _profileState,
+    themeMode: ThemeMode.light,
+    onThemeModeChanged: (_) {},
+    onSwitchProfile: (_) async {},
+    onCreateProfile: (_) async {},
+    onRenameProfile: (_, __) async {},
+    onDuplicateProfile: (_) async {},
+    onImportProfileBackup: (_, __) async {},
+    onDeleteProfile: (_) async {},
+    onSwitchWorkspace: (_) async {},
+  ),
+);
 
 void main() {
   testWidgets('人物 shell destination opens canonical generic People Database', (
@@ -62,10 +62,8 @@ void main() {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
     final repository = await _repository(database);
-    await PersonObjectWriteService.forDatabase(database).create(
-      workspaceId: repository.workspaceId,
-      name: 'Shell Person',
-    );
+    await PersonObjectWriteService.forDatabase(database)
+        .create(workspaceId: repository.workspaceId, name: 'Shell Person');
 
     await tester.pumpWidget(_shell(repository));
     await tester.pumpAndSettle();
