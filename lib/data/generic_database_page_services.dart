@@ -293,10 +293,11 @@ class GenericDatabasePageServices {
       creator: creator,
       imageImport: imageImport,
       fileImport: fileImport,
-      relationEditor: CanonicalPersonProfileImageRelationEditService.forDatabase(
-        database: genericStore.database,
-        genericEditor: genericRelationEditor,
-      ),
+      relationEditor:
+          CanonicalPersonProfileImageRelationEditService.forDatabase(
+            database: genericStore.database,
+            genericEditor: genericRelationEditor,
+          ),
       relationQuickCreatePolicy: relationQuickCreatePolicy,
       relationQuickCreate: relationQuickCreate,
       relationQuickCreateHost: relationQuickCreateHost,
