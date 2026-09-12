@@ -510,9 +510,10 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
     if (index == 7) {
       final databaseId = _peopleDatabaseId;
       if (databaseId == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('人物データベースを開けませんでした。')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(
+              const SnackBar(content: Text('人物データベースを開けませんでした。')),
+            );
         return;
       }
       setState(() {
