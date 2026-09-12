@@ -22,10 +22,10 @@ class CanonicalPersonProfileImageRelationEditService
     required this.personBridge,
     required this.profileImages,
   }) : super(
-          targets: genericEditor.targets,
-          mutations: genericEditor.mutations,
-          identitySearch: genericEditor.identitySearch,
-        );
+         targets: genericEditor.targets,
+         mutations: genericEditor.mutations,
+         identitySearch: genericEditor.identitySearch,
+       );
 
   factory CanonicalPersonProfileImageRelationEditService.forDatabase({
     required AppDatabase database,
