@@ -48,37 +48,40 @@ void main() {
     },
   );
 
-  test('native canonical Image clears stale legacy projection but remains canonical', () async {
-    final fixture = await _fixture();
-    addTearDown(fixture.database.close);
-    await fixture.profileImages.migrateLegacyProfilePhoto(
-      workspaceId: fixture.workspaceId,
-      personId: fixture.personId,
-    );
-    final nativeImage = await fixture.images.findOrCreateManaged(
-      workspaceId: fixture.workspaceId,
-      filePath: 'images/native-person-profile.png',
-      title: 'Native Person profile',
-      originalFilename: 'native-person-profile.png',
-    );
-    final context = (await fixture.profileImages.load(
-      workspaceId: fixture.workspaceId,
-      personId: fixture.personId,
-    )).relation;
+  test(
+    'native canonical Image clears stale legacy projection but remains canonical',
+    () async {
+      final fixture = await _fixture();
+      addTearDown(fixture.database.close);
+      await fixture.profileImages.migrateLegacyProfilePhoto(
+        workspaceId: fixture.workspaceId,
+        personId: fixture.personId,
+      );
+      final nativeImage = await fixture.images.findOrCreateManaged(
+        workspaceId: fixture.workspaceId,
+        filePath: 'images/native-person-profile.png',
+        title: 'Native Person profile',
+        originalFilename: 'native-person-profile.png',
+      );
+      final context = (await fixture.profileImages.load(
+        workspaceId: fixture.workspaceId,
+        personId: fixture.personId,
+      )).relation;
 
-    await fixture.router.save(
-      context: context,
-      selectedObjectIds: <int>[nativeImage.id],
-    );
+      await fixture.router.save(
+        context: context,
+        selectedObjectIds: <int>[nativeImage.id],
+      );
 
-    final after = await fixture.profileImages.load(
-      workspaceId: fixture.workspaceId,
-      personId: fixture.personId,
-    );
-    expect(after.selectedImageObjectId, nativeImage.id);
-    expect(after.legacyProfilePhotoId, isNull);
-    expect(await _legacyProfilePhotoId(fixture), isNull);
-  });
+      final after = await fixture.profileImages.load(
+        workspaceId: fixture.workspaceId,
+        personId: fixture.personId,
+      );
+      expect(after.selectedImageObjectId, nativeImage.id);
+      expect(after.legacyProfilePhotoId, isNull);
+      expect(await _legacyProfilePhotoId(fixture), isNull);
+    },
+  );
 
   test(
     'generic profile clear clears canonical and legacy projections',
@@ -109,49 +112,52 @@ void main() {
     },
   );
 
-  test('native canonical Person uses ordinary Relation semantics without legacy row', () async {
-    final fixture = await _fixture();
-    addTearDown(fixture.database.close);
-    final legacyState = await fixture.profileImages.load(
-      workspaceId: fixture.workspaceId,
-      personId: fixture.personId,
-    );
-    final personSchema = await fixture.personBridge.ensurePersonObjectType(
-      fixture.workspaceId,
-    );
-    final nativePersonId = await fixture.objectStore.createObject(
-      objectTypeId: personSchema.objectType.id,
-      title: 'Native Person',
-    );
-    final context = await fixture.targets.selectionFor(
-      workspaceId: fixture.workspaceId,
-      sourceObjectId: nativePersonId,
-      property: legacyState.property,
-    );
-
-    await fixture.router.save(
-      context: context,
-      selectedObjectIds: <int>[fixture.firstImageObjectId],
-    );
-
-    final refreshed = await fixture.targets.selectionFor(
-      workspaceId: fixture.workspaceId,
-      sourceObjectId: nativePersonId,
-      property: legacyState.property,
-    );
-    expect(refreshed.selectedObjectIds, <int>[fixture.firstImageObjectId]);
-    expect(
-      await fixture.personBridge.legacyPersonIdForObject(
+  test(
+    'native canonical Person uses ordinary Relation semantics without legacy row',
+    () async {
+      final fixture = await _fixture();
+      addTearDown(fixture.database.close);
+      final legacyState = await fixture.profileImages.load(
+        workspaceId: fixture.workspaceId,
+        personId: fixture.personId,
+      );
+      final personSchema = await fixture.personBridge.ensurePersonObjectType(
         fixture.workspaceId,
-        nativePersonId,
-      ),
-      isNull,
-    );
-    expect(
-      await fixture.database.select(fixture.database.people).get(),
-      hasLength(1),
-    );
-  });
+      );
+      final nativePersonId = await fixture.objectStore.createObject(
+        objectTypeId: personSchema.objectType.id,
+        title: 'Native Person',
+      );
+      final context = await fixture.targets.selectionFor(
+        workspaceId: fixture.workspaceId,
+        sourceObjectId: nativePersonId,
+        property: legacyState.property,
+      );
+
+      await fixture.router.save(
+        context: context,
+        selectedObjectIds: <int>[fixture.firstImageObjectId],
+      );
+
+      final refreshed = await fixture.targets.selectionFor(
+        workspaceId: fixture.workspaceId,
+        sourceObjectId: nativePersonId,
+        property: legacyState.property,
+      );
+      expect(refreshed.selectedObjectIds, <int>[fixture.firstImageObjectId]);
+      expect(
+        await fixture.personBridge.legacyPersonIdForObject(
+          fixture.workspaceId,
+          nativePersonId,
+        ),
+        isNull,
+      );
+      expect(
+        await fixture.database.select(fixture.database.people).get(),
+        hasLength(1),
+      );
+    },
+  );
 
   test(
     'missing legacy mapping fails closed before generic profile mutation',
