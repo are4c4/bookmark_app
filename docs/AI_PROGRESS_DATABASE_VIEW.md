@@ -40,17 +40,18 @@ Integrated C checkpoints:
 - canonical Person is exposed as the ordinary generic `People` Database/navigation collection, including an empty workspace with zero legacy People rows (#1199 / PR #1220);
 - normal generic Database creation for the registered system Person ObjectType routes through A's `PersonObjectWriteService` rather than title-only Object creation (#1224 / PR #1225);
 - Relation-picker Person quick-create uses the same canonical Person write authority and returns the canonical Person Object id (#1230 / PR #1231);
-- Person Board/group creation preserves canonical Person authority and applies the group preset to that same Object/transaction (#1234 / PR #1235).
+- Person Board/group creation preserves canonical Person authority and applies the group preset to that same Object/transaction (#1234 / PR #1235);
+- dedicated People group lifecycle/membership writes now route through canonical Object/Relation-first boundaries while retained legacy group/membership rows remain compatibility projection (#1237 / PR #1277).
 
-Do not reimplement those creation/navigation paths. Remaining #1046 parity must be re-audited from current `main`, with emphasis on:
+Do not reimplement those creation/navigation/group-write paths. Remaining #1046 parity must be re-audited from current `main`, with emphasis on:
 - normal Person rename/Note edit and lifecycle/delete through generic Object/Database/Inspector flows;
-- canonical Profile Image presentation through the Person -> Image Relation using generic Relation/Gallery capabilities where possible;
-- groups/roles/backlinks through canonical Relation/Database contracts;
+- canonical Profile Image presentation/editing through the Person -> Image Relation using generic Relation/Gallery capabilities where possible while preserving the temporary compatibility boundary where still required;
+- groups/roles/backlinks through canonical Relation/Database contracts rather than extending dedicated People storage authority;
 - search/filter/group/persisted View/opening behavior needed for normal People workflows;
 - inline editing/creation and keyboard/focus/empty-state behavior;
 - proving the dedicated `PeopleManagementPage` route becomes caller-zero only after equivalent daily-use workflows are available generically.
 
-Concrete transition bug #1237 owns the surviving `PeopleManagementPage` group lifecycle/membership writes that still call legacy `PersonGroupStore` directly. Do not duplicate that work. After #1237, re-audit whether those dedicated controls can be removed rather than further extended.
+The #1237 group-write transition bug is completed and must not be selected as active work. The remaining Profile Image compatibility boundary is a focused transition concern: generic Person Relation editing must preserve canonical Relation authority and only maintain legacy compatibility state where current contracts still require it. Re-audit live focused ownership before taking that work, and prefer removing dedicated controls after generic parity rather than further extending `PeopleManagementPage`.
 
 ### #1061 — Home/start UX
 Home converges on Inbox / Recent / Favorites / Pinned Databases without making legacy Bookmark/People modules permanent navigation authority.
@@ -75,34 +76,34 @@ Move ordinary saved-URL use to canonical Weblink Objects through generic Databas
 - generic Database sidebar/command-palette navigation;
 - canonical Images/Weblinks/Daily Notes/People system collection defaults;
 - normal generic Person create, Relation-picker quick-create and Board-create routed through canonical Person authority;
+- People group lifecycle/membership transition writes routed through canonical Object/Relation boundaries;
 - shared Object opening/Inspector/Body composition;
 - Home start routing with canonical recently-changed Object projection, transition-only Bookmark mirror suppression and canonical Weblink quick capture;
 - completed canonical hierarchy-aware Tag Database/View query runtime from #1053 using B's #1052/#1105 integrity/read contracts.
 
-Older statements that A/#1044 or B/#1045 are unresolved blockers for C are obsolete. Older statements that Person collection/create/Relation-picker/Board-create or Home canonical URL capture still need to be built are also obsolete. #1046/#1061 remain open for the parity/contracts explicitly listed above.
+Older statements that A/#1044 or B/#1045 are unresolved blockers for C are obsolete. Older statements that Person collection/create/Relation-picker/Board-create, People group canonicalization, or Home canonical URL capture still need to be built are also obsolete. #1046/#1061 remain open for the parity/contracts explicitly listed above.
 
 ## Cross-lane boundaries
 - **A:** Object/ObjectType identity/lifecycle, Body, Person/Bookmark migration authority. C consumes completed #1044 rather than recreating Person write identity.
-- **B:** Relation integrity, Tag Parent/group cycle/cardinality correctness, Bookmark/Person relationship migration. C consumes completed #1045 and the canonical Person Group Object/Relation boundaries; #1237 changes only surviving UI composition.
+- **B:** Relation integrity, Tag Parent/group cycle/cardinality correctness, Bookmark/Person relationship migration. C consumes completed #1045 and the canonical Person Group Object/Relation boundaries; completed #1237 composes those boundaries into the surviving transition UI rather than creating a second authority.
 - **D:** Weblink/Image/File native behavior and direct URL capture. Home capture delegates to D's canonical Weblink identity service.
 - **E:** FTS/search architecture; C owns Database/View typed query/filter semantics, not global FTS persistence. Person Search freshness remains E-owned where live acceptance exists.
 - **F:** Vault/storage lifecycle.
 - **G:** behavior-preserving shared-host reduction and caller-zero dedicated-page retirement after C parity.
 
 ## Shared hotspots
-`generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, `bookmark_unified_stage1_page.dart` and `people_management_page.dart` are conflict-prone. Recheck live PR ownership before editing. Prefer reusable query/domain/presentation components and small host-composition hunks over broad rewrites. #1237 specifically owns the surviving People group-write transition bug; avoid duplicate ownership.
+`generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, `bookmark_unified_stage1_page.dart` and `people_management_page.dart` are conflict-prone. Recheck live PR ownership before editing. Prefer reusable query/domain/presentation components and small host-composition hunks over broad rewrites. Completed #1237 no longer reserves `people_management_page.dart`; live PR ownership remains authoritative for any new work.
 
 ## Validation
 Changed-Dart format, Analyze, full Flutter Test and focused serialization/widget/real-host regressions are required for primary flows. UI acceptance includes click/key count, inline creation/editing, predictable focus, empty/error/loading states and clear remove-vs-delete semantics. Docs-only handoff changes use the repository docs/coordination path plus required merge-gate.
 
 ## Resume sequence
 1. refresh latest `main`, live open PR ownership, current CI, shared-hotspot and migration ownership;
-2. re-read live #1043/#1046/#1061, #1237 and broader #1050 acceptance/dependency status; treat #1053 and the integrated Person creation/navigation checkpoints as completed rather than implementation queues;
-3. if #1237 is unowned and safe, it is the concrete current #1046 transition bug; otherwise choose another demonstrated non-conflicting C parity gap rather than duplicating ownership;
-4. for #1046, re-audit generic edit/delete/lifecycle, Profile Image, groups/roles/backlinks, query/filter/opening and caller-zero readiness before splitting new work;
-5. for #1061, keep Home canonical Weblink capture as completed and implement Inbox/Favorites/Pinned only after their canonical contracts are explicit;
-6. for #1043, preserve canonical Weblink/Object Database/View semantics and do not grow legacy Bookmark authority;
-7. avoid broad shared-host edits until the underlying contract is testable in reusable components;
-8. after each coherent slice/PR/merge, apply the shared **Lane continuation and resume/stop contract** in `AGENTS.md` and continue while safe C work exists.
+2. re-read live #1043/#1046/#1061 and broader #1050 acceptance/dependency status; treat #1053, #1237 and the integrated Person creation/navigation checkpoints as completed rather than implementation queues;
+3. for #1046, re-audit generic edit/delete/lifecycle, Profile Image compatibility, groups/roles/backlinks, query/filter/opening and caller-zero readiness before splitting new work; prefer focused generic composition gaps over extending `PeopleManagementPage`;
+4. for #1061, keep Home canonical Weblink capture as completed and implement Inbox/Favorites/Pinned only after their canonical contracts are explicit;
+5. for #1043, preserve canonical Weblink/Object Database/View semantics and do not grow legacy Bookmark authority;
+6. avoid broad shared-host edits until the underlying contract is testable in reusable components;
+7. after each coherent slice/PR/merge, apply the shared **Lane continuation and resume/stop contract** in `AGENTS.md` and continue while safe C work exists.
 
 If the final resume audit finds no actionable C work, record the exact stop category from `AGENTS.md` with live evidence. Completion of one historical Person/Home slice is never, by itself, a stop reason.
