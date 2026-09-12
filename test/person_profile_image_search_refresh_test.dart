@@ -5,7 +5,6 @@ import 'package:bookmark_app/data/core_object_bridge.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
 import 'package:bookmark_app/data/object_relation_editor_service.dart';
 import 'package:bookmark_app/data/object_store.dart';
-import 'package:bookmark_app/data/person_object_bridge.dart';
 import 'package:bookmark_app/data/relation_mutation_service.dart';
 import 'package:bookmark_app/data/relation_target_service.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
