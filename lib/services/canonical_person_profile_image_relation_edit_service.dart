@@ -1,4 +1,5 @@
 import '../data/app_database.dart';
+import '../data/canonical_object_mutation_impact_sink.dart';
 import '../data/object_relation_editor_service.dart';
 import '../data/person_object_bridge.dart';
 import '../data/relation_target_service.dart';
@@ -21,6 +22,7 @@ class CanonicalPersonProfileImageRelationEditService
     required this.genericEditor,
     required this.personBridge,
     required this.profileImages,
+    this.canonicalObjectMutationImpactSink,
   }) : super(
          targets: genericEditor.targets,
          mutations: genericEditor.mutations,
@@ -44,12 +46,16 @@ class CanonicalPersonProfileImageRelationEditService
         systemObjectStore: systemObjects,
       ),
       profileImages: PersonProfileImageRelationService(database),
+      canonicalObjectMutationImpactSink: canonicalObjectMutationImpactSinkFor(
+        database,
+      ),
     );
   }
 
   final ObjectRelationEditorService genericEditor;
   final PersonObjectBridge personBridge;
   final PersonProfileImageRelationService profileImages;
+  final CanonicalObjectMutationImpactSink? canonicalObjectMutationImpactSink;
 
   @override
   Future<void> save({
@@ -117,6 +123,9 @@ class CanonicalPersonProfileImageRelationEditService
         workspaceId: workspaceId,
         personId: mappedLegacyId,
       );
+      await canonicalObjectMutationImpactSink?.objectCommitted(
+        context.sourceObject.id,
+      );
       return;
     }
 
@@ -124,6 +133,9 @@ class CanonicalPersonProfileImageRelationEditService
       workspaceId: workspaceId,
       personId: mappedLegacyId,
       imageObjectId: selected.single,
+    );
+    await canonicalObjectMutationImpactSink?.objectCommitted(
+      context.sourceObject.id,
     );
   }
 
