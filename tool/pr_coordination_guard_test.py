@@ -157,6 +157,101 @@ Migration/data impact: no
         )
         self.assertTrue(any("#11" in error for error in errors))
 
+    def test_open_pull_claims_finds_duplicate_on_second_page(self) -> None:
+        first_page = [
+            {
+                "number": number,
+                "title": f"PR {number}",
+                "body": "- Related issue: #1000",
+                "head": {"ref": f"feature/object-{number}"},
+            }
+            for number in range(1, 101)
+        ]
+        second_page = [
+            {
+                "number": 101,
+                "title": "Page two duplicate",
+                "body": "- Related issue: #999",
+                "head": {"ref": "refactor/issue-999-duplicate"},
+            }
+        ]
+        with mock.patch.object(
+            guard,
+            "_request_json",
+            side_effect=[first_page, second_page],
+        ) as request:
+            pulls = guard._open_pull_claims(
+                "https://api.github.com/repos/owner/repo",
+                "token",
+            )
+
+        duplicates = guard.duplicate_issue_claims(200, 999, pulls)
+        self.assertEqual([pull.number for pull in duplicates], [101])
+        self.assertEqual(
+            request.call_args_list,
+            [
+                mock.call(
+                    "https://api.github.com/repos/owner/repo/pulls?state=open&per_page=100&page=1",
+                    "token",
+                ),
+                mock.call(
+                    "https://api.github.com/repos/owner/repo/pulls?state=open&per_page=100&page=2",
+                    "token",
+                ),
+            ],
+        )
+
+    def test_open_pull_claims_multiple_pages_without_duplicate_passes(self) -> None:
+        first_page = [
+            {
+                "number": number,
+                "title": f"PR {number}",
+                "body": "- Related issue: #1000",
+                "head": {"ref": f"feature/object-{number}"},
+            }
+            for number in range(1, 101)
+        ]
+        second_page = [
+            {
+                "number": 101,
+                "title": "Different issue",
+                "body": "- Related issue: #1001",
+                "head": {"ref": "feature/object-1001"},
+            }
+        ]
+        with mock.patch.object(
+            guard,
+            "_request_json",
+            side_effect=[first_page, second_page],
+        ):
+            pulls = guard._open_pull_claims(
+                "https://api.github.com/repos/owner/repo",
+                "token",
+            )
+
+        self.assertEqual(guard.duplicate_issue_claims(200, 999, pulls), [])
+
+    def test_open_pull_claims_malformed_later_page_fails_closed(self) -> None:
+        first_page = [
+            {
+                "number": number,
+                "title": f"PR {number}",
+                "body": "- Related issue: #1000",
+                "head": {"ref": f"feature/object-{number}"},
+            }
+            for number in range(1, 101)
+        ]
+        with mock.patch.object(
+            guard,
+            "_request_json",
+            side_effect=[first_page, {"message": "unexpected"}],
+        ):
+            with self.assertRaises(ValueError):
+                guard._open_pull_claims(
+                    "https://api.github.com/repos/owner/repo",
+                    "token",
+                )
+
     def test_open_dependency_remains_advisory(self) -> None:
         contract = self.contract(
             """

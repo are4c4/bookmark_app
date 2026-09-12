@@ -406,9 +406,7 @@ def _current_base_approval_policy_active(
 
 
 def _open_pull_claims(api_root: str, token: str) -> list[OpenPullClaim]:
-    payload = _request_json(f"{api_root}/pulls?state=open&per_page=100", token)
-    if not isinstance(payload, list):
-        raise ValueError("Open pull request response was not a list")
+    payload = _request_paginated_list(f"{api_root}/pulls?state=open", token)
 
     claims: list[OpenPullClaim] = []
     for row in payload:
