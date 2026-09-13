@@ -1,5 +1,6 @@
 import 'package:bookmark_app/features/database/presentation/widgets/resizable_database_table.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Widget _host({
@@ -106,11 +107,48 @@ void main() {
     );
   });
 
-  testWidgets('resize handle exposes keyboard shortcuts and resize cursor', (
+  testWidgets('same columns adopt changed external persisted widths', (
     tester,
   ) async {
-    await tester.pumpWidget(_host(onWidthCommitted: (_, __) async {}));
+    await tester.pumpWidget(
+      _host(
+        initialWidths: const <String, dynamic>{'title': 216, 'p:7': 224},
+        onWidthCommitted: (_, __) async {},
+      ),
+    );
 
+    final title = find.byKey(
+      const ValueKey<String>('database-table-column-title'),
+    );
+    final note = find.byKey(
+      const ValueKey<String>('database-table-column-p:7'),
+    );
+    expect(tester.getSize(title).width, 216);
+    expect(tester.getSize(note).width, 224);
+
+    await tester.pumpWidget(
+      _host(
+        initialWidths: const <String, dynamic>{'title': 304, 'p:7': 144},
+        onWidthCommitted: (_, __) async {},
+      ),
+    );
+    await tester.pump();
+
+    expect(tester.getSize(title).width, 304);
+    expect(tester.getSize(note).width, 144);
+  });
+
+  testWidgets('resize handle supports focused keyboard resizing', (
+    tester,
+  ) async {
+    final commits = <(String, double)>[];
+    await tester.pumpWidget(
+      _host(onWidthCommitted: (key, width) async => commits.add((key, width))),
+    );
+
+    final column = find.byKey(
+      const ValueKey<String>('database-table-column-title'),
+    );
     final handle = find.byKey(
       const ValueKey<String>('database-table-resize-title'),
     );
@@ -119,11 +157,12 @@ void main() {
     );
     expect(mouseRegion.cursor, SystemMouseCursors.resizeColumn);
 
-    final focusable = tester.widget<FocusableActionDetector>(
-      find
-          .ancestor(of: handle, matching: find.byType(FocusableActionDetector))
-          .first,
-    );
-    expect(focusable.shortcuts, isNotEmpty);
+    await tester.tap(handle);
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pump();
+
+    expect(tester.getSize(column).width, 216);
+    expect(commits, <(String, double)>[('title', 216)]);
   });
 }
