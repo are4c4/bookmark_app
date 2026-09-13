@@ -175,8 +175,10 @@ class _ObjectBodyDocumentEntryState extends State<_ObjectBodyDocumentEntry> {
   Widget build(BuildContext context) {
     final usesTouchChrome = _usesTouchChrome(context);
     final hasActions = widget.blockActionsBuilder != null;
-    final showActions =
-        hasActions && (_hovered || _focused || _touchActionsVisible);
+    final showActions = hasActions &&
+        (usesTouchChrome
+            ? _touchActionsVisible
+            : (_hovered || _focused));
 
     final blockView = ObjectBodyBlockView(
       key: ValueKey('object-body-block-${_block.id}'),
@@ -208,6 +210,18 @@ class _ObjectBodyDocumentEntryState extends State<_ObjectBodyDocumentEntry> {
           : null,
     );
 
+    final actions = Offstage(
+      offstage: !showActions,
+      child: Row(
+        key: ValueKey('body-block-actions-${_block.id}'),
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (widget.canReorder) _buildDragHandle(context),
+          widget.blockActionsBuilder!(context, _block, widget.position),
+        ],
+      ),
+    );
+
     return Focus(
       canRequestFocus: false,
       skipTraversal: true,
@@ -224,58 +238,71 @@ class _ObjectBodyDocumentEntryState extends State<_ObjectBodyDocumentEntry> {
           if (!_hovered) return;
           setState(() => _hovered = false);
         },
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        child: usesTouchChrome
+            ? _buildTouchEntry(blockView, actions, hasActions)
+            : _buildDesktopEntry(context, blockView, actions, hasActions),
+      ),
+    );
+  }
+
+  Widget _buildDesktopEntry(
+    BuildContext context,
+    Widget blockView,
+    Widget actions,
+    bool hasActions,
+  ) {
+    if (!hasActions) return blockView;
+    final scheme = Theme.of(context).colorScheme;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        blockView,
+        Positioned(
+          top: -6,
+          right: 0,
+          child: Material(
+            key: ValueKey('body-block-gutter-${_block.id}'),
+            color: scheme.surface.withValues(alpha: 0.96),
+            borderRadius: BorderRadius.circular(8),
+            child: actions,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTouchEntry(Widget blockView, Widget actions, bool hasActions) {
+    if (!hasActions) return blockView;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Stack(
           children: [
-            if (usesTouchChrome && hasActions)
-              Stack(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(right: 40),
-                    child: blockView,
-                  ),
-                  Positioned(
-                    top: 0,
-                    right: 0,
-                    child: IconButton(
-                      key: ValueKey('body-block-touch-actions-${_block.id}'),
-                      tooltip: _touchActionsVisible
-                          ? 'ブロック操作を閉じる'
-                          : 'ブロック操作を表示',
-                      icon: Icon(
-                        _touchActionsVisible ? Icons.close : Icons.more_horiz,
-                        size: 18,
-                      ),
-                      onPressed: () => setState(
-                        () => _touchActionsVisible = !_touchActionsVisible,
-                      ),
-                    ),
-                  ),
-                ],
-              )
-            else
-              blockView,
-            if (hasActions)
-              Offstage(
-                offstage: !showActions,
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (widget.canReorder) _buildDragHandle(context),
-                      widget.blockActionsBuilder!(
-                        context,
-                        _block,
-                        widget.position,
-                      ),
-                    ],
-                  ),
+            Padding(
+              padding: const EdgeInsets.only(right: 40),
+              child: blockView,
+            ),
+            Positioned(
+              top: 0,
+              right: 0,
+              child: IconButton(
+                key: ValueKey('body-block-touch-actions-${_block.id}'),
+                tooltip: _touchActionsVisible
+                    ? 'ブロック操作を閉じる'
+                    : 'ブロック操作を表示',
+                icon: Icon(
+                  _touchActionsVisible ? Icons.close : Icons.more_horiz,
+                  size: 18,
+                ),
+                onPressed: () => setState(
+                  () => _touchActionsVisible = !_touchActionsVisible,
                 ),
               ),
+            ),
           ],
         ),
-      ),
+        actions,
+      ],
     );
   }
 
