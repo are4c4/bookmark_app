@@ -95,6 +95,23 @@ This checkpoint does **not** add signing/notarization, automatic updates, releas
 
 Focused tests cover clean/dirty/development/unknown formatting, package-script provenance contracts and the real Settings build-info/copy surface. The latest-main-synchronized head passed changed-Dart format, Analyze/guards, all four Flutter Test shards, test-health, Repository Settings/AI Migration Lease/AI Handoff audits and authoritative `merge-gate` before squash integration. PR CI intentionally skipped the macOS release-build job for this change scope, so this checkpoint proves the repository-owned packaging contract and UI behavior; it does not claim a new real-Mac packaging/signing/notarization validation run.
 
+### #1362 — repeatable release-candidate, stable and rollback workflow
+Integrated by PR #1378 / merge `187b7de7afd9e64929c01b06ebe71b36661d6503`.
+
+The next delivery layer now has one repository-owned RC→stable path without introducing a second package writer:
+
+- build provenance carries an explicit `development` / `rc` / `stable` channel and Settings exposes the installed channel alongside version/build/commit/source state;
+- ordinary local packaging defaults to `development`; RC/stable packaging requires a clean source tree and a version-matching release tag at the selected source commit;
+- `.github/workflows/macos_release.yml` accepts an explicit full source SHA already integrated into `main` and refuses publication unless that exact source has a successful authoritative `merge-gate` check;
+- RCs are GitHub prereleases retaining the DMG, SHA-256 checksum, release notes and `release-provenance.json` with semantic version/build, channel, source SHA and database schema version;
+- stable publication requires a previously published RC for the same semantic version and source SHA, and existing release/tag identities are never silently replaced;
+- the workflow reuses `tool/package_macos.sh` as the single package authority and performs DMG verification before publication;
+- application rollback means reinstalling an older compatible package, not restoring or rewriting Vault data;
+- opening a Vault whose Drift `user_version` is newer than the installed app supports now fails before downgrade migration logic, with explicit recovery guidance; focused regression proves the newer `user_version` and sentinel data remain unchanged;
+- no schemaVersion change, downgrade migration, automatic updater, signing/notarization or App Store pipeline was added.
+
+Final candidate head `690590ab986ad54cc71e8948f1e7825894a77aa4` was synchronized with then-latest `main` and passed coordination/shared-hotspot guards, changed-Dart format, Analyze, all four Flutter Test shards, test-health, Repository Settings/AI Migration Lease/AI Handoff audits and authoritative `merge-gate` before squash integration. The ordinary PR macOS build job was intentionally skipped; a real RC is produced only after integration from an already validated `main` commit.
+
 ## Integrated foundation that remains authoritative
 - configurable user-selected Vault roots;
 - create/open/switch/rename/duplicate/remove-from-list lifecycle;
@@ -107,6 +124,7 @@ Focused tests cover clean/dirty/development/unknown formatting, package-script p
 - explicit managed-byte history retention/restoreability/GC-precondition contract without deletion-by-inference;
 - read-only Vault preservation manifest/compare tooling and documented validation procedure;
 - self-identifying macOS package provenance plus Settings installed-build diagnostics;
+- explicit development/RC/stable release channels with repository-owned GitHub Release retention, checksum/provenance evidence and fail-closed rollback compatibility;
 - release packaging/basic real-Mac launch path.
 
 ## Current roadmap anchors
@@ -118,6 +136,11 @@ F may independently take a newly split #1063 child only when it is a concrete fi
 
 ### #1064 — durable history
 Durable Object history remains A-owned, with Relation-specific restore integrity owned by B. F-owned managed-byte retention/GC safety is now established by completed #1268. Further F history work must be split explicitly: do not persist a retention ledger, wire physical GC, or claim stronger restoreability until a new focused F Issue defines the exact Storage responsibility and its dependencies.
+
+### #1358 — privacy-safe diagnostics / support bundle
+#1358 is the next ready focused F responsibility after #1335/#1362 established exact build provenance and delivery identity. Live re-audit after #1362 integration found no active implementation PR claiming #1358.
+
+The default support output must remain privacy-safe and must not include Object titles/Body text, captured URLs/domains, raw absolute paths, user file names/content, secrets/tokens/cookies or full database/Vault files. Prefer a small bounded structured local diagnostics boundary that can survive individual provider failure, includes exact build/runtime/schema context, labels unavailable fields explicitly and requires no external telemetry account/API key. Do not turn #1358 into a full logging/telemetry platform or a backup/export path.
 
 ### Legacy Bookmark / People / Photo retirement
 Normal-use convergence and caller-zero work belongs to A/B/C/D/G. F participates before destructive schema/data retirement only when a focused preservation-validation requirement is explicitly created. Completion of #242/#951 does not waive that requirement.
@@ -137,21 +160,23 @@ F should not:
 - define another lane's canonical graph serialization;
 - create a package writer that invents missing logical reconstruction semantics;
 - persist a managed-byte retention ledger or implement physical history GC without a new focused F contract and explicit deletion/reference-audit boundary;
+- add always-on external telemetry or include private Vault/user content in default diagnostics;
 - perform destructive cleanup merely because a legacy UI/runtime path is caller-zero.
 
 ## Validation expectations
-Repository tests/tools are authoritative for repository-owned behavior. Use real-machine validation whenever a focused F Issue or destructive migration requires filesystem/platform evidence CI cannot prove. Storage-owned portability slices should deterministically prove containment, explicit ownership, fail-closed alias handling and source-Vault non-mutation.
+Repository tests/tools are authoritative for repository-owned behavior. Use real-machine validation whenever a focused F Issue or destructive migration requires filesystem/platform evidence CI cannot prove. Storage-owned portability slices should deterministically prove containment, explicit ownership, fail-closed alias handling and source-Vault non-mutation. Diagnostics slices must additionally prove field-level privacy boundaries, bounded retention and partial-provider failure isolation.
 
 ## Resume sequence
 1. Re-read latest `main`, `AGENTS.md`, `docs/product_architecture.md`, `docs/AI_PROGRESS.md`, this handoff, live F-focused Issues/PRs, CI, shared-hotspot ownership and migration-writer state.
-2. Re-read #1063 and take only a newly split focused F filesystem/package contract whose logical prerequisites already exist.
-3. Re-check #1064 for a new explicitly F-owned follow-up beyond completed #1268, such as a persisted retention/GC slice whose A/B dependencies and deletion/reference-audit boundary are already explicit; do not take over A's history model or B's Relation restore semantics.
-4. Re-check destructive Bookmark/People/Photo retirement only for a specifically requested F preservation-validation slice before schema/data removal.
-5. Re-check Delivery only for a newly focused packaging/install/update defect or contract; completed #1335 does not authorize inventing signing/notarization/update infrastructure without a focused Issue.
-6. If a concrete current-main Storage/Vault correctness defect is demonstrated, create/reuse the smallest focused F Issue and fix only that defect.
-7. Otherwise do not invent a serializer, package format, sync protocol, retention ledger, updater or destructive cleanup merely to keep Lane F active.
+2. Take #1358 as the current ready focused F slice unless a live ownership/dependency conflict appears; keep the first implementation privacy-safe, bounded and local-only.
+3. Re-read #1063 and take only a newly split focused F filesystem/package contract whose logical prerequisites already exist.
+4. Re-check #1064 for a new explicitly F-owned follow-up beyond completed #1268; do not take over A's history model or B's Relation restore semantics.
+5. Re-check destructive Bookmark/People/Photo retirement only for a specifically requested F preservation-validation slice before schema/data removal.
+6. Re-check Delivery only for a newly focused packaging/install/update defect beyond completed #1335/#1362; those checkpoints do not authorize inventing signing/notarization/update infrastructure without a focused Issue.
+7. If a concrete current-main Storage/Vault/Delivery correctness defect is demonstrated, create/reuse the smallest focused F Issue and fix only that defect.
+8. Otherwise do not invent a serializer, package format, sync protocol, retention ledger, updater, telemetry service or destructive cleanup merely to keep Lane F active.
 
-## Current durable stop
-Final live audit after #1335/#1341 integration found no remaining open F implementation PR and no newly split focused F child beyond the #1063 umbrella. #1063 still lacks a focused package/filesystem child whose owning-lane logical prerequisites authorize independent implementation. #1064 has completed its first F-owned managed-byte retention/GC safety contract through #1268 but has not split a further F persistence/physical-GC slice. No destructive retirement currently requests focused F preservation validation, and no additional current-main Storage/Vault/Delivery correctness defect was demonstrated in this audit.
+## Current durable state
+#1362 is completed through PR #1378 / merge `187b7de7afd9e64929c01b06ebe71b36661d6503`, and the release/rollback contract above is now authoritative on `main`. #1063 still lacks a newly split ready filesystem/package child, #1064 has no further explicit F persistence/physical-GC slice, and no destructive retirement currently requests focused F preservation validation.
 
-Stop reason: idle-no-work after #1335/#1341 integration — resume when #1063 gains an explicit focused F filesystem/package contract with owning-lane logical prerequisites, #1064 splits a new F retention-ledger/physical-GC or related Storage slice with explicit dependencies, a destructive retirement requests focused preservation validation, a focused Delivery defect/contract is created, or a concrete current-main Storage/Vault/Delivery correctness defect appears.
+The next concrete F-owned work is open Issue #1358. Live re-audit immediately after #1362 integration found no active implementation PR for it. Resume there unless current GitHub state introduces a dependency, duplicate ownership or shared-hotspot conflict.
