@@ -43,9 +43,7 @@ void main() {
     tester,
   ) async {
     ObjectQueryDraft? result;
-    final candidates = <ObjectIdentitySearchResult>[
-      _tagCandidate(42, '経済'),
-    ];
+    final candidates = <ObjectIdentitySearchResult>[_tagCandidate(42, '経済')];
     await tester.pumpWidget(
       MaterialApp(
         home: Builder(
