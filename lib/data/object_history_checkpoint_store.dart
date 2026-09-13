@@ -142,13 +142,15 @@ class ObjectHistoryCheckpointStore {
   Future<List<ObjectHistoryCheckpointPayload>> _loadValidated(
     int objectId,
   ) async {
-    final rows = await _genericStore.database.customSelect(
-      '''SELECT object_id, revision_id, payload_json
+    final rows = await _genericStore.database
+        .customSelect(
+          '''SELECT object_id, revision_id, payload_json
          FROM object_history_checkpoints
          WHERE object_id = ?
          ORDER BY revision_id''',
-      variables: [Variable<int>(objectId)],
-    ).get();
+          variables: [Variable<int>(objectId)],
+        )
+        .get();
 
     final checkpoints = <ObjectHistoryCheckpointPayload>[];
     for (final row in rows) {
@@ -194,7 +196,9 @@ void _validateChain(
     }
     if (previous == null) {
       if (entry.previousRevisionId != null) {
-        throw StateError('Object history chain does not start at a root revision.');
+        throw StateError(
+          'Object history chain does not start at a root revision.',
+        );
       }
     } else {
       if (entry.revisionId <= previous.entry.revisionId ||
