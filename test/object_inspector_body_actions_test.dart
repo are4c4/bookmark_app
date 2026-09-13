@@ -11,8 +11,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('Object inspector persists shared Body block actions',
-      (tester) async {
+  testWidgets('Object inspector persists shared Body block actions', (
+    tester,
+  ) async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
     final workspaceId = await WorkspaceStore(database).initialize();
@@ -84,7 +85,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('body-block-move-down-a')));
     await tester.pumpAndSettle();
     var document = await bodyStore.read(objectId);
-    expect(document.blocks.map((block) => block.id).toList(), <String>['b', 'a']);
+    expect(
+      document.blocks.map((block) => block.id).toList(),
+      <String>['b', 'a'],
+    );
 
     await tester.tap(find.byKey(const ValueKey('body-text-a')));
     await tester.pump();
@@ -93,14 +97,20 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('body-block-duplicate-a')));
     await tester.pumpAndSettle();
     document = await bodyStore.read(objectId);
-    expect(document.blocks.map((block) => block.id).toList(),
-        <String>['b', 'a', 'paragraph-copy-1']);
+    expect(
+      document.blocks.map((block) => block.id).toList(),
+      <String>['b', 'a', 'paragraph-copy-1'],
+    );
     expect(document.blocks.last.text, 'A');
 
     await tester.tap(find.byKey(const ValueKey('body-text-a')));
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('body-block-insert-after-a')));
     await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('body-block-insert-after-a')),
+      findsOneWidget,
+    );
     await tester.tap(find.text('見出し 1').last);
     await tester.pumpAndSettle();
     document = await bodyStore.read(objectId);
@@ -118,8 +128,9 @@ void main() {
     expect(document.blocks.any((block) => block.id == 'a'), isFalse);
   });
 
-  testWidgets('empty Object Body becomes a focused paragraph in one click',
-      (tester) async {
+  testWidgets('empty Object Body becomes a focused paragraph in one click', (
+    tester,
+  ) async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
     final workspaceId = await WorkspaceStore(database).initialize();
