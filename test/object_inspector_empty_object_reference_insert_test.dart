@@ -11,8 +11,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('empty Body starts editing then inserts an Object reference',
-      (tester) async {
+  testWidgets('empty Body starts editing then inserts an Object reference', (
+    tester,
+  ) async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
     final workspaceId = await WorkspaceStore(database).initialize();
