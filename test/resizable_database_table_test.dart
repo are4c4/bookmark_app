@@ -5,42 +5,41 @@ import 'package:flutter_test/flutter_test.dart';
 Widget _host({
   required Future<void> Function(String key, double width) onWidthCommitted,
   Map<String, dynamic> initialWidths = const <String, dynamic>{},
-}) =>
-    MaterialApp(
-      home: Scaffold(
-        body: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: ResizableDatabaseTable(
-            columns: const [
-              ResizableDatabaseTableColumn(
-                keyName: 'title',
-                label: Text('名前'),
-                defaultWidth: 200,
-                minWidth: 140,
-                maxWidth: 320,
-              ),
-              ResizableDatabaseTableColumn(
-                keyName: 'p:7',
-                label: Text('メモ'),
-                defaultWidth: 180,
-                minWidth: 120,
-                maxWidth: 300,
-              ),
-            ],
-            rows: const [
-              ResizableDatabaseTableRow(
-                cells: [
-                  ResizableDatabaseTableCell(child: Text('Example')),
-                  ResizableDatabaseTableCell(child: Text('Long note')),
-                ],
-              ),
-            ],
-            initialWidths: initialWidths,
-            onWidthCommitted: onWidthCommitted,
+}) => MaterialApp(
+  home: Scaffold(
+    body: SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: ResizableDatabaseTable(
+        columns: const [
+          ResizableDatabaseTableColumn(
+            keyName: 'title',
+            label: Text('名前'),
+            defaultWidth: 200,
+            minWidth: 140,
+            maxWidth: 320,
           ),
-        ),
+          ResizableDatabaseTableColumn(
+            keyName: 'p:7',
+            label: Text('メモ'),
+            defaultWidth: 180,
+            minWidth: 120,
+            maxWidth: 300,
+          ),
+        ],
+        rows: const [
+          ResizableDatabaseTableRow(
+            cells: [
+              ResizableDatabaseTableCell(child: Text('Example')),
+              ResizableDatabaseTableCell(child: Text('Long note')),
+            ],
+          ),
+        ],
+        initialWidths: initialWidths,
+        onWidthCommitted: onWidthCommitted,
       ),
-    );
+    ),
+  ),
+);
 
 void main() {
   testWidgets('drag resizes column and commits only when drag ends', (
@@ -48,9 +47,7 @@ void main() {
   ) async {
     final commits = <(String, double)>[];
     await tester.pumpWidget(
-      _host(
-        onWidthCommitted: (key, width) async => commits.add((key, width)),
-      ),
+      _host(onWidthCommitted: (key, width) async => commits.add((key, width))),
     );
 
     final column = find.byKey(
@@ -62,6 +59,8 @@ void main() {
     expect(tester.getSize(column).width, 200);
 
     final gesture = await tester.startGesture(tester.getCenter(handle));
+    await gesture.moveBy(const Offset(20, 0));
+    await tester.pump();
     await gesture.moveBy(const Offset(72, 0));
     await tester.pump();
 
@@ -92,9 +91,7 @@ void main() {
     expect(
       tester
           .getSize(
-            find.byKey(
-              const ValueKey<String>('database-table-column-title'),
-            ),
+            find.byKey(const ValueKey<String>('database-table-column-title')),
           )
           .width,
       320,
@@ -102,9 +99,7 @@ void main() {
     expect(
       tester
           .getSize(
-            find.byKey(
-              const ValueKey<String>('database-table-column-p:7'),
-            ),
+            find.byKey(const ValueKey<String>('database-table-column-p:7')),
           )
           .width,
       180,
@@ -114,9 +109,7 @@ void main() {
   testWidgets('resize handle exposes keyboard shortcuts and resize cursor', (
     tester,
   ) async {
-    await tester.pumpWidget(
-      _host(onWidthCommitted: (_, __) async {}),
-    );
+    await tester.pumpWidget(_host(onWidthCommitted: (_, __) async {}));
 
     final handle = find.byKey(
       const ValueKey<String>('database-table-resize-title'),
@@ -128,10 +121,7 @@ void main() {
 
     final focusable = tester.widget<FocusableActionDetector>(
       find
-          .ancestor(
-            of: handle,
-            matching: find.byType(FocusableActionDetector),
-          )
+          .ancestor(of: handle, matching: find.byType(FocusableActionDetector))
           .first,
     );
     expect(focusable.shortcuts, isNotEmpty);
