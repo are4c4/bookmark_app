@@ -119,9 +119,7 @@ void main() {
     final repository = await _repository(database);
     final preferences = _DelayedLayoutPreferences();
 
-    await tester.pumpWidget(
-      _shell(repository, layoutPreferences: preferences),
-    );
+    await tester.pumpWidget(_shell(repository, layoutPreferences: preferences));
     await tester.pump();
     expect(find.byTooltip('サイドバーを閉じる'), findsOneWidget);
 
