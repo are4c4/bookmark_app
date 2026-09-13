@@ -15,7 +15,9 @@ class ObjectBodyBlockActionVisibilityScope extends InheritedWidget {
   final ValueChanged<bool> onVisibilityChanged;
 
   static ValueChanged<bool>? maybeOf(BuildContext context) => context
-      .dependOnInheritedWidgetOfExactType<ObjectBodyBlockActionVisibilityScope>()
+      .dependOnInheritedWidgetOfExactType<
+        ObjectBodyBlockActionVisibilityScope
+      >()
       ?.onVisibilityChanged;
 
   @override
@@ -199,10 +201,10 @@ class _ObjectBodyDocumentEntryState extends State<_ObjectBodyDocumentEntry> {
   Widget build(BuildContext context) {
     final usesTouchChrome = _usesTouchChrome(context);
     final hasActions = widget.blockActionsBuilder != null;
-    final showActions = hasActions &&
-        (usesTouchChrome
-            ? _touchActionsVisible || _actionPopupVisible
-            : _hovered || _focused || _actionPopupVisible);
+    final interactionVisible = usesTouchChrome
+        ? _touchActionsVisible || _actionPopupVisible
+        : _hovered || _focused || _actionPopupVisible;
+    final showActions = hasActions && interactionVisible;
 
     final blockView = ObjectBodyBlockView(
       key: ValueKey('object-body-block-${_block.id}'),
@@ -234,26 +236,27 @@ class _ObjectBodyDocumentEntryState extends State<_ObjectBodyDocumentEntry> {
           : null,
     );
 
-    final actions = hasActions
-        ? Offstage(
-            offstage: !showActions,
-            child: Row(
-              key: ValueKey('body-block-actions-${_block.id}'),
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (widget.canReorder) _buildDragHandle(context),
-                ObjectBodyBlockActionVisibilityScope(
-                  onVisibilityChanged: _setActionPopupVisible,
-                  child: widget.blockActionsBuilder!(
-                    context,
-                    _block,
-                    widget.position,
-                  ),
-                ),
-              ],
+    Widget? actions;
+    if (hasActions) {
+      actions = Offstage(
+        offstage: !showActions,
+        child: Row(
+          key: ValueKey('body-block-actions-${_block.id}'),
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (widget.canReorder) _buildDragHandle(context),
+            ObjectBodyBlockActionVisibilityScope(
+              onVisibilityChanged: _setActionPopupVisible,
+              child: widget.blockActionsBuilder!(
+                context,
+                _block,
+                widget.position,
+              ),
             ),
-          )
-        : null;
+          ],
+        ),
+      );
+    }
 
     return Focus(
       canRequestFocus: false,
@@ -319,9 +322,7 @@ class _ObjectBodyDocumentEntryState extends State<_ObjectBodyDocumentEntry> {
               right: 0,
               child: IconButton(
                 key: ValueKey('body-block-touch-actions-${_block.id}'),
-                tooltip: _touchActionsVisible
-                    ? 'ブロック操作を閉じる'
-                    : 'ブロック操作を表示',
+                tooltip: _touchActionsVisible ? 'ブロック操作を閉じる' : 'ブロック操作を表示',
                 icon: Icon(
                   _touchActionsVisible ? Icons.close : Icons.more_horiz,
                   size: 18,
