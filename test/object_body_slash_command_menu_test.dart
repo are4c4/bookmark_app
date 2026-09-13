@@ -83,7 +83,10 @@ void main() {
     await tester.enterText(find.byType(TextField), 'hello /h2');
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('body-slash-command-menu')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('body-slash-command-menu')),
+      findsOneWidget,
+    );
     expect(
       find.byKey(const ValueKey('body-slash-command-heading-2')),
       findsOneWidget,
@@ -93,22 +96,26 @@ void main() {
       findsNothing,
     );
 
-    await tester.tap(find.byKey(const ValueKey('body-slash-command-heading-2')));
+    await tester.tap(
+      find.byKey(const ValueKey('body-slash-command-heading-2')),
+    );
     await tester.pumpAndSettle();
 
     final stored = await fixture.bodyStore.read(fixture.objectId);
     expect(stored.blocks.single.id, 'p');
     expect(stored.blocks.single.type, ObjectBodyBlockType.heading);
     expect(stored.blocks.single.text, 'hello ');
-    expect(
-      stored.blocks.single.attributes[ObjectBodyBlockAttribute.level],
-      2,
-    );
+    expect(stored.blocks.single.attributes[ObjectBodyBlockAttribute.level], 2);
     expect(find.byKey(const ValueKey('body-slash-command-menu')), findsNothing);
-    expect(tester.widget<EditableText>(find.byType(EditableText)).focusNode.hasFocus, isTrue);
+    expect(
+      tester.widget<EditableText>(find.byType(EditableText)).focusNode.hasFocus,
+      isTrue,
+    );
   });
 
-  testWidgets('divider slash command uses canonical insert path', (tester) async {
+  testWidgets('divider slash command uses canonical insert path', (
+    tester,
+  ) async {
     final fixture = await _fixture('Slash divider');
     addTearDown(fixture.database.close);
     await fixture.bodyStore.write(
@@ -150,7 +157,10 @@ void main() {
     await _pumpEditor(tester, fixture, fixture.objectId);
     await tester.enterText(find.byType(TextField), '/');
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('body-slash-command-menu')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('body-slash-command-menu')),
+      findsOneWidget,
+    );
 
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
@@ -162,7 +172,9 @@ void main() {
     expect(stored.blocks.single.text, '/');
   });
 
-  testWidgets('switching Objects clears stale slash command UI', (tester) async {
+  testWidgets('switching Objects clears stale slash command UI', (
+    tester,
+  ) async {
     final fixture = await _fixture('Slash switch');
     addTearDown(fixture.database.close);
     final secondObjectId = await fixture.objectStore.createObject(
@@ -189,7 +201,10 @@ void main() {
     await _pumpEditor(tester, fixture, fixture.objectId);
     await tester.enterText(find.byType(TextField), '/h1');
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('body-slash-command-menu')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('body-slash-command-menu')),
+      findsOneWidget,
+    );
 
     await _pumpEditor(tester, fixture, secondObjectId);
     await tester.pumpAndSettle();
@@ -202,15 +217,17 @@ void main() {
 }
 
 Future<
-    ({
-      AppDatabase database,
-      int workspaceId,
-      GenericDatabaseStore store,
-      ObjectStore objectStore,
-      ObjectBodyStore bodyStore,
-      int objectTypeId,
-      int objectId,
-    })> _fixture(String title) async {
+  ({
+    AppDatabase database,
+    int workspaceId,
+    GenericDatabaseStore store,
+    ObjectStore objectStore,
+    ObjectBodyStore bodyStore,
+    int objectTypeId,
+    int objectId,
+  })
+>
+_fixture(String title) async {
   final database = AppDatabase.forTesting(NativeDatabase.memory());
   final workspaceId = await WorkspaceStore(database).initialize();
   final store = GenericDatabaseStore(database);
@@ -244,7 +261,8 @@ Future<void> _pumpEditor(
     ObjectBodyStore bodyStore,
     int objectTypeId,
     int objectId,
-  }) fixture,
+  })
+  fixture,
   int objectId,
 ) async {
   await tester.pumpWidget(
