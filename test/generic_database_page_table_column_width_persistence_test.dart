@@ -101,6 +101,18 @@ void main() {
         expect(finder, findsWidgets);
       }
 
+      Future<void> pumpUntilWidth(Finder finder, double expected) async {
+        for (var attempt = 0; attempt < 40; attempt += 1) {
+          if (finder.evaluate().isNotEmpty &&
+              tester.getSize(finder).width == expected) {
+            return;
+          }
+          await tester.pump(const Duration(milliseconds: 50));
+        }
+        expect(finder, findsWidgets);
+        expect(tester.getSize(finder).width, expected);
+      }
+
       Future<DatabaseViewConfig> waitForWidth(
         int viewId,
         double expected,
@@ -176,8 +188,7 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();
       await pumpHost();
-      await pumpUntilVisible(titleColumn);
-      expect(tester.getSize(titleColumn).width, 304);
+      await pumpUntilWidth(titleColumn, 304);
 
       final lockEntered = Completer<void>();
       final releaseLock = Completer<void>();
