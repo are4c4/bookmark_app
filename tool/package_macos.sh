@@ -6,6 +6,8 @@ cd "$ROOT_DIR"
 
 APP_NAME="${BOOKMARK_APP_NAME:-Bookmark}"
 TARGET_BUNDLE_ID="${BOOKMARK_BUNDLE_ID:-com.are4c4.bookmark}"
+RELEASE_CHANNEL="${BOOKMARK_RELEASE_CHANNEL:-development}"
+RELEASE_TAG="${BOOKMARK_RELEASE_TAG:-}"
 INSTALL_AFTER_BUILD=0
 CONFIGURE_ONLY=0
 OPEN_DMG=0
@@ -23,9 +25,15 @@ Options:
   -h, --help         Show this help.
 
 Environment:
-  BOOKMARK_APP_NAME       Product name. Default: Bookmark
-  BOOKMARK_BUNDLE_ID      Preferred Bundle Identifier. Default: com.are4c4.bookmark
-  BOOKMARK_ICON_SOURCE    Optional 1024x1024 PNG used to regenerate AppIcon sizes.
+  BOOKMARK_APP_NAME          Product name. Default: Bookmark
+  BOOKMARK_BUNDLE_ID         Preferred Bundle Identifier. Default: com.are4c4.bookmark
+  BOOKMARK_ICON_SOURCE       Optional 1024x1024 PNG used to regenerate AppIcon sizes.
+  BOOKMARK_RELEASE_CHANNEL   development, rc, or stable. Default: development
+  BOOKMARK_RELEASE_TAG       Required for rc/stable packaging and must point to HEAD.
+
+Release-channel safety:
+  Local builds default to development. RC/stable packages require a clean source
+  tree plus a version-matching release tag that resolves to the exact source HEAD.
 
 Bundle Identifier safety:
   If the existing local runner uses another Bundle Identifier and profile data is
@@ -80,10 +88,58 @@ if [[ -z "$GIT_SHA" || -z "$GIT_SHORT_SHA" ]]; then
 fi
 if [[ -n "$(git status --porcelain --untracked-files=normal)" ]]; then
   SOURCE_STATE="dirty"
-  BUILD_PROVENANCE_LABEL="$GIT_SHORT_SHA-dirty"
 else
   SOURCE_STATE="clean"
+fi
+
+case "$RELEASE_CHANNEL" in
+  development|rc|stable) ;;
+  *)
+    echo "error: BOOKMARK_RELEASE_CHANNEL must be development, rc, or stable." >&2
+    exit 1
+    ;;
+esac
+
+if [[ "$RELEASE_CHANNEL" == "development" ]]; then
   BUILD_PROVENANCE_LABEL="$GIT_SHORT_SHA"
+  if [[ "$SOURCE_STATE" == "dirty" ]]; then
+    BUILD_PROVENANCE_LABEL="$GIT_SHORT_SHA-dirty"
+  fi
+else
+  if [[ "$SOURCE_STATE" != "clean" ]]; then
+    echo "error: $RELEASE_CHANNEL packaging requires a clean Git source tree." >&2
+    exit 1
+  fi
+  if [[ -z "$RELEASE_TAG" ]]; then
+    echo "error: BOOKMARK_RELEASE_TAG is required for $RELEASE_CHANNEL packaging." >&2
+    exit 1
+  fi
+
+  if [[ "$RELEASE_CHANNEL" == "stable" ]]; then
+    EXPECTED_TAG="v$BUILD_NAME"
+    if [[ "$RELEASE_TAG" != "$EXPECTED_TAG" ]]; then
+      echo "error: stable release tag must be $EXPECTED_TAG (got $RELEASE_TAG)." >&2
+      exit 1
+    fi
+  else
+    RC_PREFIX="v$BUILD_NAME-rc."
+    if [[ "$RELEASE_TAG" != "$RC_PREFIX"* ]]; then
+      echo "error: RC release tag must match ${RC_PREFIX}<positive-integer>." >&2
+      exit 1
+    fi
+    RC_NUMBER="${RELEASE_TAG#$RC_PREFIX}"
+    if [[ -z "$RC_NUMBER" || "$RC_NUMBER" == "0" || ! "$RC_NUMBER" =~ ^[0-9]+$ ]]; then
+      echo "error: RC release tag must match ${RC_PREFIX}<positive-integer>." >&2
+      exit 1
+    fi
+  fi
+
+  TAG_SHA="$(git rev-parse "$RELEASE_TAG^{commit}" 2>/dev/null || true)"
+  if [[ -z "$TAG_SHA" || "$TAG_SHA" != "$GIT_SHA" ]]; then
+    echo "error: release tag $RELEASE_TAG must resolve to source HEAD $GIT_SHA." >&2
+    exit 1
+  fi
+  BUILD_PROVENANCE_LABEL="$RELEASE_CHANNEL-$GIT_SHORT_SHA"
 fi
 
 APPINFO="macos/Runner/Configs/AppInfo.xcconfig"
@@ -175,6 +231,8 @@ macOS release configuration:
   Bundle Identifier: $EFFECTIVE_BUNDLE_ID
   Version:           $BUILD_NAME
   Build number:      $BUILD_NUMBER
+  Release channel:   $RELEASE_CHANNEL
+  Release tag:       ${RELEASE_TAG:-none}
   Commit:            $GIT_SHORT_SHA
   Source state:      $SOURCE_STATE
 EOF_SUMMARY
@@ -191,7 +249,8 @@ flutter build macos --release \
   --dart-define="BOOKMARK_APP_VERSION=$BUILD_NAME" \
   --dart-define="BOOKMARK_APP_BUILD_NUMBER=$BUILD_NUMBER" \
   --dart-define="BOOKMARK_GIT_SHA=$GIT_SHA" \
-  --dart-define="BOOKMARK_SOURCE_STATE=$SOURCE_STATE"
+  --dart-define="BOOKMARK_SOURCE_STATE=$SOURCE_STATE" \
+  --dart-define="BOOKMARK_RELEASE_CHANNEL=$RELEASE_CHANNEL"
 
 APP_PATH="build/macos/Build/Products/Release/$APP_NAME.app"
 if [[ ! -d "$APP_PATH" ]]; then
@@ -229,7 +288,7 @@ fi
 
 echo "Built app: $APP_PATH"
 echo "Built DMG: $DMG_PATH"
-echo "Build provenance: $BUILD_NAME ($BUILD_NUMBER) · $GIT_SHORT_SHA · $SOURCE_STATE"
+echo "Build provenance: $BUILD_NAME ($BUILD_NUMBER) · $RELEASE_CHANNEL · $GIT_SHORT_SHA · $SOURCE_STATE"
 echo "Note: this is an unsigned/not-notarized personal build unless you add signing separately."
 
 if [[ "$OPEN_DMG" -eq 1 ]]; then
