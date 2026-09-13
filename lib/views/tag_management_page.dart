@@ -5,6 +5,7 @@ import '../data/app_database.dart';
 import '../data/bookmark_repository.dart';
 import '../data/tag_group_mutation_service.dart';
 import '../data/tag_group_store.dart';
+import '../services/tag_management_hierarchy_mutation_service.dart';
 import '../ui/ui_tokens.dart';
 import '../widgets/app_toast.dart';
 import '../widgets/bookmark_reverse_lookup_dialog.dart';
@@ -23,6 +24,7 @@ class TagManagementPage extends StatefulWidget {
 
 class _TagManagementPageState extends State<TagManagementPage> {
   late final TagGroupStore _store;
+  late final TagManagementHierarchyMutationService _hierarchyMutations;
   final _searchController = TextEditingController();
   final _treeFocus = FocusNode(debugLabel: 'tag-tree');
   final Set<int> _expandedTagIds = {};
@@ -62,6 +64,8 @@ class _TagManagementPageState extends State<TagManagementPage> {
   void initState() {
     super.initState();
     _store = TagGroupStore(repository.lifecycleStore.database);
+    _hierarchyMutations =
+        TagManagementHierarchyMutationService.forRepository(repository);
     _initialize();
   }
 
@@ -278,7 +282,7 @@ class _TagManagementPageState extends State<TagManagementPage> {
     final parentId = _creatingParentId;
     try {
       final id = await repository.createTag(name);
-      await _store.moveTag(
+      await _hierarchyMutations.moveTag(
         tagId: id,
         parentTagId: parentId,
         groupId: groupId,
@@ -417,7 +421,7 @@ class _TagManagementPageState extends State<TagManagementPage> {
   Future<void> _drop(Tag dragged, TagTreeRow target) async {
     if (_dragCancelled) return;
     try {
-      final snapshot = await _store.moveTag(
+      final snapshot = await _hierarchyMutations.moveTag(
         tagId: dragged.id,
         parentTagId: target.tag?.id,
         groupId: target.tag == null ? target.groupId : null,
@@ -430,7 +434,7 @@ class _TagManagementPageState extends State<TagManagementPage> {
         context,
         '「${dragged.name}」を$destinationへ移動しました',
         actionLabel: '元に戻す',
-        onAction: () => _store.restoreMove(snapshot),
+        onAction: () => _hierarchyMutations.restoreMove(snapshot),
       );
     } catch (_) {
       if (!mounted) return;
@@ -701,7 +705,7 @@ class _TagManagementPageState extends State<TagManagementPage> {
     );
     if (ok != true || name.trim().isEmpty) return;
     final id = await repository.createTag(name.trim());
-    await _store.moveTag(
+    await _hierarchyMutations.moveTag(
       tagId: id,
       parentTagId: parentId,
       groupId: groupId,
@@ -799,7 +803,7 @@ class _TagManagementPageState extends State<TagManagementPage> {
       ),
     );
     if (ok != true) return;
-    final snapshot = await _store.moveTag(
+    final snapshot = await _hierarchyMutations.moveTag(
       tagId: tag.id,
       parentTagId: parentId,
       groupId: groupId,
@@ -809,7 +813,7 @@ class _TagManagementPageState extends State<TagManagementPage> {
       context,
       '「${tag.name}」を移動しました',
       actionLabel: '元に戻す',
-      onAction: () => _store.restoreMove(snapshot),
+      onAction: () => _hierarchyMutations.restoreMove(snapshot),
     );
   }
 
@@ -995,7 +999,7 @@ class _TagManagementPageState extends State<TagManagementPage> {
       case 'move':
         _moveDialog(tag);
       case 'root':
-        _store
+        _hierarchyMutations
             .moveTag(
               tagId: tag.id,
               groupId: _groupByTag[tag.id] ?? tag.groupId,
@@ -1007,7 +1011,7 @@ class _TagManagementPageState extends State<TagManagementPage> {
               content: Text('「${tag.name}」を最上位へ移動しました'),
               action: SnackBarAction(
                 label: '元に戻す',
-                onPressed: () => _store.restoreMove(snapshot),
+                onPressed: () => _hierarchyMutations.restoreMove(snapshot),
               ),
             ),
           );
