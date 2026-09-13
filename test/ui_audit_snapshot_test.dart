@@ -80,13 +80,10 @@ Future<void> _configureDesktopSurface(WidgetTester tester) async {
 }
 
 Widget _auditHost(Widget child) => MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark(useMaterial3: true),
-      home: RepaintBoundary(
-        key: _captureBoundaryKey,
-        child: child,
-      ),
-    );
+  debugShowCheckedModeBanner: false,
+  theme: ThemeData.dark(useMaterial3: true),
+  home: RepaintBoundary(key: _captureBoundaryKey, child: child),
+);
 
 Future<void> _captureScenario(
   WidgetTester tester, {
@@ -107,10 +104,8 @@ Future<void> _captureScenario(
         throw StateError('UI audit PNG encoding returned no bytes.');
       }
       screenshotPath = 'screenshots/$name.png';
-      await File('$root/$screenshotPath').writeAsBytes(
-        byteData.buffer.asUint8List(),
-        flush: true,
-      );
+      await File('$root/$screenshotPath')
+          .writeAsBytes(byteData.buffer.asUint8List(), flush: true);
     } finally {
       image.dispose();
     }
@@ -123,7 +118,11 @@ Future<void> _captureScenario(
     await _writeManifest();
   }
 
-  expect(exception, isNull, reason: 'UI audit surface emitted a Flutter exception.');
+  expect(
+    exception,
+    isNull,
+    reason: 'UI audit surface emitted a Flutter exception.',
+  );
   expect(
     contractSatisfied,
     isTrue,
@@ -132,12 +131,12 @@ Future<void> _captureScenario(
 }
 
 AppObject _relationObject(int id, int typeId, String title) => AppObject(
-      id: id,
-      objectTypeId: typeId,
-      title: title,
-      createdAt: DateTime.utc(2026, 1, 1),
-      updatedAt: DateTime.utc(2026, 1, 1),
-    );
+  id: id,
+  objectTypeId: typeId,
+  title: title,
+  createdAt: DateTime.utc(2026, 1, 1),
+  updatedAt: DateTime.utc(2026, 1, 1),
+);
 
 RelationSelectionContext _relationSelection() {
   const sourceTypeId = 10;
@@ -178,16 +177,15 @@ RelationSelectionContext _relationSelection() {
 
 List<ObjectIdentitySearchResult> _relationSearchResults(
   RelationSelectionContext context,
-) =>
-    context.candidates
-        .map(
-          (object) => ObjectIdentitySearchResult(
-            object: object,
-            objectType: context.targetObjectType,
-            aliases: const <String>[],
-          ),
-        )
-        .toList(growable: false);
+) => context.candidates
+    .map(
+      (object) => ObjectIdentitySearchResult(
+        object: object,
+        objectType: context.targetObjectType,
+        aliases: const <String>[],
+      ),
+    )
+    .toList(growable: false);
 
 class _UiAuditSearchService extends ObjectGlobalSearchService {
   _UiAuditSearchService(super.store);
@@ -201,8 +199,7 @@ class _UiAuditSearchService extends ObjectGlobalSearchService {
     required String rawQuery,
     int? objectTypeId,
     int limit = 100,
-  }) async =>
-      const <ResolvedObjectSearchHit>[];
+  }) async => const <ResolvedObjectSearchHit>[];
 }
 
 void main() {
@@ -248,7 +245,8 @@ void main() {
     await _captureScenario(
       tester,
       name: 'body-populated',
-      contractSatisfied: find.text('Research notes').evaluate().length == 1 &&
+      contractSatisfied:
+          find.text('Research notes').evaluate().length == 1 &&
           find.text('Review canonical Relation links').evaluate().length == 1,
     );
   });
@@ -265,9 +263,9 @@ void main() {
             onSearch: ({required context, required query}) async =>
                 _relationSearchResults(context)
                     .where(
-                      (result) => result.canonicalTitle
-                          .toLowerCase()
-                          .contains(query.toLowerCase()),
+                      (result) => result.canonicalTitle.toLowerCase().contains(
+                        query.toLowerCase(),
+                      ),
                     )
                     .toList(growable: false),
           ),
@@ -279,7 +277,8 @@ void main() {
     await _captureScenario(
       tester,
       name: 'relation-picker-person',
-      contractSatisfied: find.text('Authors').evaluate().length == 1 &&
+      contractSatisfied:
+          find.text('Authors').evaluate().length == 1 &&
           find.text('Bob').evaluate().length == 1 &&
           find.text('1件選択').evaluate().length == 1,
     );
@@ -306,8 +305,7 @@ void main() {
     await _captureScenario(
       tester,
       name: 'global-search-empty',
-      contractSatisfied:
-          find.text('オブジェクトを横断検索').evaluate().length == 1,
+      contractSatisfied: find.text('オブジェクトを横断検索').evaluate().length == 1,
     );
   });
 }
