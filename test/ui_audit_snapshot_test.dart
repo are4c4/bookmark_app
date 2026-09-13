@@ -37,18 +37,18 @@ String get _sourceSha {
   return value == null || value.isEmpty ? 'local' : value;
 }
 
-Future<void> _initializeCaptureOutput() async {
+void _initializeCaptureOutput() {
   final root = _captureRoot;
   if (root == null) return;
   final directory = Directory(root);
-  if (await directory.exists()) {
-    await directory.delete(recursive: true);
+  if (directory.existsSync()) {
+    directory.deleteSync(recursive: true);
   }
-  await Directory('$root/screenshots').create(recursive: true);
-  await _writeManifest();
+  Directory('$root/screenshots').createSync(recursive: true);
+  _writeManifest();
 }
 
-Future<void> _writeManifest() async {
+void _writeManifest() {
   final root = _captureRoot;
   if (root == null) return;
   final manifest = <String, Object?>{
@@ -66,7 +66,7 @@ Future<void> _writeManifest() async {
     },
     'scenarios': _scenarioRecords,
   };
-  await File('$root/manifest.json').writeAsString(
+  File('$root/manifest.json').writeAsStringSync(
     '${const JsonEncoder.withIndent('  ').convert(manifest)}\n',
     flush: true,
   );
@@ -104,8 +104,17 @@ Future<void> _captureScenario(
         throw StateError('UI audit PNG encoding returned no bytes.');
       }
       screenshotPath = 'screenshots/$name.png';
-      await File('$root/$screenshotPath')
-          .writeAsBytes(byteData.buffer.asUint8List(), flush: true);
+      final screenshotFile = File('$root/$screenshotPath');
+      // `testWidgets` runs in a fake-async zone. Real asynchronous dart:io
+      // writes can stall there even after PNG encoding has completed, so keep
+      // artifact persistence synchronous and immediately verifiable.
+      screenshotFile.writeAsBytesSync(
+        byteData.buffer.asUint8List(),
+        flush: true,
+      );
+      if (screenshotFile.lengthSync() == 0) {
+        throw StateError('UI audit PNG write produced an empty file.');
+      }
     } finally {
       image.dispose();
     }
@@ -115,7 +124,7 @@ Future<void> _captureScenario(
       'file': screenshotPath,
       'status': exception == null && contractSatisfied ? 'passed' : 'failed',
     });
-    await _writeManifest();
+    _writeManifest();
   }
 
   expect(
