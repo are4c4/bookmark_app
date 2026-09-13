@@ -67,6 +67,8 @@ void main() {
     expect(decoded['runtime']['operatingSystem']['value'], 'macos');
     expect(decoded['database']['schemaVersion']['value'], 16);
     expect(decoded['vault']['configured']['value'], isTrue);
+    expect(decoded['build']['version']['privacy'], 'technical');
+    expect(decoded['build']['version']['reason'], 'identify_semantic_version');
 
     expect(bundle.prettyJson, isNot(contains('private object title')));
     expect(bundle.prettyJson, isNot(contains('private body text')));
@@ -91,7 +93,7 @@ void main() {
             key: 'vault_path',
             value: '/Users/private/Vault',
             privacyClass: DiagnosticPrivacyClass.localPath,
-            reason: 'This intentionally unsafe test field must be rejected.',
+            reasonCode: 'unsafe_test_field',
           ),
         ]),
       ],
@@ -121,7 +123,7 @@ void main() {
             key: 'available',
             value: true,
             privacyClass: DiagnosticPrivacyClass.technical,
-            reason: 'Report provider availability without Object content.',
+            reasonCode: 'report_provider_availability',
           ),
         ]),
       ],
@@ -135,6 +137,34 @@ void main() {
     expect(decoded['providers']['search_health']['status'], 'unavailable');
     expect(decoded['providers']['search_health']['code'], 'provider_error');
     expect(bundle.prettyJson, isNot(contains('raw provider failure')));
+  });
+
+  test('provider technical strings must also be fixed diagnostic tokens', () async {
+    final service = SupportDiagnosticsService(
+      buildProvenance: _provenance,
+      databaseSchemaVersion: 16,
+      vaultConfigured: true,
+      runtime: _runtime,
+      events: DiagnosticEventBuffer(clock: _fixedClock),
+      clock: _fixedClock,
+      providers: [
+        _Provider('misclassified_provider', const [
+          DiagnosticField(
+            key: 'state',
+            value: 'Private object title accidentally misclassified',
+            privacyClass: DiagnosticPrivacyClass.technical,
+            reasonCode: 'report_health_state',
+          ),
+        ]),
+      ],
+    );
+
+    final bundle = await service.collect();
+    final decoded = jsonDecode(bundle.prettyJson) as Map<String, dynamic>;
+
+    expect(decoded['providers']['misclassified_provider']['status'], 'unavailable');
+    expect(decoded['providers']['misclassified_provider']['code'], 'provider_error');
+    expect(bundle.prettyJson, isNot(contains('Private object title')));
   });
 
   test('event retention is bounded and stores codes instead of messages', () {
@@ -190,7 +220,7 @@ void main() {
         key: 'count',
         value: 3,
         privacyClass: DiagnosticPrivacyClass.aggregate,
-        reason: 'Aggregate count only.',
+        reasonCode: 'report_aggregate_count',
       ),
     ]);
     final z = _Provider('z_health', const [
@@ -198,7 +228,7 @@ void main() {
         key: 'ready',
         value: true,
         privacyClass: DiagnosticPrivacyClass.technical,
-        reason: 'Technical health state only.',
+        reasonCode: 'report_health_state',
       ),
     ]);
 
