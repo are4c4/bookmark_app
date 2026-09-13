@@ -37,71 +37,81 @@ ObjectIdentitySearchResult candidate(int id, String title) =>
     );
 
 void main() {
-  testWidgets('authors Relation filter by title while returning canonical ids', (
-    tester,
-  ) async {
-    ObjectQueryDraft? result;
-    final candidates = <ObjectIdentitySearchResult>[
-      candidate(7, '今野忍'),
-      candidate(8, '佐藤花子'),
-    ];
+  testWidgets(
+    'authors Relation filter by title while returning canonical ids',
+    (tester) async {
+      ObjectQueryDraft? result;
+      final candidates = <ObjectIdentitySearchResult>[
+        candidate(7, '今野忍'),
+        candidate(8, '佐藤花子'),
+      ];
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Builder(
-          builder: (context) => Scaffold(
-            body: FilledButton(
-              onPressed: () async {
-                result = await showObjectQueryDialog(
-                  context,
-                  properties: const <ObjectPropertyDefinition>[relationProperty],
-                  initialFilters: const <ObjectFilterRule>[
-                    ObjectFilterRule(
-                      propertyId: 20,
-                      operator: ObjectFilterOperator.containsAny,
-                      value: <int>[7],
-                    ),
-                  ],
-                  relationCandidateSearch: (property, query) async {
-                    expect(property.id, 20);
-                    final normalized = query.trim();
-                    return candidates
-                        .where(
-                          (entry) =>
-                              normalized.isEmpty ||
-                              entry.canonicalTitle.contains(normalized),
-                        )
-                        .toList(growable: false);
-                  },
-                );
-              },
-              child: const Text('open'),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: FilledButton(
+                onPressed: () async {
+                  result = await showObjectQueryDialog(
+                    context,
+                    properties: const <ObjectPropertyDefinition>[
+                      relationProperty,
+                    ],
+                    initialFilters: const <ObjectFilterRule>[
+                      ObjectFilterRule(
+                        propertyId: 20,
+                        operator: ObjectFilterOperator.containsAny,
+                        value: <int>[7],
+                      ),
+                    ],
+                    relationCandidateSearch: (property, query) async {
+                      expect(property.id, 20);
+                      final normalized = query.trim();
+                      return candidates
+                          .where(
+                            (entry) =>
+                                normalized.isEmpty ||
+                                entry.canonicalTitle.contains(normalized),
+                          )
+                          .toList(growable: false);
+                    },
+                  );
+                },
+                child: const Text('open'),
+              ),
             ),
           ),
         ),
-      ),
-    );
+      );
 
-    await tester.tap(find.text('open'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('今野忍'), findsWidgets);
-    expect(find.text('Object IDをカンマ区切り'), findsNothing);
+      expect(find.text('今野忍'), findsWidgets);
+      expect(find.text('Object IDをカンマ区切り'), findsNothing);
 
-    await tester.tap(find.byKey(const ValueKey('relation-filter-selected-7')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('relation-filter-candidate-8')));
-    await tester.pumpAndSettle();
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(const ValueKey('relation-filter-selected-7')),
+          matching: find.byIcon(Icons.cancel),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('relation-filter-candidate-8')),
+      );
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.text('適用'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('適用'));
+      await tester.pumpAndSettle();
 
-    expect(result, isNotNull);
-    expect(result!.filters, hasLength(1));
-    expect(result!.filters.single.propertyId, 20);
-    expect(result!.filters.single.operator, ObjectFilterOperator.containsAny);
-    expect(result!.filters.single.value, <int>[8]);
-  });
+      expect(result, isNotNull);
+      expect(result!.filters, hasLength(1));
+      expect(result!.filters.single.propertyId, 20);
+      expect(result!.filters.single.operator, ObjectFilterOperator.containsAny);
+      expect(result!.filters.single.value, <int>[8]);
+    },
+  );
 
   testWidgets('fails closed instead of exposing raw ids without a provider', (
     tester,
