@@ -24,11 +24,12 @@ Read/recheck in this order:
 2. `docs/product_architecture.md`.
 3. `docs/AI_PROGRESS.md`.
 4. this file.
-5. relevant A–G lane handoffs.
-6. latest `main` and recent meaningful commits.
-7. all live open PRs, their declared lane/Issue/dependencies/hotspots, and current CI.
-8. relevant open umbrella/focused Issues and recently completed Issues that changed routing.
-9. current shared-hotspot, migration-writer, and repository-setting state.
+5. `docs/AI_PRODUCT_PRIORITY.md` for advisory safe/ready work selection.
+6. relevant A–G lane handoffs.
+7. latest `main` and recent meaningful commits.
+8. all live open PRs, their declared lane/Issue/dependencies/hotspots, and current CI.
+9. relevant open umbrella/focused Issues and recently completed Issues that changed routing.
+10. current shared-hotspot, migration-writer, and repository-setting state.
 
 **Live GitHub state overrides durable handoff snapshots for all transient facts.** Do not copy current open-PR counts, CI run numbers, branch tips, or other short-lived ownership facts into this handoff as long-lived truth. Record durable findings, contracts, dependencies, and resume targets instead.
 
@@ -113,6 +114,15 @@ Review the application as a whole:
 
 For visual/layout oversight, inspect the latest successful advisory UI Audit artifact when available. Treat the screenshots and manifest as evidence tied to an exact source SHA, not as a replacement for live code, behavioral tests, or product requirements. A visual finding becomes actionable only when H can describe a concrete problem and route it to exactly one A–G owning lane through a focused Issue; H does not implement product fixes under the label of screenshot review.
 
+### User-visible priority routing
+When multiple independent Issues/findings are both safe and ready, apply `docs/AI_PRODUCT_PRIORITY.md` rather than preferring whichever task is easiest to implement.
+
+- Safety, preservation, data integrity, deterministic correctness, dependencies, hotspot ownership, migration ownership and approval policy are evaluated first and may override product priority.
+- Among the remaining safe/ready choices, compare user-visible impact, frequency, friction and breadth. Prefer shared high-frequency friction and core-journey blockers over equally safe niche/internal cleanup.
+- Use the focused Issue's `Product priority signal` when present. H may refine/annotate an existing Issue if the signal is missing; do not duplicate an Issue merely to encode priority.
+- The rubric is advisory, not a numerical score or merge gate. Report genuine ties/ambiguity instead of manufacturing precision.
+- Product implementation remains with exactly one A–G owner; H only routes/reorders attention.
+
 ### Emerging technical debt
 Look for repeated helpers/adapters, new direct `AppDatabase` reach-through, shared hotspots growing again, new legacy dependencies, hidden-failure policies, and speculative caches/indexes without measurement/rebuild semantics. Do not demand abstraction on first occurrence.
 
@@ -168,11 +178,12 @@ A focused implementation slice may be complete when its acceptance criteria and 
 2. Build a current map of active work, dependencies, hotspot leases, migration writer, and relevant repository settings.
 3. Inspect recent `main` changes for architecture/product integration implications.
 4. Audit architecture, integration, parallel safety, durable-doc freshness, UX, technical debt, correctness/preservation, and roadmap coherence.
-5. When visual/layout evidence would help, inspect the latest successful UI Audit artifact/report and tie observations to its source SHA; never treat screenshots as source-of-truth over live code/GitHub.
-6. For each finding, link an existing Issue or create one focused Issue with one primary A–G owner; record dependencies, hotspot/migration impact, and acceptance criteria.
-7. Correct repository-wide durable routing/docs only when durable facts changed.
-8. Continue to another independent audit area instead of stopping after the first finding.
-9. Before ending, keep this handoff resumable without chat history.
+5. When multiple independent safe/ready Issues or findings compete, apply the user-visible priority rubric before routing/choosing attention; do not favor lower-impact work solely because it is easier.
+6. When visual/layout evidence would help, inspect the latest successful UI Audit artifact/report and tie observations to its source SHA; never treat screenshots as source-of-truth over live code/GitHub.
+7. For each finding, link an existing Issue or create one focused Issue with one primary A–G owner; record dependencies, hotspot/migration impact, product-priority signal where applicable, and acceptance criteria.
+8. Correct repository-wide durable routing/docs only when durable facts changed.
+9. Continue to another independent audit area instead of stopping after the first finding.
+10. Before ending, keep this handoff resumable without chat history.
 
 ## Stop conditions
 
@@ -184,6 +195,6 @@ When the sole blocker for an approval-sensitive PR is the #1331 solo-maintainer 
 
 ## Durable checkpoint — 2026-09-09
 
-The Object-first constitution, A–G lane ownership model, H oversight contract, strict protected-main `merge-gate`, migration/hotspot/handoff audits, branch-cleanup policy, and advisory deterministic UI-audit evidence path are established. H should not preserve exact current PR/branch/CI/artifact run identifiers here; every new run rebuilds them from live GitHub.
+The Object-first constitution, A–G lane ownership model, H oversight contract, strict protected-main `merge-gate`, migration/hotspot/handoff audits, branch-cleanup policy, advisory deterministic UI-audit evidence path, and user-visible priority-routing rubric are established. H should not preserve exact current PR/branch/CI/artifact run identifiers here; every new run rebuilds them from live GitHub.
 
 Immediate oversight priority is to keep the repository's AI coordination and reproducibility guardrails aligned with the increasing number of parallel implementation lanes, while protecting the near-term product focus on Bookmark retirement, People retirement, Tag hierarchy, Body interaction follow-ups, and Home/start UX before expanding speculative feature scope.
