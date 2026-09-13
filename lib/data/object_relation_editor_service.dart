@@ -3,13 +3,18 @@ import '../domain/object_model.dart';
 import 'object_identity_search_service.dart';
 import 'relation_mutation_service.dart';
 import 'relation_target_service.dart';
+import 'system_object_store.dart';
+import 'tag_hierarchy_integrity_service.dart';
+import 'tag_object_bridge.dart';
 
 /// Object-owned adapter for Relation picker/editor surfaces.
 ///
 /// Reads always come from [RelationTargetService] so callers see canonical
 /// persisted metadata plus diagnostics. Alias-aware candidate search delegates
 /// to [ObjectIdentitySearchService] and is intersected back with the canonical
-/// candidates loaded for the picker. Writes always go through
+/// candidates loaded for the picker. Canonical Tag targets receive only derived
+/// hierarchy-path presentation context; their identity and persistence remain
+/// ordinary Object/Relation state. Writes always go through
 /// [RelationMutationService] so bidirectional lifecycle/index rules are not
 /// reimplemented in UI code.
 class ObjectRelationEditorService {
@@ -36,10 +41,10 @@ class ObjectRelationEditorService {
 
   /// Searches the canonical target candidates by title or Object alias.
   ///
-  /// Search results always carry canonical Object ids. Alias text is display
-  /// context only. Results are intersected with [context.candidates] so a stale
-  /// picker cannot expand beyond the candidate set that was canonically loaded
-  /// for this editing session.
+  /// Search results always carry canonical Object ids. Alias and hierarchy-path
+  /// text are display context only. Results are intersected with
+  /// [context.candidates] so a stale picker cannot expand beyond the candidate
+  /// set that was canonically loaded for this editing session.
   Future<List<ObjectIdentitySearchResult>> searchCandidates({
     required RelationSelectionContext context,
     required String query,
@@ -55,9 +60,111 @@ class ObjectRelationEditorService {
       objectTypeId: context.targetObjectType.id,
     );
     final candidateIds = context.candidates.map((object) => object.id).toSet();
+    final scoped = results
+        .where((result) => candidateIds.contains(result.objectId))
+        .toList(growable: false);
     return List.unmodifiable(
-      results.where((result) => candidateIds.contains(result.objectId)),
+      await _withCanonicalTagHierarchyContext(
+        context: context,
+        results: scoped,
+      ),
     );
+  }
+
+  Future<List<ObjectIdentitySearchResult>> _withCanonicalTagHierarchyContext({
+    required RelationSelectionContext context,
+    required List<ObjectIdentitySearchResult> results,
+  }) async {
+    if (results.isEmpty ||
+        context.targetObjectType.kind != ObjectTypeKind.system) {
+      return results;
+    }
+
+    final systemObjects = SystemObjectStore(
+      database: mutations.genericStore.database,
+      objectStore: targets.objectStore,
+    );
+    final systemKey = await systemObjects.systemKeyForObjectType(
+      context.targetObjectType.id,
+    );
+    if (systemKey != TagObjectBridge.systemKey) return results;
+
+    final parentProperties = context.targetObjectType.properties
+        .where(
+          (property) =>
+              property.name == 'Parent' &&
+              property.isRelation &&
+              property.targetObjectTypeId == context.targetObjectType.id &&
+              !property.allowsMultipleRelations,
+        )
+        .toList(growable: false);
+    if (parentProperties.length != 1) {
+      throw StateError(
+        'Canonical Tag ObjectType must contain exactly one single self-targeting Parent Relation.',
+      );
+    }
+
+    final snapshot =
+        await TagHierarchyIntegrityService(
+          objectStore: targets.objectStore,
+          relationMutations: mutations,
+          relationTargets: targets,
+        ).loadSnapshot(
+          workspaceId: context.targetObjectType.workspaceId,
+          parentProperty: parentProperties.single,
+        );
+    final tags = await targets.objectStore.listObjects(
+      context.targetObjectType.id,
+    );
+    final tagsById = <int, AppObject>{for (final tag in tags) tag.id: tag};
+
+    return results
+        .map(
+          (result) => ObjectIdentitySearchResult(
+            object: result.object,
+            objectType: result.objectType,
+            aliases: result.aliases,
+            matchedAlias: result.matchedAlias,
+            presentationContext: _tagPath(
+              objectId: result.objectId,
+              snapshot: snapshot,
+              tagsById: tagsById,
+            ),
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  String? _tagPath({
+    required int objectId,
+    required TagHierarchySnapshot snapshot,
+    required Map<int, AppObject> tagsById,
+  }) {
+    if (!snapshot.parentByTagObjectId.containsKey(objectId)) {
+      throw StateError(
+        'Canonical Tag picker candidate is missing from the validated hierarchy snapshot.',
+      );
+    }
+
+    final chain = <String>[];
+    int? current = objectId;
+    final visited = <int>{};
+    while (current != null) {
+      if (!visited.add(current)) {
+        throw StateError('Canonical Tag hierarchy contains a cycle.');
+      }
+      final tag = tagsById[current];
+      if (tag == null || !snapshot.parentByTagObjectId.containsKey(current)) {
+        throw StateError(
+          'Canonical Tag hierarchy references a missing Tag Object.',
+        );
+      }
+      chain.add(tag.title);
+      current = snapshot.parentByTagObjectId[current];
+    }
+
+    if (chain.length <= 1) return null;
+    return chain.reversed.join(' › ');
   }
 
   /// Persists an explicit user selection resolved from [load].
