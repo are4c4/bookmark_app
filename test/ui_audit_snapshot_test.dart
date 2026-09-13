@@ -15,6 +15,7 @@ import 'package:bookmark_app/repositories/object_global_search_service.dart';
 import 'package:bookmark_app/repositories/object_search_result_resolver.dart';
 import 'package:bookmark_app/views/object_global_search_page.dart';
 import 'package:bookmark_app/widgets/object_relation_picker_dialog.dart';
+import 'package:crypto/crypto.dart' as crypto;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -30,9 +31,15 @@ const _fontSource =
     'notofonts/noto-cjk@Sans2.004/Sans/Variable/OTF/Subset/NotoSansJP-VF.otf';
 const _fontGitBlobSha = '36864f7e1f1a3f51e4972e4e37aaa15467649760';
 const _fontSizeBytes = 8128756;
+const _materialIconsFamily = 'MaterialIcons';
+const _materialIconsRelativePath =
+    'bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf';
+const _materialIconsSource = 'pubspec-pinned Flutter SDK artifact';
 
 final List<Map<String, Object?>> _scenarioRecords = <Map<String, Object?>>[];
-bool _auditFontLoaded = false;
+bool _auditFontsLoaded = false;
+String? _materialIconsSha256;
+int? _materialIconsSizeBytes;
 
 String? get _captureRoot {
   final value = Platform.environment['UI_AUDIT_OUTPUT_DIR']?.trim();
@@ -49,7 +56,24 @@ String get _sourceSha {
   return value == null || value.isEmpty ? 'local' : value;
 }
 
-Future<void> _loadAuditFont() async {
+File _resolveMaterialIconsFont() {
+  var directory = File(Platform.resolvedExecutable).parent;
+  while (true) {
+    final candidate = File('${directory.path}/$_materialIconsRelativePath');
+    if (candidate.existsSync()) return candidate;
+
+    final parent = directory.parent;
+    if (parent.path == directory.path) break;
+    directory = parent;
+  }
+
+  throw StateError(
+    'UI Audit could not find $_materialIconsRelativePath in the Flutter SDK '
+    'that launched this test.',
+  );
+}
+
+Future<void> _loadAuditFonts() async {
   if (_captureRoot == null) return;
 
   final path = _fontPath;
@@ -70,17 +94,32 @@ Future<void> _loadAuditFont() async {
   }
 
   final bytes = file.readAsBytesSync();
-  final loader = FontLoader(_fontFamily)
+  final textLoader = FontLoader(_fontFamily)
     ..addFont(Future<ByteData>.value(ByteData.sublistView(bytes)));
-  await loader.load();
-  _auditFontLoaded = true;
+  await textLoader.load();
+
+  final materialIconsFile = _resolveMaterialIconsFont();
+  final materialIconsBytes = materialIconsFile.readAsBytesSync();
+  if (materialIconsBytes.isEmpty) {
+    throw StateError('UI Audit Material Icons font is empty.');
+  }
+  final materialIconsLoader = FontLoader(_materialIconsFamily)
+    ..addFont(
+      Future<ByteData>.value(ByteData.sublistView(materialIconsBytes)),
+    );
+  await materialIconsLoader.load();
+  _materialIconsSizeBytes = materialIconsBytes.length;
+  _materialIconsSha256 = crypto.sha256.convert(materialIconsBytes).toString();
+  _auditFontsLoaded = true;
 }
 
 void _initializeCaptureOutput() {
   final root = _captureRoot;
   if (root == null) return;
-  if (!_auditFontLoaded) {
-    throw StateError('UI Audit capture requires the pinned Japanese font.');
+  if (!_auditFontsLoaded) {
+    throw StateError(
+      'UI Audit capture requires the pinned Japanese and Material Icons fonts.',
+    );
   }
   _scenarioRecords.clear();
   final directory = Directory(root);
@@ -112,6 +151,13 @@ void _writeManifest() {
         'gitBlobSha': _fontGitBlobSha,
         'sizeBytes': _fontSizeBytes,
       },
+      'materialIcons': <String, Object?>{
+        'family': _materialIconsFamily,
+        'source': _materialIconsSource,
+        'relativePath': _materialIconsRelativePath,
+        'sha256': _materialIconsSha256,
+        'sizeBytes': _materialIconsSizeBytes,
+      },
     },
     'scenarios': _scenarioRecords,
   };
@@ -133,7 +179,7 @@ Widget _auditHost(Widget child) => MaterialApp(
   theme: ThemeData(
     brightness: Brightness.dark,
     useMaterial3: true,
-    fontFamily: _auditFontLoaded ? _fontFamily : null,
+    fontFamily: _auditFontsLoaded ? _fontFamily : null,
   ),
   home: RepaintBoundary(key: _captureBoundaryKey, child: child),
 );
@@ -269,7 +315,7 @@ class _UiAuditSearchService extends ObjectGlobalSearchService {
 
 void main() {
   setUpAll(() async {
-    await _loadAuditFont();
+    await _loadAuditFonts();
     _initializeCaptureOutput();
   });
 
