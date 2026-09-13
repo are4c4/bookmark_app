@@ -91,6 +91,8 @@ The existing macOS delivery boundary now makes packaged builds self-identifying 
 - generated DMG naming carries the build provenance and marks dirty source builds;
 - the existing Bundle Identifier, Vault/profile paths and database/migration behavior are unchanged.
 
+This checkpoint does **not** add signing/notarization, automatic updates, release channels or runtime dependence on a source checkout.
+
 Focused tests cover clean/dirty/development/unknown formatting, package-script provenance contracts and the real Settings build-info/copy surface. The latest-main-synchronized head passed changed-Dart format, Analyze/guards, all four Flutter Test shards, test-health, Repository Settings/AI Migration Lease/AI Handoff audits and authoritative `merge-gate` before squash integration. PR CI intentionally skipped the macOS release-build job for this change scope, so this checkpoint proves the repository-owned packaging contract and UI behavior; it does not claim a new real-Mac packaging/signing/notarization validation run.
 
 ## Integrated foundation that remains authoritative
