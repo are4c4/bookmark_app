@@ -87,8 +87,7 @@ void main() {
       name: 'Tags',
       targetObjectTypeId: targetObjectTypeId,
     );
-    final property = (await objectStore.getObjectType(sourceTypeId))!
-        .properties
+    final property = (await objectStore.getObjectType(sourceTypeId))!.properties
         .singleWhere((candidate) => candidate.id == propertyId);
     final sourceId = await objectStore.createObject(
       objectTypeId: sourceTypeId,
