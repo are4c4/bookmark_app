@@ -162,8 +162,12 @@ Repository branch protection/required `merge-gate` is now established; treat liv
 #1353 established an advisory deterministic UI snapshot foundation owned by G and consumed by H.
 
 - The audit uses repository-owned deterministic fixtures, a fixed dark desktop profile, source-SHA manifests, bounded GitHub Actions artifacts, and representative shared surfaces rather than full-app screenshots.
-- The visual job is advisory: subjective or pixel-level opinions are not a required merge gate. Existing interaction/Analyze/full Flutter Test correctness remains authoritative for blocking behavior.
-- H should inspect the latest successful artifact/report when visual evidence would materially improve an oversight conclusion. Prefer the artifact whose manifest source SHA matches the code state under review, and verify scenario status before relying on it.
+- Each successful audit bundle also carries repository-generated `machine-summary.json` and `h-review-input.md`. H should read these before interpreting screenshots: verify the exact source SHA, profile, capture exit code, scenario counts/status, screenshot presence/size, and any evidence warnings.
+- Treat `evidenceStatus: complete` as a provenance/completeness signal only, not as a claim that UX is good. `incomplete` or `unavailable` means H must state what evidence is missing and continue ordinary architecture/repository oversight rather than blocking unrelated work or inventing a visual conclusion.
+- The recurring advisory H report separates four outcomes: **new actionable findings**, **known findings already owned by live Issues**, **suspected/subjective observations requiring confirmation**, and **`no new actionable UX finding`** when no concrete new gap is supported.
+- Search live Issues before routing any new finding. Reuse/refine existing ownership where acceptance already covers the problem; otherwise create exactly one focused A–G Issue with explicit reproduction/evidence and never make H the product implementation owner.
+- Weekly scheduled runs, relevant successful `main` runs, and human-triggered manual runs are valid evidence sources. Prefer the latest successful bundle whose source SHA matches the code state being reviewed; an older successful bundle may provide context but must not be presented as current evidence.
+- The visual job and H report are advisory: subjective or pixel-level opinions are not a required merge gate. Existing interaction/Analyze/full Flutter Test correctness remains authoritative for blocking behavior.
 - Screenshots are evidence only. Do not infer persistence, lifecycle, accessibility, or semantic correctness from pixels when those claims require code/tests/runtime evidence.
 - When a screenshot reveals a concrete UX/layout problem, route one focused Issue to the owning A–G lane, record the exact affected surface/contract, and avoid bundling unrelated visual cleanup.
 - Do not store external-model API credentials or introduce subjective AI screenshot scoring merely to automate H. Any later blocking golden contract requires a separate evidence-backed decision.
@@ -179,7 +183,7 @@ A focused implementation slice may be complete when its acceptance criteria and 
 3. Inspect recent `main` changes for architecture/product integration implications.
 4. Audit architecture, integration, parallel safety, durable-doc freshness, UX, technical debt, correctness/preservation, and roadmap coherence.
 5. When multiple independent safe/ready Issues or findings compete, apply the user-visible priority rubric before routing/choosing attention; do not favor lower-impact work solely because it is easier.
-6. When visual/layout evidence would help, inspect the latest successful UI Audit artifact/report and tie observations to its source SHA; never treat screenshots as source-of-truth over live code/GitHub.
+6. When visual/layout evidence would help, inspect the latest successful UI Audit `h-review-input.md` / `machine-summary.json` and screenshots, tie observations to the exact source SHA, and explicitly distinguish complete, incomplete, or unavailable evidence; never treat screenshots as source-of-truth over live code/GitHub.
 7. For each finding, link an existing Issue or create one focused Issue with one primary A–G owner; record dependencies, hotspot/migration impact, product-priority signal where applicable, and acceptance criteria.
 8. Correct repository-wide durable routing/docs only when durable facts changed.
 9. Continue to another independent audit area instead of stopping after the first finding.
