@@ -45,127 +45,146 @@ void main() {
       isNotNull,
     );
 
-    await tester.tap(
-      find.byKey(const ValueKey('object-merge-review-submit')),
-    );
+    await tester.tap(find.byKey(const ValueKey('object-merge-review-submit')));
     await tester.pumpAndSettle();
     expect(find.text('Objectを統合しますか？'), findsOneWidget);
 
-    await tester.tap(
-      find.byKey(const ValueKey('object-merge-confirm-submit')),
-    );
+    await tester.tap(find.byKey(const ValueKey('object-merge-confirm-submit')));
     await tester.pumpAndSettle();
 
-    expect(await _objectById(fixture.objectStore, typeId, currentId), isNotNull);
+    expect(
+      await _objectById(fixture.objectStore, typeId, currentId),
+      isNotNull,
+    );
     expect(await _objectById(fixture.objectStore, typeId, candidateId), isNull);
     expect(
       await ObjectRedirectStore(fixture.genericStore).resolve(candidateId),
       currentId,
     );
-    expect(find.byKey(const ValueKey('object-merge-review-dialog')), findsNothing);
-  });
-
-  testWidgets('Inspector can keep candidate identity and replace retired route', (
-    tester,
-  ) async {
-    final fixture = await _Fixture.create();
-    addTearDown(fixture.close);
-    final typeId = await fixture.objectStore.createObjectType(
-      workspaceId: fixture.workspaceId,
-      name: 'Topic',
-    );
-    final currentId = await fixture.objectStore.createObject(
-      objectTypeId: typeId,
-      title: 'Shared',
-    );
-    final candidateId = await fixture.objectStore.createObject(
-      objectTypeId: typeId,
-      title: 'Shared',
-    );
-
-    await fixture.pumpInspector(tester, currentId);
-    await _openMergeReview(tester, candidateId);
-
-    await tester.tap(
-      find.byKey(const ValueKey('object-merge-survivor-candidate')),
-    );
-    await tester.pumpAndSettle();
-    expect(
-      tester
-          .widget<FilledButton>(
-            find.byKey(const ValueKey('object-merge-review-submit')),
-          )
-          .onPressed,
-      isNotNull,
-    );
-
-    await tester.tap(
-      find.byKey(const ValueKey('object-merge-review-submit')),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const ValueKey('object-merge-confirm-submit')),
-    );
-    await tester.pumpAndSettle();
-
-    expect(await _objectById(fixture.objectStore, typeId, currentId), isNull);
-    expect(await _objectById(fixture.objectStore, typeId, candidateId), isNotNull);
-    expect(
-      await ObjectRedirectStore(fixture.genericStore).resolve(currentId),
-      candidateId,
-    );
-    expect(fixture.visitedObjectIds, contains(candidateId));
-  });
-
-  testWidgets('review and destructive confirmation cancellation do not mutate', (
-    tester,
-  ) async {
-    final fixture = await _Fixture.create();
-    addTearDown(fixture.close);
-    final typeId = await fixture.objectStore.createObjectType(
-      workspaceId: fixture.workspaceId,
-      name: 'Topic',
-    );
-    final currentId = await fixture.objectStore.createObject(
-      objectTypeId: typeId,
-      title: 'Same',
-    );
-    final candidateId = await fixture.objectStore.createObject(
-      objectTypeId: typeId,
-      title: 'Same',
-    );
-
-    await fixture.pumpInspector(tester, currentId);
-    await _openMergeReview(tester, candidateId);
-
-    await tester.tap(
-      find.byKey(const ValueKey('object-merge-review-submit')),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const ValueKey('object-merge-confirm-cancel')),
-    );
-    await tester.pumpAndSettle();
-
-    expect(
-      find.byKey(const ValueKey('object-merge-review-dialog')),
-      findsOneWidget,
-    );
-    expect(await _objectById(fixture.objectStore, typeId, currentId), isNotNull);
-    expect(await _objectById(fixture.objectStore, typeId, candidateId), isNotNull);
-
-    await tester.tap(
-      find.byKey(const ValueKey('object-merge-review-cancel')),
-    );
-    await tester.pumpAndSettle();
-
     expect(
       find.byKey(const ValueKey('object-merge-review-dialog')),
       findsNothing,
     );
-    expect(await _objectById(fixture.objectStore, typeId, currentId), isNotNull);
-    expect(await _objectById(fixture.objectStore, typeId, candidateId), isNotNull);
   });
+
+  testWidgets(
+    'Inspector can keep candidate identity and replace retired route',
+    (tester) async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      final typeId = await fixture.objectStore.createObjectType(
+        workspaceId: fixture.workspaceId,
+        name: 'Topic',
+      );
+      final currentId = await fixture.objectStore.createObject(
+        objectTypeId: typeId,
+        title: 'Shared',
+      );
+      final candidateId = await fixture.objectStore.createObject(
+        objectTypeId: typeId,
+        title: 'Shared',
+      );
+
+      await fixture.pumpInspector(tester, currentId);
+      await _openMergeReview(tester, candidateId);
+
+      await tester.tap(
+        find.byKey(const ValueKey('object-merge-survivor-candidate')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.byKey(const ValueKey('object-merge-review-submit')),
+            )
+            .onPressed,
+        isNotNull,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('object-merge-review-submit')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('object-merge-confirm-submit')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(await _objectById(fixture.objectStore, typeId, currentId), isNull);
+      expect(
+        await _objectById(fixture.objectStore, typeId, candidateId),
+        isNotNull,
+      );
+      expect(
+        await ObjectRedirectStore(fixture.genericStore).resolve(currentId),
+        candidateId,
+      );
+      expect(fixture.visitedObjectIds, contains(candidateId));
+    },
+  );
+
+  testWidgets(
+    'review and destructive confirmation cancellation do not mutate',
+    (tester) async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      final typeId = await fixture.objectStore.createObjectType(
+        workspaceId: fixture.workspaceId,
+        name: 'Topic',
+      );
+      final currentId = await fixture.objectStore.createObject(
+        objectTypeId: typeId,
+        title: 'Same',
+      );
+      final candidateId = await fixture.objectStore.createObject(
+        objectTypeId: typeId,
+        title: 'Same',
+      );
+
+      await fixture.pumpInspector(tester, currentId);
+      await _openMergeReview(tester, candidateId);
+
+      await tester.tap(
+        find.byKey(const ValueKey('object-merge-review-submit')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('object-merge-confirm-cancel')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('object-merge-review-dialog')),
+        findsOneWidget,
+      );
+      expect(
+        await _objectById(fixture.objectStore, typeId, currentId),
+        isNotNull,
+      );
+      expect(
+        await _objectById(fixture.objectStore, typeId, candidateId),
+        isNotNull,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('object-merge-review-cancel')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('object-merge-review-dialog')),
+        findsNothing,
+      );
+      expect(
+        await _objectById(fixture.objectStore, typeId, currentId),
+        isNotNull,
+      );
+      expect(
+        await _objectById(fixture.objectStore, typeId, candidateId),
+        isNotNull,
+      );
+    },
+  );
 
   testWidgets('stale finalization fails closed and preserves both Objects', (
     tester,
@@ -188,22 +207,24 @@ void main() {
     await fixture.pumpInspector(tester, currentId);
     await _openMergeReview(tester, candidateId);
 
-    await fixture.objectStore.renameObject(candidateId, 'Changed during review');
+    await fixture.objectStore.renameObject(
+      candidateId,
+      'Changed during review',
+    );
 
-    await tester.tap(
-      find.byKey(const ValueKey('object-merge-review-submit')),
-    );
+    await tester.tap(find.byKey(const ValueKey('object-merge-review-submit')));
     await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const ValueKey('object-merge-confirm-submit')),
-    );
+    await tester.tap(find.byKey(const ValueKey('object-merge-confirm-submit')));
     await tester.pumpAndSettle();
 
     expect(
       find.byKey(const ValueKey('object-merge-review-error')),
       findsOneWidget,
     );
-    expect(await _objectById(fixture.objectStore, typeId, currentId), isNotNull);
+    expect(
+      await _objectById(fixture.objectStore, typeId, currentId),
+      isNotNull,
+    );
     expect(
       (await _objectById(fixture.objectStore, typeId, candidateId))?.title,
       'Changed during review',
@@ -227,10 +248,9 @@ void main() {
             candidateObjectId: 2,
             candidateTitle: 'Candidate',
             propertyNames: const <int, String>{},
-            onPrepare: ({
-              required survivorObjectId,
-              required retiredObjectId,
-            }) async => prepared,
+            onPrepare:
+                ({required survivorObjectId, required retiredObjectId}) async =>
+                    prepared,
             onFinalize: ({required prepared, required plan}) async => 1,
           ),
         ),
@@ -247,9 +267,7 @@ void main() {
       isNull,
     );
 
-    await tester.tap(
-      find.byKey(const ValueKey('object-merge-decision-title')),
-    );
+    await tester.tap(find.byKey(const ValueKey('object-merge-decision-title')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('残す側「Current」を採用').last);
     await tester.pumpAndSettle();
@@ -287,10 +305,9 @@ void main() {
             candidateObjectId: 2,
             candidateTitle: 'Same',
             propertyNames: const <int, String>{},
-            onPrepare: ({
-              required survivorObjectId,
-              required retiredObjectId,
-            }) async => prepared,
+            onPrepare:
+                ({required survivorObjectId, required retiredObjectId}) async =>
+                    prepared,
             onFinalize: ({required prepared, required plan}) async => 1,
           ),
         ),
