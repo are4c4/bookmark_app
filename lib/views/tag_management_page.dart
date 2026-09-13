@@ -64,8 +64,9 @@ class _TagManagementPageState extends State<TagManagementPage> {
   void initState() {
     super.initState();
     _store = TagGroupStore(repository.lifecycleStore.database);
-    _hierarchyMutations =
-        TagManagementHierarchyMutationService.forRepository(repository);
+    _hierarchyMutations = TagManagementHierarchyMutationService.forRepository(
+      repository,
+    );
     _initialize();
   }
 
