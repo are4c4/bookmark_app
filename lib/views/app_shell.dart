@@ -74,6 +74,7 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
 
   var _index = 12;
   var _sidebarCollapsed = false;
+  var _sidebarPreferenceGeneration = 0;
   var _loadingWorkspaces = true;
   List<WorkspaceInfo> _workspaces = const [];
   List<AppShellDatabaseRecord> _genericDatabases = const [];
@@ -114,13 +115,19 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
   }
 
   Future<void> _restoreSidebarCollapsed() async {
-    final collapsed = await widget.layoutPreferences.loadSidebarCollapsed();
-    if (!mounted || collapsed == null || collapsed == _sidebarCollapsed) return;
+    final generation = ++_sidebarPreferenceGeneration;
+    final preferences = widget.layoutPreferences;
+    final collapsed = await preferences.loadSidebarCollapsed();
+    if (!mounted) return;
+    if (generation != _sidebarPreferenceGeneration) return;
+    if (preferences != widget.layoutPreferences) return;
+    if (collapsed == null || collapsed == _sidebarCollapsed) return;
     setState(() => _sidebarCollapsed = collapsed);
   }
 
   void _setSidebarCollapsed(bool collapsed) {
     if (_sidebarCollapsed == collapsed) return;
+    _sidebarPreferenceGeneration += 1;
     setState(() => _sidebarCollapsed = collapsed);
     unawaited(widget.layoutPreferences.saveSidebarCollapsed(collapsed));
   }
