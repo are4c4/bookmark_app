@@ -41,12 +41,12 @@ void main() {
           GenericDatabaseStore(reopenedDatabase),
         );
         final checkpoints = await store.list(7);
-        expect(
-          checkpoints.map((item) => item.entry.revisionId),
-          <int>[1, 4],
-        );
+        expect(checkpoints.map((item) => item.entry.revisionId), <int>[1, 4]);
         expect((await store.latest(7))?.entry.revisionId, 4);
-        expect((await store.load(objectId: 7, revisionId: 1))?.title, 'Title 1');
+        expect(
+          (await store.load(objectId: 7, revisionId: 1))?.title,
+          'Title 1',
+        );
         expect(await store.load(objectId: 7, revisionId: 2), isNull);
         expect(
           await store.append(_checkpoint(revisionId: 4, previousRevisionId: 1)),
@@ -67,12 +67,7 @@ void main() {
 
     expect(await store.append(_checkpoint(revisionId: 2)), isTrue);
     await expectLater(
-      store.append(
-        _checkpoint(
-          revisionId: 2,
-          title: 'Conflicting reuse',
-        ),
-      ),
+      store.append(_checkpoint(revisionId: 2, title: 'Conflicting reuse')),
       throwsStateError,
     );
     await expectLater(
@@ -84,10 +79,9 @@ void main() {
       throwsStateError,
     );
 
-    expect(
-      (await store.list(7)).map((item) => item.entry.revisionId),
-      <int>[2],
-    );
+    expect((await store.list(7)).map((item) => item.entry.revisionId), <int>[
+      2,
+    ]);
   });
 
   test('first checkpoint cannot claim a previous revision', () async {
@@ -102,21 +96,28 @@ void main() {
     expect(await store.list(7), isEmpty);
   });
 
-  test('persisted payload remains A-owned and excludes Relation targets', () async {
-    final database = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(database.close);
-    final store = ObjectHistoryCheckpointStore(GenericDatabaseStore(database));
+  test(
+    'persisted payload remains A-owned and excludes Relation targets',
+    () async {
+      final database = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(database.close);
+      final store = ObjectHistoryCheckpointStore(
+        GenericDatabaseStore(database),
+      );
 
-    await store.append(_checkpoint(revisionId: 1));
-    final row = await database.customSelect(
-      'SELECT payload_json FROM object_history_checkpoints LIMIT 1',
-    ).getSingle();
-    final stored = row.read<String>('payload_json');
+      await store.append(_checkpoint(revisionId: 1));
+      final row = await database
+          .customSelect(
+            'SELECT payload_json FROM object_history_checkpoints LIMIT 1',
+          )
+          .getSingle();
+      final stored = row.read<String>('payload_json');
 
-    expect(stored, contains('relationPropertyIds'));
-    expect(stored, isNot(contains('targetObjectIds')));
-    expect(stored, isNot(contains('object_relation_edges')));
-  });
+      expect(stored, contains('relationPropertyIds'));
+      expect(stored, isNot(contains('targetObjectIds')));
+      expect(stored, isNot(contains('object_relation_edges')));
+    },
+  );
 
   test('malformed persisted checkpoint fails closed', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
