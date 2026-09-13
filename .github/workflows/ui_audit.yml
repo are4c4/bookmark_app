@@ -1,0 +1,88 @@
+name: UI Audit
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * 1'
+  push:
+    branches:
+      - main
+    paths:
+      - 'lib/**'
+      - 'test/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - '.github/workflows/ui_audit.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ui-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  snapshots:
+    name: advisory-ui-snapshots
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version-file: pubspec.yaml
+          cache: true
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Generate Drift code
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Capture deterministic UI audit surfaces
+        id: capture
+        shell: bash
+        env:
+          UI_AUDIT_OUTPUT_DIR: build/ui_audit
+          UI_AUDIT_SOURCE_SHA: ${{ github.sha }}
+        run: |
+          mkdir -p "$UI_AUDIT_OUTPUT_DIR"
+          set +e
+          set -o pipefail
+          flutter test test/ui_audit_snapshot_test.dart --concurrency=1 --reporter=expanded \
+            2>&1 | tee "$UI_AUDIT_OUTPUT_DIR/test.log"
+          status=${PIPESTATUS[0]}
+          set -e
+          printf '%s\n' "$status" > "$UI_AUDIT_OUTPUT_DIR/test-exit-code.txt"
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          if [[ "$status" -ne 0 ]]; then
+            echo "::warning::UI audit capture reported deterministic test failures; this advisory workflow does not replace required Flutter CI."
+          fi
+
+      - name: Upload UI audit evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ui-audit-${{ github.sha }}
+          path: build/ui_audit
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Summarize UI audit
+        if: always()
+        env:
+          CAPTURE_STATUS: ${{ steps.capture.outputs.status }}
+        run: |
+          {
+            echo '## UI audit'
+            echo
+            echo "- Source SHA: \`${GITHUB_SHA}\`"
+            echo '- Profile: `desktop-dark-1440x900`'
+            echo '- Scenarios: shared Body document, generic Person Relation picker, canonical Global Search empty state'
+            echo "- Capture test exit code: \`${CAPTURE_STATUS:-not-run}\`"
+            echo '- Policy: screenshot evidence is advisory; deterministic behavior remains enforced by normal Flutter CI.'
+            echo '- Artifact retention: 14 days.'
+          } >> "$GITHUB_STEP_SUMMARY"
