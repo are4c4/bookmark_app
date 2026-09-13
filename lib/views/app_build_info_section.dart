@@ -45,6 +45,7 @@ class AppBuildInfoSection extends StatelessWidget {
         const SizedBox(height: UiTokens.space12),
         SelectableText(
           'Version ${provenance.displayVersion} (${provenance.displayBuildNumber})\n'
+          'Channel ${provenance.displayReleaseChannel}\n'
           'Commit ${provenance.shortCommit}\n'
           'Source ${provenance.displaySourceState}',
           style: const TextStyle(fontSize: UiTokens.textSm),
