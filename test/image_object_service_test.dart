@@ -34,11 +34,15 @@ void main() {
     expect(second.objectType.id, first.objectType.id);
     expect(first.objectType.kind, ObjectTypeKind.system);
     expect(first.fileProperty.type, ObjectPropertyType.file);
+    expect(first.fileProperty.config['system'], isTrue);
+    expect(first.fileProperty.config['hidden'], isTrue);
     expect(first.noteProperty.type, ObjectPropertyType.text);
     expect(first.sourceUrlProperty.type, ObjectPropertyType.url);
     expect(first.originalFilenameProperty.type, ObjectPropertyType.text);
     expect(first.contentTypeProperty.type, ObjectPropertyType.text);
     expect(first.storageOwnershipProperty.type, ObjectPropertyType.text);
+    expect(first.storageOwnershipProperty.config['system'], isTrue);
+    expect(first.storageOwnershipProperty.config['hidden'], isTrue);
     for (final name in <String>[
       'File',
       'Note',
@@ -68,6 +72,52 @@ void main() {
       first.fileProperty.id,
     ]);
     expect(defaults?.openMode, ObjectOpenMode.sidePeek);
+  });
+
+  test('Image definition upgrades existing internal storage fields to hidden',
+      () async {
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final workspaceId = await WorkspaceStore(database).initialize();
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final defaultsStore = ObjectTypeDefaultsStore(genericStore);
+    final systemObjects = SystemObjectStore(
+      database: database,
+      objectStore: objectStore,
+    );
+    final imageType = await systemObjects.ensureSystemObjectType(
+      workspaceId: workspaceId,
+      systemKey: ImageObjectService.systemKey,
+      name: '画像',
+      icon: '🖼️',
+    );
+    final oldFile = await systemObjects.ensureProperty(
+      objectTypeId: imageType.id,
+      name: 'File',
+      type: ObjectPropertyType.file,
+      config: const <String, dynamic>{'system': true},
+    );
+    final oldOwnership = await systemObjects.ensureProperty(
+      objectTypeId: imageType.id,
+      name: 'Storage ownership',
+      type: ObjectPropertyType.text,
+      config: const <String, dynamic>{'system': true},
+    );
+    expect(oldFile.config['hidden'], isNull);
+    expect(oldOwnership.config['hidden'], isNull);
+
+    final definition = await ImageObjectService(
+      systemObjects: systemObjects,
+      defaultsStore: defaultsStore,
+    ).ensureDefinition(workspaceId);
+
+    expect(definition.fileProperty.id, oldFile.id);
+    expect(definition.fileProperty.config['system'], isTrue);
+    expect(definition.fileProperty.config['hidden'], isTrue);
+    expect(definition.storageOwnershipProperty.id, oldOwnership.id);
+    expect(definition.storageOwnershipProperty.config['system'], isTrue);
+    expect(definition.storageOwnershipProperty.config['hidden'], isTrue);
   });
 
   test('managed Image reuses canonical source URL variants and preserves metadata',
