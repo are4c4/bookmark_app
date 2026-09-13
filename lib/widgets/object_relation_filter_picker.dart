@@ -157,19 +157,21 @@ class _ObjectRelationFilterPickerState
           Wrap(
             spacing: 6,
             runSpacing: 6,
-            children: widget.selectedObjectIds.map((objectId) {
-              final resolved = _resolvedById[objectId];
-              return InputChip(
-                key: ValueKey('relation-filter-selected-$objectId'),
-                avatar: resolved == null
-                    ? const Icon(Icons.warning_amber_rounded, size: 16)
-                    : null,
-                label: Text(
-                  resolved?.canonicalTitle ?? '不明なObject #$objectId',
-                ),
-                onDeleted: () => _remove(objectId),
-              );
-            }).toList(growable: false),
+            children: widget.selectedObjectIds
+                .map((objectId) {
+                  final resolved = _resolvedById[objectId];
+                  return InputChip(
+                    key: ValueKey('relation-filter-selected-$objectId'),
+                    avatar: resolved == null
+                        ? const Icon(Icons.warning_amber_rounded, size: 16)
+                        : null,
+                    label: Text(
+                      resolved?.canonicalTitle ?? '不明なObject #$objectId',
+                    ),
+                    onDeleted: () => _remove(objectId),
+                  );
+                })
+                .toList(growable: false),
           ),
           const SizedBox(height: 8),
         ],
@@ -193,16 +195,16 @@ class _ObjectRelationFilterPickerState
                       ),
                     )
                   : _controller.text.isEmpty
-                      ? null
-                      : IconButton(
-                          tooltip: '検索をクリア',
-                          onPressed: () {
-                            _controller.clear();
-                            _search('');
-                            _focusNode.requestFocus();
-                          },
-                          icon: const Icon(Icons.close),
-                        ),
+                  ? null
+                  : IconButton(
+                      tooltip: '検索をクリア',
+                      onPressed: () {
+                        _controller.clear();
+                        _search('');
+                        _focusNode.requestFocus();
+                      },
+                      icon: const Icon(Icons.close),
+                    ),
             ),
             onChanged: _search,
           ),
@@ -223,8 +225,9 @@ class _ObjectRelationFilterPickerState
               itemCount: _candidates.length,
               itemBuilder: (context, index) {
                 final candidate = _candidates[index];
-                final selected =
-                    widget.selectedObjectIds.contains(candidate.objectId);
+                final selected = widget.selectedObjectIds.contains(
+                  candidate.objectId,
+                );
                 return Material(
                   color: index == _activeIndex
                       ? scheme.secondaryContainer.withValues(alpha: .45)
