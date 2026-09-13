@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../data/bookmark_repository.dart';
 import '../services/build_provenance.dart';
+import '../services/support_diagnostics.dart';
+import '../services/support_diagnostics_factory.dart';
 import '../services/vault_lifecycle_scope.dart';
 import '../ui/ui_tokens.dart';
 import 'app_build_info_section.dart';
 import 'auto_organize_settings_section.dart';
 import 'database_backup_settings_section.dart';
+import 'support_diagnostics_section.dart';
 import 'vault_settings_section.dart';
 import 'vault_switch_dialog.dart';
 
@@ -26,6 +29,8 @@ class SettingsPage extends StatelessWidget {
     this.onMoveVault,
     this.buildProvenance = BuildProvenance.current,
     this.copyBuildInfo,
+    this.supportDiagnostics,
+    this.copySupportDiagnostics,
   });
 
   final ThemeMode themeMode;
@@ -41,15 +46,24 @@ class SettingsPage extends StatelessWidget {
   final VoidCallback? onMoveVault;
   final BuildProvenance buildProvenance;
   final Future<void> Function(String text)? copyBuildInfo;
+  final SupportDiagnosticsService? supportDiagnostics;
+  final Future<void> Function(String text)? copySupportDiagnostics;
 
   Future<void> _runVaultAction(
     BuildContext context,
     Future<void> Function() action,
-    String failureMessage,
-  ) async {
+    String failureMessage, {
+    required DiagnosticEventBuffer diagnosticEvents,
+    required String failureCode,
+  }) async {
     try {
       await action();
     } catch (_) {
+      diagnosticEvents.record(
+        category: 'vault.lifecycle',
+        severity: DiagnosticSeverity.error,
+        code: failureCode,
+      );
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(failureMessage)),
@@ -60,6 +74,7 @@ class SettingsPage extends StatelessWidget {
   Future<void> _switchVaultFromScope(
     BuildContext context,
     VaultLifecycleScope scope,
+    DiagnosticEventBuffer diagnosticEvents,
   ) async {
     final selected = await showVaultSwitchDialog(
       context,
@@ -70,6 +85,8 @@ class SettingsPage extends StatelessWidget {
       context,
       () => scope.switchVault(selected),
       'Vaultを切り替えられませんでした。現在のVaultは変更されていません。',
+      diagnosticEvents: diagnosticEvents,
+      failureCode: 'switch_failed',
     );
   }
 
@@ -77,6 +94,12 @@ class SettingsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final vaultPath = repository.profileDirectoryPath?.trim();
+    final diagnostics =
+        supportDiagnostics ??
+        createSupportDiagnosticsService(
+          repository: repository,
+          buildProvenance: buildProvenance,
+        );
     final vaultScope = VaultLifecycleScope.maybeOf(context);
     final VoidCallback? createVaultAction = onCreateVault ??
         (vaultScope == null
@@ -86,6 +109,8 @@ class SettingsPage extends StatelessWidget {
                   context,
                   vaultScope.createVault,
                   '新しいVaultを作成できませんでした。現在のVaultは変更されていません。',
+                  diagnosticEvents: diagnostics.events,
+                  failureCode: 'create_failed',
                 );
               });
     final VoidCallback? openVaultAction = onOpenVault ??
@@ -96,13 +121,19 @@ class SettingsPage extends StatelessWidget {
                   context,
                   vaultScope.openVault,
                   'Vaultを開けませんでした。現在のVaultは変更されていません。',
+                  diagnosticEvents: diagnostics.events,
+                  failureCode: 'open_failed',
                 );
               });
     final VoidCallback? switchVaultAction = onSwitchVault ??
         (vaultScope == null
             ? null
             : () async {
-                await _switchVaultFromScope(context, vaultScope);
+                await _switchVaultFromScope(
+                  context,
+                  vaultScope,
+                  diagnostics.events,
+                );
               });
     final scopeMoveVault = vaultScope?.moveVault;
     final VoidCallback? moveVaultAction = onMoveVault ??
@@ -113,6 +144,8 @@ class SettingsPage extends StatelessWidget {
                   context,
                   scopeMoveVault,
                   'Vaultを移動できませんでした。移動元のVaultは削除されていません。',
+                  diagnosticEvents: diagnostics.events,
+                  failureCode: 'move_failed',
                 );
               });
     return Scaffold(
@@ -198,6 +231,13 @@ class SettingsPage extends StatelessWidget {
           const Divider(),
           const SizedBox(height: UiTokens.space24),
           AutoOrganizeSettingsSection(repository: repository),
+          const SizedBox(height: UiTokens.space24),
+          const Divider(),
+          const SizedBox(height: UiTokens.space24),
+          SupportDiagnosticsSection(
+            diagnostics: diagnostics,
+            copyText: copySupportDiagnostics,
+          ),
           const SizedBox(height: UiTokens.space24),
           const Divider(),
           const SizedBox(height: UiTokens.space24),
