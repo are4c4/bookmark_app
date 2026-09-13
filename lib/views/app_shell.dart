@@ -630,7 +630,15 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
             padding: const EdgeInsets.fromLTRB(7, UiTokens.space8, UiTokens.space4, UiTokens.space4),
             child: Row(children: [
               Expanded(child: _profileHeader()),
-              IconButton(tooltip: 'サイドバーを閉じる', visualDensity: VisualDensity.compact, onPressed: () => _setSidebarCollapsed(true), icon: const Icon(Icons.keyboard_double_arrow_left, size: 17)),
+              IconButton(
+                tooltip: 'サイドバーを閉じる',
+                visualDensity: VisualDensity.compact,
+                onPressed: () => _setSidebarCollapsed(true),
+                icon: const Icon(
+                  Icons.keyboard_double_arrow_left,
+                  size: 17,
+                ),
+              ),
             ]),
           ),
           Expanded(
@@ -724,7 +732,14 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
         width: UiTokens.collapsedSidebarWidth,
         child: Column(children: [
           const SizedBox(height: UiTokens.space8),
-          IconButton(tooltip: 'サイドバーを開く', onPressed: () => _setSidebarCollapsed(false), icon: const Icon(Icons.keyboard_double_arrow_right, size: UiTokens.iconNormal)),
+          IconButton(
+            tooltip: 'サイドバーを開く',
+            onPressed: () => _setSidebarCollapsed(false),
+            icon: const Icon(
+              Icons.keyboard_double_arrow_right,
+              size: UiTokens.iconNormal,
+            ),
+          ),
           const SizedBox(height: UiTokens.space8),
           ...destinations.map((entry) => IconButton(
             onPressed: () => _selectPage(entry.$1),
