@@ -21,11 +21,16 @@ import '../data/object_detail_edit_service.dart';
 import '../data/object_duplicate_advisory_service.dart';
 import '../data/object_graph_query_store.dart';
 import '../data/object_identity_search_service.dart';
+import '../data/object_merge_finalizer.dart';
+import '../data/object_merge_preparation_service.dart';
+import '../data/object_merge_state_store.dart';
+import '../data/object_redirect_store.dart';
 import '../data/object_store.dart';
 import '../data/object_type_defaults_store.dart';
 import '../data/object_value_promotion_execution_service.dart';
 import '../data/person_object_bridge.dart';
 import '../data/relation_mutation_service.dart';
+import '../data/relation_object_merge_service.dart';
 import '../data/relation_read_service.dart';
 import '../data/system_object_store.dart';
 import '../data/weblink_object_service.dart';
@@ -52,6 +57,7 @@ import '../features/object/presentation/widgets/object_detail_property_view.dart
 import '../features/object/presentation/widgets/object_duplicate_advisory_section.dart';
 import '../features/object/presentation/widgets/object_file_detail_panel_host.dart';
 import '../features/object/presentation/widgets/object_image_detail_panel.dart';
+import '../features/object/presentation/widgets/object_merge_review_dialog.dart';
 import '../services/canonical_file_detail_capabilities.dart';
 import '../services/canonical_image_edit_service.dart';
 import '../services/canonical_person_detail_edit_service.dart';
@@ -101,6 +107,41 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
       ObjectDuplicateAdvisoryService(
         objectStore: widget.objectStore,
         aliasStore: _aliasStore,
+      );
+
+  ObjectMergeStateStore get _mergeStateStore =>
+      ObjectMergeStateStore(widget.store);
+
+  RelationObjectMergeService get _relationMergeService {
+    final bidirectionalStore = BidirectionalRelationStore(
+      genericStore: widget.store,
+      objectStore: widget.objectStore,
+    );
+    final mutationService = RelationMutationService(
+      objectStore: widget.objectStore,
+      bidirectionalStore: bidirectionalStore,
+      genericStore: widget.store,
+    );
+    return RelationObjectMergeService(
+      objectStore: widget.objectStore,
+      mutationService: mutationService,
+      bidirectionalStore: bidirectionalStore,
+      genericStore: widget.store,
+    );
+  }
+
+  ObjectMergePreparationService get _mergePreparation =>
+      ObjectMergePreparationService(
+        stateStore: _mergeStateStore,
+        relationMergeService: _relationMergeService,
+      );
+
+  ObjectMergeFinalizer get _mergeFinalizer => ObjectMergeFinalizer(
+        genericStore: widget.store,
+        stateStore: _mergeStateStore,
+        relationMergeService: _relationMergeService,
+        redirectStore: ObjectRedirectStore(widget.store),
+        objectStore: widget.objectStore,
       );
 
   ObjectBodyStore get _bodyStore => ObjectBodyStore(widget.store);
@@ -400,6 +441,66 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
           store: widget.store,
           objectStore: widget.objectStore,
           objectId: objectId,
+          onObjectVisited: widget.onObjectVisited,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _mergeDuplicateCandidate(
+    ObjectDuplicateCandidate candidate,
+  ) async {
+    final content = _content;
+    if (content == null) return;
+
+    final propertyNames = <int, String>{
+      for (final property in content.objectType.properties)
+        property.id: property.name,
+    };
+    final result = await showDialog<ObjectMergeReviewResult>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => ObjectMergeReviewDialog(
+        currentObjectId: content.object.id,
+        currentTitle: content.object.title,
+        candidateObjectId: candidate.objectId,
+        candidateTitle: candidate.canonicalTitle,
+        propertyNames: propertyNames,
+        onPrepare: ({
+          required survivorObjectId,
+          required retiredObjectId,
+        }) async {
+          final preparation = await _mergePreparation.prepare(
+            workspaceId: content.objectType.workspaceId,
+            objectTypeId: content.objectType.id,
+            survivorObjectId: survivorObjectId,
+            retiredObjectId: retiredObjectId,
+          );
+          return preparation.prepared;
+        },
+        onFinalize: ({required prepared, required plan}) async {
+          final finalized = await _mergeFinalizer.finalize(
+            workspaceId: content.objectType.workspaceId,
+            prepared: prepared,
+            plan: plan,
+          );
+          return finalized.survivingObjectId;
+        },
+      ),
+    );
+    if (!mounted || result == null) return;
+
+    if (result.survivingObjectId == widget.objectId) {
+      await _load();
+      return;
+    }
+
+    await Navigator.of(context).pushReplacement(
+      MaterialPageRoute<void>(
+        builder: (_) => ObjectInspectorPage(
+          store: widget.store,
+          objectStore: widget.objectStore,
+          objectId: result.survivingObjectId,
           onObjectVisited: widget.onObjectVisited,
         ),
       ),
@@ -950,6 +1051,7 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
               failed: _duplicateAdvisoryFailed,
               onRetry: _reloadDuplicateAdvisory,
               onOpenCandidate: _openObject,
+              onMergeCandidate: _mergeDuplicateCandidate,
             ),
           ],
           if (dailyNoteDate != null) ...[
