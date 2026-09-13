@@ -176,9 +176,7 @@ class _ObjectBodyDocumentEntryState extends State<_ObjectBodyDocumentEntry> {
     final usesTouchChrome = _usesTouchChrome(context);
     final hasActions = widget.blockActionsBuilder != null;
     final showActions = hasActions &&
-        (usesTouchChrome
-            ? _touchActionsVisible
-            : (_hovered || _focused));
+        (usesTouchChrome ? _touchActionsVisible : (_hovered || _focused));
 
     final blockView = ObjectBodyBlockView(
       key: ValueKey('object-body-block-${_block.id}'),
@@ -210,17 +208,19 @@ class _ObjectBodyDocumentEntryState extends State<_ObjectBodyDocumentEntry> {
           : null,
     );
 
-    final actions = Offstage(
-      offstage: !showActions,
-      child: Row(
-        key: ValueKey('body-block-actions-${_block.id}'),
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (widget.canReorder) _buildDragHandle(context),
-          widget.blockActionsBuilder!(context, _block, widget.position),
-        ],
-      ),
-    );
+    final actions = hasActions
+        ? Offstage(
+            offstage: !showActions,
+            child: Row(
+              key: ValueKey('body-block-actions-${_block.id}'),
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (widget.canReorder) _buildDragHandle(context),
+                widget.blockActionsBuilder!(context, _block, widget.position),
+              ],
+            ),
+          )
+        : null;
 
     return Focus(
       canRequestFocus: false,
@@ -239,8 +239,8 @@ class _ObjectBodyDocumentEntryState extends State<_ObjectBodyDocumentEntry> {
           setState(() => _hovered = false);
         },
         child: usesTouchChrome
-            ? _buildTouchEntry(blockView, actions, hasActions)
-            : _buildDesktopEntry(context, blockView, actions, hasActions),
+            ? _buildTouchEntry(blockView, actions)
+            : _buildDesktopEntry(context, blockView, actions),
       ),
     );
   }
@@ -248,10 +248,9 @@ class _ObjectBodyDocumentEntryState extends State<_ObjectBodyDocumentEntry> {
   Widget _buildDesktopEntry(
     BuildContext context,
     Widget blockView,
-    Widget actions,
-    bool hasActions,
+    Widget? actions,
   ) {
-    if (!hasActions) return blockView;
+    if (actions == null) return blockView;
     final scheme = Theme.of(context).colorScheme;
     return Stack(
       clipBehavior: Clip.none,
@@ -271,8 +270,8 @@ class _ObjectBodyDocumentEntryState extends State<_ObjectBodyDocumentEntry> {
     );
   }
 
-  Widget _buildTouchEntry(Widget blockView, Widget actions, bool hasActions) {
-    if (!hasActions) return blockView;
+  Widget _buildTouchEntry(Widget blockView, Widget? actions) {
+    if (actions == null) return blockView;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
