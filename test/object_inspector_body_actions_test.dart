@@ -85,10 +85,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('body-block-move-down-a')));
     await tester.pumpAndSettle();
     var document = await bodyStore.read(objectId);
-    expect(
-      document.blocks.map((block) => block.id).toList(),
-      <String>['b', 'a'],
-    );
+    expect(document.blocks.map((block) => block.id).toList(), <String>[
+      'b',
+      'a',
+    ]);
 
     await tester.tap(find.byKey(const ValueKey('body-text-a')));
     await tester.pump();
@@ -97,10 +97,11 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('body-block-duplicate-a')));
     await tester.pumpAndSettle();
     document = await bodyStore.read(objectId);
-    expect(
-      document.blocks.map((block) => block.id).toList(),
-      <String>['b', 'a', 'paragraph-copy-1'],
-    );
+    expect(document.blocks.map((block) => block.id).toList(), <String>[
+      'b',
+      'a',
+      'paragraph-copy-1',
+    ]);
     expect(document.blocks.last.text, 'A');
 
     await tester.tap(find.byKey(const ValueKey('body-text-a')));
