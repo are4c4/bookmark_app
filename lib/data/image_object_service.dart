@@ -2,6 +2,7 @@ import '../domain/managed_file_ownership.dart';
 import '../domain/mime_type_normalizer.dart';
 import '../domain/object_model.dart';
 import '../domain/object_type_defaults.dart';
+import 'generic_database_store.dart';
 import 'object_type_defaults_store.dart';
 import 'system_object_store.dart';
 
@@ -62,11 +63,11 @@ class ImageObjectService {
       name: '画像',
       icon: '🖼️',
     );
-    final file = await systemObjects.ensureProperty(
+    var file = await systemObjects.ensureProperty(
       objectTypeId: type.id,
       name: 'File',
       type: ObjectPropertyType.file,
-      config: const <String, dynamic>{'system': true},
+      config: const <String, dynamic>{'system': true, 'hidden': true},
     );
     final note = await systemObjects.ensureProperty(
       objectTypeId: type.id,
@@ -100,19 +101,32 @@ class ImageObjectService {
       type: ObjectPropertyType.number,
       config: const <String, dynamic>{'system': true},
     );
-    final storageOwnership = await systemObjects.ensureProperty(
+    var storageOwnership = await systemObjects.ensureProperty(
       objectTypeId: type.id,
       name: 'Storage ownership',
       type: ObjectPropertyType.text,
-      config: const <String, dynamic>{'system': true},
+      config: const <String, dynamic>{'system': true, 'hidden': true},
     );
+
+    // Existing Vaults can already have these system Properties from definitions
+    // that predate the presentation contract. Strengthen only the native
+    // visibility metadata in place; never remove values or rewrite user-owned
+    // Image defaults merely to hide implementation paths/provenance.
+    await _ensureInternalPropertyHidden(file);
+    await _ensureInternalPropertyHidden(storageOwnership);
+
     type = (await systemObjects.getSystemObjectType(
       workspaceId: workspaceId,
       systemKey: systemKey,
     ))!;
+    file = type.properties.singleWhere((property) => property.id == file.id);
+    storageOwnership = type.properties.singleWhere(
+      (property) => property.id == storageOwnership.id,
+    );
 
-    // Pixel dimensions and storage ownership are hidden native metadata. Adding
-    // them must not rewrite a user's visible Image Property defaults.
+    // Raw managed File paths and storage ownership are internal. Pixel
+    // dimensions stay available as useful media metadata, while default Image
+    // views continue to prioritize user-facing filename/note/type/source data.
     await _ensureDefaults(
       objectTypeId: type.id,
       fileProperty: file,
@@ -272,7 +286,7 @@ class ImageObjectService {
 
   /// Replaces persisted layout geometry after the managed image bytes change.
   ///
-  /// This deliberately updates only hidden pixel metadata. Image identity,
+  /// This deliberately updates only media geometry metadata. Image identity,
   /// managed File, title and provenance remain untouched so an editor can
   /// refresh Gallery/detail geometry without creating or retargeting an Image.
   Future<AppObject> updateManagedGeometry({
@@ -296,6 +310,30 @@ class ImageObjectService {
       value: height,
     );
     return _reload(definition.objectType.id, objectId);
+  }
+
+  Future<void> _ensureInternalPropertyHidden(
+    ObjectPropertyDefinition property,
+  ) async {
+    if (property.config['system'] == true &&
+        property.config['hidden'] == true) {
+      return;
+    }
+    final store = GenericDatabaseStore(systemObjects.database);
+    await store.updateProperty(
+      GenericPropertyRecord(
+        id: property.id,
+        databaseId: property.objectTypeId,
+        name: property.name,
+        type: property.storageType,
+        config: <String, dynamic>{
+          ...property.config,
+          'system': true,
+          'hidden': true,
+        },
+        sortOrder: property.sortOrder,
+      ),
+    );
   }
 
   Future<void> _ensureDefaults({
