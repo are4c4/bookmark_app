@@ -16,15 +16,12 @@ class AppBuildInfoSection extends StatelessWidget {
 
   Future<void> _copy(BuildContext context) async {
     final text = provenance.compactDiagnostic;
-    final copier = copyText ??
-        (value) => Clipboard.setData(
-              ClipboardData(text: value),
-            );
+    final copier =
+        copyText ?? (value) => Clipboard.setData(ClipboardData(text: value));
     await copier(text);
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('ビルド情報をコピーしました。')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('ビルド情報をコピーしました。')));
   }
 
   @override
