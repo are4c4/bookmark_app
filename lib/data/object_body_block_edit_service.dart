@@ -85,6 +85,29 @@ class ObjectBodyBlockEditService {
         );
       });
 
+  /// Converts one supported text block through the same latest-read + CAS
+  /// persistence boundary as every other structural Body edit.
+  Future<ObjectBodyDocument> convertBlock({
+    required int objectId,
+    required String blockId,
+    required String targetType,
+    int headingLevel = 1,
+    bool checklistChecked = false,
+    String? codeLanguage,
+    String? calloutIcon,
+  }) => _mutate(
+        objectId,
+        (document) => editor.convertBlock(
+          document: document,
+          blockId: blockId,
+          targetType: targetType,
+          headingLevel: headingLevel,
+          checklistChecked: checklistChecked,
+          codeLanguage: codeLanguage,
+          calloutIcon: calloutIcon,
+        ),
+      );
+
   /// Splits one paragraph across the current selection against the latest
   /// persisted Body.
   ///
@@ -114,8 +137,10 @@ class ObjectBodyBlockEditService {
     required String blockId,
   }) => _mutate(
         objectId,
-        (document) =>
-            editor.mergeParagraphIntoPrevious(document: document, blockId: blockId),
+        (document) => editor.mergeParagraphIntoPrevious(
+          document: document,
+          blockId: blockId,
+        ),
       );
 
   /// Updates checklist state without replacing its text or other attributes.
