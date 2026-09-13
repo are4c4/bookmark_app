@@ -1,3 +1,4 @@
+import 'package:bookmark_app/domain/object_identity_search.dart';
 import 'package:bookmark_app/domain/object_model.dart';
 import 'package:bookmark_app/domain/object_query.dart';
 import 'package:bookmark_app/widgets/object_query_dialog.dart';
@@ -15,11 +16,36 @@ const hierarchyProperties = <ObjectPropertyDefinition>[
   ),
 ];
 
+const _tagType = AppObjectType(
+  id: 2,
+  workspaceId: 1,
+  name: 'Tag',
+  icon: '🏷️',
+  kind: ObjectTypeKind.system,
+  sortOrder: 0,
+);
+
+ObjectIdentitySearchResult _tagCandidate(int id, String title) =>
+    ObjectIdentitySearchResult(
+      object: AppObject(
+        id: id,
+        objectTypeId: _tagType.id,
+        title: title,
+        createdAt: DateTime(2026),
+        updatedAt: DateTime(2026),
+      ),
+      objectType: _tagType,
+      aliases: const <String>[],
+    );
+
 void main() {
   testWidgets('hierarchy-aware Relation preserves its saved match mode', (
     tester,
   ) async {
     ObjectQueryDraft? result;
+    final candidates = <ObjectIdentitySearchResult>[
+      _tagCandidate(42, '経済'),
+    ];
     await tester.pumpWidget(
       MaterialApp(
         home: Builder(
@@ -38,6 +64,17 @@ void main() {
                       hierarchyMatchMode: ObjectHierarchyMatchMode.isOrBelow,
                     ),
                   ],
+                  relationCandidateSearch: (property, query) async {
+                    expect(property.id, 12);
+                    final normalized = query.trim();
+                    return candidates
+                        .where(
+                          (candidate) =>
+                              normalized.isEmpty ||
+                              candidate.canonicalTitle.contains(normalized),
+                        )
+                        .toList(growable: false);
+                  },
                 );
               },
               child: const Text('open hierarchy'),
@@ -52,7 +89,13 @@ void main() {
 
     expect(find.text('階層'), findsOneWidget);
     expect(find.text('配下を含む'), findsOneWidget);
-    expect(find.widgetWithText(TextFormField, '値'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('relation-filter-selected-42')),
+        matching: find.text('経済'),
+      ),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('適用'));
     await tester.pumpAndSettle();
