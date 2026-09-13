@@ -93,6 +93,31 @@ jobs:
             *) echo "error: unsupported release channel: $CHANNEL" >&2; exit 1 ;;
           esac
 
+          if [[ "$CHANNEL" == "stable" ]]; then
+            RC_PREFIX="v${BUILD_NAME}-rc."
+            FOUND_MATCHING_RC=0
+            while IFS= read -r CANDIDATE_TAG; do
+              if [[ "$CANDIDATE_TAG" != "$RC_PREFIX"* ]]; then
+                continue
+              fi
+              CANDIDATE_SHA="$(git ls-remote origin "refs/tags/$CANDIDATE_TAG" | awk 'NR == 1 {print $1}')"
+              if [[ "$CANDIDATE_SHA" == "$SOURCE_SHA" ]]; then
+                FOUND_MATCHING_RC=1
+                break
+              fi
+            done < <(
+              gh release list \
+                --repo "$GITHUB_REPOSITORY" \
+                --limit 100 \
+                --json tagName,isPrerelease \
+                --jq '.[] | select(.isPrerelease == true) | .tagName'
+            )
+            if [[ "$FOUND_MATCHING_RC" -ne 1 ]]; then
+              echo "error: stable publication requires a previously published RC for the same version and source commit." >&2
+              exit 1
+            fi
+          fi
+
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "error: GitHub Release $RELEASE_TAG already exists; releases are immutable." >&2
             exit 1
