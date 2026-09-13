@@ -7,6 +7,7 @@ class ResizableDatabaseTableColumn {
   const ResizableDatabaseTableColumn({
     required this.keyName,
     required this.label,
+    this.semanticLabel,
     this.defaultWidth = 180,
     this.minWidth = 120,
     this.maxWidth = 640,
@@ -17,6 +18,7 @@ class ResizableDatabaseTableColumn {
 
   final String keyName;
   final Widget label;
+  final String? semanticLabel;
   final double defaultWidth;
   final double minWidth;
   final double maxWidth;
@@ -82,8 +84,7 @@ class _ResizableDatabaseTableState extends State<ResizableDatabaseTable> {
     super.didUpdateWidget(oldWidget);
     final oldKeys = oldWidget.columns.map((column) => column.keyName).toList();
     final newKeys = widget.columns.map((column) => column.keyName).toList();
-    if (!_sameKeys(oldKeys, newKeys) ||
-        oldWidget.initialWidths != widget.initialWidths) {
+    if (!_sameKeys(oldKeys, newKeys)) {
       final next = <String, double>{};
       for (final column in widget.columns) {
         next[column.keyName] = _widths[column.keyName] ?? _initialWidth(column);
@@ -181,7 +182,7 @@ class _ResizableDatabaseTableState extends State<ResizableDatabaseTable> {
             width: 12,
             child: Semantics(
               button: true,
-              label: '${column.keyName} 列の幅を変更',
+              label: '${column.semanticLabel ?? column.keyName} 列の幅を変更',
               child: FocusableActionDetector(
                 shortcuts: const <ShortcutActivator, Intent>{
                   SingleActivator(LogicalKeyboardKey.arrowLeft):
@@ -197,20 +198,23 @@ class _ResizableDatabaseTableState extends State<ResizableDatabaseTable> {
                     },
                   ),
                 },
-                child: MouseRegion(
-                  cursor: SystemMouseCursors.resizeColumn,
-                  child: GestureDetector(
-                    key: ValueKey<String>(
-                      'database-table-resize-${column.keyName}',
-                    ),
-                    behavior: HitTestBehavior.translucent,
-                    onHorizontalDragStart: (_) => _beginDrag(column),
-                    onHorizontalDragUpdate: (details) =>
-                        _updateWidth(column, details.delta.dx),
-                    onHorizontalDragEnd: (_) => _finishDrag(column),
-                    onHorizontalDragCancel: () => _finishDrag(column),
-                    child: const Center(
-                      child: VerticalDivider(width: 1, thickness: 1),
+                child: Builder(
+                  builder: (handleContext) => MouseRegion(
+                    cursor: SystemMouseCursors.resizeColumn,
+                    child: GestureDetector(
+                      key: ValueKey<String>(
+                        'database-table-resize-${column.keyName}',
+                      ),
+                      behavior: HitTestBehavior.translucent,
+                      onTapDown: (_) => Focus.of(handleContext).requestFocus(),
+                      onHorizontalDragStart: (_) => _beginDrag(column),
+                      onHorizontalDragUpdate: (details) =>
+                          _updateWidth(column, details.delta.dx),
+                      onHorizontalDragEnd: (_) => _finishDrag(column),
+                      onHorizontalDragCancel: () => _finishDrag(column),
+                      child: const Center(
+                        child: VerticalDivider(width: 1, thickness: 1),
+                      ),
                     ),
                   ),
                 ),
