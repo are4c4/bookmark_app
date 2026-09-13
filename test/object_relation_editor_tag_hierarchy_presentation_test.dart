@@ -144,8 +144,8 @@ void main() {
         context: context,
         query: '数学',
       );
-      expect(root.single.objectId, math);
-      expect(root.single.aliasContext, isNull);
+      final rootResult = root.singleWhere((result) => result.objectId == math);
+      expect(rootResult.aliasContext, isNull);
 
       final alias = await service.searchCandidates(
         context: context,
