@@ -62,6 +62,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    final entry = find.byKey(const ValueKey('object-body-entry-a'));
+    final idleHeight = tester.getSize(entry).height;
     expect(find.byKey(const ValueKey('body-block-more-a')), findsNothing);
     expect(find.byKey(const ValueKey('body-block-move-down-a')), findsNothing);
     expect(find.byKey(const ValueKey('body-block-duplicate-a')), findsNothing);
@@ -70,9 +72,12 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('body-text-a')));
     await tester.pump();
     expect(find.byKey(const ValueKey('body-block-more-a')), findsOneWidget);
+    expect(find.byKey(const ValueKey('body-block-actions-a')), findsOneWidget);
+    expect(tester.getSize(entry).height, idleHeight);
 
     await tester.tap(find.byKey(const ValueKey('body-block-more-a')));
     await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('body-block-more-a')), findsOneWidget);
     expect(find.byKey(const ValueKey('body-block-move-down-a')), findsOneWidget);
     expect(find.byKey(const ValueKey('body-block-duplicate-a')), findsOneWidget);
     expect(find.byKey(const ValueKey('body-block-delete-a')), findsOneWidget);
@@ -113,7 +118,8 @@ void main() {
     expect(document.blocks.any((block) => block.id == 'a'), isFalse);
   });
 
-  testWidgets('empty Object Body can create its first block', (tester) async {
+  testWidgets('empty Object Body becomes a focused paragraph in one click',
+      (tester) async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
     final workspaceId = await WorkspaceStore(database).initialize();
@@ -141,13 +147,31 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('body-empty-insert')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('テキスト').last);
+    expect(find.text('入力を開始...'), findsOneWidget);
+    final emptyDocument = find.byKey(const ValueKey('body-empty-document'));
+    expect(emptyDocument, findsOneWidget);
+    await tester.tap(emptyDocument);
     await tester.pumpAndSettle();
 
-    final document = await bodyStore.read(objectId);
+    var document = await bodyStore.read(objectId);
     expect(document.blocks, hasLength(1));
     expect(document.blocks.single.type, ObjectBodyBlockType.paragraph);
+    final blockId = document.blocks.single.id;
+    final field = find.byKey(ValueKey('body-text-$blockId'));
+    expect(field, findsOneWidget);
+    expect(
+      tester
+          .widget<EditableText>(
+            find.descendant(of: field, matching: find.byType(EditableText)),
+          )
+          .focusNode
+          .hasFocus,
+      isTrue,
+    );
+
+    await tester.enterText(field, 'First paragraph');
+    await tester.pumpAndSettle();
+    document = await bodyStore.read(objectId);
+    expect(document.blocks.single.text, 'First paragraph');
   });
 }
