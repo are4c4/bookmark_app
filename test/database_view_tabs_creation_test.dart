@@ -9,8 +9,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('plus offers explicit blank or duplicate View creation',
-      (tester) async {
+  testWidgets('plus offers explicit blank or duplicate View creation', (
+    tester,
+  ) async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
     final workspaceId = await WorkspaceStore(database).initialize();
@@ -77,9 +78,7 @@ void main() {
     );
     expect(views, hasLength(1));
 
-    await tester.tap(
-      find.byKey(ValueKey('database-view-menu-$sourceId')),
-    );
+    await tester.tap(find.byKey(ValueKey('database-view-menu-$sourceId')));
     await tester.pumpAndSettle();
     expect(find.text('複製'), findsOneWidget);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);

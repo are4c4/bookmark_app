@@ -300,10 +300,7 @@ class _DatabaseViewTabsState extends State<DatabaseViewTabs> {
               if (value == 'duplicate') _createView();
             },
             itemBuilder: (_) => [
-              const PopupMenuItem(
-                value: 'blank',
-                child: Text('空のViewを作成'),
-              ),
+              const PopupMenuItem(value: 'blank', child: Text('空のViewを作成')),
               PopupMenuItem(
                 value: 'duplicate',
                 enabled: _activeView != null,
