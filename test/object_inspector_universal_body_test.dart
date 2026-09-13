@@ -103,7 +103,7 @@ void main() {
 
     Future<void> verifyEditableBody(int objectId, String text) async {
       await openInspector(objectId, 0);
-      expect(find.byKey(const ValueKey('body-empty-insert')), findsOneWidget);
+      expect(find.byKey(const ValueKey('body-empty-document')), findsOneWidget);
 
       await bodyStore.write(
         objectId: objectId,

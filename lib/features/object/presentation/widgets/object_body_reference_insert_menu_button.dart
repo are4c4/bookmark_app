@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../domain/object_body_reference_insert.dart';
+import 'object_body_document_view.dart';
 
 /// Shared menu that starts explicit target-selection flows for reference-bearing
 /// Body blocks. Selecting a kind does not persist anything by itself.
@@ -18,9 +19,17 @@ class ObjectBodyReferenceInsertMenuButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final onVisibilityChanged = ObjectBodyBlockActionVisibilityScope.maybeOf(
+      context,
+    );
     return PopupMenuButton<ObjectBodyReferenceInsertKind>(
       tooltip: tooltip,
-      onSelected: onSelected,
+      onOpened: () => onVisibilityChanged?.call(true),
+      onCanceled: () => onVisibilityChanged?.call(false),
+      onSelected: (kind) {
+        onVisibilityChanged?.call(false);
+        onSelected(kind);
+      },
       itemBuilder: (context) => [
         for (final kind in allowedKinds)
           PopupMenuItem(

@@ -53,29 +53,29 @@ void main() {
 
     expect(find.byType(DailyNoteNavigationBar), findsOneWidget);
     expect(find.text('2026-09-03'), findsWidgets);
-    expect(find.byKey(const ValueKey('body-empty-insert')), findsOneWidget);
+    expect(find.byKey(const ValueKey('body-empty-document')), findsOneWidget);
 
     await tester.tap(find.byTooltip('次の日'));
     await tester.pumpAndSettle();
 
     expect(find.byType(DailyNoteNavigationBar), findsOneWidget);
     expect(find.text('2026-09-04'), findsWidgets);
+    expect(find.byKey(const ValueKey('body-empty-document')), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('body-empty-insert')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('テキスト').last);
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const ValueKey('body-text-paragraph-1')),
-      '翌日のメモ',
-    );
+    await tester.tap(find.byKey(const ValueKey('body-empty-document')));
     await tester.pumpAndSettle();
 
     final next = await dailyNotes.openOrCreate(
       workspaceId: workspaceId,
       date: DateTime(2026, 9, 4),
     );
-    final body = await bodyStore.read(next.id);
+    var body = await bodyStore.read(next.id);
+    expect(body.blocks, hasLength(1));
+    final blockId = body.blocks.single.id;
+    await tester.enterText(find.byKey(ValueKey('body-text-$blockId')), '翌日のメモ');
+    await tester.pumpAndSettle();
+
+    body = await bodyStore.read(next.id);
     expect(body.blocks, hasLength(1));
     expect(body.blocks.single.text, '翌日のメモ');
   });
