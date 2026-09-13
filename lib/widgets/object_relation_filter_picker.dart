@@ -85,9 +85,11 @@ class _ObjectRelationFilterPickerState
             _resolvedById[candidate.objectId] = candidate;
           }
         }
-        _activeIndex = candidates.isEmpty
-            ? 0
-            : _activeIndex.clamp(0, candidates.length - 1);
+        if (candidates.isEmpty) {
+          _activeIndex = 0;
+        } else if (_activeIndex >= candidates.length) {
+          _activeIndex = candidates.length - 1;
+        }
         _loading = false;
       });
     } catch (_) {
@@ -104,18 +106,14 @@ class _ObjectRelationFilterPickerState
   KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-      if (_candidates.isNotEmpty) {
-        setState(() {
-          _activeIndex = (_activeIndex + 1).clamp(0, _candidates.length - 1);
-        });
+      if (_candidates.isNotEmpty && _activeIndex < _candidates.length - 1) {
+        setState(() => _activeIndex += 1);
       }
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-      if (_candidates.isNotEmpty) {
-        setState(() {
-          _activeIndex = (_activeIndex - 1).clamp(0, _candidates.length - 1);
-        });
+      if (_candidates.isNotEmpty && _activeIndex > 0) {
+        setState(() => _activeIndex -= 1);
       }
       return KeyEventResult.handled;
     }
