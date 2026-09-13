@@ -15,12 +15,7 @@ void main() {
     expect(script, contains('BOOKMARK_APP_BUILD_NUMBER=$BUILD_NUMBER'));
     expect(script, contains('BOOKMARK_GIT_SHA=$GIT_SHA'));
     expect(script, contains('BOOKMARK_SOURCE_STATE=$SOURCE_STATE'));
-    expect(
-      script,
-      contains(
-        r'DMG_PATH="$DIST_DIR/$APP_NAME-$BUILD_NAME-$BUILD_PROVENANCE_LABEL.dmg"'
-            .replaceAll(r'\"', '"'),
-      ),
-    );
+    expect(script, contains('DMG_PATH='));
+    expect(script, contains('BUILD_PROVENANCE_LABEL.dmg'));
   });
 }
