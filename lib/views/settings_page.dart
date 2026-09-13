@@ -52,11 +52,18 @@ class SettingsPage extends StatelessWidget {
   Future<void> _runVaultAction(
     BuildContext context,
     Future<void> Function() action,
-    String failureMessage,
-  ) async {
+    String failureMessage, {
+    required DiagnosticEventBuffer diagnosticEvents,
+    required String failureCode,
+  }) async {
     try {
       await action();
     } catch (_) {
+      diagnosticEvents.record(
+        category: 'vault.lifecycle',
+        severity: DiagnosticSeverity.error,
+        code: failureCode,
+      );
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(failureMessage)),
@@ -67,6 +74,7 @@ class SettingsPage extends StatelessWidget {
   Future<void> _switchVaultFromScope(
     BuildContext context,
     VaultLifecycleScope scope,
+    DiagnosticEventBuffer diagnosticEvents,
   ) async {
     final selected = await showVaultSwitchDialog(
       context,
@@ -77,6 +85,8 @@ class SettingsPage extends StatelessWidget {
       context,
       () => scope.switchVault(selected),
       'Vaultを切り替えられませんでした。現在のVaultは変更されていません。',
+      diagnosticEvents: diagnosticEvents,
+      failureCode: 'switch_failed',
     );
   }
 
@@ -98,6 +108,8 @@ class SettingsPage extends StatelessWidget {
                   context,
                   vaultScope.createVault,
                   '新しいVaultを作成できませんでした。現在のVaultは変更されていません。',
+                  diagnosticEvents: diagnostics.events,
+                  failureCode: 'create_failed',
                 );
               });
     final VoidCallback? openVaultAction = onOpenVault ??
@@ -108,13 +120,19 @@ class SettingsPage extends StatelessWidget {
                   context,
                   vaultScope.openVault,
                   'Vaultを開けませんでした。現在のVaultは変更されていません。',
+                  diagnosticEvents: diagnostics.events,
+                  failureCode: 'open_failed',
                 );
               });
     final VoidCallback? switchVaultAction = onSwitchVault ??
         (vaultScope == null
             ? null
             : () async {
-                await _switchVaultFromScope(context, vaultScope);
+                await _switchVaultFromScope(
+                  context,
+                  vaultScope,
+                  diagnostics.events,
+                );
               });
     final scopeMoveVault = vaultScope?.moveVault;
     final VoidCallback? moveVaultAction = onMoveVault ??
@@ -125,6 +143,8 @@ class SettingsPage extends StatelessWidget {
                   context,
                   scopeMoveVault,
                   'Vaultを移動できませんでした。移動元のVaultは削除されていません。',
+                  diagnosticEvents: diagnostics.events,
+                  failureCode: 'move_failed',
                 );
               });
     return Scaffold(
