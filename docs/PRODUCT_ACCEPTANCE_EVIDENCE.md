@@ -131,6 +131,14 @@ For a likely user-facing PR:
 
 Product Acceptance Evidence is one input to review, not an automatic approval system. Safety, preservation, data integrity, tests, architecture ownership, migration/hotspot policy, and required CI remain independent requirements.
 
+## PR-level H Product Review
+
+`docs/H_PRODUCT_REVIEW.md` defines the advisory PR-level review that consumes this evidence. It deliberately reuses this classifier rather than adding a second manual label or scope authority.
+
+For an applicable open PR, H records one current-head-bound outcome as a top-level PR comment: `product-evidence-sufficient`, `follow-up-required`, `needs-human-confirmation`, or `evidence-unavailable`. Any later commit makes that product-review outcome stale until H rechecks the new head.
+
+The H Product Review is not a GitHub code approval, destructive-change authorization, or automatic merge signal. Missing/subjective evidence remains advisory in this rollout; concrete unmet focused-Issue acceptance remains a product-completion gap regardless of CI color.
+
 ## Non-goals
 
 - no screenshot requirement for every PR;
