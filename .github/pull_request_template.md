@@ -18,6 +18,17 @@
 
 <!-- What behavior/responsibility changes? Keep this concise. -->
 
+## Product acceptance evidence
+
+<!-- Fill this only for materially user-facing UI/interaction changes. The advisory classifier derives applicability from the actual landing diff; writing n/a does not override a UI classification. See docs/PRODUCT_ACCEPTANCE_EVIDENCE.md. -->
+- Real host / user scenario: 
+- Interaction evidence: 
+- Visual evidence: 
+- Keyboard / focus: n/a
+- Empty / loading / error: n/a
+- Shared-host consistency: n/a
+- Acceptance criterion: 
+
 ## Shared hotspot ownership
 
 - [ ] This PR does not touch a shared hotspot, **or** I re-audited current open PR ownership immediately before editing.
