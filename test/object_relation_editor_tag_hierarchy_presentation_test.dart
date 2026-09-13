@@ -82,11 +82,14 @@ void main() {
       workspaceId: workspaceId,
       name: 'Source',
     );
-    final property = await objectStore.createRelationProperty(
+    final propertyId = await objectStore.createRelationProperty(
       objectTypeId: sourceTypeId,
       name: 'Tags',
       targetObjectTypeId: targetObjectTypeId,
     );
+    final property = (await objectStore.getObjectType(sourceTypeId))!
+        .properties
+        .singleWhere((candidate) => candidate.id == propertyId);
     final sourceId = await objectStore.createObject(
       objectTypeId: sourceTypeId,
       title: 'Source',
