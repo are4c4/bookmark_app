@@ -15,8 +15,8 @@ class TagManagementHierarchyMutationService {
   TagManagementHierarchyMutationService._({
     required int workspaceId,
     required TagHierarchyCompatibilityMutationService mutations,
-  })  : _workspaceId = workspaceId,
-        _mutations = mutations;
+  }) : _workspaceId = workspaceId,
+       _mutations = mutations;
 
   factory TagManagementHierarchyMutationService.forRepository(
     BookmarkRepository repository,
@@ -49,17 +49,13 @@ class TagManagementHierarchyMutationService {
     required int tagId,
     int? parentTagId,
     int? groupId,
-  }) =>
-      _mutations.moveTag(
-        workspaceId: _workspaceId,
-        tagId: tagId,
-        parentTagId: parentTagId,
-        groupId: groupId,
-      );
+  }) => _mutations.moveTag(
+    workspaceId: _workspaceId,
+    tagId: tagId,
+    parentTagId: parentTagId,
+    groupId: groupId,
+  );
 
   Future<void> restoreMove(TagCompatibilityMoveSnapshot snapshot) =>
-      _mutations.restoreMove(
-        workspaceId: _workspaceId,
-        snapshot: snapshot,
-      );
+      _mutations.restoreMove(workspaceId: _workspaceId, snapshot: snapshot);
 }
