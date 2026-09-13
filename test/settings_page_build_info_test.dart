@@ -22,7 +22,9 @@ Future<BookmarkRepository> _repository(AppDatabase database) async {
 }
 
 void main() {
-  testWidgets('Settings shows and copies installed build identity', (tester) async {
+  testWidgets('Settings shows and copies installed build identity', (
+    tester,
+  ) async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
     final repository = await _repository(database);
@@ -55,6 +57,7 @@ void main() {
     expect(find.textContaining('Commit db166af'), findsOneWidget);
     expect(find.textContaining('Source dirty'), findsOneWidget);
 
+    await tester.scrollUntilVisible(find.text('ビルド情報をコピー'), 120);
     await tester.tap(find.text('ビルド情報をコピー'));
     await tester.pump();
 
