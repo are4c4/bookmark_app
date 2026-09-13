@@ -17,7 +17,10 @@ void main() {
     expect(script, contains('BOOKMARK_SOURCE_STATE=$SOURCE_STATE'));
     expect(
       script,
-      contains(r'DMG_PATH="$DIST_DIR/$APP_NAME-$BUILD_NAME-$BUILD_PROVENANCE_LABEL.dmg"'),
+      contains(
+        r'DMG_PATH="$DIST_DIR/$APP_NAME-$BUILD_NAME-$BUILD_PROVENANCE_LABEL.dmg"'
+            .replaceAll(r'\"', '"'),
+      ),
     );
   });
 }
