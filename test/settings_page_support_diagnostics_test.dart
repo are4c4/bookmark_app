@@ -46,102 +46,109 @@ Future<BookmarkRepository> _repository(
 }
 
 void main() {
-  testWidgets('Settings copies privacy-safe support diagnostics without Vault path', (
-    tester,
-  ) async {
-    final database = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(database.close);
-    final repository = await _repository(
-      database,
-      profileDirectoryPath: '/Users/private/Vault',
-    );
-    final events = DiagnosticEventBuffer(clock: _clock);
-    final diagnostics = createSupportDiagnosticsService(
-      repository: repository,
-      buildProvenance: _provenance,
-      runtime: _runtime,
-      events: events,
-      clock: _clock,
-    );
-    String? copied;
+  testWidgets(
+    'Settings copies privacy-safe support diagnostics without Vault path',
+    (tester) async {
+      final database = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(database.close);
+      final repository = await _repository(
+        database,
+        profileDirectoryPath: '/Users/private/Vault',
+      );
+      final events = DiagnosticEventBuffer(clock: _clock);
+      final diagnostics = createSupportDiagnosticsService(
+        repository: repository,
+        buildProvenance: _provenance,
+        runtime: _runtime,
+        events: events,
+        clock: _clock,
+      );
+      String? copied;
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: SettingsPage(
-          themeMode: ThemeMode.system,
-          onThemeModeChanged: (_) {},
-          repository: repository,
-          buildProvenance: _provenance,
-          supportDiagnostics: diagnostics,
-          copySupportDiagnostics: (text) async {
-            copied = text;
-          },
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SettingsPage(
+            themeMode: ThemeMode.system,
+            onThemeModeChanged: (_) {},
+            repository: repository,
+            buildProvenance: _provenance,
+            supportDiagnostics: diagnostics,
+            copySupportDiagnostics: (text) async {
+              copied = text;
+            },
+          ),
         ),
-      ),
-    );
-    await tester.pump();
+      );
+      await tester.pump();
 
-    await tester.scrollUntilVisible(find.text('サポート情報'), 240);
-    expect(find.text('サポート情報'), findsOneWidget);
-    expect(find.textContaining('Objectのタイトル・Body・URL/ドメイン'), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('サポート情報'), 240);
+      expect(find.text('サポート情報'), findsOneWidget);
+      expect(find.textContaining('Objectのタイトル・Body・URL/ドメイン'), findsOneWidget);
 
-    final button = find.byKey(const ValueKey('copy-support-diagnostics'));
-    await tester.ensureVisible(button);
-    await tester.tap(button);
-    await tester.pumpAndSettle();
+      final button = find.byKey(const ValueKey('copy-support-diagnostics'));
+      await tester.ensureVisible(button);
+      await tester.pumpAndSettle();
+      await tester.tap(button);
+      await tester.pumpAndSettle();
 
-    expect(copied, isNotNull);
-    final decoded = jsonDecode(copied!) as Map<String, dynamic>;
-    expect(decoded['build']['commitSha']['value'], _provenance.commitSha);
-    expect(decoded['database']['schemaVersion']['value'], database.schemaVersion);
-    expect(decoded['vault']['configured']['value'], isTrue);
-    expect(decoded['events'], isNotEmpty);
-    expect(decoded['events'].first['category']['value'], 'support.bundle');
-    expect(decoded['events'].first['code']['value'], 'copy_requested');
-    expect(copied, isNot(contains('/Users/private/Vault')));
-    expect(find.text('診断情報をコピーしました。'), findsOneWidget);
-  });
+      expect(copied, isNotNull);
+      final decoded = jsonDecode(copied!) as Map<String, dynamic>;
+      expect(decoded['build']['commitSha']['value'], _provenance.commitSha);
+      expect(
+        decoded['database']['schemaVersion']['value'],
+        database.schemaVersion,
+      );
+      expect(decoded['vault']['configured']['value'], isTrue);
+      expect(decoded['events'], isNotEmpty);
+      expect(decoded['events'].first['category']['value'], 'support.bundle');
+      expect(decoded['events'].first['code']['value'], 'copy_requested');
+      expect(copied, isNot(contains('/Users/private/Vault')));
+      expect(find.text('診断情報をコピーしました。'), findsOneWidget);
+    },
+  );
 
-  testWidgets('support diagnostics copy failure reports fixed event without raw error', (
-    tester,
-  ) async {
-    final database = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(database.close);
-    final repository = await _repository(database);
-    final events = DiagnosticEventBuffer(clock: _clock);
-    final diagnostics = createSupportDiagnosticsService(
-      repository: repository,
-      buildProvenance: _provenance,
-      runtime: _runtime,
-      events: events,
-      clock: _clock,
-    );
+  testWidgets(
+    'support diagnostics copy failure reports fixed event without raw error',
+    (tester) async {
+      final database = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(database.close);
+      final repository = await _repository(database);
+      final events = DiagnosticEventBuffer(clock: _clock);
+      final diagnostics = createSupportDiagnosticsService(
+        repository: repository,
+        buildProvenance: _provenance,
+        runtime: _runtime,
+        events: events,
+        clock: _clock,
+      );
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: SettingsPage(
-          themeMode: ThemeMode.system,
-          onThemeModeChanged: (_) {},
-          repository: repository,
-          supportDiagnostics: diagnostics,
-          copySupportDiagnostics: (_) async {
-            throw StateError('clipboard raw private failure');
-          },
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SettingsPage(
+            themeMode: ThemeMode.system,
+            onThemeModeChanged: (_) {},
+            repository: repository,
+            supportDiagnostics: diagnostics,
+            copySupportDiagnostics: (_) async {
+              throw StateError('clipboard raw private failure');
+            },
+          ),
         ),
-      ),
-    );
-    await tester.pump();
+      );
+      await tester.pump();
 
-    await tester.scrollUntilVisible(find.text('サポート情報'), 240);
-    final button = find.byKey(const ValueKey('copy-support-diagnostics'));
-    await tester.ensureVisible(button);
-    await tester.tap(button);
-    await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.text('サポート情報'), 240);
+      final button = find.byKey(const ValueKey('copy-support-diagnostics'));
+      await tester.ensureVisible(button);
+      await tester.pumpAndSettle();
+      await tester.tap(button);
+      await tester.pumpAndSettle();
 
-    expect(find.text('診断情報を作成できませんでした。'), findsOneWidget);
-    expect(events.snapshot().map((event) => event.code), [
-      'copy_requested',
-      'copy_failed',
-    ]);
-  });
+      expect(find.text('診断情報を作成できませんでした。'), findsOneWidget);
+      expect(events.snapshot().map((event) => event.code), [
+        'copy_requested',
+        'copy_failed',
+      ]);
+    },
+  );
 }
