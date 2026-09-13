@@ -188,6 +188,10 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();
       await pumpHost();
+      final persistedViewTab = find.text('Resizable Table');
+      await pumpUntilVisible(persistedViewTab);
+      await tester.tap(persistedViewTab);
+      await tester.pump();
       await pumpUntilWidth(titleColumn, 304);
 
       final lockEntered = Completer<void>();
