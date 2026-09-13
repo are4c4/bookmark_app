@@ -77,7 +77,8 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
 
   static const _viewCoordinator = GenericObjectViewCoordinator();
   static const _galleryAdapter = DatabaseViewGalleryAdapter();
-  static const _tableColumnWidthsAdapter = DatabaseViewTableColumnWidthsAdapter();
+  static const _tableColumnWidthsAdapter =
+      DatabaseViewTableColumnWidthsAdapter();
   static const _openPresentationHost = ObjectOpenPresentationHost();
   static const _detailPropertyPresenter = ObjectDetailPropertyPresenter();
 
@@ -679,6 +680,37 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     });
   }
 
+  Future<void> _saveTableColumnWidth({
+    required DatabaseViewConfig sourceView,
+    required String key,
+    required double width,
+  }) async {
+    try {
+      final views = await _viewStore.listViews(
+        workspaceId: sourceView.workspaceId,
+        databaseKey: sourceView.databaseKey,
+      );
+      final latest = views.where((view) => view.id == sourceView.id).firstOrNull;
+      if (latest == null) return;
+      final next = _tableColumnWidthsAdapter.withWidth(
+        latest,
+        key: key,
+        width: width,
+      );
+      await _viewStore.updateView(next);
+      if (!mounted || _activeView?.id != sourceView.id) return;
+      setState(() {
+        _activeView = next;
+        _query = '${next.filters['query'] ?? ''}';
+      });
+    } catch (_) {
+      if (!mounted || _activeView?.id != sourceView.id) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('列幅を保存できませんでした。')));
+    }
+  }
+
   Future<void> _saveView({
     String? layoutType,
     String? query,
@@ -1240,22 +1272,12 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
             ),
             initialWidths: initialWidths,
             onWidthCommitted: (key, width) async {
-              final active = _activeView;
-              if (active == null) return;
-              try {
-                await _persistView(
-                  _tableColumnWidthsAdapter.withWidth(
-                    active,
-                    key: key,
-                    width: width,
-                  ),
-                );
-              } catch (_) {
-                if (!mounted) return;
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(const SnackBar(content: Text('列幅を保存できませんでした。')));
-              }
+              if (activeView == null) return;
+              await _saveTableColumnWidth(
+                sourceView: activeView,
+                key: key,
+                width: width,
+              );
             },
             columns: [
               const ResizableDatabaseTableColumn(
