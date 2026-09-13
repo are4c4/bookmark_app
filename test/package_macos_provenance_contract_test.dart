@@ -28,14 +28,14 @@ void main() {
 
     expect(
       script,
-      contains(r'RELEASE_CHANNEL="${BOOKMARK_RELEASE_CHANNEL:-development}"'),
+      contains(r'RELEASE_CHANNEL="${BOOKMARK_RELEASE_CHANNEL:-development}"'.replaceAll(r'\"', '"')),
     );
     expect(script, contains('development|rc|stable'));
     expect(script, contains('packaging requires a clean Git source tree'));
     expect(script, contains('BOOKMARK_RELEASE_TAG is required'));
-    expect(script, contains(r'EXPECTED_TAG="v$BUILD_NAME"'));
-    expect(script, contains(r'RC_PREFIX="v$BUILD_NAME-rc."'));
-    expect(script, contains(r'git rev-parse "$RELEASE_TAG^{commit}"'));
+    expect(script, contains(r'EXPECTED_TAG="v$BUILD_NAME"'.replaceAll(r'\"', '"')));
+    expect(script, contains(r'RC_PREFIX="v$BUILD_NAME-rc."'.replaceAll(r'\"', '"')));
+    expect(script, contains(r'git rev-parse "$RELEASE_TAG^{commit}"'.replaceAll(r'\"', '"')));
     expect(script, contains('must resolve to source HEAD'));
   });
 }
