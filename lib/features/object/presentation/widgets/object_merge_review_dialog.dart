@@ -310,7 +310,6 @@ class _ObjectMergeReviewDialogState extends State<ObjectMergeReviewDialog> {
                       dense: true,
                       leading: const Icon(Icons.block_outlined),
                       title: Text(blocker.reason),
-                      subtitle: Text(blocker.key),
                     ),
                   const Text('Relationの競合が解消されるまで統合できません。'),
                 ],
