@@ -2,6 +2,12 @@
 
 This document defines default code-placement and dependency rules. Product semantics live in `docs/product_architecture.md`; implementation must not contradict that constitution without an explicit product-design decision.
 
+## Architecture decision records
+
+`docs/product_architecture.md` and this document define the **current** architecture. The compact ADR index at `docs/adr/README.md` preserves **why** selected durable cross-cutting decisions were made when plausible alternatives existed.
+
+Before architecture-changing work introduces or replaces an authority/model, consult the ADR index and the relevant accepted ADRs. Ordinary feature, bug-fix, and behavior-preserving refactor PRs do not need to read every ADR. Materially reversing an accepted ADR should create a new ADR that supersedes it rather than silently rewriting the historical rationale.
+
 ## Goals
 
 - Keep Object/Database/Body experiences visually and behaviorally consistent.

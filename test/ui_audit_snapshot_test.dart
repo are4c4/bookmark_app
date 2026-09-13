@@ -104,9 +104,7 @@ Future<void> _loadAuditFonts() async {
     throw StateError('UI Audit Material Icons font is empty.');
   }
   final materialIconsLoader = FontLoader(_materialIconsFamily)
-    ..addFont(
-      Future<ByteData>.value(ByteData.sublistView(materialIconsBytes)),
-    );
+    ..addFont(Future<ByteData>.value(ByteData.sublistView(materialIconsBytes)));
   await materialIconsLoader.load();
   _materialIconsSizeBytes = materialIconsBytes.length;
   _materialIconsSha256 = crypto.sha256.convert(materialIconsBytes).toString();
