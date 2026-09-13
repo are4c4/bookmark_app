@@ -18,17 +18,29 @@ import 'package:bookmark_app/widgets/object_relation_picker_dialog.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const _viewport = Size(1440, 900);
 const _devicePixelRatio = 1.0;
 const _captureBoundaryKey = ValueKey<String>('ui-audit-capture-boundary');
 const _profileName = 'desktop-dark-1440x900';
+const _fontFamily = 'UiAuditNotoSansJP';
+const _fontSource =
+    'notofonts/noto-cjk@Sans2.004/Sans/Variable/OTF/Subset/NotoSansJP-VF.otf';
+const _fontGitBlobSha = '36864f7e1f1a3f51e4972e4e37aaa15467649760';
+const _fontSizeBytes = 8128756;
 
 final List<Map<String, Object?>> _scenarioRecords = <Map<String, Object?>>[];
+bool _auditFontLoaded = false;
 
 String? get _captureRoot {
   final value = Platform.environment['UI_AUDIT_OUTPUT_DIR']?.trim();
+  return value == null || value.isEmpty ? null : value;
+}
+
+String? get _fontPath {
+  final value = Platform.environment['UI_AUDIT_FONT_PATH']?.trim();
   return value == null || value.isEmpty ? null : value;
 }
 
@@ -37,9 +49,40 @@ String get _sourceSha {
   return value == null || value.isEmpty ? 'local' : value;
 }
 
+Future<void> _loadAuditFont() async {
+  if (_captureRoot == null) return;
+
+  final path = _fontPath;
+  if (path == null) {
+    throw StateError(
+      'UI_AUDIT_FONT_PATH is required when UI_AUDIT_OUTPUT_DIR is set.',
+    );
+  }
+  final file = File(path);
+  if (!file.existsSync()) {
+    throw StateError('UI Audit font is unavailable at $path.');
+  }
+  if (file.lengthSync() != _fontSizeBytes) {
+    throw StateError(
+      'UI Audit font size mismatch: expected $_fontSizeBytes bytes, '
+      'got ${file.lengthSync()}.',
+    );
+  }
+
+  final bytes = file.readAsBytesSync();
+  final loader = FontLoader(_fontFamily)
+    ..addFont(Future<ByteData>.value(ByteData.sublistView(bytes)));
+  await loader.load();
+  _auditFontLoaded = true;
+}
+
 void _initializeCaptureOutput() {
   final root = _captureRoot;
   if (root == null) return;
+  if (!_auditFontLoaded) {
+    throw StateError('UI Audit capture requires the pinned Japanese font.');
+  }
+  _scenarioRecords.clear();
   final directory = Directory(root);
   if (directory.existsSync()) {
     directory.deleteSync(recursive: true);
@@ -63,6 +106,12 @@ void _writeManifest() {
       'devicePixelRatio': _devicePixelRatio,
       'theme': 'dark',
       'renderer': 'flutter-widget-test',
+      'font': <String, Object?>{
+        'family': _fontFamily,
+        'source': _fontSource,
+        'gitBlobSha': _fontGitBlobSha,
+        'sizeBytes': _fontSizeBytes,
+      },
     },
     'scenarios': _scenarioRecords,
   };
@@ -81,7 +130,11 @@ Future<void> _configureDesktopSurface(WidgetTester tester) async {
 
 Widget _auditHost(Widget child) => MaterialApp(
   debugShowCheckedModeBanner: false,
-  theme: ThemeData.dark(useMaterial3: true),
+  theme: ThemeData(
+    brightness: Brightness.dark,
+    useMaterial3: true,
+    fontFamily: _auditFontLoaded ? _fontFamily : null,
+  ),
   home: RepaintBoundary(key: _captureBoundaryKey, child: child),
 );
 
@@ -215,7 +268,10 @@ class _UiAuditSearchService extends ObjectGlobalSearchService {
 }
 
 void main() {
-  setUpAll(_initializeCaptureOutput);
+  setUpAll(() async {
+    await _loadAuditFont();
+    _initializeCaptureOutput();
+  });
 
   testWidgets('UI audit: populated shared Body document', (tester) async {
     await _configureDesktopSurface(tester);
@@ -224,10 +280,7 @@ void main() {
       version: 1,
       blocks: <ObjectBodyBlock>[
         factory.heading(id: 'heading-1', level: 2, text: 'Research notes'),
-        factory.paragraph(
-          id: 'paragraph-1',
-          text: 'Keep the shared Body readable across every Object host.',
-        ),
+        factory.paragraph(id: 'paragraph-1', text: '共有Bodyで日本語本文を確認する。'),
         factory.checklist(
           id: 'check-1',
           text: 'Review canonical Relation links',
@@ -259,6 +312,7 @@ void main() {
       name: 'body-populated',
       contractSatisfied:
           find.text('Research notes').evaluate().length == 1 &&
+          find.text('共有Bodyで日本語本文を確認する。').evaluate().length == 1 &&
           find.text('Review canonical Relation links').evaluate().length == 1,
     );
   });
