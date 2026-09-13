@@ -83,9 +83,7 @@ void main() {
       expect(duplicate.visibleProperties, original.visibleProperties);
       expect(duplicate.propertyOrder, original.propertyOrder);
 
-      await tester.tap(
-        find.byKey(const ValueKey('database-view-add-button')),
-      );
+      await tester.tap(find.byKey(const ValueKey('database-view-add-button')));
       await tester.pumpAndSettle();
       await tester.tap(find.text('空のViewを作成'));
       await tester.pumpAndSettle();
