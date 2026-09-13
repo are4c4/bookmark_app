@@ -63,7 +63,8 @@ void main() {
       matching: find.byType(OutlinedButton),
     );
     expect(copyButton, findsOneWidget);
-    await tester.scrollUntilVisible(copyButton, 120);
+    await tester.ensureVisible(copyButton);
+    await tester.pumpAndSettle();
     await tester.tap(copyButton);
     await tester.pump();
 
