@@ -90,12 +90,10 @@ void main() {
       expect(find.text('今野忍'), findsWidgets);
       expect(find.text('Object IDをカンマ区切り'), findsNothing);
 
-      await tester.tap(
-        find.descendant(
-          of: find.byKey(const ValueKey('relation-filter-selected-7')),
-          matching: find.byIcon(Icons.cancel),
-        ),
+      final selectedChip = tester.widget<InputChip>(
+        find.byKey(const ValueKey('relation-filter-selected-7')),
       );
+      selectedChip.onDeleted!();
       await tester.pumpAndSettle();
       await tester.tap(
         find.byKey(const ValueKey('relation-filter-candidate-8')),
