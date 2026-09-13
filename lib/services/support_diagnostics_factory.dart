@@ -7,7 +7,8 @@ SupportDiagnosticsService createSupportDiagnosticsService({
   required BuildProvenance buildProvenance,
   DiagnosticEventBuffer? events,
   SupportDiagnosticsRuntime? runtime,
-  Iterable<SupportDiagnosticProvider> providers = const <SupportDiagnosticProvider>[],
+  Iterable<SupportDiagnosticProvider> providers =
+      const <SupportDiagnosticProvider>[],
   DateTime Function()? clock,
 }) {
   final vaultPath = repository.profileDirectoryPath?.trim();
