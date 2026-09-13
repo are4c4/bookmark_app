@@ -10,9 +10,11 @@ import '../data/generic_database_page_services.dart';
 import '../data/generic_database_page_state_loader.dart';
 import '../data/generic_database_store.dart';
 import '../data/generic_object_view_coordinator.dart';
+import '../data/object_alias_store.dart';
 import '../data/object_board_move_service.dart';
 import '../data/object_computed_value_store.dart';
 import '../data/object_graph_query_store.dart';
+import '../data/object_identity_search_service.dart';
 import '../data/object_store.dart';
 import '../data/object_type_management_store.dart';
 import '../data/relation_target_quick_create_policy.dart';
@@ -20,6 +22,7 @@ import '../data/tag_hierarchy_query_context_service.dart';
 import '../database/database_definition.dart';
 import '../domain/object_detail_content.dart';
 import '../domain/object_detail_property_presentation.dart';
+import '../domain/object_identity_search.dart';
 import '../domain/object_model.dart';
 import '../domain/object_type_defaults.dart';
 import '../features/database/presentation/widgets/database_create_tiles.dart';
@@ -60,6 +63,7 @@ class GenericDatabasePage extends StatefulWidget {
 class _GenericDatabasePageState extends State<GenericDatabasePage> {
   late final GenericDatabaseStore _store;
   late final ObjectStore _objectStore;
+  late final ObjectIdentitySearchService _identitySearch;
   late final GenericDatabasePageServices _pageServices;
   late final GenericDatabaseHierarchyQueryController _hierarchyQueries;
   late final GenericDatabasePageStateLoader _stateLoader;
@@ -147,6 +151,10 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     );
     _store = _pageServices.genericStore;
     _objectStore = _pageServices.objectStore;
+    _identitySearch = ObjectIdentitySearchService(
+      objectStore: _objectStore,
+      aliasStore: ObjectAliasStore(_store),
+    );
     _hierarchyQueries = GenericDatabaseHierarchyQueryController(
       TagHierarchyQueryContextService.fromStores(
         genericStore: _store,
@@ -160,6 +168,21 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     _graphStore = _pageServices.graphStore;
     _viewStore = _pageServices.viewStore;
     _reload();
+  }
+
+  Future<List<ObjectIdentitySearchResult>> _searchRelationFilterCandidates(
+    ObjectPropertyDefinition property,
+    String query,
+  ) {
+    final targetObjectTypeId = property.targetObjectTypeId;
+    if (targetObjectTypeId == null) {
+      throw StateError('Relation filter Property has no target ObjectType.');
+    }
+    return _identitySearch.search(
+      workspaceId: widget.repository.workspaceId,
+      query: query,
+      objectTypeId: targetObjectTypeId,
+    );
   }
 
   @override
@@ -297,6 +320,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
           workspaceId: widget.repository.workspaceId,
           objectType: objectType,
         ),
+        relationCandidateSearch: _searchRelationFilterCandidates,
       );
       if (draft == null) return;
       await _pageServices.collectionConfig.save(
@@ -2035,6 +2059,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                         galleryCoverSources: _galleryCoverSources,
                         hierarchyAwarePropertyIds:
                             _hierarchyQueryContext.hierarchyAwarePropertyIds,
+                        relationCandidateSearch: _searchRelationFilterCandidates,
                         onViewChanged: (next) {
                           _persistView(next);
                         },
