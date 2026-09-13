@@ -78,6 +78,17 @@ Check for:
 - long-lived PRs that should be refreshed, split, or superseded;
 - machine-certifiable PR contract violations that are still only advisory and should be hardened by a focused G/H guardrail Issue.
 
+### Approval-sensitive / solo-maintainer safety
+For high-confidence destructive or approval-policy-sensitive PRs, preserve the #1107 machine path and #1331 solo-maintainer boundary:
+- the normal green path is a distinct non-author current-head `APPROVED` review from a write/admin GitHub User;
+- if no independent reviewer exists, the only fallback is an explicit human repository-admin ruleset bypass on the final PR head, preferably PR-only;
+- `tool/pr_coordination_guard.py` is expected to remain red on that manual path; H must not route work to weaken it merely to obtain green CI;
+- the implementation/AI GitHub App, Actions identities and bots must never be bypass actors;
+- H should verify live ruleset/bypass state when relevant, not assume it from documentation;
+- before manual bypass, require one final synchronization to current `main`, all non-approval validation, and human inspection of the final diff/head; later commits invalidate the prepared decision;
+- when waiting for this human action, record `Stop reason: destructive-approval` and continue unrelated audits/work rather than recommending a second/dummy account or repeated no-op branch churn;
+- this manual path does not close #1107 Phase B or prove an independently immutable trust root.
+
 ### Durable-document freshness
 Check for:
 - transient facts copied into `AI_PROGRESS*.md` as if permanent;
@@ -154,6 +165,8 @@ A focused implementation slice may be complete when its acceptance criteria and 
 H stops only when the major oversight areas have been checked and no further actionable evidence exists, the next conclusion needs a genuine product decision, all meaningful findings depend on work that cannot yet be evaluated, or tooling/session limits prevent useful inspection.
 
 One clean PR, one green CI run, one completed Issue, or one newly created Issue is not by itself a stop reason.
+
+When the sole blocker for an approval-sensitive PR is the #1331 solo-maintainer human ruleset action, classify it as `destructive-approval`, keep unrelated oversight active, and recheck live repository settings on the next run. Do not turn it into a permanent repository-wide idle state.
 
 ## Durable checkpoint — 2026-09-09
 
