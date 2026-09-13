@@ -44,42 +44,39 @@ void main() {
     },
   );
 
-  test(
-    'release CI guard rejects missing or stale authoritative check',
-    () {
-      final temp = Directory.systemTemp.createTempSync('release-ci-guard-');
-      addTearDown(() => temp.deleteSync(recursive: true));
-      final payload = File('${temp.path}/checks.json')
-        ..writeAsStringSync(
-          jsonEncode({
-            'total_count': 2,
-            'check_runs': [
-              {
-                'name': 'merge-gate',
-                'conclusion': 'failure',
-                'head_sha': sourceSha,
-              },
-              {
-                'name': 'merge-gate',
-                'conclusion': 'success',
-                'head_sha': 'fedcba9876543210fedcba9876543210fedcba98',
-              },
-            ],
-          }),
-        );
+  test('release CI guard rejects missing or stale authoritative check', () {
+    final temp = Directory.systemTemp.createTempSync('release-ci-guard-');
+    addTearDown(() => temp.deleteSync(recursive: true));
+    final payload = File('${temp.path}/checks.json')
+      ..writeAsStringSync(
+        jsonEncode({
+          'total_count': 2,
+          'check_runs': [
+            {
+              'name': 'merge-gate',
+              'conclusion': 'failure',
+              'head_sha': sourceSha,
+            },
+            {
+              'name': 'merge-gate',
+              'conclusion': 'success',
+              'head_sha': 'fedcba9876543210fedcba9876543210fedcba98',
+            },
+          ],
+        }),
+      );
 
-      final result = Process.runSync('python3', [
-        'tool/release_ci_guard.py',
-        '--sha',
-        sourceSha,
-        '--checks-json',
-        payload.path,
-      ]);
+    final result = Process.runSync('python3', [
+      'tool/release_ci_guard.py',
+      '--sha',
+      sourceSha,
+      '--checks-json',
+      payload.path,
+    ]);
 
-      expect(result.exitCode, isNonZero);
-      expect('${result.stderr}', contains('refusing to publish a release'));
-    },
-  );
+    expect(result.exitCode, isNonZero);
+    expect('${result.stderr}', contains('refusing to publish a release'));
+  });
 
   test('release CI guard requires immutable full source SHA', () {
     final result = Process.runSync('python3', [
