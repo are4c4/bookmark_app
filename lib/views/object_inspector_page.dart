@@ -466,10 +466,8 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
         candidateObjectId: candidate.objectId,
         candidateTitle: candidate.canonicalTitle,
         propertyNames: propertyNames,
-        onPrepare: ({
-          required survivorObjectId,
-          required retiredObjectId,
-        }) async {
+        onPrepare:
+            ({required survivorObjectId, required retiredObjectId}) async {
           final preparation = await _mergePreparation.prepare(
             workspaceId: content.objectType.workspaceId,
             objectTypeId: content.objectType.id,
