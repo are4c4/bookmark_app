@@ -7,6 +7,7 @@ import 'package:bookmark_app/domain/object_model.dart';
 import 'package:bookmark_app/features/database/presentation/widgets/database_property_add_popover_host.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Future<void> _createQuickProperty(
