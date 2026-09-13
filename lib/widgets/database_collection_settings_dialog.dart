@@ -23,6 +23,7 @@ Future<DatabaseCollectionSettingsDraft?> showDatabaseCollectionSettingsDialog({
   required BuildContext context,
   required DatabaseCollectionConfigContext config,
   HierarchyAwarePropertyIdsResolver? hierarchyAwarePropertyIdsForObjectType,
+  ObjectQueryRelationCandidateSearch? relationCandidateSearch,
 }) {
   return showDialog<DatabaseCollectionSettingsDraft>(
     context: context,
@@ -30,6 +31,7 @@ Future<DatabaseCollectionSettingsDraft?> showDatabaseCollectionSettingsDialog({
       config: config,
       hierarchyAwarePropertyIdsForObjectType:
           hierarchyAwarePropertyIdsForObjectType,
+      relationCandidateSearch: relationCandidateSearch,
     ),
   );
 }
@@ -39,11 +41,13 @@ class DatabaseCollectionSettingsDialog extends StatefulWidget {
     super.key,
     required this.config,
     this.hierarchyAwarePropertyIdsForObjectType,
+    this.relationCandidateSearch,
   });
 
   final DatabaseCollectionConfigContext config;
   final HierarchyAwarePropertyIdsResolver?
       hierarchyAwarePropertyIdsForObjectType;
+  final ObjectQueryRelationCandidateSearch? relationCandidateSearch;
 
   @override
   State<DatabaseCollectionSettingsDialog> createState() =>
@@ -82,6 +86,7 @@ class _DatabaseCollectionSettingsDialogState
       properties: _targetObjectType.properties,
       initialFilters: _filters,
       hierarchyAwarePropertyIds: hierarchyAwarePropertyIds,
+      relationCandidateSearch: widget.relationCandidateSearch,
     );
     if (result == null || !mounted) return;
     setState(() => _filters = [...result.filters]);

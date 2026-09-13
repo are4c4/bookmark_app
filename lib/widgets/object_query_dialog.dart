@@ -1,8 +1,16 @@
 import 'package:flutter/material.dart';
 
+import '../domain/object_identity_search.dart';
 import '../domain/object_model.dart';
 import '../domain/object_query.dart';
 import 'object_hierarchy_match_mode_field.dart';
+import 'object_relation_filter_picker.dart';
+
+typedef ObjectQueryRelationCandidateSearch =
+    Future<List<ObjectIdentitySearchResult>> Function(
+  ObjectPropertyDefinition property,
+  String query,
+);
 
 class ObjectQueryDraft {
   const ObjectQueryDraft({
@@ -20,6 +28,7 @@ Future<ObjectQueryDraft?> showObjectQueryDialog(
   List<ObjectFilterRule> initialFilters = const <ObjectFilterRule>[],
   List<ObjectSortRule> initialSorts = const <ObjectSortRule>[],
   Set<int> hierarchyAwarePropertyIds = const <int>{},
+  ObjectQueryRelationCandidateSearch? relationCandidateSearch,
 }) {
   return showDialog<ObjectQueryDraft>(
     context: context,
@@ -28,6 +37,7 @@ Future<ObjectQueryDraft?> showObjectQueryDialog(
       initialFilters: initialFilters,
       initialSorts: initialSorts,
       hierarchyAwarePropertyIds: hierarchyAwarePropertyIds,
+      relationCandidateSearch: relationCandidateSearch,
     ),
   );
 }
@@ -39,12 +49,14 @@ class ObjectQueryDialog extends StatefulWidget {
     this.initialFilters = const <ObjectFilterRule>[],
     this.initialSorts = const <ObjectSortRule>[],
     this.hierarchyAwarePropertyIds = const <int>{},
+    this.relationCandidateSearch,
   });
 
   final List<ObjectPropertyDefinition> properties;
   final List<ObjectFilterRule> initialFilters;
   final List<ObjectSortRule> initialSorts;
   final Set<int> hierarchyAwarePropertyIds;
+  final ObjectQueryRelationCandidateSearch? relationCandidateSearch;
 
   @override
   State<ObjectQueryDialog> createState() => _ObjectQueryDialogState();
@@ -254,6 +266,24 @@ class _ObjectQueryDialogState extends State<ObjectQueryDialog> {
     _EditableFilter filter,
     ObjectPropertyDefinition? property,
   ) {
+    if (property?.type == ObjectPropertyType.objectRelation) {
+      final search = widget.relationCandidateSearch;
+      if (search == null) {
+        return const InputDecorator(
+          decoration: InputDecoration(labelText: '値'),
+          child: Text('Relation候補を読み込めません'),
+        );
+      }
+      return ObjectRelationFilterPicker(
+        key: ValueKey(
+          'relation-filter-picker-${property!.id}-${filter.revision}',
+        ),
+        selectedObjectIds: ObjectRelationValue.fromJson(filter.value).objectIds,
+        searchCandidates: (query) => search(property, query),
+        onChanged: (ids) => setState(() => filter.value = ids),
+      );
+    }
+
     if (property?.type == ObjectPropertyType.checkbox) {
       final checked = filter.value == true || '${filter.value}' == 'true';
       return DropdownButtonFormField<bool>(
@@ -459,9 +489,7 @@ class _ObjectQueryDialogState extends State<ObjectQueryDialog> {
   ) {
     if (operator == ObjectFilterOperator.containsAny ||
         operator == ObjectFilterOperator.containsAll) {
-      return property?.type == ObjectPropertyType.objectRelation
-          ? 'Object IDをカンマ区切り'
-          : '値をカンマ区切り';
+      return '値をカンマ区切り';
     }
     if (property?.type == ObjectPropertyType.date) return '2026-09-02';
     return '値を入力';
@@ -479,13 +507,6 @@ class _ObjectQueryDialogState extends State<ObjectQueryDialog> {
           .split(',')
           .map((item) => item.trim())
           .where((item) => item.isNotEmpty)
-          .toList(growable: false);
-    }
-    if (property?.type == ObjectPropertyType.objectRelation) {
-      return value
-          .split(',')
-          .map((item) => int.tryParse(item.trim()))
-          .whereType<int>()
           .toList(growable: false);
     }
     return value;
