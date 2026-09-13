@@ -33,6 +33,24 @@ void main() {
       expect(provenance.compactDiagnostic, contains('· dirty'));
     });
 
+    test('keeps development fallback explicit', () {
+      const provenance = BuildProvenance(
+        version: 'development',
+        buildNumber: '0',
+        commitSha: 'unknown',
+        sourceState: 'development',
+      );
+
+      expect(provenance.displayVersion, 'development');
+      expect(provenance.displayBuildNumber, '0');
+      expect(provenance.shortCommit, 'unknown');
+      expect(provenance.displaySourceState, 'development');
+      expect(
+        provenance.compactDiagnostic,
+        'Bookmark development (0) · unknown · development',
+      );
+    });
+
     test('fails closed for unavailable or malformed metadata', () {
       const provenance = BuildProvenance(
         version: ' ',
