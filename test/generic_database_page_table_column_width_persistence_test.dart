@@ -206,8 +206,10 @@ void main() {
       )).singleWhere((candidate) => candidate.id == secondViewId);
 
       expect(firstAfterRelease.settings['unrelated'], 'keep');
-      final secondWidths = secondAfterRelease
-          .settings[DatabaseViewTableColumnWidthsAdapter.settingsKey] as Map;
+      final secondWidths =
+          secondAfterRelease.settings[DatabaseViewTableColumnWidthsAdapter
+                  .settingsKey]
+              as Map;
       expect(secondAfterRelease.settings['second'], 'keep');
       expect((secondWidths['title'] as num).toDouble(), 200);
       expect(tester.getSize(titleColumn).width, 200);
