@@ -48,7 +48,7 @@ void main() {
         .readAsStringSync();
 
     expect(workflow, contains(r'stable) RELEASE_TAG="v${BUILD_NAME}"'));
-    expect(workflow, contains('gh release view "$RELEASE_TAG"'));
+    expect(workflow, contains(r'gh release view "$RELEASE_TAG"'));
     expect(workflow, contains('git ls-remote --exit-code --tags origin'));
     expect(workflow, contains('releases are immutable'));
     expect(workflow, contains('refusing to replace it'));
