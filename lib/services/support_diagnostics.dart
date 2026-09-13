@@ -13,19 +13,19 @@ enum DiagnosticPrivacyClass {
   secret;
 
   bool get allowedByDefault => switch (this) {
-        technical || aggregate || sanitizedCode => true,
-        userContent || localPath || url || secret => false,
-      };
+    technical || aggregate || sanitizedCode => true,
+    userContent || localPath || url || secret => false,
+  };
 
   String get wireName => switch (this) {
-        technical => 'technical',
-        aggregate => 'aggregate',
-        sanitizedCode => 'sanitized_code',
-        userContent => 'user_content',
-        localPath => 'local_path',
-        url => 'url',
-        secret => 'secret',
-      };
+    technical => 'technical',
+    aggregate => 'aggregate',
+    sanitizedCode => 'sanitized_code',
+    userContent => 'user_content',
+    localPath => 'local_path',
+    url => 'url',
+    secret => 'secret',
+  };
 }
 
 enum DiagnosticSeverity {
@@ -71,10 +71,8 @@ class DiagnosticEvent {
 }
 
 class DiagnosticEventBuffer {
-  DiagnosticEventBuffer({
-    this.maxEntries = 50,
-    DateTime Function()? clock,
-  }) : _clock = clock ?? DateTime.now {
+  DiagnosticEventBuffer({this.maxEntries = 50, DateTime Function()? clock})
+    : _clock = clock ?? DateTime.now {
     if (maxEntries <= 0) {
       throw ArgumentError.value(maxEntries, 'maxEntries', 'must be positive');
     }
@@ -107,7 +105,8 @@ class DiagnosticEventBuffer {
     }
   }
 
-  List<DiagnosticEvent> snapshot() => List<DiagnosticEvent>.unmodifiable(_events);
+  List<DiagnosticEvent> snapshot() =>
+      List<DiagnosticEvent>.unmodifiable(_events);
 
   void clear() => _events.clear();
 }
@@ -120,10 +119,10 @@ class SupportDiagnosticsRuntime {
   });
 
   factory SupportDiagnosticsRuntime.current() => SupportDiagnosticsRuntime(
-        operatingSystem: Platform.operatingSystem,
-        operatingSystemVersion: Platform.operatingSystemVersion,
-        dartVersion: Platform.version,
-      );
+    operatingSystem: Platform.operatingSystem,
+    operatingSystemVersion: Platform.operatingSystemVersion,
+    dartVersion: Platform.version,
+  );
 
   final String operatingSystem;
   final String operatingSystemVersion;
@@ -135,7 +134,8 @@ class SupportDiagnosticsBundle {
 
   final Map<String, Object?> payload;
 
-  String get prettyJson => '${const JsonEncoder.withIndent('  ').convert(payload)}\n';
+  String get prettyJson =>
+      '${const JsonEncoder.withIndent('  ').convert(payload)}\n';
 }
 
 class SupportDiagnosticsService {
@@ -145,12 +145,13 @@ class SupportDiagnosticsService {
     required this.vaultConfigured,
     SupportDiagnosticsRuntime? runtime,
     DiagnosticEventBuffer? events,
-    Iterable<SupportDiagnosticProvider> providers = const <SupportDiagnosticProvider>[],
+    Iterable<SupportDiagnosticProvider> providers =
+        const <SupportDiagnosticProvider>[],
     DateTime Function()? clock,
-  })  : runtime = runtime ?? SupportDiagnosticsRuntime.current(),
-        events = events ?? DiagnosticEventBuffer.shared,
-        providers = List<SupportDiagnosticProvider>.unmodifiable(providers),
-        _clock = clock ?? DateTime.now;
+  }) : runtime = runtime ?? SupportDiagnosticsRuntime.current(),
+       events = events ?? DiagnosticEventBuffer.shared,
+       providers = List<SupportDiagnosticProvider>.unmodifiable(providers),
+       _clock = clock ?? DateTime.now;
 
   final BuildProvenance buildProvenance;
   final int databaseSchemaVersion;
@@ -217,7 +218,10 @@ class SupportDiagnosticsService {
       }
     }
 
-    final eventPayload = events.snapshot().map(_renderEvent).toList(growable: false);
+    final eventPayload = events
+        .snapshot()
+        .map(_renderEvent)
+        .toList(growable: false);
     return SupportDiagnosticsBundle(<String, Object?>{
       'format': 'bookmark_app_support_diagnostics',
       'formatVersion': 1,
@@ -336,45 +340,45 @@ class SupportDiagnosticsService {
 }
 
 Map<String, Object?> _renderField(DiagnosticField field) => <String, Object?>{
-      'value': field.value,
-      'privacy': field.privacyClass.wireName,
-      'reason': field.reasonCode,
-    };
+  'value': field.value,
+  'privacy': field.privacyClass.wireName,
+  'reason': field.reasonCode,
+};
 
 Map<String, Object?> _renderEvent(DiagnosticEvent event) => <String, Object?>{
-      'timestamp': _renderField(
-        DiagnosticField(
-          key: 'timestamp',
-          value: event.timestamp.toUtc().toIso8601String(),
-          privacyClass: DiagnosticPrivacyClass.technical,
-          reasonCode: 'order_session_events',
-        ),
-      ),
-      'category': _renderField(
-        DiagnosticField(
-          key: 'category',
-          value: event.category,
-          privacyClass: DiagnosticPrivacyClass.sanitizedCode,
-          reasonCode: 'identify_event_subsystem',
-        ),
-      ),
-      'severity': _renderField(
-        DiagnosticField(
-          key: 'severity',
-          value: event.severity.wireName,
-          privacyClass: DiagnosticPrivacyClass.sanitizedCode,
-          reasonCode: 'classify_event_severity',
-        ),
-      ),
-      'code': _renderField(
-        DiagnosticField(
-          key: 'code',
-          value: event.code,
-          privacyClass: DiagnosticPrivacyClass.sanitizedCode,
-          reasonCode: 'report_fixed_event_code',
-        ),
-      ),
-    };
+  'timestamp': _renderField(
+    DiagnosticField(
+      key: 'timestamp',
+      value: event.timestamp.toUtc().toIso8601String(),
+      privacyClass: DiagnosticPrivacyClass.technical,
+      reasonCode: 'order_session_events',
+    ),
+  ),
+  'category': _renderField(
+    DiagnosticField(
+      key: 'category',
+      value: event.category,
+      privacyClass: DiagnosticPrivacyClass.sanitizedCode,
+      reasonCode: 'identify_event_subsystem',
+    ),
+  ),
+  'severity': _renderField(
+    DiagnosticField(
+      key: 'severity',
+      value: event.severity.wireName,
+      privacyClass: DiagnosticPrivacyClass.sanitizedCode,
+      reasonCode: 'classify_event_severity',
+    ),
+  ),
+  'code': _renderField(
+    DiagnosticField(
+      key: 'code',
+      value: event.code,
+      privacyClass: DiagnosticPrivacyClass.sanitizedCode,
+      reasonCode: 'report_fixed_event_code',
+    ),
+  ),
+};
 
 void _validateProviderFieldValue(DiagnosticField field) {
   final value = field.value;
@@ -388,7 +392,9 @@ void _validateProviderFieldValue(DiagnosticField field) {
       throw const FormatException('technical provider field must be a scalar');
     case DiagnosticPrivacyClass.aggregate:
       if (value == null || value is bool || value is num) return;
-      throw const FormatException('aggregate provider field must be numeric or boolean');
+      throw const FormatException(
+        'aggregate provider field must be numeric or boolean',
+      );
     case DiagnosticPrivacyClass.sanitizedCode:
       if (value is! String) {
         throw const FormatException('sanitized provider field must be a token');
