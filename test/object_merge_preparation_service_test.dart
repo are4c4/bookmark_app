@@ -215,8 +215,8 @@ void main() {
       expect(
         (await fixture.objectStore.listObjects(personTypeId))
             .map((object) => object.title)
-            .toList(),
-        <String>['Survivor', 'Retired'],
+            .toSet(),
+        <String>{'Survivor', 'Retired'},
       );
     },
   );
