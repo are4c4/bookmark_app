@@ -5,6 +5,24 @@ import '../../../../domain/object_body_block_actions.dart';
 import '../../../../domain/object_body_block_presentation.dart';
 import 'object_body_block_view.dart';
 
+class ObjectBodyBlockActionVisibilityScope extends InheritedWidget {
+  const ObjectBodyBlockActionVisibilityScope({
+    super.key,
+    required this.onVisibilityChanged,
+    required super.child,
+  });
+
+  final ValueChanged<bool> onVisibilityChanged;
+
+  static ValueChanged<bool>? maybeOf(BuildContext context) => context
+      .dependOnInheritedWidgetOfExactType<ObjectBodyBlockActionVisibilityScope>()
+      ?.onVisibilityChanged;
+
+  @override
+  bool updateShouldNotify(ObjectBodyBlockActionVisibilityScope oldWidget) =>
+      onVisibilityChanged != oldWidget.onVisibilityChanged;
+}
+
 typedef ObjectBodyBlockActionsBuilder = Widget Function(
   BuildContext context,
   ObjectBodyBlock block,
@@ -161,6 +179,7 @@ class _ObjectBodyDocumentEntryState extends State<_ObjectBodyDocumentEntry> {
   bool _hovered = false;
   bool _focused = false;
   bool _touchActionsVisible = false;
+  bool _actionPopupVisible = false;
 
   ObjectBodyBlock get _block => widget.presentation.block;
 
@@ -171,12 +190,19 @@ class _ObjectBodyDocumentEntryState extends State<_ObjectBodyDocumentEntry> {
         platform == TargetPlatform.fuchsia;
   }
 
+  void _setActionPopupVisible(bool visible) {
+    if (!mounted || _actionPopupVisible == visible) return;
+    setState(() => _actionPopupVisible = visible);
+  }
+
   @override
   Widget build(BuildContext context) {
     final usesTouchChrome = _usesTouchChrome(context);
     final hasActions = widget.blockActionsBuilder != null;
     final showActions = hasActions &&
-        (usesTouchChrome ? _touchActionsVisible : (_hovered || _focused));
+        (usesTouchChrome
+            ? _touchActionsVisible || _actionPopupVisible
+            : _hovered || _focused || _actionPopupVisible);
 
     final blockView = ObjectBodyBlockView(
       key: ValueKey('object-body-block-${_block.id}'),
@@ -216,7 +242,14 @@ class _ObjectBodyDocumentEntryState extends State<_ObjectBodyDocumentEntry> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (widget.canReorder) _buildDragHandle(context),
-                widget.blockActionsBuilder!(context, _block, widget.position),
+                ObjectBodyBlockActionVisibilityScope(
+                  onVisibilityChanged: _setActionPopupVisible,
+                  child: widget.blockActionsBuilder!(
+                    context,
+                    _block,
+                    widget.position,
+                  ),
+                ),
               ],
             ),
           )
