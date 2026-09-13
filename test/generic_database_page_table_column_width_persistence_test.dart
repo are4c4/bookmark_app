@@ -95,18 +95,15 @@ void main() {
           final view = (await viewStore.listViews(
             workspaceId: workspaceId,
             databaseKey: databaseKey,
-          ))
-              .single;
-          final raw = view.settings[
-            DatabaseViewTableColumnWidthsAdapter.settingsKey
-          ];
+          )).single;
+          final raw =
+              view.settings[DatabaseViewTableColumnWidthsAdapter.settingsKey];
           if (raw is Map && raw['title'] is num) return view;
         }
         return (await viewStore.listViews(
           workspaceId: workspaceId,
           databaseKey: databaseKey,
-        ))
-            .single;
+        )).single;
       }
 
       await pumpHost();
@@ -144,9 +141,9 @@ void main() {
 
       final persisted = await waitForPersistedWidth();
       expect(persisted.settings['unrelated'], 'keep');
-      final widths = persisted.settings[
-        DatabaseViewTableColumnWidthsAdapter.settingsKey
-      ] as Map;
+      final widths =
+          persisted.settings[DatabaseViewTableColumnWidthsAdapter.settingsKey]
+              as Map;
       expect((widths['title'] as num).toDouble(), 304);
 
       await tester.pumpWidget(const SizedBox.shrink());
