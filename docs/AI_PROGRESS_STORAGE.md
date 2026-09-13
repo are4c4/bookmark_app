@@ -78,6 +78,23 @@ The first F-owned durable-history byte-lifecycle contract is now explicit withou
 
 This checkpoint does **not** add a persisted retention ledger, implement physical GC, choose A-owned checkpoint compaction, replay Relations, or authorize byte deletion from metadata history alone. Any such implementation requires another focused F Issue and the normal migration/destructive-safety rules where applicable.
 
+### #1335 — packaged build provenance / installed-build identity
+Integrated by PR #1341 / merge `492390f49fa664991b97a471fe86312e919ff307`.
+
+The existing macOS delivery boundary now makes packaged builds self-identifying without changing Vault/profile/schema state:
+
+- `tool/package_macos.sh` derives the package version/build plus Git HEAD and `clean`/`dirty` source state before building;
+- release packaging fails clearly when required Git source metadata cannot be established instead of silently stamping an unknown source;
+- provenance is injected at compile time through `--dart-define`; the app does not inspect Git or the source checkout at runtime;
+- development/unavailable metadata remains explicitly distinguishable through fail-closed display fallbacks;
+- Settings exposes version/build/short commit/source state and a one-action diagnostic copy affordance;
+- generated DMG naming carries the build provenance and marks dirty source builds;
+- the existing Bundle Identifier, Vault/profile paths and database/migration behavior are unchanged.
+
+This checkpoint does **not** add signing/notarization, automatic updates, release channels or runtime dependence on a source checkout.
+
+Focused tests cover clean/dirty/development/unknown formatting, package-script provenance contracts and the real Settings build-info/copy surface. The latest-main-synchronized head passed changed-Dart format, Analyze/guards, all four Flutter Test shards, test-health, Repository Settings/AI Migration Lease/AI Handoff audits and authoritative `merge-gate` before squash integration. PR CI intentionally skipped the macOS release-build job for this change scope, so this checkpoint proves the repository-owned packaging contract and UI behavior; it does not claim a new real-Mac packaging/signing/notarization validation run.
+
 ## Integrated foundation that remains authoritative
 - configurable user-selected Vault roots;
 - create/open/switch/rename/duplicate/remove-from-list lifecycle;
@@ -89,6 +106,7 @@ This checkpoint does **not** add a persisted retention ledger, implement physica
 - managed-file copy/rollback and ownership-gated physical delete boundaries;
 - explicit managed-byte history retention/restoreability/GC-precondition contract without deletion-by-inference;
 - read-only Vault preservation manifest/compare tooling and documented validation procedure;
+- self-identifying macOS package provenance plus Settings installed-build diagnostics;
 - release packaging/basic real-Mac launch path.
 
 ## Current roadmap anchors
@@ -129,10 +147,11 @@ Repository tests/tools are authoritative for repository-owned behavior. Use real
 2. Re-read #1063 and take only a newly split focused F filesystem/package contract whose logical prerequisites already exist.
 3. Re-check #1064 for a new explicitly F-owned follow-up beyond completed #1268, such as a persisted retention/GC slice whose A/B dependencies and deletion/reference-audit boundary are already explicit; do not take over A's history model or B's Relation restore semantics.
 4. Re-check destructive Bookmark/People/Photo retirement only for a specifically requested F preservation-validation slice before schema/data removal.
-5. If a concrete current-main Storage/Vault correctness defect is demonstrated, create/reuse the smallest focused F Issue and fix only that defect.
-6. Otherwise do not invent a serializer, package format, sync protocol, retention ledger or destructive cleanup merely to keep Lane F active.
+5. Re-check Delivery only for a newly focused packaging/install/update defect or contract; completed #1335 does not authorize inventing signing/notarization/update infrastructure without a focused Issue.
+6. If a concrete current-main Storage/Vault correctness defect is demonstrated, create/reuse the smallest focused F Issue and fix only that defect.
+7. Otherwise do not invent a serializer, package format, sync protocol, retention ledger, updater or destructive cleanup merely to keep Lane F active.
 
 ## Current durable stop
-Final live audit after #1268/#1282 integration found no open F implementation PR and no newly split focused F child beyond the #1063 umbrella. #1063 still lacks a focused package/filesystem child whose owning-lane logical prerequisites authorize independent implementation. #1064 has completed its first F-owned managed-byte retention/GC safety contract through #1268 but has not split a further F persistence/physical-GC slice. No destructive retirement currently requests focused F preservation validation, and no additional current-main Storage/Vault correctness defect was demonstrated in this audit.
+Final live audit after #1335/#1341 integration found no remaining open F implementation PR and no newly split focused F child beyond the #1063 umbrella. #1063 still lacks a focused package/filesystem child whose owning-lane logical prerequisites authorize independent implementation. #1064 has completed its first F-owned managed-byte retention/GC safety contract through #1268 but has not split a further F persistence/physical-GC slice. No destructive retirement currently requests focused F preservation validation, and no additional current-main Storage/Vault/Delivery correctness defect was demonstrated in this audit.
 
-Stop reason: idle-no-work after #1268 integration — resume when #1063 gains an explicit focused F filesystem/package contract with owning-lane logical prerequisites, #1064 splits a new F retention-ledger/physical-GC or related Storage slice with explicit dependencies, a destructive retirement requests focused preservation validation, or a concrete current-main Storage/Vault correctness defect appears.
+Stop reason: idle-no-work after #1335/#1341 integration — resume when #1063 gains an explicit focused F filesystem/package contract with owning-lane logical prerequisites, #1064 splits a new F retention-ledger/physical-GC or related Storage slice with explicit dependencies, a destructive retirement requests focused preservation validation, a focused Delivery defect/contract is created, or a concrete current-main Storage/Vault/Delivery correctness defect appears.
