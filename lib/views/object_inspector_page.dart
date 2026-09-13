@@ -42,6 +42,7 @@ import '../features/object/presentation/widgets/object_alias_editor.dart';
 import '../features/object/presentation/widgets/object_body_block_action_bar.dart';
 import '../features/object/presentation/widgets/object_body_database_view_reference_picker.dart';
 import '../features/object/presentation/widgets/object_body_document_view.dart';
+import '../features/object/presentation/widgets/object_body_editor_section.dart';
 import '../features/object/presentation/widgets/object_body_insert_menu_button.dart';
 import '../features/object/presentation/widgets/object_body_object_reference_picker.dart';
 import '../features/object/presentation/widgets/object_body_reference_insert_menu_button.dart';
@@ -1027,40 +1028,14 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                   )
-                : Row(
-                    children: [
-                      Text(
-                        'Bodyは空です',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color:
-                                  Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
-                      ),
-                      const SizedBox(width: 8),
-                      ObjectBodyInsertMenuButton(
-                        key: const ValueKey('body-empty-insert'),
-                        onSelected: _insertBodyBlock,
-                      ),
-                      const SizedBox(width: 4),
-                      ObjectBodyReferenceInsertMenuButton(
-                        key: const ValueKey('body-empty-reference-insert'),
-                        allowedKinds: const [
-                          ObjectBodyReferenceInsertKind.object,
-                          ObjectBodyReferenceInsertKind.databaseView,
-                        ],
-                        onSelected: (kind) {
-                          switch (kind) {
-                            case ObjectBodyReferenceInsertKind.object:
-                              _insertObjectReference(content);
-                            case ObjectBodyReferenceInsertKind.databaseView:
-                              _insertDatabaseViewReference(content);
-                            case ObjectBodyReferenceInsertKind.image:
-                            case ObjectBodyReferenceInsertKind.file:
-                              break;
-                          }
-                        },
-                      ),
-                    ],
+                : ObjectBodyEditorSection(
+                    key: ValueKey('object-inspector-empty-body-${object.id}'),
+                    store: widget.store,
+                    objectStore: widget.objectStore,
+                    objectId: object.id,
+                    workspaceId: type.workspaceId,
+                    onOpenObject: _openObject,
+                    showHeading: false,
                   ),
           ),
           if (_relations.backlinks.isNotEmpty) ...[
