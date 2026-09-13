@@ -5,6 +5,7 @@ import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
 import 'package:bookmark_app/data/object_history_checkpoint_store.dart';
 import 'package:bookmark_app/domain/object_body.dart';
+import 'package:bookmark_app/domain/object_body_block_contracts.dart';
 import 'package:bookmark_app/domain/object_history_checkpoint.dart';
 import 'package:bookmark_app/domain/object_history_checkpoint_codec.dart';
 import 'package:bookmark_app/domain/object_history_contract.dart';
