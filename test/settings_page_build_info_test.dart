@@ -3,6 +3,7 @@ import 'package:bookmark_app/data/bookmark_lifecycle_store.dart';
 import 'package:bookmark_app/data/bookmark_repository.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/services/build_provenance.dart';
+import 'package:bookmark_app/views/app_build_info_section.dart';
 import 'package:bookmark_app/views/settings_page.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
@@ -57,8 +58,13 @@ void main() {
     expect(find.textContaining('Commit db166af'), findsOneWidget);
     expect(find.textContaining('Source dirty'), findsOneWidget);
 
-    await tester.scrollUntilVisible(find.text('ビルド情報をコピー'), 120);
-    await tester.tap(find.text('ビルド情報をコピー'));
+    final copyButton = find.descendant(
+      of: find.byType(AppBuildInfoSection),
+      matching: find.byType(OutlinedButton),
+    );
+    expect(copyButton, findsOneWidget);
+    await tester.scrollUntilVisible(copyButton, 120);
+    await tester.tap(copyButton);
     await tester.pump();
 
     expect(copied, 'Bookmark 0.1.0 (1) · db166af · dirty');
