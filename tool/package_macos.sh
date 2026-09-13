@@ -49,7 +49,7 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
   exit 1
 fi
 
-for cmd in flutter xcodebuild hdiutil ditto sips; do
+for cmd in flutter xcodebuild hdiutil ditto sips git; do
   if ! command -v "$cmd" >/dev/null 2>&1; then
     echo "error: required command not found: $cmd" >&2
     exit 1
@@ -66,6 +66,24 @@ if [[ "$PUBSPEC_VERSION" == *+* ]]; then
   BUILD_NUMBER="${PUBSPEC_VERSION##*+}"
 else
   BUILD_NUMBER="1"
+fi
+
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "error: macOS release packaging requires Git source metadata." >&2
+  exit 1
+fi
+GIT_SHA="$(git rev-parse HEAD)"
+GIT_SHORT_SHA="$(git rev-parse --short=7 HEAD)"
+if [[ -z "$GIT_SHA" || -z "$GIT_SHORT_SHA" ]]; then
+  echo "error: unable to determine the source Git commit for this package." >&2
+  exit 1
+fi
+if [[ -n "$(git status --porcelain --untracked-files=normal)" ]]; then
+  SOURCE_STATE="dirty"
+  BUILD_PROVENANCE_LABEL="$GIT_SHORT_SHA-dirty"
+else
+  SOURCE_STATE="clean"
+  BUILD_PROVENANCE_LABEL="$GIT_SHORT_SHA"
 fi
 
 APPINFO="macos/Runner/Configs/AppInfo.xcconfig"
@@ -157,6 +175,8 @@ macOS release configuration:
   Bundle Identifier: $EFFECTIVE_BUNDLE_ID
   Version:           $BUILD_NAME
   Build number:      $BUILD_NUMBER
+  Commit:            $GIT_SHORT_SHA
+  Source state:      $SOURCE_STATE
 EOF_SUMMARY
 
 if [[ "$CONFIGURE_ONLY" -eq 1 ]]; then
@@ -165,7 +185,13 @@ if [[ "$CONFIGURE_ONLY" -eq 1 ]]; then
 fi
 
 flutter pub get
-flutter build macos --release --build-name "$BUILD_NAME" --build-number "$BUILD_NUMBER"
+flutter build macos --release \
+  --build-name "$BUILD_NAME" \
+  --build-number "$BUILD_NUMBER" \
+  --dart-define="BOOKMARK_APP_VERSION=$BUILD_NAME" \
+  --dart-define="BOOKMARK_APP_BUILD_NUMBER=$BUILD_NUMBER" \
+  --dart-define="BOOKMARK_GIT_SHA=$GIT_SHA" \
+  --dart-define="BOOKMARK_SOURCE_STATE=$SOURCE_STATE"
 
 APP_PATH="build/macos/Build/Products/Release/$APP_NAME.app"
 if [[ ! -d "$APP_PATH" ]]; then
@@ -176,7 +202,7 @@ fi
 
 DIST_DIR="$ROOT_DIR/dist/macos"
 STAGE_DIR="$DIST_DIR/.dmg-stage"
-DMG_PATH="$DIST_DIR/$APP_NAME-$BUILD_NAME.dmg"
+DMG_PATH="$DIST_DIR/$APP_NAME-$BUILD_NAME-$BUILD_PROVENANCE_LABEL.dmg"
 rm -rf "$STAGE_DIR"
 mkdir -p "$STAGE_DIR"
 ditto "$APP_PATH" "$STAGE_DIR/$APP_NAME.app"
@@ -203,6 +229,7 @@ fi
 
 echo "Built app: $APP_PATH"
 echo "Built DMG: $DMG_PATH"
+echo "Build provenance: $BUILD_NAME ($BUILD_NUMBER) · $GIT_SHORT_SHA · $SOURCE_STATE"
 echo "Note: this is an unsigned/not-notarized personal build unless you add signing separately."
 
 if [[ "$OPEN_DMG" -eq 1 ]]; then

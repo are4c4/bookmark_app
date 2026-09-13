@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../data/bookmark_repository.dart';
+import '../services/build_provenance.dart';
 import '../services/vault_lifecycle_scope.dart';
 import '../ui/ui_tokens.dart';
+import 'app_build_info_section.dart';
 import 'auto_organize_settings_section.dart';
 import 'database_backup_settings_section.dart';
 import 'vault_settings_section.dart';
@@ -22,6 +24,8 @@ class SettingsPage extends StatelessWidget {
     this.onOpenVault,
     this.onSwitchVault,
     this.onMoveVault,
+    this.buildProvenance = BuildProvenance.current,
+    this.copyBuildInfo,
   });
 
   final ThemeMode themeMode;
@@ -35,6 +39,8 @@ class SettingsPage extends StatelessWidget {
   final VoidCallback? onOpenVault;
   final VoidCallback? onSwitchVault;
   final VoidCallback? onMoveVault;
+  final BuildProvenance buildProvenance;
+  final Future<void> Function(String text)? copyBuildInfo;
 
   Future<void> _runVaultAction(
     BuildContext context,
@@ -192,6 +198,13 @@ class SettingsPage extends StatelessWidget {
           const Divider(),
           const SizedBox(height: UiTokens.space24),
           AutoOrganizeSettingsSection(repository: repository),
+          const SizedBox(height: UiTokens.space24),
+          const Divider(),
+          const SizedBox(height: UiTokens.space24),
+          AppBuildInfoSection(
+            provenance: buildProvenance,
+            copyText: copyBuildInfo,
+          ),
         ],
       ),
     );
