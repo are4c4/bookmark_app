@@ -105,14 +105,14 @@ Canonical Object Search is established. #1178 is a completed checkpoint for cano
 ### G — Refactor & Architecture Health
 - #225 maintainability, hotspot reduction, developer workflow, architecture health.
 - #950 is a completed caller-zero Photo compatibility checkpoint. Surviving Photo-era paths remain intentional compatibility/preservation infrastructure unless a new focused current-main caller audit proves otherwise; destructive persisted-schema retirement is separate preservation/migration/approval-gated work.
-- #1107 Phase A non-self destructive approval is established: current-head approval must come from a distinct non-author GitHub User, complete paginated latest-review state is evaluated, and the reviewer must have write/admin permission. #1107 remains open for Phase B only: a trusted enforcement root/check or equivalent authorization boundary the implementation identity cannot modify or spoof.
+- #1107 Phase A independent-review path is established: the normal machine-pass path requires a distinct non-author current-head approved GitHub User with write/admin permission and complete latest-review-state evaluation. #1331 adds the solo-maintainer manual path: when no independent reviewer exists, the human repository admin may deliberately use the active ruleset's PR-only bypass on the final head after all non-approval validation. The repository guard remains red on this path and must not be weakened or made self-authorizing. #1107 Phase B remains open because repository-local workflow/guard enforcement is not independently immutable.
 - retire caller-zero Bookmark/People repositories/pages/bridges after owning-lane parity, and revisit Photo compatibility only through a new evidence-backed focused Issue rather than reopening #950.
 - repository-wide handoff/guard synchronization belongs here when a focused Issue owns it.
 
 ### H — Architecture & Integration Oversight
 H is the repository-wide control tower, not another runtime implementation owner. Durable handoff: `docs/AI_PROGRESS_OVERSIGHT.md`.
 
-H audits architecture drift, duplicate ownership, cross-lane dependencies, shared-hotspot/migration-writer conflicts, combined-state test gaps, UX coherence, emerging technical debt, preservation risk, and roadmap/umbrella completeness. Product/runtime fixes are routed to exactly one A–G focused Issue.
+H audits architecture drift, duplicate ownership, cross-lane dependencies, shared-hotspot/migration-writer conflicts, combined-state test gaps, UX coherence, emerging technical debt, preservation risk, and roadmap/umbrella completeness. Product/runtime fixes are routed to exactly one A–G focused Issue. For approval-sensitive solo-maintainer work, H records the explicit human ruleset action as `destructive-approval` rather than recommending a dummy reviewer account or repeated branch churn.
 
 ## Near-term dependency shape
 
@@ -146,7 +146,7 @@ Object-first constitution
                +--> #1062 [A/B] Object merge
                +--> #1063 [F + owning serializers] export
                +--> #1064 [A/B/F] durable history
-               +--> #1107 [G] approval enforcement trust root
+               +--> #1107/#1331 [G] approval enforcement + solo-maintainer manual path
 ```
 
 Each focused Issue has one active implementation owner/branch/PR. Shared hotspots use temporary ownership leases. Schema/migration writing is single-writer: non-migration PRs do not contend, the oldest open migration-sensitive PR is the unique active owner, and later migration PRs are blocked by the required gate until ownership advances.
@@ -222,7 +222,7 @@ Protected `main` intentionally keeps strict/up-to-date `merge-gate`; do not weak
 - Waiting docs work must never block the product PR through a declared dependency, shared-hotspot lease, duplicate focused-Issue claim, or migration ownership. If it would, resolve that coordination conflict rather than creating a circular wait.
 - This convention is advisory merge scheduling only. Multiple product PRs still obey normal ownership/hotspot/migration rules, and no stale code may merge merely because intervening changes are docs-only.
 
-This convention exists because strict latest-main validation is the safety property; repeated CI caused solely by merge ordering is the optimization target. It does not introduce a merge queue, bypass token, reduced test coverage, or weaker required checks.
+This convention exists because strict latest-main validation is the safety property; repeated CI caused solely by merge ordering is the optimization target. It does not introduce a merge queue, bypass token, reduced test coverage, or weaker required checks. The sole exception is the explicitly human-operated solo-maintainer approval-sensitive bypass defined by #1331/`AGENTS.md`; automation may not invoke it and it does not convert a failed guard into a green check.
 
 ## Repository integration contract
 
@@ -233,7 +233,7 @@ This convention exists because strict latest-main validation is the safety prope
 - Current branch/ruleset/PR/CI details must be queried live rather than copied into this handoff.
 - GitHub CI is authoritative when local Flutter execution is unavailable.
 - Keep Drift generation/Analyze safeguards and architecture/AI audits intact.
-- Routine reversible AI work remains approval-free. High-confidence destructive/irreversible and approval-policy-sensitive changes require a distinct non-author current-head `APPROVED` review from a GitHub User whose complete latest-review history is evaluated and whose repository permission is write/admin. #1107 Phase B remains open because the repository-local workflow/guard enforcement root is still modifiable by the implementation authorization.
+- Routine reversible AI work remains approval-free. Approval-sensitive changes normally require a distinct non-author current-head `APPROVED` review from a GitHub User with write/admin permission. If the repository has no independent reviewer, #1331 permits only the human repository admin to use an explicitly configured PR-only ruleset bypass on the final head after all non-approval validation; the guard remains red, AI/automation must not be a bypass actor, and no repository-local marker can self-authorize the exception. #1107 Phase B remains open because repository-local workflow/guard enforcement is still modifiable by the implementation authorization.
 
 ## Handoff rule
 
