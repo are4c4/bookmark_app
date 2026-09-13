@@ -66,6 +66,7 @@ class _ResizableDatabaseTableState extends State<ResizableDatabaseTable> {
   static const _keyboardStep = 16.0;
 
   late Map<String, double> _widths;
+  Future<void> _commitTail = Future<void>.value();
   String? _draggingKey;
   bool _dragDirty = false;
 
@@ -128,12 +129,19 @@ class _ResizableDatabaseTableState extends State<ResizableDatabaseTable> {
     if (_draggingKey == column.keyName) _dragDirty = true;
   }
 
+  void _enqueueCommit(String key, double width) {
+    _commitTail = _commitTail.then(
+      (_) => widget.onWidthCommitted(key, width),
+    );
+    unawaited(_commitTail.catchError((Object _) {}));
+  }
+
   void _finishDrag(ResizableDatabaseTableColumn column) {
     final shouldCommit = _draggingKey == column.keyName && _dragDirty;
     _draggingKey = null;
     _dragDirty = false;
     if (shouldCommit) {
-      unawaited(widget.onWidthCommitted(column.keyName, _widthFor(column)));
+      _enqueueCommit(column.keyName, _widthFor(column));
     }
   }
 
@@ -142,7 +150,7 @@ class _ResizableDatabaseTableState extends State<ResizableDatabaseTable> {
     _updateWidth(column, delta);
     final after = _widthFor(column);
     if (after != before) {
-      unawaited(widget.onWidthCommitted(column.keyName, after));
+      _enqueueCommit(column.keyName, after);
     }
   }
 
