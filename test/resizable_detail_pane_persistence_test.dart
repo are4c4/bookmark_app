@@ -100,11 +100,7 @@ void main() {
       'ui.layout.detailPaneWidth.v1.test-corrupt': 'old-format',
     });
 
-    await _pumpPane(
-      tester,
-      storageKey: 'test-corrupt',
-      initialWidth: 410,
-    );
+    await _pumpPane(tester, storageKey: 'test-corrupt', initialWidth: 410);
 
     final restored = tester
         .getSize(find.byKey(const ValueKey('persisted-detail-content')))
