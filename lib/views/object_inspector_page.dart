@@ -43,9 +43,7 @@ import '../features/object/presentation/widgets/object_body_block_action_bar.dar
 import '../features/object/presentation/widgets/object_body_database_view_reference_picker.dart';
 import '../features/object/presentation/widgets/object_body_document_view.dart';
 import '../features/object/presentation/widgets/object_body_editor_section.dart';
-import '../features/object/presentation/widgets/object_body_insert_menu_button.dart';
 import '../features/object/presentation/widgets/object_body_object_reference_picker.dart';
-import '../features/object/presentation/widgets/object_body_reference_insert_menu_button.dart';
 import '../features/object/presentation/widgets/object_detail_property_view.dart';
 import '../features/object/presentation/widgets/object_file_detail_panel_host.dart';
 import '../features/object/presentation/widgets/object_image_detail_panel.dart';
@@ -974,70 +972,70 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 8),
-          ObjectBodyDocumentView(
-            document: content.body,
-            onTextChanged: canEditBody
-                ? (block, text) => _editBodyText(block, text)
-                : null,
-            onChecklistChanged: canEditBody
-                ? (block, checked) => _toggleChecklist(block, checked)
-                : null,
-            onObjectReferenceTap: (block) {
-              final targetId = block.referencedObjectId;
-              if (targetId != null) _openObject(targetId);
-            },
-            blockActionsBuilder: canEditBody
-                ? (context, block, position) => ObjectBodyBlockActionBar(
-                      block: block,
-                      position: position,
-                      onMoveUp: () => _moveBodyBlockUp(block),
-                      onMoveDown: () => _moveBodyBlockDown(block),
-                      onDuplicate: () => _duplicateBodyBlock(block),
-                      onDelete: () => _deleteBodyBlock(block),
-                      onInsertAfter: (kind) => _insertBodyBlock(
-                        kind,
-                        afterBlockId: block.id,
-                      ),
-                      onInsertReferenceAfter: (kind) {
-                        switch (kind) {
-                          case ObjectBodyReferenceInsertKind.object:
-                            _insertObjectReference(
-                              content,
-                              afterBlockId: block.id,
-                            );
-                          case ObjectBodyReferenceInsertKind.databaseView:
-                            _insertDatabaseViewReference(
-                              content,
-                              afterBlockId: block.id,
-                            );
-                          case ObjectBodyReferenceInsertKind.image:
-                          case ObjectBodyReferenceInsertKind.file:
-                            break;
-                        }
-                      },
-                      referenceInsertKinds: const [
-                        ObjectBodyReferenceInsertKind.object,
-                        ObjectBodyReferenceInsertKind.databaseView,
-                      ],
-                    )
-                : null,
-            emptyBuilder: (context) => !canEditBody
-                ? Text(
-                    'Bodyは空です',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+          if (content.body.blocks.isEmpty && canEditBody)
+            ObjectBodyEditorSection(
+              store: widget.store,
+              objectStore: widget.objectStore,
+              objectId: widget.objectId,
+              workspaceId: content.objectType.workspaceId,
+              onOpenObject: _openObject,
+              showHeading: false,
+            )
+          else
+            ObjectBodyDocumentView(
+              document: content.body,
+              onTextChanged: canEditBody
+                  ? (block, text) => _editBodyText(block, text)
+                  : null,
+              onChecklistChanged: canEditBody
+                  ? (block, checked) => _toggleChecklist(block, checked)
+                  : null,
+              onObjectReferenceTap: (block) {
+                final targetId = block.referencedObjectId;
+                if (targetId != null) _openObject(targetId);
+              },
+              blockActionsBuilder: canEditBody
+                  ? (context, block, position) => ObjectBodyBlockActionBar(
+                        block: block,
+                        position: position,
+                        onMoveUp: () => _moveBodyBlockUp(block),
+                        onMoveDown: () => _moveBodyBlockDown(block),
+                        onDuplicate: () => _duplicateBodyBlock(block),
+                        onDelete: () => _deleteBodyBlock(block),
+                        onInsertAfter: (kind) => _insertBodyBlock(
+                          kind,
+                          afterBlockId: block.id,
                         ),
-                  )
-                : ObjectBodyEditorSection(
-                    key: ValueKey('object-inspector-empty-body-${object.id}'),
-                    store: widget.store,
-                    objectStore: widget.objectStore,
-                    objectId: object.id,
-                    workspaceId: type.workspaceId,
-                    onOpenObject: _openObject,
-                    showHeading: false,
-                  ),
-          ),
+                        onInsertReferenceAfter: (kind) {
+                          switch (kind) {
+                            case ObjectBodyReferenceInsertKind.object:
+                              _insertObjectReference(
+                                content,
+                                afterBlockId: block.id,
+                              );
+                            case ObjectBodyReferenceInsertKind.databaseView:
+                              _insertDatabaseViewReference(
+                                content,
+                                afterBlockId: block.id,
+                              );
+                            case ObjectBodyReferenceInsertKind.image:
+                            case ObjectBodyReferenceInsertKind.file:
+                              break;
+                          }
+                        },
+                        referenceInsertKinds: const [
+                          ObjectBodyReferenceInsertKind.object,
+                          ObjectBodyReferenceInsertKind.databaseView,
+                        ],
+                      )
+                  : null,
+              emptyBuilder: (context) => Text(
+                'Bodyは空です',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ),
           if (_relations.backlinks.isNotEmpty) ...[
             const SizedBox(height: 24),
             const Divider(),
