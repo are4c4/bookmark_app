@@ -20,31 +20,31 @@ DatabaseViewConfig _view({Map<String, dynamic> settings = const {}}) =>
 void main() {
   const adapter = DatabaseViewTableColumnWidthsAdapter();
 
-  test('stores widths by stable column key and preserves unrelated settings', () {
-    final original = _view(
-      settings: const <String, dynamic>{
-        'galleryMode': 'fit',
-        DatabaseViewTableColumnWidthsAdapter.settingsKey: <String, dynamic>{
-          'p:11': 220,
-          'removed:p:99': 330,
+  test(
+    'stores widths by stable column key and preserves unrelated settings',
+    () {
+      final original = _view(
+        settings: const <String, dynamic>{
+          'galleryMode': 'fit',
+          DatabaseViewTableColumnWidthsAdapter.settingsKey: <String, dynamic>{
+            'p:11': 220,
+            'removed:p:99': 330,
+          },
         },
-      },
-    );
+      );
 
-    final next = adapter.withWidth(original, key: 'p:22', width: 280);
+      final next = adapter.withWidth(original, key: 'p:22', width: 280);
 
-    expect(next.settings['galleryMode'], 'fit');
-    expect(
-      adapter.decode(next),
-      <String, dynamic>{
+      expect(next.settings['galleryMode'], 'fit');
+      expect(adapter.decode(next), <String, dynamic>{
         'p:11': 220,
         'removed:p:99': 330,
         'p:22': 280.0,
-      },
-    );
-    expect(next.propertyOrder, original.propertyOrder);
-    expect(next.visibleProperties, original.visibleProperties);
-  });
+      });
+      expect(next.propertyOrder, original.propertyOrder);
+      expect(next.visibleProperties, original.visibleProperties);
+    },
+  );
 
   test('malformed metadata fails soft without changing the View', () {
     final original = _view(
