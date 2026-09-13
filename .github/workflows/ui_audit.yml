@@ -4,6 +4,13 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '17 3 * * 1'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/ui_audit.yml'
+      - 'tool/ui_audit_report.py'
+      - 'tool/ui_audit_report_test.py'
   push:
     branches:
       - main
@@ -13,6 +20,8 @@ on:
       - 'pubspec.yaml'
       - 'pubspec.lock'
       - '.github/workflows/ui_audit.yml'
+      - 'tool/ui_audit_report.py'
+      - 'tool/ui_audit_report_test.py'
 
 permissions:
   contents: read
@@ -29,6 +38,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Verify H review input generator
+        run: python3 tool/ui_audit_report_test.py
 
       - name: Set up Flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
@@ -62,6 +74,10 @@ jobs:
             echo "::warning::UI audit capture reported deterministic test failures; this advisory workflow does not replace required Flutter CI."
           fi
 
+      - name: Build H UI audit review input
+        if: always()
+        run: python3 tool/ui_audit_report.py build/ui_audit
+
       - name: Upload UI audit evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -73,16 +89,19 @@ jobs:
 
       - name: Summarize UI audit
         if: always()
-        env:
-          CAPTURE_STATUS: ${{ steps.capture.outputs.status }}
         run: |
+          if [[ -f build/ui_audit/h-review-input.md ]]; then
+            cat build/ui_audit/h-review-input.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo '## UI audit review input unavailable'
+              echo
+              echo "- Source SHA: \`${GITHUB_SHA}\`"
+              echo '- Evidence bundle did not produce `h-review-input.md`; inspect uploaded artifact/logs before drawing a UX conclusion.'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
           {
-            echo '## UI audit'
             echo
-            echo "- Source SHA: \`${GITHUB_SHA}\`"
-            echo '- Profile: `desktop-dark-1440x900`'
-            echo '- Scenarios: shared Body document, generic Person Relation picker, canonical Global Search empty state'
-            echo "- Capture test exit code: \`${CAPTURE_STATUS:-not-run}\`"
-            echo '- Policy: screenshot evidence is advisory; deterministic behavior remains enforced by normal Flutter CI.'
+            echo '- Policy: screenshot evidence and H review are advisory; deterministic behavior remains enforced by normal Flutter CI.'
             echo '- Artifact retention: 14 days.'
           } >> "$GITHUB_STEP_SUMMARY"
