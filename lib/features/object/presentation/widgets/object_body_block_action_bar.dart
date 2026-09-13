@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../domain/object_body.dart';
 import '../../../../domain/object_body_block_actions.dart';
 import '../../../../domain/object_body_reference_insert.dart';
+import 'object_body_document_view.dart';
 import 'object_body_insert_menu_button.dart';
 import 'object_body_reference_insert_menu_button.dart';
 
@@ -44,6 +45,9 @@ class ObjectBodyBlockActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final onVisibilityChanged = ObjectBodyBlockActionVisibilityScope.maybeOf(
+      context,
+    );
     return IconTheme.merge(
       data: const IconThemeData(size: 18),
       child: Row(
@@ -67,7 +71,12 @@ class ObjectBodyBlockActionBar extends StatelessWidget {
               key: ValueKey('body-block-more-${block.id}'),
               tooltip: 'ブロック操作',
               icon: const Icon(Icons.more_horiz),
-              onSelected: _dispatchOverflowAction,
+              onOpened: () => onVisibilityChanged?.call(true),
+              onCanceled: () => onVisibilityChanged?.call(false),
+              onSelected: (action) {
+                onVisibilityChanged?.call(false);
+                _dispatchOverflowAction(action);
+              },
               itemBuilder: (context) => [
                 if (onMoveUp != null)
                   PopupMenuItem(

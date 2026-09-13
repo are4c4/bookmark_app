@@ -201,7 +201,7 @@ void main() {
     final error = find.byKey(const ValueKey('body-load-error'));
     await _pumpUntil(tester, error);
     expect(find.byKey(const ValueKey('body-load-retry')), findsOneWidget);
-    expect(find.byKey(const ValueKey('body-empty-insert')), findsNothing);
+    expect(find.byKey(const ValueKey('body-empty-document')), findsNothing);
 
     final row = await database.customSelect(
       'SELECT document_json FROM object_bodies WHERE object_id = ?',

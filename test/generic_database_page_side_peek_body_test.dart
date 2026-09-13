@@ -76,6 +76,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
       MaterialApp(
+        theme: ThemeData(platform: TargetPlatform.macOS),
         home: GenericDatabasePage(
           repository: repository,
           databaseId: databaseId,
@@ -103,6 +104,23 @@ void main() {
       matching: find.byKey(const ValueKey('body-text-body')),
     );
     expect(bodyField, findsOneWidget);
+    expect(
+      find.descendant(
+        of: bodyHost,
+        matching: find.byKey(const ValueKey('body-block-more-body')),
+      ),
+      findsNothing,
+    );
+    await tester.tap(bodyField);
+    await tester.pump();
+    expect(
+      find.descendant(
+        of: bodyHost,
+        matching: find.byKey(const ValueKey('body-block-more-body')),
+      ),
+      findsOneWidget,
+    );
+
     await tester.enterText(bodyField, 'Edited in side peek');
     await tester.pumpAndSettle();
 

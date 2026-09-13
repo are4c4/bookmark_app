@@ -78,7 +78,7 @@ void main() {
     expect(error, findsOneWidget);
     expect(retry, findsOneWidget);
     expect(find.byType(ObjectBodyDocumentView), findsNothing);
-    expect(find.byKey(const ValueKey('body-empty-insert')), findsNothing);
+    expect(find.byKey(const ValueKey('body-empty-document')), findsNothing);
     expect(find.text('Objectが見つかりません'), findsNothing);
 
     final corruptRow = await database.customSelect(
