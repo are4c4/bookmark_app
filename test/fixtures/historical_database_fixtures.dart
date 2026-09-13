@@ -7,10 +7,7 @@ import 'package:drift/native.dart';
 /// Keep these schemas frozen once accepted. When a later destructive migration
 /// needs a new supported checkpoint, add a new enum value/setup method instead
 /// of rewriting an existing historical shape to match today's schema.
-enum HistoricalDatabaseCheckpoint {
-  legacyV8,
-  objectEraV16,
-}
+enum HistoricalDatabaseCheckpoint { legacyV8, objectEraV16 }
 
 NativeDatabase historicalDatabaseExecutor(
   File file,
@@ -19,7 +16,9 @@ NativeDatabase historicalDatabaseExecutor(
   return NativeDatabase(
     file,
     setup: (sqlite) {
-      final version = sqlite.select('PRAGMA user_version').single['user_version'];
+      final version = sqlite
+          .select('PRAGMA user_version')
+          .single['user_version'];
       if (version != 0) return;
       switch (checkpoint) {
         case HistoricalDatabaseCheckpoint.legacyV8:
