@@ -2059,7 +2059,8 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                         galleryCoverSources: _galleryCoverSources,
                         hierarchyAwarePropertyIds:
                             _hierarchyQueryContext.hierarchyAwarePropertyIds,
-                        relationCandidateSearch: _searchRelationFilterCandidates,
+                        relationCandidateSearch:
+                            _searchRelationFilterCandidates,
                         onViewChanged: (next) {
                           _persistView(next);
                         },
