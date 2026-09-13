@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bookmark_app/features/database/presentation/widgets/resizable_database_table.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -164,5 +166,43 @@ void main() {
 
     expect(tester.getSize(column).width, 216);
     expect(commits, <(String, double)>[('title', 216)]);
+  });
+
+  testWidgets('rapid keyboard commits stay ordered and keep latest local width', (
+    tester,
+  ) async {
+    final firstRelease = Completer<void>();
+    final started = <double>[];
+    await tester.pumpWidget(
+      _host(
+        onWidthCommitted: (key, width) async {
+          started.add(width);
+          if (started.length == 1) await firstRelease.future;
+        },
+      ),
+    );
+
+    final column = find.byKey(
+      const ValueKey<String>('database-table-column-title'),
+    );
+    final handle = find.byKey(
+      const ValueKey<String>('database-table-resize-title'),
+    );
+    await tester.tap(handle);
+    await tester.pump();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pump();
+
+    expect(tester.getSize(column).width, 232);
+    expect(started, <double>[216]);
+
+    firstRelease.complete();
+    await tester.pump();
+    await tester.pump();
+
+    expect(started, <double>[216, 232]);
   });
 }
