@@ -25,11 +25,12 @@ Read/recheck in this order:
 3. `docs/AI_PROGRESS.md`.
 4. this file.
 5. `docs/AI_PRODUCT_PRIORITY.md` for advisory safe/ready work selection.
-6. relevant A–G lane handoffs.
-7. latest `main` and recent meaningful commits.
-8. all live open PRs, their declared lane/Issue/dependencies/hotspots, and current CI.
-9. relevant open umbrella/focused Issues and recently completed Issues that changed routing.
-10. current shared-hotspot, migration-writer, and repository-setting state.
+6. `docs/H_PRODUCT_REVIEW.md` for PR-level user-facing review outcomes.
+7. relevant A–G lane handoffs.
+8. latest `main` and recent meaningful commits.
+9. all live open PRs, their declared lane/Issue/dependencies/hotspots, current CI, and current Product Acceptance Evidence when applicable.
+10. relevant open umbrella/focused Issues and recently completed Issues that changed routing.
+11. current shared-hotspot, migration-writer, and repository-setting state.
 
 **Live GitHub state overrides durable handoff snapshots for all transient facts.** Do not copy current open-PR counts, CI run numbers, branch tips, or other short-lived ownership facts into this handoff as long-lived truth. Record durable findings, contracts, dependencies, and resume targets instead.
 
@@ -172,6 +173,19 @@ Repository branch protection/required `merge-gate` is now established; treat liv
 - When a screenshot reveals a concrete UX/layout problem, route one focused Issue to the owning A–G lane, record the exact affected surface/contract, and avoid bundling unrelated visual cleanup.
 - Do not store external-model API credentials or introduce subjective AI screenshot scoring merely to automate H. Any later blocking golden contract requires a separate evidence-backed decision.
 
+## PR-level H Product Review contract
+
+#1368 established the advisory Product Acceptance Evidence classifier/PR evidence format; #1370 adds H's current-head product-review loop without creating a second scope authority.
+
+- `docs/H_PRODUCT_REVIEW.md` is the durable outcome/comment contract. H uses the existing Product Acceptance Evidence result as the default applicability signal and may override a false negative only by identifying the concrete user-facing surface/behavior that the conservative path heuristic missed.
+- For an applicable open PR, H checks focused Issue acceptance, current-head Product Acceptance Evidence, relevant interaction/runtime evidence, source-SHA-bound UI Audit evidence when useful, shared-host parity, live related Issues and Core User Journeys when available.
+- H records exactly one current-head-bound top-level PR comment outcome: `product-evidence-sufficient`, `follow-up-required`, `needs-human-confirmation`, or `evidence-unavailable`.
+- Any later PR commit makes the old H Product Review stale. Recheck the new head before presenting an earlier outcome as current.
+- `follow-up-required` means a concrete reproducible gap. Search live Issues first, reuse/refine ownership where possible, otherwise route exactly one focused Issue to one A–G implementation lane. H does not take runtime hotspot ownership itself.
+- `needs-human-confirmation` is for subjective/ambiguous observations or actual product decisions. Do not convert aesthetic preference into required CI.
+- `evidence-unavailable` states missing/stale/mismatched evidence honestly; it does not imply success and does not stop unrelated H oversight.
+- This advisory product review is not a GitHub `APPROVED` review, destructive-change authorization, security approval or automatic merge signal. Required CI/preservation/migration/approval contracts remain separate.
+
 ## Umbrella completion audit
 
 A focused implementation slice may be complete when its acceptance criteria and required validation are green. An umbrella/product capability is not Done merely because one PR merged. H checks applicable architecture, behavior, tests, primary UX, accessibility/device interaction, empty/loading/error/recovery states, migration/reconciliation, replacement parity, caller-zero retirement, preservation before destructive changes, and durable documentation/routing.
@@ -183,11 +197,12 @@ A focused implementation slice may be complete when its acceptance criteria and 
 3. Inspect recent `main` changes for architecture/product integration implications.
 4. Audit architecture, integration, parallel safety, durable-doc freshness, UX, technical debt, correctness/preservation, and roadmap coherence.
 5. When multiple independent safe/ready Issues or findings compete, apply the user-visible priority rubric before routing/choosing attention; do not favor lower-impact work solely because it is easier.
-6. When visual/layout evidence would help, inspect the latest successful UI Audit `h-review-input.md` / `machine-summary.json` and screenshots, tie observations to the exact source SHA, and explicitly distinguish complete, incomplete, or unavailable evidence; never treat screenshots as source-of-truth over live code/GitHub.
-7. For each finding, link an existing Issue or create one focused Issue with one primary A–G owner; record dependencies, hotspot/migration impact, product-priority signal where applicable, and acceptance criteria.
-8. Correct repository-wide durable routing/docs only when durable facts changed.
-9. Continue to another independent audit area instead of stopping after the first finding.
-10. Before ending, keep this handoff resumable without chat history.
+6. Recheck live open PRs. For each likely user-facing PR identified by Product Acceptance Evidence (or a concrete semantic false negative), perform/reuse a current-head H Product Review when no current outcome exists; never require non-UI PRs to fabricate product evidence.
+7. When visual/layout evidence would help, inspect the latest successful UI Audit `h-review-input.md` / `machine-summary.json` and screenshots, tie observations to the exact source SHA, and explicitly distinguish complete, incomplete, or unavailable evidence; never treat screenshots as source-of-truth over live code/GitHub.
+8. For each finding, link an existing Issue or create one focused Issue with one primary A–G owner; record dependencies, hotspot/migration impact, product-priority signal where applicable, and acceptance criteria.
+9. Correct repository-wide durable routing/docs only when durable facts changed.
+10. Continue to another independent audit area instead of stopping after the first finding.
+11. Before ending, keep this handoff resumable without chat history.
 
 ## Stop conditions
 
@@ -199,6 +214,6 @@ When the sole blocker for an approval-sensitive PR is the #1331 solo-maintainer 
 
 ## Durable checkpoint — 2026-09-09
 
-The Object-first constitution, A–G lane ownership model, H oversight contract, strict protected-main `merge-gate`, migration/hotspot/handoff audits, branch-cleanup policy, advisory deterministic UI-audit evidence path, and user-visible priority-routing rubric are established. H should not preserve exact current PR/branch/CI/artifact run identifiers here; every new run rebuilds them from live GitHub.
+The Object-first constitution, A–G lane ownership model, H oversight contract, strict protected-main `merge-gate`, migration/hotspot/handoff audits, branch-cleanup policy, advisory deterministic UI-audit evidence path, PR-level Product Acceptance Evidence/H Product Review path, and user-visible priority-routing rubric are established. H should not preserve exact current PR/branch/CI/artifact run identifiers here; every new run rebuilds them from live GitHub.
 
 Immediate oversight priority is to keep the repository's AI coordination and reproducibility guardrails aligned with the increasing number of parallel implementation lanes, while protecting the near-term product focus on Bookmark retirement, People retirement, Tag hierarchy, Body interaction follow-ups, and Home/start UX before expanding speculative feature scope.

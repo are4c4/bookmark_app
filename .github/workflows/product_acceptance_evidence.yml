@@ -1,0 +1,30 @@
+name: Product Acceptance Evidence
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  advisory:
+    name: advisory-product-acceptance-evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Verify evidence classifier
+        run: python3 tool/product_acceptance_evidence_test.py
+
+      - name: Review Product Acceptance Evidence
+        env:
+          CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          CI_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PRODUCT_ACCEPTANCE_PR_BODY: ${{ github.event.pull_request.body }}
+        run: python3 tool/product_acceptance_evidence.py
