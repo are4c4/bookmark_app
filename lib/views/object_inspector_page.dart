@@ -972,70 +972,69 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 8),
-          if (content.body.blocks.isEmpty && canEditBody)
-            ObjectBodyEditorSection(
-              store: widget.store,
-              objectStore: widget.objectStore,
-              objectId: widget.objectId,
-              workspaceId: content.objectType.workspaceId,
-              onOpenObject: _openObject,
-              showHeading: false,
-            )
-          else
-            ObjectBodyDocumentView(
-              document: content.body,
-              onTextChanged: canEditBody
-                  ? (block, text) => _editBodyText(block, text)
-                  : null,
-              onChecklistChanged: canEditBody
-                  ? (block, checked) => _toggleChecklist(block, checked)
-                  : null,
-              onObjectReferenceTap: (block) {
-                final targetId = block.referencedObjectId;
-                if (targetId != null) _openObject(targetId);
-              },
-              blockActionsBuilder: canEditBody
-                  ? (context, block, position) => ObjectBodyBlockActionBar(
-                        block: block,
-                        position: position,
-                        onMoveUp: () => _moveBodyBlockUp(block),
-                        onMoveDown: () => _moveBodyBlockDown(block),
-                        onDuplicate: () => _duplicateBodyBlock(block),
-                        onDelete: () => _deleteBodyBlock(block),
-                        onInsertAfter: (kind) => _insertBodyBlock(
-                          kind,
-                          afterBlockId: block.id,
+          ObjectBodyDocumentView(
+            document: content.body,
+            onTextChanged: canEditBody
+                ? (block, text) => _editBodyText(block, text)
+                : null,
+            onChecklistChanged: canEditBody
+                ? (block, checked) => _toggleChecklist(block, checked)
+                : null,
+            onObjectReferenceTap: (block) {
+              final targetId = block.referencedObjectId;
+              if (targetId != null) _openObject(targetId);
+            },
+            blockActionsBuilder: canEditBody
+                ? (context, block, position) => ObjectBodyBlockActionBar(
+                      block: block,
+                      position: position,
+                      onMoveUp: () => _moveBodyBlockUp(block),
+                      onMoveDown: () => _moveBodyBlockDown(block),
+                      onDuplicate: () => _duplicateBodyBlock(block),
+                      onDelete: () => _deleteBodyBlock(block),
+                      onInsertAfter: (kind) => _insertBodyBlock(
+                        kind,
+                        afterBlockId: block.id,
+                      ),
+                      onInsertReferenceAfter: (kind) {
+                        switch (kind) {
+                          case ObjectBodyReferenceInsertKind.object:
+                            _insertObjectReference(
+                              content,
+                              afterBlockId: block.id,
+                            );
+                          case ObjectBodyReferenceInsertKind.databaseView:
+                            _insertDatabaseViewReference(
+                              content,
+                              afterBlockId: block.id,
+                            );
+                          case ObjectBodyReferenceInsertKind.image:
+                          case ObjectBodyReferenceInsertKind.file:
+                            break;
+                        }
+                      },
+                      referenceInsertKinds: const [
+                        ObjectBodyReferenceInsertKind.object,
+                        ObjectBodyReferenceInsertKind.databaseView,
+                      ],
+                    )
+                : null,
+            emptyBuilder: (context) => canEditBody
+                ? ObjectBodyEditorSection(
+                    store: widget.store,
+                    objectStore: widget.objectStore,
+                    objectId: widget.objectId,
+                    workspaceId: content.objectType.workspaceId,
+                    onOpenObject: _openObject,
+                    showHeading: false,
+                  )
+                : Text(
+                    'Bodyは空です',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
-                        onInsertReferenceAfter: (kind) {
-                          switch (kind) {
-                            case ObjectBodyReferenceInsertKind.object:
-                              _insertObjectReference(
-                                content,
-                                afterBlockId: block.id,
-                              );
-                            case ObjectBodyReferenceInsertKind.databaseView:
-                              _insertDatabaseViewReference(
-                                content,
-                                afterBlockId: block.id,
-                              );
-                            case ObjectBodyReferenceInsertKind.image:
-                            case ObjectBodyReferenceInsertKind.file:
-                              break;
-                          }
-                        },
-                        referenceInsertKinds: const [
-                          ObjectBodyReferenceInsertKind.object,
-                          ObjectBodyReferenceInsertKind.databaseView,
-                        ],
-                      )
-                  : null,
-              emptyBuilder: (context) => Text(
-                'Bodyは空です',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-              ),
-            ),
+                  ),
+          ),
           if (_relations.backlinks.isNotEmpty) ...[
             const SizedBox(height: 24),
             const Divider(),
