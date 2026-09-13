@@ -12,6 +12,7 @@ import 'package:bookmark_app/data/system_object_store.dart';
 import 'package:bookmark_app/data/weblink_object_service.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/database/database_definition.dart';
+import 'package:bookmark_app/features/database/presentation/widgets/resizable_database_table.dart';
 import 'package:bookmark_app/views/generic_database_page.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
@@ -192,6 +193,25 @@ void main() {
       await pumpUntilVisible(persistedViewTab);
       await tester.tap(persistedViewTab);
       await tester.pump();
+
+      final reopened = (await viewStore.listViews(
+        workspaceId: workspaceId,
+        databaseKey: databaseKey,
+      )).singleWhere((candidate) => candidate.id == seeded.id);
+      expect(
+        (DatabaseViewTableColumnWidthsAdapter()
+                .decode(reopened)['title'] as num)
+            .toDouble(),
+        304,
+      );
+      final table = tester.widget<ResizableDatabaseTable>(
+        find.byType(ResizableDatabaseTable),
+      );
+      expect(
+        table.key,
+        ValueKey<String>('database-table-${seeded.id}'),
+      );
+      expect((table.initialWidths['title'] as num).toDouble(), 304);
       await pumpUntilWidth(titleColumn, 304);
 
       final lockEntered = Completer<void>();
