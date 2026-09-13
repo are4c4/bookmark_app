@@ -12,9 +12,9 @@ class ResizableDatabaseTableColumn {
     this.minWidth = 120,
     this.maxWidth = 640,
     this.resizable = true,
-  })  : assert(defaultWidth > 0),
-        assert(minWidth > 0),
-        assert(maxWidth >= minWidth);
+  }) : assert(defaultWidth > 0),
+       assert(minWidth > 0),
+       assert(maxWidth >= minWidth);
 
   final String keyName;
   final Widget label;
@@ -26,10 +26,7 @@ class ResizableDatabaseTableColumn {
 }
 
 class ResizableDatabaseTableCell {
-  const ResizableDatabaseTableCell({
-    required this.child,
-    this.onTap,
-  });
+  const ResizableDatabaseTableCell({required this.child, this.onTap});
 
   final Widget child;
   final VoidCallback? onTap;
@@ -62,8 +59,7 @@ class ResizableDatabaseTable extends StatefulWidget {
   final Future<void> Function(String key, double width) onWidthCommitted;
 
   @override
-  State<ResizableDatabaseTable> createState() =>
-      _ResizableDatabaseTableState();
+  State<ResizableDatabaseTable> createState() => _ResizableDatabaseTableState();
 }
 
 class _ResizableDatabaseTableState extends State<ResizableDatabaseTable> {
@@ -102,9 +98,8 @@ class _ResizableDatabaseTableState extends State<ResizableDatabaseTable> {
   }
 
   Map<String, double> _resolvedInitialWidths() => {
-        for (final column in widget.columns)
-          column.keyName: _initialWidth(column),
-      };
+    for (final column in widget.columns) column.keyName: _initialWidth(column),
+  };
 
   double _initialWidth(ResizableDatabaseTableColumn column) {
     final raw = widget.initialWidths[column.keyName];
@@ -142,10 +137,7 @@ class _ResizableDatabaseTableState extends State<ResizableDatabaseTable> {
     }
   }
 
-  void _resizeFromKeyboard(
-    ResizableDatabaseTableColumn column,
-    double delta,
-  ) {
+  void _resizeFromKeyboard(ResizableDatabaseTableColumn column, double delta) {
     final before = _widthFor(column);
     _updateWidth(column, delta);
     final after = _widthFor(column);
@@ -229,11 +221,7 @@ class _ResizableDatabaseTableState extends State<ResizableDatabaseTable> {
   Widget _cell(
     ResizableDatabaseTableColumn column,
     ResizableDatabaseTableCell cell,
-  ) =>
-      SizedBox(
-        width: _widthFor(column),
-        child: cell.child,
-      );
+  ) => SizedBox(width: _widthFor(column), child: cell.child);
 
   @override
   Widget build(BuildContext context) {
@@ -251,17 +239,13 @@ class _ResizableDatabaseTableState extends State<ResizableDatabaseTable> {
             (row) => DataRow(
               selected: row.selected,
               onSelectChanged: row.onSelectChanged,
-              cells: List<DataCell>.generate(
-                widget.columns.length,
-                (index) {
-                  final cell = row.cells[index];
-                  return DataCell(
-                    _cell(widget.columns[index], cell),
-                    onTap: cell.onTap,
-                  );
-                },
-                growable: false,
-              ),
+              cells: List<DataCell>.generate(widget.columns.length, (index) {
+                final cell = row.cells[index];
+                return DataCell(
+                  _cell(widget.columns[index], cell),
+                  onTap: cell.onTap,
+                );
+              }, growable: false),
             ),
           )
           .toList(growable: false),
