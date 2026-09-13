@@ -72,10 +72,7 @@ void main() {
     var body = await bodyStore.read(next.id);
     expect(body.blocks, hasLength(1));
     final blockId = body.blocks.single.id;
-    await tester.enterText(
-      find.byKey(ValueKey('body-text-$blockId')),
-      '翌日のメモ',
-    );
+    await tester.enterText(find.byKey(ValueKey('body-text-$blockId')), '翌日のメモ');
     await tester.pumpAndSettle();
 
     body = await bodyStore.read(next.id);
