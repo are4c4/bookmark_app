@@ -66,7 +66,9 @@ class _ResizableDetailPaneState extends State<ResizableDetailPane> {
     final serial = ++_restoreSerial;
     final storageKey = widget.storageKey;
     final saved = await widget.preferences.loadDetailPaneWidth(storageKey);
-    if (!mounted || serial != _restoreSerial || storageKey != widget.storageKey) {
+    if (!mounted ||
+        serial != _restoreSerial ||
+        storageKey != widget.storageKey) {
       return;
     }
     setState(() => _width = _clamp(saved ?? widget.initialWidth));
