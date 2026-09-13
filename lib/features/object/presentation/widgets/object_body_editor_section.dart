@@ -208,7 +208,8 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
       text: text,
     );
     final current = _slashInvocation;
-    final unchanged = current?.objectId == next?.objectId &&
+    final unchanged =
+        current?.objectId == next?.objectId &&
         current?.blockId == next?.blockId &&
         current?.sourceText == next?.sourceText &&
         current?.query == next?.query &&
