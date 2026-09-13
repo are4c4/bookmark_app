@@ -91,22 +91,24 @@ class ObjectBodyBlockEditService {
     required int objectId,
     required String blockId,
     required String targetType,
+    String? replacementText,
     int headingLevel = 1,
     bool checklistChecked = false,
     String? codeLanguage,
     String? calloutIcon,
   }) => _mutate(
-    objectId,
-    (document) => editor.convertBlock(
-      document: document,
-      blockId: blockId,
-      targetType: targetType,
-      headingLevel: headingLevel,
-      checklistChecked: checklistChecked,
-      codeLanguage: codeLanguage,
-      calloutIcon: calloutIcon,
-    ),
-  );
+        objectId,
+        (document) => editor.convertBlock(
+          document: document,
+          blockId: blockId,
+          targetType: targetType,
+          replacementText: replacementText,
+          headingLevel: headingLevel,
+          checklistChecked: checklistChecked,
+          codeLanguage: codeLanguage,
+          calloutIcon: calloutIcon,
+        ),
+      );
 
   /// Splits one paragraph across the current selection against the latest
   /// persisted Body.
