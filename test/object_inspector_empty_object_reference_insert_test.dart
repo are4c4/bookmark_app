@@ -11,8 +11,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('empty Object Body can start with an explicit Object reference',
-      (tester) async {
+  testWidgets('empty Body starts editing then inserts an Object reference', (
+    tester,
+  ) async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
     final workspaceId = await WorkspaceStore(database).initialize();
@@ -50,6 +51,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
       MaterialApp(
+        theme: ThemeData(platform: TargetPlatform.macOS),
         home: ObjectInspectorPage(
           store: genericStore,
           objectStore: objectStore,
@@ -59,7 +61,18 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('body-empty-reference-insert')));
+    await tester.tap(find.byKey(const ValueKey('body-empty-document')));
+    await tester.pumpAndSettle();
+    var document = await bodyStore.read(sourceId);
+    expect(document.blocks, hasLength(1));
+    expect(document.blocks.single.type, ObjectBodyBlockType.paragraph);
+    final paragraphId = document.blocks.single.id;
+
+    await tester.tap(find.byKey(ValueKey('body-text-$paragraphId')));
+    await tester.pump();
+    await tester.tap(
+      find.byKey(ValueKey('body-block-insert-reference-after-$paragraphId')),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Object を参照'));
     await tester.pumpAndSettle();
@@ -74,10 +87,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final document = await bodyStore.read(sourceId);
-    expect(document.blocks, hasLength(1));
-    expect(document.blocks.single.type, ObjectBodyBlockType.objectReference);
-    expect(document.blocks.single.referencedObjectId, targetId);
-    expect(document.blocks.single.text, 'Serre');
+    document = await bodyStore.read(sourceId);
+    expect(document.blocks, hasLength(2));
+    expect(document.blocks.first.id, paragraphId);
+    final reference = document.blocks.last;
+    expect(reference.type, ObjectBodyBlockType.objectReference);
+    expect(reference.referencedObjectId, targetId);
+    expect(reference.text, 'Serre');
   });
 }

@@ -83,14 +83,23 @@ void main() {
   );
 
   testWidgets(
-    'Object inspector inserts a Database as the first Body reference block',
+    'empty Object Body starts editing then inserts a Database reference',
     (tester) async {
       final fixture = await _Fixture.create();
       addTearDown(fixture.database.close);
       await _pumpInspector(tester, fixture);
 
+      await tester.tap(find.byKey(const ValueKey('body-empty-document')));
+      await tester.pumpAndSettle();
+      var document = await fixture.bodyStore.read(fixture.sourceId);
+      expect(document.blocks, hasLength(1));
+      expect(document.blocks.single.type, ObjectBodyBlockType.paragraph);
+      final paragraphId = document.blocks.single.id;
+
+      await tester.tap(find.byKey(ValueKey('body-text-$paragraphId')));
+      await tester.pump();
       await tester.tap(
-        find.byKey(const ValueKey('body-empty-reference-insert')),
+        find.byKey(ValueKey('body-block-insert-reference-after-$paragraphId')),
       );
       await tester.pumpAndSettle();
       expect(find.text('Object を参照'), findsOneWidget);
@@ -108,9 +117,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final document = await fixture.bodyStore.read(fixture.sourceId);
-      expect(document.blocks, hasLength(1));
-      final reference = document.blocks.single;
+      document = await fixture.bodyStore.read(fixture.sourceId);
+      expect(document.blocks, hasLength(2));
+      expect(document.blocks.first.id, paragraphId);
+      final reference = document.blocks.last;
       expect(reference.type, ObjectBodyBlockType.databaseView);
       expect(reference.referencedDatabaseId, fixture.targetDatabaseId);
       expect(reference.referencedViewId, isNull);
