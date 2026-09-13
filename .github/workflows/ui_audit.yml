@@ -9,6 +9,7 @@ on:
       - main
     paths:
       - '.github/workflows/ui_audit.yml'
+      - 'test/ui_audit_snapshot_test.dart'
       - 'tool/ui_audit_report.py'
       - 'tool/ui_audit_report_test.py'
   push:
@@ -53,6 +54,32 @@ jobs:
 
       - name: Generate Drift code
         run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Prepare deterministic Japanese audit font
+        shell: bash
+        run: |
+          set -euo pipefail
+          font_path="$RUNNER_TEMP/NotoSansJP-VF.otf"
+          font_url='https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/Sans/Variable/OTF/Subset/NotoSansJP-VF.otf'
+          expected_blob='36864f7e1f1a3f51e4972e4e37aaa15467649760'
+          expected_size='8128756'
+
+          curl --fail --location --silent --show-error \
+            --output "$font_path" \
+            "$font_url"
+
+          actual_size="$(wc -c < "$font_path" | tr -d ' ')"
+          actual_blob="$(git hash-object "$font_path")"
+          if [[ "$actual_size" != "$expected_size" ]]; then
+            echo "UI Audit font size mismatch: expected $expected_size, got $actual_size" >&2
+            exit 1
+          fi
+          if [[ "$actual_blob" != "$expected_blob" ]]; then
+            echo "UI Audit font blob mismatch: expected $expected_blob, got $actual_blob" >&2
+            exit 1
+          fi
+
+          echo "UI_AUDIT_FONT_PATH=$font_path" >> "$GITHUB_ENV"
 
       - name: Capture deterministic UI audit surfaces
         id: capture
