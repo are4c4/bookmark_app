@@ -56,7 +56,7 @@ void main() {
 
       for (var index = 0; index < 2; index++) {
         await tester.tap(
-          find.byKey(const ValueKey('database-view-create-menu')),
+          find.byKey(const ValueKey('database-view-add-button')),
         );
         await tester.pumpAndSettle();
         await tester.tap(find.text('空のViewを作成'));
@@ -83,7 +83,10 @@ void main() {
       );
       expect(after, hasLength(3));
       expect(after.map((view) => view.id).toSet(), originalIds);
-      expect(after.map((view) => view.id).toList(), isNot(before.map((view) => view.id).toList()));
+      expect(
+        after.map((view) => view.id).toList(),
+        isNot(before.map((view) => view.id).toList()),
+      );
 
       final objects = await objectStore.listObjects(databaseId);
       expect(objects, hasLength(1));

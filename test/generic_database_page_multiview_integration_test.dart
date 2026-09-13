@@ -66,6 +66,8 @@ void main() {
         find.byKey(const ValueKey('database-view-add-button')),
       );
       await tester.pumpAndSettle();
+      await tester.tap(find.text('現在のViewを複製'));
+      await tester.pumpAndSettle();
 
       views = await viewStore.listViews(
         workspaceId: workspaceId,
@@ -82,7 +84,7 @@ void main() {
       expect(duplicate.propertyOrder, original.propertyOrder);
 
       await tester.tap(
-        find.byKey(const ValueKey('database-view-create-menu')),
+        find.byKey(const ValueKey('database-view-add-button')),
       );
       await tester.pumpAndSettle();
       await tester.tap(find.text('空のViewを作成'));
