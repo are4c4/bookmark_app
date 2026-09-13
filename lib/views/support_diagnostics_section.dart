@@ -15,7 +15,8 @@ class SupportDiagnosticsSection extends StatefulWidget {
   final Future<void> Function(String text)? copyText;
 
   @override
-  State<SupportDiagnosticsSection> createState() => _SupportDiagnosticsSectionState();
+  State<SupportDiagnosticsSection> createState() =>
+      _SupportDiagnosticsSectionState();
 }
 
 class _SupportDiagnosticsSectionState extends State<SupportDiagnosticsSection> {
@@ -31,7 +32,8 @@ class _SupportDiagnosticsSectionState extends State<SupportDiagnosticsSection> {
     );
     try {
       final bundle = await widget.diagnostics.collect();
-      final copier = widget.copyText ??
+      final copier =
+          widget.copyText ??
           (text) => Clipboard.setData(ClipboardData(text: text));
       await copier(bundle.prettyJson);
       widget.diagnostics.events.record(
@@ -40,9 +42,8 @@ class _SupportDiagnosticsSectionState extends State<SupportDiagnosticsSection> {
         code: 'copy_completed',
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('診断情報をコピーしました。')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('診断情報をコピーしました。')));
     } catch (_) {
       widget.diagnostics.events.record(
         category: 'support.bundle',
@@ -50,9 +51,8 @@ class _SupportDiagnosticsSectionState extends State<SupportDiagnosticsSection> {
         code: 'copy_failed',
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('診断情報を作成できませんでした。')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('診断情報を作成できませんでした。')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -93,7 +93,10 @@ class _SupportDiagnosticsSectionState extends State<SupportDiagnosticsSection> {
                   dimension: UiTokens.iconSmall,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Icon(Icons.content_copy_outlined, size: UiTokens.iconSmall),
+              : const Icon(
+                  Icons.content_copy_outlined,
+                  size: UiTokens.iconSmall,
+                ),
           label: Text(_busy ? '診断情報を作成中…' : '診断情報をコピー'),
         ),
       ],
