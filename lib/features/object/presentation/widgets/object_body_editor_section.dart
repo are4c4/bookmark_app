@@ -21,9 +21,7 @@ import '../object_body_object_reference_catalog.dart';
 import 'object_body_block_action_bar.dart';
 import 'object_body_database_view_reference_picker.dart';
 import 'object_body_document_view.dart';
-import 'object_body_insert_menu_button.dart';
 import 'object_body_object_reference_picker.dart';
-import 'object_body_reference_insert_menu_button.dart';
 
 /// Reusable rich Body editor for any persisted Object.
 ///
@@ -291,6 +289,32 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
               kind: kind,
             );
     });
+  }
+
+  Future<void> _activateEmptyDocument() async {
+    final objectId = widget.objectId;
+    final bodyStore = _bodyStore;
+    final actions = _bodyActions;
+    String? newBlockId;
+
+    await _enqueueDocumentMutation(objectId, () async {
+      final latest = await bodyStore.read(objectId);
+      if (latest.blocks.isNotEmpty) return latest;
+      newBlockId = _bodyBlockIds.next(latest, prefix: 'paragraph');
+      return actions.insert(
+        objectId: objectId,
+        newBlockId: newBlockId!,
+        kind: ObjectBodyInsertKind.paragraph,
+      );
+    });
+
+    if (!mounted || widget.objectId != objectId || newBlockId == null) return;
+    if (_document.blocks.any((item) => item.id == newBlockId)) {
+      setState(() {
+        _autofocusBlockId = newBlockId;
+        _autofocusOffset = 0;
+      });
+    }
   }
 
   Future<void> _insertObjectReference({String? afterBlockId}) async {
@@ -583,29 +607,27 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
                   ObjectBodyReferenceInsertKind.databaseView,
                 ],
               ),
-          emptyBuilder: (context) => Row(
-            children: [
-              Text(
-                'Bodyは空です',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+          emptyBuilder: (context) => Semantics(
+            textField: true,
+            label: 'Bodyを入力',
+            child: InkWell(
+              key: const ValueKey('body-empty-document'),
+              borderRadius: BorderRadius.circular(6),
+              mouseCursor: SystemMouseCursors.text,
+              onTap: _activateEmptyDocument,
+              onFocusChange: (focused) {
+                if (focused) _activateEmptyDocument();
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  '入力を開始...',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ),
-              const SizedBox(width: 8),
-              ObjectBodyInsertMenuButton(
-                key: const ValueKey('body-empty-insert'),
-                onSelected: _insertBlock,
-              ),
-              const SizedBox(width: 4),
-              ObjectBodyReferenceInsertMenuButton(
-                key: const ValueKey('body-empty-reference-insert'),
-                allowedKinds: const [
-                  ObjectBodyReferenceInsertKind.object,
-                  ObjectBodyReferenceInsertKind.databaseView,
-                ],
-                onSelected: _insertReference,
-              ),
-            ],
+            ),
           ),
         ),
       ],
