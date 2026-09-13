@@ -26,6 +26,21 @@ void main() {
     expect(workflow, isNot(contains('git push')));
   });
 
+  test('stable publication requires a matching immutable RC first', () {
+    final workflow = File('.github/workflows/macos_release.yml').readAsStringSync();
+
+    expect(workflow, contains(r'RC_PREFIX="v${BUILD_NAME}-rc."'));
+    expect(workflow, contains('gh release list'));
+    expect(workflow, contains('isPrerelease'));
+    expect(workflow, contains('CANDIDATE_SHA'));
+    expect(
+      workflow,
+      contains(
+        'stable publication requires a previously published RC for the same version and source commit',
+      ),
+    );
+  });
+
   test('stable release identity cannot replace an existing tag or release', () {
     final workflow = File('.github/workflows/macos_release.yml').readAsStringSync();
 
