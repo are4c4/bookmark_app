@@ -20,6 +20,7 @@ class ObjectViewToolbar extends StatelessWidget {
     this.showLayoutSelector = true,
     this.galleryCoverSources = const <GalleryCoverSourceOption>[],
     this.hierarchyAwarePropertyIds = const <int>{},
+    this.relationCandidateSearch,
   });
 
   final DatabaseViewConfig view;
@@ -40,6 +41,9 @@ class ObjectViewToolbar extends StatelessWidget {
   /// The toolbar only uses this capability to expose hierarchy modes in the
   /// generic query dialog. It does not own or traverse the hierarchy itself.
   final Set<int> hierarchyAwarePropertyIds;
+
+  /// Canonical Object identity search used only to author Relation filter ids.
+  final ObjectQueryRelationCandidateSearch? relationCandidateSearch;
 
   static const _queryAdapter = DatabaseViewQueryAdapter();
   static const _groupAdapter = DatabaseViewGroupAdapter();
@@ -98,6 +102,7 @@ class ObjectViewToolbar extends StatelessWidget {
       initialFilters: state.filters,
       initialSorts: state.sorts,
       hierarchyAwarePropertyIds: hierarchyAwarePropertyIds,
+      relationCandidateSearch: relationCandidateSearch,
     );
     if (result == null) return;
     onViewChanged(
