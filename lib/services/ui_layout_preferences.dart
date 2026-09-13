@@ -5,13 +5,33 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Local-only presentation preferences for desktop layout chrome.
 ///
 /// These values are intentionally separate from Object/Database/Vault content
-/// persistence. Keys must describe presentation identity rather than persisted
-/// content identity so a numeric Object/Database id is never reused as UI state
-/// in another Vault.
+/// persistence. Sidebar state is app-wide chrome preference, while detail pane
+/// keys describe presentation identity rather than persisted content identity.
 class UiLayoutPreferences {
   const UiLayoutPreferences();
 
+  static const _sidebarCollapsedKey = 'ui.layout.sidebarCollapsed.v1';
   static const _detailPaneWidthPrefix = 'ui.layout.detailPaneWidth.v1';
+
+  Future<bool?> loadSidebarCollapsed() async {
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      final value = preferences.get(_sidebarCollapsedKey);
+      return value is bool ? value : null;
+    } catch (_, stackTrace) {
+      _debugFailure('sidebar state load', stackTrace);
+      return null;
+    }
+  }
+
+  Future<void> saveSidebarCollapsed(bool collapsed) async {
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.setBool(_sidebarCollapsedKey, collapsed);
+    } catch (_, stackTrace) {
+      _debugFailure('sidebar state save', stackTrace);
+    }
+  }
 
   Future<double?> loadDetailPaneWidth(String storageKey) async {
     try {
