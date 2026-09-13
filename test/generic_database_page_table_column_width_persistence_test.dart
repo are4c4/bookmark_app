@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/bookmark_lifecycle_store.dart';
 import 'package:bookmark_app/data/bookmark_repository.dart';
@@ -9,14 +11,16 @@ import 'package:bookmark_app/data/object_type_defaults_store.dart';
 import 'package:bookmark_app/data/system_object_store.dart';
 import 'package:bookmark_app/data/weblink_object_service.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
+import 'package:bookmark_app/database/database_definition.dart';
 import 'package:bookmark_app/views/generic_database_page.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   testWidgets(
-    'real Table host persists resized title width and restores it after recreation',
+    'real Table host persists widths and keeps delayed commits scoped to source View',
     (tester) async {
       final database = AppDatabase.forTesting(NativeDatabase.memory());
       addTearDown(database.close);
@@ -49,6 +53,14 @@ void main() {
           .singleWhere((item) => item.id == definition.objectType.id);
       final viewStore = DatabaseViewStore(database);
       final databaseKey = destination.databaseKey;
+      final viewDefinition = DatabaseDefinition(
+        key: databaseKey,
+        label: destination.name,
+        icon: Icons.table_chart_outlined,
+        properties: const [],
+        defaultLayout: 'table',
+        supportedLayouts: const ['table'],
+      );
 
       tester.view.physicalSize = const Size(1440, 1000);
       tester.view.devicePixelRatio = 1;
@@ -89,25 +101,34 @@ void main() {
         expect(finder, findsWidgets);
       }
 
-      Future<DatabaseViewConfig> waitForPersistedWidth() async {
+      Future<DatabaseViewConfig> waitForWidth(
+        int viewId,
+        double expected,
+      ) async {
         for (var attempt = 0; attempt < 40; attempt += 1) {
           await tester.pump(const Duration(milliseconds: 50));
           final view = (await viewStore.listViews(
             workspaceId: workspaceId,
             databaseKey: databaseKey,
-          )).single;
+          )).singleWhere((candidate) => candidate.id == viewId);
           final raw =
               view.settings[DatabaseViewTableColumnWidthsAdapter.settingsKey];
-          if (raw is Map && raw['title'] is num) return view;
+          if (raw is Map && raw['title'] is num) {
+            final width = (raw['title'] as num).toDouble();
+            if (width == expected) return view;
+          }
         }
         return (await viewStore.listViews(
           workspaceId: workspaceId,
           databaseKey: databaseKey,
-        )).single;
+        )).singleWhere((candidate) => candidate.id == viewId);
       }
 
       await pumpHost();
       final seeded = (await waitForViews()).single;
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+
       await viewStore.updateView(
         seeded.copyWith(
           name: 'Resizable Table',
@@ -115,9 +136,19 @@ void main() {
           settings: const <String, dynamic>{'unrelated': 'keep'},
         ),
       );
+      final secondViewId = await viewStore.createView(
+        workspaceId: workspaceId,
+        definition: viewDefinition,
+        name: 'Second Table',
+        layoutType: 'table',
+        settings: const <String, dynamic>{
+          'second': 'keep',
+          DatabaseViewTableColumnWidthsAdapter.settingsKey: <String, dynamic>{
+            'title': 200.0,
+          },
+        },
+      );
 
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump();
       await pumpHost();
 
       final titleColumn = find.byKey(
@@ -139,19 +170,47 @@ void main() {
       await gesture.up();
       await tester.pump();
 
-      final persisted = await waitForPersistedWidth();
+      final persisted = await waitForWidth(seeded.id, 304);
       expect(persisted.settings['unrelated'], 'keep');
-      final widths =
-          persisted.settings[DatabaseViewTableColumnWidthsAdapter.settingsKey]
-              as Map;
-      expect((widths['title'] as num).toDouble(), 304);
 
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();
       await pumpHost();
       await pumpUntilVisible(titleColumn);
-
       expect(tester.getSize(titleColumn).width, 304);
+
+      final lockEntered = Completer<void>();
+      final releaseLock = Completer<void>();
+      final lockFuture = database.transaction(() async {
+        lockEntered.complete();
+        await releaseLock.future;
+      });
+      await lockEntered.future;
+
+      await tester.tap(resizeHandle);
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      expect(tester.getSize(titleColumn).width, 320);
+
+      await tester.tap(find.text('Second Table'));
+      await tester.pump();
+      expect(tester.getSize(titleColumn).width, 200);
+
+      releaseLock.complete();
+      await lockFuture;
+      final firstAfterRelease = await waitForWidth(seeded.id, 320);
+      final secondAfterRelease = (await viewStore.listViews(
+        workspaceId: workspaceId,
+        databaseKey: databaseKey,
+      )).singleWhere((candidate) => candidate.id == secondViewId);
+
+      expect(firstAfterRelease.settings['unrelated'], 'keep');
+      final secondWidths = secondAfterRelease
+          .settings[DatabaseViewTableColumnWidthsAdapter.settingsKey] as Map;
+      expect(secondAfterRelease.settings['second'], 'keep');
+      expect((secondWidths['title'] as num).toDouble(), 200);
+      expect(tester.getSize(titleColumn).width, 200);
 
       await tester.pumpWidget(const SizedBox.shrink());
     },
