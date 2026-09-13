@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -7,6 +9,7 @@ import '../services/app_shell_database_catalog_service.dart';
 import '../services/bookmark_transfer_service.dart';
 import '../services/profile_manager.dart';
 import '../services/profile_backup_service.dart';
+import '../services/ui_layout_preferences.dart';
 import '../ui/ui_tokens.dart';
 import '../widgets/object_type_template_picker.dart';
 import 'bookmark_lifecycle_page.dart';
@@ -33,6 +36,7 @@ class BookmarkAppShell extends StatefulWidget {
     required this.onImportProfileBackup,
     required this.onDeleteProfile,
     required this.onSwitchWorkspace,
+    this.layoutPreferences = const UiLayoutPreferences(),
   });
 
   final BookmarkRepository repository;
@@ -47,6 +51,7 @@ class BookmarkAppShell extends StatefulWidget {
       onImportProfileBackup;
   final Future<void> Function(DatabaseProfile profile) onDeleteProfile;
   final Future<void> Function(WorkspaceInfo workspace) onSwitchWorkspace;
+  final UiLayoutPreferences layoutPreferences;
 
   @override
   State<BookmarkAppShell> createState() => _BookmarkAppShellState();
@@ -69,6 +74,7 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
 
   var _index = 12;
   var _sidebarCollapsed = false;
+  var _sidebarPreferenceGeneration = 0;
   var _loadingWorkspaces = true;
   List<WorkspaceInfo> _workspaces = const [];
   List<AppShellDatabaseRecord> _genericDatabases = const [];
@@ -83,12 +89,16 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
     _databaseCatalog = AppShellDatabaseCatalogService.fromWorkspaceStore(
       widget.repository.workspaceStore,
     );
+    unawaited(_restoreSidebarCollapsed());
     _reloadWorkspaces();
   }
 
   @override
   void didUpdateWidget(covariant BookmarkAppShell oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.layoutPreferences != widget.layoutPreferences) {
+      unawaited(_restoreSidebarCollapsed());
+    }
     if (oldWidget.repository != widget.repository) {
       _databaseCatalog = AppShellDatabaseCatalogService.fromWorkspaceStore(
         widget.repository.workspaceStore,
@@ -102,6 +112,24 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
       _pageCache.remove(9);
       _pageCache.remove(10);
     }
+  }
+
+  Future<void> _restoreSidebarCollapsed() async {
+    final generation = ++_sidebarPreferenceGeneration;
+    final preferences = widget.layoutPreferences;
+    final collapsed = await preferences.loadSidebarCollapsed();
+    if (!mounted) return;
+    if (generation != _sidebarPreferenceGeneration) return;
+    if (preferences != widget.layoutPreferences) return;
+    if (collapsed == null || collapsed == _sidebarCollapsed) return;
+    setState(() => _sidebarCollapsed = collapsed);
+  }
+
+  void _setSidebarCollapsed(bool collapsed) {
+    if (_sidebarCollapsed == collapsed) return;
+    _sidebarPreferenceGeneration += 1;
+    setState(() => _sidebarCollapsed = collapsed);
+    unawaited(widget.layoutPreferences.saveSidebarCollapsed(collapsed));
   }
 
   Future<void> _reloadWorkspaces() async {
@@ -609,7 +637,15 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
             padding: const EdgeInsets.fromLTRB(7, UiTokens.space8, UiTokens.space4, UiTokens.space4),
             child: Row(children: [
               Expanded(child: _profileHeader()),
-              IconButton(tooltip: 'サイドバーを閉じる', visualDensity: VisualDensity.compact, onPressed: () => setState(() => _sidebarCollapsed = true), icon: const Icon(Icons.keyboard_double_arrow_left, size: 17)),
+              IconButton(
+                tooltip: 'サイドバーを閉じる',
+                visualDensity: VisualDensity.compact,
+                onPressed: () => _setSidebarCollapsed(true),
+                icon: const Icon(
+                  Icons.keyboard_double_arrow_left,
+                  size: 17,
+                ),
+              ),
             ]),
           ),
           Expanded(
@@ -703,7 +739,14 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
         width: UiTokens.collapsedSidebarWidth,
         child: Column(children: [
           const SizedBox(height: UiTokens.space8),
-          IconButton(tooltip: 'サイドバーを開く', onPressed: () => setState(() => _sidebarCollapsed = false), icon: const Icon(Icons.keyboard_double_arrow_right, size: UiTokens.iconNormal)),
+          IconButton(
+            tooltip: 'サイドバーを開く',
+            onPressed: () => _setSidebarCollapsed(false),
+            icon: const Icon(
+              Icons.keyboard_double_arrow_right,
+              size: UiTokens.iconNormal,
+            ),
+          ),
           const SizedBox(height: UiTokens.space8),
           ...destinations.map((entry) => IconButton(
             onPressed: () => _selectPage(entry.$1),
