@@ -41,7 +41,8 @@ void main() {
             version: '0.1.0',
             buildNumber: '1',
             commitSha: 'db166afb0bf57fd75929ca02018b67c7d1802fe1',
-            sourceState: 'dirty',
+            sourceState: 'clean',
+            releaseChannel: 'rc',
           ),
           copyBuildInfo: (text) async {
             copied = text;
@@ -55,8 +56,9 @@ void main() {
 
     expect(find.text('アプリ情報'), findsOneWidget);
     expect(find.textContaining('Version 0.1.0 (1)'), findsOneWidget);
+    expect(find.textContaining('Channel rc'), findsOneWidget);
     expect(find.textContaining('Commit db166af'), findsOneWidget);
-    expect(find.textContaining('Source dirty'), findsOneWidget);
+    expect(find.textContaining('Source clean'), findsOneWidget);
 
     final copyButton = find.descendant(
       of: find.byType(AppBuildInfoSection),
@@ -68,7 +70,7 @@ void main() {
     await tester.tap(copyButton);
     await tester.pump();
 
-    expect(copied, 'Bookmark 0.1.0 (1) · db166af · dirty');
+    expect(copied, 'Bookmark 0.1.0 (1) · rc · db166af · clean');
     expect(find.text('ビルド情報をコピーしました。'), findsOneWidget);
   });
 }
