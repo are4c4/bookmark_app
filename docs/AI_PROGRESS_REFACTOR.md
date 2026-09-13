@@ -80,6 +80,20 @@ Durable execution contract:
 
 Slow-test work remains evidence-backed rather than activity-driven. After the file-level cutover, the stable leading files are mostly intentional real-host Generic Database/AppShell widget/integration regressions with in-memory persistence and settled UI transitions. Do not split/combine/weaken them merely because they top the timing table. #1163/#1164 removed one genuinely unused fixture from a Bookmark error test, but the measured timing change was not material; retain it as responsibility cleanup, not as performance evidence. Create future slow-test PRs only when current timing plus source inspection identifies a concrete safe cost that can be removed without reducing assertion strength or isolation.
 
+### #1353 — deterministic advisory UI audit (completed checkpoint)
+#1353 established a small reproducible visual-evidence pipeline without turning subjective visual review into a merge gate.
+
+Durable contract:
+- `.github/workflows/ui_audit.yml` provides manual, scheduled and relevant-main advisory execution with bounded artifact retention;
+- the initial stable set renders three representative shared surfaces from repository-owned fixtures: populated shared Body, generic Person Relation picker, and canonical Global Search empty state;
+- the capture profile is fixed dark desktop `1440×900`, device-pixel-ratio `1.0`, with no live network, user Vault/path, wall-clock, random-id or external-thumbnail dependency;
+- each bundle includes source-SHA/profile/scenario status in `manifest.json` plus non-empty PNG evidence; scenario behavior remains covered by the ordinary full Flutter Test path as well;
+- `testWidgets` runs under FakeAsync, so engine image generation/PNG encoding must stay inside `WidgetTester.runAsync`; artifact directory/PNG/manifest persistence remains synchronous and zero-byte PNGs fail closed;
+- the foundation was accepted only after a successful main run produced all three PNGs and an unchanged same-SHA rerun produced byte-identical manifest and PNG content;
+- screenshot inspection is advisory evidence for H. Do not make subjective image scoring required by `merge-gate`, auto-accept baseline changes, add external-model credentials, or expand to brittle full-app snapshots merely to increase coverage.
+
+Future visual coverage should be added only through focused issues for stable high-value shared contracts. If a product surface requires test-only production seams to become capturable, route the architecture/product seam separately rather than contaminating runtime code for screenshots.
+
 Future G work after owning-lane parity:
 - retire caller-zero Bookmark repositories/items/pages/bridges from #1039;
 - retire caller-zero People-specific repositories/pages/bridges from #1040;
@@ -92,6 +106,7 @@ Future G work after owning-lane parity:
 - hunk-aware changed-Dart formatting;
 - deterministic duration-aware file-level 4-shard full Flutter Test execution with exact-once current-inventory verification, deterministic fallback for unknown files, and Drift generated-code cache;
 - test-health/flake artifacts and advisory per-file slow-test timing;
+- advisory deterministic UI Audit with source-SHA manifest, fixed repository-owned fixtures/profile, bounded PNG artifacts and same-SHA repeatability evidence; it remains non-blocking for subjective visual differences;
 - docs-only/full-CI scope for pull requests is classified from the verified synthetic current-base landing diff, failing closed when checkout identity cannot be proven;
 - docs-only CI fast path and stable `merge-gate`;
 - `merge_group` workflow support;
@@ -164,7 +179,7 @@ Behavior-preserving refactors require changed-Dart format, Analyze and relevant/
 3. treat #1208 as a completed trigger/identity checkpoint: do not recreate repository-`GITHUB_TOKEN` PR self-mutation or weaken required checks to make zero-job approval-required runs look green;
 4. re-read #1127 live state: its CI-scope half is integrated, but the canonical coordination guard still needs effective-current-base landing-diff semantics with PR-head approval identity kept separate; do not edit the guard while another PR owns the guard/test pair;
 5. if the active guard owner is otherwise ready but lacks an independent reviewer, prepare one final latest-main head/CI cycle, then stop with the exact human ruleset action required by #1331 instead of making no-op commits; after ownership clears, finish #1127 before another overlapping guard follow-up such as #1123;
-6. treat #1087 file-level CI performance work as a completed checkpoint; do not reopen shard-count or slow-test tuning without new measured evidence of a concrete regression/bottleneck;
+6. treat #1087 file-level CI performance and #1353 advisory UI-audit work as completed checkpoints; do not reopen them without new measured/reproducible evidence;
 7. take #225 or other live G work only through focused reversible child Issues; treat #1047 and #950 as completed checkpoints rather than active work queues;
 8. when #1039/#1040 owning-lane parity lands, create caller-zero retirement slices instead of combining product migration with cleanup;
 9. if historical branch cleanup is revisited, begin with a new read-only inventory and do not broaden deletion to ambiguous refs;
