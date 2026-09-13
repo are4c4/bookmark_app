@@ -9,6 +9,7 @@ class BuildProvenance {
     required this.buildNumber,
     required this.commitSha,
     required this.sourceState,
+    required this.releaseChannel,
   });
 
   static const current = BuildProvenance(
@@ -28,12 +29,17 @@ class BuildProvenance {
       'BOOKMARK_SOURCE_STATE',
       defaultValue: 'development',
     ),
+    releaseChannel: String.fromEnvironment(
+      'BOOKMARK_RELEASE_CHANNEL',
+      defaultValue: 'development',
+    ),
   );
 
   final String version;
   final String buildNumber;
   final String commitSha;
   final String sourceState;
+  final String releaseChannel;
 
   String get displayVersion => _normalizedOrUnknown(version);
 
@@ -54,9 +60,18 @@ class BuildProvenance {
     };
   }
 
+  String get displayReleaseChannel {
+    return switch (releaseChannel.trim().toLowerCase()) {
+      'development' => 'development',
+      'rc' => 'rc',
+      'stable' => 'stable',
+      _ => 'unknown',
+    };
+  }
+
   String get compactDiagnostic =>
       'Bookmark $displayVersion ($displayBuildNumber) · '
-      '$shortCommit · $displaySourceState';
+      '$displayReleaseChannel · $shortCommit · $displaySourceState';
 }
 
 String _normalizedOrUnknown(String value) {

@@ -1,0 +1,294 @@
+name: macOS Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Release channel to publish
+        required: true
+        type: choice
+        options:
+          - rc
+          - stable
+      source_sha:
+        description: Full 40-character commit SHA already validated on main
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  checks: read
+
+concurrency:
+  group: macos-release-${{ inputs.channel }}-${{ inputs.source_sha }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: publish-macos-${{ inputs.channel }}
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout selected source commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+
+      - name: Validate immutable source selection
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE_SHA='${{ inputs.source_sha }}'
+          if [[ ! "$SOURCE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "error: source_sha must be a full 40-character commit SHA." >&2
+            exit 1
+          fi
+          HEAD_SHA="$(git rev-parse HEAD)"
+          REQUESTED_SHA="$(printf '%s' "$SOURCE_SHA" | tr '[:upper:]' '[:lower:]')"
+          if [[ "$HEAD_SHA" != "$REQUESTED_SHA" ]]; then
+            echo "error: checked-out source does not match requested source_sha." >&2
+            exit 1
+          fi
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor "$HEAD_SHA" origin/main; then
+            echo "error: releases may only be published from commits already integrated into main." >&2
+            exit 1
+          fi
+          echo "source_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Require authoritative source validation
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python3 tool/release_ci_guard.py
+          --repository "$GITHUB_REPOSITORY"
+          --sha "${{ steps.source.outputs.source_sha }}"
+
+      - name: Derive release identity
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHANNEL: ${{ inputs.channel }}
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          PUBSPEC_VERSION="$(awk '/^version:[[:space:]]*/ {print $2; exit}' pubspec.yaml)"
+          if [[ -z "$PUBSPEC_VERSION" ]]; then
+            echo "error: pubspec.yaml must contain a top-level version." >&2
+            exit 1
+          fi
+          BUILD_NAME="${PUBSPEC_VERSION%%+*}"
+          if [[ "$PUBSPEC_VERSION" == *+* ]]; then
+            BUILD_NUMBER="${PUBSPEC_VERSION##*+}"
+          else
+            BUILD_NUMBER="1"
+          fi
+
+          case "$CHANNEL" in
+            rc) RELEASE_TAG="v${BUILD_NAME}-rc.${GITHUB_RUN_NUMBER}" ;;
+            stable) RELEASE_TAG="v${BUILD_NAME}" ;;
+            *) echo "error: unsupported release channel: $CHANNEL" >&2; exit 1 ;;
+          esac
+
+          if [[ "$CHANNEL" == "stable" ]]; then
+            RC_PREFIX="v${BUILD_NAME}-rc."
+            FOUND_MATCHING_RC=0
+            while IFS= read -r CANDIDATE_TAG; do
+              if [[ "$CANDIDATE_TAG" != "$RC_PREFIX"* ]]; then
+                continue
+              fi
+              CANDIDATE_SHA="$(git ls-remote origin "refs/tags/$CANDIDATE_TAG" | awk 'NR == 1 {print $1}')"
+              if [[ "$CANDIDATE_SHA" == "$SOURCE_SHA" ]]; then
+                FOUND_MATCHING_RC=1
+                break
+              fi
+            done < <(
+              gh release list \
+                --repo "$GITHUB_REPOSITORY" \
+                --limit 100 \
+                --json tagName,isPrerelease \
+                --jq '.[] | select(.isPrerelease == true) | .tagName'
+            )
+            if [[ "$FOUND_MATCHING_RC" -ne 1 ]]; then
+              echo "error: stable publication requires a previously published RC for the same version and source commit." >&2
+              exit 1
+            fi
+          fi
+
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "error: GitHub Release $RELEASE_TAG already exists; releases are immutable." >&2
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "error: Git tag $RELEASE_TAG already exists; refusing to replace it." >&2
+            exit 1
+          fi
+
+          git tag "$RELEASE_TAG" "$SOURCE_SHA"
+          echo "version=$BUILD_NAME" >> "$GITHUB_OUTPUT"
+          echo "build_number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          channel: stable
+          flutter-version-file: pubspec.yaml
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Restore Drift generated code
+        id: drift-generated-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: lib/data/app_database.g.dart
+          key: drift-generated-${{ runner.os }}-${{ hashFiles('.dart_tool/package_config.json', 'lib/data/app_database.dart', 'lib/data/app_database_schema.dart', 'lib/data/app_database_migrations.dart', 'lib/data/profile_path_resolver.dart') }}
+
+      - name: Generate Drift code on cache miss
+        if: steps.drift-generated-cache.outputs.cache-hit != 'true'
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Verify Drift generated code
+        run: test -s lib/data/app_database.g.dart
+
+      - name: Build channel-qualified macOS package
+        env:
+          BOOKMARK_RELEASE_CHANNEL: ${{ inputs.channel }}
+          BOOKMARK_RELEASE_TAG: ${{ steps.release.outputs.release_tag }}
+        run: bash tool/package_macos.sh
+
+      - name: Verify packaged DMG
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          DMGS=(dist/macos/Bookmark-*.dmg)
+          if [[ "${#DMGS[@]}" -ne 1 ]]; then
+            echo "error: expected exactly one packaged DMG, found ${#DMGS[@]}." >&2
+            exit 1
+          fi
+          DMG_PATH="${DMGS[0]}"
+          hdiutil verify "$DMG_PATH"
+
+          MOUNT_DIR="$(mktemp -d)"
+          cleanup() {
+            hdiutil detach "$MOUNT_DIR" >/dev/null 2>&1 || true
+            rm -rf "$MOUNT_DIR"
+          }
+          trap cleanup EXIT
+          hdiutil attach "$DMG_PATH" -readonly -nobrowse -mountpoint "$MOUNT_DIR" >/dev/null
+          test -d "$MOUNT_DIR/Bookmark.app"
+          hdiutil detach "$MOUNT_DIR" >/dev/null
+          trap - EXIT
+          rm -rf "$MOUNT_DIR"
+
+          echo "dmg_path=$DMG_PATH" >> "$GITHUB_OUTPUT"
+          echo "dmg_name=$(basename "$DMG_PATH")" >> "$GITHUB_OUTPUT"
+
+      - name: Create checksum and provenance evidence
+        id: evidence
+        env:
+          CHANNEL: ${{ inputs.channel }}
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+          RELEASE_TAG: ${{ steps.release.outputs.release_tag }}
+          VERSION: ${{ steps.release.outputs.version }}
+          BUILD_NUMBER: ${{ steps.release.outputs.build_number }}
+          DMG_PATH: ${{ steps.package.outputs.dmg_path }}
+          DMG_NAME: ${{ steps.package.outputs.dmg_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          CHECKSUM_PATH="$DMG_PATH.sha256"
+          (
+            cd "$(dirname "$DMG_PATH")"
+            shasum -a 256 "$DMG_NAME" > "$DMG_NAME.sha256"
+          )
+          SHA256="$(awk '{print $1}' "$CHECKSUM_PATH")"
+          SCHEMA_VERSION="$(sed -nE 's/^[[:space:]]*int get schemaVersion => ([0-9]+);/\1/p' lib/data/app_database.dart | head -n 1)"
+          if [[ -z "$SCHEMA_VERSION" ]]; then
+            echo "error: unable to determine application database schemaVersion." >&2
+            exit 1
+          fi
+
+          export SHA256 SCHEMA_VERSION
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = {
+              'format': 'bookmark_app_release_provenance',
+              'formatVersion': 1,
+              'version': os.environ['VERSION'],
+              'buildNumber': os.environ['BUILD_NUMBER'],
+              'channel': os.environ['CHANNEL'],
+              'releaseTag': os.environ['RELEASE_TAG'],
+              'sourceSha': os.environ['SOURCE_SHA'],
+              'databaseSchemaVersion': int(os.environ['SCHEMA_VERSION']),
+              'artifact': os.environ['DMG_NAME'],
+              'sha256': os.environ['SHA256'],
+          }
+          Path('dist/macos/release-provenance.json').write_text(
+              json.dumps(payload, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          PY
+
+          cat > dist/macos/release-notes.md <<EOF_NOTES
+          # Bookmark $VERSION ($BUILD_NUMBER)
+
+          - Channel: \`$CHANNEL\`
+          - Source commit: \`$SOURCE_SHA\`
+          - Database schema: \`$SCHEMA_VERSION\`
+          - DMG: \`$DMG_NAME\`
+          - SHA-256: \`$SHA256\`
+
+          ## Rollback safety
+
+          Reinstalling an older application package never authorizes a database downgrade. If that build cannot open the current Vault schema safely, keep the Vault unchanged and reinstall a newer compatible Bookmark build instead.
+          EOF_NOTES
+
+          echo "checksum_path=$CHECKSUM_PATH" >> "$GITHUB_OUTPUT"
+          echo "provenance_path=dist/macos/release-provenance.json" >> "$GITHUB_OUTPUT"
+          echo "notes_path=dist/macos/release-notes.md" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHANNEL: ${{ inputs.channel }}
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+          RELEASE_TAG: ${{ steps.release.outputs.release_tag }}
+          VERSION: ${{ steps.release.outputs.version }}
+          DMG_PATH: ${{ steps.package.outputs.dmg_path }}
+          CHECKSUM_PATH: ${{ steps.evidence.outputs.checksum_path }}
+          PROVENANCE_PATH: ${{ steps.evidence.outputs.provenance_path }}
+          NOTES_PATH: ${{ steps.evidence.outputs.notes_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$CHANNEL" == "rc" ]]; then
+            gh release create "$RELEASE_TAG" \
+              "$DMG_PATH" \
+              "$CHECKSUM_PATH" \
+              "$PROVENANCE_PATH" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$SOURCE_SHA" \
+              --title "Bookmark $VERSION RC" \
+              --notes-file "$NOTES_PATH" \
+              --prerelease
+          else
+            gh release create "$RELEASE_TAG" \
+              "$DMG_PATH" \
+              "$CHECKSUM_PATH" \
+              "$PROVENANCE_PATH" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$SOURCE_SHA" \
+              --title "Bookmark $VERSION" \
+              --notes-file "$NOTES_PATH"
+          fi
