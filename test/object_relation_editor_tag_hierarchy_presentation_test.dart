@@ -77,7 +77,7 @@ void main() {
   }
 
   Future<({int sourceId, ObjectPropertyDefinition property})>
-      createSourceRelation(int targetObjectTypeId) async {
+  createSourceRelation(int targetObjectTypeId) async {
     final sourceTypeId = await objectStore.createObjectType(
       workspaceId: workspaceId,
       name: 'Source',
