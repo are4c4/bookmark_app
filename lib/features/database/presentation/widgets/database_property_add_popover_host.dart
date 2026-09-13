@@ -78,6 +78,16 @@ class _DatabasePropertyAddPopoverHostState
       icon: Icons.star_outline,
     ),
     PropertyAddTypeOption(
+      key: 'select',
+      label: 'セレクト',
+      icon: Icons.label_outline,
+    ),
+    PropertyAddTypeOption(
+      key: 'multiSelect',
+      label: 'マルチセレクト',
+      icon: Icons.sell_outlined,
+    ),
+    PropertyAddTypeOption(
       key: 'relation',
       label: 'リレーション',
       icon: Icons.swap_horiz,
