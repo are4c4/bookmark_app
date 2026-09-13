@@ -77,8 +77,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
 
   static const _viewCoordinator = GenericObjectViewCoordinator();
   static const _galleryAdapter = DatabaseViewGalleryAdapter();
-  static const _tableColumnWidthsAdapter =
-      DatabaseViewTableColumnWidthsAdapter();
+  static const _tableColumnWidthsAdapter = DatabaseViewTableColumnWidthsAdapter();
   static const _openPresentationHost = ObjectOpenPresentationHost();
   static const _detailPropertyPresenter = ObjectDetailPropertyPresenter();
 
@@ -1253,9 +1252,9 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                 );
               } catch (_) {
                 if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('列幅を保存できませんでした。')),
-                );
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(const SnackBar(content: Text('列幅を保存できませんでした。')));
               }
             },
             columns: [
@@ -1292,7 +1291,6 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                     cells: [
                       ResizableDatabaseTableCell(
                         child: Row(
-                          mainAxisSize: MainAxisSize.min,
                           children: [
                             SystemObjectListMedia(
                               database: _store.database,
@@ -1303,7 +1301,13 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                               size: 32,
                             ),
                             const SizedBox(width: 8),
-                            Text(record.title),
+                            Expanded(
+                              child: Text(
+                                record.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                           ],
                         ),
                       ),
