@@ -75,7 +75,8 @@ class ObjectRelationEditorService {
     required RelationSelectionContext context,
     required List<ObjectIdentitySearchResult> results,
   }) async {
-    if (results.isEmpty || context.targetObjectType.kind != ObjectTypeKind.system) {
+    if (results.isEmpty ||
+        context.targetObjectType.kind != ObjectTypeKind.system) {
       return results;
     }
 
@@ -103,15 +104,18 @@ class ObjectRelationEditorService {
       );
     }
 
-    final snapshot = await TagHierarchyIntegrityService(
-      objectStore: targets.objectStore,
-      relationMutations: mutations,
-      relationTargets: targets,
-    ).loadSnapshot(
-      workspaceId: context.targetObjectType.workspaceId,
-      parentProperty: parentProperties.single,
+    final snapshot =
+        await TagHierarchyIntegrityService(
+          objectStore: targets.objectStore,
+          relationMutations: mutations,
+          relationTargets: targets,
+        ).loadSnapshot(
+          workspaceId: context.targetObjectType.workspaceId,
+          parentProperty: parentProperties.single,
+        );
+    final tags = await targets.objectStore.listObjects(
+      context.targetObjectType.id,
     );
-    final tags = await targets.objectStore.listObjects(context.targetObjectType.id);
     final tagsById = <int, AppObject>{for (final tag in tags) tag.id: tag};
 
     return results
