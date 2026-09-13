@@ -12,90 +12,96 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('prepares one clean merge through canonical A and B boundaries', () async {
-    final fixture = await _Fixture.create();
-    addTearDown(fixture.database.close);
+  test(
+    'prepares one clean merge through canonical A and B boundaries',
+    () async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.database.close);
 
-    final personTypeId = await fixture.createType('Person');
-    final survivor = await fixture.createObject(personTypeId, 'Same');
-    final retired = await fixture.createObject(personTypeId, 'Same');
+      final personTypeId = await fixture.createType('Person');
+      final survivor = await fixture.createObject(personTypeId, 'Same');
+      final retired = await fixture.createObject(personTypeId, 'Same');
 
-    final preparation = await fixture.preparationService.prepare(
-      workspaceId: fixture.workspaceId,
-      objectTypeId: personTypeId,
-      survivorObjectId: survivor,
-      retiredObjectId: retired,
-    );
+      final preparation = await fixture.preparationService.prepare(
+        workspaceId: fixture.workspaceId,
+        objectTypeId: personTypeId,
+        survivorObjectId: survivor,
+        retiredObjectId: retired,
+      );
 
-    expect(preparation.prepared.survivor.objectId, survivor);
-    expect(preparation.prepared.retired.objectId, retired);
-    expect(preparation.relationPlan.survivorObjectId, survivor);
-    expect(preparation.relationPlan.retiredObjectId, retired);
-    expect(preparation.relationPlan.isExecutable, isTrue);
-    expect(preparation.prepared.preview.hasRelationBlockers, isFalse);
-    expect(preparation.prepared.plan().isExecutable, isTrue);
+      expect(preparation.prepared.survivor.objectId, survivor);
+      expect(preparation.prepared.retired.objectId, retired);
+      expect(preparation.relationPlan.survivorObjectId, survivor);
+      expect(preparation.relationPlan.retiredObjectId, retired);
+      expect(preparation.relationPlan.isExecutable, isTrue);
+      expect(preparation.prepared.preview.hasRelationBlockers, isFalse);
+      expect(preparation.prepared.plan().isExecutable, isTrue);
 
-    expect(
-      (await fixture.objectStore.listObjects(personTypeId))
-          .map((object) => object.id)
-          .toSet(),
-      <int>{survivor, retired},
-    );
-  });
+      expect(
+        (await fixture.objectStore.listObjects(personTypeId))
+            .map((object) => object.id)
+            .toSet(),
+        <int>{survivor, retired},
+      );
+    },
+  );
 
-  test('preserves canonical Relation blockers in the prepared A preview', () async {
-    final fixture = await _Fixture.create();
-    addTearDown(fixture.database.close);
+  test(
+    'preserves canonical Relation blockers in the prepared A preview',
+    () async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.database.close);
 
-    final personTypeId = await fixture.createType('Person');
-    final sourceTypeId = await fixture.createType('Source');
-    final peopleRelation = await fixture.createRelation(
-      sourceTypeId: sourceTypeId,
-      targetTypeId: personTypeId,
-      name: 'People',
-      multiple: true,
-    );
-    final survivor = await fixture.createObject(personTypeId, 'Same');
-    final retired = await fixture.createObject(personTypeId, 'Same');
-    final source = await fixture.createObject(sourceTypeId, 'Source');
-    await fixture.mutationService.setRelation(
-      objectId: source,
-      property: peopleRelation,
-      targetObjectIds: <int>[survivor, retired],
-    );
+      final personTypeId = await fixture.createType('Person');
+      final sourceTypeId = await fixture.createType('Source');
+      final peopleRelation = await fixture.createRelation(
+        sourceTypeId: sourceTypeId,
+        targetTypeId: personTypeId,
+        name: 'People',
+        multiple: true,
+      );
+      final survivor = await fixture.createObject(personTypeId, 'Same');
+      final retired = await fixture.createObject(personTypeId, 'Same');
+      final source = await fixture.createObject(sourceTypeId, 'Source');
+      await fixture.mutationService.setRelation(
+        objectId: source,
+        property: peopleRelation,
+        targetObjectIds: <int>[survivor, retired],
+      );
 
-    final preparation = await fixture.preparationService.prepare(
-      workspaceId: fixture.workspaceId,
-      objectTypeId: personTypeId,
-      survivorObjectId: survivor,
-      retiredObjectId: retired,
-    );
+      final preparation = await fixture.preparationService.prepare(
+        workspaceId: fixture.workspaceId,
+        objectTypeId: personTypeId,
+        survivorObjectId: survivor,
+        retiredObjectId: retired,
+      );
 
-    expect(preparation.relationPlan.isExecutable, isFalse);
-    expect(preparation.relationPlan.relationBlockers, isNotEmpty);
-    expect(preparation.prepared.preview.hasRelationBlockers, isTrue);
-    expect(preparation.prepared.plan().isExecutable, isFalse);
-    expect(
-      preparation.prepared.preview.relationBlockers
-          .map((blocker) => blocker.key)
-          .toList(),
-      preparation.relationPlan.relationBlockers
-          .map((blocker) => blocker.key)
-          .toList(),
-    );
-    expect(
-      preparation.prepared.preview.relationBlockers
-          .map((blocker) => blocker.reason)
-          .toList(),
-      preparation.relationPlan.relationBlockers
-          .map((blocker) => blocker.reason)
-          .toList(),
-    );
-    expect(
-      await fixture.relationValue(sourceTypeId, source, peopleRelation.id),
-      <int>[survivor, retired],
-    );
-  });
+      expect(preparation.relationPlan.isExecutable, isFalse);
+      expect(preparation.relationPlan.relationBlockers, isNotEmpty);
+      expect(preparation.prepared.preview.hasRelationBlockers, isTrue);
+      expect(preparation.prepared.plan().isExecutable, isFalse);
+      expect(
+        preparation.prepared.preview.relationBlockers
+            .map((blocker) => blocker.key)
+            .toList(),
+        preparation.relationPlan.relationBlockers
+            .map((blocker) => blocker.key)
+            .toList(),
+      );
+      expect(
+        preparation.prepared.preview.relationBlockers
+            .map((blocker) => blocker.reason)
+            .toList(),
+        preparation.relationPlan.relationBlockers
+            .map((blocker) => blocker.reason)
+            .toList(),
+      );
+      expect(
+        await fixture.relationValue(sourceTypeId, source, peopleRelation.id),
+        <int>[survivor, retired],
+      );
+    },
+  );
 
   test('wrong workspace fails closed without changing either Object', () async {
     final fixture = await _Fixture.create();
@@ -124,92 +130,96 @@ void main() {
     );
   });
 
-  test('wrong-type or missing retired identity fails before mutation', () async {
-    final fixture = await _Fixture.create();
-    addTearDown(fixture.database.close);
+  test(
+    'wrong-type or missing retired identity fails before mutation',
+    () async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.database.close);
 
-    final personTypeId = await fixture.createType('Person');
-    final otherTypeId = await fixture.createType('Other');
-    final survivor = await fixture.createObject(personTypeId, 'Same');
-    final wrongTypeRetired = await fixture.createObject(otherTypeId, 'Same');
+      final personTypeId = await fixture.createType('Person');
+      final otherTypeId = await fixture.createType('Other');
+      final survivor = await fixture.createObject(personTypeId, 'Same');
+      final wrongTypeRetired = await fixture.createObject(otherTypeId, 'Same');
 
-    await expectLater(
-      fixture.preparationService.prepare(
+      await expectLater(
+        fixture.preparationService.prepare(
+          workspaceId: fixture.workspaceId,
+          objectTypeId: personTypeId,
+          survivorObjectId: survivor,
+          retiredObjectId: wrongTypeRetired,
+        ),
+        throwsArgumentError,
+      );
+      await expectLater(
+        fixture.preparationService.prepare(
+          workspaceId: fixture.workspaceId,
+          objectTypeId: personTypeId,
+          survivorObjectId: survivor,
+          retiredObjectId: 999999,
+        ),
+        throwsArgumentError,
+      );
+
+      expect(
+        (await fixture.objectStore.listObjects(personTypeId)).single.id,
+        survivor,
+      );
+      expect(
+        (await fixture.objectStore.listObjects(otherTypeId)).single.id,
+        wrongTypeRetired,
+      );
+    },
+  );
+
+  test(
+    'unchanged repeated preparation is deterministic and read-only',
+    () async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.database.close);
+
+      final personTypeId = await fixture.createType('Person');
+      final survivor = await fixture.createObject(personTypeId, 'Survivor');
+      final retired = await fixture.createObject(personTypeId, 'Retired');
+
+      final first = await fixture.preparationService.prepare(
         workspaceId: fixture.workspaceId,
         objectTypeId: personTypeId,
         survivorObjectId: survivor,
-        retiredObjectId: wrongTypeRetired,
-      ),
-      throwsArgumentError,
-    );
-    await expectLater(
-      fixture.preparationService.prepare(
+        retiredObjectId: retired,
+      );
+      final second = await fixture.preparationService.prepare(
         workspaceId: fixture.workspaceId,
         objectTypeId: personTypeId,
         survivorObjectId: survivor,
-        retiredObjectId: 999999,
-      ),
-      throwsArgumentError,
-    );
+        retiredObjectId: retired,
+      );
 
-    expect(
-      (await fixture.objectStore.listObjects(personTypeId)).single.id,
-      survivor,
-    );
-    expect(
-      (await fixture.objectStore.listObjects(otherTypeId)).single.id,
-      wrongTypeRetired,
-    );
-  });
-
-  test('unchanged repeated preparation is deterministic and read-only', () async {
-    final fixture = await _Fixture.create();
-    addTearDown(fixture.database.close);
-
-    final personTypeId = await fixture.createType('Person');
-    final survivor = await fixture.createObject(personTypeId, 'Survivor');
-    final retired = await fixture.createObject(personTypeId, 'Retired');
-
-    final first = await fixture.preparationService.prepare(
-      workspaceId: fixture.workspaceId,
-      objectTypeId: personTypeId,
-      survivorObjectId: survivor,
-      retiredObjectId: retired,
-    );
-    final second = await fixture.preparationService.prepare(
-      workspaceId: fixture.workspaceId,
-      objectTypeId: personTypeId,
-      survivorObjectId: survivor,
-      retiredObjectId: retired,
-    );
-
-    expect(
-      second.prepared.preview.requirements.map((item) => item.key).toList(),
-      first.prepared.preview.requirements.map((item) => item.key).toList(),
-    );
-    expect(
-      second.prepared.preview.requirements
-          .map((item) => item.status)
-          .toList(),
-      first.prepared.preview.requirements
-          .map((item) => item.status)
-          .toList(),
-    );
-    expect(
-      second.relationPlan.relationBlockers
-          .map((blocker) => blocker.key)
-          .toList(),
-      first.relationPlan.relationBlockers
-          .map((blocker) => blocker.key)
-          .toList(),
-    );
-    expect(
-      (await fixture.objectStore.listObjects(personTypeId))
-          .map((object) => object.title)
-          .toList(),
-      <String>['Survivor', 'Retired'],
-    );
-  });
+      expect(
+        second.prepared.preview.requirements.map((item) => item.key).toList(),
+        first.prepared.preview.requirements.map((item) => item.key).toList(),
+      );
+      expect(
+        second.prepared.preview.requirements
+            .map((item) => item.status)
+            .toList(),
+        first.prepared.preview.requirements.map((item) => item.status).toList(),
+      );
+      expect(
+        second.relationPlan.relationBlockers
+            .map((blocker) => blocker.key)
+            .toList(),
+        first.relationPlan.relationBlockers
+            .map((blocker) => blocker.key)
+            .toList(),
+      );
+      expect(
+        (await fixture.objectStore.listObjects(personTypeId))
+            .map((object) => object.title)
+            .toList(),
+        <String>['Survivor', 'Retired'],
+      );
+    },
+  );
 }
 
 class _Fixture {
