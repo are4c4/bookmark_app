@@ -67,13 +67,14 @@ class _ResizableDatabaseTableState extends State<ResizableDatabaseTable> {
 
   late Map<String, double> _widths;
   Future<void> _commitTail = Future<void>.value();
+  final Map<String, double> _pendingWidths = <String, double>{};
   String? _draggingKey;
   bool _dragDirty = false;
 
   @override
   void initState() {
     super.initState();
-    _widths = _resolvedInitialWidths();
+    _widths = _resolvedInitialWidths(widget.initialWidths);
   }
 
   @override
@@ -81,13 +82,30 @@ class _ResizableDatabaseTableState extends State<ResizableDatabaseTable> {
     super.didUpdateWidget(oldWidget);
     final oldKeys = oldWidget.columns.map((column) => column.keyName).toList();
     final newKeys = widget.columns.map((column) => column.keyName).toList();
-    if (!_sameKeys(oldKeys, newKeys)) {
-      final next = <String, double>{};
-      for (final column in widget.columns) {
-        next[column.keyName] = _widths[column.keyName] ?? _initialWidth(column);
+    final keysChanged = !_sameKeys(oldKeys, newKeys);
+    final externalWidthsChanged = _externalWidthsChanged(oldWidget);
+    if (!keysChanged && !externalWidthsChanged) return;
+
+    final next = <String, double>{};
+    for (final column in widget.columns) {
+      final key = column.keyName;
+      final current = _widths[key];
+      if (key == _draggingKey) {
+        next[key] = current ?? _initialWidth(column, widget.initialWidths);
+        continue;
       }
-      _widths = next;
+      if (externalWidthsChanged) {
+        final external = _initialWidth(column, widget.initialWidths);
+        final pending = _pendingWidths[key];
+        next[key] = pending != null && pending != external
+            ? current ?? pending
+            : external;
+        continue;
+      }
+      next[key] = current ?? _initialWidth(column, widget.initialWidths);
     }
+    _widths = next;
+    _pendingWidths.removeWhere((key, _) => !newKeys.contains(key));
   }
 
   bool _sameKeys(List<String> left, List<String> right) {
@@ -98,12 +116,29 @@ class _ResizableDatabaseTableState extends State<ResizableDatabaseTable> {
     return true;
   }
 
-  Map<String, double> _resolvedInitialWidths() => {
-    for (final column in widget.columns) column.keyName: _initialWidth(column),
+  bool _externalWidthsChanged(ResizableDatabaseTable oldWidget) {
+    for (final column in widget.columns) {
+      final oldColumn = oldWidget.columns
+          .where((candidate) => candidate.keyName == column.keyName)
+          .firstOrNull;
+      if (oldColumn == null) continue;
+      final oldWidth = _initialWidth(oldColumn, oldWidget.initialWidths);
+      final newWidth = _initialWidth(column, widget.initialWidths);
+      if (oldWidth != newWidth) return true;
+    }
+    return false;
+  }
+
+  Map<String, double> _resolvedInitialWidths(Map<String, dynamic> widths) => {
+    for (final column in widget.columns)
+      column.keyName: _initialWidth(column, widths),
   };
 
-  double _initialWidth(ResizableDatabaseTableColumn column) {
-    final raw = widget.initialWidths[column.keyName];
+  double _initialWidth(
+    ResizableDatabaseTableColumn column,
+    Map<String, dynamic> widths,
+  ) {
+    final raw = widths[column.keyName];
     final stored = raw is num ? raw.toDouble() : null;
     final candidate = stored != null && stored.isFinite
         ? stored
@@ -112,7 +147,7 @@ class _ResizableDatabaseTableState extends State<ResizableDatabaseTable> {
   }
 
   double _widthFor(ResizableDatabaseTableColumn column) =>
-      _widths[column.keyName] ?? _initialWidth(column);
+      _widths[column.keyName] ?? _initialWidth(column, widget.initialWidths);
 
   void _beginDrag(ResizableDatabaseTableColumn column) {
     _draggingKey = column.keyName;
@@ -130,9 +165,13 @@ class _ResizableDatabaseTableState extends State<ResizableDatabaseTable> {
   }
 
   void _enqueueCommit(String key, double width) {
-    _commitTail = _commitTail.then(
-      (_) => widget.onWidthCommitted(key, width),
-    );
+    _pendingWidths[key] = width;
+    _commitTail = _commitTail.then((_) async {
+      await widget.onWidthCommitted(key, width);
+      if (_pendingWidths[key] == width) {
+        _pendingWidths.remove(key);
+      }
+    });
     unawaited(_commitTail.catchError((Object _) {}));
   }
 
