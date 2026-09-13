@@ -24,10 +24,7 @@ class DatabaseViewTableColumnWidthsAdapter {
   }) {
     final widths = <String, dynamic>{...decode(view), key: width};
     return view.copyWith(
-      settings: <String, dynamic>{
-        ...view.settings,
-        settingsKey: widths,
-      },
+      settings: <String, dynamic>{...view.settings, settingsKey: widths},
     );
   }
 }
