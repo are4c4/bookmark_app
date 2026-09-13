@@ -290,25 +290,24 @@ class _DatabaseViewTabsState extends State<DatabaseViewTabs> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          IconButton(
-            key: const ValueKey('database-view-add-button'),
-            tooltip: '現在のビューを複製',
-            visualDensity: VisualDensity.compact,
-            onPressed: _activeView == null ? null : _createView,
-            icon: const Icon(Icons.add, size: 18),
-          ),
           PopupMenuButton<String>(
-            key: const ValueKey('database-view-create-menu'),
-            tooltip: 'ビュー作成メニュー',
-            iconSize: 16,
+            key: const ValueKey('database-view-add-button'),
+            tooltip: '新しいView',
+            icon: const Icon(Icons.add, size: 18),
             padding: EdgeInsets.zero,
             onSelected: (value) {
               if (value == 'blank') _createBlankView();
+              if (value == 'duplicate') _createView();
             },
-            itemBuilder: (_) => const [
-              PopupMenuItem(
+            itemBuilder: (_) => [
+              const PopupMenuItem(
                 value: 'blank',
                 child: Text('空のViewを作成'),
+              ),
+              PopupMenuItem(
+                value: 'duplicate',
+                enabled: _activeView != null,
+                child: const Text('現在のViewを複製'),
               ),
             ],
           ),
