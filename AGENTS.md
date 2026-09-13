@@ -185,6 +185,26 @@ A fresh H chat should be able to resume with only `Hレーンとして作業を�
 - Idle is acceptable when no independent safe work exists; never invent speculative abstractions to keep a lane busy.
 - H findings that require product/runtime code must be routed to an A–G focused Issue rather than implemented directly by H.
 
+## Approval-sensitive PRs and solo-maintainer manual gate
+
+Routine reversible PRs remain approval-free. High-confidence destructive/irreversible changes and self-protected approval-policy/guard changes remain approval-sensitive.
+
+There are exactly two valid integration paths for an approval-sensitive PR:
+
+1. **Independent reviewer path (normal machine-pass path):** the repository guard receives a current-head `APPROVED` review from a distinct non-author GitHub User with write/admin permission, using the complete latest-review-state rules defined by #1107.
+2. **Solo-maintainer manual path:** when no independent write/admin reviewer exists, the human repository administrator may explicitly use the active branch ruleset's admin bypass for that PR. Prefer a pull-request-only bypass scope. The implementation/AI GitHub App, Actions identities, bots, or other automation must never be bypass actors.
+
+The solo-maintainer path intentionally does **not** make `tool/pr_coordination_guard.py` report green. The guard keeps the strict independent-review requirement; the human admin is explicitly overriding the red required check at the repository protection layer after inspecting the final PR. Never add a PR-body marker, comment, label, self-review, environment value writable by implementation code, or code branch that lets AI self-authorize this bypass.
+
+Before a solo-maintainer manual bypass:
+- synchronize the PR once to then-current `main`;
+- run all non-approval validation on that final head and inspect the final diff/current head;
+- do not create no-op commits merely to refresh approval state;
+- treat any subsequent commit as invalidating the prepared human approval decision and review the new final head again;
+- record `Stop reason: destructive-approval — human repository-admin ruleset action required on final head` while automation waits; continue unrelated independent work rather than repeatedly churning the blocked branch.
+
+This manual path is a practical single-maintainer authorization boundary, not completion of #1107 Phase B. Phase B still requires an enforcement root the implementation identity cannot modify or spoof. Live ruleset/bypass configuration is repository setting state and must be rechecked rather than assumed from prose.
+
 ## Current issue routing
 
 Always verify live Issues because this list is a routing aid, not transient ownership state.
@@ -280,7 +300,7 @@ Record one of these exact categories in the durable handoff when a run stops:
 - `idle-no-work` — final resume audit found no concrete safe lane-local work; include the live evidence searched.
 - `dependency` — all meaningful next work is blocked by an explicit Issue/PR/contract dependency; name it.
 - `decision` — a genuine product/architecture choice requires user input; summarize the alternatives without choosing silently.
-- `destructive-approval` — the next step is destructive/irreversible or deletes user data and lacks required explicit approval/preservation evidence.
+- `destructive-approval` — the next step is destructive/irreversible, approval-policy-sensitive, or otherwise requires explicit human authorization that is not yet present; for a solo-maintainer manual path, name the final-head repository-admin ruleset action required.
 - `conflict` — active hotspot ownership, duplicate focused-Issue ownership or migration-writer ownership blocks all independent safe work; identify the owner.
 - `external-infra` — required external/real-machine infrastructure is unavailable and no independent safe work remains.
 - `tool-session-limit` — runtime/tool/session limits stopped the run despite remaining safe work; record the exact next action so a fresh chat can resume immediately.
@@ -301,7 +321,7 @@ Hourly/background automatic restarts are outside this contract and must not be i
 For A–G implementation runs, after the final resume audit:
 - `idle-no-work` applies because the lane has no actionable concrete work;
 - a genuine product decision requires user input;
-- the next step is destructive/irreversible or deletes user data and lacks explicit approval;
+- the next step is destructive/irreversible or approval-policy-sensitive and lacks explicit human authorization;
 - an unavoidable cross-lane conflict/dependency blocks all independent safe work;
 - external infrastructure failure blocks all independent safe work;
 - runtime/tool/session limits are reached.
@@ -358,7 +378,7 @@ Do not delete user data merely because replacement UI exists. Existing historica
 - Rerun CI through workflow/check mechanisms when available; otherwise wait for the next meaningful change.
 - Never merge artificial no-op commits.
 - Prefer several small coherent commits over one oversized change.
-- Merge only after relevant checks pass, unless the user explicitly directs otherwise.
+- Merge only after relevant checks pass, unless the user explicitly directs otherwise or the solo-maintainer manual gate above is deliberately used for an approval-sensitive final head after all non-approval validation is complete.
 
 ## Safety and scope
 
