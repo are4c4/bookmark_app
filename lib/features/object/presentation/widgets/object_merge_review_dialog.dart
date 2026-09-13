@@ -166,17 +166,15 @@ class _ObjectMergeReviewDialogState extends State<ObjectMergeReviewDialog> {
         plan: plan,
       );
       if (!mounted) return;
-      Navigator.of(context).pop(
-        ObjectMergeReviewResult(survivingObjectId: survivingObjectId),
-      );
+      Navigator.of(context)
+          .pop(ObjectMergeReviewResult(survivingObjectId: survivingObjectId));
     } catch (_) {
       if (!mounted) return;
       setState(() => _finalizing = false);
       await _prepare();
       if (!mounted) return;
       setState(() {
-        _errorText =
-            '統合前にObjectまたはRelationの状態が変わった可能性があります。内容をもう一度確認してください。';
+        _errorText = '統合前にObjectまたはRelationの状態が変わった可能性があります。内容をもう一度確認してください。';
       });
     }
   }
@@ -185,11 +183,13 @@ class _ObjectMergeReviewDialogState extends State<ObjectMergeReviewDialog> {
   Widget build(BuildContext context) {
     final prepared = _prepared;
     final plan = _plan;
-    final requirements = prepared?.preview.requirements
+    final requirements =
+        prepared?.preview.requirements
             .where((requirement) => requirement.requiresDecision)
             .toList(growable: false) ??
         const <ObjectMergeRequirement>[];
-    final blockers = prepared?.preview.relationBlockers ??
+    final blockers =
+        prepared?.preview.relationBlockers ??
         const <ObjectMergeRelationBlocker>[];
 
     return AlertDialog(
@@ -260,10 +260,7 @@ class _ObjectMergeReviewDialogState extends State<ObjectMergeReviewDialog> {
                 if (requirements.isEmpty)
                   const Text('Object本体の競合はありません。')
                 else ...[
-                  Text(
-                    '競合する内容',
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
+                  Text('競合する内容', style: Theme.of(context).textTheme.titleSmall),
                   const SizedBox(height: 8),
                   for (final requirement in requirements)
                     Padding(
@@ -338,7 +335,8 @@ class _ObjectMergeReviewDialogState extends State<ObjectMergeReviewDialog> {
         FilledButton(
           key: const ValueKey('object-merge-review-submit'),
           autofocus: false,
-          onPressed: !_loading &&
+          onPressed:
+              !_loading &&
                   !_finalizing &&
                   prepared != null &&
                   plan?.isExecutable == true
@@ -394,8 +392,8 @@ class _ObjectMergeReviewDialogState extends State<ObjectMergeReviewDialog> {
   ].where(requirement.allowedDecisions.contains).toList(growable: false);
 
   String _decisionLabel(ObjectMergeDecision decision) => switch (decision) {
-        ObjectMergeDecision.keepSurvivor => '残す側「$_survivorTitle」を採用',
-        ObjectMergeDecision.takeRetired => '統合される側「$_retiredTitle」を採用',
-        ObjectMergeDecision.combine => '両方を結合',
-      };
+    ObjectMergeDecision.keepSurvivor => '残す側「$_survivorTitle」を採用',
+    ObjectMergeDecision.takeRetired => '統合される側「$_retiredTitle」を採用',
+    ObjectMergeDecision.combine => '両方を結合',
+  };
 }
