@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:drift/drift.dart';
+
 import '../domain/object_history_checkpoint.dart';
 import '../domain/object_history_checkpoint_codec.dart';
 import 'generic_database_store.dart';
@@ -145,7 +147,7 @@ class ObjectHistoryCheckpointStore {
          FROM object_history_checkpoints
          WHERE object_id = ?
          ORDER BY revision_id''',
-      variables: [_intVariable(objectId)],
+      variables: [Variable<int>(objectId)],
     ).get();
 
     final checkpoints = <ObjectHistoryCheckpointPayload>[];
@@ -209,7 +211,3 @@ void _validatePositiveId(int value, String name) {
     throw ArgumentError.value(value, name, '$name must be positive.');
   }
 }
-
-/// Drift variable helper kept local so the store does not expose raw SQL
-/// parameter construction to callers.
-QueryVariable<int> _intVariable(int value) => Variable<int>(value);
