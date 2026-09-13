@@ -248,9 +248,10 @@ void main() {
             candidateObjectId: 2,
             candidateTitle: 'Candidate',
             propertyNames: const <int, String>{},
-            onPrepare:
-                ({required survivorObjectId, required retiredObjectId}) async =>
-                    prepared,
+            onPrepare: ({
+              required survivorObjectId,
+              required retiredObjectId,
+            }) async => prepared,
             onFinalize: ({required prepared, required plan}) async => 1,
           ),
         ),
@@ -305,9 +306,10 @@ void main() {
             candidateObjectId: 2,
             candidateTitle: 'Same',
             propertyNames: const <int, String>{},
-            onPrepare:
-                ({required survivorObjectId, required retiredObjectId}) async =>
-                    prepared,
+            onPrepare: ({
+              required survivorObjectId,
+              required retiredObjectId,
+            }) async => prepared,
             onFinalize: ({required prepared, required plan}) async => 1,
           ),
         ),
@@ -317,6 +319,7 @@ void main() {
 
     expect(find.text('Relationの競合'), findsOneWidget);
     expect(find.text('単一Relationのcardinalityが競合しています。'), findsOneWidget);
+    expect(find.text('relation:cardinality'), findsNothing);
     expect(
       tester
           .widget<FilledButton>(
