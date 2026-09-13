@@ -94,7 +94,8 @@ class SettingsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final vaultPath = repository.profileDirectoryPath?.trim();
-    final diagnostics = supportDiagnostics ??
+    final diagnostics =
+        supportDiagnostics ??
         createSupportDiagnosticsService(
           repository: repository,
           buildProvenance: buildProvenance,
