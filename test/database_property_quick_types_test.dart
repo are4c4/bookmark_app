@@ -30,69 +30,62 @@ Future<void> _createQuickProperty(
 }
 
 void main() {
-  testWidgets('quick add creates Select and Multi-select through authoring service', (
-    tester,
-  ) async {
-    final database = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(database.close);
-    final workspaceId = await WorkspaceStore(database).initialize();
-    final objectStore = ObjectStore(GenericDatabaseStore(database));
-    final objectTypeId = await objectStore.createObjectType(
-      workspaceId: workspaceId,
-      name: 'Book',
-    );
-    final authoring = DatabasePropertyAuthoringService(objectStore);
-    final createdIds = <int>[];
+  testWidgets(
+    'quick add creates Select and Multi-select through authoring service',
+    (tester) async {
+      final database = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(database.close);
+      final workspaceId = await WorkspaceStore(database).initialize();
+      final objectStore = ObjectStore(GenericDatabaseStore(database));
+      final objectTypeId = await objectStore.createObjectType(
+        workspaceId: workspaceId,
+        name: 'Book',
+      );
+      final authoring = DatabasePropertyAuthoringService(objectStore);
+      final createdIds = <int>[];
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: DatabasePropertyAddPopoverHost(
-            workspaceId: workspaceId,
-            objectTypeId: objectTypeId,
-            authoring: authoring,
-            hiddenProperties: const [],
-            onRevealExisting: (_) {},
-            onCreated: createdIds.add,
-            buttonLabel: '追加',
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: DatabasePropertyAddPopoverHost(
+              workspaceId: workspaceId,
+              objectTypeId: objectTypeId,
+              authoring: authoring,
+              hiddenProperties: const [],
+              onRevealExisting: (_) {},
+              onCreated: createdIds.add,
+              buttonLabel: '追加',
+            ),
           ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.text('追加'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('property-add-create-new')));
-    await tester.pumpAndSettle();
-    expect(find.text('セレクト'), findsOneWidget);
-    expect(find.text('マルチセレクト'), findsOneWidget);
-    expect(find.text('リレーション'), findsOneWidget);
-    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('追加'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('property-add-create-new')));
+      await tester.pumpAndSettle();
+      expect(find.text('セレクト'), findsOneWidget);
+      expect(find.text('マルチセレクト'), findsOneWidget);
+      expect(find.text('リレーション'), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
 
-    await _createQuickProperty(
-      tester,
-      name: '状態',
-      typeKey: 'select',
-    );
-    await _createQuickProperty(
-      tester,
-      name: '分類',
-      typeKey: 'multiSelect',
-    );
+      await _createQuickProperty(tester, name: '状態', typeKey: 'select');
+      await _createQuickProperty(tester, name: '分類', typeKey: 'multiSelect');
 
-    expect(createdIds, hasLength(2));
-    final objectType = (await objectStore.getObjectType(objectTypeId))!;
-    final select = objectType.properties.singleWhere(
-      (property) => property.id == createdIds[0],
-    );
-    final multiSelect = objectType.properties.singleWhere(
-      (property) => property.id == createdIds[1],
-    );
-    expect(select.name, '状態');
-    expect(select.type, ObjectPropertyType.select);
-    expect(multiSelect.name, '分類');
-    expect(multiSelect.type, ObjectPropertyType.multiSelect);
-  });
+      expect(createdIds, hasLength(2));
+      final objectType = (await objectStore.getObjectType(objectTypeId))!;
+      final select = objectType.properties.singleWhere(
+        (property) => property.id == createdIds[0],
+      );
+      final multiSelect = objectType.properties.singleWhere(
+        (property) => property.id == createdIds[1],
+      );
+      expect(select.name, '状態');
+      expect(select.type, ObjectPropertyType.select);
+      expect(multiSelect.name, '分類');
+      expect(multiSelect.type, ObjectPropertyType.multiSelect);
+    },
+  );
 }
