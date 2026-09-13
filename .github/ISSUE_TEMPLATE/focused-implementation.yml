@@ -33,6 +33,17 @@ body:
     validations:
       required: true
 
+  - type: textarea
+    id: product-priority
+    attributes:
+      label: Product priority signal (product/UX only)
+      description: For materially user-facing product/UX work, record Impact, Frequency, Friction and Breadth. Use n/a for invisible refactor/backend/docs/workflow work. This is advisory work-selection input under docs/AI_PRODUCT_PRIORITY.md; safety, dependencies and ownership still dominate.
+      placeholder: |
+        Impact: high
+        Frequency: daily
+        Friction: moderate
+        Breadth: shared
+
   - type: input
     id: depends-on
     attributes:
