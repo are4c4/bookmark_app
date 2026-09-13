@@ -111,6 +111,8 @@ Review the application as a whole:
 - Home/Inbox/Recent/Favorites/Pinned Databases coherence;
 - whether the generic Object Inspector remains the primary shared Object surface.
 
+For visual/layout oversight, inspect the latest successful advisory UI Audit artifact when available. Treat the screenshots and manifest as evidence tied to an exact source SHA, not as a replacement for live code, behavioral tests, or product requirements. A visual finding becomes actionable only when H can describe a concrete problem and route it to exactly one A–G owning lane through a focused Issue; H does not implement product fixes under the label of screenshot review.
+
 ### Emerging technical debt
 Look for repeated helpers/adapters, new direct `AppDatabase` reach-through, shared hotspots growing again, new legacy dependencies, hidden-failure policies, and speculative caches/indexes without measurement/rebuild semantics. Do not demand abstraction on first occurrence.
 
@@ -145,6 +147,17 @@ These are durable directions; H must still check their live Issue state before d
 
 Repository branch protection/required `merge-gate` is now established; treat live rulesets/settings as the authority rather than preserving old #980 blocker text here.
 
+## Advisory UI-audit oversight contract
+
+#1353 established an advisory deterministic UI snapshot foundation owned by G and consumed by H.
+
+- The audit uses repository-owned deterministic fixtures, a fixed dark desktop profile, source-SHA manifests, bounded GitHub Actions artifacts, and representative shared surfaces rather than full-app screenshots.
+- The visual job is advisory: subjective or pixel-level opinions are not a required merge gate. Existing interaction/Analyze/full Flutter Test correctness remains authoritative for blocking behavior.
+- H should inspect the latest successful artifact/report when visual evidence would materially improve an oversight conclusion. Prefer the artifact whose manifest source SHA matches the code state under review, and verify scenario status before relying on it.
+- Screenshots are evidence only. Do not infer persistence, lifecycle, accessibility, or semantic correctness from pixels when those claims require code/tests/runtime evidence.
+- When a screenshot reveals a concrete UX/layout problem, route one focused Issue to the owning A–G lane, record the exact affected surface/contract, and avoid bundling unrelated visual cleanup.
+- Do not store external-model API credentials or introduce subjective AI screenshot scoring merely to automate H. Any later blocking golden contract requires a separate evidence-backed decision.
+
 ## Umbrella completion audit
 
 A focused implementation slice may be complete when its acceptance criteria and required validation are green. An umbrella/product capability is not Done merely because one PR merged. H checks applicable architecture, behavior, tests, primary UX, accessibility/device interaction, empty/loading/error/recovery states, migration/reconciliation, replacement parity, caller-zero retirement, preservation before destructive changes, and durable documentation/routing.
@@ -155,10 +168,11 @@ A focused implementation slice may be complete when its acceptance criteria and 
 2. Build a current map of active work, dependencies, hotspot leases, migration writer, and relevant repository settings.
 3. Inspect recent `main` changes for architecture/product integration implications.
 4. Audit architecture, integration, parallel safety, durable-doc freshness, UX, technical debt, correctness/preservation, and roadmap coherence.
-5. For each finding, link an existing Issue or create one focused Issue with one primary A–G owner; record dependencies, hotspot/migration impact, and acceptance criteria.
-6. Correct repository-wide durable routing/docs only when durable facts changed.
-7. Continue to another independent audit area instead of stopping after the first finding.
-8. Before ending, keep this handoff resumable without chat history.
+5. When visual/layout evidence would help, inspect the latest successful UI Audit artifact/report and tie observations to its source SHA; never treat screenshots as source-of-truth over live code/GitHub.
+6. For each finding, link an existing Issue or create one focused Issue with one primary A–G owner; record dependencies, hotspot/migration impact, and acceptance criteria.
+7. Correct repository-wide durable routing/docs only when durable facts changed.
+8. Continue to another independent audit area instead of stopping after the first finding.
+9. Before ending, keep this handoff resumable without chat history.
 
 ## Stop conditions
 
@@ -170,6 +184,6 @@ When the sole blocker for an approval-sensitive PR is the #1331 solo-maintainer 
 
 ## Durable checkpoint — 2026-09-09
 
-The Object-first constitution, A–G lane ownership model, H oversight contract, strict protected-main `merge-gate`, migration/hotspot/handoff audits, and branch-cleanup policy are established. H should not preserve the exact current PR/branch/CI inventory here; every new run rebuilds it from live GitHub.
+The Object-first constitution, A–G lane ownership model, H oversight contract, strict protected-main `merge-gate`, migration/hotspot/handoff audits, branch-cleanup policy, and advisory deterministic UI-audit evidence path are established. H should not preserve exact current PR/branch/CI/artifact run identifiers here; every new run rebuilds them from live GitHub.
 
 Immediate oversight priority is to keep the repository's AI coordination and reproducibility guardrails aligned with the increasing number of parallel implementation lanes, while protecting the near-term product focus on Bookmark retirement, People retirement, Tag hierarchy, Body interaction follow-ups, and Home/start UX before expanding speculative feature scope.

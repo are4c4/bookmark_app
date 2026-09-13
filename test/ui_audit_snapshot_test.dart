@@ -97,26 +97,29 @@ Future<void> _captureScenario(
     final boundary = tester.renderObject<RenderRepaintBoundary>(
       find.byKey(_captureBoundaryKey),
     );
-    final image = await boundary.toImage(pixelRatio: _devicePixelRatio);
-    try {
-      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null) {
-        throw StateError('UI audit PNG encoding returned no bytes.');
+    // Widget tests run in FakeAsync. Rendering and PNG encoding depend on real
+    // engine async work, so keep that work inside WidgetTester.runAsync while
+    // retaining deterministic synchronous filesystem persistence afterwards.
+    final pngBytes = await tester.runAsync(() async {
+      final image = await boundary.toImage(pixelRatio: _devicePixelRatio);
+      try {
+        final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+        if (byteData == null) {
+          throw StateError('UI audit PNG encoding returned no bytes.');
+        }
+        return byteData.buffer.asUint8List();
+      } finally {
+        image.dispose();
       }
-      screenshotPath = 'screenshots/$name.png';
-      final screenshotFile = File('$root/$screenshotPath');
-      // `testWidgets` runs in a fake-async zone. Real asynchronous dart:io
-      // writes can stall there even after PNG encoding has completed, so keep
-      // artifact persistence synchronous and immediately verifiable.
-      screenshotFile.writeAsBytesSync(
-        byteData.buffer.asUint8List(),
-        flush: true,
-      );
-      if (screenshotFile.lengthSync() == 0) {
-        throw StateError('UI audit PNG write produced an empty file.');
-      }
-    } finally {
-      image.dispose();
+    });
+    if (pngBytes == null || pngBytes.isEmpty) {
+      throw StateError('UI audit PNG capture returned no bytes.');
+    }
+    screenshotPath = 'screenshots/$name.png';
+    final screenshotFile = File('$root/$screenshotPath');
+    screenshotFile.writeAsBytesSync(pngBytes, flush: true);
+    if (screenshotFile.lengthSync() == 0) {
+      throw StateError('UI audit PNG write produced an empty file.');
     }
 
     _scenarioRecords.add(<String, Object?>{
