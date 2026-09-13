@@ -41,13 +41,13 @@ class DiagnosticField {
     required this.key,
     required this.value,
     required this.privacyClass,
-    required this.reason,
+    required this.reasonCode,
   });
 
   final String key;
   final Object? value;
   final DiagnosticPrivacyClass privacyClass;
-  final String reason;
+  final String reasonCode;
 }
 
 abstract interface class SupportDiagnosticProvider {
@@ -162,6 +162,7 @@ class SupportDiagnosticsService {
 
   Future<SupportDiagnosticsBundle> collect() async {
     final providerPayload = <String, Object?>{};
+    final seenProviderIds = <String>{};
     final orderedProviders = [...providers]
       ..sort((left, right) => left.id.compareTo(right.id));
 
@@ -169,6 +170,9 @@ class SupportDiagnosticsService {
       final providerId = provider.id;
       try {
         _validateDiagnosticToken(providerId, 'provider id');
+        if (!seenProviderIds.add(providerId)) {
+          throw const FormatException('duplicate diagnostic provider id');
+        }
         final fields = await provider.collect();
         final orderedFields = [...fields]
           ..sort((left, right) => left.key.compareTo(right.key));
@@ -176,12 +180,14 @@ class SupportDiagnosticsService {
         final seenKeys = <String>{};
         for (final field in orderedFields) {
           _validateDiagnosticToken(field.key, 'field key');
+          _validateDiagnosticToken(field.reasonCode, 'reason code');
           if (!seenKeys.add(field.key)) {
             throw const FormatException('duplicate diagnostic field key');
           }
           if (!field.privacyClass.allowedByDefault) {
             throw const _UnsafeDiagnosticField();
           }
+          _validateProviderFieldValue(field);
           renderedFields[field.key] = _renderField(field);
         }
         providerPayload[providerId] = <String, Object?>{
@@ -217,10 +223,10 @@ class SupportDiagnosticsService {
       'formatVersion': 1,
       'generatedAt': _renderField(
         DiagnosticField(
-          key: 'generatedAt',
+          key: 'generated_at',
           value: _clock().toUtc().toIso8601String(),
           privacyClass: DiagnosticPrivacyClass.technical,
-          reason: 'Compare when two diagnostic snapshots were collected.',
+          reasonCode: 'compare_snapshot_time',
         ),
       ),
       'privacy': const <String, Object?>{
@@ -241,75 +247,75 @@ class SupportDiagnosticsService {
             key: 'version',
             value: buildProvenance.displayVersion,
             privacyClass: DiagnosticPrivacyClass.technical,
-            reason: 'Identify the installed semantic application version.',
+            reasonCode: 'identify_semantic_version',
           ),
         ),
         'buildNumber': _renderField(
           DiagnosticField(
-            key: 'buildNumber',
+            key: 'build_number',
             value: buildProvenance.displayBuildNumber,
             privacyClass: DiagnosticPrivacyClass.technical,
-            reason: 'Identify the exact packaged build number.',
+            reasonCode: 'identify_packaged_build',
           ),
         ),
         'commitSha': _renderField(
           DiagnosticField(
-            key: 'commitSha',
+            key: 'commit_sha',
             value: _normalizedOrUnknown(buildProvenance.commitSha),
             privacyClass: DiagnosticPrivacyClass.technical,
-            reason: 'Map the installed build to repository source provenance.',
+            reasonCode: 'map_source_provenance',
           ),
         ),
         'sourceState': _renderField(
           DiagnosticField(
-            key: 'sourceState',
+            key: 'source_state',
             value: buildProvenance.displaySourceState,
             privacyClass: DiagnosticPrivacyClass.technical,
-            reason: 'Distinguish clean packaged source from development state.',
+            reasonCode: 'distinguish_source_state',
           ),
         ),
         'releaseChannel': _renderField(
           DiagnosticField(
-            key: 'releaseChannel',
+            key: 'release_channel',
             value: buildProvenance.displayReleaseChannel,
             privacyClass: DiagnosticPrivacyClass.technical,
-            reason: 'Distinguish development, release-candidate and stable builds.',
+            reasonCode: 'identify_release_channel',
           ),
         ),
       },
       'runtime': <String, Object?>{
         'operatingSystem': _renderField(
           DiagnosticField(
-            key: 'operatingSystem',
+            key: 'operating_system',
             value: runtime.operatingSystem,
             privacyClass: DiagnosticPrivacyClass.technical,
-            reason: 'Identify the runtime platform family.',
+            reasonCode: 'identify_platform_family',
           ),
         ),
         'operatingSystemVersion': _renderField(
           DiagnosticField(
-            key: 'operatingSystemVersion',
+            key: 'operating_system_version',
             value: runtime.operatingSystemVersion,
             privacyClass: DiagnosticPrivacyClass.technical,
-            reason: 'Identify platform/runtime compatibility conditions.',
+            reasonCode: 'identify_platform_version',
           ),
         ),
         'dartVersion': _renderField(
           DiagnosticField(
-            key: 'dartVersion',
+            key: 'dart_version',
             value: runtime.dartVersion,
             privacyClass: DiagnosticPrivacyClass.technical,
-            reason: 'Identify the Dart runtime/toolchain embedded in the build.',
+            reasonCode: 'identify_dart_runtime',
           ),
         ),
       },
       'database': <String, Object?>{
         'schemaVersion': _renderField(
           DiagnosticField(
-            key: 'schemaVersion',
+            key: 'schema_version',
             value: databaseSchemaVersion,
             privacyClass: DiagnosticPrivacyClass.technical,
-            reason: 'Identify the application schema contract expected by this build.',
+            reasonCode: 'identify_schema_contract',
           ),
         ),
       },
@@ -319,7 +325,7 @@ class SupportDiagnosticsService {
             key: 'configured',
             value: vaultConfigured,
             privacyClass: DiagnosticPrivacyClass.technical,
-            reason: 'Report whether a Vault is configured without exposing its path or name.',
+            reasonCode: 'report_vault_presence_without_identity',
           ),
         ),
       },
@@ -332,7 +338,7 @@ class SupportDiagnosticsService {
 Map<String, Object?> _renderField(DiagnosticField field) => <String, Object?>{
       'value': field.value,
       'privacy': field.privacyClass.wireName,
-      'reason': field.reason,
+      'reason': field.reasonCode,
     };
 
 Map<String, Object?> _renderEvent(DiagnosticEvent event) => <String, Object?>{
@@ -341,7 +347,7 @@ Map<String, Object?> _renderEvent(DiagnosticEvent event) => <String, Object?>{
           key: 'timestamp',
           value: event.timestamp.toUtc().toIso8601String(),
           privacyClass: DiagnosticPrivacyClass.technical,
-          reason: 'Order recent diagnostic events within the current app session.',
+          reasonCode: 'order_session_events',
         ),
       ),
       'category': _renderField(
@@ -349,7 +355,7 @@ Map<String, Object?> _renderEvent(DiagnosticEvent event) => <String, Object?>{
           key: 'category',
           value: event.category,
           privacyClass: DiagnosticPrivacyClass.sanitizedCode,
-          reason: 'Identify a fixed diagnostic subsystem category without user content.',
+          reasonCode: 'identify_event_subsystem',
         ),
       ),
       'severity': _renderField(
@@ -357,7 +363,7 @@ Map<String, Object?> _renderEvent(DiagnosticEvent event) => <String, Object?>{
           key: 'severity',
           value: event.severity.wireName,
           privacyClass: DiagnosticPrivacyClass.sanitizedCode,
-          reason: 'Classify event severity without storing an error message.',
+          reasonCode: 'classify_event_severity',
         ),
       ),
       'code': _renderField(
@@ -365,10 +371,37 @@ Map<String, Object?> _renderEvent(DiagnosticEvent event) => <String, Object?>{
           key: 'code',
           value: event.code,
           privacyClass: DiagnosticPrivacyClass.sanitizedCode,
-          reason: 'Expose a bounded fixed error/event code instead of raw exception text.',
+          reasonCode: 'report_fixed_event_code',
         ),
       ),
     };
+
+void _validateProviderFieldValue(DiagnosticField field) {
+  final value = field.value;
+  switch (field.privacyClass) {
+    case DiagnosticPrivacyClass.technical:
+      if (value == null || value is bool || value is num) return;
+      if (value is String) {
+        _validateDiagnosticToken(value, 'technical provider value');
+        return;
+      }
+      throw const FormatException('technical provider field must be a scalar');
+    case DiagnosticPrivacyClass.aggregate:
+      if (value == null || value is bool || value is num) return;
+      throw const FormatException('aggregate provider field must be numeric or boolean');
+    case DiagnosticPrivacyClass.sanitizedCode:
+      if (value is! String) {
+        throw const FormatException('sanitized provider field must be a token');
+      }
+      _validateDiagnosticToken(value, 'sanitized provider value');
+      return;
+    case DiagnosticPrivacyClass.userContent:
+    case DiagnosticPrivacyClass.localPath:
+    case DiagnosticPrivacyClass.url:
+    case DiagnosticPrivacyClass.secret:
+      throw const _UnsafeDiagnosticField();
+  }
+}
 
 String _safeProviderId(String value) {
   try {
