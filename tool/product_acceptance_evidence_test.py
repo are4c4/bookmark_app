@@ -3,7 +3,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from product_acceptance_evidence import (
+    FIELD_LABELS,
     evaluate,
     parse_evidence_fields,
     probable_user_facing_ui_path,
@@ -32,6 +35,11 @@ def _body(
 
 
 def main() -> None:
+    template = Path(".github/pull_request_template.md").read_text(encoding="utf-8")
+    assert "## Product acceptance evidence" in template
+    for label in FIELD_LABELS.values():
+        assert f"- {label}:" in template, label
+
     assert probable_user_facing_ui_path("lib/views/object_global_search_page.dart")
     assert probable_user_facing_ui_path("lib/widgets/object_relation_picker_dialog.dart")
     assert probable_user_facing_ui_path(
