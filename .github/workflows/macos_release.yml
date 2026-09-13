@@ -46,11 +46,12 @@ jobs:
             exit 1
           fi
           HEAD_SHA="$(git rev-parse HEAD)"
-          if [[ "${HEAD_SHA,,}" != "${SOURCE_SHA,,}" ]]; then
+          REQUESTED_SHA="$(printf '%s' "$SOURCE_SHA" | tr '[:upper:]' '[:lower:]')"
+          if [[ "$HEAD_SHA" != "$REQUESTED_SHA" ]]; then
             echo "error: checked-out source does not match requested source_sha." >&2
             exit 1
           fi
-          git fetch --no-tags origin main
+          git fetch --no-tags origin main:refs/remotes/origin/main
           if ! git merge-base --is-ancestor "$HEAD_SHA" origin/main; then
             echo "error: releases may only be published from commits already integrated into main." >&2
             exit 1
