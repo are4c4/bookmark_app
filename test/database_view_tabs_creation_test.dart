@@ -5,11 +5,13 @@ import 'package:bookmark_app/database/database_definition.dart';
 import 'package:bookmark_app/features/database/presentation/widgets/database_view_tabs.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('plus duplicates active View and menu creates a blank View',
-      (tester) async {
+  testWidgets('plus offers explicit blank or duplicate View creation', (
+    tester,
+  ) async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);
     final workspaceId = await WorkspaceStore(database).initialize();
@@ -60,19 +62,29 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('database-view-add-button')));
     await tester.pumpAndSettle();
 
+    expect(find.text('空のViewを作成'), findsOneWidget);
+    expect(find.text('現在のViewを複製'), findsOneWidget);
     var views = await store.listViews(
       workspaceId: workspaceId,
       databaseKey: definition.key,
     );
-    expect(views, hasLength(2));
-    final duplicate = views.last;
-    expect(duplicate.name, '読書中 のコピー');
-    expect(duplicate.layoutType, 'gallery');
-    expect(duplicate.filters, const <String, dynamic>{'query': 'Serre'});
-    expect(duplicate.settings, const <String, dynamic>{'openMode': 'sidePeek'});
-    expect(selected?.id, duplicate.id);
+    expect(views, hasLength(1));
 
-    await tester.tap(find.byKey(const ValueKey('database-view-create-menu')));
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    views = await store.listViews(
+      workspaceId: workspaceId,
+      databaseKey: definition.key,
+    );
+    expect(views, hasLength(1));
+
+    await tester.tap(find.byKey(ValueKey('database-view-menu-$sourceId')));
+    await tester.pumpAndSettle();
+    expect(find.text('複製'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('database-view-add-button')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('空のViewを作成'));
     await tester.pumpAndSettle();
@@ -81,7 +93,7 @@ void main() {
       workspaceId: workspaceId,
       databaseKey: definition.key,
     );
-    expect(views, hasLength(3));
+    expect(views, hasLength(2));
     final blank = views.last;
     expect(blank.name, '新しいビュー');
     expect(blank.layoutType, definition.defaultLayout);
@@ -89,5 +101,22 @@ void main() {
     expect(blank.sorts, isEmpty);
     expect(blank.settings, isEmpty);
     expect(selected?.id, blank.id);
+
+    await tester.tap(find.byKey(const ValueKey('database-view-add-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('現在のViewを複製'));
+    await tester.pumpAndSettle();
+
+    views = await store.listViews(
+      workspaceId: workspaceId,
+      databaseKey: definition.key,
+    );
+    expect(views, hasLength(3));
+    final duplicate = views.last;
+    expect(duplicate.name, '読書中 のコピー');
+    expect(duplicate.layoutType, 'gallery');
+    expect(duplicate.filters, const <String, dynamic>{'query': 'Serre'});
+    expect(duplicate.settings, const <String, dynamic>{'openMode': 'sidePeek'});
+    expect(selected?.id, duplicate.id);
   });
 }
