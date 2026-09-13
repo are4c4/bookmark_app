@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../data/bidirectional_relation_store.dart';
@@ -16,6 +18,7 @@ import '../data/object_body_store.dart';
 import '../data/object_computed_value_store.dart';
 import '../data/object_detail_content_loader.dart';
 import '../data/object_detail_edit_service.dart';
+import '../data/object_duplicate_advisory_service.dart';
 import '../data/object_graph_query_store.dart';
 import '../data/object_identity_search_service.dart';
 import '../data/object_store.dart';
@@ -34,6 +37,7 @@ import '../domain/object_body_block_identity.dart';
 import '../domain/object_body_reference_insert.dart';
 import '../domain/object_detail_content.dart';
 import '../domain/object_detail_property_presentation.dart';
+import '../domain/object_duplicate_candidate.dart';
 import '../domain/object_model.dart';
 import '../features/object/presentation/object_body_database_view_reference_catalog.dart';
 import '../features/object/presentation/object_body_object_reference_catalog.dart';
@@ -45,6 +49,7 @@ import '../features/object/presentation/widgets/object_body_document_view.dart';
 import '../features/object/presentation/widgets/object_body_editor_section.dart';
 import '../features/object/presentation/widgets/object_body_object_reference_picker.dart';
 import '../features/object/presentation/widgets/object_detail_property_view.dart';
+import '../features/object/presentation/widgets/object_duplicate_advisory_section.dart';
 import '../features/object/presentation/widgets/object_file_detail_panel_host.dart';
 import '../features/object/presentation/widgets/object_image_detail_panel.dart';
 import '../services/canonical_file_detail_capabilities.dart';
@@ -80,13 +85,23 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
     backlinks: <ResolvedRelationBacklink>[],
   );
   List<String> _aliases = const <String>[];
+  List<ObjectDuplicateCandidate> _duplicateCandidates =
+      const <ObjectDuplicateCandidate>[];
   final Set<int> _promotingWeblinkPropertyIds = <int>{};
   String? _systemKey;
   bool _loading = true;
   bool _bodyLoadFailed = false;
   bool _dailyNoteNavigating = false;
+  bool _duplicateAdvisoryFailed = false;
+  int _duplicateAdvisoryGeneration = 0;
 
   ObjectAliasStore get _aliasStore => ObjectAliasStore(widget.store);
+
+  ObjectDuplicateAdvisoryService get _duplicateAdvisory =>
+      ObjectDuplicateAdvisoryService(
+        objectStore: widget.objectStore,
+        aliasStore: _aliasStore,
+      );
 
   ObjectBodyStore get _bodyStore => ObjectBodyStore(widget.store);
 
@@ -225,10 +240,13 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
   }
 
   Future<void> _load() async {
+    final duplicateGeneration = ++_duplicateAdvisoryGeneration;
     if (mounted) {
       setState(() {
         _loading = true;
         _bodyLoadFailed = false;
+        _duplicateCandidates = const <ObjectDuplicateCandidate>[];
+        _duplicateAdvisoryFailed = false;
       });
     }
     final graph = ObjectGraphQueryStore(widget.store);
@@ -267,7 +285,7 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
     );
     final aliases = await _aliasStore.listAliases(node.objectId);
 
-    if (!mounted) return;
+    if (!mounted || duplicateGeneration != _duplicateAdvisoryGeneration) return;
     setState(() {
       _node = node;
       _content = content;
@@ -277,11 +295,65 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
       _bodyLoadFailed = false;
       _loading = false;
     });
+    unawaited(_reloadDuplicateAdvisory());
+  }
+
+  bool _supportsDuplicateAdvisory({
+    required ObjectGraphNodeRecord node,
+    required String? systemKey,
+  }) => !node.isSystemType || systemKey == PersonObjectBridge.systemKey;
+
+  Future<void> _reloadDuplicateAdvisory() async {
+    final generation = ++_duplicateAdvisoryGeneration;
+    final node = _node;
+    final content = _content;
+    final systemKey = _systemKey;
+    final aliases = List<String>.of(_aliases);
+
+    if (node == null ||
+        content == null ||
+        !_supportsDuplicateAdvisory(node: node, systemKey: systemKey)) {
+      if (!mounted || generation != _duplicateAdvisoryGeneration) return;
+      setState(() {
+        _duplicateCandidates = const <ObjectDuplicateCandidate>[];
+        _duplicateAdvisoryFailed = false;
+      });
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _duplicateCandidates = const <ObjectDuplicateCandidate>[];
+        _duplicateAdvisoryFailed = false;
+      });
+    }
+
+    try {
+      final candidates = await _duplicateAdvisory.findCandidates(
+        objectTypeId: content.objectType.id,
+        title: content.object.title,
+        aliases: aliases,
+        excludingObjectId: content.object.id,
+      );
+      if (!mounted || generation != _duplicateAdvisoryGeneration) return;
+      setState(() {
+        _duplicateCandidates = candidates;
+        _duplicateAdvisoryFailed = false;
+      });
+    } catch (_) {
+      if (!mounted || generation != _duplicateAdvisoryGeneration) return;
+      setState(() {
+        _duplicateCandidates = const <ObjectDuplicateCandidate>[];
+        _duplicateAdvisoryFailed = true;
+      });
+    }
   }
 
   Future<void> _refreshAliases() async {
     final aliases = await _aliasStore.listAliases(widget.objectId);
-    if (mounted) setState(() => _aliases = aliases);
+    if (!mounted) return;
+    setState(() => _aliases = aliases);
+    await _reloadDuplicateAdvisory();
   }
 
   Future<void> _addAlias(String alias) async {
@@ -593,7 +665,10 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
       final updated = _isPerson
           ? await _personDetailEdits.rename(content: content, title: result)
           : await _editService.rename(content: content, title: result);
-      if (mounted) setState(() => _content = updated);
+      if (mounted) {
+        setState(() => _content = updated);
+        await _reloadDuplicateAdvisory();
+      }
     } catch (_) {
       if (!mounted) return;
       if (_isPerson) {
@@ -866,6 +941,15 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
               aliases: _aliases,
               onAdd: node.isSystemType ? null : _addAlias,
               onRemove: node.isSystemType ? null : _removeAlias,
+            ),
+          ],
+          if (_duplicateCandidates.isNotEmpty || _duplicateAdvisoryFailed) ...[
+            const SizedBox(height: 12),
+            ObjectDuplicateAdvisorySection(
+              candidates: _duplicateCandidates,
+              failed: _duplicateAdvisoryFailed,
+              onRetry: _reloadDuplicateAdvisory,
+              onOpenCandidate: _openObject,
             ),
           ],
           if (dailyNoteDate != null) ...[
