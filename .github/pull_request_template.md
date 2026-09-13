@@ -28,6 +28,9 @@
 - Empty / loading / error: n/a
 - Shared-host consistency: n/a
 - Acceptance criterion: 
+- Core user journeys: n/a
+
+<!-- For user-facing product work, list stable IDs such as J03, J10 when the change affects docs/CORE_USER_JOURNEYS.md. Do not copy the full journey text. -->
 
 ## Shared hotspot ownership
 
