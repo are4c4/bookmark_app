@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../data/database_view_store.dart';
 import '../../../../data/generic_database_store.dart';
@@ -22,6 +23,7 @@ import 'object_body_block_action_bar.dart';
 import 'object_body_database_view_reference_picker.dart';
 import 'object_body_document_view.dart';
 import 'object_body_object_reference_picker.dart';
+import 'object_body_slash_command_menu.dart';
 
 /// Reusable rich Body editor for any persisted Object.
 ///
@@ -61,6 +63,7 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
   int _loadGeneration = 0;
   String? _autofocusBlockId;
   int? _autofocusOffset;
+  ObjectBodySlashCommandInvocation? _slashInvocation;
   Future<void> _mutationQueue = Future<void>.value();
 
   ObjectBodyStore get _bodyStore => ObjectBodyStore(widget.store);
@@ -121,6 +124,7 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
         _loadFailed = false;
         _autofocusBlockId = null;
         _autofocusOffset = null;
+        _slashInvocation = null;
       });
     }
     try {
@@ -187,12 +191,89 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
   );
 
   Future<void> _editText(ObjectBodyBlock block, String text) {
+    _trackSlashCommand(block, text);
     final objectId = widget.objectId;
     final edits = _bodyBlockEdits;
     return _enqueueDocumentMutation(
       objectId,
       () => edits.updateText(objectId: objectId, blockId: block.id, text: text),
     );
+  }
+
+  void _trackSlashCommand(ObjectBodyBlock block, String text) {
+    if (!mounted) return;
+    final next = ObjectBodySlashCommandInvocation.tryParse(
+      objectId: widget.objectId,
+      block: block,
+      text: text,
+    );
+    final current = _slashInvocation;
+    final unchanged =
+        current?.objectId == next?.objectId &&
+        current?.blockId == next?.blockId &&
+        current?.sourceText == next?.sourceText &&
+        current?.query == next?.query &&
+        current?.commandStart == next?.commandStart &&
+        current?.commandEnd == next?.commandEnd;
+    if (unchanged) return;
+    setState(() => _slashInvocation = next);
+  }
+
+  void _dismissSlashCommand() {
+    if (!mounted || _slashInvocation == null) return;
+    setState(() => _slashInvocation = null);
+  }
+
+  Future<void> _applySlashCommand(ObjectBodySlashCommand command) async {
+    final invocation = _slashInvocation;
+    if (invocation == null || invocation.objectId != widget.objectId) return;
+    final objectId = invocation.objectId;
+    final blockId = invocation.blockId;
+    final replacementText = invocation.replacementText;
+    final caretOffset = invocation.commandStart.clamp(
+      0,
+      replacementText.length,
+    );
+
+    setState(() {
+      _slashInvocation = null;
+      _autofocusBlockId = null;
+      _autofocusOffset = null;
+    });
+
+    if (command.kind == ObjectBodySlashCommandKind.convert) {
+      final edits = _bodyBlockEdits;
+      await _enqueueDocumentMutation(
+        objectId,
+        () => edits.convertBlock(
+          objectId: objectId,
+          blockId: blockId,
+          targetType: command.targetType!,
+          replacementText: replacementText,
+          headingLevel: command.headingLevel ?? 1,
+        ),
+      );
+    } else {
+      final edits = _bodyBlockEdits;
+      await _enqueueDocumentMutation(
+        objectId,
+        () => edits.updateText(
+          objectId: objectId,
+          blockId: blockId,
+          text: replacementText,
+        ),
+      );
+      if (!mounted || widget.objectId != objectId) return;
+      await _insertBlock(command.insertKind!, afterBlockId: blockId);
+    }
+
+    if (!mounted || widget.objectId != objectId) return;
+    if (_document.blocks.any((block) => block.id == blockId)) {
+      setState(() {
+        _autofocusBlockId = blockId;
+        _autofocusOffset = caretOffset;
+      });
+    }
   }
 
   Future<void> _splitParagraph(
@@ -569,7 +650,7 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
       );
     }
 
-    return Column(
+    final content = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (widget.showHeading) ...[
@@ -630,7 +711,22 @@ class _ObjectBodyEditorSectionState extends State<ObjectBodyEditorSection> {
             ),
           ),
         ),
+        if (_slashInvocation case final invocation?) ...[
+          const SizedBox(height: 4),
+          ObjectBodySlashCommandMenu(
+            query: invocation.query,
+            onSelected: _applySlashCommand,
+            onDismissed: _dismissSlashCommand,
+          ),
+        ],
       ],
+    );
+
+    return CallbackShortcuts(
+      bindings: <ShortcutActivator, VoidCallback>{
+        const SingleActivator(LogicalKeyboardKey.escape): _dismissSlashCommand,
+      },
+      child: content,
     );
   }
 }

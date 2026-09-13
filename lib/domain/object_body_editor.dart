@@ -34,16 +34,20 @@ class ObjectBodyEditor {
     return document.copyWith(blocks: List.unmodifiable(next));
   }
 
-  /// Converts one supported text block without changing its identity, text or
+  /// Converts one supported text block without changing its identity or
   /// position.
   ///
-  /// Type-specific attributes from the source block are discarded when the
-  /// kind changes, while unrelated/future attributes are preserved. Reference,
-  /// divider and unknown block kinds are never coerced into text blocks.
+  /// [replacementText] lets presentation flows remove transient command text
+  /// in the same immutable conversion and CAS write. Omitting it preserves the
+  /// existing text. Type-specific attributes from the source block are
+  /// discarded only when the kind changes, while unrelated/future attributes
+  /// are preserved. Reference, divider and unknown block kinds are never
+  /// coerced into text blocks.
   ObjectBodyDocument convertBlock({
     required ObjectBodyDocument document,
     required String blockId,
     required String targetType,
+    String? replacementText,
     int headingLevel = 1,
     bool checklistChecked = false,
     String? codeLanguage,
@@ -62,7 +66,14 @@ class ObjectBodyEditor {
         'Target block type is not safely convertible.',
       );
     }
-    if (block.type == normalizedTarget) return document;
+
+    final nextText = replacementText ?? block.text;
+    if (block.type == normalizedTarget) {
+      if (nextText == block.text) return document;
+      final next = List<ObjectBodyBlock>.of(document.blocks);
+      next[index] = block.copyWith(text: nextText);
+      return document.copyWith(blocks: List.unmodifiable(next));
+    }
     if (normalizedTarget == ObjectBodyBlockType.heading &&
         (headingLevel < 1 || headingLevel > 3)) {
       throw RangeError.range(headingLevel, 1, 3, 'headingLevel');
@@ -95,7 +106,7 @@ class ObjectBodyEditor {
     next[index] = ObjectBodyBlock(
       id: block.id,
       type: normalizedTarget,
-      text: block.text,
+      text: nextText,
       attributes: Map.unmodifiable(attributes),
     );
     return document.copyWith(blocks: List.unmodifiable(next));
