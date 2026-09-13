@@ -4,7 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('macOS release workflow keeps RC and stable publication explicit', () {
-    final workflow = File('.github/workflows/macos_release.yml').readAsStringSync();
+    final workflow = File('.github/workflows/macos_release.yml')
+        .readAsStringSync();
 
     expect(workflow, contains('workflow_dispatch:'));
     expect(workflow, contains('source_sha:'));
@@ -27,7 +28,8 @@ void main() {
   });
 
   test('stable publication requires a matching immutable RC first', () {
-    final workflow = File('.github/workflows/macos_release.yml').readAsStringSync();
+    final workflow = File('.github/workflows/macos_release.yml')
+        .readAsStringSync();
 
     expect(workflow, contains(r'RC_PREFIX="v${BUILD_NAME}-rc."'));
     expect(workflow, contains('gh release list'));
@@ -42,7 +44,8 @@ void main() {
   });
 
   test('stable release identity cannot replace an existing tag or release', () {
-    final workflow = File('.github/workflows/macos_release.yml').readAsStringSync();
+    final workflow = File('.github/workflows/macos_release.yml')
+        .readAsStringSync();
 
     expect(workflow, contains(r'stable) RELEASE_TAG="v${BUILD_NAME}"'));
     expect(workflow, contains('gh release view "$RELEASE_TAG"'));
