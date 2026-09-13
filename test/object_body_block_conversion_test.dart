@@ -13,44 +13,47 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   const editor = ObjectBodyEditor();
 
-  test('pure conversion preserves identity text order and unrelated metadata', () {
-    const document = ObjectBodyDocument(
-      blocks: <ObjectBodyBlock>[
-        ObjectBodyBlock(id: 'before', type: 'paragraph', text: 'before'),
-        ObjectBodyBlock(
-          id: 'target',
-          type: 'checklist',
-          text: 'convert me',
-          attributes: <String, dynamic>{
-            ObjectBodyBlockAttribute.checked: true,
-            'align': 'center',
-            'futureMetadata': 'keep',
-          },
-        ),
-        ObjectBodyBlock(id: 'after', type: 'paragraph', text: 'after'),
-      ],
-    );
+  test(
+    'pure conversion preserves identity text order and unrelated metadata',
+    () {
+      const document = ObjectBodyDocument(
+        blocks: <ObjectBodyBlock>[
+          ObjectBodyBlock(id: 'before', type: 'paragraph', text: 'before'),
+          ObjectBodyBlock(
+            id: 'target',
+            type: 'checklist',
+            text: 'convert me',
+            attributes: <String, dynamic>{
+              ObjectBodyBlockAttribute.checked: true,
+              'align': 'center',
+              'futureMetadata': 'keep',
+            },
+          ),
+          ObjectBodyBlock(id: 'after', type: 'paragraph', text: 'after'),
+        ],
+      );
 
-    final converted = editor.convertBlock(
-      document: document,
-      blockId: 'target',
-      targetType: ObjectBodyBlockType.heading,
-      headingLevel: 2,
-    );
+      final converted = editor.convertBlock(
+        document: document,
+        blockId: 'target',
+        targetType: ObjectBodyBlockType.heading,
+        headingLevel: 2,
+      );
 
-    expect(converted.blocks.map((block) => block.id), [
-      'before',
-      'target',
-      'after',
-    ]);
-    expect(converted.blocks[1].type, ObjectBodyBlockType.heading);
-    expect(converted.blocks[1].text, 'convert me');
-    expect(converted.blocks[1].attributes, <String, dynamic>{
-      'align': 'center',
-      'futureMetadata': 'keep',
-      ObjectBodyBlockAttribute.level: 2,
-    });
-  });
+      expect(converted.blocks.map((block) => block.id), [
+        'before',
+        'target',
+        'after',
+      ]);
+      expect(converted.blocks[1].type, ObjectBodyBlockType.heading);
+      expect(converted.blocks[1].text, 'convert me');
+      expect(converted.blocks[1].attributes, <String, dynamic>{
+        'align': 'center',
+        'futureMetadata': 'keep',
+        ObjectBodyBlockAttribute.level: 2,
+      });
+    },
+  );
 
   test('conversion canonicalizes target-specific attributes', () {
     const document = ObjectBodyDocument(
@@ -134,7 +137,11 @@ void main() {
     );
     const future = ObjectBodyDocument(
       blocks: <ObjectBodyBlock>[
-        ObjectBodyBlock(id: 'future', type: 'future-rich-block', text: 'opaque'),
+        ObjectBodyBlock(
+          id: 'future',
+          type: 'future-rich-block',
+          text: 'opaque',
+        ),
       ],
     );
 
@@ -224,31 +231,37 @@ void main() {
     expect((await bodyStore.read(objectId)).toJson(), result.toJson());
   });
 
-  test('conversion reports a concurrent CAS rejection without committing', () async {
-    final database = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(database.close);
-    final genericStore = GenericDatabaseStore(database);
-    const current = ObjectBodyDocument(
-      blocks: <ObjectBodyBlock>[
-        ObjectBodyBlock(id: 'p', type: 'paragraph', text: 'current'),
-      ],
-    );
-    final bodyStore = _RejectingBodyStore(genericStore, current);
-    final service = ObjectBodyBlockEditService(bodyStore: bodyStore);
+  test(
+    'conversion reports a concurrent CAS rejection without committing',
+    () async {
+      final database = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(database.close);
+      final genericStore = GenericDatabaseStore(database);
+      const current = ObjectBodyDocument(
+        blocks: <ObjectBodyBlock>[
+          ObjectBodyBlock(id: 'p', type: 'paragraph', text: 'current'),
+        ],
+      );
+      final bodyStore = _RejectingBodyStore(genericStore, current);
+      final service = ObjectBodyBlockEditService(bodyStore: bodyStore);
 
-    await expectLater(
-      service.convertBlock(
-        objectId: 1,
-        blockId: 'p',
-        targetType: ObjectBodyBlockType.heading,
-      ),
-      throwsStateError,
-    );
+      await expectLater(
+        service.convertBlock(
+          objectId: 1,
+          blockId: 'p',
+          targetType: ObjectBodyBlockType.heading,
+        ),
+        throwsStateError,
+      );
 
-    expect(bodyStore.writeAttempts, 1);
-    expect(bodyStore.lastProposed?.blocks.single.type, ObjectBodyBlockType.heading);
-    expect((await bodyStore.read(1)).toJson(), current.toJson());
-  });
+      expect(bodyStore.writeAttempts, 1);
+      expect(
+        bodyStore.lastProposed?.blocks.single.type,
+        ObjectBodyBlockType.heading,
+      );
+      expect((await bodyStore.read(1)).toJson(), current.toJson());
+    },
+  );
 }
 
 class _RejectingBodyStore extends ObjectBodyStore {
