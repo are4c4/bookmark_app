@@ -690,7 +690,9 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
         workspaceId: sourceView.workspaceId,
         databaseKey: sourceView.databaseKey,
       );
-      final latest = views.where((view) => view.id == sourceView.id).firstOrNull;
+      final latest = views
+          .where((view) => view.id == sourceView.id)
+          .firstOrNull;
       if (latest == null) return;
       final next = _tableColumnWidthsAdapter.withWidth(
         latest,
@@ -705,9 +707,8 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
       });
     } catch (_) {
       if (!mounted || _activeView?.id != sourceView.id) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('列幅を保存できませんでした。')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('列幅を保存できませんでした。')));
     }
   }
 
