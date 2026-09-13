@@ -94,56 +94,66 @@ void main() {
     return (sourceId: sourceId, property: property);
   }
 
-  test('Tag candidates expose canonical hierarchy paths for ambiguous titles',
-      () async {
-    final math = await createTag('数学');
-    final algebra = await createTag('代数学', parentObjectId: math);
-    final numberTheory = await createTag('数論', parentObjectId: algebra);
-    final geometry = await createTag('幾何学', parentObjectId: math);
-    final geometricTheory = await createTag('数論', parentObjectId: geometry);
-    final source = await createSourceRelation(tagSchema.objectType.id);
+  test(
+    'Tag candidates expose canonical hierarchy paths for ambiguous titles',
+    () async {
+      final math = await createTag('数学');
+      final algebra = await createTag('代数学', parentObjectId: math);
+      final numberTheory = await createTag('数論', parentObjectId: algebra);
+      final geometry = await createTag('幾何学', parentObjectId: math);
+      final geometricTheory = await createTag('数論', parentObjectId: geometry);
+      final source = await createSourceRelation(tagSchema.objectType.id);
 
-    final context = await service.load(
-      workspaceId: workspaceId,
-      sourceObjectId: source.sourceId,
-      property: source.property,
-    );
-    final results = await service.searchCandidates(
-      context: context,
-      query: '数論',
-    );
+      final context = await service.load(
+        workspaceId: workspaceId,
+        sourceObjectId: source.sourceId,
+        property: source.property,
+      );
+      final results = await service.searchCandidates(
+        context: context,
+        query: '数論',
+      );
 
-    expect(
-      {for (final result in results) result.objectId: result.aliasContext},
-      <int, String?>{
-        numberTheory: '数学 › 代数学 › 数論',
-        geometricTheory: '数学 › 幾何学 › 数論',
-      },
-    );
-  });
+      expect(
+        {for (final result in results) result.objectId: result.aliasContext},
+        <int, String?>{
+          numberTheory: '数学 › 代数学 › 数論',
+          geometricTheory: '数学 › 幾何学 › 数論',
+        },
+      );
+    },
+  );
 
-  test('root Tag omits redundant path and alias keeps hierarchy context',
-      () async {
-    final math = await createTag('数学');
-    final algebra = await createTag('代数学', parentObjectId: math);
-    final numberTheory = await createTag('数論', parentObjectId: algebra);
-    await aliasStore.addAlias(objectId: numberTheory, alias: 'NT');
-    final source = await createSourceRelation(tagSchema.objectType.id);
-    final context = await service.load(
-      workspaceId: workspaceId,
-      sourceObjectId: source.sourceId,
-      property: source.property,
-    );
+  test(
+    'root Tag omits redundant path and alias keeps hierarchy context',
+    () async {
+      final math = await createTag('数学');
+      final algebra = await createTag('代数学', parentObjectId: math);
+      final numberTheory = await createTag('数論', parentObjectId: algebra);
+      await aliasStore.addAlias(objectId: numberTheory, alias: 'NT');
+      final source = await createSourceRelation(tagSchema.objectType.id);
+      final context = await service.load(
+        workspaceId: workspaceId,
+        sourceObjectId: source.sourceId,
+        property: source.property,
+      );
 
-    final root = await service.searchCandidates(context: context, query: '数学');
-    expect(root.single.objectId, math);
-    expect(root.single.aliasContext, isNull);
+      final root = await service.searchCandidates(
+        context: context,
+        query: '数学',
+      );
+      expect(root.single.objectId, math);
+      expect(root.single.aliasContext, isNull);
 
-    final alias = await service.searchCandidates(context: context, query: 'NT');
-    expect(alias.single.objectId, numberTheory);
-    expect(alias.single.matchedAlias, 'NT');
-    expect(alias.single.aliasContext, '数学 › 代数学 › 数論 · 別名: NT');
-  });
+      final alias = await service.searchCandidates(
+        context: context,
+        query: 'NT',
+      );
+      expect(alias.single.objectId, numberTheory);
+      expect(alias.single.matchedAlias, 'NT');
+      expect(alias.single.aliasContext, '数学 › 代数学 › 数論 · 別名: NT');
+    },
+  );
 
   test('non-Tag Relation search keeps existing alias presentation', () async {
     final personTypeId = await objectStore.createObjectType(
@@ -162,7 +172,10 @@ void main() {
       property: source.property,
     );
 
-    final results = await service.searchCandidates(context: context, query: 'JP');
+    final results = await service.searchCandidates(
+      context: context,
+      query: 'JP',
+    );
 
     expect(results.single.objectId, personId);
     expect(results.single.presentationContext, isNull);
