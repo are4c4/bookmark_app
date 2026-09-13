@@ -1,4 +1,5 @@
 import 'object_body.dart';
+import 'object_body_block_contracts.dart';
 
 /// Pure, immutable editing operations for an Object Body document.
 ///
@@ -30,6 +31,73 @@ class ObjectBodyEditor {
     final index = _indexOf(document, block.id);
     final next = List<ObjectBodyBlock>.of(document.blocks);
     next[index] = block;
+    return document.copyWith(blocks: List.unmodifiable(next));
+  }
+
+  /// Converts one supported text block without changing its identity, text or
+  /// position.
+  ///
+  /// Type-specific attributes from the source block are discarded when the
+  /// kind changes, while unrelated/future attributes are preserved. Reference,
+  /// divider and unknown block kinds are never coerced into text blocks.
+  ObjectBodyDocument convertBlock({
+    required ObjectBodyDocument document,
+    required String blockId,
+    required String targetType,
+    int headingLevel = 1,
+    bool checklistChecked = false,
+    String? codeLanguage,
+    String? calloutIcon,
+  }) {
+    final index = _indexOf(document, blockId);
+    final block = document.blocks[index];
+    final normalizedTarget = targetType.trim();
+    if (!_convertibleTextTypes.contains(block.type)) {
+      throw StateError('Object Body block $blockId cannot be converted.');
+    }
+    if (!_convertibleTextTypes.contains(normalizedTarget)) {
+      throw ArgumentError.value(
+        targetType,
+        'targetType',
+        'Target block type is not safely convertible.',
+      );
+    }
+    if (block.type == normalizedTarget) return document;
+    if (normalizedTarget == ObjectBodyBlockType.heading &&
+        (headingLevel < 1 || headingLevel > 3)) {
+      throw RangeError.range(headingLevel, 1, 3, 'headingLevel');
+    }
+
+    final attributes = <String, dynamic>{...block.attributes}
+      ..remove(ObjectBodyBlockAttribute.level)
+      ..remove(ObjectBodyBlockAttribute.checked)
+      ..remove(ObjectBodyBlockAttribute.language)
+      ..remove(ObjectBodyBlockAttribute.icon);
+
+    switch (normalizedTarget) {
+      case ObjectBodyBlockType.heading:
+        attributes[ObjectBodyBlockAttribute.level] = headingLevel;
+      case ObjectBodyBlockType.checklist:
+        attributes[ObjectBodyBlockAttribute.checked] = checklistChecked;
+      case ObjectBodyBlockType.code:
+        final language = codeLanguage?.trim();
+        if (language != null && language.isNotEmpty) {
+          attributes[ObjectBodyBlockAttribute.language] = language;
+        }
+      case ObjectBodyBlockType.callout:
+        final icon = calloutIcon?.trim();
+        if (icon != null && icon.isNotEmpty) {
+          attributes[ObjectBodyBlockAttribute.icon] = icon;
+        }
+    }
+
+    final next = List<ObjectBodyBlock>.of(document.blocks);
+    next[index] = ObjectBodyBlock(
+      id: block.id,
+      type: normalizedTarget,
+      text: block.text,
+      attributes: Map.unmodifiable(attributes),
+    );
     return document.copyWith(blocks: List.unmodifiable(next));
   }
 
@@ -150,4 +218,15 @@ class ObjectBodyEditor {
       throw StateError('Object Body block id $normalized already exists.');
     }
   }
+
+  static const _convertibleTextTypes = <String>{
+    ObjectBodyBlockType.paragraph,
+    ObjectBodyBlockType.heading,
+    ObjectBodyBlockType.bulletedListItem,
+    ObjectBodyBlockType.numberedListItem,
+    ObjectBodyBlockType.checklist,
+    ObjectBodyBlockType.quote,
+    ObjectBodyBlockType.callout,
+    ObjectBodyBlockType.code,
+  };
 }
