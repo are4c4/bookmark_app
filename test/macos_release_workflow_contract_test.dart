@@ -2,6 +2,29 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+Iterable<String> _shellRunBlockLines(String workflow) sync* {
+  final lines = workflow.split('\n');
+  int? runIndent;
+
+  for (final line in lines) {
+    final trimmed = line.trimLeft();
+    final indent = line.length - trimmed.length;
+
+    if (runIndent != null) {
+      if (trimmed.isNotEmpty && indent <= runIndent) {
+        runIndent = null;
+      } else {
+        yield line;
+        continue;
+      }
+    }
+
+    if (trimmed == 'run: |' || trimmed == 'run: >-') {
+      runIndent = indent;
+    }
+  }
+}
+
 void main() {
   test('macOS release workflow keeps RC and stable publication explicit', () {
     final workflow = File('.github/workflows/macos_release.yml')
@@ -25,6 +48,24 @@ void main() {
     expect(workflow, contains('gh release create'));
     expect(workflow, contains('--prerelease'));
     expect(workflow, isNot(contains('git push')));
+  });
+
+  test('release source dispatch input reaches shell only through env data', () {
+    final workflow = File('.github/workflows/macos_release.yml')
+        .readAsStringSync();
+    final shellSource = _shellRunBlockLines(workflow).join('\n');
+
+    expect(
+      workflow,
+      contains(r'REQUESTED_SOURCE_SHA: ${{ inputs.source_sha }}'),
+    );
+    expect(shellSource, isNot(contains(r'${{ inputs.source_sha }}')));
+    expect(shellSource, contains(r'SOURCE_SHA="${REQUESTED_SOURCE_SHA:-}"'));
+    expect(shellSource, contains(r'^[0-9a-fA-F]{40}$'));
+    expect(
+      shellSource.indexOf(r'SOURCE_SHA="${REQUESTED_SOURCE_SHA:-}"'),
+      lessThan(shellSource.indexOf(r'^[0-9a-fA-F]{40}$')),
+    );
   });
 
   test('stable publication requires a matching immutable RC first', () {
