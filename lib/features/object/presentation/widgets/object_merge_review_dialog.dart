@@ -60,10 +60,12 @@ class _ObjectMergeReviewDialogState extends State<ObjectMergeReviewDialog> {
       _currentSurvives ? widget.candidateObjectId : widget.currentObjectId;
 
   String get _survivorTitle =>
-      _currentSurvives ? widget.currentTitle : widget.candidateTitle;
+      _prepared?.survivor.title ??
+      (_currentSurvives ? widget.currentTitle : widget.candidateTitle);
 
   String get _retiredTitle =>
-      _currentSurvives ? widget.candidateTitle : widget.currentTitle;
+      _prepared?.retired.title ??
+      (_currentSurvives ? widget.candidateTitle : widget.currentTitle);
 
   @override
   void initState() {
@@ -191,6 +193,7 @@ class _ObjectMergeReviewDialogState extends State<ObjectMergeReviewDialog> {
     final blockers =
         prepared?.preview.relationBlockers ??
         const <ObjectMergeRelationBlocker>[];
+    final survivorSelectionEnabled = !_loading && !_finalizing;
 
     return AlertDialog(
       key: const ValueKey('object-merge-review-dialog'),
@@ -204,31 +207,36 @@ class _ObjectMergeReviewDialogState extends State<ObjectMergeReviewDialog> {
             children: [
               const Text('残すObjectを選択してください。統合は自動では実行されません。'),
               const SizedBox(height: 12),
-              RadioListTile<bool>(
-                key: const ValueKey('object-merge-survivor-current'),
-                value: true,
+              RadioGroup<bool>(
                 groupValue: _currentSurvives,
-                onChanged: _loading || _finalizing
-                    ? null
-                    : (value) {
-                        if (value != null) _selectSurvivor(value);
-                      },
-                title: Text(widget.currentTitle),
-                subtitle: Text('現在のObject #${widget.currentObjectId} を残す'),
-                contentPadding: EdgeInsets.zero,
-              ),
-              RadioListTile<bool>(
-                key: const ValueKey('object-merge-survivor-candidate'),
-                value: false,
-                groupValue: _currentSurvives,
-                onChanged: _loading || _finalizing
-                    ? null
-                    : (value) {
-                        if (value != null) _selectSurvivor(value);
-                      },
-                title: Text(widget.candidateTitle),
-                subtitle: Text('候補Object #${widget.candidateObjectId} を残す'),
-                contentPadding: EdgeInsets.zero,
+                onChanged: (value) {
+                  if (value == null || !survivorSelectionEnabled) return;
+                  _selectSurvivor(value);
+                },
+                child: Column(
+                  children: [
+                    RadioListTile<bool>(
+                      key: const ValueKey('object-merge-survivor-current'),
+                      value: true,
+                      enabled: survivorSelectionEnabled,
+                      title: Text(widget.currentTitle),
+                      subtitle: Text(
+                        '現在のObject #${widget.currentObjectId} を残す',
+                      ),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                    RadioListTile<bool>(
+                      key: const ValueKey('object-merge-survivor-candidate'),
+                      value: false,
+                      enabled: survivorSelectionEnabled,
+                      title: Text(widget.candidateTitle),
+                      subtitle: Text(
+                        '候補Object #${widget.candidateObjectId} を残す',
+                      ),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ],
+                ),
               ),
               const Divider(height: 24),
               if (_loading)
