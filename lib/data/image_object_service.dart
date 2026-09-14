@@ -112,8 +112,14 @@ class ImageObjectService {
     // that predate the presentation contract. Strengthen only the native
     // visibility metadata in place; never remove values or rewrite user-owned
     // Image defaults merely to hide implementation paths/provenance.
-    await _ensureInternalPropertyHidden(file);
-    await _ensureInternalPropertyHidden(storageOwnership);
+    await _ensureInternalPropertyHidden(
+      file,
+      expectedType: ObjectPropertyType.file,
+    );
+    await _ensureInternalPropertyHidden(
+      storageOwnership,
+      expectedType: ObjectPropertyType.text,
+    );
 
     type = (await systemObjects.getSystemObjectType(
       workspaceId: workspaceId,
@@ -313,12 +319,16 @@ class ImageObjectService {
   }
 
   Future<void> _ensureInternalPropertyHidden(
-    ObjectPropertyDefinition property,
-  ) async {
-    if (property.config['system'] == true &&
-        property.config['hidden'] == true) {
-      return;
+    ObjectPropertyDefinition property, {
+    required ObjectPropertyType expectedType,
+  }) async {
+    if (property.type != expectedType || property.config['system'] != true) {
+      throw StateError(
+        'Existing Image system Property "${property.name}" does not match the required native schema.',
+      );
     }
+    if (property.config['hidden'] == true) return;
+
     final store = GenericDatabaseStore(systemObjects.database);
     await store.updateProperty(
       GenericPropertyRecord(
@@ -326,11 +336,7 @@ class ImageObjectService {
         databaseId: property.objectTypeId,
         name: property.name,
         type: property.storageType,
-        config: <String, dynamic>{
-          ...property.config,
-          'system': true,
-          'hidden': true,
-        },
+        config: <String, dynamic>{...property.config, 'hidden': true},
         sortOrder: property.sortOrder,
       ),
     );
