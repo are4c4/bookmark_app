@@ -72,12 +72,7 @@ class ObjectHistoryRelationStore {
         '''INSERT INTO object_history_relation_snapshots(
              source_object_id, revision_id, property_id, payload_json
            ) VALUES (?, ?, ?, ?)''',
-        [
-          snapshot.sourceObjectId,
-          revisionId,
-          snapshot.propertyId,
-          encoded,
-        ],
+        [snapshot.sourceObjectId, revisionId, snapshot.propertyId, encoded],
       );
       return true;
     });
@@ -204,7 +199,9 @@ class ObjectHistoryRelationStore {
     }
     final json = Map<String, dynamic>.from(decoded);
     if (json['schemaVersion'] != 1) {
-      throw const FormatException('Unsupported Relation history store payload.');
+      throw const FormatException(
+        'Unsupported Relation history store payload.',
+      );
     }
     final revisionId = json['revisionId'];
     final rawSnapshot = json['snapshot'];
