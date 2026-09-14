@@ -10,91 +10,97 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('Image visibility upgrade does not claim a user-owned File Property', () async {
-    final database = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(database.close);
-    final workspaceId = await WorkspaceStore(database).initialize();
-    final genericStore = GenericDatabaseStore(database);
-    final objectStore = ObjectStore(genericStore);
-    final systemObjects = SystemObjectStore(
-      database: database,
-      objectStore: objectStore,
-    );
-    final imageType = await systemObjects.ensureSystemObjectType(
-      workspaceId: workspaceId,
-      systemKey: ImageObjectService.systemKey,
-      name: '画像',
-      icon: '🖼️',
-    );
-    final conflicting = await systemObjects.ensureProperty(
-      objectTypeId: imageType.id,
-      name: 'File',
-      type: ObjectPropertyType.file,
-      config: const <String, dynamic>{'userOwned': true},
-    );
+  test(
+    'Image visibility upgrade does not claim a user-owned File Property',
+    () async {
+      final database = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(database.close);
+      final workspaceId = await WorkspaceStore(database).initialize();
+      final genericStore = GenericDatabaseStore(database);
+      final objectStore = ObjectStore(genericStore);
+      final systemObjects = SystemObjectStore(
+        database: database,
+        objectStore: objectStore,
+      );
+      final imageType = await systemObjects.ensureSystemObjectType(
+        workspaceId: workspaceId,
+        systemKey: ImageObjectService.systemKey,
+        name: '画像',
+        icon: '🖼️',
+      );
+      final conflicting = await systemObjects.ensureProperty(
+        objectTypeId: imageType.id,
+        name: 'File',
+        type: ObjectPropertyType.file,
+        config: const <String, dynamic>{'userOwned': true},
+      );
 
-    final service = ImageObjectService(
-      systemObjects: systemObjects,
-      defaultsStore: ObjectTypeDefaultsStore(genericStore),
-    );
+      final service = ImageObjectService(
+        systemObjects: systemObjects,
+        defaultsStore: ObjectTypeDefaultsStore(genericStore),
+      );
 
-    await expectLater(service.ensureDefinition(workspaceId), throwsStateError);
+      await expectLater(service.ensureDefinition(workspaceId), throwsStateError);
 
-    final reloaded = await systemObjects.getSystemObjectType(
-      workspaceId: workspaceId,
-      systemKey: ImageObjectService.systemKey,
-    );
-    final preserved = reloaded!.properties.singleWhere(
-      (property) => property.id == conflicting.id,
-    );
-    expect(preserved.type, ObjectPropertyType.file);
-    expect(preserved.config, const <String, dynamic>{'userOwned': true});
-    expect(preserved.config['system'], isNull);
-    expect(preserved.config['hidden'], isNull);
-  });
+      final reloaded = await systemObjects.getSystemObjectType(
+        workspaceId: workspaceId,
+        systemKey: ImageObjectService.systemKey,
+      );
+      final preserved = reloaded!.properties.singleWhere(
+        (property) => property.id == conflicting.id,
+      );
+      expect(preserved.type, ObjectPropertyType.file);
+      expect(preserved.config, const <String, dynamic>{'userOwned': true});
+      expect(preserved.config['system'], isNull);
+      expect(preserved.config['hidden'], isNull);
+    },
+  );
 
-  test('Image visibility upgrade does not rewrite a wrong-type system File', () async {
-    final database = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(database.close);
-    final workspaceId = await WorkspaceStore(database).initialize();
-    final genericStore = GenericDatabaseStore(database);
-    final objectStore = ObjectStore(genericStore);
-    final systemObjects = SystemObjectStore(
-      database: database,
-      objectStore: objectStore,
-    );
-    final imageType = await systemObjects.ensureSystemObjectType(
-      workspaceId: workspaceId,
-      systemKey: ImageObjectService.systemKey,
-      name: '画像',
-      icon: '🖼️',
-    );
-    final conflicting = await systemObjects.ensureProperty(
-      objectTypeId: imageType.id,
-      name: 'File',
-      type: ObjectPropertyType.text,
-      config: const <String, dynamic>{'system': true, 'legacy': 'preserve'},
-    );
+  test(
+    'Image visibility upgrade does not rewrite a wrong-type system File',
+    () async {
+      final database = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(database.close);
+      final workspaceId = await WorkspaceStore(database).initialize();
+      final genericStore = GenericDatabaseStore(database);
+      final objectStore = ObjectStore(genericStore);
+      final systemObjects = SystemObjectStore(
+        database: database,
+        objectStore: objectStore,
+      );
+      final imageType = await systemObjects.ensureSystemObjectType(
+        workspaceId: workspaceId,
+        systemKey: ImageObjectService.systemKey,
+        name: '画像',
+        icon: '🖼️',
+      );
+      final conflicting = await systemObjects.ensureProperty(
+        objectTypeId: imageType.id,
+        name: 'File',
+        type: ObjectPropertyType.text,
+        config: const <String, dynamic>{'system': true, 'legacy': 'preserve'},
+      );
 
-    final service = ImageObjectService(
-      systemObjects: systemObjects,
-      defaultsStore: ObjectTypeDefaultsStore(genericStore),
-    );
+      final service = ImageObjectService(
+        systemObjects: systemObjects,
+        defaultsStore: ObjectTypeDefaultsStore(genericStore),
+      );
 
-    await expectLater(service.ensureDefinition(workspaceId), throwsStateError);
+      await expectLater(service.ensureDefinition(workspaceId), throwsStateError);
 
-    final reloaded = await systemObjects.getSystemObjectType(
-      workspaceId: workspaceId,
-      systemKey: ImageObjectService.systemKey,
-    );
-    final preserved = reloaded!.properties.singleWhere(
-      (property) => property.id == conflicting.id,
-    );
-    expect(preserved.type, ObjectPropertyType.text);
-    expect(
-      preserved.config,
-      const <String, dynamic>{'system': true, 'legacy': 'preserve'},
-    );
-    expect(preserved.config['hidden'], isNull);
-  });
+      final reloaded = await systemObjects.getSystemObjectType(
+        workspaceId: workspaceId,
+        systemKey: ImageObjectService.systemKey,
+      );
+      final preserved = reloaded!.properties.singleWhere(
+        (property) => property.id == conflicting.id,
+      );
+      expect(preserved.type, ObjectPropertyType.text);
+      expect(
+        preserved.config,
+        const <String, dynamic>{'system': true, 'legacy': 'preserve'},
+      );
+      expect(preserved.config['hidden'], isNull);
+    },
+  );
 }
