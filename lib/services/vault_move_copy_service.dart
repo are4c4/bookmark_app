@@ -18,10 +18,14 @@ class VaultMoveCopyService {
     StackTrace stackTrace,
   ) {
     assert(() {
-      stderr.writeln(
-        'VaultMoveCopyService: $operation failed during rollback.',
-      );
-      stderr.writeln(stackTrace);
+      try {
+        stderr.writeln(
+          'VaultMoveCopyService: $operation failed during rollback.',
+        );
+        stderr.writeln(stackTrace);
+      } catch (_) {
+        // Diagnostic output itself must never replace the primary failure.
+      }
       return true;
     }());
   }
