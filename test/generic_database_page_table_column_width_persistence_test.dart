@@ -103,9 +103,7 @@ void main() {
       }
 
       Future<void> pumpUntilTableView(int viewId) async {
-        final table = find.byKey(
-          ValueKey<String>('database-table-$viewId'),
-        );
+        final table = find.byKey(ValueKey<String>('database-table-$viewId'));
         if (table.evaluate().isNotEmpty) return;
         for (var attempt = 0; attempt < 40; attempt += 1) {
           await tester.pump(const Duration(milliseconds: 50));
