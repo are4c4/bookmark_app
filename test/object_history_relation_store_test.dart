@@ -67,52 +67,58 @@ void main() {
     }
   });
 
-  test('exact retry is idempotent and conflicting key reuse fails closed', () async {
-    final database = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(database.close);
-    final store = ObjectHistoryRelationStore(GenericDatabaseStore(database));
+  test(
+    'exact retry is idempotent and conflicting key reuse fails closed',
+    () async {
+      final database = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(database.close);
+      final store = ObjectHistoryRelationStore(GenericDatabaseStore(database));
 
-    expect(await store.append(revisionId: 4, snapshot: _snapshot()), isTrue);
-    expect(await store.append(revisionId: 4, snapshot: _snapshot()), isFalse);
+      expect(await store.append(revisionId: 4, snapshot: _snapshot()), isTrue);
+      expect(await store.append(revisionId: 4, snapshot: _snapshot()), isFalse);
 
-    await expectLater(
-      store.append(
-        revisionId: 4,
-        snapshot: _snapshot(targetObjectIds: <int>[11, 12]),
-      ),
-      throwsStateError,
-    );
-    expect(
-      (await store.load(
+      await expectLater(
+        store.append(
+          revisionId: 4,
+          snapshot: _snapshot(targetObjectIds: <int>[11, 12]),
+        ),
+        throwsStateError,
+      );
+      expect(
+        (await store.load(
+          sourceObjectId: 7,
+          revisionId: 4,
+          propertyId: 21,
+        ))?.targetObjectIds,
+        <int>[12, 11],
+      );
+    },
+  );
+
+  test(
+    'bidirectional metadata persists without becoming Relation authority',
+    () async {
+      final database = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(database.close);
+      final store = ObjectHistoryRelationStore(GenericDatabaseStore(database));
+      final snapshot = _snapshot(
+        inversePropertyId: 31,
+        pairRole: ObjectHistoryRelationPairRole.source,
+        inverseAllowsMultipleRelations: false,
+      );
+
+      await store.append(revisionId: 5, snapshot: snapshot);
+      final restored = await store.load(
         sourceObjectId: 7,
-        revisionId: 4,
+        revisionId: 5,
         propertyId: 21,
-      ))?.targetObjectIds,
-      <int>[12, 11],
-    );
-  });
+      );
 
-  test('bidirectional metadata persists without becoming Relation authority', () async {
-    final database = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(database.close);
-    final store = ObjectHistoryRelationStore(GenericDatabaseStore(database));
-    final snapshot = _snapshot(
-      inversePropertyId: 31,
-      pairRole: ObjectHistoryRelationPairRole.source,
-      inverseAllowsMultipleRelations: false,
-    );
-
-    await store.append(revisionId: 5, snapshot: snapshot);
-    final restored = await store.load(
-      sourceObjectId: 7,
-      revisionId: 5,
-      propertyId: 21,
-    );
-
-    expect(restored?.inversePropertyId, 31);
-    expect(restored?.pairRole, ObjectHistoryRelationPairRole.source);
-    expect(restored?.inverseAllowsMultipleRelations, isFalse);
-  });
+      expect(restored?.inversePropertyId, 31);
+      expect(restored?.pairRole, ObjectHistoryRelationPairRole.source);
+      expect(restored?.inverseAllowsMultipleRelations, isFalse);
+    },
+  );
 
   test('malformed persisted JSON and key disagreement fail closed', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
