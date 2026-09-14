@@ -1,4 +1,5 @@
 import '../data/database_view_health_audit.dart';
+import '../data/object_health_audit.dart';
 import '../data/relation_integrity_service.dart';
 import '../repositories/object_search_health_audit.dart';
 import 'canonical_file_health_audit.dart';
@@ -111,6 +112,48 @@ class DataHealthAuditService {
       }
     }
     return DataHealthReport(checks: List.unmodifiable(results));
+  }
+}
+
+typedef ObjectHealthAuditRunner = Future<ObjectHealthAuditResult> Function();
+
+/// Thin adapter over A's canonical read-only Object/value structural audit.
+///
+/// Object/value invariants remain owned by [ObjectHealthAudit]. Relation
+/// payload semantics remain B-owned. This adapter only maps stable finding
+/// kinds and safe internal Object/ObjectType/Property ids into the shared
+/// data-health result model.
+class ObjectDataHealthCheck implements DataHealthCheck {
+  const ObjectDataHealthCheck({required ObjectHealthAuditRunner audit})
+    : _audit = audit;
+
+  factory ObjectDataHealthCheck.fromAudit({
+    required ObjectHealthAudit audit,
+    required int workspaceId,
+  }) => ObjectDataHealthCheck(audit: () => audit.auditWorkspace(workspaceId));
+
+  final ObjectHealthAuditRunner _audit;
+
+  @override
+  String get checkId => 'object-integrity';
+
+  @override
+  String get subsystem => 'object';
+
+  @override
+  Future<List<DataHealthFinding>> run() async {
+    final report = await _audit();
+    return report.findings
+        .map(
+          (finding) => DataHealthFinding(
+            subsystem: subsystem,
+            category: finding.kind.name,
+            objectId: finding.objectId,
+            objectTypeId: finding.objectTypeId,
+            propertyId: finding.propertyId,
+          ),
+        )
+        .toList(growable: false);
   }
 }
 
