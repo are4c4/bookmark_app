@@ -21,7 +21,7 @@ Always verify live GitHub before taking ownership. Completed issues below are ch
 ### #1064 — durable Object history / restore contract
 Define restart-safe durable history for Object/Property/Body/Relation state, explicitly separate from local Undo, and make restore conflict-aware/fail-closed. Relation-integrity and managed-byte retention remain B/F-owned boundaries rather than A-side duplicate authorities.
 
-A's logical history/checkpoint and restore-safety contracts are established, and #1399/#1402 now persist immutable A-owned checkpoint payloads restart-safely by Object/revision. B's focused #1267 Relation checkpoint/restore integrity boundary and F's #1268 managed-byte retention safety boundary are integrated. The remaining whole-Object capture coordinator is currently sequenced behind B/#1405, which owns restart-safe immutable Relation-history persistence for the same Object/revision identity. Do not start A whole-capture by serializing Relation targets itself; resume only after B/#1405 is integrated or publishes an explicitly stack-ready boundary.
+A's logical history/checkpoint and restore-safety contracts are established, A/#1399/#1402 persist immutable A-owned checkpoint payloads restart-safely, B/#1267 owns canonical Relation checkpoint/restore integrity, F/#1268 owns managed-byte retention safety, and B/#1405 now provides restart-safe immutable Relation-history persistence. A/#1438 atomically composes A and B evidence for one Object/revision, #1441 loads that persisted whole-Object evidence after restart, and #1443 prepares read-only coordinated restore evidence through B's canonical Relation restore preview boundary. #1064 remains open for the next concrete restore-execution/product slice proven on current `main`; do not recreate Relation history/validation in A or infer managed-byte authority from logical history.
 
 ## Completed checkpoints
 
@@ -77,7 +77,6 @@ Durable contract:
 
 ### #1425 / #1426 — explicit Object Inspector merge execution
 Completed. The canonical Object Inspector can execute the already-proven merge contract only through explicit user control.
-
 Durable contract:
 - duplicate-row navigation remains read-only; `統合…` is a distinct action;
 - the user explicitly chooses current vs candidate identity as survivor before execution;
@@ -114,7 +113,7 @@ Durable contract:
 - checkpoints survive database close/reopen and remain historical evidence rather than the authority for normal current-state reads;
 - Relation state is intentionally absent from this A store and must be persisted through B's history boundary;
 - logical Image/File references do not grant A byte-retention or deletion authority;
-- whole-Object capture still requires transactionally composing this A store with B's persisted Relation snapshots rather than writing parallel Relation history in A.
+- #1438/#1439 now transactionally compose this A store with B/#1405 persisted Relation snapshots for the same Object/revision, while Relation history remains B-owned rather than a parallel A store.
 
 ### #1177 — legacy-only Bookmark preservation boundary
 Completed as a durable preservation-contract checkpoint. The completed #1041 Bookmark migration checkpoint does not by itself prove a canonical destination for every legacy scalar/lifecycle fact. In particular `lastOpenedAt`, `openCount`, and `deletedAt` remain legacy compatibility/preservation concerns until a separately proven lossless destination or explicit retirement policy exists.
@@ -179,10 +178,10 @@ Completed. Enter split, Shift+Enter newline, safe leading-Backspace merge, compa
 - generic-first Person create/update/delete/reconciliation authority with temporary legacy projection;
 - explicit preservation of legacy-only Bookmark `lastOpenedAt`, `openCount`, and `deletedAt` until a separate destination/retirement decision exists;
 - completed explicit Object duplicate/merge/redirect capability: preview/redirect, concrete A-owned state planning, A/B preparation, resolved-state materialization, canonical Relation rewiring, atomic finalization and user-controlled Object Inspector execution;
-- durable Object history identity/checkpoint/restore-safety contracts plus restart-safe A-owned checkpoint persistence, integrated B Relation checkpoint/restore and F managed-byte retention boundaries.
+- durable Object history identity/checkpoint/restore-safety contracts plus restart-safe A-owned checkpoint persistence, B Relation checkpoint/restore and restart-safe history, F managed-byte retention, atomic A+B whole-checkpoint capture, restart-safe whole-checkpoint loading, and read-only coordinated restore preparation through #1443.
 
 ## Cross-lane boundaries
-- **B:** Relation mutation/read/index/backlink/audit/reconcile, Bookmark/Person relationship migration, Person roles/groups and Tag hierarchy integrity. #1259 merge rewiring and #1267 Relation checkpoint/restore integrity are completed boundaries that A consumes. B/#1405 currently owns restart-safe Relation-history persistence needed before A whole-capture composition; A must not write Relation values/edges or invent a parallel Relation-history store directly.
+- **B:** Relation mutation/read/index/backlink/audit/reconcile, Bookmark/Person relationship migration, Person roles/groups and Tag hierarchy integrity. #1259 merge rewiring, #1267 Relation checkpoint/restore integrity and #1405 restart-safe Relation-history persistence are completed boundaries that A consumes. A/#1438 capture, #1441 loading and #1443 restore preparation compose those B-owned boundaries; A must not write Relation values/edges or invent a parallel Relation-history store directly.
 - **C:** Database/View/schema UX, Stage1/People generic collection replacement and Tag hierarchy query/filter/picker UX. Dedicated People UI retirement remains C-owned.
 - **D:** Weblink URL identity/normalization/capture-native behavior and Image/File native capabilities. A consumes those contracts rather than recreating them.
 - **E:** canonical Object Search projection/FTS freshness.
@@ -199,10 +198,10 @@ A runtime Object/Body change requires changed-Dart Format, Analyze/guards, focus
 1. refresh latest `main`, live open PR ownership, current CI, shared hotspots and migration ownership;
 2. treat completed #1062 and its focused merge checkpoints as integrated contracts, then verify the live state/acceptance of #1064 plus any newer focused A issue;
 3. do not reopen #1062 as a work queue. A future merge defect or product gap must be demonstrated on current main and opened as a new focused Issue; do not recreate the explicit merge UI or make exact-advisory candidates auto-merge;
-4. for #1064, treat A/#1402, B/#1267 and F/#1268 as integrated boundaries, but keep whole-capture sequencing behind open B/#1405 until restart-safe Relation snapshots are integrated or explicitly stack-ready. A must compose the B boundary rather than serialize Relation targets itself;
+4. for #1064, treat A/#1402, B/#1267/#1405, F/#1268 and A/#1438/#1441/#1443 as integrated boundaries. Any next restore-execution/product slice must be demonstrated on current `main`, consume the established persisted whole-checkpoint loader/restore-preparation and canonical B Relation restore authority, and must not serialize or validate Relation history independently in A;
 5. preserve the legacy-only Bookmark facts recorded by completed #1177 until a lossless destination or explicit retirement policy exists; do not convert documentation pressure into speculative schema design;
 6. after each coherent slice/PR/merge, apply the shared **Lane continuation and resume/stop contract** in `AGENTS.md` and continue while safe A work exists.
 
 ## Current continuation / stop contract
 
-#1062 is completed and must not be reopened merely to keep Lane A active. #1064 whole-Object history capture currently has an explicit `dependency` gate on B/#1405 while that issue remains open without an integrated/stack-ready persisted Relation-history boundary. Recheck live GitHub for any newer focused A issue before stopping; if none exists, `dependency` on B/#1405 is the exact stop category. Do not take over B/#1405, serialize Relation history in A, or invent speculative A work to avoid the stop.
+#1062 is completed and must not be reopened merely to keep Lane A active. #1405 and A/#1438/#1441/#1443 are integrated, so there is no longer a B/#1405 dependency gate for #1064. Recheck live GitHub for a newer focused A issue or a concrete reproducible current-main gap that advances the remaining restore-execution/product acceptance while preserving B/F ownership. If neither exists, `idle-no-work` is the exact stop category. Do not reopen completed history checkpoints, duplicate B Relation restore/history authority, or invent speculative A work merely to avoid that stop.
