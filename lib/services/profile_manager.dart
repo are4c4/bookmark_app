@@ -549,7 +549,10 @@ class ProfileManager {
       await _writeProfileMetadata(copy);
       return copy;
     } catch (_) {
-      await _discardAppManagedProfile(copy);
+      await _discardFailedAppManagedProfile(
+        copy,
+        'failed profile duplication cleanup',
+      );
       rethrow;
     }
   }
@@ -589,8 +592,24 @@ class ProfileManager {
       await _save();
       return copy;
     } catch (_) {
-      await _discardAppManagedProfile(copy);
+      await _discardFailedAppManagedProfile(
+        copy,
+        'failed profile import cleanup',
+      );
       rethrow;
+    }
+  }
+
+  Future<void> _discardFailedAppManagedProfile(
+    DatabaseProfile profile,
+    String operation,
+  ) async {
+    try {
+      await _discardAppManagedProfile(profile);
+    } catch (_, stackTrace) {
+      // Rollback is secondary. Preserve the duplicate/import failure that
+      // explains the failed operation and expose no raw profile/path/error text.
+      _debugFallbackFailure(operation, stackTrace);
     }
   }
 
