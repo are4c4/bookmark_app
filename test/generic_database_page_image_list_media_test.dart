@@ -16,8 +16,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('real Images List hosts canonical Image leading media',
-      (tester) async {
+  testWidgets('real Images List hosts canonical Image leading media', (
+    tester,
+  ) async {
     Future<void> pumpUntilVisible(Finder finder) async {
       if (finder.evaluate().isNotEmpty) return;
       for (var attempt = 0; attempt < 30; attempt += 1) {
@@ -53,6 +54,12 @@ void main() {
       objectTypeId: definition.objectType.id,
       title: 'Canonical Image row',
     );
+    const retainedOwnership = 'vault-managed-copy-v1';
+    await objectStore.setPropertyValue(
+      objectId: objectId,
+      property: definition.storageOwnershipProperty,
+      value: retainedOwnership,
+    );
 
     await DatabaseViewStore(database).createView(
       workspaceId: workspaceId,
@@ -66,6 +73,10 @@ void main() {
       ),
       name: 'List',
       layoutType: 'list',
+      visibleProperties: <String>[
+        'p:${definition.storageOwnershipProperty.id}',
+      ],
+      propertyOrder: <String>['p:${definition.storageOwnershipProperty.id}'],
     );
 
     final destination = (await genericStore.listDatabases(workspaceId))
@@ -110,6 +121,14 @@ void main() {
     await pumpUntilVisible(resolvedMedia);
     expect(resolvedMedia, findsOneWidget);
     expect(find.text('Canonical Image row'), findsOneWidget);
+    expect(find.text(retainedOwnership), findsNothing);
+
+    final persisted = (await objectStore.listObjects(definition.objectType.id))
+        .singleWhere((object) => object.id == objectId);
+    expect(
+      persisted.values[definition.storageOwnershipProperty.id],
+      retainedOwnership,
+    );
 
     final hostedMedia = tester.widget<SystemObjectListMedia>(host);
     expect(hostedMedia.database, same(database));
