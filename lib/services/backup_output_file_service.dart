@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'dart:io';
 
 /// Writes a backup archive through a fresh staging file before replacing the
@@ -25,8 +26,21 @@ class BackupOutputFileService {
       await writer(staged.path);
       await _replaceDestination(staged, destination);
     } catch (_) {
-      if (await staged.exists()) {
-        await staged.delete();
+      // Cleanup is best-effort. A cleanup failure must not replace the original
+      // writer/destination-replace failure that explains why backup failed.
+      try {
+        if (await staged.exists()) {
+          await staged.delete();
+        }
+      } catch (_, stackTrace) {
+        assert(() {
+          developer.log(
+            'Backup output staging cleanup failed.',
+            name: 'bookmark_app.backup_output',
+            stackTrace: stackTrace,
+          );
+          return true;
+        }());
       }
       rethrow;
     }
