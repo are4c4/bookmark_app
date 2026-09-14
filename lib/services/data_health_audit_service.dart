@@ -130,9 +130,8 @@ class ObjectDataHealthCheck implements DataHealthCheck {
   factory ObjectDataHealthCheck.fromAudit({
     required ObjectHealthAudit audit,
     required int workspaceId,
-  }) => ObjectDataHealthCheck(
-    audit: () => audit.auditWorkspace(workspaceId),
-  );
+  }) =>
+      ObjectDataHealthCheck(audit: () => audit.auditWorkspace(workspaceId));
 
   final ObjectHealthAuditRunner _audit;
 
