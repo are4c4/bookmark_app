@@ -1,4 +1,5 @@
 import '../data/relation_integrity_service.dart';
+import '../repositories/object_search_health_audit.dart';
 import 'canonical_file_health_audit.dart';
 
 /// Privacy-safe finding emitted by one read-only data-health check.
@@ -185,6 +186,49 @@ class FileDataHealthCheck implements DataHealthCheck {
             subsystem: subsystem,
             category: finding.kind.name,
             objectId: finding.fileObjectId,
+          ),
+        )
+        .toList(growable: false);
+  }
+}
+
+typedef ObjectSearchHealthAuditRunner =
+    Future<ObjectSearchHealthAuditResult> Function();
+
+/// Thin adapter over E's canonical read-only Search health audit.
+///
+/// Search/FTS invariants remain owned by [ObjectSearchHealthAudit]. This adapter
+/// only maps stable finding kinds and privacy-safe Object/ObjectType ids into
+/// the shared data-health result model. Indexed text and raw persisted values
+/// never cross this boundary.
+class SearchDataHealthCheck implements DataHealthCheck {
+  const SearchDataHealthCheck({required ObjectSearchHealthAuditRunner audit})
+    : _audit = audit;
+
+  factory SearchDataHealthCheck.fromAudit({
+    required ObjectSearchHealthAudit audit,
+    required int workspaceId,
+  }) => SearchDataHealthCheck(audit: () => audit.auditWorkspace(workspaceId));
+
+  final ObjectSearchHealthAuditRunner _audit;
+
+  @override
+  String get checkId => 'search-index-integrity';
+
+  @override
+  String get subsystem => 'search';
+
+  @override
+  Future<List<DataHealthFinding>> run() async {
+    final report = await _audit();
+    return report.findings
+        .map(
+          (finding) => DataHealthFinding(
+            subsystem: subsystem,
+            category: finding.kind.name,
+            objectId: finding.objectId,
+            objectTypeId:
+                finding.canonicalObjectTypeId ?? finding.indexedObjectTypeId,
           ),
         )
         .toList(growable: false);

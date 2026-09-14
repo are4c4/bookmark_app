@@ -1,4 +1,5 @@
 import 'package:bookmark_app/data/relation_integrity_service.dart';
+import 'package:bookmark_app/repositories/object_search_health_audit.dart';
 import 'package:bookmark_app/services/canonical_file_health_audit.dart';
 import 'package:bookmark_app/services/data_health_audit_service.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -118,6 +119,42 @@ void main() {
       expect(finding.sourceObjectId, isNull);
       expect(finding.targetObjectId, isNull);
       expect(finding.toString(), isNot(contains('/')));
+    },
+  );
+
+  test(
+    'Search adapter maps canonical findings and privacy-safe ids only',
+    () async {
+      const canonicalFinding = ObjectSearchHealthFinding(
+        kind: ObjectSearchHealthFindingKind.identityMismatch,
+        objectId: 31,
+        indexedObjectTypeId: 32,
+        indexedWorkspaceId: 33,
+        canonicalObjectTypeId: 34,
+        canonicalWorkspaceId: 35,
+      );
+      final check = SearchDataHealthCheck(
+        audit: () async => const ObjectSearchHealthAuditResult(
+          workspaceId: 35,
+          canonicalObjectCount: 1,
+          inspectedIndexRowCount: 1,
+          findings: [canonicalFinding],
+        ),
+      );
+
+      final report = await DataHealthAuditService(checks: [check]).audit();
+
+      expect(report.isHealthy, isFalse);
+      expect(report.checks.single.checkId, 'search-index-integrity');
+      expect(report.checks.single.status, DataHealthCheckStatus.issues);
+      final finding = report.findings.single;
+      expect(finding.subsystem, 'search');
+      expect(finding.category, 'identityMismatch');
+      expect(finding.objectId, 31);
+      expect(finding.objectTypeId, 34);
+      expect(finding.propertyId, isNull);
+      expect(finding.sourceObjectId, isNull);
+      expect(finding.targetObjectId, isNull);
     },
   );
 }
