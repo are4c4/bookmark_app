@@ -199,18 +199,15 @@ void main() {
         databaseKey: databaseKey,
       )).singleWhere((candidate) => candidate.id == seeded.id);
       expect(
-        (DatabaseViewTableColumnWidthsAdapter()
-                .decode(reopened)['title'] as num)
+        (DatabaseViewTableColumnWidthsAdapter().decode(reopened)['title']
+                as num)
             .toDouble(),
         304,
       );
       final table = tester.widget<ResizableDatabaseTable>(
         find.byType(ResizableDatabaseTable),
       );
-      expect(
-        table.key,
-        ValueKey<String>('database-table-${seeded.id}'),
-      );
+      expect(table.key, ValueKey<String>('database-table-${seeded.id}'));
       expect((table.initialWidths['title'] as num).toDouble(), 304);
       await pumpUntilWidth(titleColumn, 304);
 
