@@ -70,9 +70,7 @@ class _ObjectBodyDatabaseViewReferencePickerDialogState
         child: Column(
           children: [
             ObjectBodyReferencePickerSearchField(
-              fieldKey: const ValueKey(
-                'body-database-view-reference-search',
-              ),
+              fieldKey: const ValueKey('body-database-view-reference-search'),
               hintText: 'Database名またはView名で検索',
               onChanged: (value) => setState(() => _query = value),
             ),
