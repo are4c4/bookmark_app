@@ -208,9 +208,7 @@ class SearchDataHealthCheck implements DataHealthCheck {
   factory SearchDataHealthCheck.fromAudit({
     required ObjectSearchHealthAudit audit,
     required int workspaceId,
-  }) => SearchDataHealthCheck(
-    audit: () => audit.auditWorkspace(workspaceId),
-  );
+  }) => SearchDataHealthCheck(audit: () => audit.auditWorkspace(workspaceId));
 
   final ObjectSearchHealthAuditRunner _audit;
 
