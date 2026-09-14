@@ -41,7 +41,7 @@ class DatabasePropertyValueView extends StatelessWidget {
       property: objectProperty,
       value: value,
       displayText: objectProperty.isRelation ? null : presenter.formatValue(value),
-      isHidden: false,
+      isHidden: objectProperty.config['hidden'] == true,
     );
     return ObjectPropertyValueView(
       presentation: presentation,
