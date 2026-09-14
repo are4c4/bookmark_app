@@ -1,3 +1,4 @@
+import '../data/database_view_health_audit.dart';
 import '../data/relation_integrity_service.dart';
 import '../repositories/object_search_health_audit.dart';
 import 'canonical_file_health_audit.dart';
@@ -15,6 +16,8 @@ class DataHealthFinding {
     this.propertyId,
     this.sourceObjectId,
     this.targetObjectId,
+    this.viewId,
+    this.databaseId,
   });
 
   final String subsystem;
@@ -24,6 +27,8 @@ class DataHealthFinding {
   final int? propertyId;
   final int? sourceObjectId;
   final int? targetObjectId;
+  final int? viewId;
+  final int? databaseId;
 }
 
 enum DataHealthCheckStatus { healthy, issues, failed }
@@ -229,6 +234,53 @@ class SearchDataHealthCheck implements DataHealthCheck {
             objectId: finding.objectId,
             objectTypeId:
                 finding.canonicalObjectTypeId ?? finding.indexedObjectTypeId,
+          ),
+        )
+        .toList(growable: false);
+  }
+}
+
+typedef DatabaseViewHealthAuditRunner =
+    Future<DatabaseViewHealthAuditResult> Function();
+
+/// Thin adapter over C's canonical read-only Database/View health audit.
+///
+/// View parsing and persisted-reference semantics remain owned by
+/// [DatabaseViewHealthAudit]. This adapter only maps stable issue kinds and safe
+/// internal identifiers into the shared data-health result model. View names,
+/// filter values, raw JSON and exception text never cross this boundary.
+class DatabaseViewDataHealthCheck implements DataHealthCheck {
+  const DatabaseViewDataHealthCheck({
+    required DatabaseViewHealthAuditRunner audit,
+  }) : _audit = audit;
+
+  factory DatabaseViewDataHealthCheck.fromAudit({
+    required DatabaseViewHealthAudit audit,
+    required int workspaceId,
+  }) => DatabaseViewDataHealthCheck(
+    audit: () => audit.run(workspaceId: workspaceId),
+  );
+
+  final DatabaseViewHealthAuditRunner _audit;
+
+  @override
+  String get checkId => 'database-view-integrity';
+
+  @override
+  String get subsystem => 'database-view';
+
+  @override
+  Future<List<DataHealthFinding>> run() async {
+    final report = await _audit();
+    return report.findings
+        .map(
+          (finding) => DataHealthFinding(
+            subsystem: subsystem,
+            category: finding.kind.name,
+            viewId: finding.viewId,
+            databaseId: finding.databaseId,
+            objectTypeId: finding.objectTypeId,
+            propertyId: finding.propertyId,
           ),
         )
         .toList(growable: false);
