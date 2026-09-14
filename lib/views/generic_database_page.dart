@@ -4,6 +4,7 @@ import '../data/bookmark_repository.dart';
 import '../data/database_view_gallery_adapter.dart';
 import '../data/database_view_gallery_cover_source_service.dart';
 import '../data/database_view_store.dart';
+import '../data/database_view_table_column_widths_adapter.dart';
 import '../data/generic_database_hierarchy_query_controller.dart';
 import '../data/generic_database_object_create_service.dart';
 import '../data/generic_database_page_services.dart';
@@ -30,6 +31,7 @@ import '../features/database/presentation/widgets/database_property_value_view.d
 import '../features/database/presentation/widgets/database_view_tabs.dart';
 import '../features/database/presentation/widgets/object_gallery_view.dart';
 import '../features/database/presentation/widgets/property_add_popover.dart';
+import '../features/database/presentation/widgets/resizable_database_table.dart';
 import '../features/database/presentation/widgets/resizable_detail_pane.dart';
 import '../features/database/presentation/widgets/system_object_list_media.dart';
 import '../features/object/presentation/object_open_presentation_host.dart';
@@ -75,6 +77,8 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
 
   static const _viewCoordinator = GenericObjectViewCoordinator();
   static const _galleryAdapter = DatabaseViewGalleryAdapter();
+  static const _tableColumnWidthsAdapter =
+      DatabaseViewTableColumnWidthsAdapter();
   static const _openPresentationHost = ObjectOpenPresentationHost();
   static const _detailPropertyPresenter = ObjectDetailPropertyPresenter();
 
@@ -676,6 +680,38 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
     });
   }
 
+  Future<void> _saveTableColumnWidth({
+    required DatabaseViewConfig sourceView,
+    required String key,
+    required double width,
+  }) async {
+    try {
+      final views = await _viewStore.listViews(
+        workspaceId: sourceView.workspaceId,
+        databaseKey: sourceView.databaseKey,
+      );
+      final latest = views
+          .where((view) => view.id == sourceView.id)
+          .firstOrNull;
+      if (latest == null) return;
+      final next = _tableColumnWidthsAdapter.withWidth(
+        latest,
+        key: key,
+        width: width,
+      );
+      await _viewStore.updateView(next);
+      if (!mounted || _activeView?.id != sourceView.id) return;
+      setState(() {
+        _activeView = next;
+        _query = '${next.filters['query'] ?? ''}';
+      });
+    } catch (_) {
+      if (!mounted || _activeView?.id != sourceView.id) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('列幅を保存できませんでした。')));
+    }
+  }
+
   Future<void> _saveView({
     String? layoutType,
     String? query,
@@ -1221,33 +1257,63 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
 
   Widget _table(List<GenericRecord> records) {
     final properties = _orderedVisibleProperties;
+    final activeView = _activeView;
+    final initialWidths = activeView == null
+        ? const <String, dynamic>{}
+        : _tableColumnWidthsAdapter.decode(activeView);
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 80),
       scrollDirection: Axis.horizontal,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          DataTable(
+          ResizableDatabaseTable(
+            key: ValueKey<String>(
+              'database-table-${activeView?.id ?? 'default'}',
+            ),
+            initialWidths: initialWidths,
+            onWidthCommitted: (key, width) async {
+              if (activeView == null) return;
+              await _saveTableColumnWidth(
+                sourceView: activeView,
+                key: key,
+                width: width,
+              );
+            },
             columns: [
-              const DataColumn(label: Text('名前')),
-              ...properties.map(
-                (property) => DataColumn(label: Text(property.name)),
+              const ResizableDatabaseTableColumn(
+                keyName: 'title',
+                label: Text('名前'),
+                semanticLabel: '名前',
+                defaultWidth: 240,
+                minWidth: 160,
               ),
-              DataColumn(
+              ...properties.map(
+                (property) => ResizableDatabaseTableColumn(
+                  keyName: 'p:${property.id}',
+                  label: Text(property.name),
+                  semanticLabel: property.name,
+                ),
+              ),
+              ResizableDatabaseTableColumn(
+                keyName: '__add__',
                 label: _propertyAddPopover(
                   buttonKey: const ValueKey<String>('table-add-property'),
                 ),
+                defaultWidth: 48,
+                minWidth: 48,
+                maxWidth: 48,
+                resizable: false,
               ),
             ],
             rows: records
                 .map(
-                  (record) => DataRow(
+                  (record) => ResizableDatabaseTableRow(
                     selected: record.id == _selectedRecordId,
                     onSelectChanged: (_) => _openDatabaseObject(record.id),
                     cells: [
-                      DataCell(
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
+                      ResizableDatabaseTableCell(
+                        child: Row(
                           children: [
                             SystemObjectListMedia(
                               database: _store.database,
@@ -1258,24 +1324,32 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                               size: 32,
                             ),
                             const SizedBox(width: 8),
-                            Text(record.title),
+                            Expanded(
+                              child: Text(
+                                record.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                           ],
                         ),
                       ),
                       ...properties.map(
-                        (property) => DataCell(
-                          _propertyValueWidget(record, property),
+                        (property) => ResizableDatabaseTableCell(
+                          child: _propertyValueWidget(record, property),
                           onTap: property.type == 'formula' ||
                                   property.type == 'rollup'
                               ? null
                               : () => _editValue(record, property),
                         ),
                       ),
-                      const DataCell(SizedBox.shrink()),
+                      const ResizableDatabaseTableCell(
+                        child: SizedBox.shrink(),
+                      ),
                     ],
                   ),
                 )
-                .toList(),
+                .toList(growable: false),
           ),
           SizedBox(
             width: 320,
