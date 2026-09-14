@@ -4,6 +4,8 @@ import 'package:html/dom.dart';
 import 'package:html/parser.dart' as html_parser;
 import 'package:http/http.dart' as http;
 
+import 'weblink_metadata_target_policy.dart';
+
 class BookmarkMetadata {
   const BookmarkMetadata({
     required this.url,
@@ -29,6 +31,8 @@ class BookmarkMetadata {
 class BookmarkMetadataService {
   const BookmarkMetadataService({http.Client? client}) : _client = client;
 
+  static const _maxRedirects = 5;
+
   final http.Client? _client;
 
   Future<BookmarkMetadata> fetch(String input) async {
@@ -38,7 +42,9 @@ class BookmarkMetadataService {
     // RFC example domains are intentionally non-production resources and are
     // used throughout deterministic creation tests. Their host fallback already
     // contains all useful metadata, so avoid unnecessary external HTTP traffic.
-    if (_isDocumentationHost(uri.host) || !_isHttpScheme(uri.scheme)) {
+    if (_isDocumentationHost(uri.host) ||
+        !_isHttpScheme(uri.scheme) ||
+        !WeblinkMetadataTargetPolicy.isAllowed(uri)) {
       return _fallback(uri);
     }
 
@@ -84,10 +90,10 @@ class BookmarkMetadataService {
       );
 
       return BookmarkMetadata(
-        // Metadata retrieval may follow redirects, but the URL returned here is
-        // also used as Bookmark/Weblink creation identity. Keep that identity
-        // anchored to the requested URL; use the final response URL only as the
-        // base for resource-relative enrichment below.
+        // Metadata retrieval may follow validated redirects, but the URL returned
+        // here is also used as Bookmark/Weblink creation identity. Keep that
+        // identity anchored to the requested URL; use the final response URL only
+        // as the base for resource-relative enrichment below.
         url: uri.toString(),
         title: _firstNonEmpty([
               ogTitle,
@@ -118,22 +124,57 @@ class BookmarkMetadataService {
 
   Future<({http.Response response, Uri resourceUri})> _fetch(
     http.Client client,
-    Uri uri,
+    Uri initialUri,
   ) async {
-    final request = http.Request('GET', uri)
-      ..headers.addAll(const {
-        'User-Agent':
-            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
-            'AppleWebKit/537.36 bookmark_app/0.1',
-        'Accept': 'text/html,application/xhtml+xml',
-      });
-    final streamed = await client.send(request);
-    final resourceUri = switch (streamed) {
-      http.BaseResponseWithUrl(:final url) => url,
-      _ => streamed.request?.url ?? uri,
-    };
-    final response = await http.Response.fromStream(streamed);
-    return (response: response, resourceUri: resourceUri);
+    var uri = initialUri;
+    var redirects = 0;
+
+    while (true) {
+      if (!WeblinkMetadataTargetPolicy.isAllowed(uri)) {
+        throw const _MetadataTargetRejected();
+      }
+
+      final request = http.Request('GET', uri)
+        ..followRedirects = false
+        ..headers.addAll(const {
+          'User-Agent':
+              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
+              'AppleWebKit/537.36 bookmark_app/0.1',
+          'Accept': 'text/html,application/xhtml+xml',
+        });
+      final streamed = await client.send(request);
+      final responseUri = switch (streamed) {
+        http.BaseResponseWithUrl(:final url) => url,
+        _ => streamed.request?.url ?? uri,
+      };
+
+      // A custom transport may expose a final response URL even when it handled
+      // redirects internally. Treat that URL as untrusted network evidence too.
+      if (!WeblinkMetadataTargetPolicy.isAllowed(responseUri)) {
+        await streamed.stream.drain<void>();
+        throw const _MetadataTargetRejected();
+      }
+
+      final response = await http.Response.fromStream(streamed);
+      final location = response.headers['location'];
+      if (response.statusCode >= 300 &&
+          response.statusCode < 400 &&
+          location != null &&
+          location.trim().isNotEmpty) {
+        if (redirects >= _maxRedirects) {
+          throw const _MetadataRedirectLimitExceeded();
+        }
+        final nextUri = responseUri.resolve(location.trim());
+        if (!WeblinkMetadataTargetPolicy.isAllowed(nextUri)) {
+          throw const _MetadataTargetRejected();
+        }
+        redirects += 1;
+        uri = nextUri;
+        continue;
+      }
+
+      return (response: response, resourceUri: responseUri);
+    }
   }
 
   static void _debugFallbackFailure(Object error, StackTrace stackTrace) {
@@ -234,4 +275,12 @@ class BookmarkMetadataService {
     }
     return null;
   }
+}
+
+class _MetadataTargetRejected implements Exception {
+  const _MetadataTargetRejected();
+}
+
+class _MetadataRedirectLimitExceeded implements Exception {
+  const _MetadataRedirectLimitExceeded();
 }
