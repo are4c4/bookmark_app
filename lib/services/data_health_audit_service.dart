@@ -1,4 +1,5 @@
 import '../data/relation_integrity_service.dart';
+import 'canonical_file_health_audit.dart';
 
 /// Privacy-safe finding emitted by one read-only data-health check.
 ///
@@ -8,6 +9,7 @@ class DataHealthFinding {
   const DataHealthFinding({
     required this.subsystem,
     required this.category,
+    this.objectId,
     this.objectTypeId,
     this.propertyId,
     this.sourceObjectId,
@@ -16,6 +18,7 @@ class DataHealthFinding {
 
   final String subsystem;
   final String category;
+  final int? objectId;
   final int? objectTypeId;
   final int? propertyId;
   final int? sourceObjectId;
@@ -142,6 +145,46 @@ class RelationDataHealthCheck implements DataHealthCheck {
             propertyId: issue.propertyId,
             sourceObjectId: issue.sourceObjectId,
             targetObjectId: issue.targetObjectId,
+          ),
+        )
+        .toList(growable: false);
+  }
+}
+
+typedef CanonicalFileHealthAuditRunner =
+    Future<CanonicalFileHealthAuditResult> Function();
+
+/// Thin adapter over D's canonical read-only File health audit.
+///
+/// File persistence and filesystem invariants remain owned by
+/// [CanonicalFileHealthAudit]. This adapter only maps its stable issue kinds and
+/// safe internal File Object ids into the shared data-health result model.
+class FileDataHealthCheck implements DataHealthCheck {
+  const FileDataHealthCheck({required CanonicalFileHealthAuditRunner audit})
+    : _audit = audit;
+
+  factory FileDataHealthCheck.fromAudit({
+    required CanonicalFileHealthAudit audit,
+    required int workspaceId,
+  }) => FileDataHealthCheck(audit: () => audit.run(workspaceId: workspaceId));
+
+  final CanonicalFileHealthAuditRunner _audit;
+
+  @override
+  String get checkId => 'file-integrity';
+
+  @override
+  String get subsystem => 'file';
+
+  @override
+  Future<List<DataHealthFinding>> run() async {
+    final report = await _audit();
+    return report.findings
+        .map(
+          (finding) => DataHealthFinding(
+            subsystem: subsystem,
+            category: finding.kind.name,
+            objectId: finding.fileObjectId,
           ),
         )
         .toList(growable: false);

@@ -1,4 +1,5 @@
 import 'package:bookmark_app/data/relation_integrity_service.dart';
+import 'package:bookmark_app/services/canonical_file_health_audit.dart';
 import 'package:bookmark_app/services/data_health_audit_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -89,6 +90,34 @@ void main() {
         finding.toString(),
         isNot(contains('raw persisted diagnostic text')),
       );
+    },
+  );
+
+  test(
+    'File adapter maps canonical findings and safe Object ids only',
+    () async {
+      const canonicalFinding = CanonicalFileHealthFinding(
+        fileObjectId: 21,
+        kind: CanonicalFileHealthIssueKind.missingBytes,
+      );
+      final check = FileDataHealthCheck(
+        audit: () async =>
+            const CanonicalFileHealthAuditResult(findings: [canonicalFinding]),
+      );
+
+      final report = await DataHealthAuditService(checks: [check]).audit();
+
+      expect(report.isHealthy, isFalse);
+      expect(report.checks.single.status, DataHealthCheckStatus.issues);
+      final finding = report.findings.single;
+      expect(finding.subsystem, 'file');
+      expect(finding.category, 'missingBytes');
+      expect(finding.objectId, 21);
+      expect(finding.objectTypeId, isNull);
+      expect(finding.propertyId, isNull);
+      expect(finding.sourceObjectId, isNull);
+      expect(finding.targetObjectId, isNull);
+      expect(finding.toString(), isNot(contains('/')));
     },
   );
 }
