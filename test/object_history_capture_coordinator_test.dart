@@ -20,7 +20,10 @@ void main() {
     final coordinator = ObjectHistoryCaptureCoordinator(genericStore);
     final checkpointStore = ObjectHistoryCheckpointStore(genericStore);
     final relationStore = ObjectHistoryRelationStore(genericStore);
-    final checkpoint = _checkpoint(revisionId: 1, relationPropertyIds: <int>[21, 22]);
+    final checkpoint = _checkpoint(
+      revisionId: 1,
+      relationPropertyIds: <int>[21, 22],
+    );
     final relations = <ObjectHistoryRelationSnapshot>[
       _relation(propertyId: 21, targetObjectIds: <int>[12, 11]),
       _relation(
@@ -65,7 +68,10 @@ void main() {
     final coordinator = ObjectHistoryCaptureCoordinator(genericStore);
     final checkpointStore = ObjectHistoryCheckpointStore(genericStore);
     final relationStore = ObjectHistoryRelationStore(genericStore);
-    final checkpoint = _checkpoint(revisionId: 1, relationPropertyIds: <int>[21, 22]);
+    final checkpoint = _checkpoint(
+      revisionId: 1,
+      relationPropertyIds: <int>[21, 22],
+    );
 
     await expectLater(
       coordinator.append(
@@ -138,10 +144,7 @@ void main() {
       throwsStateError,
     );
 
-    expect(
-      await checkpointStore.load(objectId: 7, revisionId: 1),
-      isNull,
-    );
+    expect(await checkpointStore.load(objectId: 7, revisionId: 1), isNull);
     expect(
       (await relationStore.load(
         sourceObjectId: 7,
@@ -152,51 +155,51 @@ void main() {
     );
   });
 
-  test('caller-owned rollback removes both stores and readiness recovers', () async {
-    final database = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(database.close);
-    final genericStore = GenericDatabaseStore(database);
-    final coordinator = ObjectHistoryCaptureCoordinator(genericStore);
-    final checkpointStore = ObjectHistoryCheckpointStore(genericStore);
-    final relationStore = ObjectHistoryRelationStore(genericStore);
-    final checkpoint = _checkpoint(revisionId: 1);
-    final relations = <ObjectHistoryRelationSnapshot>[
-      _relation(propertyId: 21),
-    ];
+  test(
+    'caller-owned rollback removes both stores and readiness recovers',
+    () async {
+      final database = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(database.close);
+      final genericStore = GenericDatabaseStore(database);
+      final coordinator = ObjectHistoryCaptureCoordinator(genericStore);
+      final checkpointStore = ObjectHistoryCheckpointStore(genericStore);
+      final relationStore = ObjectHistoryRelationStore(genericStore);
+      final checkpoint = _checkpoint(revisionId: 1);
+      final relations = <ObjectHistoryRelationSnapshot>[
+        _relation(propertyId: 21),
+      ];
 
-    await expectLater(
-      database.transaction(() async {
+      await expectLater(
+        database.transaction(() async {
+          await coordinator.append(
+            checkpoint: checkpoint,
+            relationSnapshots: relations,
+          );
+          throw StateError('force rollback');
+        }),
+        throwsStateError,
+      );
+
+      expect(await checkpointStore.load(objectId: 7, revisionId: 1), isNull);
+      expect(
+        await relationStore.listForRevision(sourceObjectId: 7, revisionId: 1),
+        isEmpty,
+      );
+
+      expect(
         await coordinator.append(
           checkpoint: checkpoint,
           relationSnapshots: relations,
-        );
-        throw StateError('force rollback');
-      }),
-      throwsStateError,
-    );
-
-    expect(await checkpointStore.load(objectId: 7, revisionId: 1), isNull);
-    expect(
-      await relationStore.listForRevision(sourceObjectId: 7, revisionId: 1),
-      isEmpty,
-    );
-
-    expect(
-      await coordinator.append(
-        checkpoint: checkpoint,
-        relationSnapshots: relations,
-      ),
-      isTrue,
-    );
-    expect(
-      await checkpointStore.load(objectId: 7, revisionId: 1),
-      isNotNull,
-    );
-    expect(
-      await relationStore.listForRevision(sourceObjectId: 7, revisionId: 1),
-      hasLength(1),
-    );
-  });
+        ),
+        isTrue,
+      );
+      expect(await checkpointStore.load(objectId: 7, revisionId: 1), isNotNull);
+      expect(
+        await relationStore.listForRevision(sourceObjectId: 7, revisionId: 1),
+        hasLength(1),
+      );
+    },
+  );
 }
 
 ObjectHistoryCheckpointPayload _checkpoint({
