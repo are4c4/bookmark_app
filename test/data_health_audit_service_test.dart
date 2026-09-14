@@ -63,6 +63,96 @@ void main() {
     expect(report.findings.join(), isNot(contains('secret-token')));
   });
 
+  test('composes representative canonical subsystem checks', () async {
+    final audit = DataHealthAuditService(
+      checks: [
+        ObjectDataHealthCheck(
+          audit: () async => const ObjectHealthAuditResult(
+            findings: [
+              ObjectHealthFinding(
+                kind: ObjectHealthIssueKind.malformedValueJson,
+                objectId: 1,
+                objectTypeId: 2,
+                propertyId: 3,
+                propertyObjectTypeId: 2,
+              ),
+            ],
+          ),
+        ),
+        RelationDataHealthCheck(
+          audit: () async => const RelationIntegrityReport(
+            issues: [
+              RelationIntegrityIssue(
+                kind: RelationIntegrityIssueKind.missingTargetObject,
+                message: 'private relation diagnostic',
+                sourceObjectId: 4,
+                targetObjectId: 5,
+              ),
+            ],
+          ),
+        ),
+        DatabaseViewDataHealthCheck(
+          audit: () async => const DatabaseViewHealthAuditResult(
+            findings: [
+              DatabaseViewHealthFinding(
+                viewId: 6,
+                kind: DatabaseViewHealthIssueKind.danglingFilterProperty,
+                propertyId: 7,
+              ),
+            ],
+          ),
+        ),
+        SearchDataHealthCheck(
+          audit: () async => const ObjectSearchHealthAuditResult(
+            workspaceId: 8,
+            canonicalObjectCount: 1,
+            inspectedIndexRowCount: 0,
+            findings: [
+              ObjectSearchHealthFinding(
+                kind: ObjectSearchHealthFindingKind.missingIndexRow,
+                objectId: 9,
+                canonicalObjectTypeId: 10,
+                canonicalWorkspaceId: 8,
+              ),
+            ],
+          ),
+        ),
+        FileDataHealthCheck(
+          audit: () async => const CanonicalFileHealthAuditResult(
+            findings: [
+              CanonicalFileHealthFinding(
+                fileObjectId: 11,
+                kind: CanonicalFileHealthIssueKind.missingBytes,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    final report = await audit.audit();
+
+    expect(report.isHealthy, isFalse);
+    expect(report.checks.map((check) => check.checkId), [
+      'object-integrity',
+      'relation-integrity',
+      'database-view-integrity',
+      'search-index-integrity',
+      'file-integrity',
+    ]);
+    expect(
+      report.checks.map((check) => check.status),
+      everyElement(DataHealthCheckStatus.issues),
+    );
+    expect(report.findings.map((finding) => finding.subsystem), [
+      'object',
+      'relation',
+      'database-view',
+      'search',
+      'file',
+    ]);
+  });
+
   test(
     'Object adapter maps canonical findings and privacy-safe ids only',
     () async {
