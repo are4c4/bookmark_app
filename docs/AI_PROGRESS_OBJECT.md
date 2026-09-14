@@ -18,11 +18,6 @@ Own generic Object/ObjectType identity and lifecycle semantics, reusable Propert
 
 Always verify live GitHub before taking ownership. Completed issues below are checkpoints, not active work sources.
 
-### #1062 — Object duplicate / merge / redirect semantics
-Define advisory duplicate detection separately from explicit merge, preserve one canonical Object identity, define redirect/tombstone behavior for retired IDs, preserve Body/Properties/lifecycle state, and keep Relation rewiring B-owned. Fuzzy matching must never silently merge Objects.
-
-B's canonical Relation rewiring boundary from completed #1259 is integrated, and the first A-owned persistent merge finalization through #1306 is also completed. The durable sequence is now established: revalidate frozen A state inside the caller-owned transaction, apply B's canonical Relation rewiring first, persist resolved survivor state plus redirect, and retire the losing Object only after those steps succeed. #1259 is no longer a blocker. #1406 surfaces the existing exact title/alias duplicate advisory in the canonical Object Inspector as read-only product guidance; it does not silently merge/reuse/delete and does not replace an explicit merge-decision UI. After #1406 integration, re-audit #1062 for a concrete remaining explicit-merge product obligation before creating another A issue.
-
 ### #1064 — durable Object history / restore contract
 Define restart-safe durable history for Object/Property/Body/Relation state, explicitly separate from local Undo, and make restore conflict-aware/fail-closed. Relation-integrity and managed-byte retention remain B/F-owned boundaries rather than A-side duplicate authorities.
 
@@ -30,10 +25,10 @@ A's logical history/checkpoint and restore-safety contracts are established, and
 
 ## Completed checkpoints
 
-### #1062 A-side explicit merge contract through #1294
-Completed as the Object-core contract/planning/materialization foundation for explicit merge.
+### #1062 — completed Object duplicate / merge / redirect capability
+Completed end-to-end after the explicit Object Inspector flow integrated through #1425/#1426. Duplicate discovery remains advisory, merge remains explicit, one survivor is selected, retired IDs redirect durably, A-owned state is conflict-resolved, Relation rewiring remains B-owned, and finalization is stale-safe/atomic. Future merge defects require a new focused reproducible issue rather than reopening #1062 as an active queue.
 
-Durable contract:
+The foundational Object-core contract/planning/materialization through #1294 remains authoritative:
 - duplicate detection remains advisory unless a native stable key independently proves deterministic reuse; merge is an explicit operation;
 - merge preview owns positive distinct survivor/retired identities, explicit conflict requirements and B-owned Relation blockers;
 - retired Object IDs have durable A-owned redirect semantics that remain resolvable after Object-row retirement and fail closed on malformed/conflicting/cyclic mappings;
@@ -69,6 +64,30 @@ Durable contract:
 - title and alias identity edits refresh the advisory, with generation guarding so stale asynchronous results cannot overwrite newer identity state;
 - advisory failure is isolated from normal Object detail loading and offers retry without hiding or mutating the Object;
 - explicit conflict decisions and persistent merge finalization remain separate from this advisory surface.
+
+### #1420 / #1422 — canonical A/B merge preparation
+Completed. A now has one read-only composition boundary that prepares the exact explicit merge pair without duplicating B Relation authority.
+
+Durable contract:
+- `ObjectMergePreparationService` captures frozen A-owned survivor/retired state through `ObjectMergeStateStore`;
+- the same exact identities are previewed through B's canonical `RelationObjectMergeService`;
+- B-owned Relation blockers are fed into `ObjectMergePreparedState.prepare`, so an integrity-blocked merge cannot accidentally become executable in later UI;
+- preparation performs no Object/Relation mutation, redirect write, Object retirement, schema change or managed-file action;
+- finalization still revalidates both A and B state transactionally, so preparation is review context rather than mutation authorization.
+
+### #1425 / #1426 — explicit Object Inspector merge execution
+Completed. The canonical Object Inspector can execute the already-proven merge contract only through explicit user control.
+
+Durable contract:
+- duplicate-row navigation remains read-only; `統合…` is a distinct action;
+- the user explicitly chooses current vs candidate identity as survivor before execution;
+- every unresolved A-owned requirement must receive one contract-allowed decision, and Relation blockers remain B-owned/read-only and disable execution;
+- the destructive action requires a second confirmation naming survivor and retired Object;
+- execution delegates only to `ObjectMergeFinalizer`; UI does not reproduce Relation rewiring, redirect creation, stale checks or Object retirement logic;
+- current-survivor completion reloads the Inspector, while candidate-survivor completion replaces the retired route with the surviving canonical Object;
+- cancellation performs no mutation, and stale/late failure fails closed, re-prepares current state and preserves both Objects without partial mutation;
+- internal Relation blocker keys remain diagnostic/widget identity only and are not exposed as ordinary user-facing text;
+- survivor selection uses the current Flutter `RadioGroup` contract, and destructive buttons are not autofocus defaults.
 
 ### #1064 A/B/F durable-history boundaries through #1267/#1268
 Completed contract checkpoints establish the A-owned logical history shape, B-owned Relation checkpoint/restore integrity boundary and F-owned managed-byte safety boundary.
@@ -159,8 +178,7 @@ Completed. Enter split, Shift+Enter newline, safe leading-Backspace merge, compa
 - collision-safe Bookmark -> canonical Weblink convergence while compatibility data remains intact;
 - generic-first Person create/update/delete/reconciliation authority with temporary legacy projection;
 - explicit preservation of legacy-only Bookmark `lastOpenedAt`, `openCount`, and `deletedAt` until a separate destination/retirement decision exists;
-- explicit Object merge preview/redirect, concrete A-owned state planning, resolved-state materialization and persistent finalization composed with B's canonical Relation rewiring;
-- product-facing read-only exact duplicate advisory in the canonical Object Inspector, without changing explicit merge authority;
+- completed explicit Object duplicate/merge/redirect capability: preview/redirect, concrete A-owned state planning, A/B preparation, resolved-state materialization, canonical Relation rewiring, atomic finalization and user-controlled Object Inspector execution;
 - durable Object history identity/checkpoint/restore-safety contracts plus restart-safe A-owned checkpoint persistence, integrated B Relation checkpoint/restore and F managed-byte retention boundaries.
 
 ## Cross-lane boundaries
@@ -179,12 +197,12 @@ A runtime Object/Body change requires changed-Dart Format, Analyze/guards, focus
 
 ## Resume sequence
 1. refresh latest `main`, live open PR ownership, current CI, shared hotspots and migration ownership;
-2. verify the state/acceptance of #1062 and #1064 plus any newer focused A issues; treat completed focused merge/history checkpoints as integrated contracts rather than active work sources;
-3. for #1062, treat B/#1259, A/#1306 and the #1406 read-only advisory surface as completed checkpoints after their integration. Re-audit whether an explicit merge-decision/finalization product UI remains a concrete A-owned acceptance gap before opening another focused issue; do not make exact-advisory candidates auto-merge;
+2. treat completed #1062 and its focused merge checkpoints as integrated contracts, then verify the live state/acceptance of #1064 plus any newer focused A issue;
+3. do not reopen #1062 as a work queue. A future merge defect or product gap must be demonstrated on current main and opened as a new focused Issue; do not recreate the explicit merge UI or make exact-advisory candidates auto-merge;
 4. for #1064, treat A/#1402, B/#1267 and F/#1268 as integrated boundaries, but keep whole-capture sequencing behind open B/#1405 until restart-safe Relation snapshots are integrated or explicitly stack-ready. A must compose the B boundary rather than serialize Relation targets itself;
 5. preserve the legacy-only Bookmark facts recorded by completed #1177 until a lossless destination or explicit retirement policy exists; do not convert documentation pressure into speculative schema design;
 6. after each coherent slice/PR/merge, apply the shared **Lane continuation and resume/stop contract** in `AGENTS.md` and continue while safe A work exists.
 
 ## Current continuation / stop contract
 
-#1406/#1409 is the current A runtime slice until integrated. After that merge, run a fresh latest-main/open-PR/hotspot audit before choosing another slice. #1064 whole-Object history capture has an explicit `dependency` gate on B/#1405 while that issue remains open without an integrated/stack-ready persisted Relation-history boundary. Do not stop merely because #1064 is blocked if #1062 or another focused A obligation is independently actionable; if no such independent work exists after the live audit, record `dependency` as the exact stop category with #1405 evidence.
+#1062 is completed and must not be reopened merely to keep Lane A active. #1064 whole-Object history capture currently has an explicit `dependency` gate on B/#1405 while that issue remains open without an integrated/stack-ready persisted Relation-history boundary. Recheck live GitHub for any newer focused A issue before stopping; if none exists, `dependency` on B/#1405 is the exact stop category. Do not take over B/#1405, serialize Relation history in A, or invent speculative A work to avoid the stop.

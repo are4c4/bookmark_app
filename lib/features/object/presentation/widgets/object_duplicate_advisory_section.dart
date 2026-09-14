@@ -8,12 +8,14 @@ class ObjectDuplicateAdvisorySection extends StatelessWidget {
     required this.candidates,
     required this.failed,
     required this.onOpenCandidate,
+    this.onMergeCandidate,
     this.onRetry,
   });
 
   final List<ObjectDuplicateCandidate> candidates;
   final bool failed;
   final ValueChanged<int> onOpenCandidate;
+  final ValueChanged<ObjectDuplicateCandidate>? onMergeCandidate;
   final VoidCallback? onRetry;
 
   @override
@@ -81,7 +83,20 @@ class ObjectDuplicateAdvisorySection extends StatelessWidget {
                       dense: true,
                       title: Text(candidate.canonicalTitle),
                       subtitle: Text(_reason(candidate)),
-                      trailing: const Icon(Icons.chevron_right),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (onMergeCandidate != null)
+                            TextButton(
+                              key: ValueKey(
+                                'object-duplicate-merge-${candidate.objectId}',
+                              ),
+                              onPressed: () => onMergeCandidate!(candidate),
+                              child: const Text('統合…'),
+                            ),
+                          const Icon(Icons.chevron_right),
+                        ],
+                      ),
                       onTap: () => onOpenCandidate(candidate.objectId),
                     ),
                   ),
