@@ -64,7 +64,7 @@ abstract interface class DataHealthCheck {
 /// is intentionally not copied into the report.
 class DataHealthAuditService {
   DataHealthAuditService({required List<DataHealthCheck> checks})
-      : _checks = List.unmodifiable(checks);
+    : _checks = List.unmodifiable(checks);
 
   final List<DataHealthCheck> _checks;
 
@@ -72,7 +72,9 @@ class DataHealthAuditService {
     final results = <DataHealthCheckResult>[];
     for (final check in _checks) {
       try {
-        final findings = List<DataHealthFinding>.unmodifiable(await check.run());
+        final findings = List<DataHealthFinding>.unmodifiable(
+          await check.run(),
+        );
         results.add(
           DataHealthCheckResult(
             checkId: check.checkId,
@@ -112,15 +114,13 @@ typedef RelationIntegrityAudit = Future<RelationIntegrityReport> Function();
 /// the shared data-health result model.
 class RelationDataHealthCheck implements DataHealthCheck {
   const RelationDataHealthCheck({required RelationIntegrityAudit audit})
-      : _audit = audit;
+    : _audit = audit;
 
   factory RelationDataHealthCheck.fromService({
     required RelationIntegrityService service,
     required int workspaceId,
   }) =>
-      RelationDataHealthCheck(
-        audit: () => service.auditWorkspace(workspaceId),
-      );
+      RelationDataHealthCheck(audit: () => service.auditWorkspace(workspaceId));
 
   final RelationIntegrityAudit _audit;
 
