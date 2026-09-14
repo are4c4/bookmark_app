@@ -166,9 +166,7 @@ class FileDataHealthCheck implements DataHealthCheck {
   factory FileDataHealthCheck.fromAudit({
     required CanonicalFileHealthAudit audit,
     required int workspaceId,
-  }) => FileDataHealthCheck(
-    audit: () => audit.run(workspaceId: workspaceId),
-  );
+  }) => FileDataHealthCheck(audit: () => audit.run(workspaceId: workspaceId));
 
   final CanonicalFileHealthAuditRunner _audit;
 
