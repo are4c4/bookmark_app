@@ -1154,7 +1154,7 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                   children: [
                     if (activeView != null)
                       DatabaseGalleryViewCoverMedia(
-                        database: widget.repository.workspaceStore.database,
+                        database: _store.database,
                         objectStore: _objectStore,
                         workspaceId: widget.repository.workspaceId,
                         view: activeView,
