@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'object_body_reference_picker_search_field.dart';
+
 class ObjectBodyDatabaseViewReferenceCandidate {
   const ObjectBodyDatabaseViewReferenceCandidate({
     required this.databaseId,
@@ -67,13 +69,9 @@ class _ObjectBodyDatabaseViewReferencePickerDialogState
         height: 420,
         child: Column(
           children: [
-            TextField(
-              key: const ValueKey('body-database-view-reference-search'),
-              autofocus: true,
-              decoration: const InputDecoration(
-                prefixIcon: Icon(Icons.search),
-                hintText: 'Database名またはView名で検索',
-              ),
+            ObjectBodyReferencePickerSearchField(
+              fieldKey: const ValueKey('body-database-view-reference-search'),
+              hintText: 'Database名またはView名で検索',
               onChanged: (value) => setState(() => _query = value),
             ),
             const SizedBox(height: 12),
