@@ -1,3 +1,4 @@
+import 'package:bookmark_app/data/database_view_health_audit.dart';
 import 'package:bookmark_app/data/relation_integrity_service.dart';
 import 'package:bookmark_app/repositories/object_search_health_audit.dart';
 import 'package:bookmark_app/services/canonical_file_health_audit.dart';
@@ -153,6 +154,40 @@ void main() {
       expect(finding.objectId, 31);
       expect(finding.objectTypeId, 34);
       expect(finding.propertyId, isNull);
+      expect(finding.sourceObjectId, isNull);
+      expect(finding.targetObjectId, isNull);
+    },
+  );
+
+  test(
+    'Database/View adapter maps canonical findings and privacy-safe ids only',
+    () async {
+      const canonicalFinding = DatabaseViewHealthFinding(
+        viewId: 41,
+        kind: DatabaseViewHealthIssueKind.danglingFilterProperty,
+        databaseId: 42,
+        objectTypeId: 43,
+        propertyId: 44,
+      );
+      final check = DatabaseViewDataHealthCheck(
+        audit: () async => const DatabaseViewHealthAuditResult(
+          findings: [canonicalFinding],
+        ),
+      );
+
+      final report = await DataHealthAuditService(checks: [check]).audit();
+
+      expect(report.isHealthy, isFalse);
+      expect(report.checks.single.checkId, 'database-view-integrity');
+      expect(report.checks.single.status, DataHealthCheckStatus.issues);
+      final finding = report.findings.single;
+      expect(finding.subsystem, 'database-view');
+      expect(finding.category, 'danglingFilterProperty');
+      expect(finding.viewId, 41);
+      expect(finding.databaseId, 42);
+      expect(finding.objectTypeId, 43);
+      expect(finding.propertyId, 44);
+      expect(finding.objectId, isNull);
       expect(finding.sourceObjectId, isNull);
       expect(finding.targetObjectId, isNull);
     },
