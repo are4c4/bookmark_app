@@ -6,8 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 GenericPropertyRecord property(
   String type, {
   Map<String, dynamic> config = const <String, dynamic>{},
-}) =>
-    GenericPropertyRecord(
+}) => GenericPropertyRecord(
       id: 7,
       databaseId: 3,
       name: type,
