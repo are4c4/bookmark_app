@@ -1,4 +1,5 @@
 import 'package:bookmark_app/data/database_view_health_audit.dart';
+import 'package:bookmark_app/data/object_health_audit.dart';
 import 'package:bookmark_app/data/relation_integrity_service.dart';
 import 'package:bookmark_app/repositories/object_search_health_audit.dart';
 import 'package:bookmark_app/services/canonical_file_health_audit.dart';
@@ -61,6 +62,39 @@ void main() {
     expect(report.findings.join(), isNot(contains('private-vault')));
     expect(report.findings.join(), isNot(contains('secret-token')));
   });
+
+  test(
+    'Object adapter maps canonical findings and privacy-safe ids only',
+    () async {
+      const canonicalFinding = ObjectHealthFinding(
+        kind: ObjectHealthIssueKind.malformedValueJson,
+        objectId: 1,
+        objectTypeId: 2,
+        propertyId: 3,
+        propertyObjectTypeId: 4,
+      );
+      final check = ObjectDataHealthCheck(
+        audit: () async =>
+            const ObjectHealthAuditResult(findings: [canonicalFinding]),
+      );
+
+      final report = await DataHealthAuditService(checks: [check]).audit();
+
+      expect(report.isHealthy, isFalse);
+      expect(report.checks.single.checkId, 'object-integrity');
+      expect(report.checks.single.status, DataHealthCheckStatus.issues);
+      final finding = report.findings.single;
+      expect(finding.subsystem, 'object');
+      expect(finding.category, 'malformedValueJson');
+      expect(finding.objectId, 1);
+      expect(finding.objectTypeId, 2);
+      expect(finding.propertyId, 3);
+      expect(finding.sourceObjectId, isNull);
+      expect(finding.targetObjectId, isNull);
+      expect(finding.viewId, isNull);
+      expect(finding.databaseId, isNull);
+    },
+  );
 
   test(
     'Relation adapter maps canonical issue kinds and safe ids only',
