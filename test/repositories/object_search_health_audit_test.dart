@@ -69,25 +69,30 @@ void main() {
     expect(result.findings, isEmpty);
   });
 
-  test('reports a missing canonical index identity without repairing it', () async {
-    await database.customStatement(
-      'DELETE FROM object_search_fts WHERE CAST(object_id AS INTEGER) = ?',
-      <Object>[objectId],
-    );
+  test(
+    'reports a missing canonical index identity without repairing it',
+    () async {
+      await database.customStatement(
+        'DELETE FROM object_search_fts WHERE CAST(object_id AS INTEGER) = ?',
+        <Object>[objectId],
+      );
 
-    final result = await audit.auditWorkspace(workspaceId);
+      final result = await audit.auditWorkspace(workspaceId);
 
-    expect(
-      result.findings.map((finding) => finding.kind),
-      contains(ObjectSearchHealthFindingKind.missingIndexRow),
-    );
-    final rows = await database.customSelect(
-      '''SELECT rowid FROM object_search_fts
+      expect(
+        result.findings.map((finding) => finding.kind),
+        contains(ObjectSearchHealthFindingKind.missingIndexRow),
+      );
+      final rows = await database
+          .customSelect(
+            '''SELECT rowid FROM object_search_fts
          WHERE CAST(object_id AS INTEGER) = ?''',
-      variables: <Variable<Object>>[Variable<int>(objectId)],
-    ).get();
-    expect(rows, isEmpty, reason: 'health audit must remain read-only');
-  });
+            variables: <Variable<Object>>[Variable<int>(objectId)],
+          )
+          .get();
+      expect(rows, isEmpty, reason: 'health audit must remain read-only');
+    },
+  );
 
   test('reports stale, duplicate, and malformed index identities', () async {
     await insertIdentity(
@@ -120,38 +125,40 @@ void main() {
     expect(duplicate.rowCount, 2);
   });
 
-  test('reports cross-workspace/type identity mismatch for canonical Object', () async {
-    final secondWorkspaceId = await WorkspaceStore(database).createWorkspace(
-      'Second workspace',
-    );
-    final secondTypeId = await objectStore.createObjectType(
-      workspaceId: secondWorkspaceId,
-      name: 'Other type',
-    );
-    await database.customStatement(
-      'DELETE FROM object_search_fts WHERE CAST(object_id AS INTEGER) = ?',
-      <Object>[objectId],
-    );
-    await insertIdentity(
-      objectId: objectId,
-      objectTypeId: secondTypeId,
-      workspaceId: secondWorkspaceId,
-    );
+  test(
+    'reports cross-workspace/type identity mismatch for canonical Object',
+    () async {
+      final secondWorkspaceId = await WorkspaceStore(database)
+          .createWorkspace('Second workspace');
+      final secondTypeId = await objectStore.createObjectType(
+        workspaceId: secondWorkspaceId,
+        name: 'Other type',
+      );
+      await database.customStatement(
+        'DELETE FROM object_search_fts WHERE CAST(object_id AS INTEGER) = ?',
+        <Object>[objectId],
+      );
+      await insertIdentity(
+        objectId: objectId,
+        objectTypeId: secondTypeId,
+        workspaceId: secondWorkspaceId,
+      );
 
-    final result = await audit.auditWorkspace(workspaceId);
-    final mismatch = result.findings.firstWhere(
-      (finding) =>
-          finding.kind == ObjectSearchHealthFindingKind.identityMismatch,
-    );
+      final result = await audit.auditWorkspace(workspaceId);
+      final mismatch = result.findings.firstWhere(
+        (finding) =>
+            finding.kind == ObjectSearchHealthFindingKind.identityMismatch,
+      );
 
-    expect(mismatch.objectId, objectId);
-    expect(mismatch.indexedObjectTypeId, secondTypeId);
-    expect(mismatch.indexedWorkspaceId, secondWorkspaceId);
-    expect(mismatch.canonicalObjectTypeId, objectTypeId);
-    expect(mismatch.canonicalWorkspaceId, workspaceId);
-    expect(
-      result.findings.map((finding) => finding.kind),
-      contains(ObjectSearchHealthFindingKind.missingIndexRow),
-    );
-  });
+      expect(mismatch.objectId, objectId);
+      expect(mismatch.indexedObjectTypeId, secondTypeId);
+      expect(mismatch.indexedWorkspaceId, secondWorkspaceId);
+      expect(mismatch.canonicalObjectTypeId, objectTypeId);
+      expect(mismatch.canonicalWorkspaceId, workspaceId);
+      expect(
+        result.findings.map((finding) => finding.kind),
+        contains(ObjectSearchHealthFindingKind.missingIndexRow),
+      );
+    },
+  );
 }
