@@ -83,17 +83,15 @@ class _IndexedSearchIdentity {
 /// exposing indexed titles, Body, Properties, URLs, or other user content.
 class ObjectSearchHealthAudit {
   ObjectSearchHealthAudit(GenericDatabaseStore genericStore)
-      : _database = genericStore.database;
+    : _database = genericStore.database;
 
   final AppDatabase _database;
 
   Future<bool> _indexExists() async {
-    final rows = await _database.customSelect(
-      '''SELECT 1 AS present
+    final rows = await _database.customSelect('''SELECT 1 AS present
          FROM sqlite_master
          WHERE type = 'table' AND name = 'object_search_fts'
-         LIMIT 1''',
-    ).get();
+         LIMIT 1''').get();
     return rows.isNotEmpty;
   }
 
@@ -103,15 +101,13 @@ class ObjectSearchHealthAudit {
   }
 
   Future<List<_CanonicalSearchIdentity>> _canonicalIdentities() async {
-    final rows = await _database.customSelect(
-      '''SELECT
+    final rows = await _database.customSelect('''SELECT
            r.id AS object_id,
            r.database_id AS object_type_id,
            d.workspace_id AS workspace_id
          FROM generic_records r
          JOIN generic_databases d ON d.id = r.database_id
-         ORDER BY r.id''',
-    ).get();
+         ORDER BY r.id''').get();
     return rows
         .map(
           (row) => _CanonicalSearchIdentity(
@@ -124,22 +120,22 @@ class ObjectSearchHealthAudit {
   }
 
   Future<List<_IndexedSearchIdentity>> _indexedIdentities() async {
-    final rows = await _database.customSelect(
-      '''SELECT
+    final rows = await _database.customSelect('''SELECT
            CAST(object_id AS TEXT) AS object_id_raw,
            CAST(object_type_id AS TEXT) AS object_type_id_raw,
            CAST(workspace_id AS TEXT) AS workspace_id_raw
          FROM object_search_fts
-         ORDER BY rowid''',
-    ).get();
+         ORDER BY rowid''').get();
     return rows
         .map(
           (row) => _IndexedSearchIdentity(
             objectId: _parseIdentity(row.readNullable<String>('object_id_raw')),
-            objectTypeId:
-                _parseIdentity(row.readNullable<String>('object_type_id_raw')),
-            workspaceId:
-                _parseIdentity(row.readNullable<String>('workspace_id_raw')),
+            objectTypeId: _parseIdentity(
+              row.readNullable<String>('object_type_id_raw'),
+            ),
+            workspaceId: _parseIdentity(
+              row.readNullable<String>('workspace_id_raw'),
+            ),
           ),
         )
         .toList(growable: false);
@@ -168,12 +164,14 @@ class ObjectSearchHealthAudit {
     }
 
     final indexed = await _indexedIdentities();
-    final relevant = indexed.where((identity) {
-      if (identity.workspaceId == workspaceId) return true;
-      final objectId = identity.objectId;
-      if (objectId == null) return false;
-      return canonicalById[objectId]?.workspaceId == workspaceId;
-    }).toList(growable: false);
+    final relevant = indexed
+        .where((identity) {
+          if (identity.workspaceId == workspaceId) return true;
+          final objectId = identity.objectId;
+          if (objectId == null) return false;
+          return canonicalById[objectId]?.workspaceId == workspaceId;
+        })
+        .toList(growable: false);
 
     final findings = <ObjectSearchHealthFinding>[];
     final rowsByObjectId = <int, List<_IndexedSearchIdentity>>{};
@@ -197,9 +195,9 @@ class ObjectSearchHealthAudit {
         continue;
       }
 
-      rowsByObjectId.putIfAbsent(objectId, () => <_IndexedSearchIdentity>[]).add(
-            indexedIdentity,
-          );
+      rowsByObjectId
+          .putIfAbsent(objectId, () => <_IndexedSearchIdentity>[])
+          .add(indexedIdentity);
       final canonicalIdentity = canonicalById[objectId];
       if (canonicalIdentity == null) {
         if (indexedWorkspaceId == workspaceId) {
@@ -215,7 +213,8 @@ class ObjectSearchHealthAudit {
         continue;
       }
 
-      final exact = canonicalIdentity.objectTypeId == objectTypeId &&
+      final exact =
+          canonicalIdentity.objectTypeId == objectTypeId &&
           canonicalIdentity.workspaceId == indexedWorkspaceId;
       if (exact) {
         exactRowsByObjectId[objectId] =
