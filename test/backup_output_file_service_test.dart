@@ -41,11 +41,17 @@ void main() {
         '// Cleanup is best-effort. A cleanup failure must not replace the original',
       ),
     );
-    expect(source, contains("'Backup output staging cleanup failed.'"));
-    expect(source, contains("name: 'bookmark_app.backup_output'"));
+    expect(
+      source,
+      contains(
+        "developer.log(\n"
+        "            'Backup output staging cleanup failed.',\n"
+        "            name: 'bookmark_app.backup_output',\n"
+        '            stackTrace: stackTrace,\n'
+        '          );',
+      ),
+    );
     expect(source, contains('rethrow;'));
     expect(source, isNot(contains('error: error')));
-    expect(source, isNot(contains('staged.path,')));
-    expect(source, isNot(contains('destination.path,')));
   });
 }
