@@ -13,10 +13,7 @@ class VaultMoveCopyService {
   final VaultMovePreflightService preflight;
   final VaultRelinkValidator validator;
 
-  static void _debugCleanupFailure(
-    String operation,
-    StackTrace stackTrace,
-  ) {
+  static void _debugCleanupFailure(String operation, StackTrace stackTrace) {
     assert(() {
       try {
         stderr.writeln(
