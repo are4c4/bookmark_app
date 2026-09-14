@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'object_body_reference_picker_result_tile.dart';
 import 'object_body_reference_picker_search_field.dart';
 
 class ObjectBodyDatabaseViewReferenceCandidate {
@@ -85,17 +86,15 @@ class _ObjectBodyDatabaseViewReferencePickerDialogState
                         final suffix = candidate.viewId == null
                             ? 'database'
                             : 'view-${candidate.viewId}';
-                        return ListTile(
+                        return ObjectBodyReferencePickerResultTile(
                           key: ValueKey(
                             'body-database-view-reference-${candidate.databaseId}-$suffix',
                           ),
-                          leading: Text(candidate.databaseIcon),
-                          title: Text(candidate.displayName),
-                          subtitle: Text(
-                            candidate.viewId == null
-                                ? 'Database'
-                                : candidate.databaseName,
-                          ),
+                          leadingText: candidate.databaseIcon,
+                          title: candidate.displayName,
+                          subtitle: candidate.viewId == null
+                              ? 'Database'
+                              : candidate.databaseName,
                           onTap: () => Navigator.pop(context, candidate),
                         );
                       },
