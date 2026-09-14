@@ -13,6 +13,19 @@ class VaultMoveCopyService {
   final VaultMovePreflightService preflight;
   final VaultRelinkValidator validator;
 
+  static void _debugCleanupFailure(
+    String operation,
+    StackTrace stackTrace,
+  ) {
+    assert(() {
+      stderr.writeln(
+        'VaultMoveCopyService: $operation failed during rollback.',
+      );
+      stderr.writeln(stackTrace);
+      return true;
+    }());
+  }
+
   Future<DatabaseProfile> copyPreparedVault({
     required DatabaseProfile profile,
     required String targetDirectoryPath,
@@ -144,8 +157,8 @@ class VaultMoveCopyService {
     for (final file in createdFiles.reversed) {
       try {
         if (await file.exists()) await file.delete();
-      } catch (_) {
-        // Best-effort cleanup must not replace the original copy failure.
+      } catch (_, stackTrace) {
+        _debugCleanupFailure('copied file cleanup', stackTrace);
       }
     }
     for (final directory in createdDirectories.reversed) {
@@ -153,8 +166,8 @@ class VaultMoveCopyService {
         if (await directory.exists() && await directory.list().isEmpty) {
           await directory.delete();
         }
-      } catch (_) {
-        // Best-effort cleanup must not replace the original copy failure.
+      } catch (_, stackTrace) {
+        _debugCleanupFailure('created directory cleanup', stackTrace);
       }
     }
     if (removeRootWhenEmpty) {
@@ -162,8 +175,8 @@ class VaultMoveCopyService {
         if (await target.exists() && await target.list().isEmpty) {
           await target.delete();
         }
-      } catch (_) {
-        // Best-effort cleanup must not replace the original copy failure.
+      } catch (_, stackTrace) {
+        _debugCleanupFailure('created root cleanup', stackTrace);
       }
     }
   }
