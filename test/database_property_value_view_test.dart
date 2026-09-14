@@ -3,12 +3,16 @@ import 'package:bookmark_app/features/database/presentation/widgets/database_pro
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-GenericPropertyRecord property(String type) => GenericPropertyRecord(
+GenericPropertyRecord property(
+  String type, {
+  Map<String, dynamic> config = const <String, dynamic>{},
+}) =>
+    GenericPropertyRecord(
       id: 7,
       databaseId: 3,
       name: type,
       type: type,
-      config: const <String, dynamic>{},
+      config: config,
       sortOrder: 0,
     );
 
@@ -50,5 +54,36 @@ void main() {
     expect(find.text('Bob'), findsOneWidget);
     expect(find.text('41'), findsNothing);
     expect(find.text('42'), findsNothing);
+  });
+
+  testWidgets('Database hidden Property does not render its value',
+      (tester) async {
+    await tester.pumpWidget(
+      host(
+        DatabasePropertyValueView(
+          property: property(
+            'text',
+            config: const <String, dynamic>{'system': true, 'hidden': true},
+          ),
+          value: '/managed/internal/path.jpg',
+        ),
+      ),
+    );
+
+    expect(find.text('/managed/internal/path.jpg'), findsNothing);
+  });
+
+  testWidgets('Database visible Property still renders its value',
+      (tester) async {
+    await tester.pumpWidget(
+      host(
+        DatabasePropertyValueView(
+          property: property('text'),
+          value: 'Visible value',
+        ),
+      ),
+    );
+
+    expect(find.text('Visible value'), findsOneWidget);
   });
 }
