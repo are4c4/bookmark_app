@@ -72,64 +72,68 @@ void main() {
     expect(metadata.title, '169.254.169.254');
   });
 
-  test('redirect to a private target is rejected before the second request',
-      () async {
-    final requested = <Uri>[];
-    final service = BookmarkMetadataService(
-      client: MockClient((request) async {
-        requested.add(request.url);
-        if (requested.length == 1) {
+  test(
+    'redirect to a private target is rejected before the second request',
+    () async {
+      final requested = <Uri>[];
+      final service = BookmarkMetadataService(
+        client: MockClient((request) async {
+          requested.add(request.url);
+          if (requested.length == 1) {
+            return http.Response(
+              '',
+              302,
+              headers: const {'location': 'http://127.0.0.1/admin'},
+            );
+          }
+          return http.Response('forbidden private response', 200);
+        }),
+      );
+
+      final metadata = await service.fetch(
+        'https://public.resource.test/start',
+      );
+
+      expect(requested, [Uri.parse('https://public.resource.test/start')]);
+      expect(metadata.url, 'https://public.resource.test/start');
+      expect(metadata.title, 'public.resource.test');
+    },
+  );
+
+  test(
+    'public redirects are followed only after each target is validated',
+    () async {
+      final requested = <Uri>[];
+      final service = BookmarkMetadataService(
+        client: MockClient((request) async {
+          requested.add(request.url);
+          if (requested.length == 1) {
+            return http.Response(
+              '',
+              302,
+              headers: const {'location': 'https://cdn.resource.test/final/'},
+            );
+          }
           return http.Response(
-            '',
-            302,
-            headers: const {
-              'location': 'http://127.0.0.1/admin',
-            },
+            '<html><head><title>Public redirect target</title></head></html>',
+            200,
+            headers: const {'content-type': 'text/html'},
           );
-        }
-        return http.Response('forbidden private response', 200);
-      }),
-    );
+        }),
+      );
 
-    final metadata = await service.fetch('https://public.resource.test/start');
+      final metadata = await service.fetch(
+        'https://public.resource.test/start',
+      );
 
-    expect(requested, [Uri.parse('https://public.resource.test/start')]);
-    expect(metadata.url, 'https://public.resource.test/start');
-    expect(metadata.title, 'public.resource.test');
-  });
-
-  test('public redirects are followed only after each target is validated',
-      () async {
-    final requested = <Uri>[];
-    final service = BookmarkMetadataService(
-      client: MockClient((request) async {
-        requested.add(request.url);
-        if (requested.length == 1) {
-          return http.Response(
-            '',
-            302,
-            headers: const {
-              'location': 'https://cdn.resource.test/final/',
-            },
-          );
-        }
-        return http.Response(
-          '<html><head><title>Public redirect target</title></head></html>',
-          200,
-          headers: const {'content-type': 'text/html'},
-        );
-      }),
-    );
-
-    final metadata = await service.fetch('https://public.resource.test/start');
-
-    expect(requested, [
-      Uri.parse('https://public.resource.test/start'),
-      Uri.parse('https://cdn.resource.test/final/'),
-    ]);
-    expect(metadata.url, 'https://public.resource.test/start');
-    expect(metadata.title, 'Public redirect target');
-  });
+      expect(requested, [
+        Uri.parse('https://public.resource.test/start'),
+        Uri.parse('https://cdn.resource.test/final/'),
+      ]);
+      expect(metadata.url, 'https://public.resource.test/start');
+      expect(metadata.title, 'Public redirect target');
+    },
+  );
 
   test('transport-exposed private final URL fails closed', () async {
     final requestedUrl = Uri.parse('https://public.resource.test/start');
