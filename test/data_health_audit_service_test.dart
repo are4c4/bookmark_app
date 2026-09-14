@@ -16,14 +16,11 @@ void main() {
 
     expect(calls, ['object', 'view']);
     expect(report.isHealthy, isTrue);
-    expect(
-      report.checks.map((check) => check.checkId),
-      ['object', 'view'],
-    );
-    expect(
-      report.checks.map((check) => check.status),
-      [DataHealthCheckStatus.healthy, DataHealthCheckStatus.healthy],
-    );
+    expect(report.checks.map((check) => check.checkId), ['object', 'view']);
+    expect(report.checks.map((check) => check.status), [
+      DataHealthCheckStatus.healthy,
+      DataHealthCheckStatus.healthy,
+    ]);
     expect(report.findings, isEmpty);
   });
 
@@ -54,40 +51,46 @@ void main() {
     expect(report.checks.first.findings, hasLength(1));
     expect(report.checks.first.findings.single.category, 'check-failed');
     expect(report.checks.first.findings.single.subsystem, 'broken');
-    expect(
-      report.findings.map((finding) => finding.category),
-      ['check-failed', 'stale-index'],
-    );
+    expect(report.findings.map((finding) => finding.category), [
+      'check-failed',
+      'stale-index',
+    ]);
     expect(report.findings.join(), isNot(contains('private-vault')));
     expect(report.findings.join(), isNot(contains('secret-token')));
   });
 
-  test('Relation adapter maps canonical issue kinds and safe ids only', () async {
-    const issue = RelationIntegrityIssue(
-      kind: RelationIntegrityIssueKind.missingTargetObject,
-      message: 'raw persisted diagnostic text must not cross the adapter',
-      objectTypeId: 11,
-      propertyId: 12,
-      sourceObjectId: 13,
-      targetObjectId: 14,
-    );
-    final check = RelationDataHealthCheck(
-      audit: () async => const RelationIntegrityReport(issues: [issue]),
-    );
+  test(
+    'Relation adapter maps canonical issue kinds and safe ids only',
+    () async {
+      const issue = RelationIntegrityIssue(
+        kind: RelationIntegrityIssueKind.missingTargetObject,
+        message: 'raw persisted diagnostic text must not cross the adapter',
+        objectTypeId: 11,
+        propertyId: 12,
+        sourceObjectId: 13,
+        targetObjectId: 14,
+      );
+      final check = RelationDataHealthCheck(
+        audit: () async => const RelationIntegrityReport(issues: [issue]),
+      );
 
-    final report = await DataHealthAuditService(checks: [check]).audit();
+      final report = await DataHealthAuditService(checks: [check]).audit();
 
-    expect(report.isHealthy, isFalse);
-    expect(report.checks.single.status, DataHealthCheckStatus.issues);
-    final finding = report.findings.single;
-    expect(finding.subsystem, 'relation');
-    expect(finding.category, 'missingTargetObject');
-    expect(finding.objectTypeId, 11);
-    expect(finding.propertyId, 12);
-    expect(finding.sourceObjectId, 13);
-    expect(finding.targetObjectId, 14);
-    expect(finding.toString(), isNot(contains('raw persisted diagnostic text')));
-  });
+      expect(report.isHealthy, isFalse);
+      expect(report.checks.single.status, DataHealthCheckStatus.issues);
+      final finding = report.findings.single;
+      expect(finding.subsystem, 'relation');
+      expect(finding.category, 'missingTargetObject');
+      expect(finding.objectTypeId, 11);
+      expect(finding.propertyId, 12);
+      expect(finding.sourceObjectId, 13);
+      expect(finding.targetObjectId, 14);
+      expect(
+        finding.toString(),
+        isNot(contains('raw persisted diagnostic text')),
+      );
+    },
+  );
 }
 
 class _FakeCheck implements DataHealthCheck {
