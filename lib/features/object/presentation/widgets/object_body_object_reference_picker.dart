@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../domain/object_alias.dart';
+import 'object_body_reference_picker_search_field.dart';
 
 class ObjectBodyObjectReferenceCandidate {
   const ObjectBodyObjectReferenceCandidate({
@@ -85,13 +86,9 @@ class _ObjectBodyObjectReferencePickerDialogState
         height: 420,
         child: Column(
           children: [
-            TextField(
-              key: const ValueKey('body-object-reference-search'),
-              autofocus: true,
-              decoration: const InputDecoration(
-                prefixIcon: Icon(Icons.search),
-                hintText: 'Object名・別名またはObjectTypeで検索',
-              ),
+            ObjectBodyReferencePickerSearchField(
+              fieldKey: const ValueKey('body-object-reference-search'),
+              hintText: 'Object名・別名またはObjectTypeで検索',
               onChanged: (value) => setState(() => _query = value),
             ),
             const SizedBox(height: 12),
