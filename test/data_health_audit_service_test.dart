@@ -110,7 +110,8 @@ class _FakeCheck implements DataHealthCheck {
   @override
   Future<List<DataHealthFinding>> run() async {
     calls.add(checkId);
-    if (error case final error?) throw error;
+    final failure = error;
+    if (failure != null) throw failure;
     return findings;
   }
 }
