@@ -71,6 +71,7 @@ class _ResizableDatabaseTableState extends State<ResizableDatabaseTable> {
   final Map<String, double> _pendingWidths = <String, double>{};
   String? _draggingKey;
   bool _dragDirty = false;
+  bool _dragBaselineEstablished = false;
 
   static GestureRecognizerFactory _eagerGestureFactory() =>
       GestureRecognizerFactoryWithHandlers<EagerGestureRecognizer>(
@@ -159,6 +160,18 @@ class _ResizableDatabaseTableState extends State<ResizableDatabaseTable> {
   void _beginDrag(ResizableDatabaseTableColumn column) {
     _draggingKey = column.keyName;
     _dragDirty = false;
+    _dragBaselineEstablished = false;
+  }
+
+  void _handleDragMove(
+    ResizableDatabaseTableColumn column,
+    PointerMoveEvent event,
+  ) {
+    if (!_dragBaselineEstablished) {
+      _dragBaselineEstablished = true;
+      return;
+    }
+    _updateWidth(column, event.delta.dx);
   }
 
   void _updateWidth(ResizableDatabaseTableColumn column, double delta) {
@@ -186,6 +199,7 @@ class _ResizableDatabaseTableState extends State<ResizableDatabaseTable> {
     final shouldCommit = _draggingKey == column.keyName && _dragDirty;
     _draggingKey = null;
     _dragDirty = false;
+    _dragBaselineEstablished = false;
     if (shouldCommit) {
       _enqueueCommit(column.keyName, _widthFor(column));
     }
@@ -261,7 +275,7 @@ class _ResizableDatabaseTableState extends State<ResizableDatabaseTable> {
                           _beginDrag(column);
                         },
                         onPointerMove: (event) =>
-                            _updateWidth(column, event.delta.dx),
+                            _handleDragMove(column, event),
                         onPointerUp: (_) => _finishDrag(column),
                         onPointerCancel: (_) => _finishDrag(column),
                         child: const Center(
