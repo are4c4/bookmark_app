@@ -86,7 +86,10 @@ void main() {
         defaultsStore: ObjectTypeDefaultsStore(genericStore),
       );
 
-      await expectLater(service.ensureDefinition(workspaceId), throwsStateError);
+      await expectLater(
+        service.ensureDefinition(workspaceId),
+        throwsStateError,
+      );
 
       final reloaded = await systemObjects.getSystemObjectType(
         workspaceId: workspaceId,
@@ -132,7 +135,10 @@ void main() {
         defaultsStore: ObjectTypeDefaultsStore(genericStore),
       );
 
-      await expectLater(service.ensureDefinition(workspaceId), throwsStateError);
+      await expectLater(
+        service.ensureDefinition(workspaceId),
+        throwsStateError,
+      );
 
       final reloaded = await systemObjects.getSystemObjectType(
         workspaceId: workspaceId,
@@ -142,10 +148,10 @@ void main() {
         (property) => property.id == conflicting.id,
       );
       expect(preserved.type, ObjectPropertyType.text);
-      expect(
-        preserved.config,
-        const <String, dynamic>{'system': true, 'legacy': 'preserve'},
-      );
+      expect(preserved.config, const <String, dynamic>{
+        'system': true,
+        'legacy': 'preserve',
+      });
       expect(preserved.config['hidden'], isNull);
     },
   );
