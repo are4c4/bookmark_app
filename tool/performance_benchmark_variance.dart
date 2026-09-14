@@ -160,9 +160,9 @@ Future<void> main(List<String> arguments) async {
       throw FormatException('Expected --name=value, got "$argument".');
     }
     final separator = argument.indexOf('=');
-    values.putIfAbsent(argument.substring(2, separator), () => <String>[]).add(
-      argument.substring(separator + 1),
-    );
+    values
+        .putIfAbsent(argument.substring(2, separator), () => <String>[])
+        .add(argument.substring(separator + 1));
   }
 
   final inputPaths = values['input'] ?? const <String>[];
@@ -247,12 +247,14 @@ List<Map<String, Object?>> _requireScenarios(Map<String, Object?> report) {
   if (raw is! List || raw.isEmpty) {
     throw const FormatException('Expected non-empty scenarios list.');
   }
-  return raw.map((value) {
-    if (value is! Map) {
-      throw const FormatException('Expected scenario object.');
-    }
-    return value.cast<String, Object?>();
-  }).toList(growable: false);
+  return raw
+      .map((value) {
+        if (value is! Map) {
+          throw const FormatException('Expected scenario object.');
+        }
+        return value.cast<String, Object?>();
+      })
+      .toList(growable: false);
 }
 
 bool _deepEqual(Object? left, Object? right) =>
