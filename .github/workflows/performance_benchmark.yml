@@ -1,0 +1,113 @@
+name: Performance Benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Synthetic benchmark profile
+        required: true
+        type: choice
+        default: medium
+        options:
+          - small
+          - medium
+          - large
+  schedule:
+    - cron: '43 3 * * 3'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/performance_benchmark.yml'
+      - 'tool/performance_benchmark.dart'
+      - 'test/performance_benchmark_smoke_test.dart'
+      - 'docs/PERFORMANCE_BENCHMARKS.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: performance-benchmark-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    name: advisory-performance-benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      BENCHMARK_OUTPUT_DIR: build/performance
+      BENCHMARK_PROFILE_INPUT: ${{ inputs.profile }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Select benchmark profile
+        shell: bash
+        run: |
+          case "$GITHUB_EVENT_NAME" in
+            pull_request)
+              profile='small'
+              ;;
+            schedule)
+              profile='large'
+              ;;
+            *)
+              profile="${BENCHMARK_PROFILE_INPUT:-medium}"
+              ;;
+          esac
+          echo "BENCHMARK_PROFILE=$profile" >> "$GITHUB_ENV"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version-file: pubspec.yaml
+          cache: true
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Generate Drift code
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Run deterministic advisory benchmark
+        env:
+          PERFORMANCE_BENCHMARK_PROFILE: ${{ env.BENCHMARK_PROFILE }}
+          PERFORMANCE_BENCHMARK_SOURCE_SHA: ${{ github.sha }}
+          PERFORMANCE_BENCHMARK_WARMUPS: '1'
+          PERFORMANCE_BENCHMARK_SAMPLES: '5'
+          PERFORMANCE_BENCHMARK_JSON_PATH: build/performance/report.json
+          PERFORMANCE_BENCHMARK_MARKDOWN_PATH: build/performance/summary.md
+        run: |
+          mkdir -p "$BENCHMARK_OUTPUT_DIR"
+          flutter test test/performance_benchmark_smoke_test.dart --reporter=expanded
+
+      - name: Upload benchmark report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: performance-benchmark-${{ github.sha }}-${{ env.BENCHMARK_PROFILE }}
+          path: build/performance
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Summarize benchmark
+        if: always()
+        run: |
+          if [[ -f "$BENCHMARK_OUTPUT_DIR/summary.md" ]]; then
+            cat "$BENCHMARK_OUTPUT_DIR/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo '# Performance benchmark unavailable'
+              echo
+              echo "- Source SHA: \`${GITHUB_SHA}\`"
+              echo "- Requested profile: \`${BENCHMARK_PROFILE}\`"
+              echo '- Inspect workflow logs and any uploaded artifact before drawing a performance conclusion.'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          {
+            echo
+            echo '- Policy: this scheduled/manual benchmark is advisory and is not a required merge gate.'
+            echo '- Pull requests run the small profile; scheduled runs use large; manual runs use the selected profile.'
+            echo '- Compare repeated runs on equivalent runner/runtime profiles before defining a regression budget.'
+          } >> "$GITHUB_STEP_SUMMARY"
