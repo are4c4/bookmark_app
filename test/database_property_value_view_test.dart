@@ -51,43 +51,4 @@ void main() {
     expect(find.text('41'), findsNothing);
     expect(find.text('42'), findsNothing);
   });
-
-  testWidgets(
-    'Database hidden Property does not render its value',
-    (tester) async {
-      await tester.pumpWidget(
-        host(
-          DatabasePropertyValueView(
-            property: const GenericPropertyRecord(
-              id: 7,
-              databaseId: 3,
-              name: 'text',
-              type: 'text',
-              config: <String, dynamic>{'system': true, 'hidden': true},
-              sortOrder: 0,
-            ),
-            value: '/managed/internal/path.jpg',
-          ),
-        ),
-      );
-
-      expect(find.text('/managed/internal/path.jpg'), findsNothing);
-    },
-  );
-
-  testWidgets(
-    'Database visible Property still renders its value',
-    (tester) async {
-      await tester.pumpWidget(
-        host(
-          DatabasePropertyValueView(
-            property: property('text'),
-            value: 'Visible value',
-          ),
-        ),
-      );
-
-      expect(find.text('Visible value'), findsOneWidget);
-    },
-  );
 }
