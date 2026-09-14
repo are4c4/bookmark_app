@@ -22,7 +22,9 @@ class ObjectDetailPropertyView extends StatelessWidget {
   static const double firstLineHeight = 20;
   static const double handleSlotWidth = 20;
   static const double propertyIconSlotWidth = 18;
-  static const double propertyLabelWidth = 120;
+  static const double minPropertyLabelWidth = 96;
+  static const double maxPropertyLabelWidth = 220;
+  static const double propertyLabelWidthFraction = 0.32;
 
   final ObjectDetailPropertyPresentation presentation;
   final Widget? relationChild;
@@ -55,6 +57,16 @@ class ObjectDetailPropertyView extends StatelessWidget {
     return value;
   }
 
+  double _propertyLabelWidth(BoxConstraints constraints) {
+    if (!constraints.hasBoundedWidth) {
+      return maxPropertyLabelWidth;
+    }
+    return (constraints.maxWidth * propertyLabelWidthFraction).clamp(
+      minPropertyLabelWidth,
+      maxPropertyLabelWidth,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (presentation.isHidden) {
@@ -76,55 +88,57 @@ class ObjectDetailPropertyView extends StatelessWidget {
             child: ObjectPropertyValueView(presentation: presentation),
           );
 
-    final row = Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (normalizedLeading != null) ...[
-            SizedBox(
-              key: const ValueKey('object-property-handle-slot'),
-              width: handleSlotWidth,
-              height: firstLineHeight,
-              child: Center(child: normalizedLeading),
-            ),
-            const SizedBox(width: 6),
-          ],
-          SizedBox(
-            key: const ValueKey('object-property-label-grid'),
-            width: propertyLabelWidth,
-            height: firstLineHeight,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
+    final row = LayoutBuilder(
+      builder: (context, constraints) {
+        final propertyLabelWidth = _propertyLabelWidth(constraints);
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (normalizedLeading != null) ...[
                 SizedBox(
-                  key: const ValueKey('object-property-icon-slot'),
-                  width: propertyIconSlotWidth,
+                  key: const ValueKey('object-property-handle-slot'),
+                  width: handleSlotWidth,
                   height: firstLineHeight,
-                  child: presentation.isComputed
-                      ? const Center(child: Icon(Icons.functions, size: 16))
-                      : const SizedBox.shrink(),
+                  child: Center(child: normalizedLeading),
                 ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    property.name,
-                    maxLines: 1,
-                    style: Theme.of(context).textTheme.labelLarge,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
+                const SizedBox(width: 6),
               ],
-            ),
+              SizedBox(
+                key: const ValueKey('object-property-label-grid'),
+                width: propertyLabelWidth,
+                height: firstLineHeight,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      key: const ValueKey('object-property-icon-slot'),
+                      width: propertyIconSlotWidth,
+                      height: firstLineHeight,
+                      child: presentation.isComputed
+                          ? const Center(child: Icon(Icons.functions, size: 16))
+                          : const SizedBox.shrink(),
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        property.name,
+                        maxLines: 1,
+                        style: Theme.of(context).textTheme.labelLarge,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: valueWidget),
+              if (trailing != null) ...[const SizedBox(width: 8), trailing!],
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(child: valueWidget),
-          if (trailing != null) ...[
-            const SizedBox(width: 8),
-            trailing!,
-          ],
-        ],
-      ),
+        );
+      },
     );
 
     if (onTap == null) return row;
