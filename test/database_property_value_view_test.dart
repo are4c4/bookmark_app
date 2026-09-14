@@ -3,15 +3,12 @@ import 'package:bookmark_app/features/database/presentation/widgets/database_pro
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-GenericPropertyRecord property(
-  String type, {
-  Map<String, dynamic> config = const <String, dynamic>{},
-}) => GenericPropertyRecord(
+GenericPropertyRecord property(String type) => GenericPropertyRecord(
       id: 7,
       databaseId: 3,
       name: type,
       type: type,
-      config: config,
+      config: const <String, dynamic>{},
       sortOrder: 0,
     );
 
@@ -60,9 +57,13 @@ void main() {
     await tester.pumpWidget(
       host(
         DatabasePropertyValueView(
-          property: property(
-            'text',
-            config: const <String, dynamic>{'system': true, 'hidden': true},
+          property: const GenericPropertyRecord(
+            id: 7,
+            databaseId: 3,
+            name: 'text',
+            type: 'text',
+            config: <String, dynamic>{'system': true, 'hidden': true},
+            sortOrder: 0,
           ),
           value: '/managed/internal/path.jpg',
         ),
