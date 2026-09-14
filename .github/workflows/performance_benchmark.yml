@@ -20,7 +20,9 @@ on:
     paths:
       - '.github/workflows/performance_benchmark.yml'
       - 'tool/performance_benchmark.dart'
+      - 'tool/performance_benchmark_variance.dart'
       - 'test/performance_benchmark_smoke_test.dart'
+      - 'test/performance_benchmark_variance_test.dart'
       - 'docs/PERFORMANCE_BENCHMARKS.md'
 
 permissions:
@@ -42,21 +44,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Select benchmark profile
+      - name: Select benchmark profile and repetitions
         shell: bash
         run: |
           case "$GITHUB_EVENT_NAME" in
             pull_request)
               profile='small'
+              repetitions='2'
               ;;
             schedule)
               profile='large'
+              repetitions='3'
               ;;
             *)
               profile="${BENCHMARK_PROFILE_INPUT:-medium}"
+              repetitions='3'
               ;;
           esac
           echo "BENCHMARK_PROFILE=$profile" >> "$GITHUB_ENV"
+          echo "BENCHMARK_REPETITIONS=$repetitions" >> "$GITHUB_ENV"
 
       - name: Set up Flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
@@ -70,17 +76,29 @@ jobs:
       - name: Generate Drift code
         run: dart run build_runner build --delete-conflicting-outputs
 
-      - name: Run deterministic advisory benchmark
+      - name: Run repeated deterministic advisory benchmark
+        shell: bash
         env:
           PERFORMANCE_BENCHMARK_PROFILE: ${{ env.BENCHMARK_PROFILE }}
           PERFORMANCE_BENCHMARK_SOURCE_SHA: ${{ github.sha }}
           PERFORMANCE_BENCHMARK_WARMUPS: '1'
           PERFORMANCE_BENCHMARK_SAMPLES: '5'
-          PERFORMANCE_BENCHMARK_JSON_PATH: build/performance/report.json
-          PERFORMANCE_BENCHMARK_MARKDOWN_PATH: build/performance/summary.md
         run: |
-          mkdir -p "$BENCHMARK_OUTPUT_DIR"
-          flutter test test/performance_benchmark_smoke_test.dart --reporter=expanded
+          set -euo pipefail
+          mkdir -p "$BENCHMARK_OUTPUT_DIR/runs"
+          inputs=()
+          for index in $(seq 1 "$BENCHMARK_REPETITIONS"); do
+            run_dir="$BENCHMARK_OUTPUT_DIR/runs/run-$index"
+            mkdir -p "$run_dir"
+            PERFORMANCE_BENCHMARK_JSON_PATH="$run_dir/report.json" \
+            PERFORMANCE_BENCHMARK_MARKDOWN_PATH="$run_dir/summary.md" \
+              flutter test test/performance_benchmark_smoke_test.dart --reporter=expanded
+            inputs+=("--input=$run_dir/report.json")
+          done
+          dart run tool/performance_benchmark_variance.dart \
+            "${inputs[@]}" \
+            --json="$BENCHMARK_OUTPUT_DIR/variance.json" \
+            --markdown="$BENCHMARK_OUTPUT_DIR/variance.md"
 
       - name: Upload benchmark report
         if: always()
@@ -94,8 +112,8 @@ jobs:
       - name: Summarize benchmark
         if: always()
         run: |
-          if [[ -f "$BENCHMARK_OUTPUT_DIR/summary.md" ]]; then
-            cat "$BENCHMARK_OUTPUT_DIR/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          if [[ -f "$BENCHMARK_OUTPUT_DIR/variance.md" ]]; then
+            cat "$BENCHMARK_OUTPUT_DIR/variance.md" >> "$GITHUB_STEP_SUMMARY"
           else
             {
               echo '# Performance benchmark unavailable'
@@ -107,7 +125,7 @@ jobs:
           fi
           {
             echo
-            echo '- Policy: this scheduled/manual benchmark is advisory and is not a required merge gate.'
-            echo '- Pull requests run the small profile; scheduled runs use large; manual runs use the selected profile.'
-            echo '- Compare repeated runs on equivalent runner/runtime profiles before defining a regression budget.'
+            echo '- Policy: this repeated-run benchmark is advisory and is not a required merge gate.'
+            echo '- Pull requests use 2 small repetitions to validate aggregation; scheduled runs use 3 large repetitions; manual runs use 3 repetitions of the selected profile.'
+            echo '- Variance aggregation fails closed if source/profile/runtime/fixture/scenario provenance differs across repetitions.'
           } >> "$GITHUB_STEP_SUMMARY"
