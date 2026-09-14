@@ -16,7 +16,8 @@ void main() {
     expect(report.scenarios, hasLength(1));
 
     final json = report.toJson();
-    final scenarios = (json['scenarios'] as List<Object?>).cast<Map<String, Object?>>();
+    final scenarios = (json['scenarios'] as List<Object?>)
+        .cast<Map<String, Object?>>();
     final median = scenarios.single['median'] as Map<String, Object?>;
     final p95 = scenarios.single['p95'] as Map<String, Object?>;
     expect(median['min'], 90);
@@ -37,8 +38,9 @@ void main() {
       _report(median: 100, p95: 120),
     ]);
 
-    final scenario = (report.toJson()['scenarios'] as List<Object?>).single
-        as Map<String, Object?>;
+    final scenario =
+        (report.toJson()['scenarios'] as List<Object?>).single
+            as Map<String, Object?>;
     final median = scenario['median'] as Map<String, Object?>;
     expect(median['relativeSpreadPercent'], 0.0);
   });
@@ -58,7 +60,8 @@ void main() {
 
   test('rejects runtime and scenario mismatches', () {
     final runtimeMismatch = _report(median: 101, p95: 121);
-    (runtimeMismatch['runtime'] as Map<String, Object?>)['dartVersion'] = 'other';
+    (runtimeMismatch['runtime'] as Map<String, Object?>)['dartVersion'] =
+        'other';
     expect(
       () => aggregatePerformanceBenchmarkReports(<Map<String, Object?>>[
         _report(median: 100, p95: 120),
@@ -68,7 +71,8 @@ void main() {
     );
 
     final scenarioMismatch = _report(median: 101, p95: 121);
-    final scenarios = scenarioMismatch['scenarios'] as List<Map<String, Object?>>;
+    final scenarios =
+        scenarioMismatch['scenarios'] as List<Map<String, Object?>>;
     scenarios.single['name'] = 'scenario-b';
     expect(
       () => aggregatePerformanceBenchmarkReports(<Map<String, Object?>>[
@@ -80,31 +84,30 @@ void main() {
   });
 }
 
-Map<String, Object?> _report({required num median, required num p95}) =>
+Map<String, Object?> _report({
+  required num median,
+  required num p95,
+}) => <String, Object?>{
+  'schemaVersion': 1,
+  'sourceSha': 'same-sha',
+  'profile': 'large',
+  'fixture': <String, Object?>{'primaryObjects': 2500, 'relationTargets': 1000},
+  'runtime': <String, Object?>{
+    'dartVersion': 'test-dart',
+    'operatingSystem': 'linux',
+    'operatingSystemVersion': 'test-os',
+  },
+  'scenarios': <Map<String, Object?>>[
     <String, Object?>{
-      'schemaVersion': 1,
-      'sourceSha': 'same-sha',
-      'profile': 'large',
-      'fixture': <String, Object?>{
-        'primaryObjects': 2500,
-        'relationTargets': 1000,
+      'name': 'scenario-a',
+      'unit': 'microseconds',
+      'samples': <int>[1, 2, 3],
+      'summary': <String, Object?>{
+        'min': median,
+        'median': median,
+        'p95': p95,
+        'max': p95,
       },
-      'runtime': <String, Object?>{
-        'dartVersion': 'test-dart',
-        'operatingSystem': 'linux',
-        'operatingSystemVersion': 'test-os',
-      },
-      'scenarios': <Map<String, Object?>>[
-        <String, Object?>{
-          'name': 'scenario-a',
-          'unit': 'microseconds',
-          'samples': <int>[1, 2, 3],
-          'summary': <String, Object?>{
-            'min': median,
-            'median': median,
-            'p95': p95,
-            'max': p95,
-          },
-        },
-      ],
-    };
+    },
+  ],
+};
