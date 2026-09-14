@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../domain/object_alias.dart';
+import 'object_body_reference_picker_result_tile.dart';
 import 'object_body_reference_picker_search_field.dart';
 
 class ObjectBodyObjectReferenceCandidate {
@@ -100,17 +101,15 @@ class _ObjectBodyObjectReferencePickerDialogState
                       itemBuilder: (context, index) {
                         final candidate = visible[index];
                         final matchedAlias = _matchedAlias(candidate, query);
-                        return ListTile(
+                        return ObjectBodyReferencePickerResultTile(
                           key: ValueKey(
                             'body-object-reference-candidate-${candidate.objectId}',
                           ),
-                          leading: Text(candidate.objectTypeIcon),
-                          title: Text(candidate.title),
-                          subtitle: Text(
-                            matchedAlias == null
-                                ? candidate.objectTypeName
-                                : '${candidate.objectTypeName} · 別名: $matchedAlias',
-                          ),
+                          leadingText: candidate.objectTypeIcon,
+                          title: candidate.title,
+                          subtitle: matchedAlias == null
+                              ? candidate.objectTypeName
+                              : '${candidate.objectTypeName} · 別名: $matchedAlias',
                           onTap: () => Navigator.pop(
                             context,
                             candidate.objectId,
