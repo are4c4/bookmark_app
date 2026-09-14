@@ -6,6 +6,8 @@ import 'package:bookmark_app/data/generic_database_store.dart';
 import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/database/database_definition.dart';
+import 'package:bookmark_app/domain/object_model.dart';
+import 'package:bookmark_app/features/object/presentation/widgets/object_detail_property_view.dart';
 import 'package:bookmark_app/views/generic_database_page.dart';
 import 'package:bookmark_app/views/object_inspector_page.dart';
 import 'package:drift/native.dart';
@@ -35,9 +37,24 @@ void main() {
         name: 'Notes',
         icon: '📝',
       );
+      await objectStore.createProperty(
+        objectTypeId: databaseId,
+        name: 'Representative preview image',
+        type: ObjectPropertyType.text,
+      );
+      final previewProperty = (await objectStore.getObjectType(databaseId))!
+          .properties
+          .singleWhere(
+            (property) => property.name == 'Representative preview image',
+          );
       final objectId = await objectStore.createObject(
         objectTypeId: databaseId,
         title: 'Before promotion',
+      );
+      await objectStore.setPropertyValue(
+        objectId: objectId,
+        property: previewProperty,
+        value: 'preview',
       );
 
       final definition = DatabaseDefinition(
@@ -75,11 +92,38 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('詳細'), findsOneWidget);
 
+      final sidePeekLabelGrid = find.byKey(
+        const ValueKey('object-property-label-grid'),
+      );
+      expect(sidePeekLabelGrid, findsOneWidget);
+      final sidePeekLabelWidth = tester.getSize(sidePeekLabelGrid).width;
+      expect(
+        sidePeekLabelWidth,
+        inInclusiveRange(
+          ObjectDetailPropertyView.minPropertyLabelWidth,
+          ObjectDetailPropertyView.maxPropertyLabelWidth,
+        ),
+      );
+      expect(tester.takeException(), isNull);
+
       await tester.tap(
         find.byKey(ValueKey('side-peek-open-full-page-$objectId')),
       );
       await tester.pumpAndSettle();
       expect(find.byType(ObjectInspectorPage), findsOneWidget);
+
+      final fullPageLabelGrid = find.descendant(
+        of: find.byType(ObjectInspectorPage),
+        matching: find.byKey(const ValueKey('object-property-label-grid')),
+      );
+      expect(fullPageLabelGrid, findsOneWidget);
+      final fullPageLabelWidth = tester.getSize(fullPageLabelGrid).width;
+      expect(fullPageLabelWidth, greaterThan(sidePeekLabelWidth));
+      expect(
+        fullPageLabelWidth,
+        ObjectDetailPropertyView.maxPropertyLabelWidth,
+      );
+      expect(tester.takeException(), isNull);
 
       await tester.tap(find.byKey(const ValueKey('object-title-edit-button')));
       await tester.pumpAndSettle();
