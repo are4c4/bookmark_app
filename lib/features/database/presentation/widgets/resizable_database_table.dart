@@ -244,9 +244,7 @@ class _ResizableDatabaseTableState extends State<ResizableDatabaseTable> {
                     child: RawGestureDetector(
                       gestures: <Type, GestureRecognizerFactory>{
                         EagerGestureRecognizer:
-                            GestureRecognizerFactoryWithHandlers<
-                              EagerGestureRecognizer
-                            >(
+                            GestureRecognizerFactoryWithHandlers<EagerGestureRecognizer>(
                               EagerGestureRecognizer.new,
                               (recognizer) {},
                             ),
