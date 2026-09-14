@@ -102,6 +102,18 @@ void main() {
         expect(finder, findsWidgets);
       }
 
+      Future<void> pumpUntilTableView(int viewId) async {
+        final table = find.byKey(
+          ValueKey<String>('database-table-$viewId'),
+        );
+        if (table.evaluate().isNotEmpty) return;
+        for (var attempt = 0; attempt < 40; attempt += 1) {
+          await tester.pump(const Duration(milliseconds: 50));
+          if (table.evaluate().isNotEmpty) return;
+        }
+        expect(table, findsOneWidget);
+      }
+
       Future<void> pumpUntilWidth(Finder finder, double expected) async {
         for (var attempt = 0; attempt < 40; attempt += 1) {
           if (finder.evaluate().isNotEmpty &&
@@ -170,6 +182,11 @@ void main() {
       final resizeHandle = find.byKey(
         const ValueKey<String>('database-table-resize-title'),
       );
+      final seededViewTab = find.text('Resizable Table');
+      await pumpUntilVisible(seededViewTab);
+      await tester.tap(seededViewTab);
+      await tester.pump();
+      await pumpUntilTableView(seeded.id);
       await pumpUntilVisible(resizeHandle);
       expect(tester.getSize(titleColumn).width, 240);
 
@@ -193,6 +210,7 @@ void main() {
       await pumpUntilVisible(persistedViewTab);
       await tester.tap(persistedViewTab);
       await tester.pump();
+      await pumpUntilTableView(seeded.id);
 
       final reopened = (await viewStore.listViews(
         workspaceId: workspaceId,
@@ -227,6 +245,7 @@ void main() {
 
       await tester.tap(find.text('Second Table'));
       await tester.pump();
+      await pumpUntilTableView(secondViewId);
       expect(tester.getSize(titleColumn).width, 200);
 
       releaseLock.complete();
