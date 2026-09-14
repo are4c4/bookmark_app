@@ -27,6 +27,9 @@ void main() {
     expect(field.decoration?.hintText, 'Search references');
     expect(find.byIcon(Icons.search), findsOneWidget);
 
+    final editableText = tester.widget<EditableText>(find.byType(EditableText));
+    expect(editableText.focusNode.hasFocus, isTrue);
+
     await tester.enterText(find.byKey(fieldKey), 'Person');
     expect(query, 'Person');
   });
