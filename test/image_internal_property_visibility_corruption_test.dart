@@ -11,6 +11,52 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test(
+    'Image definition hides new and historical native storage metadata',
+    () async {
+      final database = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(database.close);
+      final workspaceId = await WorkspaceStore(database).initialize();
+      final genericStore = GenericDatabaseStore(database);
+      final objectStore = ObjectStore(genericStore);
+      final systemObjects = SystemObjectStore(
+        database: database,
+        objectStore: objectStore,
+      );
+      final imageType = await systemObjects.ensureSystemObjectType(
+        workspaceId: workspaceId,
+        systemKey: ImageObjectService.systemKey,
+        name: '画像',
+        icon: '🖼️',
+      );
+      final historicalFile = await systemObjects.ensureProperty(
+        objectTypeId: imageType.id,
+        name: 'File',
+        type: ObjectPropertyType.file,
+        config: const <String, dynamic>{'system': true, 'legacy': 'preserve'},
+      );
+      final historicalOwnership = await systemObjects.ensureProperty(
+        objectTypeId: imageType.id,
+        name: 'Storage ownership',
+        type: ObjectPropertyType.text,
+        config: const <String, dynamic>{'system': true},
+      );
+
+      final definition = await ImageObjectService(
+        systemObjects: systemObjects,
+        defaultsStore: ObjectTypeDefaultsStore(genericStore),
+      ).ensureDefinition(workspaceId);
+
+      expect(definition.fileProperty.id, historicalFile.id);
+      expect(definition.fileProperty.config['system'], isTrue);
+      expect(definition.fileProperty.config['hidden'], isTrue);
+      expect(definition.fileProperty.config['legacy'], 'preserve');
+      expect(definition.storageOwnershipProperty.id, historicalOwnership.id);
+      expect(definition.storageOwnershipProperty.config['system'], isTrue);
+      expect(definition.storageOwnershipProperty.config['hidden'], isTrue);
+    },
+  );
+
+  test(
     'Image visibility upgrade does not claim a user-owned File Property',
     () async {
       final database = AppDatabase.forTesting(NativeDatabase.memory());
