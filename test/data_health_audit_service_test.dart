@@ -170,9 +170,8 @@ void main() {
         propertyId: 44,
       );
       final check = DatabaseViewDataHealthCheck(
-        audit: () async => const DatabaseViewHealthAuditResult(
-          findings: [canonicalFinding],
-        ),
+        audit: () async =>
+            const DatabaseViewHealthAuditResult(findings: [canonicalFinding]),
       );
 
       final report = await DataHealthAuditService(checks: [check]).audit();
