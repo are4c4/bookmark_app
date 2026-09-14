@@ -26,7 +26,13 @@ void main() {
     expect(find.text('Details'), findsOneWidget);
     expect(find.text('Shared detail-section content'), findsOneWidget);
     expect(find.byTooltip('More detail actions'), findsOneWidget);
-    expect(find.bySemanticsLabel('More detail actions'), findsOneWidget);
+    expect(
+      tester
+          .getSemantics(find.byIcon(Icons.more_horiz))
+          .getSemanticsData()
+          .tooltip,
+      'More detail actions',
+    );
     expect(tester.takeException(), isNull);
   });
 
