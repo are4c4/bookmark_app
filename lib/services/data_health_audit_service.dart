@@ -250,8 +250,9 @@ typedef DatabaseViewHealthAuditRunner =
 /// internal identifiers into the shared data-health result model. View names,
 /// filter values, raw JSON and exception text never cross this boundary.
 class DatabaseViewDataHealthCheck implements DataHealthCheck {
-  const DatabaseViewDataHealthCheck({required DatabaseViewHealthAuditRunner audit})
-    : _audit = audit;
+  const DatabaseViewDataHealthCheck({
+    required DatabaseViewHealthAuditRunner audit,
+  }) : _audit = audit;
 
   factory DatabaseViewDataHealthCheck.fromAudit({
     required DatabaseViewHealthAudit audit,
