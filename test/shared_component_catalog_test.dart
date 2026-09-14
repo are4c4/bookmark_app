@@ -17,23 +17,26 @@ void main() {
     tester,
   ) async {
     final semantics = tester.ensureSemantics();
-    addTearDown(semantics.dispose);
-    await pumpCatalog(tester, const Size(900, 900));
+    try {
+      await pumpCatalog(tester, const Size(900, 900));
 
-    expect(find.text('Shared component catalog'), findsOneWidget);
-    expect(find.text('No items yet'), findsOneWidget);
-    expect(find.text('Create item'), findsOneWidget);
-    expect(find.text('Details'), findsOneWidget);
-    expect(find.text('Shared detail-section content'), findsOneWidget);
-    expect(find.byTooltip('More detail actions'), findsOneWidget);
-    expect(
-      tester
-          .getSemantics(find.byIcon(Icons.more_horiz))
-          .getSemanticsData()
-          .tooltip,
-      'More detail actions',
-    );
-    expect(tester.takeException(), isNull);
+      expect(find.text('Shared component catalog'), findsOneWidget);
+      expect(find.text('No items yet'), findsOneWidget);
+      expect(find.text('Create item'), findsOneWidget);
+      expect(find.text('Details'), findsOneWidget);
+      expect(find.text('Shared detail-section content'), findsOneWidget);
+      expect(find.byTooltip('More detail actions'), findsOneWidget);
+      expect(
+        tester
+            .getSemantics(find.byIcon(Icons.more_horiz))
+            .getSemanticsData()
+            .tooltip,
+        'More detail actions',
+      );
+      expect(tester.takeException(), isNull);
+    } finally {
+      semantics.dispose();
+    }
   });
 
   testWidgets('renders without overflow at narrow width', (tester) async {
