@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -240,19 +241,32 @@ class _ResizableDatabaseTableState extends State<ResizableDatabaseTable> {
                 child: Builder(
                   builder: (handleContext) => MouseRegion(
                     cursor: SystemMouseCursors.resizeColumn,
-                    child: GestureDetector(
-                      key: ValueKey<String>(
-                        'database-table-resize-${column.keyName}',
-                      ),
-                      behavior: HitTestBehavior.translucent,
-                      onTapDown: (_) => Focus.of(handleContext).requestFocus(),
-                      onHorizontalDragStart: (_) => _beginDrag(column),
-                      onHorizontalDragUpdate: (details) =>
-                          _updateWidth(column, details.delta.dx),
-                      onHorizontalDragEnd: (_) => _finishDrag(column),
-                      onHorizontalDragCancel: () => _finishDrag(column),
-                      child: const Center(
-                        child: VerticalDivider(width: 1, thickness: 1),
+                    child: RawGestureDetector(
+                      gestures: <Type, GestureRecognizerFactory>{
+                        EagerGestureRecognizer:
+                            GestureRecognizerFactoryWithHandlers<
+                              EagerGestureRecognizer
+                            >(
+                              EagerGestureRecognizer.new,
+                              (recognizer) {},
+                            ),
+                      },
+                      child: Listener(
+                        key: ValueKey<String>(
+                          'database-table-resize-${column.keyName}',
+                        ),
+                        behavior: HitTestBehavior.translucent,
+                        onPointerDown: (_) {
+                          Focus.of(handleContext).requestFocus();
+                          _beginDrag(column);
+                        },
+                        onPointerMove: (event) =>
+                            _updateWidth(column, event.delta.dx),
+                        onPointerUp: (_) => _finishDrag(column),
+                        onPointerCancel: (_) => _finishDrag(column),
+                        child: const Center(
+                          child: VerticalDivider(width: 1, thickness: 1),
+                        ),
                       ),
                     ),
                   ),
