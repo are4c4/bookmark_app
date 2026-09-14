@@ -72,6 +72,12 @@ class _ResizableDatabaseTableState extends State<ResizableDatabaseTable> {
   String? _draggingKey;
   bool _dragDirty = false;
 
+  static GestureRecognizerFactory _eagerGestureFactory() =>
+      GestureRecognizerFactoryWithHandlers<EagerGestureRecognizer>(
+        EagerGestureRecognizer.new,
+        (_) {},
+      );
+
   @override
   void initState() {
     super.initState();
@@ -243,11 +249,7 @@ class _ResizableDatabaseTableState extends State<ResizableDatabaseTable> {
                     cursor: SystemMouseCursors.resizeColumn,
                     child: RawGestureDetector(
                       gestures: <Type, GestureRecognizerFactory>{
-                        EagerGestureRecognizer:
-                            GestureRecognizerFactoryWithHandlers<EagerGestureRecognizer>(
-                              EagerGestureRecognizer.new,
-                              (recognizer) {},
-                            ),
+                        EagerGestureRecognizer: _eagerGestureFactory(),
                       },
                       child: Listener(
                         key: ValueKey<String>(
