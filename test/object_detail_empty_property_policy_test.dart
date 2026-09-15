@@ -23,13 +23,12 @@ void main() {
     ObjectPropertyDefinition property = scalarProperty,
     dynamic value,
     bool hidden = false,
-  }) =>
-      ObjectDetailPropertyPresentation(
-        property: property,
-        value: value,
-        displayText: value == null ? 'なし' : '$value',
-        isHidden: hidden,
-      );
+  }) => ObjectDetailPropertyPresentation(
+    property: property,
+    value: value,
+    displayText: value == null ? 'なし' : '$value',
+    isHidden: hidden,
+  );
 
   test('collapses only absent scalar presentation values', () {
     expect(
@@ -50,18 +49,21 @@ void main() {
     );
   });
 
-  test('does not classify hidden or computed Properties as collapsible empty', () {
-    expect(
-      ObjectDetailEmptyPropertyPolicy.isCollapsibleEmpty(
-        presentation(hidden: true),
-      ),
-      isFalse,
-    );
-    expect(
-      ObjectDetailEmptyPropertyPolicy.isCollapsibleEmpty(
-        presentation(property: computedProperty),
-      ),
-      isFalse,
-    );
-  });
+  test(
+    'does not classify hidden or computed Properties as collapsible empty',
+    () {
+      expect(
+        ObjectDetailEmptyPropertyPolicy.isCollapsibleEmpty(
+          presentation(hidden: true),
+        ),
+        isFalse,
+      );
+      expect(
+        ObjectDetailEmptyPropertyPolicy.isCollapsibleEmpty(
+          presentation(property: computedProperty),
+        ),
+        isFalse,
+      );
+    },
+  );
 }
