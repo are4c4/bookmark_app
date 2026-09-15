@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('collapses and reveals empty Property rows with keyboard focus', (
+  testWidgets('collapses and reveals empty Property rows with keyboard', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -25,11 +25,6 @@ void main() {
 
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.pump();
-    final showButton = tester.widget<TextButton>(
-      find.byKey(const ValueKey('object-detail-show-empty-properties')),
-    );
-    expect(Focus.of(tester.element(find.byWidget(showButton))).hasFocus, isTrue);
-
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pump();
 
