@@ -21,7 +21,8 @@ class ObjectDetailPropertySection extends StatelessWidget {
   final Widget Function(
     BuildContext context,
     ObjectDetailPropertyPresentation presentation,
-  ) itemBuilder;
+  )
+  itemBuilder;
 
   @override
   Widget build(BuildContext context) {
