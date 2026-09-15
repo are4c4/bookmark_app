@@ -76,6 +76,70 @@ void main() {
     expect(taps, 0);
   });
 
+  testWidgets('quietly omits empty read-only scalar metadata', (tester) async {
+    await tester.pumpWidget(
+      host(
+        const ObjectDetailPropertyPresentation(
+          property: textProperty,
+          value: null,
+          displayText: 'なし',
+          isHidden: false,
+        ),
+      ),
+    );
+
+    expect(find.text('Summary'), findsNothing);
+    expect(find.text('なし'), findsNothing);
+    expect(find.byType(ObjectDetailPropertyView), findsOneWidget);
+  });
+
+  testWidgets('keeps editable empty scalar Properties quietly reachable', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      host(
+        const ObjectDetailPropertyPresentation(
+          property: textProperty,
+          value: null,
+          displayText: 'なし',
+          isHidden: false,
+        ),
+        trailing: const Icon(Icons.edit_outlined),
+      ),
+    );
+
+    expect(find.text('Summary'), findsOneWidget);
+    expect(find.text('なし'), findsNothing);
+    expect(find.byIcon(Icons.edit_outlined), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('object-property-label-grid')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('row-management hosts retain empty scalar structure', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      host(
+        const ObjectDetailPropertyPresentation(
+          property: textProperty,
+          value: null,
+          displayText: 'なし',
+          isHidden: false,
+        ),
+        leading: ReorderableDragStartListener(
+          index: 0,
+          child: const Icon(Icons.drag_indicator),
+        ),
+      ),
+    );
+
+    expect(find.text('Summary'), findsOneWidget);
+    expect(find.text('なし'), findsOneWidget);
+    expect(find.byType(PropertyDragHandle), findsOneWidget);
+  });
+
   testWidgets('uses caller supplied canonical Relation renderer', (tester) async {
     const relationProperty = ObjectPropertyDefinition(
       id: 2,
