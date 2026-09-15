@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../domain/object_detail_property_presentation.dart';
+import '../object_detail_empty_property_policy.dart';
 import 'object_property_value_view.dart';
 import 'property_drag_handle.dart';
 
@@ -67,18 +68,6 @@ class ObjectDetailPropertyView extends StatelessWidget {
     );
   }
 
-  bool get _hasEmptyScalarValue {
-    if (presentation.usesRelationRenderer || presentation.isComputed) {
-      return false;
-    }
-    final value = presentation.value;
-    if (value == null) return true;
-    if (value is String) return value.trim().isEmpty;
-    if (value is Iterable) return value.isEmpty;
-    if (value is Map) return value.isEmpty;
-    return false;
-  }
-
   Widget _quietEmptyRow(BuildContext context) {
     final property = presentation.property;
     final canAccess = trailing != null || onTap != null;
@@ -126,7 +115,8 @@ class ObjectDetailPropertyView extends StatelessWidget {
     // that supply leading row-management chrome (for example Database schema
     // editing/reordering) retain the full row so this presentation policy does
     // not hide their structure-management surface.
-    if (leading == null && _hasEmptyScalarValue) {
+    if (leading == null &&
+        ObjectDetailEmptyPropertyPolicy.isCollapsibleEmpty(presentation)) {
       return _quietEmptyRow(context);
     }
 
