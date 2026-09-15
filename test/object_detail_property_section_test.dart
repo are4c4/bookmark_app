@@ -34,9 +34,12 @@ void main() {
     property: property,
     value: value,
     displayText: value == null ? 'なし' : '$value',
+    isHidden: false,
   );
 
-  testWidgets('shares policy classification with reveal interaction', (tester) async {
+  testWidgets('shares policy classification with reveal interaction', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -60,7 +63,9 @@ void main() {
     expect(find.byKey(const ValueKey('property-3')), findsOneWidget);
     expect(find.text('空のプロパティを表示 (1)'), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('object-detail-show-empty-properties')));
+    await tester.tap(
+      find.byKey(const ValueKey('object-detail-show-empty-properties')),
+    );
     await tester.pump();
 
     expect(find.byKey(const ValueKey('property-2')), findsOneWidget);
