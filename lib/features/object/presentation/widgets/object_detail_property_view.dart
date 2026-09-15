@@ -67,10 +67,67 @@ class ObjectDetailPropertyView extends StatelessWidget {
     );
   }
 
+  bool get _hasEmptyScalarValue {
+    if (presentation.usesRelationRenderer || presentation.isComputed) {
+      return false;
+    }
+    final value = presentation.value;
+    if (value == null) return true;
+    if (value is String) return value.trim().isEmpty;
+    if (value is Iterable) return value.isEmpty;
+    if (value is Map) return value.isEmpty;
+    return false;
+  }
+
+  Widget _quietEmptyRow(BuildContext context) {
+    final property = presentation.property;
+    final canAccess = trailing != null || onTap != null;
+    if (!canAccess) {
+      return const SizedBox.shrink();
+    }
+
+    final row = Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              property.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+          ),
+          if (trailing != null) ...[const SizedBox(width: 8), trailing!],
+        ],
+      ),
+    );
+
+    if (onTap == null) return row;
+    return InkWell(
+      key: const ValueKey('object-property-empty-affordance'),
+      borderRadius: BorderRadius.circular(5),
+      onTap: onTap,
+      child: row,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (presentation.isHidden) {
       return const SizedBox.shrink();
+    }
+
+    // Read-oriented Object detail should prioritize meaningful content. Empty
+    // scalar metadata without an edit affordance disappears entirely; editable
+    // empty values remain reachable as a quiet compact label/chrome row. Hosts
+    // that supply leading row-management chrome (for example Database schema
+    // editing/reordering) retain the full row so this presentation policy does
+    // not hide their structure-management surface.
+    if (leading == null && _hasEmptyScalarValue) {
+      return _quietEmptyRow(context);
     }
 
     final property = presentation.property;
