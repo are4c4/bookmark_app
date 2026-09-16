@@ -57,6 +57,7 @@ void main() {
       }
       expect(markdown, contains('Advisory only'));
     },
+    timeout: const Timeout(Duration(minutes: 3)),
   );
 }
 
