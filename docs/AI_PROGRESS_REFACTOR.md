@@ -103,7 +103,21 @@ The product-quality developer loop is now established across several completed f
 - #1359 — read-only cross-subsystem Data Health audit composition;
 - #1367/#1368/#1369/#1370 — Core User Journeys, Product Acceptance Evidence, user-visible priority routing and PR-level H Product Review.
 
-Treat those as established infrastructure rather than standing implementation queues. #1360 remains open for performance-benchmark evidence/budget decisions; continue it only from measured evidence and focused child work, not by weakening workloads or inventing thresholds.
+Treat those as established infrastructure rather than standing implementation queues.
+
+### #1360 — repeatable performance evidence (active umbrella; foundation established)
+The performance-infrastructure foundation is now established through focused children rather than as a standing rewrite queue:
+
+- #1430/#1431 added deterministic `small` / `medium` / `large` synthetic profiles, repeated timing samples and production-boundary scenarios for Generic Database page-state load, canonical Object Search query and Relation picker load;
+- the repository-owned Performance Benchmark workflow runs benchmark-related PR smoke repetitions plus scheduled/manual advisory profiles, publishes provenance-linked JSON/Markdown artifacts and does not participate in the required merge gate;
+- #1453/#1454 added fail-closed unchanged-source variance aggregation across repeated runs, comparing only equivalent source/profile/runtime/fixture/scenario provenance and keeping the resulting spread advisory rather than inventing a hard millisecond budget;
+- #1509/#1510 corrected local documentation to execute the Flutter-dependent benchmark through `flutter test`, matching the workflow contract; the variance aggregator remains a pure-Dart tool;
+- #1511 is the next focused performance slice after Search #1504 lands: measure healthy canonical Search prepare/open cost separately from query latency and explicit rebuild/repair cost. Do not optimize `ObjectSearchHealthAudit` in G without measured evidence.
+
+Keep #1360 open for measured follow-up/budget decisions. Do not weaken fixture size/workflows, add speculative caches, or manufacture a blocking threshold merely to close the umbrella.
+
+### Repository metadata drift — #1094
+The live GitHub repository description still identifies the product as a Flutter bookmark manager even though the durable architecture is Object-first/local-first. This is repository-setting drift, not a code defect. Fix it through repository metadata administration when an authorized settings mutation path is available; do not encode marketing/description text into runtime code or a brittle required merge gate merely to work around missing settings tooling.
 
 Future G work after owning-lane parity:
 - retire caller-zero Bookmark repositories/items/pages/bridges from #1039;
@@ -198,4 +212,4 @@ Behavior-preserving refactors require changed-Dart format, Analyze and relevant/
 11. keep durable docs free of transient snapshots and route machine-certifiable drift to CI while H handles semantic drift.
 
 ### Last audited stop
-`Stop reason: destructive-approval` — the current approval-sensitive guard owner must not be churned merely because the repository has no second human reviewer. Recheck live ownership and live ruleset settings on resume. If the active guard PR is ready apart from approval, synchronize it once to then-current `main`, complete all non-approval validation, and require the human repository admin to authorize that final head through the #1331 PR-only ruleset bypass when configured. Until the human action occurs, continue any file-disjoint independent G work; do not weaken `tool/pr_coordination_guard.py`, create a dummy reviewer account, or manufacture CI-refresh commits. Once the guard ownership clears, resume #1127 before later overlapping guard follow-ups such as #1123/#1312.
+`Stop reason: dependency` — the next focused performance slice #1511 depends on Search PR #1504 landing so the real `prepareWorkspace` healthy/open boundary exists on `main`. Overlapping coordination-guard follow-ups (#1127/#1123/#1312/#1082) must not edit the canonical guard/test pair while active PR #1136 owns it. Repository metadata drift #1094 remains a settings-level action and the current connected GitHub toolset exposes read-only repository metadata but no repository-description mutation. Re-read live PR/Issue/settings state on resume; if #1504 or guard ownership clears, take the newly unblocked focused work before inventing a new refactor.
