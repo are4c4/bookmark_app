@@ -65,13 +65,17 @@ void main() {
 
     expect(find.byType(ObjectDetailPropertyView), findsNWidgets(2));
 
-    await tester.tap(find.byKey(const ValueKey('object-title-edit-button')));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const ValueKey('object-title-edit-field')),
-      'After',
+    final titleEditor = find.byKey(
+      ValueKey('object-title-inline-editor-$objectId'),
     );
-    await tester.tap(find.byKey(const ValueKey('object-title-edit-save')));
+    final titleField = find.descendant(
+      of: titleEditor,
+      matching: find.byKey(const ValueKey('object-inline-title-field')),
+    );
+    expect(titleEditor, findsOneWidget);
+    await tester.tap(titleField);
+    await tester.enterText(titleField, 'After');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
 
     expect(find.text('After'), findsOneWidget);
