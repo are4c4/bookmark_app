@@ -4,8 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../data/bookmark_repository.dart';
+import '../data/generic_database_store.dart';
+import '../data/home_recent_service.dart';
 import '../data/object_search_compatibility_bridge.dart';
 import '../data/object_store.dart';
+import '../data/system_object_store.dart';
 import '../data/workspace_store.dart';
 import '../features/shell/presentation/widgets/unified_command_palette.dart';
 import '../repositories/object_global_search_service.dart';
@@ -793,6 +796,36 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
         .toList(growable: false);
   }
 
+  Future<List<UnifiedCommandPaletteItem>> _loadCommandRecentObjects({
+    required int workspaceId,
+    required GenericDatabaseStore store,
+  }) async {
+    final objectStore = ObjectStore(store);
+    final recent = await HomeRecentService(
+      objectStore: objectStore,
+      systemObjects: SystemObjectStore(
+        database: store.database,
+        objectStore: objectStore,
+      ),
+    ).listRecentlyChanged(workspaceId: workspaceId, limit: 6);
+
+    return recent
+        .map(
+          (item) => UnifiedCommandPaletteItem(
+            keyName: 'recent-object:${item.object.id}',
+            kind: UnifiedCommandPaletteItemKind.object,
+            label: item.object.title,
+            subtitle: item.objectType.name,
+            iconText: item.objectType.icon.trim().isEmpty
+                ? null
+                : item.objectType.icon,
+            objectId: item.object.id,
+            groupLabel: '最近のオブジェクト',
+          ),
+        )
+        .toList(growable: false);
+  }
+
   Future<void> _openCommandObject(int objectId) async {
     final searchContext = ObjectSearchCompatibilityBridge.fromRepository(
       widget.repository,
@@ -917,6 +950,10 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
         workspaceId: searchContext.workspaceId,
         preparation: preparation,
         query: query,
+      ),
+      loadRecentObjects: () => _loadCommandRecentObjects(
+        workspaceId: searchContext.workspaceId,
+        store: searchContext.store,
       ),
     );
     if (!mounted || selected == null) return;
