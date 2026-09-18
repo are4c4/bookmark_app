@@ -15,76 +15,87 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('whole restore rejects a changed identity-managed Value before mutation', () async {
-    final fixture = await _Fixture.create();
-    addTearDown(fixture.database.close);
+  test(
+    'whole restore rejects a changed identity-managed Value before mutation',
+    () async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.database.close);
 
-    final identity = await fixture.createValueProperty('Date', identityManaged: true);
-    final mutable = await fixture.createValueProperty('Note');
-    final objectId = await fixture.createObject('Current title');
-    await fixture.genericStore.setValue(
-      recordId: objectId,
-      propertyId: identity.id,
-      value: '2026-09-19',
-    );
-    await fixture.genericStore.setValue(
-      recordId: objectId,
-      propertyId: mutable.id,
-      value: 'current note',
-    );
+      final identity = await fixture.createValueProperty(
+        'Date',
+        identityManaged: true,
+      );
+      final mutable = await fixture.createValueProperty('Note');
+      final objectId = await fixture.createObject('Current title');
+      await fixture.genericStore.setValue(
+        recordId: objectId,
+        propertyId: identity.id,
+        value: '2026-09-19',
+      );
+      await fixture.genericStore.setValue(
+        recordId: objectId,
+        propertyId: mutable.id,
+        value: 'current note',
+      );
 
-    final historical = _checkpoint(
-      objectId: objectId,
-      revisionId: 2,
-      title: 'Historical title',
-      values: <ObjectPropertyDefinition, dynamic>{
-        identity: '2026-09-18',
-        mutable: 'historical note',
-      },
-    );
-    final current = _checkpoint(
-      objectId: objectId,
-      revisionId: 3,
-      title: 'Current title',
-      values: <ObjectPropertyDefinition, dynamic>{
-        identity: '2026-09-19',
-        mutable: 'current note',
-      },
-    );
-    var relationCalls = 0;
-    final executor = ObjectHistoryRestoreExecutor(
-      genericStore: fixture.genericStore,
-      loadCurrent: () async => current,
-      applyRelationRestore: (_) async {
-        relationCalls += 1;
-        return ObjectHistoryRelationRestoreImpact(changedObjectIds: const <int>[]);
-      },
-    );
+      final historical = _checkpoint(
+        objectId: objectId,
+        revisionId: 2,
+        title: 'Historical title',
+        values: <ObjectPropertyDefinition, dynamic>{
+          identity: '2026-09-18',
+          mutable: 'historical note',
+        },
+      );
+      final current = _checkpoint(
+        objectId: objectId,
+        revisionId: 3,
+        title: 'Current title',
+        values: <ObjectPropertyDefinition, dynamic>{
+          identity: '2026-09-19',
+          mutable: 'current note',
+        },
+      );
+      var relationCalls = 0;
+      final executor = ObjectHistoryRestoreExecutor(
+        genericStore: fixture.genericStore,
+        loadCurrent: () async => current,
+        applyRelationRestore: (_) async {
+          relationCalls += 1;
+          return ObjectHistoryRelationRestoreImpact(
+            changedObjectIds: const <int>[],
+          );
+        },
+      );
 
-    await expectLater(
-      executor.execute(
-        preparation: _preparation(
-          historical: historical,
-          current: current,
-          scope: ObjectHistoryRestoreScope.wholeObject(),
+      await expectLater(
+        executor.execute(
+          preparation: _preparation(
+            historical: historical,
+            current: current,
+            scope: ObjectHistoryRestoreScope.wholeObject(),
+          ),
+          expectedCurrentRevisionId: 3,
         ),
-        expectedCurrentRevisionId: 3,
-      ),
-      throwsStateError,
-    );
+        throwsStateError,
+      );
 
-    final preserved = await fixture.object(objectId);
-    expect(preserved.title, 'Current title');
-    expect(preserved.values[identity.id], '2026-09-19');
-    expect(preserved.values[mutable.id], 'current note');
-    expect(relationCalls, 0);
-  });
+      final preserved = await fixture.object(objectId);
+      expect(preserved.title, 'Current title');
+      expect(preserved.values[identity.id], '2026-09-19');
+      expect(preserved.values[mutable.id], 'current note');
+      expect(relationCalls, 0);
+    },
+  );
 
   test('selective changed identity-managed Value restore rejects', () async {
     final fixture = await _Fixture.create();
     addTearDown(fixture.database.close);
 
-    final identity = await fixture.createValueProperty('Date', identityManaged: true);
+    final identity = await fixture.createValueProperty(
+      'Date',
+      identityManaged: true,
+    );
     final objectId = await fixture.createObject('Current title');
     await fixture.genericStore.setValue(
       recordId: objectId,
@@ -127,62 +138,68 @@ void main() {
     expect((await fixture.object(objectId)).values[identity.id], '2026-09-19');
   });
 
-  test('matching identity evidence does not block unrelated mutable restore', () async {
-    final fixture = await _Fixture.create();
-    addTearDown(fixture.database.close);
+  test(
+    'matching identity evidence does not block unrelated mutable restore',
+    () async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.database.close);
 
-    final identity = await fixture.createValueProperty('Date', identityManaged: true);
-    final mutable = await fixture.createValueProperty('Note');
-    final objectId = await fixture.createObject('Current title');
-    await fixture.genericStore.setValue(
-      recordId: objectId,
-      propertyId: identity.id,
-      value: '2026-09-19',
-    );
-    await fixture.genericStore.setValue(
-      recordId: objectId,
-      propertyId: mutable.id,
-      value: 'current note',
-    );
-    final historical = _checkpoint(
-      objectId: objectId,
-      revisionId: 2,
-      title: 'Historical title',
-      values: <ObjectPropertyDefinition, dynamic>{
-        identity: '2026-09-19',
-        mutable: 'historical note',
-      },
-    );
-    final current = _checkpoint(
-      objectId: objectId,
-      revisionId: 3,
-      title: 'Current title',
-      values: <ObjectPropertyDefinition, dynamic>{
-        identity: '2026-09-19',
-        mutable: 'current note',
-      },
-    );
-    final executor = ObjectHistoryRestoreExecutor(
-      genericStore: fixture.genericStore,
-      loadCurrent: () async => current,
-      applyRelationRestore: (_) async =>
-          ObjectHistoryRelationRestoreImpact(changedObjectIds: const <int>[]),
-    );
+      final identity = await fixture.createValueProperty(
+        'Date',
+        identityManaged: true,
+      );
+      final mutable = await fixture.createValueProperty('Note');
+      final objectId = await fixture.createObject('Current title');
+      await fixture.genericStore.setValue(
+        recordId: objectId,
+        propertyId: identity.id,
+        value: '2026-09-19',
+      );
+      await fixture.genericStore.setValue(
+        recordId: objectId,
+        propertyId: mutable.id,
+        value: 'current note',
+      );
+      final historical = _checkpoint(
+        objectId: objectId,
+        revisionId: 2,
+        title: 'Historical title',
+        values: <ObjectPropertyDefinition, dynamic>{
+          identity: '2026-09-19',
+          mutable: 'historical note',
+        },
+      );
+      final current = _checkpoint(
+        objectId: objectId,
+        revisionId: 3,
+        title: 'Current title',
+        values: <ObjectPropertyDefinition, dynamic>{
+          identity: '2026-09-19',
+          mutable: 'current note',
+        },
+      );
+      final executor = ObjectHistoryRestoreExecutor(
+        genericStore: fixture.genericStore,
+        loadCurrent: () async => current,
+        applyRelationRestore: (_) async =>
+            ObjectHistoryRelationRestoreImpact(changedObjectIds: const <int>[]),
+      );
 
-    await executor.execute(
-      preparation: _preparation(
-        historical: historical,
-        current: current,
-        scope: ObjectHistoryRestoreScope.wholeObject(),
-      ),
-      expectedCurrentRevisionId: 3,
-    );
+      await executor.execute(
+        preparation: _preparation(
+          historical: historical,
+          current: current,
+          scope: ObjectHistoryRestoreScope.wholeObject(),
+        ),
+        expectedCurrentRevisionId: 3,
+      );
 
-    final restored = await fixture.object(objectId);
-    expect(restored.title, 'Historical title');
-    expect(restored.values[identity.id], '2026-09-19');
-    expect(restored.values[mutable.id], 'historical note');
-  });
+      final restored = await fixture.object(objectId);
+      expect(restored.title, 'Historical title');
+      expect(restored.values[identity.id], '2026-09-19');
+      expect(restored.values[mutable.id], 'historical note');
+    },
+  );
 }
 
 ObjectHistoryRestorePreparation _preparation({
