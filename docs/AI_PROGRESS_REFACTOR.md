@@ -35,6 +35,8 @@ Always verify Issue state and active PR ownership live before taking work.
 ### #225 — architecture health umbrella
 Continue measurable hotspot reduction, `AppDatabase` narrowing, explicit failure/privacy policy and CI/AI workflow guardrails through focused child Issues/PRs. Prefer deletion or responsibility movement over another abstraction layer.
 
+#1505/#1506 completed one evidence-backed public-surface narrowing checkpoint: the legacy Bookmark-People compatibility writer is now internal to `AppDatabase.addBookmark(personNames: ...)` instead of remaining a public `AppDatabase` method. The adjacent current-main audit found live production callers for the remaining public `AppDatabase` methods, so do not continue mechanical privateization or add pass-through wrappers without a fresh caller-zero/responsibility proof.
+
 ### #950 — Photo caller-zero cleanup (completed checkpoint)
 Safe caller-zero Photo mutation/presentation/read cleanup is complete. The surviving Photo-era paths are intentionally live compatibility/preservation infrastructure and must not be treated as spare cleanup merely to keep G active. Any future Photo code retirement requires a new focused current-main caller-zero proof; persisted Photo schema/data retirement is separately preservation-, migration-, and approval-gated.
 
