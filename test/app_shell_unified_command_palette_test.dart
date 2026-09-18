@@ -236,7 +236,9 @@ void main() {
       await captureFromPalette(
         'HTTPS://Example.COM:443/a/../command-palette-capture',
       );
-      final definition = await weblinks.ensureDefinition(repository.workspaceId);
+      final definition = await weblinks.ensureDefinition(
+        repository.workspaceId,
+      );
       final firstObjects = await objectStore.listObjects(
         definition.objectType.id,
       );
@@ -251,9 +253,7 @@ void main() {
       await tester.pageBack();
       await tester.pumpAndSettle();
 
-      await captureFromPalette(
-        'https://example.com/command-palette-capture',
-      );
+      await captureFromPalette('https://example.com/command-palette-capture');
       final secondObjects = await objectStore.listObjects(
         definition.objectType.id,
       );
@@ -286,7 +286,9 @@ void main() {
         ),
         defaultsStore: ObjectTypeDefaultsStore(genericStore),
       );
-      final definition = await weblinks.ensureDefinition(repository.workspaceId);
+      final definition = await weblinks.ensureDefinition(
+        repository.workspaceId,
+      );
 
       await weblinks.findOrCreate(
         workspaceId: repository.workspaceId,
@@ -314,10 +316,7 @@ void main() {
       final query = find.byKey(
         const ValueKey<String>('unified-command-palette-query'),
       );
-      await tester.enterText(
-        query,
-        'https://example.com/palette-collision',
-      );
+      await tester.enterText(query, 'https://example.com/palette-collision');
       await tester.pump();
       await tester.tap(
         find.byKey(
@@ -340,5 +339,4 @@ void main() {
       );
     },
   );
-
 }
