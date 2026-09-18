@@ -898,18 +898,13 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
           defaultsStore: ObjectTypeDefaultsStore(store),
         ),
       );
-      final object = await capture.capture(
-        workspaceId: workspaceId,
-        url: url,
-      );
+      final object = await capture.capture(workspaceId: workspaceId, url: url);
       if (!mounted) return;
       await _openCommandObject(object.id);
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('このURLを保存できませんでした。URLを確認してください。'),
-        ),
+        const SnackBar(content: Text('このURLを保存できませんでした。URLを確認してください。')),
       );
     }
   }
