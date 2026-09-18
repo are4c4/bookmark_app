@@ -46,6 +46,9 @@ The repository has durable foundations for:
 - canonical Object Search and focused freshness;
 - Vault lifecycle/portable managed storage and release delivery;
 - Photo→Image product-facing convergence while historical preservation remains intentional;
+- explicit Object duplicate/merge/redirect semantics with fail-closed conflict handling (#1062 completed);
+- product-quality infrastructure: deterministic advisory UI snapshots (#1353), shared component/catalog convergence (#1357), Core User Journeys/Product Acceptance/H review (#1367/#1368/#1370), and user-visible work-selection guidance (#1369);
+- read-only cross-subsystem data-health audit composition (#1359) plus repeatable performance-benchmark infrastructure whose remaining evidence/budget work stays under #1360;
 - parallel-development CI with a stable aggregate `merge-gate`, full-test sharding, docs-only fast path, immutable GitHub Action pinning, repository-pinned Flutter + tracked dependency lockfile reproducibility guards, deterministic AI PR-contract enforcement, a blocking deterministic migration single-writer gate, hotspot/Issue/dependency/handoff audits, and protected `main` integration;
 - a read-only repository-settings audit that checks the observable effective default-branch integration contract on PR/scheduled/manual runs without adding privileged administration credentials or guessing omitted administration-only fields;
 - a focused implementation Issue Form that captures lane ownership, dependencies, hotspots, migration/data impact, acceptance and non-goals before implementation.
@@ -70,22 +73,25 @@ Always re-check each Issue live before assuming state or ownership.
 The Issue numbers below are durable roadmap/routing anchors, not claims that a PR is currently active. Verify live state before taking ownership. Completed focused Issues are checkpoints, not active work sources.
 
 ### A — Object Core & Body
-- #1062 duplicate detection / Object merge / redirect semantics.
 - #1064 durable Object/Property/Body/Relation history contract; split B/F slices when required.
 - #1177 legacy-only Bookmark engagement/lifecycle preservation boundary where its acceptance remains open.
-- Completed checkpoints: #1041 legacy Bookmark → canonical Weblink/generic Object migration authority; #1044 generic-first Person create/update/delete/reconciliation authority; #1057 Body contextual block handles/drag reorder; #1058/#1121 local structural Undo plus compatibility-safe persisted Body concurrency.
+- Completed checkpoints: #1062 explicit Object duplicate/merge/redirect capability; #1041 legacy Bookmark → canonical Weblink/generic Object migration authority; #1044 generic-first Person create/update/delete/reconciliation authority; #1057 Body contextual block handles/drag reorder; #1058/#1121 local structural Undo plus compatibility-safe persisted Body concurrency. Future merge defects require new focused Issues rather than reopening #1062.
 
 ### B — Relations & Data Integrity
-- Future #1062/#1064 Relation rewiring/restore slices belong in focused B Issues when explicitly split.
+- Future #1064 Relation restore/history integrity slices belong in focused B Issues when explicitly split. #1062 Relation merge/rewiring work is a completed checkpoint; new merge-integrity defects require focused reproductions.
 - Otherwise resume B only for a newly demonstrated Relation/integrity obligation from a live focused Issue rather than reopening completed migration queues.
 - Completed checkpoints: #1042 retained Bookmark-era Relation convergence; #1045 generic Person roles/groups convergence; #1052 canonical Tag Parent/TagGroup integrity and cycle prevention; #1105 strict canonical Tag descendant reader.
 
 ### C — Database, View & Schema UX
-- #1043 generic Weblink/Object Database/View + Inbox replacement for Stage1 normal ownership.
-- #1046 generic Person Database/View/Inspector replacement after parity.
+Use `docs/AI_PRODUCT_PRIORITY.md` after safety/ownership gates. Current high-value durable anchors include:
+- #1491/#1346 shared Object-detail Property presentation: finish real-host collapsed/revealed/editable behavior after the integrated prerequisite slices;
+- #1345 direct inline title editing across shared Object detail hosts;
+- #1344 unified keyboard-first ⌘K using canonical Object Search/actions;
+- #1361 shared keyboard/focus/accessibility contract;
+- #1043 generic Weblink/Object Database/View + Inbox replacement for Stage1 normal ownership;
+- #1046 generic Person Database/View/Inspector replacement after parity;
 - #1061 Home/start UX centered on Inbox / Recent / Favorites / Pinned Databases.
-- Broader #1050 Tag picker/tree/management UX remains an umbrella concern only where live acceptance is unfinished.
-- Completed checkpoint: #1053 hierarchy-aware Tag predicates/filter UX, integrated through canonical B hierarchy semantics.
+Broader #1050 Tag picker/tree/management UX remains an umbrella concern only where live acceptance is unfinished. #1053 hierarchy-aware Tag predicates/filter UX is completed.
 
 ### D — Primitive Objects & Media
 - #155 is the durable Weblink/Image/File native-capability umbrella; resume D only for a concrete native-capability obligation proven by a live focused Issue.
@@ -94,7 +100,7 @@ The Issue numbers below are durable roadmap/routing anchors, not claims that a P
 Tag/TagGroup are not D-owned native primitives.
 
 ### E — Search & Indexing
-Canonical Object Search is established. #1178 is a completed checkpoint for canonical Person mutation Search freshness. Resume E only for a newly demonstrated FTS/search correctness, freshness, ranking, projection, or opening obligation; do not create domain-specific long-term search stores for Bookmark/Person/Tag.
+Canonical Object Search is established. #1178 is a completed checkpoint for canonical Person mutation Search freshness. #1350 is an explicit open user-visible Search UX contract: normal Search should auto-prepare/validate the canonical index and move rebuild behind repair UI. Resume E for that live-ready UX work or for newly demonstrated FTS/search correctness, freshness, ranking, projection, privacy, or opening obligations; do not create domain-specific long-term search stores for Bookmark/Person/Tag.
 
 ### F — Storage, Vault & Delivery
 - #1063 open export/portability distinct from backup/restore is the current durable roadmap anchor; verify live ownership before taking it.
@@ -104,6 +110,8 @@ Canonical Object Search is established. #1178 is a completed checkpoint for cano
 
 ### G — Refactor & Architecture Health
 - #225 maintainability, hotspot reduction, developer workflow, architecture health.
+- #1360 remains open for repeatable large-fixture performance evidence/budget decisions; benchmark infrastructure and bounded large-run timeout are established prerequisites.
+- Completed product-quality/developer-loop checkpoints include #1353 deterministic UI audit, #1357 shared design-system/component catalog, #1359 read-only data-health audit, and #1367/#1368/#1369/#1370 journey/evidence/priority/H-product-review contracts. Do not reopen them merely to keep G active.
 - #950 is a completed caller-zero Photo compatibility checkpoint. Surviving Photo-era paths remain intentional compatibility/preservation infrastructure unless a new focused current-main caller audit proves otherwise; destructive persisted-schema retirement is separate preservation/migration/approval-gated work.
 - #1107 Phase A independent-review path is established: the normal machine-pass path requires a distinct non-author current-head approved GitHub User with write/admin permission and complete latest-review-state evaluation. #1331 adds the solo-maintainer manual path: when no independent reviewer exists, the human repository admin may deliberately use the active ruleset's PR-only bypass on the final head after all non-approval validation. The repository guard remains red on this path and must not be weakened or made self-authorizing. #1107 Phase B remains open because repository-local workflow/guard enforcement is not independently immutable.
 - retire caller-zero Bookmark/People repositories/pages/bridges after owning-lane parity, and revisit Photo compatibility only through a new evidence-backed focused Issue rather than reopening #950.
@@ -143,7 +151,7 @@ Object-first constitution
         |
         +--> Platform contracts
                +--> #1061 [C] Home
-               +--> #1062 [A/B] Object merge
+               +--> completed #1062 [A/B] Object merge/redirect checkpoint; future defects use focused follow-ups
                +--> #1063 [F + owning serializers] export
                +--> #1064 [A/B/F] durable history
                +--> #1107/#1331 [G] approval enforcement + solo-maintainer manual path

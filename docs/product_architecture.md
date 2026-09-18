@@ -90,7 +90,7 @@ Duplicate detection and Object merge are distinct concepts:
 - merge is an explicit user/system-authorized operation with a reviewed merge plan;
 - fuzzy similarity must never silently collapse canonical Objects.
 
-Object merge is a future first-class capability tracked by #1062. Its contract must:
+Object merge/redirect is an established first-class capability completed through #1062. Future merge changes or defect fixes must preserve this contract:
 - choose or preserve one surviving canonical Object identity;
 - define redirect/tombstone behavior for the retired identity so old references do not silently dangle;
 - preserve or explicitly reconcile Body, Properties, aliases, lifecycle metadata and other user-authored state;
@@ -100,7 +100,7 @@ Object merge is a future first-class capability tracked by #1062. Its contract m
 - remain restart/reconciliation safe and retry/idempotency aware;
 - avoid inferring managed Image/File byte-deletion authority from identity merge alone.
 
-Until merge/redirect semantics exist, migrations must fail closed rather than silently combine Objects with conflicting user-authored data or Relations.
+Migrations and future merge changes must continue to fail closed rather than silently combine Objects with conflicting user-authored data or Relations. Do not reopen #1062 as a standing work queue; route a newly reproduced merge defect or extension through a focused Issue that preserves the established contract.
 
 ## Properties
 
@@ -484,7 +484,7 @@ A fresh H chat must be able to resume from GitHub alone with `Hレーンとし�
 - #1049 / #1057 / #1058 — make Body editing document-like and locally undoable while preserving Body persistence.
 - #1050 / #1052 / #1053 — generic Tag/TagGroup hierarchy and hierarchy-aware query/UX contracts.
 - #1061 — Home/start surface centered on Inbox / Recent / Favorites / Pinned Databases.
-- #1062 — explicit Object duplicate detection, merge and redirect/tombstone contract.
+- #1062 — completed explicit Object duplicate detection, merge and redirect/tombstone contract; preserve it and route future defects through focused follow-ups.
 - #1063 — open export/portability contract distinct from backup/restore.
 - #1064 — durable Object/Property/Body/Relation version history and conflict-safe restore contract.
 - #1060 — H oversight/control-tower and completion-contract integration.
