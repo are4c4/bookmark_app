@@ -4,6 +4,7 @@ import '../data/object_body_store.dart';
 import '../data/object_computed_value_store.dart';
 import '../data/object_detail_content_loader.dart';
 import '../data/object_detail_edit_service.dart';
+import '../data/object_history_current_state_capture_service.dart';
 import '../data/object_store.dart';
 import '../data/person_object_bridge.dart';
 import '../data/person_object_write_service.dart';
@@ -41,10 +42,16 @@ class CanonicalPersonDetailEditService {
       objectStore: objectStore,
       systemObjectStore: systemObjects,
     );
+    final bodyStore = ObjectBodyStore(genericStore);
     final loader = ObjectDetailContentLoader(
       objectStore: objectStore,
-      bodyStore: ObjectBodyStore(genericStore),
+      bodyStore: bodyStore,
       computedStore: ObjectComputedValueStore(objectStore),
+    );
+    final historyCapture = ObjectHistoryCurrentStateCaptureService.fromStores(
+      genericStore: genericStore,
+      objectStore: objectStore,
+      bodyStore: bodyStore,
     );
     return CanonicalPersonDetailEditService(
       objectStore: objectStore,
@@ -56,8 +63,9 @@ class CanonicalPersonDetailEditService {
       ),
       genericEdits: ObjectDetailEditService(
         objectStore: objectStore,
-        bodyStore: ObjectBodyStore(genericStore),
+        bodyStore: bodyStore,
         loader: loader,
+        historyCapture: historyCapture,
       ),
       loader: loader,
       canonicalObjectMutationImpactSink:

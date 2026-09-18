@@ -1,6 +1,7 @@
 import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/canonical_object_mutation_impact_sink.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
+import 'package:bookmark_app/data/object_history_checkpoint_store.dart';
 import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/person_object_bridge.dart';
 import 'package:bookmark_app/data/person_object_write_service.dart';
@@ -129,6 +130,20 @@ void main() {
     expect(await database.select(database.people).get(), isEmpty);
     expect(await bridge.legacyPersonIdForObject(workspaceId, objectId), isNull);
     expect(committedObjectIds, <int>[objectId, objectId]);
+
+    final history = await ObjectHistoryCheckpointStore(genericStore)
+        .list(objectId);
+    expect(history, hasLength(2));
+    expect(history.first.entry.revisionId, 1);
+    expect(history.first.entry.previousRevisionId, isNull);
+    expect(history.first.title, 'Native');
+    expect(history[1].entry.revisionId, 2);
+    expect(history[1].entry.previousRevisionId, 1);
+    expect(history[1].title, 'Native renamed');
+    final noteBeforeEdit = history[1].propertySnapshots.singleWhere(
+      (snapshot) => snapshot.propertyId == schema.noteProperty.id,
+    );
+    expect(noteBeforeEdit.value, isNull);
   });
 
   test(

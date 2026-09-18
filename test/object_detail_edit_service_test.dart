@@ -4,6 +4,8 @@ import 'package:bookmark_app/data/object_body_store.dart';
 import 'package:bookmark_app/data/object_computed_value_store.dart';
 import 'package:bookmark_app/data/object_detail_content_loader.dart';
 import 'package:bookmark_app/data/object_detail_edit_service.dart';
+import 'package:bookmark_app/data/object_history_checkpoint_store.dart';
+import 'package:bookmark_app/data/object_history_current_state_capture_service.dart';
 import 'package:bookmark_app/data/object_store.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/domain/object_model.dart';
@@ -57,6 +59,67 @@ void main() {
     expect(content.object.title, 'After');
     expect(content.object.valueFor(propertyId), 'doing');
   });
+
+  test(
+    'failed detail mutation rolls back its pre-state history capture',
+    () async {
+      final database = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(database.close);
+      final workspaceId = await WorkspaceStore(database).initialize();
+      final genericStore = GenericDatabaseStore(database);
+      final objectStore = ObjectStore(genericStore);
+      final bodyStore = ObjectBodyStore(genericStore);
+      final loader = ObjectDetailContentLoader(
+        objectStore: objectStore,
+        bodyStore: bodyStore,
+        computedStore: ObjectComputedValueStore(objectStore),
+      );
+      final edits = ObjectDetailEditService(
+        objectStore: objectStore,
+        bodyStore: bodyStore,
+        loader: loader,
+        historyCapture: ObjectHistoryCurrentStateCaptureService.fromStores(
+          genericStore: genericStore,
+          objectStore: objectStore,
+          bodyStore: bodyStore,
+        ),
+      );
+      final typeId = await objectStore.createObjectType(
+        workspaceId: workspaceId,
+        name: 'Note',
+      );
+      final propertyId = await objectStore.createProperty(
+        objectTypeId: typeId,
+        name: 'Value',
+        type: ObjectPropertyType.number,
+      );
+      final objectId = await objectStore.createObject(
+        objectTypeId: typeId,
+        title: 'Preserved',
+      );
+      final content = (await loader.load(
+        objectTypeId: typeId,
+        objectId: objectId,
+      ))!;
+      final property = content.objectType.properties.singleWhere(
+        (candidate) => candidate.id == propertyId,
+      );
+
+      await expectLater(
+        edits.setValue(content: content, property: property, value: double.nan),
+        throwsA(anything),
+      );
+
+      expect(
+        await ObjectHistoryCheckpointStore(genericStore).list(objectId),
+        isEmpty,
+      );
+      expect(
+        (await objectStore.listObjects(typeId)).single.values[propertyId],
+        isNull,
+      );
+    },
+  );
 
   test('detail Value editing rejects Relation and Computed properties', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
