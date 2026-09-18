@@ -69,6 +69,31 @@ void main() {
     expect(result.findings, isEmpty);
   });
 
+  test('reports canonical title drift without exposing title text', () async {
+    await objectStore.renameObject(objectId, 'Renamed canonical title');
+
+    final result = await audit.auditWorkspace(workspaceId);
+
+    final mismatch = result.findings.singleWhere(
+      (finding) => finding.kind == ObjectSearchHealthFindingKind.titleMismatch,
+    );
+    expect(mismatch.objectId, objectId);
+    expect(mismatch.indexedObjectTypeId, objectTypeId);
+    expect(mismatch.indexedWorkspaceId, workspaceId);
+    expect(mismatch.canonicalObjectTypeId, objectTypeId);
+    expect(mismatch.canonicalWorkspaceId, workspaceId);
+
+    final staleHits = await search.search(
+      workspaceId: workspaceId,
+      rawQuery: 'search health object',
+    );
+    expect(
+      staleHits.map((hit) => hit.objectId),
+      contains(objectId),
+      reason: 'health audit must report title drift without repairing it',
+    );
+  });
+
   test(
     'reports a missing canonical index identity without repairing it',
     () async {
