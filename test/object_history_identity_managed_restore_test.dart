@@ -1,5 +1,6 @@
 import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
+import 'package:bookmark_app/data/object_history_checkpoint_loader.dart';
 import 'package:bookmark_app/data/object_history_restore_executor.dart';
 import 'package:bookmark_app/data/object_history_restore_preparation_service.dart';
 import 'package:bookmark_app/data/object_store.dart';
@@ -8,7 +9,6 @@ import 'package:bookmark_app/domain/object_body.dart';
 import 'package:bookmark_app/domain/object_history_checkpoint.dart';
 import 'package:bookmark_app/domain/object_history_contract.dart';
 import 'package:bookmark_app/domain/object_history_relation.dart';
-import 'package:bookmark_app/domain/object_history_restore_composition.dart';
 import 'package:bookmark_app/domain/object_history_restore_planner.dart';
 import 'package:bookmark_app/domain/object_model.dart';
 import 'package:drift/native.dart';
