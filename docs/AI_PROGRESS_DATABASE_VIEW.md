@@ -40,7 +40,13 @@ Responsive Property labels, quiet empty-scalar handling, the reusable reveal sec
 Replace ordinary modal rename friction with a shared direct inline title editor across editable full-page and peek/detail Object surfaces. Preserve canonical Object mutation/validation and read-only system-title cases.
 
 ### #1344 — unified ⌘K
-Evolve the navigation-only palette into a keyboard-first Object/Database/navigation/action entry point by composing canonical Object Search/recent readers and existing creation/capture authorities. Do not create a second Search index or persistence authority.
+PR #1517 is integrated: ⌘K now composes existing shell/Database destinations with canonical Object Search, reuses Search-owned `prepareWorkspace()` for first-use readiness, opens results through the shared Object Inspector, preserves deterministic keyboard selection, and keeps full Search reachable after Search failure. This checkpoint must not be reopened as a second Search implementation.
+
+#1344 intentionally remains open for the two still-unfinished focused product slices:
+- recently used Objects, sourced from an existing canonical recent-object reader rather than palette-local history persistence;
+- a small set of safe common actions such as canonical URL capture/new Object only where existing creation/capture authorities can be composed without making AppShell a new mutation engine.
+
+Do not create a second Search index, recent-history store, Bookmark/People-specific command engine, or new persistence authority.
 
 ### #1361 — shared keyboard/focus/accessibility contract
 Treat keyboard/focus/semantics as product UX, not optional polish. Cover representative shared surfaces and coordinate with #1344/#1345/#1491 so each focused slice can contribute evidence without turning #1361 into one broad hotspot rewrite.
