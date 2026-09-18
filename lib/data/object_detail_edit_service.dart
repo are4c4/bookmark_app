@@ -2,6 +2,7 @@ import '../domain/object_detail_content.dart';
 import '../domain/object_model.dart';
 import 'object_body_store.dart';
 import 'object_detail_content_loader.dart';
+import 'object_history_current_state_capture_service.dart';
 import 'object_store.dart';
 
 /// Narrow Object-owned mutation facade for shared detail surfaces.
@@ -15,11 +16,13 @@ class ObjectDetailEditService {
     required this.objectStore,
     required this.bodyStore,
     required this.loader,
+    this.historyCapture,
   });
 
   final ObjectStore objectStore;
   final ObjectBodyStore bodyStore;
   final ObjectDetailContentLoader loader;
+  final ObjectHistoryCurrentStateCaptureService? historyCapture;
 
   Future<ObjectDetailContent> rename({
     required ObjectDetailContent content,
@@ -29,7 +32,10 @@ class ObjectDetailEditService {
     if (normalized.isEmpty) {
       throw ArgumentError.value(title, 'title', 'Object title cannot be empty.');
     }
-    await objectStore.renameObject(content.object.id, normalized);
+    await _mutateWithHistory(
+      content,
+      () => objectStore.renameObject(content.object.id, normalized),
+    );
     return _reload(content);
   }
 
@@ -39,10 +45,13 @@ class ObjectDetailEditService {
     required dynamic value,
   }) async {
     final canonical = _editableValueProperty(content.objectType, property.id);
-    await objectStore.setPropertyValue(
-      objectId: content.object.id,
-      property: canonical,
-      value: value,
+    await _mutateWithHistory(
+      content,
+      () => objectStore.setPropertyValue(
+        objectId: content.object.id,
+        property: canonical,
+        value: value,
+      ),
     );
     return _reload(content);
   }
@@ -137,12 +146,31 @@ class ObjectDetailEditService {
         'Expected ${expectedType.name} Value Property.',
       );
     }
-    await objectStore.setPropertyValue(
-      objectId: content.object.id,
-      property: canonical,
-      value: value,
+    await _mutateWithHistory(
+      content,
+      () => objectStore.setPropertyValue(
+        objectId: content.object.id,
+        property: canonical,
+        value: value,
+      ),
     );
     return _reload(content);
+  }
+
+  Future<void> _mutateWithHistory(
+    ObjectDetailContent content,
+    Future<void> Function() mutation,
+  ) async {
+    final capture = historyCapture;
+    if (capture == null) {
+      await mutation();
+      return;
+    }
+    await capture.captureBeforeMutation<void>(
+      objectTypeId: content.objectType.id,
+      objectId: content.object.id,
+      mutation: mutation,
+    );
   }
 
   ObjectPropertyDefinition _editableValueProperty(
