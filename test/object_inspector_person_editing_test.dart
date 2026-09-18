@@ -24,8 +24,7 @@ void main() {
         database,
         canonicalObjectMutationImpactSink: CanonicalObjectMutationImpactSink(
           onObjectCommitted: search.refreshObjectLabelDependents,
-          onDeletionCommitted: (impact) =>
-              search.refreshCommittedDeletionImpact(
+          onDeletionCommitted: (impact) => search.refreshCommittedDeletionImpact(
             deletedObjectId: impact.deletedObjectId,
             changedSourceObjectIds: impact.detachedSourceObjectIds,
           ),
@@ -140,8 +139,7 @@ void main() {
         <int>[objectId],
       );
 
-      final object = (await objectStore.listObjects(schema.objectType.id))
-          .single;
+      final object = (await objectStore.listObjects(schema.objectType.id)).single;
       final person = (await database.select(database.people).get()).single;
       expect(object.title, 'InspectorAfterToken');
       expect(object.values[schema.noteProperty.id], 'InspectorNewNoteToken');
@@ -204,10 +202,12 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('人物を更新できませんでした。'), findsOneWidget);
-      expect(tester.widget<TextField>(titleField).controller?.text, 'Preserved');
+      expect(
+        tester.widget<TextField>(titleField).controller?.text,
+        'Preserved',
+      );
       expect(tester.widget<TextField>(titleField).focusNode?.hasFocus, isFalse);
-      final object = (await objectStore.listObjects(schema.objectType.id))
-          .single;
+      final object = (await objectStore.listObjects(schema.objectType.id)).single;
       final person = (await database.select(database.people).get()).single;
       expect(object.title, 'Preserved');
       expect(object.values[schema.noteProperty.id], 'old note');
