@@ -1,8 +1,13 @@
+import 'dart:convert';
+
+import 'package:drift/drift.dart';
+
 import '../domain/object_history_checkpoint.dart';
 import '../domain/object_history_contract.dart';
 import '../domain/object_history_relation.dart';
 import '../domain/object_history_restore_composition.dart';
 import '../domain/object_history_restore_planner.dart';
+import '../domain/object_model.dart';
 import 'generic_database_store.dart';
 import 'object_body_store.dart';
 import 'object_history_relation_service.dart';
@@ -131,6 +136,28 @@ class ObjectHistoryRestoreExecutor {
           snapshot.propertyId: snapshot,
       };
 
+      // Identity-managed Values are historical evidence, but their owning
+      // lifecycle service remains the only mutation authority. Preflight every
+      // requested Value restore before any A/B mutation so GenericDatabaseStore
+      // cannot silently no-op a changed identity fact and report success.
+      final objectTypeId = await _objectTypeId(historical.entry.objectId);
+      for (final decision in freshPreview.decisions) {
+        if (!decision.needsRestore ||
+            decision.target.kind != ObjectHistoryFieldKind.property) {
+          continue;
+        }
+        final propertyId = decision.target.propertyId!;
+        final config = await _strictPropertyConfig(
+          objectTypeId: objectTypeId,
+          propertyId: propertyId,
+        );
+        if (ObjectPropertyDefinition.isIdentityManagedConfig(config)) {
+          throw StateError(
+            'Identity-managed Value Property $propertyId cannot be changed by generic history restore.',
+          );
+        }
+      }
+
       for (final decision in freshPreview.decisions) {
         if (!decision.needsRestore) continue;
         switch (decision.target.kind) {
@@ -180,6 +207,63 @@ class ObjectHistoryRestoreExecutor {
         changedObjectIds: changedObjectIds,
       );
     });
+  }
+
+  Future<Map<String, dynamic>> _strictPropertyConfig({
+    required int objectTypeId,
+    required int propertyId,
+  }) async {
+    final row = await _genericStore.database
+        .customSelect(
+          '''SELECT config_json
+             FROM generic_properties
+             WHERE id = ? AND database_id = ?
+             LIMIT 1''',
+          variables: [Variable<int>(propertyId), Variable<int>(objectTypeId)],
+        )
+        .getSingleOrNull();
+    if (row == null) {
+      throw StateError(
+        'Value Property $propertyId is missing during history restore execution.',
+      );
+    }
+
+    final raw = row.read<String>('config_json');
+    dynamic decoded;
+    try {
+      decoded = jsonDecode(raw);
+    } on FormatException {
+      throw StateError(
+        'Value Property $propertyId has malformed configuration during history restore execution.',
+      );
+    }
+    if (decoded is! Map) {
+      throw StateError(
+        'Value Property $propertyId has malformed configuration during history restore execution.',
+      );
+    }
+    try {
+      return Map<String, dynamic>.from(decoded);
+    } on TypeError {
+      throw StateError(
+        'Value Property $propertyId has malformed configuration during history restore execution.',
+      );
+    }
+  }
+
+  Future<int> _objectTypeId(int objectId) async {
+    final row = await _genericStore.database
+        .customSelect(
+          'SELECT database_id FROM generic_records WHERE id = ? LIMIT 1',
+          variables: [Variable<int>(objectId)],
+        )
+        .getSingleOrNull();
+    if (row == null) {
+      throw StateError(
+        'Current Object is missing during history restore execution.',
+      );
+    }
+    return row.read<int>('database_id');
   }
 }
 
