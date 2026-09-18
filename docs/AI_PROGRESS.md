@@ -100,7 +100,7 @@ Broader #1050 Tag picker/tree/management UX remains an umbrella concern only whe
 Tag/TagGroup are not D-owned native primitives.
 
 ### E — Search & Indexing
-Canonical Object Search is established. #1178 is a completed checkpoint for canonical Person mutation Search freshness. #1350 is an explicit open user-visible Search UX contract: normal Search should auto-prepare/validate the canonical index and move rebuild behind repair UI. Resume E for that live-ready UX work or for newly demonstrated FTS/search correctness, freshness, ranking, projection, privacy, or opening obligations; do not create domain-specific long-term search stores for Bookmark/Person/Tag.
+Canonical Object Search is established. #1178 is a completed checkpoint for canonical Person mutation Search freshness. #1350/#1504 are completed checkpoints for health-based canonical index preparation, repair-first recovery, and secondary manual rebuild UI. Resume E for a newly demonstrated FTS/search correctness, freshness, ranking, projection, privacy, or opening obligation, or another explicit live focused Search UX Issue; do not reopen #1350 or create domain-specific long-term search stores for Bookmark/Person/Tag.
 
 ### F — Storage, Vault & Delivery
 - #1063 open export/portability distinct from backup/restore is the current durable roadmap anchor; verify live ownership before taking it.
@@ -111,6 +111,7 @@ Canonical Object Search is established. #1178 is a completed checkpoint for cano
 ### G — Refactor & Architecture Health
 - #225 maintainability, hotspot reduction, developer workflow, architecture health.
 - #1360 remains open for repeatable large-fixture performance evidence/budget decisions; benchmark infrastructure and bounded large-run timeout are established prerequisites.
+- #1511 is the current focused measurement child under #1360 now that #1504 is completed: measure healthy canonical Search prepare/open separately from query latency and explicit rebuild/repair. Keep it measurement-only; optimization belongs to evidence-backed follow-up.
 - Completed product-quality/developer-loop checkpoints include #1353 deterministic UI audit, #1357 shared design-system/component catalog, #1359 read-only data-health audit, and #1367/#1368/#1369/#1370 journey/evidence/priority/H-product-review contracts. Do not reopen them merely to keep G active.
 - #950 is a completed caller-zero Photo compatibility checkpoint. Surviving Photo-era paths remain intentional compatibility/preservation infrastructure unless a new focused current-main caller audit proves otherwise; destructive persisted-schema retirement is separate preservation/migration/approval-gated work.
 - #1107 Phase A independent-review path is established: the normal machine-pass path requires a distinct non-author current-head approved GitHub User with write/admin permission and complete latest-review-state evaluation. #1331 adds the solo-maintainer manual path: when no independent reviewer exists, the human repository admin may deliberately use the active ruleset's PR-only bypass on the final head after all non-approval validation. The repository guard remains red on this path and must not be weakened or made self-authorizing. #1107 Phase B remains open because repository-local workflow/guard enforcement is not independently immutable.
