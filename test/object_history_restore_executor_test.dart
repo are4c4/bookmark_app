@@ -233,6 +233,311 @@ void main() {
     );
   });
 
+
+  test(
+    'whole restore rejects changed identity-managed Value before any mutation',
+    () async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.database.close);
+
+      final personTypeId = await fixture.createType('Person');
+      final sourceTypeId = await fixture.createType('Source');
+      final identity = await fixture.createValueProperty(
+        sourceTypeId,
+        'Identity date',
+        type: ObjectPropertyType.date,
+        config: const <String, dynamic>{
+          ObjectPropertyDefinition.identityManagedConfigKey: true,
+        },
+      );
+      final note = await fixture.createValueProperty(sourceTypeId, 'Note');
+      final person = await fixture.createRelation(
+        sourceTypeId: sourceTypeId,
+        targetTypeId: personTypeId,
+        name: 'Person',
+        multiple: false,
+      );
+      final historicalTarget = await fixture.createObject(
+        personTypeId,
+        'Historical target',
+      );
+      final currentTarget = await fixture.createObject(
+        personTypeId,
+        'Current target',
+      );
+      final source = await fixture.createObject(sourceTypeId, 'Current title');
+
+      await fixture.genericStore.setValue(
+        recordId: source,
+        propertyId: identity.id,
+        value: '2026-09-19',
+      );
+      await fixture.genericStore.setValue(
+        recordId: source,
+        propertyId: note.id,
+        value: 'current note',
+      );
+      await fixture.bodyStore.write(
+        objectId: source,
+        document: _body('current body'),
+      );
+      await fixture.mutationService.setRelation(
+        objectId: source,
+        property: person,
+        targetObjectIds: <int>[historicalTarget],
+      );
+      final historicalRelation = await fixture.historyService.capture(
+        workspaceId: fixture.workspaceId,
+        sourceObjectId: source,
+        propertyId: person.id,
+      );
+      await fixture.mutationService.setRelation(
+        objectId: source,
+        property: person,
+        targetObjectIds: <int>[currentTarget],
+      );
+
+      final historical = _checkpoint(
+        objectId: source,
+        revisionId: 2,
+        title: 'Historical title',
+        body: _body('historical body'),
+        propertySnapshots: <ObjectHistoryPropertySnapshot>[
+          ObjectHistoryPropertySnapshot.fromDefinition(
+            property: identity,
+            value: '2026-09-18',
+          ),
+          ObjectHistoryPropertySnapshot.fromDefinition(
+            property: note,
+            value: 'historical note',
+          ),
+        ],
+        relations: <ObjectPropertyDefinition>[person],
+      );
+      final current = _checkpoint(
+        objectId: source,
+        revisionId: 3,
+        title: 'Current title',
+        body: _body('current body'),
+        propertySnapshots: <ObjectHistoryPropertySnapshot>[
+          ObjectHistoryPropertySnapshot.fromDefinition(
+            property: identity,
+            value: '2026-09-19',
+          ),
+          ObjectHistoryPropertySnapshot.fromDefinition(
+            property: note,
+            value: 'current note',
+          ),
+        ],
+        relations: <ObjectPropertyDefinition>[person],
+      );
+      final relationPlan = await fixture.historyService.previewRestore(
+        workspaceId: fixture.workspaceId,
+        historical: historicalRelation,
+      );
+      final preparation = _preparation(
+        historical: historical,
+        current: current,
+        scope: ObjectHistoryRestoreScope.wholeObject(),
+        relationSnapshots: <ObjectHistoryRelationSnapshot>[historicalRelation],
+        relationPlans: <ObjectHistoryRelationRestorePlan>[relationPlan],
+      );
+      var relationCalls = 0;
+      final executor = ObjectHistoryRestoreExecutor(
+        genericStore: fixture.genericStore,
+        loadCurrent: () async => current,
+        applyRelationRestore: (plan) async {
+          relationCalls += 1;
+          return fixture.historyService.applyRestore(plan);
+        },
+      );
+
+      await expectLater(
+        executor.execute(
+          preparation: preparation,
+          expectedCurrentRevisionId: 3,
+        ),
+        throwsStateError,
+      );
+
+      final preserved = await fixture.object(sourceTypeId, source);
+      expect(preserved.title, 'Current title');
+      expect(preserved.values[identity.id], '2026-09-19');
+      expect(preserved.values[note.id], 'current note');
+      expect(
+        (await fixture.bodyStore.read(source)).toJson(),
+        _body('current body').toJson(),
+      );
+      expect(
+        await fixture.relationValue(sourceTypeId, source, person.id),
+        <int>[currentTarget],
+      );
+      expect(relationCalls, 0);
+    },
+  );
+
+  test('selective changed identity-managed Value restore rejects', () async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.database.close);
+
+    final sourceTypeId = await fixture.createType('Source');
+    final identity = await fixture.createValueProperty(
+      sourceTypeId,
+      'Identity date',
+      type: ObjectPropertyType.date,
+      config: const <String, dynamic>{
+        ObjectPropertyDefinition.identityManagedConfigKey: true,
+      },
+    );
+    final source = await fixture.createObject(sourceTypeId, 'Current title');
+    await fixture.genericStore.setValue(
+      recordId: source,
+      propertyId: identity.id,
+      value: '2026-09-19',
+    );
+
+    final historical = _checkpoint(
+      objectId: source,
+      revisionId: 2,
+      title: 'Current title',
+      body: const ObjectBodyDocument(),
+      propertySnapshots: <ObjectHistoryPropertySnapshot>[
+        ObjectHistoryPropertySnapshot.fromDefinition(
+          property: identity,
+          value: '2026-09-18',
+        ),
+      ],
+    );
+    final current = _checkpoint(
+      objectId: source,
+      revisionId: 3,
+      title: 'Current title',
+      body: const ObjectBodyDocument(),
+      propertySnapshots: <ObjectHistoryPropertySnapshot>[
+        ObjectHistoryPropertySnapshot.fromDefinition(
+          property: identity,
+          value: '2026-09-19',
+        ),
+      ],
+    );
+    final preparation = _preparation(
+      historical: historical,
+      current: current,
+      scope: ObjectHistoryRestoreScope.selective(<ObjectHistoryFieldTarget>[
+        ObjectHistoryFieldTarget.property(identity.id),
+      ]),
+    );
+    final executor = ObjectHistoryRestoreExecutor(
+      genericStore: fixture.genericStore,
+      loadCurrent: () async => current,
+      applyRelationRestore: (_) async =>
+          ObjectHistoryRelationRestoreImpact(changedObjectIds: const <int>[]),
+    );
+
+    await expectLater(
+      executor.execute(
+        preparation: preparation,
+        expectedCurrentRevisionId: 3,
+      ),
+      throwsStateError,
+    );
+
+    final preserved = await fixture.object(sourceTypeId, source);
+    expect(preserved.values[identity.id], '2026-09-19');
+  });
+
+  test(
+    'matching identity-managed Value does not block unrelated whole restore',
+    () async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.database.close);
+
+      final sourceTypeId = await fixture.createType('Source');
+      final identity = await fixture.createValueProperty(
+        sourceTypeId,
+        'Identity date',
+        type: ObjectPropertyType.date,
+        config: const <String, dynamic>{
+          ObjectPropertyDefinition.identityManagedConfigKey: true,
+        },
+      );
+      final note = await fixture.createValueProperty(sourceTypeId, 'Note');
+      final source = await fixture.createObject(sourceTypeId, 'Current title');
+      await fixture.genericStore.setValue(
+        recordId: source,
+        propertyId: identity.id,
+        value: '2026-09-19',
+      );
+      await fixture.genericStore.setValue(
+        recordId: source,
+        propertyId: note.id,
+        value: 'current note',
+      );
+      await fixture.bodyStore.write(
+        objectId: source,
+        document: _body('current body'),
+      );
+
+      final historical = _checkpoint(
+        objectId: source,
+        revisionId: 2,
+        title: 'Historical title',
+        body: _body('historical body'),
+        propertySnapshots: <ObjectHistoryPropertySnapshot>[
+          ObjectHistoryPropertySnapshot.fromDefinition(
+            property: identity,
+            value: '2026-09-19',
+          ),
+          ObjectHistoryPropertySnapshot.fromDefinition(
+            property: note,
+            value: 'historical note',
+          ),
+        ],
+      );
+      final current = _checkpoint(
+        objectId: source,
+        revisionId: 3,
+        title: 'Current title',
+        body: _body('current body'),
+        propertySnapshots: <ObjectHistoryPropertySnapshot>[
+          ObjectHistoryPropertySnapshot.fromDefinition(
+            property: identity,
+            value: '2026-09-19',
+          ),
+          ObjectHistoryPropertySnapshot.fromDefinition(
+            property: note,
+            value: 'current note',
+          ),
+        ],
+      );
+      final preparation = _preparation(
+        historical: historical,
+        current: current,
+        scope: ObjectHistoryRestoreScope.wholeObject(),
+      );
+      final executor = ObjectHistoryRestoreExecutor(
+        genericStore: fixture.genericStore,
+        loadCurrent: () async => current,
+        applyRelationRestore: (_) async =>
+            ObjectHistoryRelationRestoreImpact(changedObjectIds: const <int>[]),
+      );
+
+      await executor.execute(
+        preparation: preparation,
+        expectedCurrentRevisionId: 3,
+      );
+
+      final restored = await fixture.object(sourceTypeId, source);
+      expect(restored.title, 'Historical title');
+      expect(restored.values[identity.id], '2026-09-19');
+      expect(restored.values[note.id], 'historical note');
+      expect(
+        (await fixture.bodyStore.read(source)).toJson(),
+        _body('historical body').toJson(),
+      );
+    },
+  );
+
   test('stale current revision rejects before any mutation', () async {
     final fixture = await _Fixture.create();
     addTearDown(fixture.database.close);
@@ -528,6 +833,7 @@ ObjectHistoryCheckpointPayload _checkpoint({
   required ObjectBodyDocument body,
   ObjectPropertyDefinition? valueProperty,
   dynamic value,
+  List<ObjectHistoryPropertySnapshot>? propertySnapshots,
   List<ObjectPropertyDefinition> relations = const <ObjectPropertyDefinition>[],
 }) => ObjectHistoryCheckpointPayload(
   entry: ObjectHistoryEntry(
@@ -538,13 +844,15 @@ ObjectHistoryCheckpointPayload _checkpoint({
     source: ObjectHistorySourceKind.userMutation,
   ),
   title: title,
-  propertySnapshots: <ObjectHistoryPropertySnapshot>[
-    if (valueProperty != null)
-      ObjectHistoryPropertySnapshot.fromDefinition(
-        property: valueProperty,
-        value: value,
-      ),
-  ],
+  propertySnapshots:
+      propertySnapshots ??
+      <ObjectHistoryPropertySnapshot>[
+        if (valueProperty != null)
+          ObjectHistoryPropertySnapshot.fromDefinition(
+            property: valueProperty,
+            value: value,
+          ),
+      ],
   body: body,
   relationRequirements: <ObjectHistoryRelationRequirement>[
     for (final relation in relations)
@@ -631,12 +939,15 @@ class _Fixture {
 
   Future<ObjectPropertyDefinition> createValueProperty(
     int objectTypeId,
-    String name,
-  ) async {
+    String name, {
+    ObjectPropertyType type = ObjectPropertyType.text,
+    Map<String, dynamic> config = const <String, dynamic>{},
+  }) async {
     final propertyId = await objectStore.createProperty(
       objectTypeId: objectTypeId,
       name: name,
-      type: ObjectPropertyType.text,
+      type: type,
+      config: config,
     );
     return (await objectStore.getObjectType(objectTypeId))!.properties
         .singleWhere((property) => property.id == propertyId);

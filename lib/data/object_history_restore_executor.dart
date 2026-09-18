@@ -1,8 +1,13 @@
+import 'dart:convert';
+
+import 'package:drift/drift.dart';
+
 import '../domain/object_history_checkpoint.dart';
 import '../domain/object_history_contract.dart';
 import '../domain/object_history_relation.dart';
 import '../domain/object_history_restore_composition.dart';
 import '../domain/object_history_restore_planner.dart';
+import '../domain/object_model.dart';
 import 'generic_database_store.dart';
 import 'object_body_store.dart';
 import 'object_history_relation_service.dart';
@@ -131,6 +136,8 @@ class ObjectHistoryRestoreExecutor {
           snapshot.propertyId: snapshot,
       };
 
+      await _assertNoIdentityManagedValueRestore(freshPreview.decisions);
+
       for (final decision in freshPreview.decisions) {
         if (!decision.needsRestore) continue;
         switch (decision.target.kind) {
@@ -180,6 +187,50 @@ class ObjectHistoryRestoreExecutor {
         changedObjectIds: changedObjectIds,
       );
     });
+  }
+
+  Future<void> _assertNoIdentityManagedValueRestore(
+    List<ObjectHistoryRestoreFieldDecision> decisions,
+  ) async {
+    for (final decision in decisions) {
+      if (!decision.needsRestore ||
+          decision.target.kind != ObjectHistoryFieldKind.property) {
+        continue;
+      }
+      final propertyId = decision.target.propertyId!;
+      final row = await _genericStore.database
+          .customSelect(
+            'SELECT config_json FROM generic_properties WHERE id = ? LIMIT 1',
+            variables: <Variable<Object>>[Variable<int>(propertyId)],
+          )
+          .getSingleOrNull();
+      if (row == null) {
+        throw StateError(
+          'Value Property $propertyId disappeared before history restore execution.',
+        );
+      }
+
+      final rawConfig = row.read<String>('config_json');
+      dynamic decoded;
+      try {
+        decoded = jsonDecode(rawConfig);
+      } on FormatException {
+        throw StateError(
+          'Value Property $propertyId has malformed configuration.',
+        );
+      }
+      if (decoded is! Map) {
+        throw StateError(
+          'Value Property $propertyId has malformed configuration.',
+        );
+      }
+      final config = Map<String, dynamic>.from(decoded);
+      if (ObjectPropertyDefinition.isIdentityManagedConfig(config)) {
+        throw StateError(
+          'Identity-managed Value Property $propertyId cannot be changed by generic history restore.',
+        );
+      }
+    }
   }
 }
 
