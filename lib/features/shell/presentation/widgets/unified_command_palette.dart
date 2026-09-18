@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-enum UnifiedCommandPaletteItemKind { destination, database, object }
+enum UnifiedCommandPaletteItemKind { destination, database, object, action }
 
 class UnifiedCommandPaletteItem {
   const UnifiedCommandPaletteItem({
@@ -16,6 +16,8 @@ class UnifiedCommandPaletteItem {
     this.navigationIndex,
     this.databaseId,
     this.objectId,
+    this.actionId,
+    this.actionValue,
     this.groupLabel,
     this.recoveryOnSearchFailure = false,
   });
@@ -29,6 +31,8 @@ class UnifiedCommandPaletteItem {
   final int? navigationIndex;
   final int? databaseId;
   final int? objectId;
+  final String? actionId;
+  final String? actionValue;
   final String? groupLabel;
   final bool recoveryOnSearchFailure;
 }
@@ -39,6 +43,7 @@ Future<UnifiedCommandPaletteItem?> showUnifiedCommandPalette({
   required Future<List<UnifiedCommandPaletteItem>> Function(String query)
   searchObjects,
   Future<List<UnifiedCommandPaletteItem>> Function()? loadRecentObjects,
+  List<UnifiedCommandPaletteItem> Function(String query)? queryItems,
 }) {
   return showDialog<UnifiedCommandPaletteItem>(
     context: context,
@@ -46,6 +51,7 @@ Future<UnifiedCommandPaletteItem?> showUnifiedCommandPalette({
       staticItems: staticItems,
       searchObjects: searchObjects,
       loadRecentObjects: loadRecentObjects,
+      queryItems: queryItems,
     ),
   );
 }
@@ -56,12 +62,14 @@ class UnifiedCommandPalette extends StatefulWidget {
     required this.staticItems,
     required this.searchObjects,
     this.loadRecentObjects,
+    this.queryItems,
   });
 
   final List<UnifiedCommandPaletteItem> staticItems;
   final Future<List<UnifiedCommandPaletteItem>> Function(String query)
   searchObjects;
   final Future<List<UnifiedCommandPaletteItem>> Function()? loadRecentObjects;
+  final List<UnifiedCommandPaletteItem> Function(String query)? queryItems;
 
   @override
   State<UnifiedCommandPalette> createState() => _UnifiedCommandPaletteState();
@@ -114,9 +122,17 @@ class _UnifiedCommandPaletteState extends State<UnifiedCommandPalette> {
       ? _recentItems
       : const <UnifiedCommandPaletteItem>[];
 
+  List<UnifiedCommandPaletteItem> get _visibleQueryItems {
+    final query = _controller.text.trim();
+    if (query.isEmpty) return const <UnifiedCommandPaletteItem>[];
+    return widget.queryItems?.call(query) ??
+        const <UnifiedCommandPaletteItem>[];
+  }
+
   List<UnifiedCommandPaletteItem> get _visibleItems =>
       <UnifiedCommandPaletteItem>[
         ..._visibleStaticItems,
+        ..._visibleQueryItems,
         ..._visibleRecentItems,
         ..._objectItems,
       ];
@@ -252,6 +268,7 @@ class _UnifiedCommandPaletteState extends State<UnifiedCommandPalette> {
         UnifiedCommandPaletteItemKind.destination => '移動',
         UnifiedCommandPaletteItemKind.database => 'データベース',
         UnifiedCommandPaletteItemKind.object => 'オブジェクト',
+        UnifiedCommandPaletteItemKind.action => 'アクション',
       };
 
   @override
