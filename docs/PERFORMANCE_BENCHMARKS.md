@@ -23,17 +23,23 @@ The generated data contains no personal Vault content, network dependency or wal
 
 ## Running locally
 
-A single benchmark report can still be produced directly:
+A benchmark run imports Flutter application code, so execute it through the Flutter test runner rather than a pure `dart run` VM. The environment contract below is the same one used by the repository workflow:
 
 ```sh
-dart run tool/performance_benchmark.dart \
-  --profile=medium \
-  --warmups=1 \
-  --samples=5 \
-  --source-sha=local \
-  --json=build/performance/run-1.json \
-  --markdown=build/performance/run-1.md
+flutter pub get
+dart run build_runner build --delete-conflicting-outputs
+mkdir -p build/performance
+
+PERFORMANCE_BENCHMARK_PROFILE=medium \
+PERFORMANCE_BENCHMARK_SOURCE_SHA="$(git rev-parse HEAD)" \
+PERFORMANCE_BENCHMARK_WARMUPS=1 \
+PERFORMANCE_BENCHMARK_SAMPLES=5 \
+PERFORMANCE_BENCHMARK_JSON_PATH=build/performance/run-1.json \
+PERFORMANCE_BENCHMARK_MARKDOWN_PATH=build/performance/run-1.md \
+  flutter test test/performance_benchmark_smoke_test.dart --reporter=expanded
 ```
+
+The test writes the requested JSON/Markdown files after validating their shape. Run the same command again with `run-2.json` / `run-2.md` (and optionally a third run) before aggregating unchanged-source variance. Keep the source SHA, profile and runtime equivalent across those repetitions.
 
 To measure unchanged-source variance, produce at least two reports with the same source SHA/profile/runtime/fixture and aggregate them:
 
