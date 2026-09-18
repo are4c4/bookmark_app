@@ -152,6 +152,111 @@ void main() {
   });
 
   testWidgets(
+    'async Recent arrival preserves selection and hides while querying',
+    (tester) async {
+      final recentCompleter = Completer<List<UnifiedCommandPaletteItem>>();
+      UnifiedCommandPaletteItem? selected;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => FilledButton(
+                onPressed: () async {
+                  selected = await showUnifiedCommandPalette(
+                    context: context,
+                    staticItems: const <UnifiedCommandPaletteItem>[
+                      home,
+                      database,
+                    ],
+                    searchObjects: (_) async =>
+                        const <UnifiedCommandPaletteItem>[],
+                    loadRecentObjects: () => recentCompleter.future,
+                  );
+                },
+                child: const Text('Open'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+
+      recentCompleter.complete(const <UnifiedCommandPaletteItem>[
+        UnifiedCommandPaletteItem(
+          keyName: 'recent-object:42',
+          kind: UnifiedCommandPaletteItemKind.object,
+          label: 'Recent algebra note',
+          subtitle: 'Note',
+          objectId: 42,
+          groupLabel: '最近のオブジェクト',
+        ),
+      ]);
+      await tester.pumpAndSettle();
+
+      final databaseTile = tester.widget<ListTile>(
+        find.byKey(
+          const ValueKey<String>('unified-command-palette-item-database:7'),
+        ),
+      );
+      expect(databaseTile.selected, isTrue);
+      expect(find.text('最近のオブジェクト'), findsOneWidget);
+      expect(find.text('Recent algebra note'), findsOneWidget);
+
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('unified-command-palette-query')),
+        'paper',
+      );
+      await tester.pump(const Duration(milliseconds: 180));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Recent algebra note'), findsNothing);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(selected?.databaseId, 7);
+    },
+  );
+
+  testWidgets('Recent load failure leaves static navigation usable', (
+    tester,
+  ) async {
+    UnifiedCommandPaletteItem? selected;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => FilledButton(
+              onPressed: () async {
+                selected = await showUnifiedCommandPalette(
+                  context: context,
+                  staticItems: const <UnifiedCommandPaletteItem>[home],
+                  searchObjects: (_) async =>
+                      const <UnifiedCommandPaletteItem>[],
+                  loadRecentObjects: () async =>
+                      throw StateError('recent unavailable'),
+                );
+              },
+              child: const Text('Open'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+    expect(find.text('ホーム'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+
+    expect(selected?.navigationIndex, 12);
+  });
+
+  testWidgets(
     'search failure keeps the full Search recovery action reachable',
     (tester) async {
       UnifiedCommandPaletteItem? selected;
