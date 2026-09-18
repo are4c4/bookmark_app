@@ -283,7 +283,10 @@ void main() {
     );
 
     expect((await fixture.object(sourceTypeId, source)).title, 'Current title');
-    expect(await fixture.bodyStore.read(source), isA<ObjectBodyDocument>());
+    expect(
+      (await fixture.bodyStore.read(source)).toJson(),
+      const ObjectBodyDocument().toJson(),
+    );
     expect(relationCalls, 0);
   });
 
@@ -568,7 +571,7 @@ ObjectBodyDocument _body(String text) => ObjectBodyDocument(
 );
 
 class _RejectingBodyStore extends ObjectBodyStore {
-  _RejectingBodyStore(super.genericStore);
+  _RejectingBodyStore(GenericDatabaseStore store) : super(store);
 
   @override
   Future<bool> writeIfUnchanged({
