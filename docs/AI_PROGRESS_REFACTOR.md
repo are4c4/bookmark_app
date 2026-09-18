@@ -94,6 +94,15 @@ Durable contract:
 
 Future visual coverage should be added only through focused issues for stable high-value shared contracts. If a product surface requires test-only production seams to become capturable, route the architecture/product seam separately rather than contaminating runtime code for screenshots.
 
+### Product-quality / health checkpoints
+The product-quality developer loop is now established across several completed focused tracks:
+- #1353 — deterministic advisory UI snapshot evidence;
+- #1357 — small shared design-system/component catalog with real shared callers and interaction-contract regressions;
+- #1359 — read-only cross-subsystem Data Health audit composition;
+- #1367/#1368/#1369/#1370 — Core User Journeys, Product Acceptance Evidence, user-visible priority routing and PR-level H Product Review.
+
+Treat those as established infrastructure rather than standing implementation queues. #1360 remains open for performance-benchmark evidence/budget decisions; continue it only from measured evidence and focused child work, not by weakening workloads or inventing thresholds.
+
 Future G work after owning-lane parity:
 - retire caller-zero Bookmark repositories/items/pages/bridges from #1039;
 - retire caller-zero People-specific repositories/pages/bridges from #1040;
