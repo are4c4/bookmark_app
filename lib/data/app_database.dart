@@ -230,8 +230,13 @@ class AppDatabase extends _$AppDatabase {
     }
   }
 
-  Future<void> _setBookmarkPeople(int bookmarkId, Iterable<String> names) async {
-    await (delete(bookmarkPeople)..where((bp) => bp.bookmarkId.equals(bookmarkId))).go();
+  Future<void> _setBookmarkPeople(
+    int bookmarkId,
+    Iterable<String> names,
+  ) async {
+    await (delete(
+      bookmarkPeople,
+    )..where((bp) => bp.bookmarkId.equals(bookmarkId))).go();
     for (final name in _normalizeNames(names)) {
       final personId = await _ensurePerson(name);
       await into(bookmarkPeople).insert(
