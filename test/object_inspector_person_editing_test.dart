@@ -72,23 +72,23 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(
-        find.byKey(const ValueKey('object-title-edit-button')),
-        findsOneWidget,
+      final titleEditor = find.byKey(
+        ValueKey('object-title-inline-editor-$objectId'),
       );
+      expect(titleEditor, findsOneWidget);
       final noteEdit = find.byKey(
         ValueKey('edit-object-value-${schema.noteProperty.id}'),
       );
       expect(noteEdit, findsOneWidget);
 
       final renameProjection = search.projectionChanges.first;
-      await tester.tap(find.byKey(const ValueKey('object-title-edit-button')));
-      await tester.pumpAndSettle();
-      await tester.enterText(
-        find.byKey(const ValueKey('object-title-edit-field')),
-        'InspectorAfterToken',
+      final titleField = find.descendant(
+        of: titleEditor,
+        matching: find.byKey(const ValueKey('object-inline-title-field')),
       );
-      await tester.tap(find.byKey(const ValueKey('object-title-edit-save')));
+      await tester.tap(titleField);
+      await tester.enterText(titleField, 'InspectorAfterToken');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
       await renameProjection;
 
@@ -191,16 +191,21 @@ void main() {
         <Object>[workspaceId, personId],
       );
 
-      await tester.tap(find.byKey(const ValueKey('object-title-edit-button')));
-      await tester.pumpAndSettle();
-      await tester.enterText(
-        find.byKey(const ValueKey('object-title-edit-field')),
-        'Must not commit',
+      final titleEditor = find.byKey(
+        ValueKey('object-title-inline-editor-$objectId'),
       );
-      await tester.tap(find.byKey(const ValueKey('object-title-edit-save')));
+      final titleField = find.descendant(
+        of: titleEditor,
+        matching: find.byKey(const ValueKey('object-inline-title-field')),
+      );
+      await tester.tap(titleField);
+      await tester.enterText(titleField, 'Must not commit');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
 
       expect(find.text('人物を更新できませんでした。'), findsOneWidget);
+      expect(tester.widget<TextField>(titleField).controller?.text, 'Preserved');
+      expect(tester.widget<TextField>(titleField).focusNode?.hasFocus, isFalse);
       final object = (await objectStore.listObjects(schema.objectType.id))
           .single;
       final person = (await database.select(database.people).get()).single;
