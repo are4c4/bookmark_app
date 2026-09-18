@@ -112,7 +112,7 @@ The performance-infrastructure foundation is now established through focused chi
 - the repository-owned Performance Benchmark workflow runs benchmark-related PR smoke repetitions plus scheduled/manual advisory profiles, publishes provenance-linked JSON/Markdown artifacts and does not participate in the required merge gate;
 - #1453/#1454 added fail-closed unchanged-source variance aggregation across repeated runs, comparing only equivalent source/profile/runtime/fixture/scenario provenance and keeping the resulting spread advisory rather than inventing a hard millisecond budget;
 - #1509/#1510 corrected local documentation to execute the Flutter-dependent benchmark through `flutter test`, matching the workflow contract; the variance aggregator remains a pure-Dart tool;
-- #1511 is the next focused performance slice after Search #1504 lands: measure healthy canonical Search prepare/open cost separately from query latency and explicit rebuild/repair cost. Do not optimize `ObjectSearchHealthAudit` in G without measured evidence.
+- #1511 is the next focused performance slice with Search #1504 now integrated: measure healthy canonical Search prepare/open cost separately from query latency and explicit rebuild/repair cost. Do not optimize `ObjectSearchHealthAudit` in G without measured evidence.
 
 Keep #1360 open for measured follow-up/budget decisions. Do not weaken fixture size/workflows, add speculative caches, or manufacture a blocking threshold merely to close the umbrella.
 
@@ -211,5 +211,5 @@ Behavior-preserving refactors require changed-Dart format, Analyze and relevant/
 10. keep destructive schema/data removal separate, preservation-gated, and independently or manually human-authorized according to the active approval path;
 11. keep durable docs free of transient snapshots and route machine-certifiable drift to CI while H handles semantic drift.
 
-### Last audited stop
-`Stop reason: dependency` — the next focused performance slice #1511 depends on Search PR #1504 landing so the real `prepareWorkspace` healthy/open boundary exists on `main`. Overlapping coordination-guard follow-ups (#1127/#1123/#1312/#1082) must not edit the canonical guard/test pair while active PR #1136 owns it. Repository metadata drift #1094 remains a settings-level action and the current connected GitHub toolset exposes read-only repository metadata but no repository-description mutation. Re-read live PR/Issue/settings state on resume; if #1504 or guard ownership clears, take the newly unblocked focused work before inventing a new refactor.
+### Current resume state
+#1511 is live-ready because #1504 is integrated and the real `prepareWorkspace` healthy/open boundary now exists on `main`. Prefer that focused measurement slice before inventing unrelated G work, while keeping it benchmark-only and evidence-driven. Before any overlapping coordination-guard follow-up (#1127/#1123/#1312/#1082), recheck live ownership of the canonical guard/test pair and do not edit it concurrently with another owner. Repository metadata drift #1094 remains a settings-level action rather than a code workaround.
