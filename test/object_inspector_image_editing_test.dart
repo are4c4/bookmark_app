@@ -69,12 +69,16 @@ void main() {
         ),
       ),
     );
-    final titleEditButton = find.byKey(
-      const ValueKey('object-title-edit-button'),
+    final titleEditor = find.byKey(
+      ValueKey('object-title-inline-editor-${image.id}'),
     );
-    await _pumpUntil(tester, () => titleEditButton.evaluate().isNotEmpty);
+    await _pumpUntil(tester, () => titleEditor.evaluate().isNotEmpty);
+    final titleField = find.descendant(
+      of: titleEditor,
+      matching: find.byKey(const ValueKey('object-inline-title-field')),
+    );
 
-    expect(titleEditButton, findsOneWidget);
+    expect(titleEditor, findsOneWidget);
     expect(
       find.byKey(
         ValueKey('edit-object-value-${definition.noteProperty.id}'),
@@ -100,14 +104,10 @@ void main() {
       findsNothing,
     );
 
-    await tester.tap(titleEditButton);
-    final titleEditField = find.byKey(
-      const ValueKey('object-title-edit-field'),
-    );
-    await _pumpUntil(tester, () => titleEditField.evaluate().isNotEmpty);
-    await tester.enterText(titleEditField, 'Edited image');
-    await tester.tap(find.byKey(const ValueKey('object-title-edit-save')));
-    await _pumpUntil(tester, () => titleEditField.evaluate().isEmpty);
+    await tester.tap(titleField);
+    await tester.enterText(titleField, 'Edited image');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
 
     final noteId = definition.noteProperty.id;
     await tester.tap(find.byKey(ValueKey('edit-object-value-$noteId')));
@@ -185,7 +185,7 @@ void main() {
     await _pumpUntil(tester, () => imagePanel.evaluate().isNotEmpty);
 
     expect(
-      find.byKey(const ValueKey('object-title-edit-button')),
+      find.byKey(ValueKey('object-title-inline-editor-${image.id}')),
       findsNothing,
     );
     expect(
@@ -236,7 +236,7 @@ void main() {
     );
 
     expect(
-      find.byKey(const ValueKey('object-title-edit-button')),
+      find.byKey(ValueKey('object-title-inline-editor-${weblink.id}')),
       findsNothing,
     );
     for (final property in definition.objectType.properties) {
