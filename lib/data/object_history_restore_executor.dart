@@ -201,7 +201,7 @@ class ObjectHistoryRestoreExecutor {
       final row = await _genericStore.database
           .customSelect(
             'SELECT config_json FROM generic_properties WHERE id = ? LIMIT 1',
-            variables: <Variable<Object>>[Variable<int>(propertyId)],
+            variables: [Variable<int>(propertyId)],
           )
           .getSingleOrNull();
       if (row == null) {
