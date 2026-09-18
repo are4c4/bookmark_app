@@ -15,7 +15,9 @@ Keep one canonical Object-level search/index architecture correct, stale-safe, p
 ## Current state
 Canonical Object Search is established and covers focused freshness, Body/Property/Relation projection, corruption isolation, background completion refresh, mounted-query replay and Japanese/CJK intra-token matching, including ordinary surrounding query punctuation, full-width/half-width Katakana compatibility and canonically equivalent Japanese dakuten/handakuten composition, without a second persistent index.
 
-Idle is a valid Lane E state when live Issues and a final current-main audit reveal no concrete Search obligation. Never infer that state from this handoff alone.
+#1350 is an explicit user-visible Lane E obligation when live-ready: normal Global Search should validate/prepare the existing canonical index automatically and move manual rebuild behind secondary repair UI. This is lifecycle/presentation work over the same canonical index, not permission to add a second search store.
+
+Idle is a valid Lane E state only when live Issues and a final current-main audit reveal no concrete Search correctness **or approved Search UX** obligation. Never infer that state from this handoff alone.
 
 ## Integrated contracts that remain authoritative
 - one shared Object FTS projection across ObjectTypes;
@@ -35,7 +37,7 @@ Idle is a valid Lane E state when live Issues and a final current-main audit rev
 - mounted Global Search can replay the active query after successful focused refresh.
 
 ## Resume triggers
-Open a focused Lane E issue when real behavior demonstrates one of these:
+Take an existing focused Lane E issue when it is live-ready, including explicit user-visible Search lifecycle/repair UX such as #1350. Open a new focused Lane E issue when real behavior demonstrates one of these:
 - canonical Object Search misses new Object-first Properties/Body/native metadata that should be searchable;
 - language/tokenization behavior causes an ordinary query to miss searchable canonical text;
 - stale tokens remain after canonical Object/Relation/native producer mutation;
@@ -57,10 +59,10 @@ Search changes require focused projection/freshness/query/restart regressions as
 
 ## Resume sequence
 1. re-read live open Issues/PRs and current architecture;
-2. take only a concrete Search/Indexing obligation;
+2. take a concrete Search/Indexing obligation, including an approved user-visible Search UX Issue such as #1350 when ready; do not restrict Lane E to correctness-only work;
 3. reuse canonical Object projection/refresh infrastructure;
 4. avoid domain-specific permanent indexes;
 5. update this handoff only with durable contracts/state, leaving volatile PR/branch/CI facts to live GitHub;
 6. if no concrete E issue exists, stop under the no-actionable-work condition.
 
-Lane E inherits the shared **Lane continuation and resume/stop contract** in `AGENTS.md`. Its legitimate idle behavior is intentional: do not invent Search features merely to keep the lane active. Before `idle-no-work`, however, perform the full final resume audit against live Issues, recent Object/Relation/native changes and the triggers above. Record `Stop reason: idle-no-work — <live evidence>` only when no concrete Search obligation exists; if a prerequisite is merely blocked, use the more precise dependency/conflict/external category instead.
+Lane E inherits the shared **Lane continuation and resume/stop contract** in `AGENTS.md`. Its legitimate idle behavior is intentional: do not invent Search features merely to keep the lane active. Before `idle-no-work`, however, perform the full final resume audit against live Issues, recent Object/Relation/native changes and the triggers above. Record `Stop reason: idle-no-work — <live evidence>` only when no concrete Search correctness or approved Search UX obligation exists; if a prerequisite is merely blocked, use the more precise dependency/conflict/external category instead.

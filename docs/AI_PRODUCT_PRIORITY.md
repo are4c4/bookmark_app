@@ -66,6 +66,18 @@ A–G lanes should use the priority signal during next-work discovery after the 
 
 Examples of commonly high-value shared surfaces include Body/Object detail, Relation/Tag pickers, Database/View authoring, Search/command entry points, and Home/start workflows, but these examples are calibration only. Their live priority depends on current Issues and product state.
 
+## Stagnation detection
+
+The priority rubric is also a guard against passive autonomous idling. If a lane/H audit repeatedly sees one or more safe/ready high-impact user-visible Issues but no owning product implementation PR or user-visible `main` progress, do not infer that "the schedule ran" means development is healthy.
+
+H should:
+- verify live ownership, dependency, hotspot, migration and approval blockers for the ready candidates;
+- if a real blocker exists, record the precise stop category and keep rechecking it;
+- if no blocker exists, re-route/reactivate the owning lane and point it at the highest-value ready work;
+- avoid creating speculative replacement Issues merely to manufacture activity.
+
+An implementation lane may still stop as `idle-no-work`, but only after the normal final resume audit proves there is no safe/ready lane-local work. A ready Issue with no concrete blocker is evidence against `idle-no-work`.
+
 ## Product acceptance loop
 
 For materially user-facing work, prefer completion evidence shaped like:

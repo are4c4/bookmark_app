@@ -124,6 +124,15 @@ When multiple independent Issues/findings are both safe and ready, apply `docs/A
 - The rubric is advisory, not a numerical score or merge gate. Report genuine ties/ambiguity instead of manufacturing precision.
 - Product implementation remains with exactly one A–G owner; H only routes/reorders attention.
 
+### Product-development stagnation
+A healthy scheduler can still produce no product progress if lanes repeatedly audit and stop. H therefore treats **ready high-impact UX work + repeated absence of owning product PR/user-visible main progress** as a condition to investigate, not as proof that idle is correct.
+
+- First verify live dependency, hotspot, migration, approval and duplicate-ownership blockers for the candidate Issues.
+- If a real blocker exists, keep the exact stop category visible and recheck it on later runs.
+- If no blocker exists, re-route/reactivate the owning lane using `docs/AI_PRODUCT_PRIORITY.md`; do not let repeated `idle-no-work` reports hide a ready lane-local Issue.
+- This is not an activity quota: never manufacture speculative Issues, no-op commits or unsafe concurrency merely to make the graph move.
+- Product progress means completing acceptance in the real/shared host where applicable, not merely adding internal abstractions or tests while the user-facing route remains unchanged.
+
 ### Emerging technical debt
 Look for repeated helpers/adapters, new direct `AppDatabase` reach-through, shared hotspots growing again, new legacy dependencies, hidden-failure policies, and speculative caches/indexes without measurement/rebuild semantics. Do not demand abstraction on first occurrence.
 
@@ -152,7 +161,7 @@ If responsibility genuinely spans lanes, split it into coherent focused Issues w
 These are durable directions; H must still check their live Issue state before describing them as active:
 
 - #1061 — Home becomes a work-start surface centered on Inbox / Recent / Favorites / Pinned Databases.
-- #1062 — duplicate detection and explicit Object merge/redirect semantics become first-class and fail closed on conflicts.
+- #1062 — completed first-class duplicate detection and explicit Object merge/redirect semantics; H protects the established fail-closed contract and routes future defects through focused follow-ups rather than reopening the umbrella.
 - #1063 — users get an open portable export path distinct from backup/restore.
 - #1064 — durable Object/Property/Body/Relation history remains distinct from short-lived local Undo.
 
@@ -197,12 +206,13 @@ A focused implementation slice may be complete when its acceptance criteria and 
 3. Inspect recent `main` changes for architecture/product integration implications.
 4. Audit architecture, integration, parallel safety, durable-doc freshness, UX, technical debt, correctness/preservation, and roadmap coherence.
 5. When multiple independent safe/ready Issues or findings compete, apply the user-visible priority rubric before routing/choosing attention; do not favor lower-impact work solely because it is easier.
-6. Recheck live open PRs. For each likely user-facing PR identified by Product Acceptance Evidence (or a concrete semantic false negative), perform/reuse a current-head H Product Review when no current outcome exists; never require non-UI PRs to fabricate product evidence.
-7. When visual/layout evidence would help, inspect the latest successful UI Audit `h-review-input.md` / `machine-summary.json` and screenshots, tie observations to the exact source SHA, and explicitly distinguish complete, incomplete, or unavailable evidence; never treat screenshots as source-of-truth over live code/GitHub.
-8. For each finding, link an existing Issue or create one focused Issue with one primary A–G owner; record dependencies, hotspot/migration impact, product-priority signal where applicable, and acceptance criteria.
-9. Correct repository-wide durable routing/docs only when durable facts changed.
-10. Continue to another independent audit area instead of stopping after the first finding.
-11. Before ending, keep this handoff resumable without chat history.
+6. Check for product-development stagnation: if high-impact lane-local work is live-ready but repeated audits show no owning product PR/user-visible progress, determine the blocker and re-route/reactivate the lane when no blocker exists.
+7. Recheck live open PRs. For each likely user-facing PR identified by Product Acceptance Evidence (or a concrete semantic false negative), perform/reuse a current-head H Product Review when no current outcome exists; never require non-UI PRs to fabricate product evidence.
+8. When visual/layout evidence would help, inspect the latest successful UI Audit `h-review-input.md` / `machine-summary.json` and screenshots, tie observations to the exact source SHA, and explicitly distinguish complete, incomplete, or unavailable evidence; never treat screenshots as source-of-truth over live code/GitHub.
+9. For each finding, link an existing Issue or create one focused Issue with one primary A–G owner; record dependencies, hotspot/migration impact, product-priority signal where applicable, and acceptance criteria.
+10. Correct repository-wide durable routing/docs only when durable facts changed.
+11. Continue to another independent audit area instead of stopping after the first finding.
+12. Before ending, keep this handoff resumable without chat history.
 
 ## Stop conditions
 
@@ -212,8 +222,8 @@ One clean PR, one green CI run, one completed Issue, or one newly created Issue 
 
 When the sole blocker for an approval-sensitive PR is the #1331 solo-maintainer human ruleset action, classify it as `destructive-approval`, keep unrelated oversight active, and recheck live repository settings on the next run. Do not turn it into a permanent repository-wide idle state.
 
-## Durable checkpoint — 2026-09-09
+## Durable checkpoint — 2026-09-18
 
-The Object-first constitution, A–G lane ownership model, H oversight contract, strict protected-main `merge-gate`, migration/hotspot/handoff audits, branch-cleanup policy, advisory deterministic UI-audit evidence path, PR-level Product Acceptance Evidence/H Product Review path, and user-visible priority-routing rubric are established. H should not preserve exact current PR/branch/CI/artifact run identifiers here; every new run rebuilds them from live GitHub.
+The Object-first constitution, A–G lane ownership model, H oversight contract, strict protected-main `merge-gate`, migration/hotspot/handoff audits, advisory deterministic UI-audit evidence, shared component/catalog guidance, Core User Journeys, Product Acceptance Evidence/H Product Review, read-only Data Health auditing, and user-visible priority routing are established. H should not preserve exact current PR/branch/CI/artifact run identifiers here; every new run rebuilds them from live GitHub.
 
-Immediate oversight priority is to keep the repository's AI coordination and reproducibility guardrails aligned with the increasing number of parallel implementation lanes, while protecting the near-term product focus on Bookmark retirement, People retirement, Tag hierarchy, Body interaction follow-ups, and Home/start UX before expanding speculative feature scope.
+Near-term oversight should bias safe/ready work toward real shared-host product friction—Object detail/title, command/search entry points, keyboard/focus, Home and the remaining Bookmark/People generic-parity paths—while still allowing correctness, preservation, security, migration and approval blockers to override product priority. Repeated scheduler execution without product progress is not itself healthy evidence; use the stagnation rule above to distinguish a real blocker from passive idle.

@@ -9,7 +9,8 @@ Before changing code, read these in order:
 1. The active focused GitHub Issue and its acceptance criteria, when an implementation/coordination Issue is active.
 2. `docs/product_architecture.md` for the durable product architecture constitution.
 3. `docs/AI_PROGRESS.md` for repository-wide integration/routing state.
-4. The progress file for the active lane:
+4. `docs/AI_PRODUCT_PRIORITY.md` for advisory safe/ready work selection when multiple lane-local choices exist.
+5. The progress file for the active lane:
    - `docs/AI_PROGRESS_OBJECT.md` — Object Core & Body.
    - `docs/AI_PROGRESS_RELATION.md` — Relations & Data Integrity.
    - `docs/AI_PROGRESS_DATABASE_VIEW.md` — Database, View & Schema UX.
@@ -18,7 +19,7 @@ Before changing code, read these in order:
    - `docs/AI_PROGRESS_STORAGE.md` — Storage, Vault & Delivery.
    - `docs/AI_PROGRESS_REFACTOR.md` — Refactor & Architecture Health.
    - `docs/AI_PROGRESS_OVERSIGHT.md` — H Architecture & Integration Oversight / control tower.
-5. Existing code, tests, and other repository documentation.
+6. Existing code, tests, and other repository documentation.
 
 `docs/product_architecture.md` is a stable product contract. A focused Issue may refine implementation details, but it must not silently contradict that architecture. Resolve a real conflict explicitly before implementation.
 
@@ -42,7 +43,7 @@ The product is a local-first, Object-first personal knowledge/database applicati
 - Tag is not a native media primitive. Tag hierarchy uses canonical Object/Relation persistence; B owns integrity and C owns hierarchy-aware query/UX.
 - Historical Bookmark/People/Photo schema/data remains until replacement parity, caller-zero proof, preservation validation and any explicit destructive migration are complete.
 - Home should converge on Inbox / Recent / Favorites / Pinned Databases rather than permanent legacy domain modules.
-- Object merge, open export/portability and durable version history are explicit future first-class contracts; do not improvise lossy substitutes.
+- Object merge/redirect is an established first-class capability; open export/portability and durable version history remain explicit first-class roadmap contracts. Preserve the completed merge safety contract rather than reopening #1062 as a generic queue.
 
 ## Seven implementation lanes + H oversight
 
@@ -209,14 +210,14 @@ This manual path is a practical single-maintainer authorization boundary, not co
 
 Always verify live Issues because this list is a routing aid, not transient ownership state.
 
-- **A:** #1062 Object merge/redirect; #1064 durable history contract; #1177 legacy-only Bookmark preservation where its acceptance remains open; #56 core follow-ups through focused Issues. #1044/#1058/#1121 are completed checkpoints, not active work sources.
-- **B:** future #1062/#1064 Relation-integrity slices when explicitly split, plus newly demonstrated Relation/integrity gaps through focused B Issues. #1042/#1045 are completed migration/integrity checkpoints, not active work sources.
-- **C:** #1043 Stage1→generic Weblink/Object Database/View + Inbox; #1046 People→generic Person Database/View; #1061 Home/start UX; broader #1050 Tag picker/tree/management UX only where live acceptance remains. #1053 hierarchy-aware Tag filtering/query UX is a completed checkpoint, not an active work source.
+- **A:** #1064 durable history contract; #1177 legacy-only Bookmark preservation where its acceptance remains open; #56 core follow-ups through focused Issues. #1062 Object merge/redirect and #1044/#1058/#1121 are completed checkpoints, not active work sources; new merge defects require a new focused reproducible Issue.
+- **B:** future #1064 Relation-history/restore integrity slices when explicitly split, plus newly demonstrated Relation/integrity gaps through focused B Issues. #1062 merge rewiring, #1042 and #1045 are completed checkpoints rather than standing queues.
+- **C:** prioritize safe/ready high-frequency UX through `docs/AI_PRODUCT_PRIORITY.md`. Current durable anchors include #1491/#1346 Object-detail Property presentation, #1345 inline title editing, #1344 unified ⌘K, #1361 keyboard/focus/accessibility, #1043 Stage1→generic Weblink/Object Database/View + Inbox, #1046 People→generic Person Database/View, and #1061 Home/start UX. Broader #1050 Tag picker/tree/management UX applies only where live acceptance remains.
 - **D:** #155 is the durable Weblink/Image/File native-capability umbrella; resume D only for concrete native Weblink/Image/File obligations proven by live focused Issues.
-- **E:** focused Search issues when canonical FTS correctness/freshness obligations are demonstrated.
+- **E:** #1350 is the current explicit user-visible Search UX anchor when live-ready; also take focused Search Issues for demonstrated canonical FTS correctness/freshness/ranking/opening obligations. Do not interpret Lane E as correctness-only when an approved Search UX Issue exists.
 - **F:** #1063 export/portability is the current durable roadmap anchor; #242/#951 are completed preservation checkpoints, not active stop gates; future destructive retirement still requires migration-specific preservation evidence and explicit single-writer/destructive-approval handling.
-- **G:** #225 maintainability and live focused G Issues; #1047/#950 are completed checkpoints, and future caller-zero Bookmark/People retirement begins only after owning-lane parity; surviving Photo-era paths remain compatibility/preservation infrastructure unless a new focused caller audit proves otherwise; repository-wide architecture/guardrail sync such as #1060.
-- **H:** continuous architecture/integration oversight via `docs/AI_PROGRESS_OVERSIGHT.md`; #1060 establishes the lane. H routes implementation findings to A–G.
+- **G:** #225 maintainability and live focused G Issues; #1360 remains a performance-evidence roadmap anchor while #1353/#1357/#1359 and #1367/#1368/#1369/#1370 are completed product-quality/developer-loop checkpoints. #1047/#950 are completed checkpoints; caller-zero Bookmark/People retirement begins only after owning-lane parity.
+- **H:** continuous architecture/integration oversight via `docs/AI_PROGRESS_OVERSIGHT.md`. H routes implementation findings to A–G and must investigate repeated product-development stagnation when ready high-impact UX work exists but product PR/main progress remains absent across repeated audits.
 
 Umbrellas #56, #1039, #1040, #1050, #155, #225, #245 organize broader direction; implement through focused child Issues when possible.
 
@@ -245,10 +246,11 @@ H follows `docs/AI_PROGRESS_OVERSIGHT.md` rather than the product implementation
 2. Build the current dependency/hotspot/migration ownership map.
 3. Inspect recent `main` changes and active PRs for cross-lane composition risks.
 4. Audit architecture, UX, technical debt, correctness/preservation and roadmap coherence.
-5. Link findings to existing Issues or create one focused Issue with exactly one owning A–G implementation lane.
-6. Update oversight/repository routing only when durable facts changed.
-7. Continue to another independent audit area instead of stopping after the first finding.
-8. Keep `docs/AI_PROGRESS_OVERSIGHT.md` resumable without chat history.
+5. Check for product-development stagnation: if safe/ready high-impact user-visible Issues remain but repeated H audits show no product implementation PR or user-visible main progress, determine the concrete blocker; when none exists, re-route/reactivate the owning lane rather than accepting passive idle.
+6. Link findings to existing Issues or create one focused Issue with exactly one owning A–G implementation lane.
+7. Update oversight/repository routing only when durable facts changed.
+8. Continue to another independent audit area instead of stopping after the first finding.
+9. Keep `docs/AI_PROGRESS_OVERSIGHT.md` resumable without chat history.
 
 Any H PR that changes repository files still needs a focused coordination Issue and normal PR/CI discipline.
 
@@ -272,7 +274,7 @@ Use this order so a lane does not stop merely because its first Issue finished:
 
 1. unfinished acceptance criteria in the current focused Issue;
 2. an explicit next slice or unmet acceptance dimension in the same umbrella Issue;
-3. another live open focused Issue routed to the lane and not already owned by another active branch/PR;
+3. another live open focused Issue routed to the lane and not already owned by another active branch/PR; when multiple candidates are safe/ready, apply `docs/AI_PRODUCT_PRIORITY.md` rather than choosing a lower-impact task merely because it is easier;
 4. a lane-local dependency that became actionable because another PR merged or current `main` changed;
 5. a concrete, evidence-backed acceptance/correctness/parity gap discovered from current `main`, tests or the active umbrella; create/refine one focused Issue before implementing a new gap rather than silently broadening scope;
 6. for H, a newly actionable previously-idle lane, cross-lane integration gap, or architecture/roadmap inconsistency that should be routed to exactly one A–G lane.

@@ -33,6 +33,18 @@ Completed. The durable semantics are:
 
 Always verify live GitHub before taking ownership. Completed checkpoints below are not active work sources.
 
+### #1491 / #1346 — finish shared Object-detail Property UX
+Responsive Property labels, quiet empty-scalar handling, the reusable reveal section, centralized empty-value policy and shared section composition are integrated prerequisites. The remaining product-complete work is real-host composition/evidence: full-page and Side Peek must use the shared collapsed/revealed section, revealed empty Properties must remain editable through canonical renderers, and keyboard/focus behavior must be proven in those real hosts. Recheck live ownership before touching `object_inspector_page.dart`; do not reopen completed prerequisite slices.
+
+### #1345 — inline Object title editing
+Replace ordinary modal rename friction with a shared direct inline title editor across editable full-page and peek/detail Object surfaces. Preserve canonical Object mutation/validation and read-only system-title cases.
+
+### #1344 — unified ⌘K
+Evolve the navigation-only palette into a keyboard-first Object/Database/navigation/action entry point by composing canonical Object Search/recent readers and existing creation/capture authorities. Do not create a second Search index or persistence authority.
+
+### #1361 — shared keyboard/focus/accessibility contract
+Treat keyboard/focus/semantics as product UX, not optional polish. Cover representative shared surfaces and coordinate with #1344/#1345/#1491 so each focused slice can contribute evidence without turning #1361 into one broad hotspot rewrite.
+
 ### #1046 — replace dedicated People management
 A/#1044 generic Person authority, B/#1045 Person role/group integrity, and E/#1178 canonical Person mutation Search freshness are completed prerequisites. C no longer waits on those tracks before proving daily-use parity.
 
@@ -103,7 +115,7 @@ Changed-Dart format, Analyze, full Flutter Test and focused serialization/widget
 
 ## Resume sequence
 1. refresh latest `main`, live open PR ownership, current CI, shared-hotspot and migration ownership;
-2. re-read live #1043/#1046/#1061 and broader #1050 acceptance/dependency status; treat #1053, #1237, #1292, #1327 and the integrated Person creation/navigation checkpoints as completed rather than implementation queues;
+2. apply `docs/AI_PRODUCT_PRIORITY.md` across live-ready C Issues. Re-read #1491/#1346, #1345, #1344, #1361, #1043, #1046, #1061 and broader #1050; prefer high-frequency shared UX when safety/ownership gates are equal, and treat completed prerequisites as checkpoints rather than queues;
 3. for #1046, treat shell Person routing as completed, then re-audit generic edit/delete/lifecycle, Profile Image presentation/opening, groups/roles/backlinks, query/filter/opening and full parity before handing the dedicated page to G for caller-zero retirement; do not rebuild #1292/#1308 compatibility-safe Profile Image edit composition;
 4. for #1061, keep Home canonical Weblink capture as completed and implement Inbox/Favorites/Pinned only after their canonical contracts are explicit;
 5. for #1043, preserve canonical Weblink/Object Database/View semantics and do not grow legacy Bookmark authority;
