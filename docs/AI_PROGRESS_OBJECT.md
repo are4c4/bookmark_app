@@ -21,7 +21,12 @@ Always verify live GitHub before taking ownership. Completed issues below are ch
 ### #1064 — durable Object history / restore contract
 Define restart-safe durable history for Object/Property/Body/Relation state, explicitly separate from local Undo, and make restore conflict-aware/fail-closed. Relation-integrity and managed-byte retention remain B/F-owned boundaries rather than A-side duplicate authorities.
 
-A's logical history/checkpoint and restore-safety contracts are established, A/#1399/#1402 persist immutable A-owned checkpoint payloads restart-safely, B/#1267 owns canonical Relation checkpoint/restore integrity, F/#1268 owns managed-byte retention safety, and B/#1405 now provides restart-safe immutable Relation-history persistence. A/#1438 atomically composes A and B evidence for one Object/revision, #1441 loads that persisted whole-Object evidence after restart, and #1443 prepares read-only coordinated restore evidence through B's canonical Relation restore preview boundary. #1064 remains open for the next concrete restore-execution/product slice proven on current `main`; do not recreate Relation history/validation in A or infer managed-byte authority from logical history.
+A's logical history/checkpoint and restore-safety contracts are established, A/#1399/#1402 persist immutable A-owned checkpoint payloads restart-safely, B/#1267 owns canonical Relation checkpoint/restore integrity, F/#1268 owns managed-byte retention safety, and B/#1405 provides restart-safe immutable Relation-history persistence. A/#1438 atomically composes A and B evidence for one Object/revision, #1441 loads that persisted whole-Object evidence after restart, #1443 prepares read-only coordinated restore evidence through B's canonical Relation restore preview boundary, #1508/#1514 execute an already-prepared whole/selective restore atomically across A-owned title/value-Property/Body state plus B-owned Relation restore, and #1522/#1525 makes requested identity-managed Value restores plus malformed current Property metadata fail closed before any A/B mutation. #1064 remains open only for concrete current-main history/product gaps demonstrated after those integrated boundaries; do not recreate the executor, Relation history/validation in A, or infer managed-byte authority from logical history.
+
+### #1531 — production durable-history capture integration
+Active after #1522. Current-main code search proves `ObjectHistoryCaptureCoordinator` has no production caller, so normal Object edits still create no durable historical evidence even though persistence/load/prepare/execute infrastructure exists.
+
+Next work must materialize canonical current Object/Value/Body state, capture Relation evidence only through B's history service, allocate/extend the persisted revision chain safely, avoid duplicate same-state history growth, and integrate at least one safe real A mutation seam rather than leaving another caller-zero helper. Body-wide cadence, Relation mutation triggering, retention/compaction and timeline UI remain separate follow-up concerns unless proven necessary by the focused slice.
 
 ## Completed checkpoints
 
@@ -115,6 +120,29 @@ Durable contract:
 - logical Image/File references do not grant A byte-retention or deletion authority;
 - #1438/#1439 now transactionally compose this A store with B/#1405 persisted Relation snapshots for the same Object/revision, while Relation history remains B-owned rather than a parallel A store.
 
+### #1508 / #1514 — atomic prepared history restore execution
+Completed. A now has a mutation boundary for an already-prepared durable whole/selective restore without duplicating B Relation authority.
+
+Durable contract:
+- execution rechecks the prepared current revision and A-owned checkpoint comparison inside one database transaction before mutation;
+- stale revision/state, Property/type drift, Body CAS failure or B Relation validation/execution failure fails closed;
+- requested A-owned title/value-Property/Body mutations and prepared B Relation restore plans execute under one outer transaction, so a late A/B failure rolls the whole restore back;
+- Relation execution remains delegated through B's canonical history/Relation service rather than A writing Relation edges/index/pairs directly;
+- historical checkpoints/snapshots remain immutable evidence, and managed Image/File byte retention/deletion authority remains F-owned;
+- focused regressions cover representative whole restore, selective restore, stale revision rejection, late Relation rollback and late A rollback.
+
+This is an integrated execution checkpoint, not a future work source. Any additional #1064 runtime work must demonstrate a separate current-main gap rather than recreating this executor.
+
+### #1522 / #1525 — identity-managed restore fail-closed safety
+Completed. Durable history may preserve identity-managed Value facts as evidence, but generic history execution cannot claim mutation authority over them.
+
+Durable contract:
+- a requested changed identity-managed Value is rejected before title/value/Body/Relation mutation rather than passing through the generic Value writer's protected no-op behavior;
+- current persisted Property configuration is read strictly at the execution boundary, so missing, malformed or non-object metadata fails closed instead of being normalized by tolerant presentation decoding;
+- unchanged identity-managed evidence does not block unrelated mutable whole-Object restore;
+- a blocked whole restore preserves title, ordinary Values, Body and real current Relation targets and never invokes the prepared B Relation restore plan;
+- identity transition remains owned by the relevant Object lifecycle service; history execution does not rewrite Daily Note/Person identity registries.
+
 ### #1177 — legacy-only Bookmark preservation boundary
 Completed as a durable preservation-contract checkpoint. The completed #1041 Bookmark migration checkpoint does not by itself prove a canonical destination for every legacy scalar/lifecycle fact. In particular `lastOpenedAt`, `openCount`, and `deletedAt` remain legacy compatibility/preservation concerns until a separately proven lossless destination or explicit retirement policy exists.
 
@@ -178,7 +206,7 @@ Completed. Enter split, Shift+Enter newline, safe leading-Backspace merge, compa
 - generic-first Person create/update/delete/reconciliation authority with temporary legacy projection;
 - explicit preservation of legacy-only Bookmark `lastOpenedAt`, `openCount`, and `deletedAt` until a separate destination/retirement decision exists;
 - completed explicit Object duplicate/merge/redirect capability: preview/redirect, concrete A-owned state planning, A/B preparation, resolved-state materialization, canonical Relation rewiring, atomic finalization and user-controlled Object Inspector execution;
-- durable Object history identity/checkpoint/restore-safety contracts plus restart-safe A-owned checkpoint persistence, B Relation checkpoint/restore and restart-safe history, F managed-byte retention, atomic A+B whole-checkpoint capture, restart-safe whole-checkpoint loading, and read-only coordinated restore preparation through #1443.
+- durable Object history identity/checkpoint/restore-safety contracts plus restart-safe A-owned checkpoint persistence, B Relation checkpoint/restore and restart-safe history, F managed-byte retention, atomic A+B whole-checkpoint capture, restart-safe whole-checkpoint loading, read-only coordinated restore preparation through #1443, atomic prepared restore execution through #1508/#1514, and identity-managed/malformed-Property fail-closed restore safety through #1522/#1525.
 
 ## Cross-lane boundaries
 - **B:** Relation mutation/read/index/backlink/audit/reconcile, Bookmark/Person relationship migration, Person roles/groups and Tag hierarchy integrity. #1259 merge rewiring, #1267 Relation checkpoint/restore integrity and #1405 restart-safe Relation-history persistence are completed boundaries that A consumes. A/#1438 capture, #1441 loading and #1443 restore preparation compose those B-owned boundaries; A must not write Relation values/edges or invent a parallel Relation-history store directly.
@@ -198,10 +226,10 @@ A runtime Object/Body change requires changed-Dart Format, Analyze/guards, focus
 1. refresh latest `main`, live open PR ownership, current CI, shared hotspots and migration ownership;
 2. treat completed #1062 and its focused merge checkpoints as integrated contracts, then verify the live state/acceptance of #1064 plus any newer focused A issue;
 3. do not reopen #1062 as a work queue. A future merge defect or product gap must be demonstrated on current main and opened as a new focused Issue; do not recreate the explicit merge UI or make exact-advisory candidates auto-merge;
-4. for #1064, treat A/#1402, B/#1267/#1405, F/#1268 and A/#1438/#1441/#1443 as integrated boundaries. Any next restore-execution/product slice must be demonstrated on current `main`, consume the established persisted whole-checkpoint loader/restore-preparation and canonical B Relation restore authority, and must not serialize or validate Relation history independently in A;
+4. for #1064, treat A/#1402, B/#1267/#1405, F/#1268 and A/#1438/#1441/#1443/#1508/#1522 as integrated boundaries. The atomic prepared restore executor and identity-managed fail-closed safety are complete. Resume from live #1531 while it remains open and unowned: production capture must consume the established A/B persistence boundary, strict current-state contracts and canonical B Relation history service rather than recreating restore/Relation authority;
 5. preserve the legacy-only Bookmark facts recorded by completed #1177 until a lossless destination or explicit retirement policy exists; do not convert documentation pressure into speculative schema design;
 6. after each coherent slice/PR/merge, apply the shared **Lane continuation and resume/stop contract** in `AGENTS.md` and continue while safe A work exists.
 
 ## Current continuation / stop contract
 
-#1062 is completed and must not be reopened merely to keep Lane A active. #1405 and A/#1438/#1441/#1443 are integrated, so there is no longer a B/#1405 dependency gate for #1064. Recheck live GitHub for a newer focused A issue or a concrete reproducible current-main gap that advances the remaining restore-execution/product acceptance while preserving B/F ownership. If neither exists, `idle-no-work` is the exact stop category. Do not reopen completed history checkpoints, duplicate B Relation restore/history authority, or invent speculative A work merely to avoid that stop.
+#1062 is completed and must not be reopened merely to keep Lane A active. #1405 and A/#1438/#1441/#1443/#1508/#1522 are integrated, so durable history persistence, loading, preparation, atomic prepared execution and identity-managed fail-closed safety are established checkpoints rather than standing queues. Live #1531 is the current A continuation because production history capture is still caller-zero on main; take it only while ownership/hotspot checks remain clear. If #1531 becomes blocked or completed, re-run the full live discovery audit; use `idle-no-work` only when no newer safe A work exists. Do not recreate the completed executor, reopen completed history checkpoints, duplicate B Relation restore/history authority, or invent speculative A work merely to avoid that stop.
