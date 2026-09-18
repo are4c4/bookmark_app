@@ -24,10 +24,11 @@ void main() {
         database,
         canonicalObjectMutationImpactSink: CanonicalObjectMutationImpactSink(
           onObjectCommitted: search.refreshObjectLabelDependents,
-          onDeletionCommitted: (impact) => search.refreshCommittedDeletionImpact(
-            deletedObjectId: impact.deletedObjectId,
-            changedSourceObjectIds: impact.detachedSourceObjectIds,
-          ),
+          onDeletionCommitted: (impact) =>
+              search.refreshCommittedDeletionImpact(
+                deletedObjectId: impact.deletedObjectId,
+                changedSourceObjectIds: impact.detachedSourceObjectIds,
+              ),
         ),
       ).initialize();
       final objectStore = ObjectStore(genericStore);
@@ -139,7 +140,8 @@ void main() {
         <int>[objectId],
       );
 
-      final object = (await objectStore.listObjects(schema.objectType.id)).single;
+      final object = (await objectStore.listObjects(schema.objectType.id))
+          .single;
       final person = (await database.select(database.people).get()).single;
       expect(object.title, 'InspectorAfterToken');
       expect(object.values[schema.noteProperty.id], 'InspectorNewNoteToken');
@@ -207,7 +209,8 @@ void main() {
         'Preserved',
       );
       expect(tester.widget<TextField>(titleField).focusNode?.hasFocus, isFalse);
-      final object = (await objectStore.listObjects(schema.objectType.id)).single;
+      final object = (await objectStore.listObjects(schema.objectType.id))
+          .single;
       final person = (await database.select(database.people).get()).single;
       expect(object.title, 'Preserved');
       expect(object.values[schema.noteProperty.id], 'old note');
