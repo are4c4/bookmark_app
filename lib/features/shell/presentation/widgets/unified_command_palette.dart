@@ -16,6 +16,7 @@ class UnifiedCommandPaletteItem {
     this.navigationIndex,
     this.databaseId,
     this.objectId,
+    this.groupLabel,
     this.recoveryOnSearchFailure = false,
   });
 
@@ -28,6 +29,7 @@ class UnifiedCommandPaletteItem {
   final int? navigationIndex;
   final int? databaseId;
   final int? objectId;
+  final String? groupLabel;
   final bool recoveryOnSearchFailure;
 }
 
@@ -36,12 +38,14 @@ Future<UnifiedCommandPaletteItem?> showUnifiedCommandPalette({
   required List<UnifiedCommandPaletteItem> staticItems,
   required Future<List<UnifiedCommandPaletteItem>> Function(String query)
   searchObjects,
+  Future<List<UnifiedCommandPaletteItem>> Function()? loadRecentObjects,
 }) {
   return showDialog<UnifiedCommandPaletteItem>(
     context: context,
     builder: (dialogContext) => UnifiedCommandPalette(
       staticItems: staticItems,
       searchObjects: searchObjects,
+      loadRecentObjects: loadRecentObjects,
     ),
   );
 }
@@ -51,11 +55,13 @@ class UnifiedCommandPalette extends StatefulWidget {
     super.key,
     required this.staticItems,
     required this.searchObjects,
+    this.loadRecentObjects,
   });
 
   final List<UnifiedCommandPaletteItem> staticItems;
   final Future<List<UnifiedCommandPaletteItem>> Function(String query)
   searchObjects;
+  final Future<List<UnifiedCommandPaletteItem>> Function()? loadRecentObjects;
 
   @override
   State<UnifiedCommandPalette> createState() => _UnifiedCommandPaletteState();
@@ -68,9 +74,17 @@ class _UnifiedCommandPaletteState extends State<UnifiedCommandPalette> {
   int _searchGeneration = 0;
   List<UnifiedCommandPaletteItem> _objectItems =
       const <UnifiedCommandPaletteItem>[];
+  List<UnifiedCommandPaletteItem> _recentItems =
+      const <UnifiedCommandPaletteItem>[];
   String? _selectedKey;
   bool _searching = false;
   bool _searchFailed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadRecentObjects());
+  }
 
   @override
   void dispose() {
@@ -95,8 +109,36 @@ class _UnifiedCommandPaletteState extends State<UnifiedCommandPalette> {
         .toList(growable: false);
   }
 
+  List<UnifiedCommandPaletteItem> get _visibleRecentItems =>
+      _normalizedQuery.isEmpty
+      ? _recentItems
+      : const <UnifiedCommandPaletteItem>[];
+
   List<UnifiedCommandPaletteItem> get _visibleItems =>
-      <UnifiedCommandPaletteItem>[..._visibleStaticItems, ..._objectItems];
+      <UnifiedCommandPaletteItem>[
+        ..._visibleStaticItems,
+        ..._visibleRecentItems,
+        ..._objectItems,
+      ];
+
+  Future<void> _loadRecentObjects() async {
+    final loadRecentObjects = widget.loadRecentObjects;
+    if (loadRecentObjects == null) return;
+    try {
+      final results = await loadRecentObjects();
+      if (!mounted) return;
+      setState(() {
+        _recentItems = results;
+        _ensureSelection(_visibleItems);
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _recentItems = const <UnifiedCommandPaletteItem>[];
+        _ensureSelection(_visibleItems);
+      });
+    }
+  }
 
   void _ensureSelection(List<UnifiedCommandPaletteItem> items) {
     if (items.isEmpty) {
@@ -204,11 +246,13 @@ class _UnifiedCommandPaletteState extends State<UnifiedCommandPalette> {
     return Icon(item.icon ?? Icons.description_outlined, size: 20);
   }
 
-  String _groupLabel(UnifiedCommandPaletteItemKind kind) => switch (kind) {
-    UnifiedCommandPaletteItemKind.destination => '移動',
-    UnifiedCommandPaletteItemKind.database => 'データベース',
-    UnifiedCommandPaletteItemKind.object => 'オブジェクト',
-  };
+  String _groupLabel(UnifiedCommandPaletteItem item) =>
+      item.groupLabel ??
+      switch (item.kind) {
+        UnifiedCommandPaletteItemKind.destination => '移動',
+        UnifiedCommandPaletteItemKind.database => 'データベース',
+        UnifiedCommandPaletteItemKind.object => 'オブジェクト',
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -253,14 +297,15 @@ class _UnifiedCommandPaletteState extends State<UnifiedCommandPalette> {
                       itemCount: items.length,
                       itemBuilder: (context, index) {
                         final item = items[index];
-                        final previousKind = index == 0
+                        final groupLabel = _groupLabel(item);
+                        final previousGroupLabel = index == 0
                             ? null
-                            : items[index - 1].kind;
+                            : _groupLabel(items[index - 1]);
                         final selected = item.keyName == _selectedKey;
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            if (previousKind != item.kind)
+                            if (previousGroupLabel != groupLabel)
                               Padding(
                                 padding: const EdgeInsets.fromLTRB(
                                   12,
@@ -269,7 +314,7 @@ class _UnifiedCommandPaletteState extends State<UnifiedCommandPalette> {
                                   4,
                                 ),
                                 child: Text(
-                                  _groupLabel(item.kind),
+                                  groupLabel,
                                   style: Theme.of(context).textTheme.labelSmall,
                                 ),
                               ),
