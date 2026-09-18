@@ -125,13 +125,13 @@ void main() {
       );
       expect(tester.takeException(), isNull);
 
-      await tester.tap(find.byKey(const ValueKey('object-title-edit-button')));
-      await tester.pumpAndSettle();
-      await tester.enterText(
-        find.byKey(const ValueKey('object-title-edit-field')),
-        'After promotion',
+      final fullPageTitle = find.descendant(
+        of: find.byKey(ValueKey('object-title-inline-editor-$objectId')),
+        matching: find.byKey(const ValueKey('object-inline-title-field')),
       );
-      await tester.tap(find.byKey(const ValueKey('object-title-edit-save')));
+      await tester.tap(fullPageTitle);
+      await tester.enterText(fullPageTitle, 'After promotion');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
       expect(find.text('After promotion'), findsOneWidget);
 
