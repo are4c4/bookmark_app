@@ -327,10 +327,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(
-        find.text('このURLを保存できませんでした。URLを確認してください。'),
-        findsOneWidget,
-      );
+      expect(find.text('このURLを保存できませんでした。URLを確認してください。'), findsOneWidget);
       expect(find.textContaining('Canonical Weblink collision'), findsNothing);
       expect(find.text('コマンドパレット'), findsNothing);
       expect(
