@@ -10,6 +10,7 @@ enum ObjectSearchHealthFindingKind {
   staleIndexRow,
   duplicateIndexRow,
   identityMismatch,
+  titleMismatch,
   malformedIndexRow,
 }
 
@@ -54,11 +55,13 @@ class _CanonicalSearchIdentity {
     required this.objectId,
     required this.objectTypeId,
     required this.workspaceId,
+    required this.title,
   });
 
   final int objectId;
   final int objectTypeId;
   final int workspaceId;
+  final String title;
 }
 
 class _IndexedSearchIdentity {
@@ -66,19 +69,21 @@ class _IndexedSearchIdentity {
     required this.objectId,
     required this.objectTypeId,
     required this.workspaceId,
+    required this.title,
   });
 
   final int? objectId;
   final int? objectTypeId;
   final int? workspaceId;
+  final String? title;
 }
 
 /// Read-only checker for the canonical `object_search_fts` identity projection.
 ///
 /// This boundary never rebuilds, refreshes, deletes, inserts, or repairs Search
-/// state. It compares only stable Object/ObjectType/workspace identities and is
-/// therefore safe to compose into cross-subsystem health reporting without
-/// exposing indexed titles, Body, Properties, URLs, or other user content.
+/// state. It compares stable Object/ObjectType/workspace identities plus
+/// equality of the canonical title bucket. Findings expose identity metadata
+/// only, never title text, Body, Properties, URLs, or other user content.
 class ObjectSearchHealthAudit {
   ObjectSearchHealthAudit(GenericDatabaseStore genericStore)
     : _database = genericStore.database;
@@ -102,7 +107,8 @@ class ObjectSearchHealthAudit {
     final rows = await _database.customSelect('''SELECT
            r.id AS object_id,
            r.database_id AS object_type_id,
-           d.workspace_id AS workspace_id
+           d.workspace_id AS workspace_id,
+           r.title AS title
          FROM generic_records r
          JOIN generic_databases d ON d.id = r.database_id
          ORDER BY r.id''').get();
@@ -112,6 +118,7 @@ class ObjectSearchHealthAudit {
             objectId: row.read<int>('object_id'),
             objectTypeId: row.read<int>('object_type_id'),
             workspaceId: row.read<int>('workspace_id'),
+            title: row.read<String>('title'),
           ),
         )
         .toList(growable: false);
@@ -121,7 +128,8 @@ class ObjectSearchHealthAudit {
     final rows = await _database.customSelect('''SELECT
            CAST(object_id AS TEXT) AS object_id_raw,
            CAST(object_type_id AS TEXT) AS object_type_id_raw,
-           CAST(workspace_id AS TEXT) AS workspace_id_raw
+           CAST(workspace_id AS TEXT) AS workspace_id_raw,
+           CAST(title AS TEXT) AS title_raw
          FROM object_search_fts
          ORDER BY rowid''').get();
     return rows
@@ -134,6 +142,7 @@ class ObjectSearchHealthAudit {
             workspaceId: _parseIdentity(
               row.readNullable<String>('workspace_id_raw'),
             ),
+            title: row.readNullable<String>('title_raw'),
           ),
         )
         .toList(growable: false);
@@ -217,6 +226,18 @@ class ObjectSearchHealthAudit {
       if (exact) {
         exactRowsByObjectId[objectId] =
             (exactRowsByObjectId[objectId] ?? 0) + 1;
+        if (indexedIdentity.title != canonicalIdentity.title) {
+          findings.add(
+            ObjectSearchHealthFinding(
+              kind: ObjectSearchHealthFindingKind.titleMismatch,
+              objectId: objectId,
+              indexedObjectTypeId: objectTypeId,
+              indexedWorkspaceId: indexedWorkspaceId,
+              canonicalObjectTypeId: canonicalIdentity.objectTypeId,
+              canonicalWorkspaceId: canonicalIdentity.workspaceId,
+            ),
+          );
+        }
         continue;
       }
 

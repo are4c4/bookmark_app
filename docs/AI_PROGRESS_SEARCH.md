@@ -15,7 +15,7 @@ Keep one canonical Object-level search/index architecture correct, stale-safe, p
 ## Current state
 Canonical Object Search is established and covers focused freshness, Body/Property/Relation projection, corruption isolation, background completion refresh, mounted-query replay and Japanese/CJK intra-token matching, including ordinary surrounding query punctuation, full-width/half-width Katakana compatibility and canonically equivalent Japanese dakuten/handakuten composition, without a second persistent index.
 
-#1350 is an explicit user-visible Lane E obligation when live-ready: normal Global Search should validate/prepare the existing canonical index automatically and move manual rebuild behind secondary repair UI. This is lifecycle/presentation work over the same canonical index, not permission to add a second search store.
+Normal Global Search automatically validates/prepares the existing canonical index when opened, rebuilds only when the canonical health audit reports unhealthy state, and keeps index maintenance out of the primary empty-state flow. Manual rebuild remains a secondary repair action; preparation failure exposes privacy-safe Retry/Rebuild recovery and repair restores keyboard focus to Search. This lifecycle/presentation contract reuses the same canonical Object index and does not introduce a second search store.
 
 Idle is a valid Lane E state only when live Issues and a final current-main audit reveal no concrete Search correctness **or approved Search UX** obligation. Never infer that state from this handoff alone.
 
@@ -34,10 +34,11 @@ Idle is a valid Lane E state only when live Issues and a final current-main audi
 - stale/deleted impacted ids remain refreshable so rows can be removed;
 - fail-closed corruption isolation for malformed Body/schema/Relation state;
 - Search result resolution does not manufacture missing canonical identity;
-- mounted Global Search can replay the active query after successful focused refresh.
+- mounted Global Search can replay the active query after successful focused refresh;
+- opening Global Search performs health-based canonical index preparation rather than an unconditional rebuild; healthy state stays immediately usable, manual rebuild is secondary repair UI, and preparation failure offers explicit Retry/Rebuild recovery while preserving Search focus.
 
 ## Resume triggers
-Take an existing focused Lane E issue when it is live-ready, including explicit user-visible Search lifecycle/repair UX such as #1350. Open a new focused Lane E issue when real behavior demonstrates one of these:
+Take an existing focused Lane E issue when it is live-ready. Open a new focused Lane E issue when real behavior demonstrates one of these:
 - canonical Object Search misses new Object-first Properties/Body/native metadata that should be searchable;
 - language/tokenization behavior causes an ordinary query to miss searchable canonical text;
 - stale tokens remain after canonical Object/Relation/native producer mutation;
@@ -59,7 +60,7 @@ Search changes require focused projection/freshness/query/restart regressions as
 
 ## Resume sequence
 1. re-read live open Issues/PRs and current architecture;
-2. take a concrete Search/Indexing obligation, including an approved user-visible Search UX Issue such as #1350 when ready; do not restrict Lane E to correctness-only work;
+2. take a concrete Search/Indexing obligation, including approved user-visible Search UX work when live-ready; do not restrict Lane E to correctness-only work;
 3. reuse canonical Object projection/refresh infrastructure;
 4. avoid domain-specific permanent indexes;
 5. update this handoff only with durable contracts/state, leaving volatile PR/branch/CI facts to live GitHub;

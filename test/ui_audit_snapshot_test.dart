@@ -415,7 +415,9 @@ void main() {
     await _captureScenario(
       tester,
       name: 'global-search-empty',
-      contractSatisfied: find.text('オブジェクトを横断検索').evaluate().length == 1,
+      contractSatisfied:
+          find.text('何を検索しますか？').evaluate().length == 1 &&
+          find.text('インデックスを更新').evaluate().isEmpty,
     );
   });
 }

@@ -28,10 +28,12 @@ Future<BookmarkRepository> _repository(AppDatabase database) async {
 class _FakeSearchService extends ObjectGlobalSearchService {
   _FakeSearchService(
     GenericDatabaseStore store, {
+    this.onPrepare,
     required this.onRebuild,
     required this.onSearch,
   }) : super(store);
 
+  final Future<void> Function(int workspaceId)? onPrepare;
   final Future<void> Function(int workspaceId) onRebuild;
   final Future<List<ResolvedObjectSearchHit>> Function(
     int workspaceId,
@@ -39,6 +41,12 @@ class _FakeSearchService extends ObjectGlobalSearchService {
     int? objectTypeId,
     int limit,
   ) onSearch;
+
+  @override
+  Future<void> prepareWorkspace(int workspaceId) async {
+    final prepare = onPrepare;
+    if (prepare != null) await prepare(workspaceId);
+  }
 
   @override
   Future<void> rebuildWorkspace(int workspaceId) => onRebuild(workspaceId);
@@ -74,16 +82,22 @@ void main() {
     addTearDown(database.close);
     final repository = await _repository(database);
     final genericStore = GenericDatabaseStore(database);
+    var prepareAttempts = 0;
     var rebuildAttempts = 0;
+    var searchAttempts = 0;
     final searchService = _FakeSearchService(
       genericStore,
+      onPrepare: (_) async {
+        prepareAttempts++;
+        throw StateError('private index detail /Users/example/profile.db');
+      },
       onRebuild: (_) async {
         rebuildAttempts++;
-        if (rebuildAttempts == 1) {
-          throw StateError('private index detail /Users/example/profile.db');
-        }
       },
-      onSearch: (_, __, ___, ____) async => const <ResolvedObjectSearchHit>[],
+      onSearch: (_, __, ___, ____) async {
+        searchAttempts++;
+        return const <ResolvedObjectSearchHit>[];
+      },
     );
 
     await tester.pumpWidget(
@@ -98,23 +112,39 @@ void main() {
     await tester.pump();
 
     expect(find.byType(ObjectGlobalSearchPage), findsOneWidget);
-    expect(rebuildAttempts, 1);
+    expect(prepareAttempts, 1);
+    expect(rebuildAttempts, 0);
     expect(find.text('全文検索を準備できませんでした'), findsOneWidget);
-    expect(
-      find.text('検索インデックスを再構築して、もう一度お試しください。'),
-      findsOneWidget,
-    );
+    expect(find.text('再試行'), findsOneWidget);
+    expect(find.text('検索インデックスを再構築'), findsOneWidget);
     expect(find.textContaining('private index detail'), findsNothing);
     expect(find.textContaining('/Users/example/profile.db'), findsNothing);
+
+    await tester.enterText(find.byType(TextField), 'must-not-bypass');
+    await tester.pump(const Duration(milliseconds: 221));
+    await tester.pump();
+    expect(searchAttempts, 0);
+    expect(find.text('全文検索を準備できませんでした'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), '');
+    final focusNode = tester
+        .widget<TextField>(find.byType(TextField))
+        .focusNode!;
+    focusNode.unfocus();
+    await tester.pump();
+    expect(focusNode.hasFocus, isFalse);
 
     await tester.tap(find.text('検索インデックスを再構築'));
     await tester.pump();
     await tester.pump();
 
-    expect(rebuildAttempts, 2);
-    expect(find.text('オブジェクトを横断検索'), findsOneWidget);
-    expect(find.text('ブックマークを横断検索'), findsNothing);
+    expect(prepareAttempts, 1);
+    expect(rebuildAttempts, 1);
+    expect(searchAttempts, 0);
+    expect(find.text('何を検索しますか？'), findsOneWidget);
+    expect(find.text('インデックスを更新'), findsNothing);
     expect(find.text('全文検索を準備できませんでした'), findsNothing);
+    expect(focusNode.hasFocus, isTrue);
   });
 
   testWidgets('Object query failure keeps stable retryable error boundary',
@@ -147,7 +177,9 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(find.text('オブジェクトを横断検索'), findsOneWidget);
+    expect(find.text('何を検索しますか？'), findsOneWidget);
+    expect(find.text('インデックスを更新'), findsNothing);
+    expect(rebuildAttempts, 0);
 
     await tester.enterText(find.byType(TextField), 'example');
     await tester.pump(const Duration(milliseconds: 221));
@@ -164,8 +196,8 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(rebuildAttempts, 2);
-    expect(find.text('オブジェクトを横断検索'), findsOneWidget);
+    expect(rebuildAttempts, 1);
+    expect(find.text('何を検索しますか？'), findsOneWidget);
     expect(find.text('全文検索を準備できませんでした'), findsNothing);
   });
 
@@ -208,10 +240,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('全文検索を準備できませんでした'), findsOneWidget);
-    expect(
-      find.text('検索インデックスを再構築して、もう一度お試しください。'),
-      findsOneWidget,
-    );
+    expect(find.text('再試行'), findsOneWidget);
+    expect(find.text('検索インデックスを再構築'), findsOneWidget);
     expect(find.textContaining('private refresh detail'), findsNothing);
     expect(find.textContaining('/Users/example/profile.db'), findsNothing);
   });

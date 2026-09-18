@@ -50,7 +50,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('オブジェクトを横断検索'), findsOneWidget);
+    expect(find.text('何を検索しますか？'), findsOneWidget);
+    expect(find.text('インデックスを更新'), findsNothing);
     expect(find.textContaining('ブックマークを横断検索'), findsNothing);
 
     await tester.enterText(find.byType(TextField), 'kokoro');
