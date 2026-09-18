@@ -4,6 +4,7 @@ import '../data/generic_database_store.dart';
 import '../data/object_graph_query_store.dart';
 import '../data/object_store.dart';
 import '../services/canonical_file_pdf_search_indexer.dart';
+import 'object_search_health_audit.dart';
 import 'object_search_refresh_planner.dart';
 import 'object_search_repository.dart';
 import 'object_search_result_resolver.dart';
@@ -42,6 +43,7 @@ class ObjectGlobalSearchService {
     CanonicalFilePdfSearchIndexer? pdfSearchIndexer,
   })  : _projectionChanges = _projectionChangesFor(genericStore),
         _index = ObjectSearchRepository(genericStore),
+        _healthAudit = ObjectSearchHealthAudit(genericStore),
         _resolver = ObjectSearchResultResolver(ObjectStore(genericStore)),
         _refreshPlanner = ObjectSearchRefreshPlanner(ObjectStore(genericStore)),
         _graphStore = ObjectGraphQueryStore(genericStore),
@@ -50,6 +52,7 @@ class ObjectGlobalSearchService {
 
   final _ObjectSearchProjectionChangeChannel _projectionChanges;
   final ObjectSearchRepository _index;
+  final ObjectSearchHealthAudit _healthAudit;
   final ObjectSearchResultResolver _resolver;
   final ObjectSearchRefreshPlanner _refreshPlanner;
   final ObjectGraphQueryStore _graphStore;
@@ -64,6 +67,17 @@ class ObjectGlobalSearchService {
   /// Relation and Primitive producers remain unaware of Search presentation and
   /// report only canonical ids to Search-owned refresh methods.
   Stream<void> get projectionChanges => _projectionChanges.stream;
+
+  /// Ensures canonical Object Search is usable without rebuilding a healthy
+  /// workspace merely because the Search surface was opened.
+  ///
+  /// The privacy-safe identity audit is read-only. Any missing, stale,
+  /// malformed, duplicate, or mismatched projection row is repaired through
+  /// the existing canonical rebuild boundary rather than a second index path.
+  Future<void> prepareWorkspace(int workspaceId) async {
+    final health = await _healthAudit.auditWorkspace(workspaceId);
+    if (!health.isHealthy) await rebuildWorkspace(workspaceId);
+  }
 
   /// Rebuilds canonical Object search for one workspace after reconciling the
   /// optional PDF-derived contribution of canonical File Objects.

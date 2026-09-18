@@ -35,6 +35,7 @@ class ObjectGlobalSearchPage extends StatefulWidget {
 class _ObjectGlobalSearchPageState extends State<ObjectGlobalSearchPage> {
   late ObjectGlobalSearchService _searchService;
   final TextEditingController _controller = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
   Timer? _debounce;
   StreamSubscription<void>? _projectionChangesSubscription;
   bool _projectionReplayScheduled = false;
@@ -80,6 +81,7 @@ class _ObjectGlobalSearchPageState extends State<ObjectGlobalSearchPage> {
     _debounce?.cancel();
     final subscription = _projectionChangesSubscription;
     if (subscription != null) unawaited(subscription.cancel());
+    _searchFocusNode.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -110,14 +112,41 @@ class _ObjectGlobalSearchPageState extends State<ObjectGlobalSearchPage> {
       });
     }
     try {
-      await _searchService.rebuildWorkspace(widget.workspaceId);
+      await _searchService.prepareWorkspace(widget.workspaceId);
       if (!mounted) return;
       setState(() => _indexing = false);
       if (_controller.text.trim().isNotEmpty) {
         await _search(_controller.text);
       }
     } catch (_, stackTrace) {
-      _recordSearchFailure('Object global search index rebuild failed.', stackTrace);
+      _recordSearchFailure(
+        'Object global search index preparation failed.',
+        stackTrace,
+      );
+    }
+  }
+
+  Future<void> _repairIndex() async {
+    _searchGeneration += 1;
+    if (mounted) {
+      setState(() {
+        _indexing = true;
+        _searchFailed = false;
+      });
+    }
+    try {
+      await _searchService.rebuildWorkspace(widget.workspaceId);
+      if (!mounted) return;
+      setState(() => _indexing = false);
+      _searchFocusNode.requestFocus();
+      if (_controller.text.trim().isNotEmpty) {
+        await _search(_controller.text);
+      }
+    } catch (_, stackTrace) {
+      _recordSearchFailure(
+        'Object global search index rebuild failed.',
+        stackTrace,
+      );
     }
   }
 
@@ -156,7 +185,7 @@ class _ObjectGlobalSearchPageState extends State<ObjectGlobalSearchPage> {
 
   Future<void> _search(String rawQuery) async {
     final query = rawQuery.trim();
-    if (query.isEmpty || _indexing) return;
+    if (query.isEmpty || _indexing || _searchFailed) return;
     final generation = ++_searchGeneration;
     if (mounted) {
       setState(() {
@@ -221,23 +250,24 @@ class _ObjectGlobalSearchPageState extends State<ObjectGlobalSearchPage> {
       return AppEmptyState(
         icon: Icons.error_outline,
         title: '全文検索を準備できませんでした',
-        message: '検索インデックスを再構築して、もう一度お試しください。',
-        actionLabel: '検索インデックスを再構築',
-        onAction: _prepareIndex,
+        message: 'もう一度準備するか、検索インデックスを再構築して復旧できます。',
+        actionLabel: '再試行',
+        onAction: () {
+          _searchFocusNode.requestFocus();
+          unawaited(_prepareIndex());
+        },
+        secondaryActionLabel: '検索インデックスを再構築',
+        onSecondaryAction: () => unawaited(_repairIndex()),
       );
     }
     if (_controller.text.trim().isEmpty) {
-      return AppEmptyState(
+      return const AppEmptyState(
         icon: Icons.manage_search,
-        title: 'オブジェクトを横断検索',
-        message: 'タイトル・エイリアス・プロパティ・本文などを、すべてのオブジェクトから検索します。',
-        actionLabel: 'インデックスを更新',
-        onAction: _prepareIndex,
+        title: '何を検索しますか？',
+        message: 'タイトル・エイリアス・プロパティ・本文などを、すべてのオブジェクトから検索できます。',
       );
     }
-    if (_searching) {
-      return const Center(child: CircularProgressIndicator());
-    }
+    if (_searching) return const Center(child: CircularProgressIndicator());
     if (_results.isEmpty) {
       return const AppEmptyState(
         icon: Icons.search_off,
@@ -317,10 +347,18 @@ class _ObjectGlobalSearchPageState extends State<ObjectGlobalSearchPage> {
           ],
         ),
         actions: [
-          IconButton(
-            tooltip: '検索インデックスを更新',
-            onPressed: _indexing ? null : _prepareIndex,
-            icon: const Icon(Icons.refresh, size: UiTokens.iconNormal),
+          PopupMenuButton<String>(
+            tooltip: '検索オプション',
+            enabled: !_indexing,
+            onSelected: (value) {
+              if (value == 'repair') unawaited(_repairIndex());
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem<String>(
+                value: 'repair',
+                child: Text('検索インデックスを再構築'),
+              ),
+            ],
           ),
           const SizedBox(width: UiTokens.space8),
         ],
@@ -334,6 +372,7 @@ class _ObjectGlobalSearchPageState extends State<ObjectGlobalSearchPage> {
             ),
             child: TextField(
               controller: _controller,
+              focusNode: _searchFocusNode,
               autofocus: true,
               onChanged: _onQueryChanged,
               decoration: InputDecoration(
@@ -346,6 +385,7 @@ class _ObjectGlobalSearchPageState extends State<ObjectGlobalSearchPage> {
                         onPressed: () {
                           _controller.clear();
                           _onQueryChanged('');
+                          _searchFocusNode.requestFocus();
                         },
                       ),
               ),
