@@ -345,4 +345,98 @@ void main() {
 
     expect(selected?.objectId, 42);
   });
+
+  testWidgets(
+    'query action is immediate and async Search does not steal selection',
+    (tester) async {
+      final searchCompleter = Completer<List<UnifiedCommandPaletteItem>>();
+      UnifiedCommandPaletteItem? selected;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: FilledButton(
+                onPressed: () async {
+                  selected = await showUnifiedCommandPalette(
+                    context: context,
+                    staticItems: const <UnifiedCommandPaletteItem>[],
+                    searchObjects: (_) => searchCompleter.future,
+                    queryItems: (query) {
+                      final uri = Uri.tryParse(query);
+                      if (uri == null ||
+                          !uri.hasAuthority ||
+                          (uri.scheme != 'http' && uri.scheme != 'https')) {
+                        return const <UnifiedCommandPaletteItem>[];
+                      }
+                      return <UnifiedCommandPaletteItem>[
+                        UnifiedCommandPaletteItem(
+                          keyName: 'action:capture-weblink',
+                          kind: UnifiedCommandPaletteItemKind.action,
+                          label: 'URLを保存',
+                          actionId: 'capture-weblink',
+                          actionValue: query,
+                        ),
+                      ];
+                    },
+                  );
+                },
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      final query = find.byKey(
+        const ValueKey<String>('unified-command-palette-query'),
+      );
+      await tester.enterText(query, 'ordinary text');
+      await tester.pump();
+      expect(
+        find.byKey(
+          const ValueKey<String>(
+            'unified-command-palette-item-action:capture-weblink',
+          ),
+        ),
+        findsNothing,
+      );
+
+      await tester.enterText(query, 'https://example.com/from-palette');
+      await tester.pump();
+
+      final action = find.byKey(
+        const ValueKey<String>(
+          'unified-command-palette-item-action:capture-weblink',
+        ),
+      );
+      expect(action, findsOneWidget);
+      expect(tester.widget<ListTile>(action).selected, isTrue);
+
+      await tester.pump(const Duration(milliseconds: 180));
+      searchCompleter.complete(
+        const <UnifiedCommandPaletteItem>[
+          UnifiedCommandPaletteItem(
+            keyName: 'object:99',
+            kind: UnifiedCommandPaletteItemKind.object,
+            label: 'Search result',
+            objectId: 99,
+          ),
+        ],
+      );
+      await tester.pump();
+      expect(tester.widget<ListTile>(action).selected, isTrue);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+
+      expect(selected?.kind, UnifiedCommandPaletteItemKind.action);
+      expect(selected?.actionId, 'capture-weblink');
+      expect(selected?.actionValue, 'https://example.com/from-palette');
+    },
+  );
+
 }
