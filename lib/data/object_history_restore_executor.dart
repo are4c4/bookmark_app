@@ -214,12 +214,16 @@ class ObjectHistoryRestoreExecutor {
   }
 
   Future<int> _objectTypeId(int objectId) async {
-    final row = await _genericStore.database.customSelect(
-      'SELECT database_id FROM generic_records WHERE id = ? LIMIT 1',
-      variables: <Variable<Object>>[Variable<int>(objectId)],
-    ).getSingleOrNull();
+    final row = await _genericStore.database
+        .customSelect(
+          'SELECT database_id FROM generic_records WHERE id = ? LIMIT 1',
+          variables: [Variable<int>(objectId)],
+        )
+        .getSingleOrNull();
     if (row == null) {
-      throw StateError('Current Object is missing during history restore execution.');
+      throw StateError(
+        'Current Object is missing during history restore execution.',
+      );
     }
     return row.read<int>('database_id');
   }
