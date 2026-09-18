@@ -4,7 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../data/bookmark_repository.dart';
+import '../data/object_search_compatibility_bridge.dart';
+import '../data/object_store.dart';
 import '../data/workspace_store.dart';
+import '../features/shell/presentation/widgets/unified_command_palette.dart';
+import '../repositories/object_global_search_service.dart';
 import '../services/app_shell_database_catalog_service.dart';
 import '../services/bookmark_transfer_service.dart';
 import '../services/profile_manager.dart';
@@ -18,6 +22,7 @@ import 'collection_management_page.dart';
 import 'global_search_page.dart';
 import 'generic_database_page.dart';
 import 'home_start_page.dart';
+import 'object_inspector_page.dart';
 import 'profile_management_page.dart';
 import 'settings_page.dart';
 import 'tag_management_page.dart';
@@ -758,118 +763,182 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
     );
   }
 
-  Future<void> _showCommandPalette() async {
-    var query = '';
-    const destinations = <(String, IconData, int)>[
-      ('ホーム', Icons.home_outlined, 12),
-      ('ブックマーク', Icons.bookmarks_outlined, 0),
-      ('人物', Icons.people_outline, 7),
-      ('タグ', Icons.account_tree_outlined, 6),
-      ('コレクション', Icons.collections_bookmark_outlined, 8),
-      ('全文検索', Icons.search, 1),
-      ('ゴミ箱', Icons.delete_outline, 4),
-      ('Vault管理', Icons.manage_accounts_outlined, 9),
-      ('設定', Icons.settings_outlined, 10),
-    ];
-
-    final selected = await showDialog<(int, int?)>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setLocalState) {
-          final normalized = query.trim().toLowerCase();
-          final visibleDestinations = destinations
-              .where(
-                (destination) =>
-                    normalized.isEmpty ||
-                    destination.$1.toLowerCase().contains(normalized),
-              )
-              .toList();
-          final visibleDatabases = _genericDatabases
-              .where(
-                (database) =>
-                    normalized.isEmpty ||
-                    database.name.toLowerCase().contains(normalized),
-              )
-              .toList();
-          return AlertDialog(
-            title: const Text('コマンドパレット'),
-            content: SizedBox(
-              width: 520,
-              height: 420,
-              child: Column(
-                children: [
-                  TextField(
-                    autofocus: true,
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.search),
-                      hintText: '移動先を検索',
-                    ),
-                    onChanged: (value) =>
-                        setLocalState(() => query = value),
-                  ),
-                  const SizedBox(height: UiTokens.space8),
-                  Expanded(
-                    child: ListView.builder(
-                      itemCount:
-                          visibleDestinations.length + visibleDatabases.length,
-                      itemBuilder: (context, index) {
-                        if (index < visibleDestinations.length) {
-                          final destination = visibleDestinations[index];
-                          return ListTile(
-                            leading: Icon(
-                              destination.$2,
-                              size: UiTokens.iconNormal,
-                            ),
-                            title: Text(destination.$1),
-                            trailing: const Icon(
-                              Icons.keyboard_return,
-                              size: UiTokens.iconSmall,
-                            ),
-                            onTap: () => Navigator.pop(dialogContext, (
-                              destination.$3,
-                              null,
-                            )),
-                          );
-                        }
-                        final database =
-                            visibleDatabases[index -
-                                visibleDestinations.length];
-                        return ListTile(
-                          leading: Text(
-                            database.icon,
-                            style: const TextStyle(
-                              fontSize: UiTokens.iconNormal,
-                            ),
-                          ),
-                          title: Text(database.name),
-                          trailing: const Icon(
-                            Icons.keyboard_return,
-                            size: UiTokens.iconSmall,
-                          ),
-                          onTap: () =>
-                              Navigator.pop(dialogContext, (11, database.id)),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
+  Future<List<UnifiedCommandPaletteItem>> _searchCommandObjects({
+    required ObjectGlobalSearchService searchService,
+    required int workspaceId,
+    required Future<void> preparation,
+    required String query,
+  }) async {
+    await preparation;
+    final results = await searchService.search(
+      workspaceId: workspaceId,
+      rawQuery: query,
+      limit: 12,
+    );
+    return results
+        .map((result) {
+          final snippet = result.hit.snippet.trim();
+          final icon = result.objectType.icon.trim();
+          return UnifiedCommandPaletteItem(
+            keyName: 'object:${result.object.id}',
+            kind: UnifiedCommandPaletteItemKind.object,
+            label: result.object.title,
+            subtitle: snippet.isEmpty
+                ? result.objectType.name
+                : '${result.objectType.name} · $snippet',
+            iconText: icon.isEmpty ? null : icon,
+            objectId: result.object.id,
           );
-        },
+        })
+        .toList(growable: false);
+  }
+
+  Future<void> _openCommandObject(int objectId) async {
+    final searchContext = ObjectSearchCompatibilityBridge.fromRepository(
+      widget.repository,
+    );
+    final searchService = ObjectGlobalSearchService(searchContext.store);
+    final visitedObjectIds = <int>{objectId};
+
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => ObjectInspectorPage(
+          store: searchContext.store,
+          objectStore: ObjectStore(searchContext.store),
+          objectId: objectId,
+          onObjectVisited: visitedObjectIds.add,
+        ),
       ),
     );
-    if (selected != null && mounted) {
-      final databaseId = selected.$2;
-      if (selected.$1 == 11 && databaseId != null) {
+    if (!mounted) return;
+
+    try {
+      await searchService.refreshVisitedDetailReturnObjects(visitedObjectIds);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('検索結果を更新できませんでした。')));
+    }
+  }
+
+  Future<void> _showCommandPalette() async {
+    final searchContext = ObjectSearchCompatibilityBridge.fromRepository(
+      widget.repository,
+    );
+    final searchService = ObjectGlobalSearchService(searchContext.store);
+    final preparation = searchService.prepareWorkspace(
+      searchContext.workspaceId,
+    );
+
+    const destinations = <UnifiedCommandPaletteItem>[
+      UnifiedCommandPaletteItem(
+        keyName: 'destination:home',
+        kind: UnifiedCommandPaletteItemKind.destination,
+        label: 'ホーム',
+        icon: Icons.home_outlined,
+        navigationIndex: 12,
+      ),
+      UnifiedCommandPaletteItem(
+        keyName: 'destination:bookmarks',
+        kind: UnifiedCommandPaletteItemKind.destination,
+        label: 'ブックマーク',
+        icon: Icons.bookmarks_outlined,
+        navigationIndex: 0,
+      ),
+      UnifiedCommandPaletteItem(
+        keyName: 'destination:people',
+        kind: UnifiedCommandPaletteItemKind.destination,
+        label: '人物',
+        icon: Icons.people_outline,
+        navigationIndex: 7,
+      ),
+      UnifiedCommandPaletteItem(
+        keyName: 'destination:tags',
+        kind: UnifiedCommandPaletteItemKind.destination,
+        label: 'タグ',
+        icon: Icons.account_tree_outlined,
+        navigationIndex: 6,
+      ),
+      UnifiedCommandPaletteItem(
+        keyName: 'destination:collections',
+        kind: UnifiedCommandPaletteItemKind.destination,
+        label: 'コレクション',
+        icon: Icons.collections_bookmark_outlined,
+        navigationIndex: 8,
+      ),
+      UnifiedCommandPaletteItem(
+        keyName: 'destination:search',
+        kind: UnifiedCommandPaletteItemKind.destination,
+        label: '全文検索を開く',
+        subtitle: '詳しい検索と検索インデックスの修復',
+        icon: Icons.search,
+        navigationIndex: 1,
+        recoveryOnSearchFailure: true,
+      ),
+      UnifiedCommandPaletteItem(
+        keyName: 'destination:trash',
+        kind: UnifiedCommandPaletteItemKind.destination,
+        label: 'ゴミ箱',
+        icon: Icons.delete_outline,
+        navigationIndex: 4,
+      ),
+      UnifiedCommandPaletteItem(
+        keyName: 'destination:vaults',
+        kind: UnifiedCommandPaletteItemKind.destination,
+        label: 'Vault管理',
+        icon: Icons.manage_accounts_outlined,
+        navigationIndex: 9,
+      ),
+      UnifiedCommandPaletteItem(
+        keyName: 'destination:settings',
+        kind: UnifiedCommandPaletteItemKind.destination,
+        label: '設定',
+        icon: Icons.settings_outlined,
+        navigationIndex: 10,
+      ),
+    ];
+
+    final selected = await showUnifiedCommandPalette(
+      context: context,
+      staticItems: <UnifiedCommandPaletteItem>[
+        ...destinations,
+        ..._genericDatabases.map(
+          (database) => UnifiedCommandPaletteItem(
+            keyName: 'database:${database.id}',
+            kind: UnifiedCommandPaletteItemKind.database,
+            label: database.name,
+            iconText: database.icon,
+            databaseId: database.id,
+          ),
+        ),
+      ],
+      searchObjects: (query) => _searchCommandObjects(
+        searchService: searchService,
+        workspaceId: searchContext.workspaceId,
+        preparation: preparation,
+        query: query,
+      ),
+    );
+    if (!mounted || selected == null) return;
+
+    switch (selected.kind) {
+      case UnifiedCommandPaletteItemKind.object:
+        final objectId = selected.objectId;
+        if (objectId != null) await _openCommandObject(objectId);
+        return;
+      case UnifiedCommandPaletteItemKind.database:
+        final databaseId = selected.databaseId;
+        if (databaseId == null) return;
         setState(() {
           _selectedGenericDatabaseId = databaseId;
           _index = 11;
           _pageCache.remove(11);
         });
-      } else {
-        _selectPage(selected.$1);
-      }
+        return;
+      case UnifiedCommandPaletteItemKind.destination:
+        final navigationIndex = selected.navigationIndex;
+        if (navigationIndex != null) _selectPage(navigationIndex);
+        return;
     }
   }
 
