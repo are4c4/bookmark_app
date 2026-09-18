@@ -1,3 +1,5 @@
+import 'package:drift/drift.dart';
+
 import '../domain/object_history_checkpoint.dart';
 import '../domain/object_history_contract.dart';
 import '../domain/object_history_relation.dart';
@@ -214,7 +216,7 @@ class ObjectHistoryRestoreExecutor {
   Future<int> _objectTypeId(int objectId) async {
     final row = await _genericStore.database.customSelect(
       'SELECT database_id FROM generic_records WHERE id = ? LIMIT 1',
-      variables: <Object>[objectId],
+      variables: <Variable<Object>>[Variable<int>(objectId)],
     ).getSingleOrNull();
     if (row == null) {
       throw StateError('Current Object is missing during history restore execution.');
