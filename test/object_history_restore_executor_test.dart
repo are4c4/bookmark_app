@@ -208,9 +208,9 @@ void main() {
     final preparation = _preparation(
       historical: historical,
       current: current,
-      scope: ObjectHistoryRestoreScope.selective(
-        <ObjectHistoryFieldTarget>[ObjectHistoryFieldTarget.title()],
-      ),
+      scope: ObjectHistoryRestoreScope.selective(<ObjectHistoryFieldTarget>[
+        ObjectHistoryFieldTarget.title(),
+      ]),
     );
     final executor = ObjectHistoryRestoreExecutor(
       genericStore: fixture.genericStore,
@@ -275,10 +275,7 @@ void main() {
     );
 
     await expectLater(
-      executor.execute(
-        preparation: preparation,
-        expectedCurrentRevisionId: 3,
-      ),
+      executor.execute(preparation: preparation, expectedCurrentRevisionId: 3),
       throwsStateError,
     );
 
@@ -377,10 +374,7 @@ void main() {
     );
 
     await expectLater(
-      executor.execute(
-        preparation: preparation,
-        expectedCurrentRevisionId: 3,
-      ),
+      executor.execute(preparation: preparation, expectedCurrentRevisionId: 3),
       throwsStateError,
     );
 
@@ -391,10 +385,9 @@ void main() {
       (await fixture.bodyStore.read(source)).toJson(),
       _body('current body').toJson(),
     );
-    expect(
-      await fixture.relationValue(sourceTypeId, source, person.id),
-      <int>[currentTarget],
-    );
+    expect(await fixture.relationValue(sourceTypeId, source, person.id), <int>[
+      currentTarget,
+    ]);
   });
 
   test('late A failure leaves Relation state untouched', () async {
@@ -486,10 +479,7 @@ void main() {
     );
 
     await expectLater(
-      executor.execute(
-        preparation: preparation,
-        expectedCurrentRevisionId: 3,
-      ),
+      executor.execute(preparation: preparation, expectedCurrentRevisionId: 3),
       throwsStateError,
     );
 
@@ -500,10 +490,9 @@ void main() {
       (await fixture.bodyStore.read(source)).toJson(),
       _body('current body').toJson(),
     );
-    expect(
-      await fixture.relationValue(sourceTypeId, source, person.id),
-      <int>[currentTarget],
-    );
+    expect(await fixture.relationValue(sourceTypeId, source, person.id), <int>[
+      currentTarget,
+    ]);
     expect(relationCalls, 0);
   });
 }
@@ -539,8 +528,7 @@ ObjectHistoryCheckpointPayload _checkpoint({
   required ObjectBodyDocument body,
   ObjectPropertyDefinition? valueProperty,
   dynamic value,
-  List<ObjectPropertyDefinition> relations =
-      const <ObjectPropertyDefinition>[],
+  List<ObjectPropertyDefinition> relations = const <ObjectPropertyDefinition>[],
 }) => ObjectHistoryCheckpointPayload(
   entry: ObjectHistoryEntry(
     objectId: objectId,
@@ -671,9 +659,8 @@ class _Fixture {
   }
 
   Future<AppObject> object(int objectTypeId, int objectId) async =>
-      (await objectStore.listObjects(objectTypeId)).singleWhere(
-        (candidate) => candidate.id == objectId,
-      );
+      (await objectStore.listObjects(objectTypeId))
+          .singleWhere((candidate) => candidate.id == objectId);
 
   Future<List<int>> relationValue(
     int objectTypeId,
