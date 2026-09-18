@@ -4,11 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../data/bookmark_repository.dart';
+import '../data/canonical_weblink_capture_service.dart';
 import '../data/generic_database_store.dart';
 import '../data/home_recent_service.dart';
 import '../data/object_search_compatibility_bridge.dart';
 import '../data/object_store.dart';
+import '../data/object_type_defaults_store.dart';
 import '../data/system_object_store.dart';
+import '../data/weblink_object_service.dart';
 import '../data/workspace_store.dart';
 import '../features/shell/presentation/widgets/unified_command_palette.dart';
 import '../repositories/object_global_search_service.dart';
@@ -854,6 +857,63 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
     }
   }
 
+  List<UnifiedCommandPaletteItem> _commandQueryActions(String query) {
+    final value = query.trim();
+    final uri = Uri.tryParse(value);
+    final scheme = uri?.scheme.toLowerCase();
+    if (uri == null ||
+        !uri.hasAuthority ||
+        uri.host.isEmpty ||
+        (scheme != 'http' && scheme != 'https')) {
+      return const <UnifiedCommandPaletteItem>[];
+    }
+
+    return <UnifiedCommandPaletteItem>[
+      UnifiedCommandPaletteItem(
+        keyName: 'action:capture-weblink',
+        kind: UnifiedCommandPaletteItemKind.action,
+        label: 'URLを保存',
+        subtitle: value,
+        icon: Icons.add_link,
+        actionId: 'capture-weblink',
+        actionValue: value,
+        groupLabel: 'アクション',
+      ),
+    ];
+  }
+
+  Future<void> _captureCommandWeblink({
+    required GenericDatabaseStore store,
+    required int workspaceId,
+    required String url,
+  }) async {
+    try {
+      final objectStore = ObjectStore(store);
+      final capture = CanonicalWeblinkCaptureService(
+        weblinks: WeblinkObjectService(
+          systemObjects: SystemObjectStore(
+            database: store.database,
+            objectStore: objectStore,
+          ),
+          defaultsStore: ObjectTypeDefaultsStore(store),
+        ),
+      );
+      final object = await capture.capture(
+        workspaceId: workspaceId,
+        url: url,
+      );
+      if (!mounted) return;
+      await _openCommandObject(object.id);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('このURLを保存できませんでした。URLを確認してください。'),
+        ),
+      );
+    }
+  }
+
   Future<void> _showCommandPalette() async {
     final searchContext = ObjectSearchCompatibilityBridge.fromRepository(
       widget.repository,
@@ -955,6 +1015,7 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
         workspaceId: searchContext.workspaceId,
         store: searchContext.store,
       ),
+      queryItems: _commandQueryActions,
     );
     if (!mounted || selected == null) return;
 
@@ -975,6 +1036,16 @@ class _BookmarkAppShellState extends State<BookmarkAppShell> {
       case UnifiedCommandPaletteItemKind.destination:
         final navigationIndex = selected.navigationIndex;
         if (navigationIndex != null) _selectPage(navigationIndex);
+        return;
+      case UnifiedCommandPaletteItemKind.action:
+        if (selected.actionId != 'capture-weblink') return;
+        final url = selected.actionValue;
+        if (url == null) return;
+        await _captureCommandWeblink(
+          store: searchContext.store,
+          workspaceId: searchContext.workspaceId,
+          url: url,
+        );
         return;
     }
   }
