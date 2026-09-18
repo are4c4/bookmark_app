@@ -3,6 +3,7 @@ import '../domain/object_history_contract.dart';
 import '../domain/object_history_relation.dart';
 import '../domain/object_history_restore_composition.dart';
 import '../domain/object_history_restore_planner.dart';
+import '../domain/object_model.dart';
 import 'generic_database_store.dart';
 import 'object_body_store.dart';
 import 'object_history_relation_service.dart';
@@ -131,6 +132,34 @@ class ObjectHistoryRestoreExecutor {
           snapshot.propertyId: snapshot,
       };
 
+      // Identity-managed Values are historical evidence, but their owning
+      // lifecycle service remains the only mutation authority. Preflight every
+      // requested Value restore before any A/B mutation so GenericDatabaseStore
+      // cannot silently no-op a changed identity fact and report success.
+      final objectTypeId = await _objectTypeId(historical.entry.objectId);
+      final properties = await _genericStore.listProperties(objectTypeId);
+      final propertiesById = <int, GenericPropertyRecord>{
+        for (final property in properties) property.id: property,
+      };
+      for (final decision in freshPreview.decisions) {
+        if (!decision.needsRestore ||
+            decision.target.kind != ObjectHistoryFieldKind.property) {
+          continue;
+        }
+        final propertyId = decision.target.propertyId!;
+        final property = propertiesById[propertyId];
+        if (property == null) {
+          throw StateError(
+            'Value Property $propertyId is missing during history restore execution.',
+          );
+        }
+        if (ObjectPropertyDefinition.isIdentityManagedConfig(property.config)) {
+          throw StateError(
+            'Identity-managed Value Property $propertyId cannot be changed by generic history restore.',
+          );
+        }
+      }
+
       for (final decision in freshPreview.decisions) {
         if (!decision.needsRestore) continue;
         switch (decision.target.kind) {
@@ -180,6 +209,17 @@ class ObjectHistoryRestoreExecutor {
         changedObjectIds: changedObjectIds,
       );
     });
+  }
+
+  Future<int> _objectTypeId(int objectId) async {
+    final row = await _genericStore.database.customSelect(
+      'SELECT database_id FROM generic_records WHERE id = ? LIMIT 1',
+      variables: <Object>[objectId],
+    ).getSingleOrNull();
+    if (row == null) {
+      throw StateError('Current Object is missing during history restore execution.');
+    }
+    return row.read<int>('database_id');
   }
 }
 
