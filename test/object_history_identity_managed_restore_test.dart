@@ -1,5 +1,6 @@
 import 'package:bookmark_app/data/app_database.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
+import 'package:bookmark_app/data/object_body_store.dart';
 import 'package:bookmark_app/data/object_history_checkpoint_loader.dart';
 import 'package:bookmark_app/data/object_history_restore_executor.dart';
 import 'package:bookmark_app/data/object_history_restore_preparation_service.dart';
@@ -37,11 +38,16 @@ void main() {
         propertyId: mutable.id,
         value: 'current note',
       );
+      await fixture.bodyStore.write(
+        objectId: objectId,
+        document: _body('current body'),
+      );
 
       final historical = _checkpoint(
         objectId: objectId,
         revisionId: 2,
         title: 'Historical title',
+        body: _body('historical body'),
         values: <ObjectPropertyDefinition, dynamic>{
           identity: '2026-09-18',
           mutable: 'historical note',
@@ -51,6 +57,7 @@ void main() {
         objectId: objectId,
         revisionId: 3,
         title: 'Current title',
+        body: _body('current body'),
         values: <ObjectPropertyDefinition, dynamic>{
           identity: '2026-09-19',
           mutable: 'current note',
@@ -84,6 +91,10 @@ void main() {
       expect(preserved.title, 'Current title');
       expect(preserved.values[identity.id], '2026-09-19');
       expect(preserved.values[mutable.id], 'current note');
+      expect(
+        (await fixture.bodyStore.read(objectId)).toJson(),
+        _body('current body').toJson(),
+      );
       expect(relationCalls, 0);
     },
   );
@@ -160,10 +171,15 @@ void main() {
         propertyId: mutable.id,
         value: 'current note',
       );
+      await fixture.bodyStore.write(
+        objectId: objectId,
+        document: _body('current body'),
+      );
       final historical = _checkpoint(
         objectId: objectId,
         revisionId: 2,
         title: 'Historical title',
+        body: _body('historical body'),
         values: <ObjectPropertyDefinition, dynamic>{
           identity: '2026-09-19',
           mutable: 'historical note',
@@ -173,6 +189,7 @@ void main() {
         objectId: objectId,
         revisionId: 3,
         title: 'Current title',
+        body: _body('current body'),
         values: <ObjectPropertyDefinition, dynamic>{
           identity: '2026-09-19',
           mutable: 'current note',
@@ -198,6 +215,10 @@ void main() {
       expect(restored.title, 'Historical title');
       expect(restored.values[identity.id], '2026-09-19');
       expect(restored.values[mutable.id], 'historical note');
+      expect(
+        (await fixture.bodyStore.read(objectId)).toJson(),
+        _body('historical body').toJson(),
+      );
     },
   );
 }
@@ -227,6 +248,7 @@ ObjectHistoryCheckpointPayload _checkpoint({
   required int revisionId,
   required String title,
   required Map<ObjectPropertyDefinition, dynamic> values,
+  ObjectBodyDocument body = const ObjectBodyDocument(),
 }) => ObjectHistoryCheckpointPayload(
   entry: ObjectHistoryEntry(
     objectId: objectId,
@@ -243,7 +265,13 @@ ObjectHistoryCheckpointPayload _checkpoint({
         value: entry.value,
       ),
   ],
-  body: const ObjectBodyDocument(),
+  body: body,
+);
+
+ObjectBodyDocument _body(String text) => ObjectBodyDocument(
+  blocks: <ObjectBodyBlock>[
+    ObjectBodyBlock.paragraph(id: 'paragraph', text: text),
+  ],
 );
 
 class _Fixture {
@@ -251,12 +279,14 @@ class _Fixture {
     required this.database,
     required this.genericStore,
     required this.objectStore,
+    required this.bodyStore,
     required this.objectTypeId,
   });
 
   final AppDatabase database;
   final GenericDatabaseStore genericStore;
   final ObjectStore objectStore;
+  final ObjectBodyStore bodyStore;
   final int objectTypeId;
 
   static Future<_Fixture> create() async {
@@ -264,6 +294,7 @@ class _Fixture {
     final workspaceId = await WorkspaceStore(database).initialize();
     final genericStore = GenericDatabaseStore(database);
     final objectStore = ObjectStore(genericStore);
+    final bodyStore = ObjectBodyStore(genericStore);
     final objectTypeId = await objectStore.createObjectType(
       workspaceId: workspaceId,
       name: 'Daily Note-like',
@@ -272,6 +303,7 @@ class _Fixture {
       database: database,
       genericStore: genericStore,
       objectStore: objectStore,
+      bodyStore: bodyStore,
       objectTypeId: objectTypeId,
     );
   }
