@@ -124,6 +124,8 @@ Future<void> _runWorkflowBenchmark(String profileName) async {
 
 const _scenarioNames = <String>[
   'generic-database-page-load',
+  'canonical-search-prepare-healthy',
   'canonical-object-search',
+  'canonical-search-rebuild',
   'relation-picker-load',
 ];

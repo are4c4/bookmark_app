@@ -8,10 +8,12 @@ It exists to make long-term scaling changes visible before optimization work is 
 `tool/performance_benchmark.dart` builds a deterministic synthetic workspace in an isolated in-memory database and then measures production application boundaries for:
 
 1. Generic Database page-state loading;
-2. canonical Object Search queries after the Search index has been built outside the timed operation;
-3. Relation picker selection/candidate loading.
+2. healthy canonical Search preparation through `ObjectGlobalSearchService.prepareWorkspace()`, starting from an already-built deterministic index;
+3. canonical Object Search queries against that healthy index;
+4. explicit canonical Search rebuild/repair through `ObjectGlobalSearchService.rebuildWorkspace()`;
+5. Relation picker selection/candidate loading.
 
-Fixture creation, schema/bootstrap work and Search index construction are setup costs and are intentionally excluded from scenario timings.
+Fixture creation, schema/bootstrap work and the initial Search index construction are setup costs and are intentionally excluded from scenario timings. The explicit rebuild scenario is the exception: it times the production rebuild boundary on purpose so healthy Search-open preparation is not conflated with repair cost.
 
 ## Profiles
 
