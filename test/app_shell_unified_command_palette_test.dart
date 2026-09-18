@@ -173,7 +173,13 @@ void main() {
     await tester.drag(paletteList, const Offset(0, -600));
     await tester.pumpAndSettle();
 
-    expect(find.text('最近のオブジェクト'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('最近のオブジェクト'),
+      ),
+      findsOneWidget,
+    );
     expect(recentResult, findsOneWidget);
 
     await tester.tap(recentResult);
