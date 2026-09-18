@@ -123,4 +123,63 @@ void main() {
     expect(find.text('Unique command palette article'), findsWidgets);
     expect(find.text('コマンドパレット'), findsNothing);
   });
+
+  testWidgets('empty ⌘K surfaces canonical Recent and opens its Object', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = await _repository(database);
+    final genericStore = GenericDatabaseStore(database);
+    final objectStore = ObjectStore(genericStore);
+    final weblinks = WeblinkObjectService(
+      systemObjects: SystemObjectStore(
+        database: database,
+        objectStore: objectStore,
+      ),
+      defaultsStore: ObjectTypeDefaultsStore(genericStore),
+    );
+    await tester.pumpWidget(_shell(repository));
+    await tester.pumpAndSettle();
+
+    final created = await weblinks.findOrCreate(
+      workspaceId: repository.workspaceId,
+      url: 'https://example.com/recent-command-palette-object',
+      title: 'Recently changed command palette article',
+    );
+    await database.customStatement(
+      "UPDATE generic_records SET updated_at = '2099-01-01 00:00:00' WHERE id = ?",
+      [created.id],
+    );
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+    await tester.pumpAndSettle();
+
+    final recentResult = find.byKey(
+      ValueKey<String>(
+        'unified-command-palette-item-recent-object:${created.id}',
+      ),
+    );
+    final paletteList = find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.byType(ListView),
+    );
+    expect(paletteList, findsOneWidget);
+    await tester.drag(paletteList, const Offset(0, -600));
+    await tester.pumpAndSettle();
+
+    expect(find.text('最近のオブジェクト'), findsOneWidget);
+    expect(recentResult, findsOneWidget);
+
+    await tester.tap(recentResult);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Recently changed command palette article'), findsWidgets);
+    expect(find.text('コマンドパレット'), findsNothing);
+  });
 }
