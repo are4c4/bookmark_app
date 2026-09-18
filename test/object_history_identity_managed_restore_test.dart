@@ -1,10 +1,13 @@
 import 'package:bookmark_app/data/app_database.dart';
+import 'package:bookmark_app/data/bidirectional_relation_store.dart';
 import 'package:bookmark_app/data/generic_database_store.dart';
 import 'package:bookmark_app/data/object_body_store.dart';
 import 'package:bookmark_app/data/object_history_checkpoint_loader.dart';
+import 'package:bookmark_app/data/object_history_relation_service.dart';
 import 'package:bookmark_app/data/object_history_restore_executor.dart';
 import 'package:bookmark_app/data/object_history_restore_preparation_service.dart';
 import 'package:bookmark_app/data/object_store.dart';
+import 'package:bookmark_app/data/relation_mutation_service.dart';
 import 'package:bookmark_app/data/workspace_store.dart';
 import 'package:bookmark_app/domain/object_body.dart';
 import 'package:bookmark_app/domain/object_history_checkpoint.dart';
@@ -27,6 +30,20 @@ void main() {
         identityManaged: true,
       );
       final mutable = await fixture.createValueProperty('Note');
+      final personTypeId = await fixture.createType('Person');
+      final person = await fixture.createRelation(
+        targetObjectTypeId: personTypeId,
+        name: 'Person',
+        multiple: false,
+      );
+      final historicalTarget = await fixture.createObjectForType(
+        personTypeId,
+        'Historical target',
+      );
+      final currentTarget = await fixture.createObjectForType(
+        personTypeId,
+        'Current target',
+      );
       final objectId = await fixture.createObject('Current title');
       await fixture.genericStore.setValue(
         recordId: objectId,
@@ -42,12 +59,28 @@ void main() {
         objectId: objectId,
         document: _body('current body'),
       );
+      await fixture.mutationService.setRelation(
+        objectId: objectId,
+        property: person,
+        targetObjectIds: <int>[historicalTarget],
+      );
+      final historicalRelation = await fixture.historyService.capture(
+        workspaceId: fixture.workspaceId,
+        sourceObjectId: objectId,
+        propertyId: person.id,
+      );
+      await fixture.mutationService.setRelation(
+        objectId: objectId,
+        property: person,
+        targetObjectIds: <int>[currentTarget],
+      );
 
       final historical = _checkpoint(
         objectId: objectId,
         revisionId: 2,
         title: 'Historical title',
         body: _body('historical body'),
+        relations: <ObjectPropertyDefinition>[person],
         values: <ObjectPropertyDefinition, dynamic>{
           identity: '2026-09-18',
           mutable: 'historical note',
@@ -58,20 +91,23 @@ void main() {
         revisionId: 3,
         title: 'Current title',
         body: _body('current body'),
+        relations: <ObjectPropertyDefinition>[person],
         values: <ObjectPropertyDefinition, dynamic>{
           identity: '2026-09-19',
           mutable: 'current note',
         },
       );
+      final relationPlan = await fixture.historyService.previewRestore(
+        workspaceId: fixture.workspaceId,
+        historical: historicalRelation,
+      );
       var relationCalls = 0;
       final executor = ObjectHistoryRestoreExecutor(
         genericStore: fixture.genericStore,
         loadCurrent: () async => current,
-        applyRelationRestore: (_) async {
+        applyRelationRestore: (plan) async {
           relationCalls += 1;
-          return ObjectHistoryRelationRestoreImpact(
-            changedObjectIds: const <int>[],
-          );
+          return fixture.historyService.applyRestore(plan);
         },
       );
 
@@ -81,6 +117,10 @@ void main() {
             historical: historical,
             current: current,
             scope: ObjectHistoryRestoreScope.wholeObject(),
+            relationSnapshots: <ObjectHistoryRelationSnapshot>[
+              historicalRelation,
+            ],
+            relationPlans: <ObjectHistoryRelationRestorePlan>[relationPlan],
           ),
           expectedCurrentRevisionId: 3,
         ),
@@ -95,9 +135,65 @@ void main() {
         (await fixture.bodyStore.read(objectId)).toJson(),
         _body('current body').toJson(),
       );
+      expect(
+        await fixture.relationValue(objectId, person.id),
+        <int>[currentTarget],
+      );
       expect(relationCalls, 0);
     },
   );
+
+  test('malformed current Property config fails closed before mutation', () async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.database.close);
+
+    final mutable = await fixture.createValueProperty('Note');
+    final objectId = await fixture.createObject('Current title');
+    await fixture.genericStore.setValue(
+      recordId: objectId,
+      propertyId: mutable.id,
+      value: 'current note',
+    );
+    await fixture.database.customStatement(
+      'UPDATE generic_properties SET config_json = ? WHERE id = ?',
+      <Object>['{malformed', mutable.id],
+    );
+
+    final historical = _checkpoint(
+      objectId: objectId,
+      revisionId: 2,
+      title: 'Historical title',
+      values: <ObjectPropertyDefinition, dynamic>{mutable: 'historical note'},
+    );
+    final current = _checkpoint(
+      objectId: objectId,
+      revisionId: 3,
+      title: 'Current title',
+      values: <ObjectPropertyDefinition, dynamic>{mutable: 'current note'},
+    );
+    final executor = ObjectHistoryRestoreExecutor(
+      genericStore: fixture.genericStore,
+      loadCurrent: () async => current,
+      applyRelationRestore: (_) async =>
+          ObjectHistoryRelationRestoreImpact(changedObjectIds: const <int>[]),
+    );
+
+    await expectLater(
+      executor.execute(
+        preparation: _preparation(
+          historical: historical,
+          current: current,
+          scope: ObjectHistoryRestoreScope.wholeObject(),
+        ),
+        expectedCurrentRevisionId: 3,
+      ),
+      throwsStateError,
+    );
+
+    final preserved = await fixture.object(objectId);
+    expect(preserved.title, 'Current title');
+    expect(preserved.values[mutable.id], 'current note');
+  });
 
   test('selective changed identity-managed Value restore rejects', () async {
     final fixture = await _Fixture.create();
@@ -227,6 +323,10 @@ ObjectHistoryRestorePreparation _preparation({
   required ObjectHistoryCheckpointPayload historical,
   required ObjectHistoryCheckpointPayload current,
   required ObjectHistoryRestoreScope scope,
+  List<ObjectHistoryRelationSnapshot> relationSnapshots =
+      const <ObjectHistoryRelationSnapshot>[],
+  List<ObjectHistoryRelationRestorePlan> relationPlans =
+      const <ObjectHistoryRelationRestorePlan>[],
 }) {
   final preview = const ObjectHistoryCheckpointRestorePlanner().preview(
     historical: historical,
@@ -236,10 +336,10 @@ ObjectHistoryRestorePreparation _preparation({
   return ObjectHistoryRestorePreparation(
     historical: ObjectHistoryWholeCheckpoint(
       checkpoint: historical,
-      relationSnapshots: const <ObjectHistoryRelationSnapshot>[],
+      relationSnapshots: relationSnapshots,
     ),
     preview: preview,
-    relationPlans: const <ObjectHistoryRelationRestorePlan>[],
+    relationPlans: relationPlans,
   );
 }
 
@@ -249,6 +349,7 @@ ObjectHistoryCheckpointPayload _checkpoint({
   required String title,
   required Map<ObjectPropertyDefinition, dynamic> values,
   ObjectBodyDocument body = const ObjectBodyDocument(),
+  List<ObjectPropertyDefinition> relations = const <ObjectPropertyDefinition>[],
 }) => ObjectHistoryCheckpointPayload(
   entry: ObjectHistoryEntry(
     objectId: objectId,
@@ -266,6 +367,10 @@ ObjectHistoryCheckpointPayload _checkpoint({
       ),
   ],
   body: body,
+  relationRequirements: <ObjectHistoryRelationRequirement>[
+    for (final relation in relations)
+      ObjectHistoryRelationRequirement.fromDefinition(relation),
+  ],
 );
 
 ObjectBodyDocument _body(String text) => ObjectBodyDocument(
@@ -277,16 +382,24 @@ ObjectBodyDocument _body(String text) => ObjectBodyDocument(
 class _Fixture {
   _Fixture({
     required this.database,
+    required this.workspaceId,
     required this.genericStore,
     required this.objectStore,
     required this.bodyStore,
+    required this.bidirectionalStore,
+    required this.mutationService,
+    required this.historyService,
     required this.objectTypeId,
   });
 
   final AppDatabase database;
+  final int workspaceId;
   final GenericDatabaseStore genericStore;
   final ObjectStore objectStore;
   final ObjectBodyStore bodyStore;
+  final BidirectionalRelationStore bidirectionalStore;
+  final RelationMutationService mutationService;
+  final ObjectHistoryRelationService historyService;
   final int objectTypeId;
 
   static Future<_Fixture> create() async {
@@ -295,17 +408,57 @@ class _Fixture {
     final genericStore = GenericDatabaseStore(database);
     final objectStore = ObjectStore(genericStore);
     final bodyStore = ObjectBodyStore(genericStore);
+    final bidirectionalStore = BidirectionalRelationStore(
+      genericStore: genericStore,
+      objectStore: objectStore,
+    );
+    final mutationService = RelationMutationService(
+      objectStore: objectStore,
+      bidirectionalStore: bidirectionalStore,
+      genericStore: genericStore,
+    );
+    final historyService = ObjectHistoryRelationService(
+      objectStore: objectStore,
+      bidirectionalStore: bidirectionalStore,
+      mutationService: mutationService,
+      genericStore: genericStore,
+    );
     final objectTypeId = await objectStore.createObjectType(
       workspaceId: workspaceId,
       name: 'Daily Note-like',
     );
     return _Fixture(
       database: database,
+      workspaceId: workspaceId,
       genericStore: genericStore,
       objectStore: objectStore,
       bodyStore: bodyStore,
+      bidirectionalStore: bidirectionalStore,
+      mutationService: mutationService,
+      historyService: historyService,
       objectTypeId: objectTypeId,
     );
+  }
+
+  Future<int> createType(String name) =>
+      objectStore.createObjectType(workspaceId: workspaceId, name: name);
+
+  Future<int> createObjectForType(int typeId, String title) =>
+      objectStore.createObject(objectTypeId: typeId, title: title);
+
+  Future<ObjectPropertyDefinition> createRelation({
+    required int targetObjectTypeId,
+    required String name,
+    required bool multiple,
+  }) async {
+    final propertyId = await objectStore.createRelationProperty(
+      objectTypeId: objectTypeId,
+      name: name,
+      targetObjectTypeId: targetObjectTypeId,
+      multiple: multiple,
+    );
+    return (await objectStore.getObjectType(objectTypeId))!.properties
+        .singleWhere((property) => property.id == propertyId);
   }
 
   Future<ObjectPropertyDefinition> createValueProperty(
@@ -332,4 +485,9 @@ class _Fixture {
   Future<AppObject> object(int objectId) async =>
       (await objectStore.listObjects(objectTypeId))
           .singleWhere((object) => object.id == objectId);
+
+  Future<List<int>> relationValue(int objectId, int propertyId) async {
+    final current = await object(objectId);
+    return ObjectRelationValue.fromJson(current.values[propertyId]).objectIds;
+  }
 }
