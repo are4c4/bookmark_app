@@ -417,16 +417,14 @@ void main() {
       expect(tester.widget<ListTile>(action).selected, isTrue);
 
       await tester.pump(const Duration(milliseconds: 180));
-      searchCompleter.complete(
-        const <UnifiedCommandPaletteItem>[
-          UnifiedCommandPaletteItem(
-            keyName: 'object:99',
-            kind: UnifiedCommandPaletteItemKind.object,
-            label: 'Search result',
-            objectId: 99,
-          ),
-        ],
-      );
+      searchCompleter.complete(const <UnifiedCommandPaletteItem>[
+        UnifiedCommandPaletteItem(
+          keyName: 'object:99',
+          kind: UnifiedCommandPaletteItemKind.object,
+          label: 'Search result',
+          objectId: 99,
+        ),
+      ]);
       await tester.pump();
       expect(tester.widget<ListTile>(action).selected, isTrue);
 
@@ -438,5 +436,4 @@ void main() {
       expect(selected?.actionValue, 'https://example.com/from-palette');
     },
   );
-
 }
