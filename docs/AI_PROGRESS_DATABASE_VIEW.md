@@ -40,13 +40,20 @@ Responsive Property labels, quiet empty-scalar handling, the reusable reveal sec
 Replace ordinary modal rename friction with a shared direct inline title editor across editable full-page and peek/detail Object surfaces. Preserve canonical Object mutation/validation and read-only system-title cases.
 
 ### #1344 — unified ⌘K
-PR #1517 is integrated: ⌘K now composes existing shell/Database destinations with canonical Object Search, reuses Search-owned `prepareWorkspace()` for first-use readiness, opens results through the shared Object Inspector, preserves deterministic keyboard selection, and keeps full Search reachable after Search failure. This checkpoint must not be reopened as a second Search implementation.
+PR #1517 is integrated: ⌘K composes existing shell/Database destinations with canonical Object Search, reuses Search-owned `prepareWorkspace()` for first-use readiness, opens results through the shared Object Inspector, preserves deterministic keyboard selection, and keeps full Search reachable after Search failure. This checkpoint must not be reopened as a second Search implementation.
 
-#1344 intentionally remains open for the two still-unfinished focused product slices:
-- recently used Objects, sourced from an existing canonical recent-object reader rather than palette-local history persistence;
-- a small set of safe common actions such as canonical URL capture/new Object only where existing creation/capture authorities can be composed without making AppShell a new mutation engine.
+#1524 / PR #1527 is also integrated:
+- empty-query ⌘K loads canonical recently changed Objects through the existing `HomeRecentService`;
+- Recent loading is asynchronous and fail-soft, so opening the palette and existing navigation/Search do not depend on it;
+- Recent is visible only while the query is empty; typed queries remain owned by canonical Object Search;
+- async Recent arrival preserves the existing stable-key keyboard selection;
+- Recent activation reuses the same shared Object Inspector/return-refresh path as searched Objects;
+- transition-only mirrored Bookmark Objects remain excluded through the existing Home Recent contract;
+- no palette-local recently-opened history, cache authority, Search index, schema or migration was added.
 
-Do not create a second Search index, recent-history store, Bookmark/People-specific command engine, or new persistence authority.
+#1344 remains open for only one focused product slice: a small set of safe common actions such as canonical URL capture/new Object, and only where existing creation/capture authorities can be composed without making AppShell a new mutation engine.
+
+Do not rebuild #1517 or #1524/#1527. Do not create a second Search index, recent-history store, Bookmark/People-specific command engine, or new persistence authority.
 
 ### #1361 — shared keyboard/focus/accessibility contract
 Treat keyboard/focus/semantics as product UX, not optional polish. Cover representative shared surfaces and coordinate with #1344/#1345/#1491 so each focused slice can contribute evidence without turning #1361 into one broad hotspot rewrite.
@@ -94,6 +101,7 @@ Move ordinary saved-URL use to canonical Weblink Objects through generic Databas
 - relation-aware Property authoring/schema editing through canonical services;
 - generic Gallery cover sources and media rendering;
 - generic Database sidebar/command-palette navigation;
+- unified ⌘K navigation + canonical Object Search + canonical Home Recent composition from #1517 and #1524/#1527;
 - canonical Images/Weblinks/Daily Notes/People system collection defaults;
 - normal generic Person create, Relation-picker quick-create and Board-create routed through canonical Person authority;
 - People group lifecycle/membership transition writes routed through canonical Object/Relation boundaries;
@@ -103,7 +111,7 @@ Move ordinary saved-URL use to canonical Weblink Objects through generic Databas
 - Home start routing with canonical recently-changed Object projection, transition-only Bookmark mirror suppression and canonical Weblink quick capture;
 - completed canonical hierarchy-aware Tag Database/View query runtime from #1053 using B's #1052/#1105 integrity/read contracts.
 
-Older statements that A/#1044, B/#1045, or E/#1178 are unresolved blockers for C are obsolete. Older statements that Person collection/create/Relation-picker/Board-create, People group canonicalization, Profile Image edit composition, shell Person routing, or Home canonical URL capture still need to be built are also obsolete. #1046/#1061 remain open for the parity/contracts explicitly listed above.
+Older statements that A/#1044, B/#1045, or E/#1178 are unresolved blockers for C are obsolete. Older statements that Person collection/create/Relation-picker/Board-create, People group canonicalization, Profile Image edit composition, shell Person routing, Home canonical URL capture, command-palette canonical Object Search, or command-palette canonical Recent still need to be built are also obsolete. #1046/#1061/#1344 remain open only for the parity/contracts explicitly listed above.
 
 ## Cross-lane boundaries
 - **A:** Object/ObjectType identity/lifecycle, Body, Person/Bookmark migration authority. C consumes completed #1044 rather than recreating Person write identity.
