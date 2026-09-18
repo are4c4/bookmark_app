@@ -157,6 +157,12 @@ Future<PerformanceBenchmarkReport> runPerformanceBenchmark({
       },
     );
 
+    final searchPrepareSamples = await _measure(
+      warmups: warmups,
+      samples: samples,
+      operation: () => fixture.search.prepareWorkspace(fixture.workspaceId),
+    );
+
     final searchSamples = await _measure(
       warmups: warmups,
       samples: samples,
@@ -169,6 +175,12 @@ Future<PerformanceBenchmarkReport> runPerformanceBenchmark({
           throw StateError('Search benchmark returned no deterministic hits.');
         }
       },
+    );
+
+    final searchRebuildSamples = await _measure(
+      warmups: warmups,
+      samples: samples,
+      operation: () => fixture.search.rebuildWorkspace(fixture.workspaceId),
     );
 
     final relationPickerSamples = await _measure(
@@ -200,8 +212,16 @@ Future<PerformanceBenchmarkReport> runPerformanceBenchmark({
           samplesMicros: pageLoadSamples,
         ),
         BenchmarkScenarioResult(
+          name: 'canonical-search-prepare-healthy',
+          samplesMicros: searchPrepareSamples,
+        ),
+        BenchmarkScenarioResult(
           name: 'canonical-object-search',
           samplesMicros: searchSamples,
+        ),
+        BenchmarkScenarioResult(
+          name: 'canonical-search-rebuild',
+          samplesMicros: searchRebuildSamples,
         ),
         BenchmarkScenarioResult(
           name: 'relation-picker-load',
