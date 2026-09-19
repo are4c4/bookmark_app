@@ -96,6 +96,43 @@ void main() {
     return (sourceId: sourceId, property: property);
   }
 
+  test('empty Tag search follows canonical hierarchy preorder instead of title order', () async {
+    final zoo = await createTag('Zoo');
+    final alphaChild = await createTag('Alpha child', parentObjectId: zoo);
+    final apple = await createTag('Apple');
+    final zuluChild = await createTag('Zulu child', parentObjectId: apple);
+    final duplicateA = await createTag('Same', parentObjectId: apple);
+    final duplicateB = await createTag('Same', parentObjectId: apple);
+    final source = await createSourceRelation(tagSchema.objectType.id);
+    final context = await service.load(
+      workspaceId: workspaceId,
+      sourceObjectId: source.sourceId,
+      property: source.property,
+    );
+
+    final results = await service.searchCandidates(context: context, query: '');
+
+    expect(results.map((result) => result.objectId), <int>[
+      apple,
+      duplicateA,
+      duplicateB,
+      zuluChild,
+      zoo,
+      alphaChild,
+    ]);
+    expect(
+      {for (final result in results) result.objectId: result.aliasContext},
+      <int, String?>{
+        apple: null,
+        duplicateA: 'Apple › Same',
+        duplicateB: 'Apple › Same',
+        zuluChild: 'Apple › Zulu child',
+        zoo: null,
+        alphaChild: 'Zoo › Alpha child',
+      },
+    );
+  });
+
   test(
     'Tag candidates expose canonical hierarchy paths for ambiguous titles',
     () async {
@@ -116,6 +153,11 @@ void main() {
         query: '数論',
       );
 
+      expect(
+        results.map((result) => result.objectId),
+        <int>[numberTheory, geometricTheory],
+        reason: 'typed identity-search ranking must not become tree ordering',
+      );
       expect(
         {for (final result in results) result.objectId: result.aliasContext},
         <int, String?>{
@@ -156,6 +198,35 @@ void main() {
       expect(alias.single.aliasContext, '数学 › 代数学 › 数論 · 別名: NT');
     },
   );
+
+  test('non-Tag empty search keeps existing title ordering', () async {
+    final personTypeId = await objectStore.createObjectType(
+      workspaceId: workspaceId,
+      name: 'Person',
+    );
+    final zuluId = await objectStore.createObject(
+      objectTypeId: personTypeId,
+      title: 'Zulu',
+    );
+    final alphaId = await objectStore.createObject(
+      objectTypeId: personTypeId,
+      title: 'Alpha',
+    );
+    final source = await createSourceRelation(personTypeId);
+    final context = await service.load(
+      workspaceId: workspaceId,
+      sourceObjectId: source.sourceId,
+      property: source.property,
+    );
+
+    final results = await service.searchCandidates(context: context, query: '');
+
+    expect(results.map((result) => result.objectId), <int>[alphaId, zuluId]);
+    expect(
+      results.every((result) => result.presentationContext == null),
+      isTrue,
+    );
+  });
 
   test('non-Tag Relation search keeps existing alias presentation', () async {
     final personTypeId = await objectStore.createObjectType(
