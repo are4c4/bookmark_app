@@ -67,6 +67,7 @@ class ObjectRelationEditorService {
       await _withCanonicalTagHierarchyContext(
         context: context,
         results: scoped,
+        orderByHierarchy: query.trim().isEmpty,
       ),
     );
   }
@@ -74,6 +75,7 @@ class ObjectRelationEditorService {
   Future<List<ObjectIdentitySearchResult>> _withCanonicalTagHierarchyContext({
     required RelationSelectionContext context,
     required List<ObjectIdentitySearchResult> results,
+    required bool orderByHierarchy,
   }) async {
     if (results.isEmpty ||
         context.targetObjectType.kind != ObjectTypeKind.system) {
@@ -118,7 +120,7 @@ class ObjectRelationEditorService {
     );
     final tagsById = <int, AppObject>{for (final tag in tags) tag.id: tag};
 
-    return results
+    final presented = results
         .map(
           (result) => ObjectIdentitySearchResult(
             object: result.object,
@@ -133,9 +135,64 @@ class ObjectRelationEditorService {
           ),
         )
         .toList(growable: false);
+    if (orderByHierarchy) {
+      presented.sort(
+        (left, right) => _compareTagHierarchyOrder(
+          leftObjectId: left.objectId,
+          rightObjectId: right.objectId,
+          snapshot: snapshot,
+          tagsById: tagsById,
+        ),
+      );
+    }
+    return presented;
+  }
+
+  int _compareTagHierarchyOrder({
+    required int leftObjectId,
+    required int rightObjectId,
+    required TagHierarchySnapshot snapshot,
+    required Map<int, AppObject> tagsById,
+  }) {
+    final leftPath = _tagPathObjectIds(
+      objectId: leftObjectId,
+      snapshot: snapshot,
+      tagsById: tagsById,
+    );
+    final rightPath = _tagPathObjectIds(
+      objectId: rightObjectId,
+      snapshot: snapshot,
+      tagsById: tagsById,
+    );
+    final sharedLength = leftPath.length < rightPath.length
+        ? leftPath.length
+        : rightPath.length;
+    for (var index = 0; index < sharedLength; index += 1) {
+      final left = tagsById[leftPath[index]]!;
+      final right = tagsById[rightPath[index]]!;
+      final titleOrder = left.title.compareTo(right.title);
+      if (titleOrder != 0) return titleOrder;
+      final idOrder = left.id.compareTo(right.id);
+      if (idOrder != 0) return idOrder;
+    }
+    return leftPath.length.compareTo(rightPath.length);
   }
 
   String? _tagPath({
+    required int objectId,
+    required TagHierarchySnapshot snapshot,
+    required Map<int, AppObject> tagsById,
+  }) {
+    final path = _tagPathObjectIds(
+      objectId: objectId,
+      snapshot: snapshot,
+      tagsById: tagsById,
+    );
+    if (path.length <= 1) return null;
+    return path.map((id) => tagsById[id]!.title).join(' › ');
+  }
+
+  List<int> _tagPathObjectIds({
     required int objectId,
     required TagHierarchySnapshot snapshot,
     required Map<int, AppObject> tagsById,
@@ -146,25 +203,23 @@ class ObjectRelationEditorService {
       );
     }
 
-    final chain = <String>[];
+    final chain = <int>[];
     int? current = objectId;
     final visited = <int>{};
     while (current != null) {
       if (!visited.add(current)) {
         throw StateError('Canonical Tag hierarchy contains a cycle.');
       }
-      final tag = tagsById[current];
-      if (tag == null || !snapshot.parentByTagObjectId.containsKey(current)) {
+      if (tagsById[current] == null ||
+          !snapshot.parentByTagObjectId.containsKey(current)) {
         throw StateError(
           'Canonical Tag hierarchy references a missing Tag Object.',
         );
       }
-      chain.add(tag.title);
+      chain.add(current);
       current = snapshot.parentByTagObjectId[current];
     }
-
-    if (chain.length <= 1) return null;
-    return chain.reversed.join(' › ');
+    return chain.reversed.toList(growable: false);
   }
 
   /// Persists an explicit user selection resolved from [load].
