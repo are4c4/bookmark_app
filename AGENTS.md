@@ -177,6 +177,8 @@ A fresh H chat should be able to resume with only `Hレーンとして作業を�
 
 - Identify exactly one primary A–G implementation lane before product/runtime editing. H is valid only for oversight/coordination work within its contract.
 - One focused Issue has one active implementation owner/branch/PR. Umbrellas may have many focused child Issues.
+- If duplicate active implementation PRs nevertheless appear for one focused Issue, all involved A–G owners stop as `conflict` and **must not independently close/reopen the competing PRs or decide ownership from PR number/chronology alone**. Route the conflict to H. H compares live main, focused acceptance coverage, latest-main freshness, hotspot/migration ownership and preservation/correctness evidence, selects exactly one active owner, and records that decision on the focused Issue/PRs before non-selected PRs are closed as superseded.
+- A PR closed as superseded by that H arbitration stays non-owning. An A–G lane must not automatically reopen it merely because its local branch has useful changes; fold useful evidence into the selected owner or route materially new evidence back to H for an explicit revised arbitration.
 - Do not modify another lane's progress file except for a repository-wide coordination/architecture change or an explicit cross-lane dependency.
 - Split cross-lane work by coherent acceptance slices and sequence dependencies.
 - Before non-trivial edits to shared hotspots such as `generic_database_page.dart`, `app_shell.dart`, `object_inspector_page.dart`, `bookmark_unified_stage1_page.dart`, `bookmark_reorderable_properties.dart`, `people_management_page.dart`, `settings_page.dart`, `profile_manager.dart`, or `app_database.dart`, inspect current open PR ownership.
