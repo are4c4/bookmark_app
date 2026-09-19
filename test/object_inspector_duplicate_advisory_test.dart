@@ -87,13 +87,17 @@ void main() {
       findsNothing,
     );
 
-    await tester.tap(find.byKey(const ValueKey('object-title-edit-button')));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const ValueKey('object-title-edit-field')),
-      'Shared',
+    final titleEditor = find.byKey(
+      ValueKey('object-title-inline-editor-$sourceId'),
     );
-    await tester.tap(find.byKey(const ValueKey('object-title-edit-save')));
+    final titleField = find.descendant(
+      of: titleEditor,
+      matching: find.byKey(const ValueKey('object-inline-title-field')),
+    );
+    expect(titleEditor, findsOneWidget);
+    await tester.tap(titleField);
+    await tester.enterText(titleField, 'Shared');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
 
     expect(
@@ -101,13 +105,9 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(find.byKey(const ValueKey('object-title-edit-button')));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const ValueKey('object-title-edit-field')),
-      'Unique',
-    );
-    await tester.tap(find.byKey(const ValueKey('object-title-edit-save')));
+    await tester.tap(titleField);
+    await tester.enterText(titleField, 'Unique');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
     expect(
       find.byKey(const ValueKey('object-duplicate-advisory')),
@@ -219,13 +219,13 @@ void main() {
       "UPDATE object_aliases SET position = 'broken' WHERE object_id = ?",
       [candidateId],
     );
-    await tester.tap(find.byKey(const ValueKey('object-title-edit-button')));
+    await tester.tap(find.byKey(const ValueKey('object-alias-add-button')));
     await tester.pumpAndSettle();
     await tester.enterText(
-      find.byKey(const ValueKey('object-title-edit-field')),
-      'Stable Detail',
+      find.byKey(const ValueKey('object-alias-add-field')),
+      'Still usable',
     );
-    await tester.tap(find.byKey(const ValueKey('object-title-edit-save')));
+    await tester.tap(find.byKey(const ValueKey('object-alias-add-save')));
     await tester.pumpAndSettle();
 
     expect(find.text('Stable Detail'), findsWidgets);

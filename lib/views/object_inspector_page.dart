@@ -56,6 +56,7 @@ import '../features/object/presentation/widgets/object_body_object_reference_pic
 import '../features/object/presentation/widgets/object_detail_property_view.dart';
 import '../features/object/presentation/widgets/object_duplicate_advisory_section.dart';
 import '../features/object/presentation/widgets/object_file_detail_panel_host.dart';
+import '../features/object/presentation/widgets/object_inline_title_editor.dart';
 import '../features/object/presentation/widgets/object_image_detail_panel.dart';
 import '../features/object/presentation/widgets/object_merge_review_dialog.dart';
 import '../services/canonical_file_detail_capabilities.dart';
@@ -728,55 +729,26 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
     }
   }
 
-  Future<void> _editTitle(
-    ObjectGraphNodeRecord node,
-    ObjectDetailContent content,
-  ) async {
-    if (node.isSystemType && !_isEditableImage && !_isPerson) return;
-    var value = content.object.title;
-    final result = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Object名を変更'),
-        content: TextFormField(
-          key: const ValueKey('object-title-edit-field'),
-          initialValue: value,
-          autofocus: true,
-          onChanged: (text) => value = text,
-          onFieldSubmitted: (_) =>
-              Navigator.pop(dialogContext, value.trim()),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('キャンセル'),
-          ),
-          FilledButton(
-            key: const ValueKey('object-title-edit-save'),
-            onPressed: () => Navigator.pop(dialogContext, value.trim()),
-            child: const Text('保存'),
-          ),
-        ],
-      ),
-    );
-    if (result == null || result.trim().isEmpty) return;
+  Future<void> _saveTitle(ObjectDetailContent content, String title) async {
     try {
       final updated = _isPerson
-          ? await _personDetailEdits.rename(content: content, title: result)
-          : await _editService.rename(content: content, title: result);
+          ? await _personDetailEdits.rename(content: content, title: title)
+          : await _editService.rename(content: content, title: title);
       if (mounted) {
         setState(() => _content = updated);
         await _reloadDuplicateAdvisory();
       }
     } catch (_) {
-      if (!mounted) return;
-      if (_isPerson) {
-        _showPersonEditError();
-        return;
+      if (mounted) {
+        if (_isPerson) {
+          _showPersonEditError();
+        } else {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Object名を変更できませんでした。')));
+        }
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Object名を変更できませんでした。')),
-      );
+      rethrow;
     }
   }
 
@@ -988,6 +960,7 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
     final type = content.objectType;
     final dailyNoteDate = _isDailyNote ? _dailyNoteDate(content) : null;
     final canEditBody = _canEditBody(node);
+    final canEditTitle = !node.isSystemType || _isEditableImage || _isPerson;
 
     return Scaffold(
       appBar: AppBar(
@@ -1014,26 +987,21 @@ class _ObjectInspectorPageState extends State<ObjectInspectorPage> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(24, 24, 24, 48),
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Text(
-                  object.title,
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                ),
-              ),
-              if (!node.isSystemType || _isEditableImage || _isPerson)
-                IconButton(
-                  key: const ValueKey('object-title-edit-button'),
-                  tooltip: 'Object名を変更',
-                  onPressed: () => _editTitle(node, content),
-                  icon: const Icon(Icons.edit_outlined, size: 18),
-                ),
-            ],
-          ),
+          if (canEditTitle)
+            ObjectInlineTitleEditor(
+              key: ValueKey('object-title-inline-editor-${object.id}'),
+              value: object.title,
+              style: Theme.of(context).textTheme.headlineMedium
+                  ?.copyWith(fontWeight: FontWeight.w700),
+              onSaved: (value) => _saveTitle(content, value),
+            )
+          else
+            Text(
+              object.title,
+              key: ValueKey('object-title-read-only-${object.id}'),
+              style: Theme.of(context).textTheme.headlineMedium
+                  ?.copyWith(fontWeight: FontWeight.w700),
+            ),
           if (!node.isSystemType || _aliases.isNotEmpty) ...[
             const SizedBox(height: 12),
             ObjectAliasEditor(

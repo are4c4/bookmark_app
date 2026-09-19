@@ -36,6 +36,7 @@ import '../features/database/presentation/widgets/resizable_detail_pane.dart';
 import '../features/database/presentation/widgets/system_object_list_media.dart';
 import '../features/object/presentation/object_open_presentation_host.dart';
 import '../features/object/presentation/widgets/object_body_editor_section.dart';
+import '../features/object/presentation/widgets/object_inline_title_editor.dart';
 import '../features/object/presentation/widgets/object_detail_property_view.dart';
 import '../widgets/database_collection_settings_dialog.dart';
 import '../widgets/database_gallery_view_cover_media.dart';
@@ -1908,7 +1909,8 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(20, 18, 20, 48),
               children: [
-                NotionInlineField(
+                ObjectInlineTitleEditor(
+                  key: ValueKey('side-peek-title-editor-${record.id}'),
                   value: record.title,
                   hintText: '名前',
                   style: const TextStyle(
@@ -1918,6 +1920,12 @@ class _GenericDatabasePageState extends State<GenericDatabasePage> {
                   onSaved: (value) async {
                     await _store.renameRecord(record.id, value);
                     await _reload();
+                  },
+                  onSaveError: (_) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Object名を変更できませんでした。')),
+                    );
                   },
                 ),
                 const SizedBox(height: 18),
