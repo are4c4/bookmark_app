@@ -22,7 +22,24 @@ class ObjectDetailPropertyRevealSection extends StatefulWidget {
 
 class _ObjectDetailPropertyRevealSectionState
     extends State<ObjectDetailPropertyRevealSection> {
+  final FocusNode _toggleFocusNode = FocusNode();
   bool _showEmpty = false;
+
+  @override
+  void dispose() {
+    _toggleFocusNode.dispose();
+    super.dispose();
+  }
+
+  void _setShowEmpty(bool value) {
+    final hadFocus = _toggleFocusNode.hasFocus;
+    setState(() => _showEmpty = value);
+    if (hadFocus) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _toggleFocusNode.requestFocus();
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,7 +53,8 @@ class _ObjectDetailPropertyRevealSectionState
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
               key: const ValueKey('object-detail-show-empty-properties'),
-              onPressed: () => setState(() => _showEmpty = true),
+              focusNode: _toggleFocusNode,
+              onPressed: () => _setShowEmpty(true),
               icon: const Icon(Icons.unfold_more, size: 16),
               label: Text('空のプロパティを表示 (${widget.emptyChildren.length})'),
             ),
@@ -47,7 +65,8 @@ class _ObjectDetailPropertyRevealSectionState
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
               key: const ValueKey('object-detail-hide-empty-properties'),
-              onPressed: () => setState(() => _showEmpty = false),
+              focusNode: _toggleFocusNode,
+              onPressed: () => _setShowEmpty(false),
               icon: const Icon(Icons.unfold_less, size: 16),
               label: const Text('空のプロパティを隠す'),
             ),
