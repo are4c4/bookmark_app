@@ -25,21 +25,38 @@ void main() {
 
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.pump();
+    expect(
+      tester.widget<TextButton>(
+        find.byKey(const ValueKey('object-detail-show-empty-properties')),
+      ).focusNode?.hasFocus,
+      isTrue,
+    );
+
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pump();
 
     expect(find.text('Site name'), findsOneWidget);
     expect(find.text('Published date'), findsOneWidget);
     expect(find.text('空のプロパティを隠す'), findsOneWidget);
-
-    await tester.tap(
-      find.byKey(const ValueKey('object-detail-hide-empty-properties')),
+    expect(
+      tester.widget<TextButton>(
+        find.byKey(const ValueKey('object-detail-hide-empty-properties')),
+      ).focusNode?.hasFocus,
+      isTrue,
     );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pump();
 
     expect(find.text('Site name'), findsNothing);
     expect(find.text('Published date'), findsNothing);
     expect(find.text('空のプロパティを表示 (2)'), findsOneWidget);
+    expect(
+      tester.widget<TextButton>(
+        find.byKey(const ValueKey('object-detail-show-empty-properties')),
+      ).focusNode?.hasFocus,
+      isTrue,
+    );
   });
 
   testWidgets('does not render a reveal control when there are no empty rows', (
