@@ -219,17 +219,13 @@ void main() {
       "UPDATE object_aliases SET position = 'broken' WHERE object_id = ?",
       [candidateId],
     );
-    final titleEditor = find.byKey(
-      ValueKey('object-title-inline-editor-$sourceId'),
+    await tester.tap(find.byKey(const ValueKey('object-alias-add-button')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('object-alias-add-field')),
+      'Still usable',
     );
-    final titleField = find.descendant(
-      of: titleEditor,
-      matching: find.byKey(const ValueKey('object-inline-title-field')),
-    );
-    expect(titleEditor, findsOneWidget);
-    await tester.tap(titleField);
-    await tester.enterText(titleField, 'Stable Detail');
-    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.tap(find.byKey(const ValueKey('object-alias-add-save')));
     await tester.pumpAndSettle();
 
     expect(find.text('Stable Detail'), findsWidgets);
