@@ -107,7 +107,7 @@ void main() {
     await tester.tap(titleField);
     await tester.enterText(titleField, 'Edited image');
     await tester.testTextInput.receiveAction(TextInputAction.done);
-    await tester.pumpAndSettle();
+    await tester.pump();
 
     final noteId = definition.noteProperty.id;
     await tester.tap(find.byKey(ValueKey('edit-object-value-$noteId')));
