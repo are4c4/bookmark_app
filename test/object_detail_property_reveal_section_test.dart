@@ -26,9 +26,12 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.pump();
     expect(
-      tester.widget<TextButton>(
-        find.byKey(const ValueKey('object-detail-show-empty-properties')),
-      ).focusNode?.hasFocus,
+      tester
+          .widget<TextButton>(
+            find.byKey(const ValueKey('object-detail-show-empty-properties')),
+          )
+          .focusNode
+          ?.hasFocus,
       isTrue,
     );
 
@@ -39,9 +42,12 @@ void main() {
     expect(find.text('Published date'), findsOneWidget);
     expect(find.text('空のプロパティを隠す'), findsOneWidget);
     expect(
-      tester.widget<TextButton>(
-        find.byKey(const ValueKey('object-detail-hide-empty-properties')),
-      ).focusNode?.hasFocus,
+      tester
+          .widget<TextButton>(
+            find.byKey(const ValueKey('object-detail-hide-empty-properties')),
+          )
+          .focusNode
+          ?.hasFocus,
       isTrue,
     );
 
@@ -52,9 +58,12 @@ void main() {
     expect(find.text('Published date'), findsNothing);
     expect(find.text('空のプロパティを表示 (2)'), findsOneWidget);
     expect(
-      tester.widget<TextButton>(
-        find.byKey(const ValueKey('object-detail-show-empty-properties')),
-      ).focusNode?.hasFocus,
+      tester
+          .widget<TextButton>(
+            find.byKey(const ValueKey('object-detail-show-empty-properties')),
+          )
+          .focusNode
+          ?.hasFocus,
       isTrue,
     );
   });
