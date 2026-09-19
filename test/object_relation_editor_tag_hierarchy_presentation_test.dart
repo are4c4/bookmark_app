@@ -153,11 +153,10 @@ void main() {
         query: '数論',
       );
 
-      expect(
-        results.map((result) => result.objectId),
-        <int>[numberTheory, geometricTheory],
-        reason: 'typed identity-search ranking must not become tree ordering',
-      );
+      expect(results.map((result) => result.objectId), <int>[
+        numberTheory,
+        geometricTheory,
+      ], reason: 'typed identity-search ranking must not become tree ordering');
       expect(
         {for (final result in results) result.objectId: result.aliasContext},
         <int, String?>{
