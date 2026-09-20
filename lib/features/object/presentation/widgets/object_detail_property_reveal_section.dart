@@ -51,24 +51,32 @@ class _ObjectDetailPropertyRevealSectionState
         if (hasEmpty && !_showEmpty)
           Align(
             alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              key: const ValueKey('object-detail-show-empty-properties'),
-              focusNode: _toggleFocusNode,
-              onPressed: () => _setShowEmpty(true),
-              icon: const Icon(Icons.unfold_more, size: 16),
-              label: Text('空のプロパティを表示 (${widget.emptyChildren.length})'),
+            child: Semantics(
+              key: const ValueKey('object-detail-empty-properties-disclosure'),
+              expanded: false,
+              child: TextButton.icon(
+                key: const ValueKey('object-detail-show-empty-properties'),
+                focusNode: _toggleFocusNode,
+                onPressed: () => _setShowEmpty(true),
+                icon: const Icon(Icons.unfold_more, size: 16),
+                label: Text('空のプロパティを表示 (${widget.emptyChildren.length})'),
+              ),
             ),
           ),
         if (hasEmpty && _showEmpty) ...[
           ...widget.emptyChildren,
           Align(
             alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              key: const ValueKey('object-detail-hide-empty-properties'),
-              focusNode: _toggleFocusNode,
-              onPressed: () => _setShowEmpty(false),
-              icon: const Icon(Icons.unfold_less, size: 16),
-              label: const Text('空のプロパティを隠す'),
+            child: Semantics(
+              key: const ValueKey('object-detail-empty-properties-disclosure'),
+              expanded: true,
+              child: TextButton.icon(
+                key: const ValueKey('object-detail-hide-empty-properties'),
+                focusNode: _toggleFocusNode,
+                onPressed: () => _setShowEmpty(false),
+                icon: const Icon(Icons.unfold_less, size: 16),
+                label: const Text('空のプロパティを隠す'),
+              ),
             ),
           ),
         ],
