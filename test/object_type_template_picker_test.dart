@@ -142,8 +142,9 @@ void main() {
     expect((result as TemplateObjectTypeChoice).template.key, 'plant');
   });
 
-  testWidgets('Enter does not guess when template search is ambiguous',
-      (tester) async {
+  testWidgets('Enter does not guess when template search is ambiguous', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       const MaterialApp(home: Scaffold(body: ObjectTypeTemplatePickerDialog())),
     );
