@@ -22,6 +22,17 @@ void main() {
     expect(find.text('Site name'), findsNothing);
     expect(find.text('Published date'), findsNothing);
     expect(find.text('空のプロパティを表示 (2)'), findsOneWidget);
+    expect(
+      tester
+          .widget<Semantics>(
+            find.byKey(
+              const ValueKey('object-detail-empty-properties-disclosure'),
+            ),
+          )
+          .properties
+          .expanded,
+      isFalse,
+    );
 
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.pump();
@@ -43,6 +54,17 @@ void main() {
     expect(find.text('空のプロパティを隠す'), findsOneWidget);
     expect(
       tester
+          .widget<Semantics>(
+            find.byKey(
+              const ValueKey('object-detail-empty-properties-disclosure'),
+            ),
+          )
+          .properties
+          .expanded,
+      isTrue,
+    );
+    expect(
+      tester
           .widget<TextButton>(
             find.byKey(const ValueKey('object-detail-hide-empty-properties')),
           )
@@ -57,6 +79,17 @@ void main() {
     expect(find.text('Site name'), findsNothing);
     expect(find.text('Published date'), findsNothing);
     expect(find.text('空のプロパティを表示 (2)'), findsOneWidget);
+    expect(
+      tester
+          .widget<Semantics>(
+            find.byKey(
+              const ValueKey('object-detail-empty-properties-disclosure'),
+            ),
+          )
+          .properties
+          .expanded,
+      isFalse,
+    );
     expect(
       tester
           .widget<TextButton>(
@@ -85,6 +118,10 @@ void main() {
     expect(find.text('Title'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('object-detail-show-empty-properties')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('object-detail-empty-properties-disclosure')),
       findsNothing,
     );
   });
