@@ -112,9 +112,9 @@ The performance-infrastructure foundation is now established through focused chi
 - the repository-owned Performance Benchmark workflow runs benchmark-related PR smoke repetitions plus scheduled/manual advisory profiles, publishes provenance-linked JSON/Markdown artifacts and does not participate in the required merge gate;
 - #1453/#1454 added fail-closed unchanged-source variance aggregation across repeated runs, comparing only equivalent source/profile/runtime/fixture/scenario provenance and keeping the resulting spread advisory rather than inventing a hard millisecond budget;
 - #1509/#1510 corrected local documentation to execute the Flutter-dependent benchmark through `flutter test`, matching the workflow contract; the variance aggregator remains a pure-Dart tool;
-- #1511 is the next focused performance slice with Search #1504 now integrated: measure healthy canonical Search prepare/open cost separately from query latency and explicit rebuild/repair cost. Do not optimize `ObjectSearchHealthAudit` in G without measured evidence.
+- #1511/#1532 completed the Search measurement split: healthy canonical Search prepare/open, query latency, and explicit rebuild/repair are separate scenarios, so normal open cost is no longer conflated with recovery work.
 
-Keep #1360 open for measured follow-up/budget decisions. Do not weaken fixture size/workflows, add speculative caches, or manufacture a blocking threshold merely to close the umbrella.
+Keep #1360 open for unchanged-source repeated-run variance evidence and later evidence-backed budget decisions. Do not reimplement #1511, weaken fixture size/workflows, add speculative caches, or manufacture a blocking threshold merely to close the umbrella.
 
 ### Repository metadata drift — #1094
 The live GitHub repository description still identifies the product as a Flutter bookmark manager even though the durable architecture is Object-first/local-first. This is repository-setting drift, not a code defect. Fix it through repository metadata administration when an authorized settings mutation path is available; do not encode marketing/description text into runtime code or a brittle required merge gate merely to work around missing settings tooling.
@@ -212,4 +212,4 @@ Behavior-preserving refactors require changed-Dart format, Analyze and relevant/
 11. keep durable docs free of transient snapshots and route machine-certifiable drift to CI while H handles semantic drift.
 
 ### Current resume state
-#1511 is live-ready because #1504 is integrated and the real `prepareWorkspace` healthy/open boundary now exists on `main`. Prefer that focused measurement slice before inventing unrelated G work, while keeping it benchmark-only and evidence-driven. Before any overlapping coordination-guard follow-up (#1127/#1123/#1312/#1082), recheck live ownership of the canonical guard/test pair and do not edit it concurrently with another owner. Repository metadata drift #1094 remains a settings-level action rather than a code workaround.
+#1511/#1532 are completed Search performance measurement checkpoints. Resume #1360 only from unchanged-source repeated-run variance evidence and later evidence-backed budget decisions; do not reopen the measurement slice or optimize Search without measured evidence. Before any overlapping coordination-guard follow-up (#1127/#1123/#1312/#1082), recheck live ownership of the canonical guard/test pair and do not edit it concurrently with another owner. Repository metadata drift #1094 remains a settings-level action rather than a code workaround.
