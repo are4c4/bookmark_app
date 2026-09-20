@@ -17,6 +17,16 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('template picker autofocuses search', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: ObjectTypeTemplatePickerDialog())),
+    );
+    await tester.pump();
+
+    final editable = tester.widget<EditableText>(find.byType(EditableText));
+    expect(editable.focusNode.hasFocus, isTrue);
+  });
+
   testWidgets('template search matches names descriptions and properties',
       (tester) async {
     await tester.pumpWidget(
@@ -96,6 +106,58 @@ void main() {
         findsOneWidget,
       );
     }
+  });
+
+  testWidgets('Enter selects a uniquely filtered template', (tester) async {
+    ObjectTypeCreationChoice? result;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () async {
+                result = await showObjectTypeTemplatePicker(context);
+              },
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    final search = find.byKey(const ValueKey('object-type-template-search'));
+    await tester.enterText(search, '植物');
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('object-type-template-plant')),
+      findsOneWidget,
+    );
+
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+
+    expect(result, isA<TemplateObjectTypeChoice>());
+    expect((result as TemplateObjectTypeChoice).template.key, 'plant');
+  });
+
+  testWidgets('Enter does not guess when template search is ambiguous', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: ObjectTypeTemplatePickerDialog())),
+    );
+
+    final search = find.byKey(const ValueKey('object-type-template-search'));
+    await tester.enterText(search, 'url');
+    await tester.pump();
+    expect(find.byType(ObjectTypeTemplatePickerDialog), findsOneWidget);
+
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+
+    expect(find.byType(ObjectTypeTemplatePickerDialog), findsOneWidget);
   });
 
   testWidgets('template picker returns selected template', (tester) async {

@@ -99,6 +99,7 @@ class _ObjectTypeTemplatePickerDialogState
               TextField(
                 key: const ValueKey('object-type-template-search'),
                 controller: _searchController,
+                autofocus: true,
                 decoration: InputDecoration(
                   labelText: 'テンプレートを検索',
                   hintText: '名前・用途・プロパティ',
@@ -116,6 +117,13 @@ class _ObjectTypeTemplatePickerDialogState
                         ),
                 ),
                 onChanged: (value) => setState(() => _query = value),
+                onSubmitted: (_) {
+                  if (visibleTemplates.length != 1) return;
+                  Navigator.pop(
+                    context,
+                    TemplateObjectTypeChoice(visibleTemplates.single),
+                  );
+                },
               ),
               const SizedBox(height: 10),
               Padding(
