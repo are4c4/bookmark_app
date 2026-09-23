@@ -92,7 +92,7 @@ jobs:
             mkdir -p "$run_dir"
             PERFORMANCE_BENCHMARK_JSON_PATH="$run_dir/report.json" \
             PERFORMANCE_BENCHMARK_MARKDOWN_PATH="$run_dir/summary.md" \
-              flutter test test/performance_benchmark_smoke_test.dart --reporter=expanded
+              flutter test test/performance_benchmark_smoke_test.dart --reporter=expanded --timeout=15m
             inputs+=("--input=$run_dir/report.json")
           done
           dart run tool/performance_benchmark_variance.dart \
